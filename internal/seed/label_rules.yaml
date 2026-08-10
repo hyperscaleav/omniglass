@@ -1,0 +1,40 @@
+# The global tier of the label rules (#682): the rule that applies to an entity
+# kind when neither its type nor its specific artifact has an opinion.
+#
+# Every value here is written to default_template, the column the boot seed owns
+# authoritatively. An operator's own rule lives in template beside it and is
+# never touched by re-seeding, so a release can improve these without stomping
+# anyone.
+#
+# The rule language is Go text/template over a closed data map; see
+# internal/label for the map each kind carries.
+label_rules:
+  - entity_kind: component
+    # A component's readable label is what it IS plus which one it is, and the
+    # ordinal is suppressed when the platform owns no number for this row (an
+    # operator typed the name, or renamed it): {{if}} on an absent fact is
+    # false, so the conditional is the whole of the suppression rule.
+    template: "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}"
+
+  - entity_kind: system
+    # What kind of space this system is. A standard is the blueprint it is built
+    # to, which is a different question and rarely what an operator wants read
+    # back at them in a list.
+    template: "{{.TypeName}}"
+
+  - entity_kind: location
+    # DELIBERATELY EMPTY, and it is the same argument the epic makes for
+    # refusing to auto-name a nominal location type.
+    #
+    # A campus, a building and a room have real-world names an operator already
+    # knows, and a rule cannot produce one: every fact available here is either
+    # the type ("Room", for every room in the estate) or the name itself, so any
+    # rule that runs is either a constant or a restatement. Shipping one would
+    # replace a correct fallback (the location's own name) with a worse label,
+    # for every location, on the first boot.
+    #
+    # A POSITIONAL type does have a rule worth shipping, since a floor's ordinal
+    # genuinely is its name, but that belongs on the type rather than the whole
+    # kind, and it arrives with the slice that gives positional types their name
+    # rules (#687).
+    template: ""

@@ -24,6 +24,7 @@ type componentTypeBody struct {
 	Stem        string   `json:"stem,omitempty" doc:"The auto-generated component name's prefix; empty inherits the nearest ancestor's"`
 	Icon        string   `json:"icon,omitempty" doc:"A glyph key; empty inherits the nearest ancestor's"`
 	Abbrev      string   `json:"abbrev,omitempty" doc:"A compact form of display_name; empty inherits the nearest ancestor's"`
+	LabelRule   string   `json:"label_rule,omitempty" doc:"The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components"`
 	DefaultTags []string `json:"default_tags" doc:"Tags every instance of this type (or a descendant that does not override) starts with"`
 	Official    bool     `json:"official" doc:"True for a row this release ships. A shipped row is never written by an operator: an edit forks it"`
 	Forked      bool     `json:"forked" doc:"True when this shipped row carries changes of yours overriding it. Restore discards them"`
@@ -34,7 +35,7 @@ type componentTypeBody struct {
 func toComponentTypeBody(ct *storage.ComponentType, parentName *string) componentTypeBody {
 	b := componentTypeBody{
 		ID: ct.ID.String(), Name: ct.Name, DisplayName: ct.DisplayName,
-		Stem: derefStr(ct.Stem), Icon: derefStr(ct.Icon), Abbrev: derefStr(ct.Abbrev),
+		Stem: derefStr(ct.Stem), Icon: derefStr(ct.Icon), Abbrev: derefStr(ct.Abbrev), LabelRule: derefStr(ct.LabelRule),
 		DefaultTags: ct.DefaultTags, Official: ct.Official, Forked: ct.Forked,
 	}
 	if ct.ParentID != nil {
@@ -65,6 +66,7 @@ type createComponentTypeInput struct {
 		Stem        string   `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens."`
 		Icon        string   `json:"icon,omitempty" doc:"A glyph key; omit to inherit the parent's"`
 		Abbrev      string   `json:"abbrev,omitempty" doc:"A compact form of display_name; omit to inherit the parent's"`
+		LabelRule   string   `json:"label_rule,omitempty" doc:"A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower and slug. Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422."`
 		DefaultTags []string `json:"default_tags,omitempty" doc:"Tags every instance of this type starts with"`
 		ParentID    string   `json:"parent_id,omitempty" doc:"The parent component_type, by name or uuid; omit for a root type"`
 	}
@@ -78,6 +80,7 @@ type updateComponentTypeInput struct {
 		Stem        *string   `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new name prefix. Lowercase letters, digits, and hyphens."`
 		Icon        *string   `json:"icon,omitempty" doc:"A new glyph key"`
 		Abbrev      *string   `json:"abbrev,omitempty" doc:"A new compact form"`
+		LabelRule   *string   `json:"label_rule,omitempty" doc:"A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse."`
 		DefaultTags *[]string `json:"default_tags,omitempty" doc:"Replaces the default-tag set; omit to leave unchanged"`
 	}
 }
@@ -173,6 +176,7 @@ func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gate
 		ct, err := gw.CreateComponentType(ctx, actorID(ctx), storage.ComponentType{
 			Name: in.Body.Name, DisplayName: in.Body.DisplayName,
 			Stem: ptrOrNil(in.Body.Stem), Icon: ptrOrNil(in.Body.Icon), Abbrev: ptrOrNil(in.Body.Abbrev),
+			LabelRule:   ptrOrNil(in.Body.LabelRule),
 			DefaultTags: in.Body.DefaultTags, ParentID: parentID,
 		})
 		if err != nil {
@@ -186,10 +190,11 @@ func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodPatch,
 		Path:        "/component-types/{id}",
 		Summary:     "Update a component type",
-		Description: "Patches a component_type's display_name, stem, icon, abbrev, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.",
+		Description: "Patches a component_type's display_name, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.",
 	}, "component_type", "update"), func(ctx context.Context, in *updateComponentTypeInput) (*componentTypeOutput, error) {
 		ct, err := gw.UpdateComponentType(ctx, actorID(ctx), in.ID, storage.ComponentTypePatch{
 			DisplayName: in.Body.DisplayName, Stem: in.Body.Stem, Icon: in.Body.Icon, Abbrev: in.Body.Abbrev,
+			LabelRule:   in.Body.LabelRule,
 			DefaultTags: in.Body.DefaultTags,
 		})
 		if err != nil {

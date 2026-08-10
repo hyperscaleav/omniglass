@@ -1213,6 +1213,7 @@ func generatedCommands() []*cobra.Command {
 				var fDefaultTags string
 				var fDisplayName string
 				var fIcon string
+				var fLabelRule string
 				var fName string
 				var fParentId string
 				var fStem string
@@ -1237,6 +1238,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("icon") {
 							body["icon"] = fIcon
 						}
+						if cmd.Flags().Changed("label-rule") {
+							body["label_rule"] = fLabelRule
+						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
@@ -1254,6 +1258,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; omit to inherit the parent's")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower and slug. Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422.")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentId, "parent-id", "", "The parent component_type, by name or uuid; omit for a root type")
@@ -1319,11 +1324,12 @@ func generatedCommands() []*cobra.Command {
 				var fDefaultTags string
 				var fDisplayName string
 				var fIcon string
+				var fLabelRule string
 				var fStem string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update a component type",
-					Long:    "Patches a component_type's display_name, stem, icon, abbrev, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.",
+					Long:    "Patches a component_type's display_name, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.",
 					Example: "  omniglass component-type update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1341,6 +1347,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("icon") {
 							body["icon"] = fIcon
 						}
+						if cmd.Flags().Changed("label-rule") {
+							body["label_rule"] = fLabelRule
+						}
 						if cmd.Flags().Changed("stem") {
 							body["stem"] = fStem
 						}
@@ -1351,6 +1360,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDefaultTags, "default-tags", "", "Replaces the default-tag set; omit to leave unchanged")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse.")
 				cmd.Flags().StringVar(&fStem, "stem", "", "A new name prefix. Lowercase letters, digits, and hyphens.")
 				return cmd
 			}()
@@ -3689,6 +3699,7 @@ func generatedCommands() []*cobra.Command {
 				var fDriverId string
 				var fIcon string
 				var fKind string
+				var fLabelRule string
 				var fName string
 				var fParentProductId string
 				var fVendorId string
@@ -3716,6 +3727,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("kind") {
 							body["kind"] = fKind
 						}
+						if cmd.Flags().Changed("label-rule") {
+							body["label_rule"] = fLabelRule
+						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
@@ -3736,6 +3750,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A product-level icon override; unset inherits the component_type's icon")
 				cmd.Flags().StringVar(&fKind, "kind", "", "What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly.")
 				_ = cmd.MarkFlagRequired("kind")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower and slug. Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422.")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "The parent product, by handle or uuid")
@@ -3940,6 +3955,7 @@ func generatedCommands() []*cobra.Command {
 				var fDriverId string
 				var fIcon string
 				var fKind string
+				var fLabelRule string
 				var fParentProductId string
 				var fVendorId string
 				cmd := &cobra.Command{
@@ -3966,6 +3982,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("kind") {
 							body["kind"] = fKind
 						}
+						if cmd.Flags().Changed("label-rule") {
+							body["label_rule"] = fLabelRule
+						}
 						if cmd.Flags().Changed("parent-product-id") {
 							body["parent_product_id"] = fParentProductId
 						}
@@ -3980,6 +3999,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "A new driver, by handle or uuid")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new icon override")
 				cmd.Flags().StringVar(&fKind, "kind", "", "A new product class")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse.")
 				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "A new parent product, by handle or uuid")
 				cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "A new vendor, by handle or uuid")
 				return cmd

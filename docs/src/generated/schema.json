@@ -135,6 +135,11 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "label_rule",
+      "type": "text",
+      "nullable": true
      }
     ],
     "uniques": [
@@ -267,6 +272,11 @@
      },
      {
       "name": "icon",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "label_rule",
       "type": "text",
       "nullable": true
      }
@@ -468,6 +478,11 @@
       "nullable": true,
       "fk": true,
       "fk_target": "standard.id"
+     },
+     {
+      "name": "label_rule",
+      "type": "text",
+      "nullable": true
      }
     ],
     "uniques": [
@@ -644,6 +659,11 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "label_rule",
+      "type": "text",
+      "nullable": true
      }
     ],
     "uniques": [
@@ -1613,6 +1633,12 @@
       "name": "ordinal",
       "type": "integer",
       "nullable": true
+     },
+     {
+      "name": "display_name_generated",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
      }
     ],
     "checks": [
@@ -1787,6 +1813,12 @@
       "nullable": false,
       "fk": true,
       "fk_target": "location_type.id"
+     },
+     {
+      "name": "display_name_generated",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
      }
     ],
     "uniques": [
@@ -1842,6 +1874,11 @@
       "nullable": false,
       "default": "uuidv7()",
       "pk": true
+     },
+     {
+      "name": "label_rule",
+      "type": "text",
+      "nullable": true
      }
     ],
     "uniques": [
@@ -2017,6 +2054,12 @@
       "nullable": true,
       "fk": true,
       "fk_target": "system_type.id"
+     },
+     {
+      "name": "display_name_generated",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
      }
     ],
     "uniques": [
@@ -3733,6 +3776,47 @@
      {
       "name": "property_type_handle_key",
       "definition": "CREATE UNIQUE INDEX property_type_handle_key ON public.property_type USING btree (name)"
+     }
+    ]
+   }
+  },
+  "unclustered": {
+   "label_rule": {
+    "columns": [
+     {
+      "name": "entity_kind",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "default_template",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "template",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "checks": [
+     {
+      "name": "label_rule_entity_kind_check",
+      "expr": "CHECK ((entity_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text])))"
      }
     ]
    }

@@ -77,6 +77,12 @@ type Component struct {
 	// slice 2, a label rule's .Ordinal both read it server-side, and the
 	// console already learns who holds the pen from NameGenerated.
 	Ordinal *int
+	// DisplayNameGenerated is the LABEL's pen (#682), the same shape
+	// NameGenerated is for the name: true means the platform owns
+	// display_name and re-renders it from the resolved label rule on every
+	// write that can change one of the rule's inputs. Setting the label by
+	// hand clears it; clearing the field returns it.
+	DisplayNameGenerated bool
 	// Path, PathSegments, and Renders are the dotted address and its two
 	// display-only compact forms (#627 Task 15), attached by attachComponentPaths
 	// after every GET or LIST fetch (see scopedConfig.attachPaths). Zero-value
@@ -152,13 +158,13 @@ const componentCols = `id, name, coalesce(display_name, ''), parent_id,
 	(select p.name from component p where p.id = component.parent_id) as parent_name,
 	(select l.name from location l where l.id = component.location_id) as location_name,
 	(select pr.name from product pr where pr.id = component.product_id) as product_handle,
-	name_generated, ordinal,
+	name_generated, ordinal, display_name_generated,
 	created_at, updated_at`
 
 func scanComponent(row pgx.Row) (*Component, error) {
 	var c Component
 	if err := row.Scan(&c.ID, &c.Name, &c.DisplayName, &c.ParentID, &c.PrimarySystem, &c.PrimarySystemID, &c.SystemCount,
-		&c.LocationID, &c.ProductID, &c.ParentName, &c.LocationName, &c.ProductHandle, &c.NameGenerated, &c.Ordinal, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		&c.LocationID, &c.ProductID, &c.ParentName, &c.LocationName, &c.ProductHandle, &c.NameGenerated, &c.Ordinal, &c.DisplayNameGenerated, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &c, nil
@@ -223,7 +229,7 @@ func attachComponentPaths(ctx context.Context, q querier, cs []*Component, full 
 			a, done := abbrevs[*c.ProductID]
 			if !done {
 				if typeID, err := componentTypeIDForProduct(ctx, q, *c.ProductID); err == nil {
-					if _, _, resolved, _, err := resolveTypeFacts(ctx, q, typeID); err == nil {
+					if _, _, resolved, _, _, err := resolveTypeFacts(ctx, q, typeID); err == nil {
 						a = resolved
 					}
 				}
@@ -426,13 +432,20 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	// requires an explicit product on create (a stricter operator-facing
 	// gate naming the generics); this default only ever fires below it, for a
 	// caller that writes the gateway directly (seed, devseed, tests).
+	// An empty display_name is the operator handing the LABEL's pen to the
+	// platform, exactly as an empty name hands over the name's (#682). The row
+	// is inserted with no label and stamped below, once it exists and its
+	// classification is resolvable.
 	c, err := scanComponent(tx.QueryRow(ctx, `
-		insert into component (name, display_name, parent_id, location_id, product_id, name_generated, ordinal)
-		values ($1, $2, $3, $4, coalesce($5::uuid, (select id from product where name = 'generic-device')), $6, $7)
+		insert into component (name, display_name, parent_id, location_id, product_id, name_generated, ordinal, display_name_generated)
+		values ($1, $2, $3, $4, coalesce($5::uuid, (select id from product where name = 'generic-device')), $6, $7, $8)
 		returning `+componentCols,
-		name, nullize(spec.DisplayName), parentID, locationID, productID, generated, ordinal))
+		name, nullize(spec.DisplayName), parentID, locationID, productID, generated, ordinal, spec.DisplayName == ""))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
+	}
+	if c, err = stampComponentLabel(ctx, tx, c); err != nil {
+		return nil, err
 	}
 	// The membership after the row exists, both ids already in hand (sysID
 	// above, c.ID from the insert just returned). Re-read so the returned
@@ -546,7 +559,17 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 		update component set
 			name         = coalesce($5, name),
 			ordinal      = coalesce($6::integer, ordinal),
-			display_name = coalesce($2, display_name),
+			-- display_name is three-state like the placement fields, not a
+			-- coalesce: nil leaves it, a value is the operator typing a label
+			-- (and taking the pen, $7 below), and an explicit empty string
+			-- clears it and hands the pen back, which the stamp after this
+			-- statement then acts on (#682).
+			display_name = case
+				when $2::text is null then display_name
+				when $2 = '' then null
+				else $2::text
+			end,
+			display_name_generated = $7,
 			-- product_id has no clear state: the floor makes it NOT NULL, so unlike
 			-- a three-state placement field there is no empty-string-means-null
 			-- branch here to attempt (that used to be the case before the #614
@@ -567,9 +590,16 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 			updated_at   = now()
 		where id = $1
 		returning `+componentCols,
-		before.ID, patch.DisplayName, patch.ProductName, patchProductID, namePatch, ordinalPatch))
+		before.ID, patch.DisplayName, patch.ProductName, patchProductID, namePatch, ordinalPatch,
+		labelPen(before.DisplayNameGenerated, patch.DisplayName)))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
+	}
+	// A reclassify changes the type, product and vendor facts a rule reads, and
+	// clearing the label hands the pen back; both land here, after the row is
+	// final, so the audit image below carries the label it just changed (#682).
+	if after, err = stampComponentLabel(ctx, tx, after); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "component", after.ID, before, after); err != nil {
 		return nil, err
@@ -734,6 +764,11 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
+	// A move re-mints the ordinal, which a rule reads, so a platform-owned
+	// label follows it (#682).
+	if after, err = stampComponentLabel(ctx, tx, after); err != nil {
+		return nil, err
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "move", "component", after.ID, before, after); err != nil {
 		return nil, err
 	}
@@ -792,6 +827,13 @@ func (p *PG) RenameComponent(ctx context.Context, actorID, name, newName string,
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
+	// A rename changes .Name and nulls .Ordinal, both of which a rule reads, so
+	// a platform-owned label is re-rendered against the new pair (#682). The
+	// LABEL's pen is untouched here: a rename is a claim on the name, and an
+	// operator who wants the label too says so by typing one.
+	if after, err = stampComponentLabel(ctx, tx, after); err != nil {
+		return nil, err
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "rename", "component", after.ID, before, after); err != nil {
 		return nil, err
 	}
@@ -839,6 +881,11 @@ func (p *PG) ResetComponentName(ctx context.Context, actorID, name string, read,
 		before.ID, newName, newOrdinal))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
+	}
+	// Same pair as a rename, in the other direction: a fresh name and a freshly
+	// allocated ordinal, so a platform-owned label follows (#682).
+	if after, err = stampComponentLabel(ctx, tx, after); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "reset", "component", after.ID, before, after); err != nil {
 		return nil, err

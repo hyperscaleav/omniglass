@@ -527,6 +527,9 @@ components:
         id:
           description: The component_type's uuid, the stable handle that survives a rename
           type: string
+        label_rule:
+          description: The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components
+          type: string
         name:
           description: The name an operator reads and types; renameable
           type: string
@@ -643,6 +646,9 @@ components:
           type: string
         icon:
           description: A glyph key; omit to inherit the parent's
+          type: string
+        label_rule:
+          description: A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower and slug. Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422.
           type: string
         name:
           description: The globally unique name
@@ -1112,6 +1118,9 @@ components:
             - device
             - app
             - service
+          type: string
+        label_rule:
+          description: A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower and slug. Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422.
           type: string
         name:
           description: The globally unique name; renameable
@@ -3745,6 +3754,9 @@ components:
             - app
             - service
           type: string
+        label_rule:
+          description: The label template instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule
+          type: string
         name:
           description: The name an operator reads and types; renameable
           type: string
@@ -5631,6 +5643,9 @@ components:
         icon:
           description: A new glyph key
           type: string
+        label_rule:
+          description: A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse.
+          type: string
         stem:
           description: A new name prefix. Lowercase letters, digits, and hyphens.
           maxLength: 100
@@ -5860,6 +5875,9 @@ components:
             - device
             - app
             - service
+          type: string
+        label_rule:
+          description: A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse.
           type: string
         parent_product_id:
           description: A new parent product, by handle or uuid
@@ -6673,7 +6691,7 @@ paths:
       summary: Delete a component type
       x-omniglass-permission: component_type:delete
     patch:
-      description: "Patches a component_type's display_name, stem, icon, abbrev, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update."
+      description: "Patches a component_type's display_name, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update."
       operationId: update-component-type
       parameters:
         - in: path

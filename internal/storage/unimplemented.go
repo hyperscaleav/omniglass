@@ -15,7 +15,17 @@ import (
 // not break as the interface grows.
 type UnimplementedGateway struct{}
 
-func (UnimplementedGateway) Ping(context.Context) error             { return nil }
+func (UnimplementedGateway) Ping(context.Context) error { return nil }
+func (UnimplementedGateway) UpsertLabelRuleDefault(context.Context, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) ListLabelRules(context.Context) ([]LabelRule, error) { return nil, nil }
+func (UnimplementedGateway) GetLabelRule(context.Context, string) (*LabelRule, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) SetLabelRule(context.Context, string, string, string) (*LabelRule, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) UpsertRole(context.Context, Role) error { return nil }
 func (UnimplementedGateway) BootstrapOwner(context.Context, OwnerSpec) (bool, error) {
 	return false, nil

@@ -242,7 +242,7 @@ func generateNameForProduct(ctx context.Context, tx pgx.Tx, productID string, pa
 	if err != nil {
 		return "", 0, err
 	}
-	stem, _, _, _, err := resolveTypeFacts(ctx, tx, typeID)
+	stem, _, _, _, _, err := resolveTypeFacts(ctx, tx, typeID)
 	if err != nil {
 		return "", 0, fmt.Errorf("storage: resolve type facts for product %q: %w", productID, err)
 	}

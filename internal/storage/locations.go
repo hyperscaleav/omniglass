@@ -115,12 +115,15 @@ func (p *PG) locationIsDescendant(ctx context.Context, q querier, targetID, cand
 // Location is a place in the estate tree: name-addressable (name is globally
 // unique), classified by location_type, and nested under an optional parent.
 type Location struct {
-	ID             string
-	Name           string
-	DisplayName    string
-	LocationType   string
-	LocationTypeID string
-	ParentID       *string
+	ID          string
+	Name        string
+	DisplayName string
+	// DisplayNameGenerated is the label's pen (#682); see System's own field
+	// for the polarity and what a write does with it.
+	DisplayNameGenerated bool
+	LocationType         string
+	LocationTypeID       string
+	ParentID             *string
 	// The name the API addresses the parent by; ParentID above is internal.
 	ParentName *string
 	// Path, PathSegments, and Renders are the dotted address (no accessor: a
@@ -188,6 +191,10 @@ type LocationType struct {
 	DisplayName        string
 	Icon               string
 	AllowedParentTypes []string
+	// LabelRule is this type's label template (#682), nullable: null defers to
+	// the global tier. A location_type is flat (no parent link), so there is
+	// nothing to inherit from and the two tiers are the whole ladder.
+	LabelRule *string
 }
 
 // UpsertLocationType installs or updates a location type by id, the boot-seed
@@ -199,10 +206,10 @@ type LocationType struct {
 // the canonical catalogs want.
 func (p *PG) SeedLocationType(ctx context.Context, lt LocationType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into location_type (name, official, display_name, icon, allowed_parent_types)
-		values ($1, $2, $3, $4, $5)
+		insert into location_type (name, official, display_name, icon, allowed_parent_types, label_rule)
+		values ($1, $2, $3, $4, $5, $6)
 		on conflict (name) do nothing`,
-		lt.Name, lt.Official, lt.DisplayName, lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes))
+		lt.Name, lt.Official, lt.DisplayName, lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes), nilIfEmptyRule(lt.LabelRule))
 	if err != nil {
 		return fmt.Errorf("storage: seed location_type %q: %w", lt.Name, err)
 	}
@@ -211,14 +218,15 @@ func (p *PG) SeedLocationType(ctx context.Context, lt LocationType) error {
 
 func (p *PG) UpsertLocationType(ctx context.Context, lt LocationType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into location_type (name, official, display_name, icon, allowed_parent_types)
-		values ($1, $2, $3, $4, $5)
+		insert into location_type (name, official, display_name, icon, allowed_parent_types, label_rule)
+		values ($1, $2, $3, $4, $5, $6)
 		on conflict (name) do update
 			set official             = excluded.official,
 			    display_name         = excluded.display_name,
 			    icon                 = excluded.icon,
-			    allowed_parent_types = excluded.allowed_parent_types`,
-		lt.Name, lt.Official, lt.DisplayName, lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes))
+			    allowed_parent_types = excluded.allowed_parent_types,
+			    label_rule           = excluded.label_rule`,
+		lt.Name, lt.Official, lt.DisplayName, lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes), nilIfEmptyRule(lt.LabelRule))
 	if err != nil {
 		return fmt.Errorf("storage: upsert location_type %q: %w", lt.Name, err)
 	}
@@ -239,7 +247,7 @@ func normalizeAllowedParentTypes(s []string) []string {
 // display_name then id, for the registry view and validation.
 func (p *PG) ListLocationTypes(ctx context.Context) ([]LocationType, error) {
 	rows, err := p.pool.Query(ctx,
-		`select id, name, official, display_name, icon, allowed_parent_types from location_type order by display_name, name`)
+		`select id, name, official, display_name, icon, allowed_parent_types, label_rule from location_type order by display_name, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list location_types: %w", err)
 	}
@@ -247,7 +255,7 @@ func (p *PG) ListLocationTypes(ctx context.Context) ([]LocationType, error) {
 	var out []LocationType
 	for rows.Next() {
 		var lt LocationType
-		if err := rows.Scan(&lt.ID, &lt.Name, &lt.Official, &lt.DisplayName, &lt.Icon, &lt.AllowedParentTypes); err != nil {
+		if err := rows.Scan(&lt.ID, &lt.Name, &lt.Official, &lt.DisplayName, &lt.Icon, &lt.AllowedParentTypes, &lt.LabelRule); err != nil {
 			return nil, fmt.Errorf("storage: scan location_type: %w", err)
 		}
 		lt.AllowedParentTypes = normalizeAllowedParentTypes(lt.AllowedParentTypes)
@@ -265,6 +273,7 @@ type LocationTypePatch struct {
 	DisplayName        *string
 	Icon               *string
 	AllowedParentTypes *[]string
+	LabelRule          *string
 }
 
 // CreateLocationType inserts a custom (official=false) location_type and audits
@@ -277,8 +286,12 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	if err := ValidateName("location_type", lt.Name); err != nil {
 		return nil, err
 	}
+	if err := validateLabelRule(lt.LabelRule); err != nil {
+		return nil, err
+	}
 	lt.Official = false
 	lt.AllowedParentTypes = normalizeAllowedParentTypes(lt.AllowedParentTypes)
+	lt.LabelRule = nilIfEmptyRule(lt.LabelRule)
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create location_type: %w", err)
@@ -286,8 +299,8 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx,
-		`insert into location_type (name, official, display_name, icon, allowed_parent_types) values ($1, false, $2, $3, $4) returning id`,
-		lt.Name, lt.DisplayName, lt.Icon, lt.AllowedParentTypes); err != nil {
+		`insert into location_type (name, official, display_name, icon, allowed_parent_types, label_rule) values ($1, false, $2, $3, $4, $5) returning id`,
+		lt.Name, lt.DisplayName, lt.Icon, lt.AllowedParentTypes, lt.LabelRule); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
 		}
@@ -306,6 +319,9 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 // allowed_parent_types (nil fields unchanged) and audits it. Official rows are
 // read-only (ErrTypeOfficial); an unknown id is ErrTypeNotFound.
 func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch LocationTypePatch) (*LocationType, error) {
+	if err := validateLabelRule(patch.LabelRule); err != nil {
+		return nil, err
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin update location_type: %w", err)
@@ -332,11 +348,18 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch L
 		update location_type set
 			display_name         = coalesce($2, display_name),
 			icon                 = coalesce($3, icon),
-			allowed_parent_types = coalesce($4, allowed_parent_types)
+			allowed_parent_types = coalesce($4, allowed_parent_types),
+			-- An explicit empty string CLEARS the rule; see UpdateComponentType's
+			-- own label_rule CASE for why this is not a coalesce.
+			label_rule           = case
+				when $5::text is null then label_rule
+				when $5 = '' then null
+				else $5::text
+			end
 		where `+registryRefCol(id)+` = $1
-		returning id, name, official, display_name, icon, allowed_parent_types`,
-		id, patch.DisplayName, patch.Icon, allowed).
-		Scan(&lt.ID, &lt.Name, &lt.Official, &lt.DisplayName, &lt.Icon, &lt.AllowedParentTypes); err != nil {
+		returning id, name, official, display_name, icon, allowed_parent_types, label_rule`,
+		id, patch.DisplayName, patch.Icon, allowed, patch.LabelRule).
+		Scan(&lt.ID, &lt.Name, &lt.Official, &lt.DisplayName, &lt.Icon, &lt.AllowedParentTypes, &lt.LabelRule); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
 		}
@@ -363,14 +386,14 @@ func (p *PG) DeleteLocationType(ctx context.Context, actorID, id string) error {
 }
 
 // locationCols is the column list every location read scans, in struct order.
-const locationCols = `id, name, coalesce(display_name, ''),
+const locationCols = `id, name, coalesce(display_name, ''), display_name_generated,
 	(select t.name from location_type t where t.id = location.location_type) as location_type, location.location_type as location_type_id, parent_id,
 	(select p.name from location p where p.id = location.parent_id) as parent_name,
 	created_at, updated_at`
 
 func scanLocation(row pgx.Row) (*Location, error) {
 	var l Location
-	if err := row.Scan(&l.ID, &l.Name, &l.DisplayName, &l.LocationType, &l.LocationTypeID, &l.ParentID, &l.ParentName,
+	if err := row.Scan(&l.ID, &l.Name, &l.DisplayName, &l.DisplayNameGenerated, &l.LocationType, &l.LocationTypeID, &l.ParentID, &l.ParentName,
 		&l.CreatedAt, &l.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -472,13 +495,18 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 		return nil, err
 	}
 
+	// An empty display_name hands the LABEL's pen to the platform (#682); the
+	// row is inserted with no label and stamped below.
 	l, err := scanLocation(tx.QueryRow(ctx, `
-		insert into location (name, display_name, location_type, parent_id)
-		values ($1, $2, (select id from location_type where `+registryRefCol(spec.LocationType)+` = $3), $4)
+		insert into location (name, display_name, location_type, parent_id, display_name_generated)
+		values ($1, $2, (select id from location_type where `+registryRefCol(spec.LocationType)+` = $3), $4, $5)
 		returning `+locationCols,
-		spec.Name, nullize(spec.DisplayName), spec.LocationType, parentID))
+		spec.Name, nullize(spec.DisplayName), spec.LocationType, parentID, spec.DisplayName == ""))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
+	}
+	if l, err = stampLocationLabel(ctx, tx, l); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "location", l.ID, nil, l); err != nil {
 		return nil, err
@@ -516,14 +544,28 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 	}
 	after, err := scanLocation(tx.QueryRow(ctx, `
 		update location set
-			display_name  = coalesce($2, display_name),
+			-- Three-state, not a coalesce: a value is the operator typing a
+			-- label and taking the pen ($4), an explicit empty string clears it
+			-- and hands the pen back (#682).
+			display_name  = case
+				when $2::text is null then display_name
+				when $2 = '' then null
+				else $2::text
+			end,
+			display_name_generated = $4,
 			location_type = coalesce((select id from location_type where `+typeRefCol+` = $3), location_type),
 			updated_at    = now()
 		where id = $1
 		returning `+locationCols,
-		before.ID, patch.DisplayName, patch.LocationType))
+		before.ID, patch.DisplayName, patch.LocationType,
+		labelPen(before.DisplayNameGenerated, patch.DisplayName)))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
+	}
+	// A reclassify changes the location_type facts a rule reads, and clearing
+	// the label hands the pen back; both are settled by now (#682).
+	if after, err = stampLocationLabel(ctx, tx, after); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "location", after.ID, before, after); err != nil {
 		return nil, err
@@ -654,6 +696,11 @@ func (p *PG) RenameLocation(ctx context.Context, actorID, name, newName string, 
 		before.ID, newName))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
+	}
+	// .Name is a fact a rule can read, so a platform-owned label follows the
+	// rename (#682).
+	if after, err = stampLocationLabel(ctx, tx, after); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "rename", "location", after.ID, before, after); err != nil {
 		return nil, err

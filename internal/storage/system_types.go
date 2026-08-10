@@ -53,8 +53,12 @@ type SystemType struct {
 	Stem        *string
 	Icon        *string
 	Abbrev      *string
-	Official    bool
-	ParentID    *uuid.UUID
+	// LabelRule is this node's label template (#682), nullable on the same
+	// inherit-from-parent rule Stem/Icon/Abbrev follow: null defers to the
+	// nearest ancestor that sets one, and then to the global tier.
+	LabelRule *string
+	Official  bool
+	ParentID  *uuid.UUID
 }
 
 // SystemTypePatch carries the mutable fields of a system_type update; a nil
@@ -66,13 +70,14 @@ type SystemTypePatch struct {
 	Stem        *string
 	Icon        *string
 	Abbrev      *string
+	LabelRule   *string
 }
 
-const systemTypeCols = `id, name, display_name, stem, icon, abbrev, official, parent_id`
+const systemTypeCols = `id, name, display_name, stem, icon, abbrev, label_rule, official, parent_id`
 
 func scanSystemType(row pgx.Row) (*SystemType, error) {
 	var st SystemType
-	if err := row.Scan(&st.ID, &st.Name, &st.DisplayName, &st.Stem, &st.Icon, &st.Abbrev, &st.Official, &st.ParentID); err != nil {
+	if err := row.Scan(&st.ID, &st.Name, &st.DisplayName, &st.Stem, &st.Icon, &st.Abbrev, &st.LabelRule, &st.Official, &st.ParentID); err != nil {
 		return nil, err
 	}
 	return &st, nil
@@ -102,17 +107,18 @@ func mapSystemTypeWriteErr(err error) error {
 // re-seeding the same name updates it in place, id stable.
 func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into system_type (name, display_name, stem, icon, abbrev, official, parent_id)
-		values ($1, $2, $3, $4, $5, $6, $7)
+		insert into system_type (name, display_name, stem, icon, abbrev, label_rule, official, parent_id)
+		values ($1, $2, $3, $4, $5, $6, $7, $8)
 		on conflict (name) do update
 			set display_name = excluded.display_name,
 			    stem         = excluded.stem,
 			    icon         = excluded.icon,
 			    abbrev       = excluded.abbrev,
+			    label_rule   = excluded.label_rule,
 			    official     = excluded.official,
 			    parent_id    = excluded.parent_id,
 			    updated_at   = now()`,
-		st.Name, st.DisplayName, st.Stem, st.Icon, st.Abbrev, st.Official, st.ParentID)
+		st.Name, st.DisplayName, st.Stem, st.Icon, st.Abbrev, nilIfEmptyRule(st.LabelRule), st.Official, st.ParentID)
 	if err != nil {
 		return fmt.Errorf("storage: upsert system_type %q: %w", st.Name, mapSystemTypeWriteErr(err))
 	}
@@ -175,6 +181,9 @@ func (p *PG) CreateSystemType(ctx context.Context, actorID string, st SystemType
 	} else if st.ParentID == nil {
 		return nil, ErrRootSystemTypeNeedsStem
 	}
+	if err := validateLabelRule(st.LabelRule); err != nil {
+		return nil, err
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create system_type: %w", err)
@@ -182,10 +191,10 @@ func (p *PG) CreateSystemType(ctx context.Context, actorID string, st SystemType
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	created, err := scanSystemType(tx.QueryRow(ctx, `
-		insert into system_type (name, display_name, stem, icon, abbrev, official, parent_id)
-		values ($1, $2, $3, $4, $5, false, $6)
+		insert into system_type (name, display_name, stem, icon, abbrev, label_rule, official, parent_id)
+		values ($1, $2, $3, $4, $5, $6, false, $7)
 		returning `+systemTypeCols,
-		st.Name, st.DisplayName, st.Stem, st.Icon, st.Abbrev, st.ParentID))
+		st.Name, st.DisplayName, st.Stem, st.Icon, st.Abbrev, nilIfEmptyRule(st.LabelRule), st.ParentID))
 	if err != nil {
 		return nil, mapSystemTypeWriteErr(err)
 	}
@@ -210,6 +219,9 @@ func (p *PG) UpdateSystemType(ctx context.Context, actorID, ref string, patch Sy
 			return nil, err
 		}
 	}
+	if err := validateLabelRule(patch.LabelRule); err != nil {
+		return nil, err
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin update system_type: %w", err)
@@ -232,10 +244,18 @@ func (p *PG) UpdateSystemType(ctx context.Context, actorID, ref string, patch Sy
 			stem         = coalesce($3, stem),
 			icon         = coalesce($4, icon),
 			abbrev       = coalesce($5, abbrev),
+			-- An explicit empty string CLEARS the rule ("this tier no longer has
+			-- an opinion"), which coalesce cannot express; see
+			-- UpdateComponentType's own label_rule CASE.
+			label_rule   = case
+				when $6::text is null then label_rule
+				when $6 = '' then null
+				else $6::text
+			end,
 			updated_at   = now()
 		where `+registryRefCol(ref)+` = $1
 		returning `+systemTypeCols,
-		ref, patch.DisplayName, patch.Stem, patch.Icon, patch.Abbrev))
+		ref, patch.DisplayName, patch.Stem, patch.Icon, patch.Abbrev, patch.LabelRule))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -272,12 +292,13 @@ func (p *PG) DeleteSystemType(ctx context.Context, actorID, ref string) error {
 type systemTypeWalkRow struct {
 	parentID           *uuid.UUID
 	stem, icon, abbrev *string
+	labelRule          *string
 }
 
 func loadSystemTypeWalk(ctx context.Context, q querier, id uuid.UUID) (*systemTypeWalkRow, error) {
 	var row systemTypeWalkRow
-	err := q.QueryRow(ctx, `select parent_id, stem, icon, abbrev from system_type where id = $1`, id).
-		Scan(&row.parentID, &row.stem, &row.icon, &row.abbrev)
+	err := q.QueryRow(ctx, `select parent_id, stem, icon, abbrev, label_rule from system_type where id = $1`, id).
+		Scan(&row.parentID, &row.stem, &row.icon, &row.abbrev, &row.labelRule)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -296,19 +317,30 @@ func loadSystemTypeWalk(ctx context.Context, q querier, id uuid.UUID) (*systemTy
 // A caller resolving facts inside its own transaction calls
 // resolveSystemTypeFacts directly with its own querier instead, exactly as
 // ResolveTypeFacts and resolveTypeFacts split for components.
+// The label rule the walk also resolves (#682) is deliberately NOT returned
+// here: it is a storage-side input to the label generator, never a wire field,
+// and the Gateway's only callers of this are the console-facing facts.
 func (p *PG) ResolveSystemTypeFacts(ctx context.Context, id uuid.UUID) (stem, icon, abbrev string, err error) {
-	return resolveSystemTypeFacts(ctx, p.pool, id)
+	stem, icon, abbrev, _, err = resolveSystemTypeFacts(ctx, p.pool, id)
+	return stem, icon, abbrev, err
 }
 
 // resolveSystemTypeFacts is ResolveSystemTypeFacts's walk, taking a querier so
 // it can run inside a caller's transaction.
-func resolveSystemTypeFacts(ctx context.Context, q querier, id uuid.UUID) (stem, icon, abbrev string, err error) {
+//
+// labelRule (#682) inherits by the identical first-non-null rule the other
+// three follow, and that is the answer to "a type's rule is set and its
+// parent's is not, which applies": the same one ADR-0095 gives for facts. A
+// rule is a fact of the node that declares it, so a child that declares none
+// inherits its ancestor's, and a child that declares one overrides for itself
+// and its own descendants only.
+func resolveSystemTypeFacts(ctx context.Context, q querier, id uuid.UUID) (stem, icon, abbrev, labelRule string, err error) {
 	cur := id
-	var gotStem, gotIcon, gotAbbrev bool
+	var gotStem, gotIcon, gotAbbrev, gotRule bool
 	for range maxSystemTypeDepth {
 		row, rerr := loadSystemTypeWalk(ctx, q, cur)
 		if rerr != nil {
-			return "", "", "", rerr
+			return "", "", "", "", rerr
 		}
 		if !gotStem && row.stem != nil {
 			stem, gotStem = *row.stem, true
@@ -319,10 +351,13 @@ func resolveSystemTypeFacts(ctx context.Context, q querier, id uuid.UUID) (stem,
 		if !gotAbbrev && row.abbrev != nil {
 			abbrev, gotAbbrev = *row.abbrev, true
 		}
-		if row.parentID == nil || (gotStem && gotIcon && gotAbbrev) {
+		if !gotRule && row.labelRule != nil {
+			labelRule, gotRule = *row.labelRule, true
+		}
+		if row.parentID == nil || (gotStem && gotIcon && gotAbbrev && gotRule) {
 			break
 		}
 		cur = *row.parentID
 	}
-	return stem, icon, abbrev, nil
+	return stem, icon, abbrev, labelRule, nil
 }

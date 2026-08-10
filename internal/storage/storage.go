@@ -301,6 +301,14 @@ type Gateway interface {
 	// The component_type registry: the hierarchical taxonomy a product is
 	// classified by (mic, camera, wireless-mic under mic). ResolveTypeFacts
 	// and TypeIsWithin walk the tree in Go; no DB logic.
+	// The global tier of the label rules (#682): one row per entity kind,
+	// its shipped default rewritten authoritatively on every boot and an
+	// operator's override left alone, which is why they are two columns.
+	UpsertLabelRuleDefault(ctx context.Context, kind, template string) error
+	ListLabelRules(ctx context.Context) ([]LabelRule, error)
+	GetLabelRule(ctx context.Context, kind string) (*LabelRule, error)
+	SetLabelRule(ctx context.Context, actorID, kind, template string) (*LabelRule, error)
+
 	UpsertComponentType(ctx context.Context, ct ComponentType) error
 	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
 	GetComponentType(ctx context.Context, ref string) (*ComponentType, error)

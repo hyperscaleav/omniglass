@@ -88,6 +88,13 @@ func mapTypeErr(err error, kind string) error {
 		return huma.Error422UnprocessableEntity(kind + " name may not be a uuid")
 	case errors.Is(err, storage.ErrInvalidEntityName):
 		return huma.Error422UnprocessableEntity(kind + " name must be lowercase letters, digits, and hyphens, starting with a letter or digit")
+	// A label rule that does not compile is refused HERE, at the edit, rather
+	// than stored and discovered later by a write path rendering one entity
+	// (#682). The template engine's own message names the offending construct
+	// and its position, which is the only thing that makes a template error
+	// actionable, so it is passed through rather than replaced.
+	case errors.Is(err, storage.ErrInvalidLabelRule):
+		return huma.Error422UnprocessableEntity("label rule does not parse: " + err.Error())
 	default:
 		return huma.Error500InternalServerError("type operation failed")
 	}

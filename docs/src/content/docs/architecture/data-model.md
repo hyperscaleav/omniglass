@@ -399,6 +399,13 @@ audit: {
   }
 }
 
+unclustered: {
+  label_rule: {
+    shape: sql_table
+    entity_kind: text {constraint: primary_key}
+  }
+}
+
 audit.audit_log.actor_principal_id -> identity.principal.id
 audit.audit_log.real_actor_principal_id -> identity.principal.id
 catalog.component_type.parent_id -> catalog.component_type.id

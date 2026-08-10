@@ -383,7 +383,7 @@ export interface paths {
         head?: never;
         /**
          * Update a component type
-         * @description Patches a component_type's display_name, stem, icon, abbrev, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.
+         * @description Patches a component_type's display_name, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.
          */
         patch: operations["update-component-type"];
         trace?: never;
@@ -3870,6 +3870,8 @@ export interface components {
             icon?: string;
             /** @description The component_type's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components */
+            label_rule?: string;
             /** @description The name an operator reads and types; renameable */
             name: string;
             /** @description True for a row this release ships. A shipped row is never written by an operator: an edit forks it */
@@ -3941,6 +3943,8 @@ export interface components {
             display_name: string;
             /** @description A glyph key; omit to inherit the parent's */
             icon?: string;
+            /** @description A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower and slug. Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422. */
+            label_rule?: string;
             /** @description The globally unique name */
             name: string;
             /** @description The parent component_type, by name or uuid; omit for a root type */
@@ -4212,6 +4216,8 @@ export interface components {
              * @enum {string}
              */
             kind: "device" | "app" | "service";
+            /** @description A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower and slug. Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422. */
+            label_rule?: string;
             /** @description The globally unique name; renameable */
             name: string;
             /** @description The parent product, by handle or uuid */
@@ -5605,6 +5611,8 @@ export interface components {
             id: string;
             /** @enum {string} */
             kind: "device" | "app" | "service";
+            /** @description The label template instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule */
+            label_rule?: string;
             /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
@@ -6671,6 +6679,8 @@ export interface components {
             display_name?: string;
             /** @description A new glyph key */
             icon?: string;
+            /** @description A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse. */
+            label_rule?: string;
             /** @description A new name prefix. Lowercase letters, digits, and hyphens. */
             stem?: string;
         };
@@ -6827,6 +6837,8 @@ export interface components {
              * @enum {string}
              */
             kind?: "device" | "app" | "service";
+            /** @description A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse. */
+            label_rule?: string;
             /** @description A new parent product, by handle or uuid */
             parent_product_id?: string;
             /** @description A new vendor, by handle or uuid */

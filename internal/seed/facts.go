@@ -55,6 +55,14 @@ type factsInterfaceType struct {
 	Built       bool   `json:"built"`
 }
 
+// factsLabelRule is one global label rule (#682) as the docs render it: the
+// entity kind and the template this release ships for it. An operator's own
+// override is estate data and is deliberately not a shipped fact.
+type factsLabelRule struct {
+	EntityKind string `json:"entity_kind"`
+	Template   string `json:"template"`
+}
+
 type factsLocationType struct {
 	ID                 string   `json:"id"`
 	DisplayName        string   `json:"display_name"`
@@ -134,6 +142,7 @@ type seedFactsDoc struct {
 	Vendors        []factsVendor        `json:"vendors"`
 	Drivers        []factsDriver        `json:"drivers"`
 	Products       []factsProduct       `json:"products"`
+	LabelRules     []factsLabelRule     `json:"label_rules"`
 }
 
 // eventCommandDoc covers the shared name/display/description shape of the
@@ -174,6 +183,14 @@ func FactsJSON() ([]byte, error) {
 			Inherits: r.Inherits, Declared: r.Permissions,
 			Effective: idx.Flatten([]string{r.ID}).Strings(),
 		})
+	}
+
+	var rules labelRulesDoc
+	if err := yaml.Unmarshal(labelRulesYAML, &rules); err != nil {
+		return nil, fmt.Errorf("seed facts: label rules: %w", err)
+	}
+	for _, r := range rules.LabelRules {
+		doc.LabelRules = append(doc.LabelRules, factsLabelRule{EntityKind: r.EntityKind, Template: r.Template})
 	}
 
 	var props propertyTypesDoc

@@ -42,6 +42,6 @@ func (p *PG) ExportStemForProduct(ctx context.Context, productID string) (string
 	if err != nil {
 		return "", err
 	}
-	stem, _, _, _, err := resolveTypeFacts(ctx, p.pool, typeID)
+	stem, _, _, _, _, err := resolveTypeFacts(ctx, p.pool, typeID)
 	return stem, err
 }
