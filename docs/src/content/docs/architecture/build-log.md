@@ -3503,6 +3503,16 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   does not cascade, which is ADR-0100's line applied to the name side. Both foreign keys agree
   (`ON DELETE RESTRICT`), so no placement moves without one of those acts.
 
+  Review found two defects after the slice was first built, and both came out of suppression rather
+  than out of the plumbing. A reclassify was gated on the `system_type` field being PRESENT rather
+  than on the classification changing, and the console sends that key on every save so an unclassify
+  can clear: an operator editing a label, with a lower ordinal freed by an earlier rename, would have
+  had their system renamed under `system:update` with no rename asked for. And the allocation lock
+  still carried the stem in its key, which was sound only while the mint was always `<stem>-<n>`:
+  stem `wall` at ordinal 2 and stem `wall-2` at ordinal 1 are the same name, so two concurrent
+  creates in one room took different locks and one would have died on the scoped-name index. The
+  lock now guards the bucket, which is the only partition of the name space a mint cannot cross.
+
   The honest limit: the system bare render stays unwired although both halves of its substitution now
   exist. `RenderBare` stamps `<abbrev><ordinal>` whenever it is given both, so a suppressed name
   would print `brd1` for a room named `boardroom`, a digit on a physical label that appears nowhere

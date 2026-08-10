@@ -136,7 +136,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits) | 2026-08-10 | Accepted | A label rule is Go `text/template` over a **closed `map[string]string`** AND a **closed grammar**: the sandbox is the data map (a secret is absent rather than filtered) plus an allowlist over the parsed tree (a closed set of node types and function names, so `printf` and friends are refused at rule-edit time; a length cap bounds output, which is not the same as bounding work). The map carries the entity's own columns and its resolved classification facts, and deliberately **no placement**: every input then changes on exactly five of the entity's own acts (create, rename, move, reclassify, reset), which is what makes the stored label's recompute-and-compare invariant provable. Exposing a location's name would put a location rename in that set and stale every label under it. The global tier is one row per entity kind with TWO columns, `default_template` (boot-seed space, authoritative) and `template` (operator space, nullable) |
 | [ADR-0099](#adr-0099-the-acronym-list-is-one-replaceable-setting-not-a-shipped-list-plus-operator-additions) | 2026-08-10 | Accepted | The acronym dictionary `title` consults is ONE key, `label.acronyms`, in a new `platform,client` settings namespace; an operator's list REPLACES the shipped one and provenance tells them apart, rather than a union of shipped plus additions (which would give one key a merge rule no other setting has, make the wire value a fragment rather than the effective dictionary, and make a shipped entry unremovable). The engine resolves the dictionary at render time and caches the compiled engine against the dictionary ITSELF, so a change builds a replacement rather than mutating one and no writer has a generation counter to forget; validation uses a dictionary-less engine, since whether a rule parses is a fact about the rule alone |
 | [ADR-0100](#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate) | 2026-08-10 | Accepted | A label rule reads its entity's PLACEMENT (a component's location label and its primary system's type label, a system's location label), reversing ADR-0098's exclusion, and the write paths that keep those honest are derived from the map rather than enumerated. The line is BLAST RADIUS, not ownership: bounded by a placement (the rows at one location, one system's members, one component's membership) it cascades inside the act's own transaction; bounded only by the estate (a rule at any tier, a classification row's display_name, the acronym list) it waits for the preview-then-apply verb. A preview is an apply that rolls back, so it lists exactly what the apply changes including the second hop. One audit row per operation, keyed on the rule, never one per changed entity |
-| [ADR-0101](#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests) | 2026-08-10 | Accepted | A generated **system** name suppresses the ordinal on the first of its stem in a placement bucket (`boardroom`, then `boardroom-2`), and the order dependence is accepted: deleting the bare one while the second survives frees the bare name again, and `boardroom-1` never exists. Suppression is a field on the MINT rather than a change to the shape (a component still reads `display-1`), and the ALLOCATOR takes that same mint, so a suppressing mint and a non-suppressing allocator cannot disagree on ordinal 1 and turn the second create into a `23505`. A placement bucket becomes a value per entity kind, so a location's two buckets cannot be written as a system's three. The pen and both verbs spread to system and location; only a system generates, and a location's `:resetName` refuses with the missing fact named. No backfill: the default false is the right value for a row an operator already named |
+| [ADR-0101](#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests) | 2026-08-10 | Accepted | A generated **system** name suppresses the ordinal on the first of its stem in a placement bucket (`boardroom`, then `boardroom-2`), and the order dependence is accepted: deleting the bare one while the second survives frees the bare name again, and `boardroom-1` never exists. Suppression is a field on the MINT rather than a change to the shape (a component still reads `display-1`), and the ALLOCATOR takes that same mint, so a suppressing mint and a non-suppressing allocator cannot disagree on ordinal 1 and turn the second create into a `23505`. A placement bucket becomes a value per entity kind, so a location's two buckets cannot be written as a system's three, and the allocation lock loses the stem from its key, since two stems can now mint one name. The pen and both verbs spread to system and location; only a system generates, and a location's `:resetName` refuses with the missing fact named. No backfill: the default false is the right value for a row an operator already named |
 
 ## Entries
 
@@ -3980,6 +3980,16 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   type carries one, not a competing mechanism. A stem-less mint ignores the flag outright, since
   suppressing the ordinal of a name that IS its ordinal (a floor called `1`) would leave nothing at
   all.
+- **Decision (the allocation lock is keyed on the bucket, and the stem comes OUT of that key):**
+  The advisory lock was keyed on the table, the stem and the bucket, which was sound only because
+  the mint was always `<stem>-<n>`, making two stems' name spaces provably disjoint. Suppression
+  ends that: stem `wall` at ordinal 2 and stem `wall-2` at ordinal 1 are the same name, and both
+  stems pass the rule a stem is validated with. Keyed on the stem, those two concurrent creates in
+  one bucket take different locks, read the same siblings, mint the same name, and the loser gets a
+  `23505` on a create that supplied no name at all. So the lock now guards what the unique index
+  guards, the **bucket**, because the bucket is the only partition of the name space a mint cannot
+  cross. The cost is that two creates in one room serialize whatever they are classified as, which
+  is the price of the shape being per-type rather than fixed.
 - **Decision (a placement bucket is a value, not a pair of pointers):** The lock key and the sibling
   filter became one `nameScope` per entity kind, because the kinds do not agree on how many buckets
   there are. `component` and `system` have three (a parent, else a location, else unplaced) and
@@ -4023,6 +4033,14 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   [ADR-0100](#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)'s
   line applied to the name side. The database agrees: `system.location_id` and `system.parent_id`
   are both `ON DELETE RESTRICT`, so no placement changes without one of these acts running.
+
+  The same derivation settles the shape of the reclassify guard, which review caught the code
+  getting wrong. The trigger is the classification **changing**, not the `system_type` field being
+  present in the patch: the console sends that key on every save so an unclassify can clear, so a
+  presence test re-mints on an edit to the label alone, and with a lower ordinal freed by an earlier
+  rename that re-mint MOVES the name (`boardroom-2` becomes `boardroom`) under `system:update`, with
+  no rename requested and possibly no `system:rename` grant held. A patch that re-states the type
+  changes neither input to the mint.
 - **Consequence:** `Ordinal` joins the system label data map, widening
   [ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)'s closed map by one
   key, and the shipped global system rule deliberately does not use it: for a suppressed first name

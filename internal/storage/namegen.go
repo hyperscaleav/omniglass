@@ -230,13 +230,23 @@ func locationNameScope(parentID *string) nameScope {
 	return treeNameScope(locationTable, parentID)
 }
 
-// lockKey is the advisory-lock key for allocating stem's ordinals in this
-// bucket: the table, the stem and the bucket, all three. Two concurrent creates
-// under different parents never contend even with the same stem, two under the
-// same parent with different stems never contend either, and a system never
-// contends with a component that happens to share a parent id.
-func (s nameScope) lockKey(stem string) string {
-	return string(s.table) + "_name/" + stem + "/" + s.bucket
+// lockKey is the advisory-lock key for allocating a name in this bucket: the
+// table and the bucket, and deliberately NOT the stem. Two concurrent creates
+// under different parents never contend, and a system never contends with a
+// component that happens to share a parent id, but two creates in the same
+// bucket serialize whatever they are classified as.
+//
+// The stem used to be in this key, and suppression is what took it out (#686).
+// The old key was sound only because the mint was always "<stem>-<n>", which
+// made two stems' name spaces provably disjoint. A suppressing mint breaks
+// that: stem "wall" at ordinal 2 and stem "wall-2" at ordinal 1 both produce
+// "wall-2", and both stems pass validateEntityName. Keyed on the stem, those
+// two allocations take different locks, read the same bucket, mint the same
+// name, and the loser gets a 23505 on a create that supplied no name at all.
+// So the lock guards what the unique index guards, the BUCKET, because the
+// bucket is the only partition of the name space a mint cannot cross.
+func (s nameScope) lockKey() string {
+	return string(s.table) + "_name/" + s.bucket
 }
 
 // siblingNames reads every name in this bucket, the exact candidate set
@@ -289,9 +299,10 @@ func (s nameScope) siblingNames(ctx context.Context, q querier, excludeID *strin
 // The advisory lock it takes first is transaction-scoped (pg_advisory_xact_lock,
 // released at commit or rollback, the same primitive lockMemberComponent
 // already uses to serialize a component's default membership) and keyed on the
-// table, the stem AND the placement bucket, not any one alone: only two
-// allocations that would actually collide on the same name serialize. They do
-// so with no retry: a 23505 would abort the whole transaction, and this repo's
+// table and the placement bucket: every allocation that could collide on a name
+// serializes, and nothing else does (see lockKey for why the stem is not in
+// that key any more). They serialize with no retry: a 23505 would abort the
+// whole transaction, and this repo's
 // other race of this class (ADR-0075's guarded conditional insert) is a
 // different shape (a single conditional write, not an allocate-then-write
 // sequence), so a lock taken before the read-then-decide is the only one of the
@@ -305,7 +316,7 @@ func (s nameScope) siblingNames(ctx context.Context, q querier, excludeID *strin
 // at all. It is also what makes a rule-produced name safe to add later: whatever
 // shape a mint grows, it is refused here before it can reach a row.
 func generateName(ctx context.Context, tx pgx.Tx, m nameMint, sc nameScope, excludeID *string) (string, int, error) {
-	if err := lockAdvisory(ctx, tx, sc.lockKey(m.stem)); err != nil {
+	if err := lockAdvisory(ctx, tx, sc.lockKey()); err != nil {
 		return "", 0, err
 	}
 	existing, err := sc.siblingNames(ctx, tx, excludeID)

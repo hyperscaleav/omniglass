@@ -223,14 +223,14 @@ func TestPickOrdinalSuppressedYieldsToAHandTypedName(t *testing.T) {
 func TestNameScopeBuckets(t *testing.T) {
 	p, l := "parent-1", "loc-1"
 	keys := map[string]string{
-		"component parent":   componentNameScope(&p, nil).lockKey("display"),
-		"component location": componentNameScope(nil, &l).lockKey("display"),
-		"component orphan":   componentNameScope(nil, nil).lockKey("display"),
-		"system parent":      systemNameScope(&p, nil).lockKey("display"),
-		"system location":    systemNameScope(nil, &l).lockKey("display"),
-		"system orphan":      systemNameScope(nil, nil).lockKey("display"),
-		"location parent":    locationNameScope(&p).lockKey("display"),
-		"location root":      locationNameScope(nil).lockKey("display"),
+		"component parent":   componentNameScope(&p, nil).lockKey(),
+		"component location": componentNameScope(nil, &l).lockKey(),
+		"component orphan":   componentNameScope(nil, nil).lockKey(),
+		"system parent":      systemNameScope(&p, nil).lockKey(),
+		"system location":    systemNameScope(nil, &l).lockKey(),
+		"system orphan":      systemNameScope(nil, nil).lockKey(),
+		"location parent":    locationNameScope(&p).lockKey(),
+		"location root":      locationNameScope(nil).lockKey(),
 	}
 	seen := map[string]string{}
 	for label, k := range keys {
@@ -239,12 +239,41 @@ func TestNameScopeBuckets(t *testing.T) {
 		}
 		seen[k] = label
 	}
-	if got, want := componentNameScope(&p, &l).lockKey("display"), keys["component parent"]; got != want {
+	if got, want := componentNameScope(&p, &l).lockKey(), keys["component parent"]; got != want {
 		t.Errorf("a parent must win over a location, as ComponentNameTaken resolves placement: got %q, want %q", got, want)
 	}
-	// A different stem is a different allocation space in the same bucket.
-	if componentNameScope(&p, nil).lockKey("mic") == keys["component parent"] {
-		t.Error("two stems in one bucket share a lock key: they count ordinals separately and must not serialize")
+}
+
+// TestTwoStemsCanMintOneName is why the lock key above carries no stem, and it
+// is a fact about suppression rather than a preference: stem "wall" at ordinal
+// 2 and stem "wall-2" at ordinal 1 are the SAME NAME, and both stems pass the
+// rule CreateSystemType validates a stem with.
+//
+// Before suppression the two spaces were provably disjoint ("wall-2" needs
+// digits after the dash, "wall-2-1" is not a name "wall" can mint), which is
+// what made a stem-keyed lock sound. Keyed on the stem now, those two creates
+// in one bucket take different locks, read the same siblings, mint the same
+// name, and the loser gets a 23505 on a create that supplied no name at all.
+func TestTwoStemsCanMintOneName(t *testing.T) {
+	if a, b := systemMint("wall").name(2), systemMint("wall-2").name(1); a != b {
+		t.Fatalf("systemMint(\"wall\").name(2) = %q and systemMint(\"wall-2\").name(1) = %q: this test is asserting an overlap that no longer exists, so re-check whether lockKey may carry the stem again", a, b)
+	}
+	if err := validateEntityName("wall-2"); err != nil {
+		t.Fatalf("validateEntityName(\"wall-2\") = %v: a stem of this shape must be reachable for the overlap to matter", err)
+	}
+	// So the key's composition is pinned by value: the table and the bucket,
+	// nothing narrower. Any allocation input finding its way back in here has to
+	// come past this assertion and past the overlap above.
+	l := "loc-1"
+	if got, want := systemNameScope(nil, &l).lockKey(), "system_name/location/loc-1"; got != want {
+		t.Errorf("lock key = %q, want %q: the key is the table and the bucket, because the bucket is the only partition of the name space a mint cannot cross", got, want)
+	}
+	// Dropping the stem widens the lock to the bucket and no further: the table
+	// stays in the key, so a component and a system sharing a parent id still
+	// do not serialize against each other.
+	p := "parent-1"
+	if componentNameScope(&p, nil).lockKey() == systemNameScope(&p, nil).lockKey() {
+		t.Error("a component and a system sharing a parent id share a lock key: they cannot collide and must not serialize")
 	}
 }
 

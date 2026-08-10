@@ -702,11 +702,23 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	// keeping the name while quietly handing back the pen would be a change of
 	// ownership nobody asked for. :rename claims the name first, and then the
 	// unclassify goes through.
+	//
+	// The guard is the classification CHANGING, not the field being present,
+	// and that distinction is load-bearing rather than tidy. The console sends
+	// system_type_id on every save (web/src/pages/Systems.tsx keys it always, so
+	// an unclassify can clear), so a presence test re-mints on an edit to the
+	// display name alone. With a lower ordinal freed in the meantime by a
+	// rename, that re-mint MOVES THE NAME: "boardroom-2" becomes "boardroom"
+	// under system:update, with no rename asked for and possibly no
+	// system:rename grant held. The mint reads the stem and the bucket, and a
+	// patch that re-states the type changes neither, which is the derivation
+	// ADR-0101 records. sameOptional is the same comparison the member-label
+	// cascade below already makes about the same question.
 	var (
 		namePatch    *string
 		ordinalPatch *int
 	)
-	if patch.SystemTypeID != nil && before.NameGenerated {
+	if patch.SystemTypeID != nil && before.NameGenerated && !sameOptional(before.SystemTypeID, systemTypePatchID) {
 		newName, newOrdinal, err := generateNameForSystemType(ctx, tx, systemTypePatchID, before.ParentID, before.LocationID, &before.ID)
 		if err != nil {
 			return nil, err

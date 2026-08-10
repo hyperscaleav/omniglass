@@ -311,6 +311,62 @@ func TestSystemReclassifyReMintsTheStem(t *testing.T) {
 	}
 }
 
+// TestSystemUpdateWithoutAClassificationChangeKeepsTheName is the case the
+// console actually drives: it sends system_type_id on EVERY save (the key is
+// always keyed so an unclassify can clear), so a re-mint gated on the field
+// being present rather than on the classification changing would rename a
+// system whenever an operator edited its label.
+//
+// The estate here is the one that makes it visible rather than silent: a lower
+// ordinal has been freed by a rename, so a spurious re-mint does not recompute
+// to the same answer, it MOVES the name to "boardroom" under system:update,
+// with no rename requested and possibly no system:rename grant held.
+func TestSystemUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
+	gw, ctx, room := newSystemNamegenDB(t)
+
+	first, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all)
+	if err != nil {
+		t.Fatalf("create the first: %v", err)
+	}
+	second, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all)
+	if err != nil {
+		t.Fatalf("create the second: %v", err)
+	}
+	if second.Name != "boardroom-2" {
+		t.Fatalf("the second create = %q, want boardroom-2", second.Name)
+	}
+	// Frees "boardroom" in this bucket.
+	if _, err := gw.RenameSystem(ctx, "", first.ID, "main-room", all, all); err != nil {
+		t.Fatalf("rename the first: %v", err)
+	}
+
+	after, err := gw.UpdateSystem(ctx, "", second.ID, storage.SystemPatch{
+		DisplayName:  strp("The Small Boardroom"),
+		SystemTypeID: strp("board"), // unchanged, and always sent by the console
+	}, all, all)
+	if err != nil {
+		t.Fatalf("update the label: %v", err)
+	}
+	if after.Name != "boardroom-2" {
+		t.Fatalf("a label edit renamed the system to %q: a patch that re-states the classification changes neither input to the mint", after.Name)
+	}
+	if after.Ordinal == nil || *after.Ordinal != 2 {
+		t.Fatalf("after.Ordinal = %s, want 2 (unchanged)", ordstr(after.Ordinal))
+	}
+	if after.DisplayName != "The Small Boardroom" {
+		t.Fatalf("after.DisplayName = %q, want the label the patch set", after.DisplayName)
+	}
+	// A REAL reclassify still re-mints, so the guard narrows the trigger without
+	// disabling it.
+	reclassified, err := gw.UpdateSystem(ctx, "", second.ID, storage.SystemPatch{SystemTypeID: strp("class")}, all, all)
+	if err != nil {
+		t.Fatalf("reclassify: %v", err)
+	}
+	if reclassified.Name != "classroom" {
+		t.Fatalf("a real reclassify = %q, want classroom", reclassified.Name)
+	}
+}
+
 // TestSystemWithNoTypeCannotGenerate proves the refusal is typed and names the
 // reason, on both the paths that can reach it: a nameless create with no
 // system_type, and un-classifying a system whose name the platform owns (which
