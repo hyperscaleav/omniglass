@@ -134,6 +134,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0096](#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy) | 2026-08-09 | Accepted | A nested, universally seeded **`system_type`** registry lands beside `standard` (not inside it): the coarse taxonomy of what kind of space a system is (`av / room / {board, class, ...}`, `av / sign / {...}`), with `stem`, `abbrev`, and `icon` inherited down `parent_id` and overridable at any node, and `system.system_type_id` nullable for now. The identifier is reused deliberately (it was ADR-0048's retired column name for `standard_id`), so its docs-lint denylist entry is removed on ADR-0085's precedent |
 | [ADR-0097](#adr-0097-allocation-tests-the-name-it-would-mint-rather-than-reading-the-ordinal-it-stored) | 2026-08-10 | Accepted | The generated ordinal becomes a stored nullable `component.ordinal`, but sibling allocation does **not** read it: it reads sibling NAMES and returns the lowest ordinal whose MINTED name is free. An operator can hold a generated-shaped name with no ordinal, and the unique index is on the name, so an ordinal-only allocator would remint a taken name as a `23505`. Minting candidates instead of parsing siblings is what makes a stem-less name (a floor called `1`) possible, not the column; the column is what every reader DOWNSTREAM of allocation consumes. No scoped-unique index on the ordinal |
 | [ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits) | 2026-08-10 | Accepted | A label rule is Go `text/template` over a **closed `map[string]string`** AND a **closed grammar**: the sandbox is the data map (a secret is absent rather than filtered) plus an allowlist over the parsed tree (a closed set of node types and function names, so `printf` and friends are refused at rule-edit time; a length cap bounds output, which is not the same as bounding work). The map carries the entity's own columns and its resolved classification facts, and deliberately **no placement**: every input then changes on exactly five of the entity's own acts (create, rename, move, reclassify, reset), which is what makes the stored label's recompute-and-compare invariant provable. Exposing a location's name would put a location rename in that set and stale every label under it. The global tier is one row per entity kind with TWO columns, `default_template` (boot-seed space, authoritative) and `template` (operator space, nullable) |
+| [ADR-0099](#adr-0099-the-acronym-list-is-one-replaceable-setting-not-a-shipped-list-plus-operator-additions) | 2026-08-10 | Accepted | The acronym dictionary `title` consults is ONE key, `label.acronyms`, in a new `platform,client` settings namespace; an operator's list REPLACES the shipped one and provenance tells them apart, rather than a union of shipped plus additions (which would give one key a merge rule no other setting has, make the wire value a fragment rather than the effective dictionary, and make a shipped entry unremovable). The engine resolves the dictionary at render time and caches the compiled engine against the dictionary ITSELF, so a change builds a replacement rather than mutating one and no writer has a generation counter to forget; validation uses a dictionary-less engine, since whether a rule parses is a fact about the rule alone |
 
 ## Entries
 
@@ -3792,4 +3793,46 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   That is the pre-existing state of those registries rather than a new restriction, and the tier that
   matters most for components (`component_type`) is forkable now.
 - **Tracked under** [#682](https://github.com/hyperscaleav/omniglass/issues/682), the second slice of
+  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
+
+### ADR-0099: The acronym list is one replaceable setting, not a shipped list plus operator additions
+
+- **Date:** 2026-08-10 | **Status:** Accepted | **Pages:** [settings](/architecture/settings/),
+  [core entities](/architecture/core-entities/), [glossary](/architecture/glossary/)
+- **Decision:** The acronym dictionary a label rule's `title` consults is **one key**,
+  `label.acronyms`, in a new `platform,client` settings namespace. An operator's list **replaces**
+  the shipped one; the two are told apart by the settings engine's existing **provenance**
+  (`sources["label.acronyms"]` reads `default` or `platform`), not by keeping them as separate
+  values and unioning them at read time.
+- **Why not shipped-plus-additions:** The epic's scope text reads as a union, and a union is what an
+  operator adding one word wants. It was rejected because of what it costs everywhere else. Merge in
+  this engine is presence-based over generic maps and a non-map value overrides wholesale, so a
+  union would be a merge rule this one key does not share with any other setting, and reading
+  `label.acronyms` would no longer tell you the effective dictionary: the value would be a fragment
+  and the engine would hold a list nothing on the wire reports. It also makes a shipped entry
+  **unremovable**, which matters more than it sounds, since a word we ship that an operator's estate
+  spells differently would then be uncorrectable. The union's one benefit, not retyping the list to
+  add a word, is a console problem, and the console already read-modify-writes the effective value
+  for every other setting.
+- **Consequence, stated rather than discovered:** an operator who overrides the list stops receiving
+  later releases' additions to it, exactly as overriding any other setting freezes it. The console
+  badges the key as overridden, and restoring the namespace returns the shipped list.
+- **Decision (the engine's lifecycle):** The dictionary is resolved from the settings cascade **at
+  render time**, and the compiled engine is cached against the dictionary itself
+  (`label.EngineCache`). Parsing binds a template's FuncMap, so a dictionary change produces a
+  **new** engine rather than mutating one, and a rule compiled against the old engine keeps the old
+  casing for as long as it lives; the storage path re-parses on every render, so the longest a stale
+  dictionary survives is one render and an operator's edit needs no restart. A generation counter
+  bumped by the settings write path was rejected for having a failure mode a content key cannot
+  have: a second write path that forgets to bump it.
+- **Consequence:** a render costs one read of the override table, on a write path already several
+  round trips deep. A caller rendering many rows (the bulk recompute, [#685](https://github.com/hyperscaleav/omniglass/issues/685))
+  resolves the engine once and passes it down, which is why the render functions take an engine
+  rather than reaching for one.
+- **Decision (parse and render need different engines):** Rule **validation** uses a
+  dictionary-less engine, because `label.New` binds the same four function names whatever dictionary
+  it is given and the grammar check walks a static allowlist: whether a rule parses is a fact about
+  the rule alone. Only execution differs, so only the render path carries the current engine, and a
+  template compiled by the validator is discarded rather than reused.
+- **Tracked under** [#684](https://github.com/hyperscaleav/omniglass/issues/684), the fourth slice of
   epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).

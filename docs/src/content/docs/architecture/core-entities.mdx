@@ -748,6 +748,29 @@ of its type. A rule that does not parse, or that names something outside the gra
 rule-edit time (422) and never stored; a rule that fails while rendering one entity degrades to no
 label rather than failing the write it was riding.
 
+**`title` reads an acronym dictionary an operator owns.** Title-casing a word by upper-casing its
+first letter turns `dsp` into `Dsp`, so the platform ships a list of words that have a fixed form,
+resolved through the [settings](/architecture/settings/) cascade as `label.acronyms` and consulted by
+`title` whole-word and case-insensitively (`av`, `Av` and `AV` all render `AV`; the entry is the form
+emitted, so `PoE` is spelled that way in the list). It is a **platform-domain, client-visible**
+namespace: one install-wide dictionary an admin writes, readable by any authenticated caller, because
+a label is stored once and read by everybody and the console renders one from the same list the
+server did. An operator's list **replaces** the shipped one rather than extending it, which is the
+settings engine's rule for every list-valued setting and the only way a shipped entry can be removed;
+provenance is what says which of the two is in force
+([ADR-0099](/architecture/decisions/#adr-0099-the-acronym-list-is-one-replaceable-setting-not-a-shipped-list-plus-operator-additions)).
+The engine follows the list without a restart: the dictionary is resolved when a label is rendered
+and the compiled engine is cached against the list itself, so an edit reaches the next write.
+
+The dictionary matters **less** than it looks, and the honest limit is worth stating rather than
+discovering. A type's `display_name` already holds correctly-cased English out of the catalog ("DSP",
+"Video Bar"), and the shipped rules render that, so the list only bites where a rule title-cases a
+name the operator typed: mostly systems and locations. Product model numbers (`qm55` wanting `QM55`)
+are unbounded and vendor-supplied, so a dictionary can never be complete, and a missing one degrades
+quietly to `Qm55` rather than failing. That is acceptable because the result is one click from being
+overridden on the row, and because the alternative, a rule that guesses at casing, is wrong more
+often than it is right.
+
 What a rule deliberately **cannot** read is the entity's placement. Every fact above changes on
 exactly five acts, all of them the entity's own (create, rename, move, reclassify, reset), and each
 of those re-renders, which is what lets a recompute-and-compare invariant prove no stored label has
