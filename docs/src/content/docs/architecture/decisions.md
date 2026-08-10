@@ -137,6 +137,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0099](#adr-0099-the-acronym-list-is-one-replaceable-setting-not-a-shipped-list-plus-operator-additions) | 2026-08-10 | Accepted | The acronym dictionary `title` consults is ONE key, `label.acronyms`, in a new `platform,client` settings namespace; an operator's list REPLACES the shipped one and provenance tells them apart, rather than a union of shipped plus additions (which would give one key a merge rule no other setting has, make the wire value a fragment rather than the effective dictionary, and make a shipped entry unremovable). The engine resolves the dictionary at render time and caches the compiled engine against the dictionary ITSELF, so a change builds a replacement rather than mutating one and no writer has a generation counter to forget; validation uses a dictionary-less engine, since whether a rule parses is a fact about the rule alone |
 | [ADR-0100](#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate) | 2026-08-10 | Accepted | A label rule reads its entity's PLACEMENT (a component's location label and its primary system's type label, a system's location label), reversing ADR-0098's exclusion, and the write paths that keep those honest are derived from the map rather than enumerated. The line is BLAST RADIUS, not ownership: bounded by a placement (the rows at one location, one system's members, one component's membership) it cascades inside the act's own transaction; bounded only by the estate (a rule at any tier, a classification row's display_name, the acronym list) it waits for the preview-then-apply verb. A preview is an apply that rolls back, so it lists exactly what the apply changes including the second hop. One audit row per operation, keyed on the rule, never one per changed entity |
 | [ADR-0101](#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests) | 2026-08-10 | Accepted | A generated **system** name suppresses the ordinal on the first of its stem in a placement bucket (`boardroom`, then `boardroom-2`), and the order dependence is accepted: deleting the bare one while the second survives frees the bare name again, and `boardroom-1` never exists. Suppression is a field on the MINT rather than a change to the shape (a component still reads `display-1`), and the ALLOCATOR takes that same mint, so a suppressing mint and a non-suppressing allocator cannot disagree on ordinal 1 and turn the second create into a `23505`. A placement bucket becomes a value per entity kind, so a location's two buckets cannot be written as a system's three, and the allocation lock loses the stem from its key, since two stems can now mint one name. The pen and both verbs spread to system and location; only a system generates, and a location's `:resetName` refuses with the missing fact named. No backfill: the default false is the right value for a row an operator already named |
+| [ADR-0102](#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing) | 2026-08-10 | Accepted | A **`location_type.name_rule`** (nullable jsonb) is a type's opt-in to naming the locations it classifies, and it is a **declaration** (a stem, possibly empty, plus the first-ordinal suppression flag) rather than the `label_rule` template beside it. A name has to satisfy `validateEntityName`, it lands in a scoped-unique index, and other things reference it, so an unrenderable rule has no safe degradation the way a label's does; a declaration IS a `nameMint`, so a rule is refused at RULE-EDIT time by minting from it (ordinal 1 and a nine-digit ceiling bound the whole output space), which a template's output could only be sampled. Null is the opt-out and there is no boolean beside it. A rule change **renames nothing**: there is no name-side recompute verb, deliberately, because relabelling in bulk is recoverable and renaming is not. A positional type permitted at root allocates `1`, `2` across the estate and that is legal, since the bucket is the placement and two positional types under one parent already share an ordinal space |
 
 ## Entries
 
@@ -4047,4 +4048,120 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   the number and the name disagree, so whether a label says "Boardroom" or "Boardroom 1" is an
   authoring choice an operator makes, not a platform default.
 - **Tracked under** [#686](https://github.com/hyperscaleav/omniglass/issues/686), the sixth slice of
+  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
+
+### ADR-0102: A name rule is a declaration a type opts in with, and a rule change renames nothing
+
+- **Date:** 2026-08-10 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [storage](/architecture/storage/), [glossary](/architecture/glossary/)
+- **Decision (the opt-in):** `location_type` gains a **nullable `name_rule`**, and its presence IS
+  the opt-in: null means an operator names every location of that type, which is where three of the
+  four shipped types stay. There is no boolean beside it, so "this type generates" and "this is what
+  it generates" cannot disagree. Of the shipped place vocabulary only **floor** is genuinely
+  auto-nameable, and it ships positional; a campus, a building and a room each have a real-world name
+  an operator holds and the platform does not, so generating one would be guessing. `17c` is ground
+  truth, not a default.
+- **Decision (a declaration, not a template):** The rule is `{"stem": "...", "bare_first": <bool>}`,
+  decoded straight into the `nameMint`
+  [ADR-0101](#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests)
+  already made the one place a generated name's shape lives. An empty stem is a **positional** type,
+  whose ordinal genuinely is its name (a floor called `1`).
+
+  The alternative, and it was the more consistent-looking one, was the `label_rule` template beside
+  it on the same table: the same `text/template` engine, the same allowlist
+  ([ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)), reusing a parser
+  rather than growing a second dialect. It was rejected on three counts, and the first is decisive.
+
+  **A name has no safe failure.** A label rule that fails to render degrades: the row keeps the pen,
+  the read ladder falls through to the entity's name, and nothing is lost. A name has no next rung.
+  It is `NOT NULL`, it is in a scoped-unique index, it is the address an operator types, and it is
+  what a runbook outside this system stores. A template that renders `Floor-1` for a type whose
+  display name is `Floor` produces an illegal name, and the honest options at that point are a failed
+  create or a silently different name, neither of which is a degradation.
+
+  **The edit-time refusal is provable for a declaration and only sampleable for a template.**
+  [#686](https://github.com/hyperscaleav/omniglass/issues/686)'s acceptance already promised that a
+  rule which would render an illegal name is refused when the RULE is edited, not when a location is
+  created, and nothing had built it. A declaration's whole output space is `{stem}` and
+  `{stem-n : n >= 1}`, so `validateNameRule` mints ordinal 1 and a nine-digit ceiling and checks
+  both: every candidate between them shares a character class and has a length between the two, so a
+  rule legal at both ends is legal everywhere in it. The ceiling has to exist rather than being
+  waved at, because `<stem>-<n>` grows with `n` and the name rule has a length cap: a 97-character
+  stem mints legally at 1 and illegally at 100. A template could only have been probed against a
+  sample row, which is a different and weaker promise.
+
+  **The expressiveness would have bought nothing here.** A location's data map
+  ([ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)) carries `Name` and
+  `TypeName`. `Name` is what a name rule is producing, so it is circular; `TypeName` is the type's
+  display name, whose slug IS the stem. The one useful template a location could write is the
+  declaration, spelled longer. The FuncMap would have diverged too (`slug` and `lower` matter,
+  `title` and the acronym dictionary are actively wrong for a kebab name), so "reuse the engine"
+  would have meant a second configuration of it, not a second use of it.
+
+  Where a template earns its place is a rule reading facts a declaration cannot name, which is the
+  shape a future component or system name rule might have (a vendor, a product, a role). That is a
+  reversal to make when there is a fact to read, on the tier that has one, with an argument about
+  failure that this tier cannot make.
+- **Decision (the rule IS the mint, so nothing restates the shape):** `NameRule.mint()` returns a
+  `nameMint` with no reshaping, which carries ADR-0101's guarantee onto this tier for free: the
+  allocator tests `mint.name(n)`, the caller mints from the same value, and there is no second
+  spelling of the shape to keep in step. Validation mints from it too, so the check and the generator
+  cannot disagree about what a rule produces. A stem-less rule normalizes `bare_first` to false,
+  since suppressing the ordinal of a name that IS its ordinal would leave nothing: two spellings of
+  one rule would compare unequal while minting identically.
+- **Decision (a rule change renames nothing, and there is no name-side recompute):**
+  [#687](https://github.com/hyperscaleav/omniglass/issues/687)'s own acceptance said a rule change
+  renames nothing "except through the explicit recompute" of
+  [#685](https://github.com/hyperscaleav/omniglass/issues/685). That verb is the **label** cascade,
+  and there is no name-side equivalent. Editing a rule changes no stored fact about any existing row:
+  the name, the ordinal and the pen all stand, and the new rule decides how the NEXT nameless create,
+  `:resetName`, move or reclassify names a row.
+
+  That is ADR-0100's blast-radius line, which ADR-0101 already applied to a `system_type`'s stem, and
+  it is stronger on the name side rather than merely the same. A bulk relabel is recoverable: a label
+  is display, the pen says who owns it, and the preview shows the blast radius before the apply. A
+  bulk rename is not: it breaks bookmarks, runbooks and integration config outside this system,
+  which is the entire reason a rename is its own verb under its own permission
+  ([ADR-0088](#adr-0088-a-placement-change-is-an-authorization-act-so-a-move-is-its-own-verb)).
+  `:resetName` is the deliberate, one-row-at-a-time way to bring a row onto a new rule, and it is
+  gated by `location:rename` because it IS a rename.
+- **Decision (a positional type at root is legal):** `allowed_parent_types` can permit a positional
+  type at root, where the bucket is every parentless location, so it allocates `1`, `2` across the
+  whole estate. That is allowed, and the argument is that the root bucket is not a special case, it
+  is a large one. The bucket is the PLACEMENT, never the placement and the type, so two positional
+  types under one parent already share an ordinal space; refusing at root would refuse the
+  estate-sized instance of a rule that holds everywhere else, and bucket size is not a property the
+  platform can police (a building with two hundred floors is the same shape). An operator asks for it
+  by making one type both positional and root-placeable.
+
+  The real consequence is not allocation, it is ADDRESSING: a positional type makes a bare name
+  ambiguous by design, since every building has a floor `1`. That is answered by machinery this epic
+  did not have to build, the dotted address
+  ([ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)'s addressing and
+  `#627`'s placement-scoped uniqueness): `boi.17c.1` resolves where `1` cannot, and an ambiguous bare
+  name is already a named refusal listing its candidates rather than a silent first match.
+- **Consequence (the fork primitive does not reach this registry, and does not need to):**
+  [#655](https://github.com/hyperscaleav/omniglass/issues/655)'s `registry_shadow`
+  ([ADR-0095](#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it))
+  has exactly one adopter, `component_type`, so an operator cannot fork a rule onto an official
+  `location_type` row. They do not have to: the shipped location types are seeded
+  `official: false` and inserted only when absent, so they are ordinary operator-owned rows the
+  registry's own `PATCH` edits, and a restart never reverts the edit. That is the forked-template
+  half of the seed model rather than the canonical-catalog half, and it is the same reason this
+  registry has needed no fork for `label_rule` either.
+- **Consequence (the write paths, derived again):** A location's mint reads exactly two things, the
+  type's rule and the parent bucket, which yields create, `:resetName`, the `location_type` half of a
+  reclassify, and `:move`. Two of those are worth stating. The reclassify guard is the classification
+  **changing**, not the field being present, because `web/src/pages/Locations.tsx` sends
+  `location_type` on every save: the defect review caught on the system tier one slice ago
+  (ADR-0101) is refused entry here rather than repeated. And `:move` re-mints only when the parent
+  actually moves, which is NARROWER than the system tier's, where the same re-mint runs on a move
+  that changes no bucket; nothing generated a location name before this slice, so there was no
+  existing behavior to preserve and the narrow form is simply the correct one.
+- **Consequence:** `location` gains the nullable `ordinal` the previous slice deliberately withheld
+  from it ("a column no writer can fill is a fact waiting to be read wrongly"), and the
+  recompute-and-compare invariant now covers all three trees. The bare render stays unwired here for
+  a reason of its own: `location_type` carries no `abbrev` at all, so there is no compact form to
+  substitute into, and a positional location's name already is its ordinal.
+- **Tracked under** [#687](https://github.com/hyperscaleav/omniglass/issues/687), the seventh slice of
   epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).

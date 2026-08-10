@@ -715,7 +715,7 @@ Allocation itself still reads sibling **names**, not this column, and returns th
 whose minted name is free: an operator can hold `display-1` by hand while owning no ordinal, and the
 uniqueness that has to be satisfied is the name's. Asking the mint for candidates rather than picking
 siblings apart is also what makes a name that is nothing but its ordinal expressible, which is what a
-positional type (a floor, a rack unit) will need.
+positional type (a floor) is named with below.
 
 **A system names itself too, and the first of a kind carries no number**
 ([ADR-0101](/architecture/decisions/#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests)).
@@ -729,10 +729,34 @@ as a hand-typed `display-1` blocks a component's, because what has to be unique 
 system with no `system_type` cannot be named this way (422 naming the reason), and neither can it be
 un-classified while the platform owns its name: `:rename` claims the name first.
 
-A **location** carries the pen and both verbs and generates nothing: `location_type` has no stem, so
-`:resetName` on a location refuses (422) with the missing fact named rather than reporting a reset
-that did not happen. The pen ships ahead of the generator on purpose, so a location an operator
-names today is already frozen when a positional type learns to name its own rows.
+**A location type opts in, with a rule that is a declaration**
+([ADR-0102](/architecture/decisions/#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing)).
+`location_type.name_rule` is nullable and its presence IS the opt-in: `NULL` means an operator names
+every location of that type, and there is no boolean beside it for the two to disagree about. Of the
+shipped place vocabulary only **floor** carries one, because only a floor has a name the platform can
+know: a campus, a building and a room each have a real-world name an operator holds, and `17c` is
+ground truth rather than a default.
+
+The rule is a small declaration, a stem plus whether the first of that stem in a parent carries an
+ordinal, and it decodes straight into the same mint a component and a system are named from. An
+**empty stem is a positional type**, whose ordinal genuinely is its name: the first floor of a
+building is `1`, the next is `2`, allocated among that building's own floors, so every building has
+its own floor `1`. That is deliberately not the `label_rule` template beside it on the same registry:
+a label that fails to render falls through to the next rung of the read ladder, and a name has no
+next rung, so a rule that would mint an illegal name is refused **when the rule is edited** by
+minting from it, rather than discovered by a create it breaks.
+
+**Editing a rule renames nothing.** The name, the ordinal and the pen of every existing location
+stand; the new rule decides how the next nameless create, `:resetName`, move or reclassify names a
+row. There is no name-side counterpart of the label's preview-then-apply recompute, and the
+asymmetry is the point: a bulk relabel is display and recoverable, a bulk rename breaks the
+bookmarks, runbooks and integration config stored outside this system. `:resetName` is the
+deliberate, one-row-at-a-time way to bring a location onto a new rule, and it is gated by
+`location:rename` because it is one.
+
+A location whose type carries no rule still refuses `:resetName` (422, naming the missing fact),
+which is what every location did before this rule existed, and the pen shipped a slice ahead of the
+generator on purpose: a location an operator named then is already frozen now.
 
 **A label generates itself too, from a rule an operator can change**
 ([ADR-0098](/architecture/decisions/#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)).
