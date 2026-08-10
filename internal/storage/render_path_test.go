@@ -194,9 +194,10 @@ func TestListComponentsSkipsAbbrevGetCompactsFully(t *testing.T) {
 	// display-1 is a HAND-TYPED name on a component whose type is
 	// generic-device (stem "device", abbrev "dev"), so no substitution is
 	// legitimate on it in either direction: the type never minted this name
-	// (#654). Asserting that on the GET path too keeps this test honest, since
-	// the compaction it exercises below has to come from a name the type
-	// actually owns.
+	// (#654, and since #681 the row says so itself by carrying no ordinal).
+	// Asserting that on the GET path too keeps this test honest, since the
+	// compaction it exercises below has to come from a name the type actually
+	// owns.
 	gotHand, err := gw.GetComponent(ctx, fx.display1.ID, all)
 	if err != nil {
 		t.Fatalf("GetComponent(display1.ID) = %v", err)
@@ -213,16 +214,26 @@ func TestListComponentsSkipsAbbrevGetCompactsFully(t *testing.T) {
 		t.Error("ListComponents Path is empty, want the dotted address (not gated by full)")
 	}
 
-	// A component whose name IS its type's stem-ordinal pair, which is what
-	// the generator mints: generic-device's seeded stem is "device" and its
-	// abbrev is "dev", so device-1 compacts to dev1 on a GET and stays whole
-	// on a LIST. This is the pair the test exists to tell apart, and it needs
-	// a name the type owns for the compaction to be legitimate at all.
+	// A component the type actually minted, which is what makes the compaction
+	// legitimate: generic-device's seeded stem is "device" and its abbrev is
+	// "dev", so a generated name here is "device-1", it records ordinal 1, and
+	// it compacts to dev1 on a GET while staying whole on a LIST. This is the
+	// pair the test exists to tell apart.
+	//
+	// The name is left empty rather than typed (#681). Typing "device-1" used
+	// to be the only way to put a name of this shape in this room, and it
+	// passed because the render matched the type's stem against the string.
+	// The render reads the row's own ordinal now, and a typed name has none,
+	// so a hand-typed "device-1" is a row the platform never named and is left
+	// whole. Generating it asks for what this test always meant.
 	owned, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "device-1", LocationName: &fx.r415a.Name,
+		LocationName: &fx.r415a.Name,
 	}, all)
 	if err != nil {
 		t.Fatalf("create device-1: %v", err)
+	}
+	if owned.Name != "device-1" {
+		t.Fatalf("generated name = %q, want device-1 (generic-device's seeded stem)", owned.Name)
 	}
 
 	list2, err := gw.ListComponents(ctx, all)

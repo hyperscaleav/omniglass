@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -18,61 +16,82 @@ import (
 // requires a root component_type to carry one (there is no ancestor left to
 // inherit from), so this should only be reachable through data that
 // predates that guard or bypasses it (UpsertComponentType, the trusted
-// boot-seed path). It is a data defect, not a normal "nothing to generate
-// from" case: minting "-1" from an empty stem would silently violate the
-// entity name rule and the address grammar every downstream reader trusts,
-// so this is refused instead, naming the offending component_type.
+// boot-seed path).
+//
+// The refusal survives #681 even though mintName can now produce a legal
+// stem-less name ("1" rather than the "-1" that used to make this
+// mechanically impossible). A stem-less name is right for a positional type
+// whose ordinal genuinely is its name, a floor or a rack unit; it is not
+// right for a device, where a bare "1" says nothing about what the thing is
+// and a component_type carrying no stem at all is a data defect rather than a
+// declaration. So this stays a refusal by policy, naming the offending
+// component_type, not a fallback.
 var ErrComponentTypeNoStem = errors.New("storage: component_type chain has no stem to generate a name from")
 
 // The name generator (#627 Task 14): when an operator leaves name empty on
 // create, or hands the pen back with :resetName, or a move or a product
 // reclassify leaves a still-platform-owned name no longer fitting its stem,
-// the platform mints one instead. One rule, no branches: <resolved-stem>-<n>,
-// the ordinal always present (so a lone component still reads "display-1",
-// never bare "display"), n the smallest positive integer not already claimed
-// by a sibling name matching "<stem>-<digits>" in the same placement scope.
-// Roles, positions, and staffing feed nothing into it; :swap, assign, and
-// unassign never touch a name.
+// the platform mints one instead. One rule, no branches: mintName's
+// "<resolved-stem>-<n>", the ordinal always present (so a lone component
+// still reads "display-1", never bare "display"), n the smallest ordinal
+// whose minted name no sibling in the same placement scope already holds.
+// The number that was picked is then STORED (#681) rather than left to be
+// read back out of the name by whoever needs it. Roles, positions, and
+// staffing feed nothing into it; :swap, assign, and unassign never touch a
+// name.
 
-// ordinalSuffixRe matches the "-<digits>" tail generateComponentName always
-// mints. Anchored at both ends so it only matches the whole remainder after
-// the stem prefix is stripped, not a digit run buried inside a longer
-// operator-typed suffix.
-var ordinalSuffixRe = regexp.MustCompile(`^-([0-9]+)$`)
+// mintName is the one place a generated name's SHAPE lives: "<stem>-<n>", or
+// the ordinal alone when the type carries no stem. Every generation site
+// funnels through it, and so does allocation itself (pickOrdinal below tests
+// the name this would mint rather than picking a name apart), so the two can
+// never disagree about what a given ordinal is called.
+//
+// The stem-less form is not a degenerate case, it is the point (#681): a
+// positional type whose ordinal genuinely IS its name (a floor called "1")
+// needs a mint that produces "1", not the "-1" a bare format string would
+// give, which validateEntityName refuses and which the old prefix-scan
+// allocator could never have counted anyway.
+func mintName(stem string, n int) string {
+	if stem == "" {
+		return strconv.Itoa(n)
+	}
+	return stem + "-" + strconv.Itoa(n)
+}
 
-// pickOrdinal returns the smallest positive integer not already claimed by a
-// sibling name of the exact form "<stem>-<n>". A name with a different stem
-// (a foreign prefix, or a prefix that merely starts with stem's characters,
-// e.g. "display-panel-1" against stem "display") is ignored, and so is an
-// operator's bare "display" with no ordinal suffix at all: neither occupies
-// an ordinal, so neither can block one. Pure: no I/O, no clock, so the whole
-// allocation rule is exhaustively unit-testable without a database.
+// pickOrdinal returns the smallest positive integer whose MINTED name is not
+// already held by a sibling in the bucket. The loop runs forward from 1 over
+// candidates rather than backward from sibling names to the ordinals they
+// encode, and that inversion is the whole of #681's allocator change.
+//
+// The answers are identical to the prefix-scan it replaces, because that scan
+// was already computing this: "the smallest n with no sibling named
+// <stem>-<n>". Reading it forward buys three things the parse could not give.
+// A stem-less type allocates at all (mintName's "1", "2", where a "-" prefix
+// matched nothing and returned 1 forever). A name shape that is not
+// "<stem>-<n>" needs no second parser written to match it, only a different
+// mint. And an operator-typed name occupying the shape the generator would
+// mint still blocks it, which is not a nicety: the scoped-name unique index is
+// on the NAME, so an allocator that consulted only the ordinals the platform
+// recorded would hand back a name a hand-typed row already holds and turn an
+// ordinary create into a 23505 the transaction cannot recover from.
+//
+// A sibling in a different stem's space blocks nothing, because no candidate
+// this mint produces is ever equal to it: "mic-1" and "display-panel-1" are
+// both simply not names stem "display" can mint.
+//
+// It terminates: at most len(existing) candidates can be taken, so the answer
+// is never larger than len(existing)+1. Pure (no I/O, no clock), so the whole
+// allocation rule stays exhaustively unit-testable without a database.
 func pickOrdinal(existing []string, stem string) int {
-	prefix := stem + "-"
-	used := make(map[int]bool, len(existing))
+	taken := make(map[string]bool, len(existing))
 	for _, name := range existing {
-		if !strings.HasPrefix(name, prefix) {
-			continue
-		}
-		// Keep the leading "-" so the anchored regex only accepts an all-digit
-		// remainder; "display-panel-1" strips to "-panel-1", which the regex
-		// rejects, leaving the foreign stem's ordinal space untouched.
-		suffix := name[len(prefix)-1:]
-		m := ordinalSuffixRe.FindStringSubmatch(suffix)
-		if m == nil {
-			continue
-		}
-		n, err := strconv.Atoi(m[1])
-		if err != nil {
-			continue // unreachable for a regexp-matched digit run, but never trust a parse blindly
-		}
-		used[n] = true
+		taken[name] = true
 	}
-	n := 1
-	for used[n] {
-		n++
+	for n := 1; ; n++ {
+		if !taken[mintName(stem, n)] {
+			return n
+		}
 	}
-	return n
 }
 
 // nameGenScopeKey composes the placement half of the ordinal generator's
@@ -94,10 +113,21 @@ func nameGenScopeKey(parentID, locationID *string) string {
 }
 
 // siblingNamesInScope reads every component name sharing parentID/locationID's
-// placement bucket, the exact candidate set pickOrdinal scans. excludeID
-// omits one row (a move or a reclassify recomputing its OWN row's name,
-// which already occupies this bucket under its old name at read time); nil
-// excludes nothing (a create, whose row does not exist yet).
+// placement bucket, the exact candidate set pickOrdinal tests against.
+// excludeID omits one row (a move or a reclassify recomputing its OWN row's
+// name, which already occupies this bucket under its old name at read time);
+// nil excludes nothing (a create, whose row does not exist yet).
+//
+// It reads NAMES, not the ordinals #681 now stores beside them, and that is
+// the deliberate half of this slice. The constraint allocation has to satisfy
+// is the scoped-name unique index, which is on the name, and the rows holding
+// a name are not the same set as the rows holding an ordinal: an operator can
+// type "display-1" by hand, taking the name while owning no ordinal at all.
+// An allocator reading the ordinal column would not see that row and would
+// mint its name a second time. What the stored ordinal buys is everything
+// DOWNSTREAM of allocation (the bare render, a label rule reading .Ordinal,
+// the recompute-and-compare invariant); what unblocks a stem-less name is
+// pickOrdinal minting candidates instead of parsing siblings.
 func siblingNamesInScope(ctx context.Context, q querier, parentID, locationID, excludeID *string) ([]string, error) {
 	var (
 		rows pgx.Rows
@@ -126,7 +156,12 @@ func siblingNamesInScope(ctx context.Context, q querier, parentID, locationID, e
 	return out, rows.Err()
 }
 
-// generateComponentName mints "<stem>-<n>" inside the caller's transaction.
+// generateComponentName mints a name inside the caller's transaction and
+// returns it together with the ORDINAL it was minted from, which the caller
+// stores on the row (#681). The number used to be computed here, formatted
+// into the name, and dropped on the floor, leaving every downstream reader to
+// recover it by string surgery; it is a fact the platform owns, so it is
+// returned as one.
 //
 // The advisory lock it takes first is transaction-scoped
 // (pg_advisory_xact_lock, released at commit or rollback, the same primitive
@@ -152,19 +187,20 @@ func siblingNamesInScope(ctx context.Context, q querier, parentID, locationID, e
 // reclassify) trusts this return value with no re-check of its own, so the
 // guarantee has to live here, the one place all of them funnel through, or
 // it is not a guarantee at all.
-func generateComponentName(ctx context.Context, tx pgx.Tx, stem string, parentID, locationID, excludeID *string) (string, error) {
+func generateComponentName(ctx context.Context, tx pgx.Tx, stem string, parentID, locationID, excludeID *string) (string, int, error) {
 	if err := lockAdvisory(ctx, tx, "component_name/"+stem+"/"+nameGenScopeKey(parentID, locationID)); err != nil {
-		return "", err
+		return "", 0, err
 	}
 	existing, err := siblingNamesInScope(ctx, tx, parentID, locationID, excludeID)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
-	name := fmt.Sprintf("%s-%d", stem, pickOrdinal(existing, stem))
+	ordinal := pickOrdinal(existing, stem)
+	name := mintName(stem, ordinal)
 	if err := validateEntityName(name); err != nil {
-		return "", fmt.Errorf("storage: generated name %q is invalid: %w", name, err)
+		return "", 0, fmt.Errorf("storage: generated name %q is invalid: %w", name, err)
 	}
-	return name, nil
+	return name, ordinal, nil
 }
 
 // genericDeviceProductID resolves generic-device's id, the same fallback
@@ -201,22 +237,23 @@ func componentTypeIDForProduct(ctx context.Context, q querier, productID string)
 // resolve the product's component_type stem, then mint the ordinal within
 // the given placement scope. One function so "generate a name" has exactly
 // one implementation, never a per-call-site variant.
-func generateNameForProduct(ctx context.Context, tx pgx.Tx, productID string, parentID, locationID, excludeID *string) (string, error) {
+func generateNameForProduct(ctx context.Context, tx pgx.Tx, productID string, parentID, locationID, excludeID *string) (string, int, error) {
 	typeID, err := componentTypeIDForProduct(ctx, tx, productID)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	stem, _, _, _, err := resolveTypeFacts(ctx, tx, typeID)
 	if err != nil {
-		return "", fmt.Errorf("storage: resolve type facts for product %q: %w", productID, err)
+		return "", 0, fmt.Errorf("storage: resolve type facts for product %q: %w", productID, err)
 	}
 	// A resolved stem of "" means the walk reached the root of this
-	// component_type's ancestry with no stem set anywhere on it: refused by
-	// name rather than minted into "-1", which would pass straight through
-	// as a real component name and fail every downstream reader that
-	// assumes the entity name grammar.
+	// component_type's ancestry with no stem set anywhere on it. The mint
+	// below would now produce a legal name from it ("1", not the "-1" that
+	// used to make this mechanically impossible), which is exactly right for
+	// a positional type and exactly wrong for a device: see
+	// ErrComponentTypeNoStem for why this stays a refusal.
 	if stem == "" {
-		return "", fmt.Errorf("%w: component_type %s (product %q)", ErrComponentTypeNoStem, typeID, productID)
+		return "", 0, fmt.Errorf("%w: component_type %s (product %q)", ErrComponentTypeNoStem, typeID, productID)
 	}
 	return generateComponentName(ctx, tx, stem, parentID, locationID, excludeID)
 }

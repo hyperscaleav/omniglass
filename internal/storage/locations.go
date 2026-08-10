@@ -380,9 +380,11 @@ func scanLocation(row pgx.Row) (*Location, error) {
 // attachLocationPaths fills every l's Path/.PathSegments/.Renders (#627 Task
 // 15), in one batch walk however long the page (#643, and one query rather
 // than the accessor planes' three: a location's address is its own ancestor
-// chain, with no plane root to cross to). A location has no accessor and no
+// chain, with no plane root to cross to). A location has no accessor, no
 // type-level abbreviation (location_type carries no abbrev column the way
-// component_type does), so RenderBare always gets "" here. full is unused
+// component_type does), and no generated name to have allocated an ordinal for
+// (#657 slices 6 and 7 bring both), so RenderBare always gets nil and ""
+// here. full is unused
 // (see attachSystemPaths' own doc comment for why the parameter exists
 // anyway).
 func attachLocationPaths(ctx context.Context, q querier, ls []*Location, full bool) error {
@@ -402,7 +404,7 @@ func attachLocationPaths(ctx context.Context, q querier, ls []*Location, full bo
 		segs := paths[l.ID]
 		l.PathSegments = segs
 		l.Path = strings.Join(segs, ".")
-		l.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, "", "")}
+		l.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, nil, "")}
 	}
 	return nil
 }

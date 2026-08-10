@@ -368,7 +368,9 @@ func scanSystem(row pgx.Row) (*System, error) {
 // product) carries no abbrev column the way component_type does, and the
 // system_type registry that now does carry one (ADR-0096) is not read here,
 // because the rules that consume a resolved stem and abbrev are the naming epic
-// (#657). So RenderBare still gets "" here and falls back to its no-abbrev
+// (#657). Nor does a system generate a name yet, so it has no allocated
+// ordinal to compact with (#657 slice 6 is what brings both). RenderBare still
+// gets nil and "" here and falls back to its no-abbrev
 // concatenation. full is unused
 // here (nothing to gate: the walk is the whole cost); it exists so this
 // matches scopedConfig.attachPaths' shared signature, which
@@ -391,7 +393,7 @@ func attachSystemPaths(ctx context.Context, q querier, ss []*System, full bool) 
 		segs := paths[s.ID]
 		s.PathSegments = segs
 		s.Path = strings.Join(segs, ".")
-		s.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, "", "")}
+		s.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, nil, "")}
 	}
 	return nil
 }
