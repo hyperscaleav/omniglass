@@ -769,8 +769,19 @@ func locationLabelChainWith(ctx context.Context, q querier, locationTypeID, glob
 	return in, nil
 }
 
-// locationLabelData is the closed data map for one location. No product, no
-// ordinal, no vendor: a location has none of them.
+// locationLabelData is the closed data map for one location. No product and no
+// vendor: a location is not an instance of a catalog row.
+//
+// And deliberately NO Ordinal, although #687 gave a location one (the comment
+// here used to say a location has none, which that slice made false). The key
+// would be redundant where it would help and wrong where it would not. A
+// POSITIONAL location's name IS its ordinal, so "{{.TypeName}} {{.Name}}"
+// already renders "Floor 3" with nothing added; the only case a separate key
+// serves is a STEMMED type with the first ordinal suppressed, where the name is
+// "wing" and the ordinal is 1, and printing "Wing 1" for the only wing in a
+// building is the exact defect this epic was filed about (ADR-0101 declines to
+// use .Ordinal in the shipped SYSTEM rule for the same reason). Adding a key is
+// the only way to widen what a rule can see, so it is not added on a maybe.
 func locationLabelData(l *Location, in locationLabelInputs) label.Data {
 	return label.Data{
 		"Name":     l.Name,

@@ -4140,6 +4140,24 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   ([ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)'s addressing and
   `#627`'s placement-scoped uniqueness): `boi.17c.1` resolves where `1` cannot, and an ambiguous bare
   name is already a named refusal listing its candidates rather than a silent first match.
+- **Consequence (two limits recorded rather than papered over):** A rule cannot be CLEARED on the
+  wire, only replaced, because an omitted JSON key and an explicit `null` both decode to a nil
+  pointer and an object field has no third state to read. That is the limit
+  `component_type.stem`'s patch already carries (its wire field is `minLength: 1`), and closing it
+  means either an untyped `json.RawMessage` field, which costs the generated client its shape, or a
+  custom method for one field; both are wire-contract choices rather than this slice's. And the
+  shipped `floor` rule reaches NEW estates only: `SeedLocationType` is insert-when-absent, the
+  forked-template half of the seed model, so an upgraded estate opts its own `floor` in with one
+  `PATCH`. Deliberately no backfill migration, since the rule it would install could not then be
+  removed, and a `location_type` row is operator space rather than platform space. Both limits are
+  written into the operator guide with the exact call.
+- **Consequence (a location label rule still cannot read `.Ordinal`, and that is not an oversight):**
+  ADR-0098's closed map gains no key here, although this slice gives a location an ordinal. It would
+  be redundant where it helps and wrong where it does not: a positional location's name IS its
+  ordinal, so `{{.TypeName}} {{.Name}}` already renders `Floor 3`, and the only case a separate key
+  serves is a stemmed type with the first ordinal suppressed, where printing `Wing 1` for the only
+  wing is the defect the epic was filed about. ADR-0101 declines `.Ordinal` in the shipped SYSTEM
+  rule for the same reason.
 - **Consequence (the fork primitive does not reach this registry, and does not need to):**
   [#655](https://github.com/hyperscaleav/omniglass/issues/655)'s `registry_shadow`
   ([ADR-0095](#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it))

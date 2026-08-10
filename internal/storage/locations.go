@@ -398,31 +398,40 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	if err != nil {
 		return nil, err
 	}
-	if lt.NameRule != nil {
-		norm := lt.NameRule.normalized()
-		lt.NameRule = &norm
-	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create location_type: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if _, err := tx.Exec(ctx,
-		`insert into location_type (name, official, display_name, icon, allowed_parent_types, label_rule, name_rule) values ($1, false, $2, $3, $4, $5, $6) returning id`,
-		lt.Name, lt.DisplayName, lt.Icon, lt.AllowedParentTypes, lt.LabelRule, rule); err != nil {
+	// Scanned rather than Exec'd, which this insert's own `returning id` always
+	// meant to do and never did: the id is minted by the database, so a caller
+	// that discarded it handed the operator back a row with an EMPTY id (the
+	// field the wire schema calls the stable handle that survives a rename) and
+	// wrote an audit row keyed on the empty string, which commits because
+	// resource_id is text. The static audit-key guard could not see it, since it
+	// reads the expression at the call site and `lt.ID` is exactly the shape it
+	// wants. CreateComponentType has always scanned its own RETURNING; this is
+	// the same statement finally doing so, and it is also what makes the
+	// normalized name_rule come back from the column rather than from the input.
+	created, err := scanLocationType(tx.QueryRow(ctx,
+		`insert into location_type (name, official, display_name, icon, allowed_parent_types, label_rule, name_rule)
+		 values ($1, false, $2, $3, $4, $5, $6)
+		 returning `+locationTypeCols,
+		lt.Name, lt.DisplayName, lt.Icon, lt.AllowedParentTypes, lt.LabelRule, rule))
+	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
 		}
 		return nil, fmt.Errorf("storage: insert location_type %q: %w", lt.Name, err)
 	}
-	if err := writeAuditRes(ctx, tx, actorID, "create", "location_type", lt.ID, nil, lt); err != nil {
+	if err := writeAuditRes(ctx, tx, actorID, "create", "location_type", created.ID, nil, created); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit create location_type: %w", err)
 	}
-	return &lt, nil
+	return created, nil
 }
 
 // UpdateLocationType patches a custom location_type's display_name, icon, or
