@@ -564,10 +564,10 @@ export default function Locations() {
     // A location has TWO buckets, not three: it has no located-at column, so
     // the shape falls out of asking for the bucket with no location at all.
     const parentItems = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 })));
-    // The label the platform would write. A shipped estate answers with
-    // nothing here (the global location rule ships deliberately empty and no
-    // seeded location_type carries one), which is the state the form has to be
-    // honest about rather than the exception.
+    // The label the platform would write. A shipped estate answers with the
+    // global location rule's render of the name (#657); an empty answer means no
+    // rule resolves at any tier, which the form still has to be honest about,
+    // since it shows the name there rather than a locked empty field.
     const labelDraft = useLabelDraft(() =>
       type().trim()
         ? {

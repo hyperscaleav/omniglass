@@ -20,10 +20,11 @@ import { api } from "../api/client";
 
 // DraftLabel is the answer: the label, and the rule that produced it.
 //
-// An empty label is a real, common state rather than an error. No location rule
-// ships at any tier, so every location create form is in it, and it means the
-// platform stores nothing and the surface reads the name instead. The rule is
-// what tells that apart from a rule that ran and had nothing to say.
+// An empty label is a real state rather than an error: it means the platform
+// stores nothing and the surface reads the name instead. It is reached by
+// clearing the rule at every tier, rather than being where a shipped estate
+// starts (each of the three kinds ships a rule as of #657). The rule field is
+// what tells it apart from a rule that ran and had nothing to say.
 export interface DraftLabel {
   label: string;
   rule: string;

@@ -672,13 +672,31 @@ describe("Locations create identity", () => {
     expect(key.value).toBe("room");
   });
 
-  it("falls back to the name in the locked label field, which is where a shipped estate lands", async () => {
-    // No location rule ships at any tier (internal/seed/label_rules.yaml is
-    // deliberately empty for this kind, and no seeded location_type carries
-    // one), so this is the DEFAULT state of the location create form rather
-    // than an edge case. A locked field showing nothing at all would be worse
-    // than the form this replaces, so it shows what an operator will actually
-    // read, which is the name.
+  it("shows the label the shipped location rule renders, and names the rule", async () => {
+    // The default state of the location create form as of #657: the global
+    // location rule reads the name as words and titles it, so the locked field
+    // carries a real value and the form says which rule produced it. The render
+    // is the server's (the browser never re-implements the engine), so the fetch
+    // is mocked with what the route actually answers.
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":renderLabel")) {
+        return new Response(JSON.stringify({ label: "North Boardroom", rule: "{{title (words .Name)}}" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    const { typeSelect, display } = await fields();
+    fireEvent.change(typeSelect, { target: { value: "room" } });
+    await waitFor(() => expect(display.value).toBe("North Boardroom"));
+    expect(display.disabled).toBe(true);
+    expect(screen.getByText(/Rendered from/)).toBeTruthy();
+  });
+
+  it("falls back to the name in the locked label field where no rule resolves", async () => {
+    // Reachable by clearing the rule at every tier, and it stopped being the
+    // shipped estate's default when the location rule landed (#657). A locked
+    // field showing nothing at all would be worse than the form this replaces,
+    // so it shows what an operator will actually read, which is the name.
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "POST" && req.url.includes(":renderLabel")) {
