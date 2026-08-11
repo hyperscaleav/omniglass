@@ -75,6 +75,24 @@ uuid minted by the database, the internal address the handle resolves to
   that is the one place this differs from a type's **label rule**, which does have a
   preview-then-apply recompute: a label is display, and a name is an address.
 
+  **Reclassifying a platform-named location needs its name claimed first.** A name the platform owns
+  is minted from its type's rule, so changing the type re-mints it, and moving to a type with **no**
+  rule leaves nothing to mint from: the platform would be left owning a name it can no longer
+  produce. That save is refused (422) rather than quietly handing you the pen. Because `floor` is the
+  only shipped type with a rule, this is the ordinary case rather than a corner: reclassifying a
+  generated floor as a room, a building or a campus is refused until you claim the name. The way
+  through is two steps, and the refusal names it.
+
+  ```sh
+  omniglass location rename boi.17c.1 --name lobby       # the name is now yours
+  omniglass location update boi.17c.lobby --location-type room
+  ```
+
+  Only a **platform-named** location is affected. One you named yourself was never the platform's to
+  re-mint, so it reclassifies to anything, and its name comes through untouched. Reclassifying
+  between two types that both carry a rule is fine too: the name is simply re-minted from the new
+  one.
+
   Two limits to know before you set one. **A rule cannot be removed once set**, only replaced: an
   omitted field and an explicit `null` are the same thing in a PATCH body, so there is no request
   that spells "back to operator-named". Set a rule only on a type whose names you want the platform

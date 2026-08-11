@@ -1355,7 +1355,7 @@ export interface paths {
         head?: never;
         /**
          * Update a location
-         * @description Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+         * @description Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type but floor: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-location"];
         trace?: never;

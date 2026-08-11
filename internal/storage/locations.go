@@ -42,7 +42,16 @@ var (
 	// pen and the verbs ahead of the generator, so a location an operator named
 	// then is already frozen now). What changed here is only which types it
 	// applies to.
-	ErrLocationTypeNoNameRule = errors.New("storage: this location_type has no name rule, so the platform cannot generate a name for it")
+	//
+	// The message names the WAY OUT, not only the missing fact, because the
+	// path an operator meets it on most is neither of the two above: `floor` is
+	// the one shipped type carrying a rule, so RECLASSIFYING a platform-named
+	// floor as a room, a building or a campus (the routine misclassification
+	// fix) lands here, and there "name it yourself" is advice with nowhere to
+	// take it, since the patch that reclassifies carries no name field. The
+	// system tier's twin (ErrSystemTypeRequiredForName) names its escape for the
+	// same reason.
+	ErrLocationTypeNoNameRule = errors.New("storage: this location_type has no name rule, so the platform cannot generate a name for it; supply a name on create, or :rename the location to claim its name before reclassifying it to this type")
 
 	// ErrLocationExistsUnderParent / ErrLocationExistsAtRoot name which
 	// placement bucket a 23505 collided in (#627 scopes name uniqueness to

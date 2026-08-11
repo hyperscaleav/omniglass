@@ -353,7 +353,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/locations/{name}",
 		Summary:     "Update a location",
-		Description: "Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type but floor: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
 	}, "location", "update"), func(ctx context.Context, in *updateLocationInput) (*locationOutput, error) {
 		l, err := gw.UpdateLocation(ctx, actorID(ctx), in.Name, storage.LocationPatch{
 			DisplayName:  in.Body.DisplayName,
@@ -519,7 +519,7 @@ func mapLocationErr(err error) error {
 	case errors.Is(err, storage.ErrLocationCycle):
 		return huma.Error422UnprocessableEntity("cannot move a location under itself or a descendant")
 	case errors.Is(err, storage.ErrLocationTypeNoNameRule):
-		return huma.Error422UnprocessableEntity("this location_type has no name rule, so the platform cannot generate a name for it: name it yourself")
+		return huma.Error422UnprocessableEntity("this location_type has no name rule, so the platform cannot generate a name for it: supply a name on create, or :rename the location to claim its name before reclassifying it to this type")
 	default:
 		return huma.Error500InternalServerError("location operation failed")
 	}

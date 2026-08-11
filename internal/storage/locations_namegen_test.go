@@ -3,6 +3,7 @@ package storage_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -115,6 +116,24 @@ func TestLocationTypeWithNoNameRuleGeneratesNothing(t *testing.T) {
 	}
 	if named.NameGenerated || named.Ordinal != nil {
 		t.Errorf("an operator-named location = (generated %v, ordinal %v), want (false, absent)", named.NameGenerated, ordstr(named.Ordinal))
+	}
+}
+
+// The refusal has to name the WAY OUT, not only the missing fact, because the
+// place an operator meets it most is not a create: `floor` is the one shipped
+// location type carrying a rule, so reclassifying a platform-named floor into a
+// room, a building or a campus (the routine fix for a misclassification) hits
+// it, and there the fix is neither "supply a name" nor "give the type a rule",
+// it is ":rename the location first, then reclassify it". The system tier's
+// twin already names its escape (ErrSystemTypeRequiredForName); this one said
+// only "the platform cannot generate a name for it", which is the diagnosis
+// with the remedy left off.
+func TestTheNoNameRuleRefusalNamesTheEscape(t *testing.T) {
+	for _, part := range []string{":rename", "reclassif"} {
+		if !strings.Contains(storage.ErrLocationTypeNoNameRule.Error(), part) {
+			t.Errorf("ErrLocationTypeNoNameRule = %q, want it to mention %q: an operator reclassifying a platform-named floor has to be told to claim the name first",
+				storage.ErrLocationTypeNoNameRule.Error(), part)
+		}
 	}
 }
 

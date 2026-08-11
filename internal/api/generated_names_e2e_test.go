@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
@@ -237,4 +238,57 @@ func TestLocationGeneratedNameAPI(t *testing.T) {
 		map[string]any{"name": "wing", "display_name": "Wing", "name_rule": map[string]any{"stem": "Wing"}}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/location-types",
 		map[string]any{"name": "wing", "display_name": "Wing", "name_rule": map[string]any{"stem": "wing", "bare_first": true}}, http.StatusCreated)
+}
+
+// A platform-named location cannot be reclassified to a type with no name rule,
+// which is intended (the platform would be left owning a name it can no longer
+// mint) and is where most operators will actually meet the refusal: `floor` is
+// the only shipped type carrying a rule, so reclassifying a generated floor as
+// a room, a building or a campus is the routine misclassification fix and it is
+// refused. What the wire owes them is the WAY OUT, and ":rename it first" is
+// not something "name it yourself" says: there is no name field on the patch to
+// name it in.
+func TestReclassifyingAPlatformNamedLocationNamesTheEscape(t *testing.T) {
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "boi", "location_type": "campus"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "17c", "location_type": "building", "parent": "boi"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"location_type": "floor", "parent": "17c"}, http.StatusCreated)
+
+	body := c.do(ownerTok, http.MethodPatch, "/locations/boi.17c.1",
+		map[string]any{"location_type": "room"}, http.StatusUnprocessableEntity)
+	var problem struct {
+		Detail string `json:"detail"`
+	}
+	if err := json.Unmarshal(body, &problem); err != nil {
+		t.Fatalf("decode the refusal: %v", err)
+	}
+	for _, part := range []string{":rename", "reclassif"} {
+		if !strings.Contains(problem.Detail, part) {
+			t.Errorf("the 422 detail = %q, want it to mention %q", problem.Detail, part)
+		}
+	}
+
+	// And the escape it names actually works: claim the name, then reclassify.
+	c.do(ownerTok, http.MethodPost, "/locations/boi.17c.1:rename", map[string]any{"name": "lobby"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/locations/boi.17c.lobby",
+		map[string]any{"location_type": "room"}, http.StatusOK)
 }
