@@ -766,6 +766,7 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		{table: "component", place: "huddle", name: "display-1", label: "Display 1", platform: true},
 		{table: "component", place: "boardroom", name: "videobar-1", label: "Video Bar 1", platform: true},
 		{table: "component", place: "boardroom", name: "videobar-2", label: "Video Bar 2", platform: true},
+		{table: "component", place: "boardroom", name: "display-1", label: "Display 1", platform: true},
 		{table: "component", place: "boardroom", name: "display-2", label: "Display 2", platform: true},
 		{table: "component", place: "auditorium", name: "display-1", label: "Display 1", platform: true},
 		// The unclassified box: the rule can only say "Generic Device 1", so
