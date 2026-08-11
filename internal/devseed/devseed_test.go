@@ -322,6 +322,24 @@ func TestRunIdempotent(t *testing.T) {
 	if systems != 2 {
 		t.Errorf("systems = %d, want 2 (the two halves of the divisible boardroom)", systems)
 	}
+	// Membership and staffing are counted too, because they are where a resolver
+	// that zipped the fixture onto the estate in the wrong order shows up: every
+	// name and label would still be right, and the second Run would staff a
+	// second device into a role the first Run already filled.
+	var members, assignments int
+	if err := conn.QueryRow(ctx, `select count(*) from system_member`).Scan(&members); err != nil {
+		t.Fatalf("count members: %v", err)
+	}
+	if members != 6 {
+		t.Errorf("system members = %d, want 6 (four in the first half including the unstaffed conditioner, two in the second, the shared bar in both)", members)
+	}
+	if err := conn.QueryRow(ctx, `select count(*) from system_role_assignment`).Scan(&assignments); err != nil {
+		t.Fatalf("count role assignments: %v", err)
+	}
+	if assignments != 5 {
+		t.Errorf("role assignments = %d, want 5 (the fixture's five, unchanged by the second Run)", assignments)
+	}
+
 	// A multi-site estate: three campuses, not one.
 	var campuses int
 	if err := conn.QueryRow(ctx, `select count(*) from location where location_type = (select id from location_type where name = 'campus')`).Scan(&campuses); err != nil {
