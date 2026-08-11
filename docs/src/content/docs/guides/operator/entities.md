@@ -68,23 +68,38 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   display name never fills the name in for you here; those two fields are independent, because a blank
   name is a **request** rather than an omission.
 
-  Leave the name blank and the platform names the row from what you just told it. The form shows what
-  that will be as soon as the classification is chosen, in the form `display-n`: the **stem** comes
-  from the type (so it is known), and `n` is the lowest free number in the placement, which the
-  platform picks when the row is created and which nothing can know before then, so it is shown as a
-  letter and never as a digit. Some types carry no number on the first of their kind in a place, and
-  the form says so where that applies (`boardroom`, then `boardroom-2`). Beneath it the form names the
-  **placement the name has to be unique in**, as a path: the name itself never carries that path, since
-  a name is unique within its placement rather than across the estate. Type your own name to override
-  it, which the form acknowledges and tells you how to undo; overriding one identity field never
-  disturbs the other.
+  **Both identity fields arrive locked, already filled in with what the platform will use.** That is
+  the default in effect rather than an offer: you are not asked to name anything, you are shown what
+  the row is about to be called and given a lock to open if you disagree. Each field has its own
+  **Override**, and opening one leaves the other exactly where it was. A locked field sends nothing at
+  all, which is how the platform keeps the pen; **Use the generated one** closes the lock again and
+  discards whatever you typed.
 
-  A name is **required** only where nothing will generate one: a system with no type, a location whose
+  The locked **name** reads as `display-n`: the **stem** comes from the type (so it is known), and `n`
+  is the lowest free number in the placement, which the platform picks when the row is created and
+  which nothing can know before then, so it is shown as a letter and never as a digit. Some types carry
+  no number on the first of their kind in a place, and the form says so where that applies
+  (`boardroom`, then `boardroom-2`). Under it the form names the **placement the name has to be unique
+  in**, as a path: the name itself never carries that path, since a name is unique within its placement
+  rather than across the estate.
+
+  The locked **display name** is the real label, rendered by the same rule engine that will stamp it,
+  against the classification and placement you have just chosen, with the same `n` standing in for the
+  ordinal. The form also names the **rule** that produced it, so the value is traceable rather than
+  arriving from nowhere. Nothing is created to work this out and no number is reserved: it is a render,
+  not a draft row ([ADR-0104](/architecture/decisions/)).
+
+  Where **no label rule applies** to what you picked, the field says so and shows the **name** instead,
+  because that is what an operator will actually read on the row. Every location in a fresh estate is
+  in this state: no label rule ships for locations at any tier, deliberately, since a campus, a
+  building and a room each have a real-world name the platform has no access to.
+
+  A name is **required** only where nothing will generate one, and there the field arrives unlocked
+  with no lock to close: a system with no type (or a type whose chain sets no stem), a location whose
   type carries no name rule, a product whose type chain carries no stem. The form names the missing
   fact rather than just refusing. Elsewhere (the catalog and admin pages, whose names have no
   generator and are unique estate-wide) the name still fills itself in from the display name until you
-  edit it. Leave the **display name** blank and a label rule may render one, marked **Generated**;
-  where no rule applies, the name is what shows.
+  edit it.
 
   A location's type is required, since for a location the type is the only shape-definer; on a
   component and a system the classifier picks the stem too, so an unclassified system is legitimate

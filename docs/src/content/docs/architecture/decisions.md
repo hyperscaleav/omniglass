@@ -140,7 +140,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0102](#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing) | 2026-08-10 | Accepted | A **`location_type.name_rule`** (nullable jsonb) is a type's opt-in to naming the locations it classifies, and it is a **declaration** (a stem, possibly empty, plus the first-ordinal suppression flag) rather than the `label_rule` template beside it. A name has to satisfy `validateEntityName`, it lands in a scoped-unique index, and other things reference it, so an unrenderable rule has no safe degradation the way a label's does; a declaration IS a `nameMint`, so a rule is refused at RULE-EDIT time by minting from it (ordinal 1 and a nine-digit ceiling bound the whole output space), which a template's output could only be sampled. Null is the opt-out and there is no boolean beside it. A rule change **renames nothing**: there is no name-side recompute verb, deliberately, because relabelling in bulk is recoverable and renaming is not. A positional type permitted at root allocates `1`, `2` across the estate and that is legal, since the bucket is the placement and two positional types under one parent already share an ordinal space |
 | [ADR-0103](#adr-0103-a-positional-name-is-allocation-order-and-the-real-world-designation-is-a-label) | 2026-08-11 | Accepted | A positional name is **allocation order**, never a claim about the world: the dev estate's West Building holds one floor, the building's Level 2, and the generator calls it `1`. The divergence is kept rather than removed, because a name is an address (unique under its parent, typeable, ownable by the platform so nobody has to invent one) and a label is what a human reads (a floor's designation is signage, a fact the platform has no access to). The seeded estate ships both cases of one type side by side, a floor named `1` labelled Level 1 and a floor named `1` labelled Level 2. The rule this generalises to: a stem-less positional name fits an arbitrary disambiguator and not a number an operator reads as a designation, which puts `floor` on the line rather than safely inside it; making it nominal (the plain reversal of ADR-0102) is declined on cost, not principle, and stays available. Seeding a Level 1 so the numbers line up, and shipping a `Floor {{.Name}}` label rule, are both refused as the same defect with better manners |
 
-| [ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it) | 2026-08-11 | Accepted | A create form shows the **stem** a generated name will carry, resolved in the browser from the classification the operator just chose, and writes the ordinal as the token `n`, because the ordinal is allocated against live siblings inside the create's own transaction and does not exist until the row does. A **draft-preview verb that mints and rolls back** is refused: its answer is provisional (another create can take the ordinal between the preview and the commit), and the rolled-back mint takes the same advisory lock real creates need, so a form that previewed on every keystroke would serialise the estate's creates behind a UI affordance. **Re-rendering the label rule in TypeScript** is refused outright, as the second implementation of an engine slice 3 swept 42 copies of. The label is therefore not previewed at all: its data map carries `Name` and `Ordinal`, so it is unknowable for the same reason. The placement bucket is shown beside the field as a PATH and never as a prefix inside it, since names became scoped to placement and a name no longer contains its ancestry |
+| [ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it) | 2026-08-11 | Accepted | A create form shows the **stem** a generated name will carry, resolved in the browser from the classification the operator just chose, and writes the ordinal as the token `n`, because the ordinal is allocated against live siblings inside the create's own transaction and does not exist until the row does. A **draft-preview verb that mints and rolls back** is refused: its answer is provisional (another create can take the ordinal between the preview and the commit), and the rolled-back mint takes the same advisory lock real creates need, so a form that previewed on every keystroke would serialise the estate's creates behind a UI affordance. **Re-rendering the label rule in TypeScript** is refused outright, as the second implementation of an engine slice 3 swept 42 copies of. The label is therefore not previewed at all: its data map carries `Name` and `Ordinal`, so it is unknowable for the same reason. The placement bucket is shown beside the field as a PATH and never as a prefix inside it, since names became scoped to placement and a name no longer contains its ancestry. **Amended (#699):** a RENDER is not a mint, and both refusals were about allocating, so `:renderLabel` resolves the rule through the same tiers with the same one engine, writes the token where the ordinal goes, and takes no lock; the form now shows both values in LOCKED fields, gated by the entity's `:create` with the placement resolved in the caller's read scope |
 
 ## Entries
 
@@ -4310,7 +4310,8 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   - **Re-rendering the label rule in TypeScript.** A second implementation of the rule engine in
     another language, which is the defect the epic's third slice swept 42 hand-rolled copies of onto a
     single primitive to end. The label is therefore not previewed at all: the form says a rule will
-    render one and marks it Generated, and shows nothing it cannot know.
+    render one and marks it Generated, and shows nothing it cannot know. (Amended by #699 below: the
+    refusal stands, and the label is now shown, because the ONE engine renders it.)
   - **Fetching the resolved stem from the server per selection.** It removes the one thing that can
     drift (the browser's walk of the type chain versus the gateway's) at the cost of a round trip per
     picker change and a new route. Declined because the walk is not new here: the console already
@@ -4323,5 +4324,39 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   chain with no stem). Each of those states shows the missing fact by name rather than a disabled
   button with no explanation. The console can now produce a row the platform owns the name of, which
   every earlier slice of this epic could only be reached from the API or the CLI.
+- **Amendment (#699, 2026-08-11): a render is not a mint, and the distinction is what this decision
+  turned on without naming.** Both refusals above are about ALLOCATING. The provisional-answer
+  argument is that a minted ordinal can be taken by another create before the commit; the
+  serialisation argument is that a rolled-back mint takes the bucket's `pg_advisory_xact_lock`.
+  Neither reaches an operation that allocates nothing: resolve the rule through the same tiers, build
+  the same closed data map, execute it with the same one engine, and write the token `n` where the
+  ordinal would go. No lock, no write transaction, no allocation, and no second implementation of
+  anything. That operation is `POST /<collection>:renderLabel`, and the create form now shows both
+  generated values in **locked fields** rather than showing a shape and a promise. The
+  no-allocation claim is held by a test that reads back every SQL statement the render issued (#650's
+  counting instrument) and by a create five renders later still taking ordinal 1, rather than by this
+  paragraph.
+  - The TypeScript refusal is **unchanged and is what makes this shape the only one available**: the
+    label is shown because the Go engine rendered it, not because the browser learned to.
+  - The NAME's shape stays client-side, so the two halves of the form now answer from different tiers.
+    That is a deliberate trade rather than an oversight: a stem resolves synchronously from a registry
+    the picker has already loaded, so the locked name appears the instant a picker moves, where a
+    round trip would leave the form's primary affordance empty until it lands. The cost is the drift
+    ADR-0104 already accepted, and the round-trip objection to resolving the stem server-side is now
+    void, since the form makes a round trip per picker change regardless. Folding the name into the
+    same answer is therefore available and cheap, and is deliberately not taken here.
+  - **The gate is the entity's own `:create`,** the permission the create it precedes needs: the
+    answer exists to be acted on, and an operator who cannot create has no use for it. The PLACEMENT
+    refs are a separate question and resolve within the caller's `location:read` and `system:read`
+    scopes, because the rendered string can carry a location's label and a system type's label, so
+    without that the route is a disclosure channel. A location draft injects no scope at all, because
+    a location's data map reads no other estate row (ADR-0098's exclusion survives on that tier).
+  - **Three states per field, not two,** and the third is not a loading state. Generation is
+    unavailable, permanently, for a component_type chain with no stem, a system with no system_type,
+    a system_type chain with no stem, and a location_type with no name rule; the label has its own,
+    where no rule resolves at any tier. That last one is not an edge case: no location label rule
+    ships at any tier, so every location in a fresh estate is in it, and the field shows the NAME
+    (the read ladder's third rung) rather than sitting locked and empty.
 - **Tracked under** [#688](https://github.com/hyperscaleav/omniglass/issues/688), the eighth slice of
-  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
+  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657), and amended by
+  [#699](https://github.com/hyperscaleav/omniglass/issues/699), its tenth.
