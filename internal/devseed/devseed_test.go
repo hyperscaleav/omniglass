@@ -783,6 +783,78 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 	}
 }
 
+// TestSeededStaffingLandsOnTheRightDevices proves the fixture's references still
+// point where they say they do now that the keys and the names have come apart.
+// It is the assertion that catches a resolver which zips the fixture onto the
+// estate in the wrong order: every name and label would still be right, and the
+// wrong panel would be staffing the wrong half of the room.
+//
+// The staffing is also the estate's health story: boardroom-a holds two mics and
+// a display and reads healthy; boardroom-b is one mic short of its quorum of two
+// and reads degraded, with the shared bar in both.
+func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
+	ctx, conn, _ := seededEstate(t)
+
+	for _, tc := range []struct {
+		system string
+		want   map[string]string // role -> the component names filling it, joined
+	}{
+		{system: "boardroom", want: map[string]string{"room-mic": "videobar-1,videobar-2", "main-display": "display-1"}},
+		{system: "boardroom-2", want: map[string]string{"room-mic": "videobar-1", "main-display": "display-2"}},
+	} {
+		rows, err := conn.Query(ctx, `
+			select r.name, c.name
+			from system_role_assignment a
+			join system s on s.id = a.system_id
+			join system_role r on r.id = a.role_id
+			join component c on c.id = a.component_id
+			where s.name = $1
+			order by r.name, c.name`, tc.system)
+		if err != nil {
+			t.Fatalf("read staffing for %q: %v", tc.system, err)
+		}
+		got := map[string]string{}
+		for rows.Next() {
+			var role, comp string
+			if err := rows.Scan(&role, &comp); err != nil {
+				t.Fatalf("scan staffing: %v", err)
+			}
+			if got[role] != "" {
+				got[role] += ","
+			}
+			got[role] += comp
+		}
+		if err := rows.Err(); err != nil {
+			t.Fatalf("iterate staffing: %v", err)
+		}
+		rows.Close()
+		for role, want := range tc.want {
+			if got[role] != want {
+				t.Errorf("system %q role %q is filled by %q, want %q", tc.system, role, got[role], want)
+			}
+		}
+		if len(got) != len(tc.want) {
+			t.Errorf("system %q staffing = %v, want %v", tc.system, got, tc.want)
+		}
+	}
+
+	// The power conditioner is a member of the first half and fills nothing,
+	// which is the case an assignment cannot produce.
+	var unstaffed int
+	if err := conn.QueryRow(ctx, `
+		select count(*) from system_member m
+		join system s on s.id = m.system_id
+		join component c on c.id = m.component_id
+		where s.name = 'boardroom' and c.name = 'device-1'
+		  and not exists (select 1 from system_role_assignment a
+		    where a.system_id = m.system_id and a.component_id = m.component_id)`).Scan(&unstaffed); err != nil {
+		t.Fatalf("read the unstaffed member: %v", err)
+	}
+	if unstaffed != 1 {
+		t.Errorf("the power conditioner is a member of boardroom filling no role in %d rows, want 1", unstaffed)
+	}
+}
+
 // TestTheSameFloorNumberMeansTwoDifferentThings is the friction this slice found
 // and chose to keep rather than hide (ADR-0103). A positional name is ALLOCATION
 // ORDER, not a real-world designation, and the estate seeds both cases side by
