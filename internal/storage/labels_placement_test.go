@@ -863,6 +863,15 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 			_, err := gw.RenameSystem(ctx, "", board.ID, "sys-board-renamed", all, all)
 			return err
 		}},
+		// A delete belongs in this loop for the same reason every other act
+		// does, and its absence is the hole this test's own claim (a write path
+		// nobody thought of fails it) could not cover: the claim only reaches
+		// acts the fixture performs. Deleting a system cascades its memberships
+		// away in the database, which moves what its members read for
+		// .SystemTypeLabel with no membership call anywhere in the gateway.
+		{"delete a system its members are bound to", func() error {
+			return gw.DeleteSystem(ctx, "", huddle.ID, all, all)
+		}},
 	}
 	for _, act := range acts {
 		if err := act.run(); err != nil {
@@ -930,6 +939,98 @@ func TestStaffingARoleRestampsTheComponentItBinds(t *testing.T) {
 	}
 	if got := labelOf(t, gw, ctx, bar.ID); got != "[Boardroom]" {
 		t.Fatalf("after staffing a role = %q, want %q: the implicit membership is a label write path too", got, "[Boardroom]")
+	}
+	assertNoLabelDrift(t, gw, ctx)
+}
+
+// Deleting a system is the membership write path with no membership call in it.
+// system_member_system_id_fkey is ON DELETE CASCADE, so the delete takes every
+// membership with it, and a component whose PRIMARY membership was one of them
+// reads a different .SystemTypeLabel from that instant. Slice 5 derived its
+// write paths from the data map and caught every EXPLICIT mover of a primary
+// membership (AddMember, RemoveMember, SetPrimaryMember, AssignRole); this is
+// the implicit one the database performs on the gateway's behalf.
+func TestDeletingASystemRestampsItsMembers(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	if _, err := gw.SetLabelRule(ctx, "", "component", "[{{.SystemTypeLabel}}]"); err != nil {
+		t.Fatalf("component rule: %v", err)
+	}
+	room := makeRoom(t, gw, ctx, "room-a")
+	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
+		Name: "sys-a", SystemTypeID: strptr("board"), LocationName: &room,
+	}, all)
+	if err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
+		ProductName: strptr(qm55), LocationName: &room, SystemName: &s.Name,
+	}, all)
+	if err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if c.DisplayName != "[Boardroom]" {
+		t.Fatalf("a bound component reads %q, want %q", c.DisplayName, "[Boardroom]")
+	}
+	if err := gw.DeleteSystem(ctx, "", s.ID, all, all); err != nil {
+		t.Fatalf("delete system: %v", err)
+	}
+	if got := labelOf(t, gw, ctx, c.ID); got != "[]" {
+		t.Fatalf("after deleting the system its member reads %q, want %q: the cascade took the membership and nothing restamped the label", got, "[]")
+	}
+	assertNoLabelDrift(t, gw, ctx)
+}
+
+// The second half of the same act: a component with two memberships loses the
+// PRIMARY one to the delete, and the sole survivor has to become the default,
+// exactly as it does when the operator unbinds that membership by hand
+// (RemoveMember calls promoteSolePrimary; the delete reached the same table by
+// a different door and did not). The label is what makes the divergence visible
+// rather than theoretical: with no default at all a rule reading
+// .SystemTypeLabel renders empty for a component that is still in a system.
+func TestDeletingASystemPromotesTheSoleSurvivingMembership(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	if _, err := gw.SetLabelRule(ctx, "", "component", "[{{.SystemTypeLabel}}]"); err != nil {
+		t.Fatalf("component rule: %v", err)
+	}
+	room := makeRoom(t, gw, ctx, "room-a")
+	board, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
+		Name: "sys-board", SystemTypeID: strptr("board"), LocationName: &room,
+	}, all)
+	if err != nil {
+		t.Fatalf("create board: %v", err)
+	}
+	huddle, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
+		Name: "sys-huddle", SystemTypeID: strptr("huddle"), LocationName: &room,
+	}, all)
+	if err != nil {
+		t.Fatalf("create huddle: %v", err)
+	}
+	// The first membership becomes the default with nobody asking, so the
+	// board is primary and the huddle is the ordinary second.
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
+		ProductName: strptr(qm55), LocationName: &room, SystemName: &board.Name,
+	}, all)
+	if err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if err := gw.AddMember(ctx, "", huddle.Name, c.ID, all); err != nil {
+		t.Fatalf("add the second membership: %v", err)
+	}
+	if err := gw.DeleteSystem(ctx, "", board.ID, all, all); err != nil {
+		t.Fatalf("delete the primary's system: %v", err)
+	}
+	ms, err := gw.ComponentMemberships(ctx, c.ID, all)
+	if err != nil {
+		t.Fatalf("read memberships: %v", err)
+	}
+	if len(ms) != 1 {
+		t.Fatalf("memberships after the delete = %d, want 1", len(ms))
+	}
+	if !ms[0].IsPrimary {
+		t.Fatalf("the sole surviving membership is not the default: a component with one system carries an unanswered question")
+	}
+	if got := labelOf(t, gw, ctx, c.ID); got != "[Huddle Room]" {
+		t.Fatalf("after the delete the component reads %q, want %q", got, "[Huddle Room]")
 	}
 	assertNoLabelDrift(t, gw, ctx)
 }

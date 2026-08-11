@@ -599,7 +599,10 @@ The cascade is **not** "delete everything below", because containers do not own 
 
 - a **component** (leaf) decommissions as above;
 - a **system** delete **unbinds its members** (the `system_member` rows) but keeps the components,
-  standalone and re-homeable;
+  standalone and re-homeable. The unbinding is the same act `RemoveMember` performs, and it carries
+  the same two consequences: a component left holding exactly one membership has that one promoted
+  to its default, and every released component's platform-owned label restamps, because a rule reading
+  `.SystemTypeLabel` reads the default membership's type and the default just moved;
 - a **location** delete is **refused by the API while occupied**; today the occupancy check counts
   only child locations (`parent_id` children), a still-placed system or component surfacing as the
   generic referenced error; the console offers re-homing first;

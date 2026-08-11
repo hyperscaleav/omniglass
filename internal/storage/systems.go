@@ -451,6 +451,13 @@ func attachSystemPaths(ctx context.Context, q querier, ss []*System, full bool) 
 
 // systemConfig drives the generic scoped-CRUD helpers for the system tree.
 //
+// beforeDelete releases the memberships. The database would take them anyway
+// (ON DELETE CASCADE), which is exactly the problem: a membership disappearing
+// moves a component's default and stales the label that reads its type, and
+// neither consequence can be attached to a cascade the gateway never sees.
+// Releasing them explicitly, one step ahead of the row's own delete, makes this
+// the same act RemoveMember performs and subject to the same rules.
+//
 // afterDelete records the room's recovery. A location's verdict is the rollup of
 // the systems in it, so deleting the system that was dragging it down improves it,
 // and that improvement is an edge an operator has to be able to read back. The
@@ -461,6 +468,9 @@ var systemConfig = scopedConfig[System]{
 	scan: scanSystem, idOf: func(s *System) string { return s.ID },
 	notFound: ErrSystemNotFound, forbidden: ErrSystemForbidden, occupied: ErrSystemOccupied,
 	attachPaths: attachSystemPaths,
+	beforeDelete: func(ctx context.Context, p *PG, tx pgx.Tx, before *System) error {
+		return p.releaseSystemMembers(ctx, tx, before.ID)
+	},
 	afterDelete: func(ctx context.Context, p *PG, q txQuerier, before *System) error {
 		if before.LocationID == nil {
 			return nil // placed nowhere: its removal rolls up to nothing

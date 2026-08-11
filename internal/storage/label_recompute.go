@@ -123,8 +123,12 @@ type labelNarrow struct {
 	// primarySystemID restricts to the components whose PRIMARY membership is
 	// this system.
 	primarySystemID *string
-	// rowID restricts to one row, the membership cascade's case.
-	rowID *string
+	// rowIDs restricts to a named set of rows, the membership cascade's case.
+	// A slice rather than a single id for the same reason locationIDs is one:
+	// deleting a system releases every membership it holds at once, and
+	// following each released component with a cascade of its own would be an
+	// N+1 in the one path that can hold a whole room's worth of components.
+	rowIDs []string
 }
 
 // labelScanQuery builds the row query a recompute reads from: the scoped-tree
@@ -166,8 +170,8 @@ func labelScanQuery(tbl scopeTable, cols string, read, action scope.Set, n label
 		sql += ` and exists (select 1 from system_member m
 			where m.component_id = ` + t + `.id and m.is_primary and m.system_id = ` + next(*n.primarySystemID) + `::uuid)`
 	}
-	if n.rowID != nil {
-		sql += ` and id = ` + next(*n.rowID) + `::uuid`
+	if n.rowIDs != nil {
+		sql += ` and id = any(` + next(n.rowIDs) + `::uuid[])`
 	}
 	// Ordered by id, not by name: this is the order rows are LOCKED in, and a
 	// single order shared by every recompute is what keeps two of them from
@@ -653,11 +657,22 @@ func (p *PG) cascadeSystemMemberLabels(ctx context.Context, tx pgx.Tx, systemID 
 // all, and re-reading one to stamp it would be a second definition of the same
 // thing.
 func (p *PG) cascadeComponentLabel(ctx context.Context, tx pgx.Tx, componentID string) error {
+	return p.cascadeComponentLabels(ctx, tx, []string{componentID})
+}
+
+// cascadeComponentLabels is the same cascade over a SET of components, for the
+// one act that moves many primaries at once: a system's delete releases every
+// membership it holds, so the components it defaulted for all restamp together
+// in one recompute rather than one apiece.
+func (p *PG) cascadeComponentLabels(ctx context.Context, tx pgx.Tx, componentIDs []string) error {
+	if len(componentIDs) == 0 {
+		return nil
+	}
 	eng, err := p.labelEngine(ctx, tx)
 	if err != nil {
 		return err
 	}
 	_, err = p.lockedRecompute(ctx, tx, eng, componentTable, "component",
-		labelNarrow{rowID: &componentID}, scope.Set{All: true}, scope.Set{All: true})
+		labelNarrow{rowIDs: componentIDs}, scope.Set{All: true}, scope.Set{All: true})
 	return err
 }
