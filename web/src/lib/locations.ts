@@ -49,7 +49,11 @@ export async function getLocation(name: string): Promise<Location> {
 }
 
 export type CreateLocation = {
-  name: string;
+  // Optional (#687, #688): omit it and the platform mints one from the
+  // location_type's name rule, and marks name_generated. A type with no rule is
+  // the opt-out, and a nameless create against one is a 422 naming the missing
+  // fact rather than an invented stem.
+  name?: string;
   location_type: string;
   display_name?: string;
   parent?: string;

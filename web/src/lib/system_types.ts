@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import { resolveInherited } from "./typechain";
 
 // The system_type registry data layer: the coarse taxonomy of what kind of
 // space a system is (ADR-0096), a boardroom, a classroom, a video wall. It is
@@ -94,23 +95,16 @@ export function systemTypeByName(types: SystemType[]): Map<string, SystemType> {
   return new Map(types.map((t) => [t.name, t] as const));
 }
 
-// The same bound the server's resolveSystemTypeFacts walk uses
-// (internal/storage/system_types.go): defends an inheritance walk against a
-// cycle a client sent us, never expected against real data.
-const MAX_DEPTH = 32;
-
 // resolveSystemTypeIcon walks the ancestor chain for the FIRST non-empty icon
 // (first-non-null-wins, the same rule the server's fact resolver applies), so a
 // mid-chain override beats the root's. Falls back to "map-pin", which is what
 // components/icons.tsx already resolves an unknown key to, only for a name the
 // registry does not contain at all.
+//
+// The walk itself lives in lib/typechain.ts, shared with the component
+// registry's icon and with the generated-name preview's stem.
 export function resolveSystemTypeIcon(typeName: string | undefined, byName: Map<string, SystemType>): string {
-  let cur = typeName ? byName.get(typeName) : undefined;
-  for (let depth = 0; cur && depth < MAX_DEPTH; depth++) {
-    if (cur.icon) return cur.icon;
-    cur = cur.parent ? byName.get(cur.parent) : undefined;
-  }
-  return "map-pin";
+  return resolveInherited(typeName, byName, (t) => t.icon) ?? "map-pin";
 }
 
 export type SystemTypeNode = SystemType & { children: SystemTypeNode[]; depth: number };

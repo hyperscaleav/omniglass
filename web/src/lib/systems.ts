@@ -66,7 +66,11 @@ export async function getSystem(name: string): Promise<System> {
 }
 
 export type CreateSystem = {
-  name: string;
+  // Optional (#686, #688): omit it and the platform mints "<stem>-<n>" from the
+  // system_type's stem, suppressing the ordinal on the first of that stem in the
+  // placement bucket. Posting "" is not the same request and the API refuses it
+  // against the entity-name pattern, so a create form sends undefined.
+  name?: string;
   // Omit for a one-off system that conforms to no standard.
   standard_id?: string;
   // Omit to leave the system unclassified.

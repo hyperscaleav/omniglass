@@ -141,6 +141,19 @@ export function deriveName(display: string): string {
 // Passing an existing name marks it as already the operator's, so an edit form
 // can never rewrite a live name from its display name. Renaming is a deliberate
 // act (the API takes it explicitly), never a side effect of relabelling.
+//
+// It is for the REGISTRY and identity pages only: products, vendors, standards,
+// drivers, groups, nodes, the three type registries, and users. Their names have
+// no generator and stay globally unique, so deriving one from what the operator
+// typed is exactly the right affordance there.
+//
+// The three ESTATE entities (component, system, location) left it in #688, and
+// the reason is not stylistic. A blank name on those is the REQUEST to have the
+// platform mint one from the entity's classification, so a form that filled the
+// field in from a typed label claimed the platform's pen on the operator's
+// behalf the moment they typed a word. Their create forms use
+// components/CreateIdentity.tsx, which holds the two fields independent and
+// shows what the blank one will be filled with.
 export function createIdentity(initial?: { display?: string; name?: string }) {
   const [display, setDisplayRaw] = createSignal(initial?.display ?? "");
   const [name, setNameRaw] = createSignal(initial?.name ?? "");

@@ -7,6 +7,7 @@ import { COMPONENTS_KEY, type Component } from "../lib/components";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { PRODUCTS_KEY, type Product } from "../lib/products";
+import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
@@ -33,12 +34,26 @@ const products: Product[] = [
   { id: uuidFor("prod-generic-service"), name: "generic-service", display_name: "Generic Service", kind: "service", component_type: "generic-service", component_type_id: uuidFor("ct-generic-service"), official: true },
 ];
 
+// The device-class registry the create form resolves a generated name's stem
+// through. Three tiers on purpose: ceiling-mic sets no stem of its own, so a
+// preview that read the product's own type and stopped would answer nothing
+// where the server's inheriting walk answers "mic".
+const componentTypes: ComponentType[] = [
+  { id: uuidFor("ct-device"), name: "device", display_name: "Device", official: true, forked: false, stem: "device", default_tags: [] },
+  { id: uuidFor("ct-mic"), name: "mic", display_name: "Microphone", official: true, forked: false, parent: "device", stem: "mic", default_tags: [] },
+  { id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", display_name: "Ceiling Microphone", official: true, forked: false, parent: "mic", default_tags: [] },
+  { id: uuidFor("ct-generic-device"), name: "generic-device", display_name: "Generic Device", official: true, forked: false, stem: "device", default_tags: [] },
+  { id: uuidFor("ct-generic-app"), name: "generic-app", display_name: "Generic App", official: true, forked: false, stem: "app", default_tags: [] },
+  { id: uuidFor("ct-generic-service"), name: "generic-service", display_name: "Generic Service", official: true, forked: false, stem: "service", default_tags: [] },
+];
+
 function mount(path: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...COMPONENTS_KEY], [comp]);
   qc.setQueryData([...SYSTEMS_KEY], []);
   qc.setQueryData([...LOCATIONS_KEY], []);
   qc.setQueryData([...PRODUCTS_KEY], products);
+  qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
@@ -64,6 +79,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], [{ id: sysId, name: "boardroom", member_count: 1 }]);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     window.history.pushState({}, "", "/components");
@@ -98,6 +114,7 @@ describe("Components create-as-route", () => {
     ]);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     window.history.pushState({}, "", `/components?system=${sysId}`);
@@ -137,6 +154,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     // Force list (flattened) mode: the tree-local ancestor path (Row.path)
@@ -249,6 +267,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], [{ id: locID, name: "415a" }]);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
@@ -304,6 +323,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
@@ -341,6 +361,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], limitedMe);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
@@ -404,6 +425,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "twin")], []);
@@ -536,6 +558,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
@@ -570,6 +593,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     window.history.pushState({}, "", "/components/mic-2");
@@ -637,6 +661,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
@@ -719,6 +744,7 @@ describe("Components list survives duplicate names across placements (#627)", ()
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     window.history.pushState({}, "", "/components");
@@ -770,6 +796,7 @@ describe("Components list survives duplicate names across placements (#627)", ()
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     window.history.pushState({}, "", "/components");
@@ -857,5 +884,72 @@ describe("Components create requires a product (#614)", () => {
     fireEvent.click(screen.getByText("Create component"));
     await waitFor(() => expect(sent).toBeTruthy());
     expect((sent as { product: string }).product).toBe("generic-device");
+  });
+});
+
+// The create form asks WHAT and WHERE first, then shows what the platform will
+// name the row. This form already had independent identity fields (#627 Task
+// 15d) and was the model the other two moved to; what it lacked was any way to
+// SEE the name it was about to be given, so an operator leaving the field blank
+// was trusting an affordance they could not read.
+describe("Components create identity", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  const fields = async () => {
+    mount("/components/create");
+    await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
+    return {
+      display: screen.getByPlaceholderText("Ceiling Mic 2") as HTMLInputElement,
+      key: screen.getByPlaceholderText("mic-2 (optional)") as HTMLInputElement,
+      product: screen.getByLabelText("Product") as HTMLSelectElement,
+      submit: screen.getByText("Create component").closest("button") as HTMLButtonElement,
+    };
+  };
+
+  it("asks what and where before it says anything about the name", async () => {
+    await fields();
+    const eyebrows = Array.from(document.querySelectorAll("form .eyebrow")).map((e) => e.textContent);
+    expect(eyebrows.indexOf("Classification")).toBeLessThan(eyebrows.indexOf("Placement"));
+    expect(eyebrows.indexOf("Placement")).toBeLessThan(eyebrows.indexOf("Identity"));
+  });
+
+  it("resolves the stem up the product's component_type chain", async () => {
+    const { product } = await fields();
+    expect(screen.queryByText("Generated name")).toBeNull();
+    // shure-mxa920 classifies as ceiling-mic, which sets no stem of its own and
+    // inherits "mic". A preview reading the product's own type alone would show
+    // nothing here, and the row would still arrive named mic-1.
+    fireEvent.change(product, { target: { value: "shure-mxa920" } });
+    await waitFor(() => expect(screen.getByText("Generated name")).toBeTruthy());
+    expect(screen.getByText("mic-n")).toBeTruthy();
+    // Never a number: the ordinal is allocated against live siblings inside the
+    // create's transaction and does not exist yet.
+    expect(screen.queryByText("mic-1")).toBeNull();
+  });
+
+  it("never suppresses a component's first ordinal", async () => {
+    const { product } = await fields();
+    fireEvent.change(product, { target: { value: "generic-app" } });
+    await waitFor(() => expect(screen.getByText("app-n")).toBeTruthy());
+    expect(screen.queryByText(/app-2/)).toBeNull();
+  });
+
+  it("shows the placement bucket, and moves it when the placement moves", async () => {
+    const { product } = await fields();
+    fireEvent.change(product, { target: { value: "shure-mxa920" } });
+    await waitFor(() => expect(screen.getByText("Generated name")).toBeTruthy());
+    expect(screen.getByText(/Unique among the unplaced components/)).toBeTruthy();
+
+    // A parent wins over a location, the server's own bucket precedence.
+    const parent = screen.getByLabelText("Parent component") as HTMLSelectElement;
+    fireEvent.change(parent, { target: { value: comp.id } });
+    await waitFor(() => expect(screen.getByText(/Unique under Ceiling Mic 2/)).toBeTruthy());
+  });
+
+  it("never rewrites the key from the display name", async () => {
+    const { display, key } = await fields();
+    fireEvent.input(display, { target: { value: "Front Ceiling Mic" } });
+    await waitFor(() => expect(display.value).toBe("Front Ceiling Mic"));
+    expect(key.value).toBe("");
   });
 });

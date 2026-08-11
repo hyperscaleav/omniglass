@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { flattenTree, type TreeNode } from "./treeselect";
+import { flattenTree, pathTo, type TreeNode } from "./treeselect";
 
 // Deliberately unsorted input: the flattener owns ordering and nesting.
 const nodes: TreeNode[] = [
@@ -32,5 +32,30 @@ describe("flattenTree", () => {
 
   it("excludes a node and its whole subtree when excludeSubtreeOf is set (reparent self-guard)", () => {
     expect(flattenTree(nodes, "ca").map((o) => o.value)).toEqual(["campus-b"]);
+  });
+});
+
+// The placement path a create form shows beside the name field: names are unique
+// within a placement, so the operator has to see which one they are naming in.
+describe("pathTo", () => {
+  it("returns root-first labels down to the node", () => {
+    expect(pathTo(nodes, "f2")).toEqual(["Campus A", "Bldg 1", "Floor 2"]);
+  });
+
+  it("is the node alone at the root", () => {
+    expect(pathTo(nodes, "ca")).toEqual(["Campus A"]);
+  });
+
+  it("is empty for an id the set does not contain", () => {
+    expect(pathTo(nodes, "ghost")).toEqual([]);
+    expect(pathTo(nodes, "")).toEqual([]);
+  });
+
+  it("stops on a cycle rather than hanging", () => {
+    const cyclic: TreeNode[] = [
+      { id: "a", value: "a", label: "A", parentId: "b" },
+      { id: "b", value: "b", label: "B", parentId: "a" },
+    ];
+    expect(pathTo(cyclic, "a")).toEqual(["B", "A"]);
   });
 });
