@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Components from "./Components";
 import { COMPONENTS_KEY, type Component } from "../lib/components";
 import { SYSTEMS_KEY } from "../lib/systems";
-import { LOCATIONS_KEY } from "../lib/locations";
+import { LOCATIONS_KEY, type Location } from "../lib/locations";
 import { PRODUCTS_KEY, type Product } from "../lib/products";
 import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types";
 import { ME_KEY, type Me } from "../lib/auth";
@@ -47,11 +47,17 @@ const componentTypes: ComponentType[] = [
   { id: uuidFor("ct-generic-service"), name: "generic-service", display_name: "Generic Service", official: true, forked: false, stem: "service", default_tags: [] },
 ];
 
+// One room, so the create form's placement has both a parent candidate and a
+// location candidate: the bucket precedence (a parent wins) cannot be witnessed
+// with only one of the two set, and a page passing the two the wrong way round
+// is invisible to a unit test of the rule.
+const room: Location = { id: uuidFor("l-room"), name: "boardroom", display_name: "Boardroom", location_type: "room", effective_tags: {} };
+
 function mount(path: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...COMPONENTS_KEY], [comp]);
   qc.setQueryData([...SYSTEMS_KEY], []);
-  qc.setQueryData([...LOCATIONS_KEY], []);
+  qc.setQueryData([...LOCATIONS_KEY], [room]);
   qc.setQueryData([...PRODUCTS_KEY], products);
   qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
   qc.setQueryData([...ME_KEY], me);
@@ -940,10 +946,17 @@ describe("Components create identity", () => {
     await waitFor(() => expect(screen.getByText("Generated name")).toBeTruthy());
     expect(screen.getByText(/Unique among the unplaced components/)).toBeTruthy();
 
-    // A parent wins over a location, the server's own bucket precedence.
+    const location = screen.getByLabelText("Location") as HTMLSelectElement;
+    fireEvent.change(location, { target: { value: room.id } });
+    await waitFor(() => expect(screen.getByText(/Unique at Boardroom/)).toBeTruthy());
+
+    // A parent wins over a location, the server's own bucket precedence. Both
+    // are set here on purpose: with only one, a page handing the two to the
+    // rule in the wrong order reads exactly the same.
     const parent = screen.getByLabelText("Parent component") as HTMLSelectElement;
     fireEvent.change(parent, { target: { value: comp.id } });
     await waitFor(() => expect(screen.getByText(/Unique under Ceiling Mic 2/)).toBeTruthy());
+    expect(screen.queryByText(/Unique at Boardroom/)).toBeNull();
   });
 
   it("never rewrites the key from the display name", async () => {
