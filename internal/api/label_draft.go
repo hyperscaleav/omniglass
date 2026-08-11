@@ -45,10 +45,9 @@ import (
 // draftLabelOutput is the rendered answer plus the rule that produced it.
 //
 // The rule is not decoration. It is the only way a surface can tell "no rule
-// applies at any tier" (both fields empty, which is every location in a shipped
-// estate, since the shipped global location rule is deliberately empty) from "a
-// rule applies and rendered nothing for this row", and the two want different
-// words in front of an operator. It also lets the form say WHERE the value came
+// applies at any tier" (both fields empty, which an operator reaches by clearing
+// the rule at every tier) from "a rule applies and rendered nothing for this
+// row", and the two want different words in front of an operator. It also lets the form say WHERE the value came
 // from, which is the difference between a console that operates the label engine
 // and one that merely reports its output.
 type draftLabelOutput struct {
@@ -151,7 +150,7 @@ func registerLocationLabelDraft(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodPost,
 		Path:        "/locations:renderLabel",
 		Summary:     "Render the label a location create would store",
-		Description: "The location tier of :renderLabel on components. Renders the label a location create would stamp, allocating nothing. A shipped estate answers with an empty label here: the global location rule ships deliberately empty and no seeded location_type carries one, so the location's own name is what an operator reads, which is the design rather than a gap. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create. No placement scope is injected because a location's label rule reads no other estate row.",
+		Description: "The location tier of :renderLabel on components. Renders the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create. No placement scope is injected because a location's label rule reads no other estate row.",
 	}, "location", "create"), func(ctx context.Context, in *renderLocationLabelInput) (*draftLabelOutput, error) {
 		d, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{
 			LocationTypeRef: in.Body.LocationType,

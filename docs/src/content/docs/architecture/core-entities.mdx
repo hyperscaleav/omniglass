@@ -808,7 +808,7 @@ The map is the sandbox for what a rule can READ: a component's rule can read `Na
 and there is no mechanism by which any other name resolves to anything, so a secret is unreachable
 because it was never put in rather than because a filter refused it. The grammar is the sandbox for what a rule can DO: an allowlist
 over the parsed tree admits a closed set of node types and the functions `title`, `upper`, `lower`,
-`slug` plus `and`/`or`/`not` and the six comparisons, and refuses everything else text/template
+`slug`, `words` plus `and`/`or`/`not` and the six comparisons, and refuses everything else text/template
 offers, `printf` and variable declarations and `{{range}}` among them. That second half is not
 tidiness: a value built inside a pipeline is never written, so a cap on rendered length cannot see
 it, and a few hundred bytes of rule can otherwise allocate gigabytes on every write to every entity
@@ -842,6 +842,27 @@ A component reads the label of the room it is in, never that room's building, so
 free. That is a property of the map rather than of the cascade, and if a later slice gives a location
 an ancestry fact the cascade owes it a subtree arm.
 
+**`words` is how a NAME becomes words, and `title` alone is not.** `title` upper-cases each word and
+leaves the separator standing, so `{{title .Name}}` renders `north-wing` as "North-Wing";
+`{{title (words .Name)}}` renders it "North Wing", because `words` turns a run of `-` or `_` into a
+single space (an edge run is dropped, and everything else, including whitespace the fact already
+carried, is untouched). It is `slug`'s opposite number, and it is what puts the acronym dictionary
+below within reach of a name: `hq-west` reads "HQ West" once `HQ` is in the list
+([ADR-0105](/architecture/decisions/#adr-0105-a-rule-reads-a-name-as-words-and-the-location-tier-ships-the-restatement-it-once-refused)).
+
+That composition is the **shipped global rule for locations**, `{{title (words .Name)}}`. A location
+kind carries only two facts, its type and its own name, so a rule there is either a constant or a
+restatement, and the constant is refused: labelling every room "Room" is worse than the name it would
+replace. The restatement earns its place because it re-cases the name and runs the operator's
+dictionary over it, which is a string the read ladder's last rung cannot produce. That last rung is
+unchanged and still **verbatim**: a row with no stored label renders its `name` exactly, never a
+prettified version. The difference is that a rule renders a label and STORES it.
+
+Because a rule change's blast radius is the whole estate, **shipping this rule restamps nothing on its
+own**. A new estate gets a rendered label when each location is created; an estate that already exists
+keeps its raw kebab locations until an operator runs `:previewLabels` and `:recomputeLabels` on
+locations. The upgrade is an operator's act, not a release's.
+
 **`title` reads an acronym dictionary an operator owns.** Title-casing a word by upper-casing its
 first letter turns `dsp` into `Dsp`, so the platform ships a list of words that have a fixed form,
 resolved through the [settings](/architecture/settings/) cascade as `label.acronyms` and consulted by
@@ -865,10 +886,10 @@ quietly to `Qm55` rather than failing. That is acceptable because the result is 
 overridden on the row, and because the alternative, a rule that guesses at casing, is wrong more
 often than it is right.
 
-What a rule deliberately **cannot** read is the entity's placement. Every fact above changes on
-exactly five acts, all of them the entity's own (create, rename, move, reclassify, reset), and each
-of those re-renders, which is what lets a recompute-and-compare invariant prove no stored label has
-drifted. A location's name in the map would make renaming a location stale every label under it. The
-ancestry is not lost: it is the `path` and the two renders above, beside the label rather than inside
-it.
+What a rule deliberately **cannot** read is the entity's **ancestry**. A component reads the label of
+the location it sits at and a location reads nothing about where it sits, so a location's own map is
+`Name` and `TypeName` and no more. That is why moving a location restamps nothing: putting its
+parent's name in the map would make one campus rename stale every label under it, and the ancestry is
+not lost anyway, since it is the `path` and the two renders above, beside the label rather than
+inside it.
 

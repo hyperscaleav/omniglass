@@ -66,10 +66,12 @@ import (
 // stale every descendant, and it costs a recursive walk per row on a path that
 // already runs on every create.
 //
-// LocationLabel is the location's READ LADDER, the label an operator typed else
-// the location's own name, not the raw column. A shipped estate has no location
-// labels at all (the shipped location rule is deliberately empty), so reading
-// the column alone would render placement as blank for every row in it.
+// LocationLabel is the location's READ LADDER, the label an operator typed or
+// the platform rendered, else the location's own name, not the raw column. A
+// location rule ships now (#657), so most rows carry a label; the ladder is
+// still what a rule reads, because an estate that predates the rule and has not
+// run :recomputeLabels has none, and reading the column alone would render
+// placement as blank for every row in it.
 //
 // # The cost of that, which is this whole slice
 //

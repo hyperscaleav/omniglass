@@ -90,9 +90,14 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   not a draft row ([ADR-0104](/architecture/decisions/)).
 
   Where **no label rule applies** to what you picked, the field says so and shows the **name** instead,
-  because that is what an operator will actually read on the row. Every location in a fresh estate is
-  in this state: no label rule ships for locations at any tier, deliberately, since a campus, a
-  building and a room each have a real-world name the platform has no access to.
+  because that is what an operator will actually read on the row. You reach that state by clearing the
+  rule at every tier; out of the box each of the three kinds ships one.
+
+  A location's shipped rule reads its **own name as words**: create a room named `north-boardroom` and
+  the locked field shows **North Boardroom**, because the rule splits the name on its hyphens, capitalises
+  each word, and applies your [acronym list](/architecture/settings/) (so `hq-west` reads **HQ West** once
+  `HQ` is on it). It only re-cases what you typed, so where the room's real name is not in its machine
+  name (a `huddle` that everyone calls the Huddle Room), open the lock and type it.
 
   A name is **required** only where nothing will generate one, and there the field arrives unlocked
   with no lock to close: a system with no type (or a type whose chain sets no stem), a location whose

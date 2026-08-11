@@ -1331,7 +1331,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; omit to inherit the parent's")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower and slug. Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422.")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422.")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentId, "parent-id", "", "The parent component_type, by name or uuid; omit for a root type")
@@ -2321,7 +2321,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "renderLabel",
 					Short:   "Render the label a location create would store",
-					Long:    "The location tier of :renderLabel on components. Renders the label a location create would stamp, allocating nothing. A shipped estate answers with an empty label here: the global location rule ships deliberately empty and no seeded location_type carries one, so the location's own name is what an operator reads, which is the design rather than a gap. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create. No placement scope is injected because a location's label rule reads no other estate row.",
+					Long:    "The location tier of :renderLabel on components. Renders the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create. No placement scope is injected because a location's label rule reads no other estate row.",
 					Example: "  omniglass location renderLabel --location-type location_type",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3922,7 +3922,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A product-level icon override; unset inherits the component_type's icon")
 				cmd.Flags().StringVar(&fKind, "kind", "", "What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly.")
 				_ = cmd.MarkFlagRequired("kind")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower and slug. Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422.")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422.")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "The parent product, by handle or uuid")

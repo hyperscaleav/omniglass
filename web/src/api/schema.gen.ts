@@ -1655,7 +1655,7 @@ export interface paths {
         put?: never;
         /**
          * Render the label a location create would store
-         * @description The location tier of :renderLabel on components. Renders the label a location create would stamp, allocating nothing. A shipped estate answers with an empty label here: the global location rule ships deliberately empty and no seeded location_type carries one, so the location's own name is what an operator reads, which is the design rather than a gap. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create. No placement scope is injected because a location's label rule reads no other estate row.
+         * @description The location tier of :renderLabel on components. Renders the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create. No placement scope is injected because a location's label rule reads no other estate row.
          */
         post: operations["render-location-label"];
         delete?: never;
@@ -4165,7 +4165,7 @@ export interface components {
             display_name: string;
             /** @description A glyph key; omit to inherit the parent's */
             icon?: string;
-            /** @description A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower and slug. Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422. */
+            /** @description A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422. */
             label_rule?: string;
             /** @description The globally unique name */
             name: string;
@@ -4442,7 +4442,7 @@ export interface components {
              * @enum {string}
              */
             kind: "device" | "app" | "service";
-            /** @description A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower and slug. Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422. */
+            /** @description A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422. */
             label_rule?: string;
             /** @description The globally unique name; renameable */
             name: string;

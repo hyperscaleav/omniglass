@@ -66,7 +66,7 @@ type createComponentTypeInput struct {
 		Stem        string   `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens."`
 		Icon        string   `json:"icon,omitempty" doc:"A glyph key; omit to inherit the parent's"`
 		Abbrev      string   `json:"abbrev,omitempty" doc:"A compact form of display_name; omit to inherit the parent's"`
-		LabelRule   string   `json:"label_rule,omitempty" doc:"A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower and slug. Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422."`
+		LabelRule   string   `json:"label_rule,omitempty" doc:"A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422."`
 		DefaultTags []string `json:"default_tags,omitempty" doc:"Tags every instance of this type starts with"`
 		ParentID    string   `json:"parent_id,omitempty" doc:"The parent component_type, by name or uuid; omit for a root type"`
 	}

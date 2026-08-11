@@ -45,6 +45,15 @@ sections ([getting around](/guides/operator/#getting-around)).
   it by. An entity with no display name shows its name alone, in the data face, so an absence reads as
   an absence rather than a typo. That second line is what you copy into an `omniglass` command. The
   column is headed **Name** on every page and sorts on the line you are reading down.
+- A display name the platform rendered from a [label rule](/architecture/core-entities/) wears a
+  **Generated** chip beside it, which is how you tell the rows a rule edit would rewrite from the ones
+  you named yourself. Typing over one claims it; clearing the field hands it back.
+- **Upgrading into a new rule does not relabel anything you already have.** Locations shipped with no
+  label rule before, so an estate created then keeps reading its raw names (`north-wing`) after the
+  upgrade. Applying the new rule is your act, and there is no console button for it yet: run
+  `omniglass location previewLabels` to see exactly which rows would move, then
+  `omniglass location recomputeLabels` to apply it, and the same rows read **North Wing**. Nothing you
+  typed yourself is touched by either.
 - The **columns** menu shows or hides columns and lets you **drag to reorder** them. The
   layout is remembered per browser.
 - On Locations, each row wears its **type's icon** as a leading glyph (a campus, building,
