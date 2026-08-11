@@ -32,6 +32,15 @@ func (UnimplementedGateway) PreviewLabelRecompute(context.Context, string, scope
 func (UnimplementedGateway) RecomputeLabels(context.Context, string, string, scope.Set, scope.Set) ([]LabelChange, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) RenderComponentDraftLabel(context.Context, ComponentLabelDraft, scope.Set, scope.Set) (DraftLabel, error) {
+	return DraftLabel{}, nil
+}
+func (UnimplementedGateway) RenderSystemDraftLabel(context.Context, SystemLabelDraft, scope.Set) (DraftLabel, error) {
+	return DraftLabel{}, nil
+}
+func (UnimplementedGateway) RenderLocationDraftLabel(context.Context, LocationLabelDraft) (DraftLabel, error) {
+	return DraftLabel{}, nil
+}
 func (UnimplementedGateway) UpsertRole(context.Context, Role) error { return nil }
 func (UnimplementedGateway) BootstrapOwner(context.Context, OwnerSpec) (bool, error) {
 	return false, nil

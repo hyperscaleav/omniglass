@@ -335,6 +335,16 @@ type Gateway interface {
 	PreviewLabelRecompute(ctx context.Context, kind string, read, action scope.Set) ([]LabelChange, error)
 	RecomputeLabels(ctx context.Context, actorID, kind string, read, action scope.Set) ([]LabelChange, error)
 
+	// The draft render (#699): the label a create WOULD stamp, for a form that
+	// shows the operator what the platform is about to produce. It allocates
+	// nothing, which is what separates it from the preview ADR-0104 refused;
+	// see label_draft.go. The scopes are the PLACEMENT's, because a placement
+	// fact is what the answer could otherwise leak, and a location draft takes
+	// none because a location's data map reads no other estate row.
+	RenderComponentDraftLabel(ctx context.Context, draft ComponentLabelDraft, locationRead, systemRead scope.Set) (DraftLabel, error)
+	RenderSystemDraftLabel(ctx context.Context, draft SystemLabelDraft, locationRead scope.Set) (DraftLabel, error)
+	RenderLocationDraftLabel(ctx context.Context, draft LocationLabelDraft) (DraftLabel, error)
+
 	UpsertComponentType(ctx context.Context, ct ComponentType) error
 	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
 	GetComponentType(ctx context.Context, ref string) (*ComponentType, error)

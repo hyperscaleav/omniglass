@@ -130,6 +130,7 @@ const errProductRequired = "a component must be an instance of a product; name o
 // as locations and systems.
 func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	registerLabelRecomputeRoutes(api, a, gw, "component", "/components")
+	registerComponentLabelDraft(api, a, gw)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-components",
 		Method:      http.MethodGet,

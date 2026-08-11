@@ -908,6 +908,29 @@ Example:
 omniglass component rename <name> --name name
 ```
 
+### `omniglass component renderLabel`
+
+Render the label a component create would store
+
+```
+omniglass component renderLabel [flags]
+```
+
+Renders the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is written as the token "n", because it is allocated against live siblings inside the create's own transaction and does not exist until the row does. Omitting name renders the label the platform's own generated name would produce, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the location and system refs resolve within the caller's location:read and system:read scopes, because the rendered string can carry their labels.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--location` | string | (none) | The location this component will sit at, by name or uuid. Resolved within the caller's location:read scope: a location out of scope is refused, never rendered. |
+| `--name` | string | (none) | The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token "n"; supply it to render the label an operator-named row would carry, which has no ordinal at all. |
+| `--product` | string | (none) | The product this component is an instance of, by name or uuid; the classification both a label rule and a generated name are resolved from |
+| `--system` | string | (none) | The system this component will belong to, by name or uuid. Resolved within the caller's system:read scope. |
+
+Example:
+
+```sh
+omniglass component renderLabel --product product
+```
+
 ### `omniglass component resetName`
 
 Regenerate a component's name
@@ -1764,6 +1787,27 @@ Example:
 
 ```sh
 omniglass location rename <name> --name name
+```
+
+### `omniglass location renderLabel`
+
+Render the label a location create would store
+
+```
+omniglass location renderLabel [flags]
+```
+
+The location tier of :renderLabel on components. Renders the label a location create would stamp, allocating nothing. A shipped estate answers with an empty label here: the global location rule ships deliberately empty and no seeded location_type carries one, so the location's own name is what an operator reads, which is the design rather than a gap. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create. No placement scope is injected because a location's label rule reads no other estate row.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--location-type` | string | (none) | The location_type this location is classified by, by name or uuid |
+| `--name` | string | (none) | The name the row will carry. Omit it to render the label the platform's own generated name would produce, which a location_type with no name rule refuses; supply it to render the label an operator-named location would carry. |
+
+Example:
+
+```sh
+omniglass location renderLabel --location-type location_type
 ```
 
 ### `omniglass location resetName`
@@ -4241,6 +4285,29 @@ Example:
 
 ```sh
 omniglass system rename <name> --name name
+```
+
+### `omniglass system renderLabel`
+
+Render the label a system create would store
+
+```
+omniglass system renderLabel [flags]
+```
+
+The system tier of :renderLabel on components. Renders the label a system create would stamp, allocating nothing. Omitting name renders the label the platform's generated name would produce and refuses (422) an unclassified system, the same refusal a nameless create gives, since the stem lives on the system_type. Gated by system:create; the location ref resolves within the caller's location:read scope, because a system's label can carry its location's.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--location` | string | (none) | The location this system will sit at, by name or uuid. Resolved within the caller's location:read scope. |
+| `--name` | string | (none) | The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token "n"; supply it to render the label an operator-named row would carry, which has no ordinal at all. |
+| `--standard-id` | string | (none) | The standard this system conforms to, by name or uuid; omit for a one-off system |
+| `--system-type-id` | string | (none) | The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row. |
+
+Example:
+
+```sh
+omniglass system renderLabel
 ```
 
 ### `omniglass system resetName`

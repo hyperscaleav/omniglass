@@ -928,6 +928,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components:renderLabel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render the label a component create would store
+         * @description Renders the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is written as the token "n", because it is allocated against live siblings inside the create's own transaction and does not exist until the row does. Omitting name renders the label the platform's own generated name would produce, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the location and system refs resolve within the caller's location:read and system:read scopes, because the rendered string can carry their labels.
+         */
+        post: operations["render-component-label"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/drivers": {
         parameters: {
             query?: never;
@@ -1618,6 +1638,26 @@ export interface paths {
          * @description Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by location:update.
          */
         post: operations["recompute-location-labels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/locations:renderLabel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render the label a location create would store
+         * @description The location tier of :renderLabel on components. Renders the label a location create would stamp, allocating nothing. A shipped estate answers with an empty label here: the global location rule ships deliberately empty and no seeded location_type carries one, so the location's own name is what an operator reads, which is the design rather than a gap. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create. No placement scope is injected because a location's label rule reads no other estate row.
+         */
+        post: operations["render-location-label"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3460,6 +3500,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/systems:renderLabel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Render the label a system create would store
+         * @description The system tier of :renderLabel on components. Renders the label a system create would stamp, allocating nothing. Omitting name renders the label the platform's generated name would produce and refuses (422) an unclassified system, the same refusal a nameless create gives, since the stem lives on the system_type. Gated by system:create; the location ref resolves within the caller's location:read scope, because a system's label can carry its location's.
+         */
+        post: operations["render-system-label"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tags": {
         parameters: {
             query?: never;
@@ -4568,6 +4628,18 @@ export interface components {
             content: string;
             content_type: string;
             name: string;
+        };
+        DraftLabelOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/DraftLabelOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The label the create would store, with the token "n" standing where the ordinal will go. Empty means no label is stored and the surface falls back to the name. */
+            label: string;
+            /** @description The label rule that produced it, resolved through the same tiers the create uses. Empty means no tier carries a rule for this classification. */
+            rule: string;
         };
         DriverBody: {
             /**
@@ -6164,6 +6236,50 @@ export interface components {
             bare: string;
             /** @description The path's non-accessor segments joined with '-' (e.g. boi-17c-216b-display-1). Display only; not accepted by the resolver. */
             dash: string;
+        };
+        RenderComponentLabelInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RenderComponentLabelInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The location this component will sit at, by name or uuid. Resolved within the caller's location:read scope: a location out of scope is refused, never rendered. */
+            location?: string;
+            /** @description The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token "n"; supply it to render the label an operator-named row would carry, which has no ordinal at all. */
+            name?: string;
+            /** @description The product this component is an instance of, by name or uuid; the classification both a label rule and a generated name are resolved from */
+            product: string;
+            /** @description The system this component will belong to, by name or uuid. Resolved within the caller's system:read scope. */
+            system?: string;
+        };
+        RenderLocationLabelInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RenderLocationLabelInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The location_type this location is classified by, by name or uuid */
+            location_type: string;
+            /** @description The name the row will carry. Omit it to render the label the platform's own generated name would produce, which a location_type with no name rule refuses; supply it to render the label an operator-named location would carry. */
+            name?: string;
+        };
+        RenderSystemLabelInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/RenderSystemLabelInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The location this system will sit at, by name or uuid. Resolved within the caller's location:read scope. */
+            location?: string;
+            /** @description The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token "n"; supply it to render the label an operator-named row would carry, which has no ordinal at all. */
+            name?: string;
+            /** @description The standard this system conforms to, by name or uuid; omit for a one-off system */
+            standard_id?: string;
+            /** @description The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row. */
+            system_type_id?: string;
         };
         ResetPasswordInputBody: {
             /**
@@ -9085,6 +9201,39 @@ export interface operations {
             };
         };
     };
+    "render-component-label": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenderComponentLabelInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftLabelOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-drivers": {
         parameters: {
             query?: never;
@@ -10689,6 +10838,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LabelRecomputeOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "render-location-label": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenderLocationLabelInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftLabelOutputBody"];
                 };
             };
             /** @description Error */
@@ -14821,6 +15003,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LabelRecomputeOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "render-system-label": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenderSystemLabelInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftLabelOutputBody"];
                 };
             };
             /** @description Error */

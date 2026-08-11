@@ -210,6 +210,7 @@ type renameLocationInput struct {
 // row filter and writes audit. The capability is necessary, the scope decides.
 func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	registerLabelRecomputeRoutes(api, a, gw, "location", "/locations")
+	registerLocationLabelDraft(api, a, gw)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-locations",
 		Method:      http.MethodGet,

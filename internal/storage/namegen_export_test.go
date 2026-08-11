@@ -81,3 +81,17 @@ func (p *PG) ExportStemForProduct(ctx context.Context, productID string) (string
 	stem, _, _, _, _, err := resolveTypeFacts(ctx, p.pool, typeID)
 	return stem, err
 }
+
+// ExportMintShape and ExportMintName expose the two halves of the mint the
+// draft render (#699) has to keep in step: the SHAPE a create form shows, with
+// the ordinal written as a token, and the NAME allocation actually produces for
+// a given ordinal. Both are pure, so the test that pins them to each other
+// needs no database; they are here rather than in production code because
+// nothing outside a test wants "what would this be called".
+func ExportMintShape(stem string, bareFirst bool) string {
+	return nameMint{stem: stem, bareFirst: bareFirst}.shape(OrdinalToken)
+}
+
+func ExportMintName(stem string, bareFirst bool, n int) string {
+	return nameMint{stem: stem, bareFirst: bareFirst}.name(n)
+}

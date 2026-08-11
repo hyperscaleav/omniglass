@@ -198,6 +198,7 @@ type checkNameOutput struct {
 // scope and hands it to the gateway.
 func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	registerLabelRecomputeRoutes(api, a, gw, "system", "/systems")
+	registerSystemLabelDraft(api, a, gw)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-systems",
 		Method:      http.MethodGet,
