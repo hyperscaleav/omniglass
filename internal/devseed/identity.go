@@ -84,8 +84,13 @@ func newGenIndex(rows []genRow) *genIndex {
 
 // take claims this slot's next row for the fixture row being seeded, returning
 // its id, or "" when the estate holds fewer rows in this slot than the fixture
-// declares. Every call advances the slot, so two fixture rows in one slot never
-// resolve to the same estate row.
+// declares and the caller must create one.
+//
+// It advances the slot on EVERY call, including the ones that answer nothing,
+// which is what makes recording the created row unnecessary: the fixture's third
+// display in a room asks for index 2 whether the first two were found or made a
+// moment ago. Appending each create back into the index would be a second way to
+// keep the same count, and two of them can disagree.
 func (g *genIndex) take(slot genSlot) string {
 	k := g.next[slot]
 	g.next[slot]++
@@ -93,12 +98,6 @@ func (g *genIndex) take(slot genSlot) string {
 		return g.rows[slot][k]
 	}
 	return ""
-}
-
-// grew records a row this run created, so a later fixture row in the same slot
-// sees the estate as it now is rather than as it was when the index was built.
-func (g *genIndex) grew(slot genSlot, id string) {
-	g.rows[slot] = append(g.rows[slot], id)
 }
 
 // bucketOf is the placement bucket a generated name is unique within, in the
@@ -139,7 +138,7 @@ func productClass(product string) string {
 // name) and not of the entity kind, and a call site that got it backwards would
 // either duplicate the estate on every start or silently stop exercising the
 // generator.
-func existingRowID(ctx context.Context, name, key string, slot genSlot, idx *genIndex, byName func(string) (string, error)) (string, error) {
+func existingRowID(name, key string, slot genSlot, idx *genIndex, byName func(string) (string, error)) (string, error) {
 	if name != "" {
 		id, err := byName(name)
 		if err != nil {

@@ -226,7 +226,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			parentID = id
 		}
 		slot := genSlot{bucket: bucketOf(parentID, ""), class: l.Type}
-		id, err := existingRowID(ctx, l.Name, l.Key, slot, locIndex, func(name string) (string, error) {
+		id, err := existingRowID(l.Name, l.Key, slot, locIndex, func(name string) (string, error) {
 			existing, err := gw.GetLocation(ctx, name, all)
 			if errors.Is(err, storage.ErrLocationNotFound) {
 				return "", nil
@@ -256,9 +256,6 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			return fmt.Errorf("devseed: create location %q: %w", l.Key, err)
 		}
 		locIDs[l.Key] = created.ID
-		if l.Name == "" {
-			locIndex.grew(slot, created.ID)
-		}
 	}
 
 	// Users next. A user that already exists (ErrUsernameTaken) is left as is,
@@ -412,7 +409,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			locID = id
 		}
 		slot := genSlot{bucket: bucketOf("", locID), class: productClass(c.Product)}
-		id, err := existingRowID(ctx, c.Name, c.Key, slot, compIndex, func(name string) (string, error) {
+		id, err := existingRowID(c.Name, c.Key, slot, compIndex, func(name string) (string, error) {
 			existing, err := gw.GetComponent(ctx, name, all)
 			if errors.Is(err, storage.ErrComponentNotFound) {
 				return "", nil
@@ -443,9 +440,6 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			return fmt.Errorf("devseed: create component %q: %w", c.Key, err)
 		}
 		compIDs[c.Key] = created.ID
-		if c.Name == "" {
-			compIndex.grew(slot, created.ID)
-		}
 	}
 
 	// Systems: the thing in the room that either works or does not, conforming to a
@@ -467,7 +461,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			locID = id
 		}
 		slot := genSlot{bucket: bucketOf("", locID), class: s.SystemType}
-		id, err := existingRowID(ctx, s.Name, s.Key, slot, sysIndex, func(name string) (string, error) {
+		id, err := existingRowID(s.Name, s.Key, slot, sysIndex, func(name string) (string, error) {
 			existing, err := gw.GetSystem(ctx, name, all)
 			if errors.Is(err, storage.ErrSystemNotFound) {
 				return "", nil
@@ -502,9 +496,6 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			return fmt.Errorf("devseed: create system %q: %w", s.Key, err)
 		}
 		sysIDs[s.Key] = created.ID
-		if s.Name == "" {
-			sysIndex.grew(slot, created.ID)
-		}
 	}
 
 	// Members: a component bound into a system without a job, which is the case an

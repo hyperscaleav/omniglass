@@ -55,34 +55,34 @@ func TestGenIndexKeepsSlotsApart(t *testing.T) {
 	}
 }
 
-// TestGenIndexSeesTheRowsThisRunCreated proves a row created mid-run is visible
-// to the next fixture row in the same slot, so two identical fixture rows create
-// two estate rows on the first run and resolve to those same two on the second.
-// Without it the second row would resolve to the first and the estate would come
-// up one short, which no count assertion of a fresh run would notice.
-func TestGenIndexSeesTheRowsThisRunCreated(t *testing.T) {
+// TestGenIndexAdvancesEvenWhenTheEstateIsShort is why nothing has to record the
+// rows a run creates. Two identical fixture rows on an empty estate must each be
+// told "not here" so each is created; if the slot only advanced on a hit, the
+// second would resolve to the first and the estate would come up one short, which
+// a fresh run's counts would never notice.
+func TestGenIndexAdvancesEvenWhenTheEstateIsShort(t *testing.T) {
 	room := genSlot{bucket: "location/room-1", class: "samsung-qm55"}
-	idx := newGenIndex(nil)
-	if got := idx.take(room); got != "" {
-		t.Fatalf("first take on an empty estate = %q, want \"\"", got)
+	idx := newGenIndex([]genRow{{slot: room, ordinal: 1, id: "already-here"}})
+	if got, want := idx.take(room), "already-here"; got != want {
+		t.Fatalf("first take = %q, want %q", got, want)
 	}
-	idx.grew(room, "created-1")
 	if got := idx.take(room); got != "" {
-		t.Errorf("second take = %q, want \"\" (a second fixture row wants a second estate row, not the one just created)", got)
+		t.Errorf("second take = %q, want \"\" (the estate holds one and the fixture declares two)", got)
 	}
-	idx.grew(room, "created-2")
+	if got := idx.take(room); got != "" {
+		t.Errorf("third take = %q, want \"\" (a slot never hands the same row out twice)", got)
+	}
 
-	// A second run over the same estate: a fresh index built from what is now
-	// there hands the two fixture rows back the two rows they created.
+	// The next run over the estate those creates left behind resolves all three.
 	next := newGenIndex([]genRow{
-		{slot: room, ordinal: 1, id: "created-1"},
+		{slot: room, ordinal: 1, id: "already-here"},
 		{slot: room, ordinal: 2, id: "created-2"},
+		{slot: room, ordinal: 3, id: "created-3"},
 	})
-	if got, want := next.take(room), "created-1"; got != want {
-		t.Errorf("re-run first take = %q, want %q", got, want)
-	}
-	if got, want := next.take(room), "created-2"; got != want {
-		t.Errorf("re-run second take = %q, want %q", got, want)
+	for _, want := range []string{"already-here", "created-2", "created-3"} {
+		if got := next.take(room); got != want {
+			t.Errorf("re-run take = %q, want %q", got, want)
+		}
 	}
 }
 
