@@ -53,26 +53,47 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
 
 ## Create, edit, delete
 
-- **New** opens a **draft** at the entity's own `/create` address (a form for display name, name,
-  classifier, placement, and where applicable a parent). Identity is two fields you fill and one you
-  never see: the **display name** is the friendly string a human reads ("HQ Boardroom DSP"), the
-  **name** is the identifier the API, the CLI, and the URL carry (`hq-boardroom-dsp`, lowercase
-  letters, digits, and hyphens, changeable later, see Edit), and the `id` is a uuid the platform mints
-  and keeps internally. The name fills itself in from the display name until you edit it, so most of
-  the time you type one field and check the other. **On a component, name is optional**: leave it
-  blank and the platform mints one from the component's type and the next free number in its room
-  (`display-1`, `display-2`, ...), a **Generated** badge marking it as the platform's to keep current.
-  The classifier is the entity's shape: a component
-  picks its [product](/guides/admin/products/), a system the
-  [standard](/guides/admin/standards/) it conforms to, a location its
-  [type](/guides/admin/location-types/). On a component and a system the classifier is **optional**, so a
-  one-off unit or a system that matches no blueprint is legitimate; a location's type is
-  required, since for a location the type is the only shape-definer. **Create** commits it and
-  drops you straight into the new entity's detail in **edit mode**, so you can tag it and finish
-  configuring in place instead of hunting for it back in the list. Bindings like tags need the
-  entity to exist, so they unlock the moment it is created. On a location, the type you pick may
-  restrict which parent types it can sit under (or require no parent at all); a placement outside
-  that set is refused with a message naming both types, right on the create form.
+- **New** opens a **draft** at the entity's own `/create` address, and it asks **what** and **where**
+  before it asks what to call it, because those are what the naming and labelling rules read.
+  **Classification** comes first: a component picks its [product](/guides/admin/products/), a system
+  its type and the [standard](/guides/admin/standards/) it conforms to, a location its
+  [type](/guides/admin/location-types/). **Placement** comes second (a system, a location, a parent,
+  depending on the entity). **Identity** comes last, and on these three pages both of its fields are
+  optional.
+
+  Identity is two fields you may fill and one you never see: the **name** is the identifier the API,
+  the CLI, and the URL carry (`display-1`, lowercase letters, digits, and hyphens, unique within its
+  placement, changeable later, see Edit), the **display name** is the friendly string a human reads
+  ("HQ Boardroom DSP"), and the `id` is a uuid the platform mints and keeps internally. Typing a
+  display name never fills the name in for you here; those two fields are independent, because a blank
+  name is a **request** rather than an omission.
+
+  Leave the name blank and the platform names the row from what you just told it. The form shows what
+  that will be as soon as the classification is chosen, in the form `display-n`: the **stem** comes
+  from the type (so it is known), and `n` is the lowest free number in the placement, which the
+  platform picks when the row is created and which nothing can know before then, so it is shown as a
+  letter and never as a digit. Some types carry no number on the first of their kind in a place, and
+  the form says so where that applies (`boardroom`, then `boardroom-2`). Beneath it the form names the
+  **placement the name has to be unique in**, as a path: the name itself never carries that path, since
+  a name is unique within its placement rather than across the estate. Type your own name to override
+  it, which the form acknowledges and tells you how to undo; overriding one identity field never
+  disturbs the other.
+
+  A name is **required** only where nothing will generate one: a system with no type, a location whose
+  type carries no name rule, a product whose type chain carries no stem. The form names the missing
+  fact rather than just refusing. Elsewhere (the catalog and admin pages, whose names have no
+  generator and are unique estate-wide) the name still fills itself in from the display name until you
+  edit it. Leave the **display name** blank and a label rule may render one, marked **Generated**;
+  where no rule applies, the name is what shows.
+
+  A location's type is required, since for a location the type is the only shape-definer; on a
+  component and a system the classifier picks the stem too, so an unclassified system is legitimate
+  but has to be named by hand. **Create** commits the row and drops you straight into its detail in
+  **edit mode**, so you can tag it and finish configuring in place instead of hunting for it back in
+  the list. Bindings like tags need the entity to exist, so they unlock the moment it is created. On a
+  location, the type you pick may restrict which parent types it can sit under (or require no parent at
+  all); a placement outside that set is refused with a message naming both types, right on the create
+  form.
 - **Edit** (the pencil on a row, or the button in the detail) flips that same detail into edit
   mode: the fields become inputs and the tag editor goes live. The **Name** is editable here on a
   component, a system, and a location, with an inline **Check** button that reports whether a
@@ -87,9 +108,9 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   bookmarks, runbooks, and integration config holding the old name stop resolving. Nothing inside
   Omniglass breaks: every reference holds the entity's `id`, so its tags, grants, alarms, and
   recorded history follow the rename, and the audit trail stays attributable across it. **Renaming a
-  Generated component's name hands you the pen for good**: the platform stops tracking it, even
+  Generated name hands you the pen for good**: the platform stops tracking it, even
   through a later move or a product swap. A reset icon beside the name field (gated the same as
-  rename) hands it back, regenerating from the component's current type and room and marking it
+  rename) hands it back, regenerating from the entity's current type and placement and marking it
   Generated again.
 - **Moving is a separate act from an update too, and separately granted**, the same split renaming
   draws. Placement (Parent on a component, a system, or a location; Location on a component or a

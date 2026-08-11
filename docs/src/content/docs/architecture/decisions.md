@@ -140,6 +140,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0102](#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing) | 2026-08-10 | Accepted | A **`location_type.name_rule`** (nullable jsonb) is a type's opt-in to naming the locations it classifies, and it is a **declaration** (a stem, possibly empty, plus the first-ordinal suppression flag) rather than the `label_rule` template beside it. A name has to satisfy `validateEntityName`, it lands in a scoped-unique index, and other things reference it, so an unrenderable rule has no safe degradation the way a label's does; a declaration IS a `nameMint`, so a rule is refused at RULE-EDIT time by minting from it (ordinal 1 and a nine-digit ceiling bound the whole output space), which a template's output could only be sampled. Null is the opt-out and there is no boolean beside it. A rule change **renames nothing**: there is no name-side recompute verb, deliberately, because relabelling in bulk is recoverable and renaming is not. A positional type permitted at root allocates `1`, `2` across the estate and that is legal, since the bucket is the placement and two positional types under one parent already share an ordinal space |
 | [ADR-0103](#adr-0103-a-positional-name-is-allocation-order-and-the-real-world-designation-is-a-label) | 2026-08-11 | Accepted | A positional name is **allocation order**, never a claim about the world: the dev estate's West Building holds one floor, the building's Level 2, and the generator calls it `1`. The divergence is kept rather than removed, because a name is an address (unique under its parent, typeable, ownable by the platform so nobody has to invent one) and a label is what a human reads (a floor's designation is signage, a fact the platform has no access to). The seeded estate ships both cases of one type side by side, a floor named `1` labelled Level 1 and a floor named `1` labelled Level 2. The rule this generalises to: a stem-less positional name fits an arbitrary disambiguator and not a number an operator reads as a designation, which puts `floor` on the line rather than safely inside it; making it nominal (the plain reversal of ADR-0102) is declined on cost, not principle, and stays available. Seeding a Level 1 so the numbers line up, and shipping a `Floor {{.Name}}` label rule, are both refused as the same defect with better manners |
 
+| [ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it) | 2026-08-11 | Accepted | A create form shows the **stem** a generated name will carry, resolved in the browser from the classification the operator just chose, and writes the ordinal as the token `n`, because the ordinal is allocated against live siblings inside the create's own transaction and does not exist until the row does. A **draft-preview verb that mints and rolls back** is refused: its answer is provisional (another create can take the ordinal between the preview and the commit), and the rolled-back mint takes the same advisory lock real creates need, so a form that previewed on every keystroke would serialise the estate's creates behind a UI affordance. **Re-rendering the label rule in TypeScript** is refused outright, as the second implementation of an engine slice 3 swept 42 copies of. The label is therefore not previewed at all: its data map carries `Name` and `Ordinal`, so it is unknowable for the same reason. The placement bucket is shown beside the field as a PATH and never as a prefix inside it, since names became scoped to placement and a name no longer contains its ancestry |
+
 ## Entries
 
 ### ADR-0001: AI acts as a user; the `agent` principal is deferred
@@ -4229,4 +4231,60 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   abstraction. It also means a positional name is not safe to read as a designation anywhere in the
   product, so a console surface that shows a floor must show its label.
 - **Tracked under** [#689](https://github.com/hyperscaleav/omniglass/issues/689), the ninth slice of
+  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
+
+### ADR-0104: A create form shows the name it can know, and never mints one to preview it
+
+- **Date:** 2026-08-11 | **Status:** Accepted | **Pages:** [work with an entity](/guides/operator/entities/),
+  [UI](/architecture/ui/)
+- **Context:** eight slices of epic [#657](https://github.com/hyperscaleav/omniglass/issues/657) built a
+  generator that names a component, a system and a location from what it is and where it sits, and the
+  console was the last surface that could not reach it: two of the three create forms derived the name
+  from the display name and refused to submit without one, so every console-created row arrived
+  operator-named whether the operator meant that or not. The sub-issue asked the form to "produce both
+  values without the operator typing either", and the epic's own mechanics say that only half of one of
+  them is knowable. A generated name is `<stem>-<n>`: the **stem** falls out of the classification the
+  operator has just chosen, and the **ordinal** is the lowest free number among the LIVE siblings in the
+  placement bucket, allocated under an advisory lock inside the create's own transaction
+  ([ADR-0097](#adr-0097-allocation-tests-the-name-it-would-mint-rather-than-reading-the-ordinal-it-stored)).
+  The label is worse: its data map carries the row's own `Name` and `Ordinal`
+  ([ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)), so it cannot be
+  rendered before the row it describes exists.
+- **Decision:** the form shows the **shape** and marks the unknown half as unknown. The stem is resolved
+  in the browser from the type registry the picker already loaded, and the ordinal is written as the
+  literal token `n`, which is not a digit and cannot be misread as the value: `display-n`, `boardroom`
+  for a mint that suppresses its first ordinal, `n` alone for a positional type. Each shape travels with
+  the sentence that makes it honest, and for a suppressing mint that sentence is load-bearing rather
+  than decorative, since the shown `boardroom` becomes `boardroom-2` for the second one in the room.
+- **Decision (the placement is context, not a prefix):** the bucket the name has to be unique in is
+  shown beside the field as a **path** (`Unique at Headquarters / West Building / Level 2 / Boardroom`),
+  read-only. The sub-issue asked for the ancestry as an editable field's read-only prefix
+  (`boi-17c-[editable]`), which is stale by two slices: names became scoped to placement, so a name no
+  longer contains its ancestry at all, and rendering the path into the field would put back exactly the
+  redundancy the scoping removed.
+- **Rejected, and why each:**
+  - **A draft-preview verb that mints and rolls back.** It matches the acceptance's wording and buys a
+    number that is **provisional**: any other create in the same bucket can take it between the preview
+    and the commit, so the form would show a value that silently turns out different, which is the one
+    outcome this whole affordance exists to prevent. It is also not free to ask: a rolled-back mint
+    takes the same `pg_advisory_xact_lock` on the bucket that real creates take, so a form previewing
+    as the operator changes a picker would serialise the estate's creates behind a UI affordance.
+    Refused on both counts, and the second is the one that would not have shown up in review.
+  - **Re-rendering the label rule in TypeScript.** A second implementation of the rule engine in
+    another language, which is the defect the epic's third slice swept 42 hand-rolled copies of onto a
+    single primitive to end. The label is therefore not previewed at all: the form says a rule will
+    render one and marks it Generated, and shows nothing it cannot know.
+  - **Fetching the resolved stem from the server per selection.** It removes the one thing that can
+    drift (the browser's walk of the type chain versus the gateway's) at the cost of a round trip per
+    picker change and a new route. Declined because the walk is not new here: the console already
+    climbs both type registries for the icon, and #688 makes that walk a single primitive
+    (`lib/typechain.ts`) with the stem as its third consumer, so there is one client-side climb rather
+    than three. What closes the gap instead is a browser-tier e2e that reads the shape the console
+    showed and asserts the row lands with that stem, which is the only tier that can see both answers.
+- **Consequence:** a name is optional on all three estate create forms, and required only where nothing
+  will generate one (an unclassified system, a `location_type` with no name rule, a `component_type`
+  chain with no stem). Each of those states shows the missing fact by name rather than a disabled
+  button with no explanation. The console can now produce a row the platform owns the name of, which
+  every earlier slice of this epic could only be reached from the API or the CLI.
+- **Tracked under** [#688](https://github.com/hyperscaleav/omniglass/issues/688), the eighth slice of
   epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).

@@ -705,6 +705,19 @@ recomputes on a `:move` or a product reclassify, riding that write's own audit e
 it; `:resetName` hands the pen back and regenerates from the component's current facts, gated by the
 same `component:rename` permission `:rename` uses.
 
+**The console can ask for a generated name, and shows what it will be**
+([ADR-0104](/architecture/decisions/#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)).
+A create form asks for the classification and the placement first, since those are what the rules
+read, and then renders the SHAPE of the name a blank field will be filled with: the resolved stem,
+with the ordinal written as the token `n` rather than a digit, because the ordinal is allocated
+against live siblings inside the create's own transaction and does not exist until the row does. There
+is deliberately no draft-preview verb that mints and rolls back: its answer would be provisional
+(another create can take the number in between), and the rolled-back mint takes the advisory lock real
+creates need. The label is not previewed at all, since its data map carries the row's own `Name` and
+`Ordinal`. The placement bucket is shown beside the field as a path, never as a prefix inside it: a
+name is unique within its placement rather than across the estate, so it no longer carries its
+ancestry.
+
 **The ordinal is stored, and it says who owns the name**
 ([ADR-0097](/architecture/decisions/#adr-0097-allocation-tests-the-name-it-would-mint-rather-than-reading-the-ordinal-it-stored)).
 `component.ordinal` records the number a generated name was minted from, and it is `NULL` on every
