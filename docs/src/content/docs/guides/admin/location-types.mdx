@@ -50,9 +50,16 @@ uuid minted by the database, the internal address the handle resolves to
 - **A type can name its own locations.** A location type carries an optional **name rule**, and
   having one is the opt-in: without it, every location of that type is named by whoever creates it,
   which is where three of the four shipped types stay. Of the shipped vocabulary only **floor**
-  carries a rule, because only a floor has a name the platform can know: a campus, a building and a
-  room each have a real-world name you hold and it does not, and `17c` is a fact rather than a
-  default.
+  carries a rule, because a campus, a building and a room each have a real-world name you hold and
+  the platform does not, and `17c` is a fact rather than a default.
+
+  **A positional name is allocation order, not the floor number.** The platform gives the first
+  floor created under a building the name `1` whether that floor is the ground floor, Level 2 or the
+  mezzanine: the name is an address, unique under its parent, and nothing about it claims to match
+  your signage. The designation you and your users say out loud goes in the **label**, which is
+  yours (ADR-0103). Set a rule on a type only where a number the platform invents is good enough to
+  address rows by; where the number is a real-world fact your team reads off a wall, leave the type
+  named by hand.
 
   A rule is a **stem** plus whether the first of that stem under one parent carries a number. Leave
   the stem empty and the type is **positional**: creating a location of it with no name gives `1`,

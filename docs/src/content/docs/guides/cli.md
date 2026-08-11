@@ -23,6 +23,13 @@ named volume persists data between runs; `docker compose down -v` wipes it and r
 token next run). `make up` / `make down` manage just the database. Tests never touch this
 stack: they spin their own ephemeral Postgres via testcontainers.
 
+The example estate deliberately types almost none of its own names: its devices, its
+systems and its floors all ask the platform to name them, so what you sign in to is the
+name generator's own output (`display-1` in three different rooms, `boardroom` and
+`boardroom-2` for the two halves of one) rather than a list somebody wrote out. The rows
+that do carry a typed name are the ones no rule could produce: a campus, a building and a
+room, whose names you hold and the platform does not.
+
 ## Connecting
 
 Every generated command is a client of a running server and takes two shared flags, each

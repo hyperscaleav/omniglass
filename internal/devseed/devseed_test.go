@@ -2,6 +2,7 @@ package devseed_test
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -19,10 +20,11 @@ var officialRoles = map[string]bool{
 	"viewer": true, "operator": true, "deploy": true, "admin": true, "owner": true,
 }
 
-// TestFixturesShape is a pure unit check on the embedded fixtures: the tree is
-// well formed (every parent named before its children), every user carries a
-// password, and every grant references a real role and (when scoped) a location
-// declared in the same document. It needs no database, so it runs under -short.
+// TestFixturesShape is a pure unit check on the embedded fixtures: every row
+// carries a key, the tree is well formed (every parent named before its
+// children), every reference resolves to a key declared in the same document,
+// every user carries a password, and every grant references a real role. It
+// needs no database, so it runs under -short.
 func TestFixturesShape(t *testing.T) {
 	doc, err := devseed.Fixtures()
 	if err != nil {
@@ -34,13 +36,16 @@ func TestFixturesShape(t *testing.T) {
 
 	seenLoc := map[string]bool{}
 	for _, l := range doc.Locations {
-		if l.Name == "" || l.Type == "" {
-			t.Errorf("location %+v missing name or type", l)
+		if l.Key == "" || l.Type == "" {
+			t.Errorf("location %+v missing key or type", l)
+		}
+		if seenLoc[l.Key] {
+			t.Errorf("location key %q is declared twice (a key is the fixture's identity)", l.Key)
 		}
 		if l.Parent != "" && !seenLoc[l.Parent] {
-			t.Errorf("location %q references parent %q not declared before it", l.Name, l.Parent)
+			t.Errorf("location %q references parent key %q not declared before it", l.Key, l.Parent)
 		}
-		seenLoc[l.Name] = true
+		seenLoc[l.Key] = true
 	}
 
 	for _, u := range doc.Users {
@@ -55,8 +60,14 @@ func TestFixturesShape(t *testing.T) {
 				t.Errorf("user %q grant references unknown role %q", u.Username, g.Role)
 			}
 			if g.ScopeKind != "all" && !seenLoc[g.ScopeRef] {
-				t.Errorf("user %q grant scoped to location %q not in the fixtures", u.Username, g.ScopeRef)
+				t.Errorf("user %q grant scoped to location key %q not in the fixtures", u.Username, g.ScopeRef)
 			}
+		}
+	}
+
+	for _, b := range doc.TagBindings {
+		if !seenLoc[b.Location] {
+			t.Errorf("tag %q binds at location key %q not in the fixtures", b.Key, b.Location)
 		}
 	}
 
@@ -69,26 +80,145 @@ func TestFixturesShape(t *testing.T) {
 	}
 
 	// Components place a device in the estate; a component that names a location must
-	// name one declared in this document (the seed resolves the placement by name).
+	// name one declared in this document (the seed resolves the placement by key).
 	seenComp := map[string]bool{}
 	for _, c := range doc.Components {
-		if c.Name == "" {
-			t.Errorf("component %+v missing name", c)
+		if c.Key == "" {
+			t.Errorf("component %+v missing key", c)
+		}
+		if seenComp[c.Key] {
+			t.Errorf("component key %q is declared twice", c.Key)
 		}
 		if c.Location != "" && !seenLoc[c.Location] {
-			t.Errorf("component %q placed at location %q not in the fixtures", c.Name, c.Location)
+			t.Errorf("component %q placed at location key %q not in the fixtures", c.Key, c.Location)
 		}
-		seenComp[c.Name] = true
+		seenComp[c.Key] = true
+	}
+
+	seenSys := map[string]bool{}
+	for _, s := range doc.Systems {
+		if s.Key == "" {
+			t.Errorf("system %+v missing key", s)
+		}
+		if seenSys[s.Key] {
+			t.Errorf("system key %q is declared twice", s.Key)
+		}
+		if s.Location != "" && !seenLoc[s.Location] {
+			t.Errorf("system %q placed at location key %q not in the fixtures", s.Key, s.Location)
+		}
+		seenSys[s.Key] = true
+	}
+
+	for _, m := range doc.Members {
+		if !seenSys[m.System] || !seenComp[m.Component] {
+			t.Errorf("member %+v references a key not in the fixtures", m)
+		}
+	}
+	for _, ra := range doc.RoleAssignments {
+		if !seenSys[ra.System] || !seenComp[ra.Component] {
+			t.Errorf("role assignment %+v references a key not in the fixtures", ra)
+		}
+		if ra.Role == "" {
+			t.Errorf("role assignment %+v names no role", ra)
+		}
 	}
 
 	// Property values declare a literal on a component: the component must be declared
 	// in this document, else the seed's set fails at run time.
 	for _, pv := range doc.PropertyValues {
 		if !seenComp[pv.Component] {
-			t.Errorf("property value references component %q not in the fixtures", pv.Component)
+			t.Errorf("property value references component key %q not in the fixtures", pv.Component)
 		}
 		if pv.Property == "" {
 			t.Errorf("property value on %q names no property", pv.Component)
+		}
+	}
+}
+
+// TestFixturesLetThePlatformNameTheEstate is the pure guard on what this estate
+// is FOR: it demonstrates the name generator, so a fixture row must not hand the
+// platform a name it was supposed to mint. It is the test that fails the moment
+// somebody goes back to hand-writing names, which is the failure that otherwise
+// looks like success (every other assertion still passes while the feature is no
+// longer exercised at all).
+//
+// The exceptions are enumerated rather than counted, because each one is a
+// separate argument: a campus, a building and a room have a real-world name the
+// platform cannot produce (no name rule on those location types, so a nameless
+// create is refused outright), and nothing else in the fixture may carry one.
+func TestFixturesLetThePlatformNameTheEstate(t *testing.T) {
+	doc, err := devseed.Fixtures()
+	if err != nil {
+		t.Fatalf("parse fixtures: %v", err)
+	}
+
+	// The location types whose rows an operator must name: they carry no name
+	// rule in the boot seed, on purpose.
+	nominal := map[string]bool{"campus": true, "building": true, "room": true}
+	generated := 0
+	for _, l := range doc.Locations {
+		switch {
+		case nominal[l.Type] && l.Name == "":
+			t.Errorf("location %q is a %s and carries no name, which the platform cannot mint (that type has no name rule)", l.Key, l.Type)
+		case !nominal[l.Type] && l.Name != "":
+			t.Errorf("location %q is a %s and hand-writes the name %q; a positional type is the one the platform names", l.Key, l.Type, l.Name)
+		case l.Name == "":
+			generated++
+		}
+	}
+	if generated == 0 {
+		t.Errorf("no seeded location asks the platform for a name, so the estate demonstrates the location-tier generator not at all")
+	}
+
+	for _, c := range doc.Components {
+		if c.Name != "" {
+			t.Errorf("component %q hand-writes the name %q; every seeded component's name comes from its product's stem", c.Key, c.Name)
+		}
+	}
+	for _, s := range doc.Systems {
+		if s.Name != "" {
+			t.Errorf("system %q hand-writes the name %q; every seeded system's name comes from its type's stem", s.Key, s.Name)
+		}
+	}
+}
+
+// TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint is the label half of the
+// same guard. A set display_name takes the pen from the platform (#682), so a
+// fixture that sets one everywhere demonstrates the opposite of the label rules.
+// The survivors are listed by key, each for a stated reason, so adding a
+// fourteenth is a deliberate edit to this list rather than a quiet one.
+func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
+	doc, err := devseed.Fixtures()
+	if err != nil {
+		t.Fatalf("parse fixtures: %v", err)
+	}
+
+	// The one component with no product: with no classification to read, the
+	// component rule can only render "Generic Device 1", so the operator's own
+	// words are the only thing that says what the box is.
+	wantComponentLabels := map[string]bool{"power": true}
+	for _, c := range doc.Components {
+		if (c.DisplayName != "") != wantComponentLabels[c.Key] {
+			t.Errorf("component %q display_name = %q, want set = %v (everything else lets the shipped component rule render)",
+				c.Key, c.DisplayName, wantComponentLabels[c.Key])
+		}
+	}
+
+	// Both systems: which half of a divisible boardroom is A and which is B is a
+	// fact about the air wall, and the shipped system rule (which reads the
+	// type) renders the same label for both of them.
+	for _, s := range doc.Systems {
+		if s.DisplayName == "" {
+			t.Errorf("system %q has no display_name; the shipped system rule renders the type, so both halves would read alike", s.Key)
+		}
+	}
+
+	// Every location: the shipped location label rule is deliberately empty
+	// (internal/seed/label_rules.yaml argues why), so a location's label is the
+	// operator's or it is nothing and the console falls back to the name.
+	for _, l := range doc.Locations {
+		if l.DisplayName == "" {
+			t.Errorf("location %q has no display_name; the shipped location rule is empty, so nothing would render one", l.Key)
 		}
 	}
 }
@@ -98,7 +228,7 @@ func TestFixturesShape(t *testing.T) {
 // unparented top, and devices sit under more than one of those tops. With every
 // device under a single top, a binding at that top looks like it covers the
 // estate, and the reason the install-wide `platform` tier exists (it is the only
-// rung that reaches all of the tops) is invisible in the console.
+// rung that reaches all of them) is invisible in the console.
 func TestFixturesEstateIsAForest(t *testing.T) {
 	doc, err := devseed.Fixtures()
 	if err != nil {
@@ -108,9 +238,9 @@ func TestFixturesEstateIsAForest(t *testing.T) {
 	parentOf := map[string]string{}
 	var tops []string
 	for _, l := range doc.Locations {
-		parentOf[l.Name] = l.Parent
+		parentOf[l.Key] = l.Parent
 		if l.Parent == "" {
-			tops = append(tops, l.Name)
+			tops = append(tops, l.Key)
 		}
 	}
 	if len(tops) < 2 {
@@ -120,11 +250,11 @@ func TestFixturesEstateIsAForest(t *testing.T) {
 	// topOf walks a location up to its unparented ancestor. TestFixturesShape
 	// already proves every parent is declared before its child, so the walk
 	// terminates.
-	topOf := func(name string) string {
-		for parentOf[name] != "" {
-			name = parentOf[name]
+	topOf := func(key string) string {
+		for parentOf[key] != "" {
+			key = parentOf[key]
 		}
-		return name
+		return key
 	}
 	occupied := map[string]bool{}
 	for _, c := range doc.Components {
@@ -168,13 +298,29 @@ func TestRunIdempotent(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	// Counts prove idempotency: the second Run added nothing.
+	// Counts prove idempotency: the second Run added nothing. They are the
+	// assertion that catches a seed which cannot recognise its own
+	// platform-named rows, because that failure doubles the estate rather than
+	// erroring.
 	var locs, humans, grants int
 	if err := conn.QueryRow(ctx, `select count(*) from location`).Scan(&locs); err != nil {
 		t.Fatalf("count locations: %v", err)
 	}
 	if locs != 13 {
 		t.Errorf("locations = %d, want 13 (seed not idempotent or incomplete)", locs)
+	}
+	var comps, systems int
+	if err := conn.QueryRow(ctx, `select count(*) from component`).Scan(&comps); err != nil {
+		t.Fatalf("count components: %v", err)
+	}
+	if comps != 8 {
+		t.Errorf("components = %d, want 8 (7 fixture devices, all platform-named, plus the operator-named DSP)", comps)
+	}
+	if err := conn.QueryRow(ctx, `select count(*) from system`).Scan(&systems); err != nil {
+		t.Fatalf("count systems: %v", err)
+	}
+	if systems != 2 {
+		t.Errorf("systems = %d, want 2 (the two halves of the divisible boardroom)", systems)
 	}
 	// A multi-site estate: three campuses, not one.
 	var campuses int
@@ -198,10 +344,10 @@ func TestRunIdempotent(t *testing.T) {
 	}
 
 	// The property primitive seeds one extra contract line on the QM55, one component
-	// bound to that product, and two declared overrides. The counts prove the second
-	// Run added none of them: the contract, component, and value loops are each
-	// idempotent.
-	var contractLines, comps, propVals int
+	// in the huddle room bound to that product, and two declared overrides. The counts
+	// prove the second Run added none of them: the contract, component, and value loops
+	// are each idempotent.
+	var contractLines, huddleComps, propVals int
 	if err := conn.QueryRow(ctx, `
 		select count(*) from product_property where product_id = (select id from product where name = 'samsung-qm55')`).Scan(&contractLines); err != nil {
 		t.Fatalf("count contract lines: %v", err)
@@ -209,16 +355,17 @@ func TestRunIdempotent(t *testing.T) {
 	if contractLines != 4 {
 		t.Errorf("qm55 contract lines = %d, want 4 (3 boot-seed + mac-address)", contractLines)
 	}
-	if err := conn.QueryRow(ctx, `select count(*) from component where name = 'lobby-display'`).Scan(&comps); err != nil {
-		t.Fatalf("count property-seed components: %v", err)
+	if err := conn.QueryRow(ctx, `
+		select count(*) from component where location_id = (select id from location where name = 'huddle')`).Scan(&huddleComps); err != nil {
+		t.Fatalf("count huddle components: %v", err)
 	}
-	if comps != 1 {
-		t.Errorf("property-seed components = %d, want 1 (lobby-display)", comps)
+	if huddleComps != 1 {
+		t.Errorf("huddle room components = %d, want 1 (the display carrying the property overrides)", huddleComps)
 	}
 	if err := conn.QueryRow(ctx, `
 		select count(*) from property
 		where owner_kind = 'component'
-		  and component_id = (select id from component where name = 'lobby-display')
+		  and component_id = `+huddleDisplaySQL+`
 		  and provenance = 'declared'`).Scan(&propVals); err != nil {
 		t.Fatalf("count declared values: %v", err)
 	}
@@ -226,15 +373,17 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("declared value rows = %d, want 2 (serial-number, firmware-version; a re-run re-declares the same values, which appends nothing)", propVals)
 	}
 
-	// The tree links resolve: the west building hangs under the hq campus.
+	// The tree links resolve: the west building hangs under the hq campus, and
+	// its name carries no ancestry, because a location's name is unique within
+	// its parent rather than across the estate.
 	var parentName string
 	if err := conn.QueryRow(ctx, `
 		select p.name from location c join location p on p.id = c.parent_id
-		where c.name = 'hq-west'`).Scan(&parentName); err != nil {
-		t.Fatalf("read hq-west parent: %v", err)
+		where c.name = 'west'`).Scan(&parentName); err != nil {
+		t.Fatalf("read west parent: %v", err)
 	}
 	if parentName != "hq" {
-		t.Errorf("hq-west parent = %q, want hq", parentName)
+		t.Errorf("west parent = %q, want hq", parentName)
 	}
 
 	// Each seeded user has a password credential (so they can sign in to make dev).
@@ -263,9 +412,11 @@ func TestRunIdempotent(t *testing.T) {
 	// the seed failing to be idempotent.
 	all := scope.Set{All: true}
 
-	// The component the checks hang on, placed under the HQ boardroom.
+	// The component the checks hang on, placed under the boardroom. It is the one
+	// component in the estate an operator named, so it is addressable by that
+	// name where its platform-named siblings are not.
 	var reachComps int
-	if err := conn.QueryRow(ctx, `select count(*) from component where name = 'hq-boardroom-dsp'`).Scan(&reachComps); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from component where name = 'dsp'`).Scan(&reachComps); err != nil {
 		t.Fatalf("count reachability component: %v", err)
 	}
 	if reachComps != 1 {
@@ -290,7 +441,7 @@ func TestRunIdempotent(t *testing.T) {
 	}
 	byName := map[string]*storage.Interface{}
 	for i := range ifaces {
-		if ifaces[i].Component != nil && *ifaces[i].Component == "hq-boardroom-dsp" {
+		if ifaces[i].Component != nil && *ifaces[i].Component == "dsp" {
 			byName[ifaces[i].Name] = &ifaces[i]
 		}
 	}
@@ -298,7 +449,7 @@ func TestRunIdempotent(t *testing.T) {
 	// transport (http and tcp), not a free-text label.
 	httpIf, tcpIf := byName["http"], byName["tcp"]
 	if httpIf == nil || tcpIf == nil {
-		t.Fatalf("seeded http/tcp interfaces not both found on hq-boardroom-dsp: %v", byName)
+		t.Fatalf("seeded http/tcp interfaces not both found on the dsp: %v", byName)
 	}
 	if httpIf.Type != "http" {
 		t.Errorf("http interface type = %q, want http", httpIf.Type)
@@ -312,7 +463,7 @@ func TestRunIdempotent(t *testing.T) {
 		}
 	}
 	var ifaceCount int
-	if err := conn.QueryRow(ctx, `select count(*) from interface where component = (select id from component where name = 'hq-boardroom-dsp')`).Scan(&ifaceCount); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from interface where component = (select id from component where name = 'dsp')`).Scan(&ifaceCount); err != nil {
 		t.Fatalf("count reachability interfaces: %v", err)
 	}
 	if ifaceCount != 2 {
@@ -351,28 +502,28 @@ func TestRunIdempotent(t *testing.T) {
 		{iface: "http", transitions: 1},
 		{iface: "tcp", transitions: 3},
 	} {
-		verdict, err := gw.LatestProperty(ctx, "hq-boardroom-dsp", "interface-reachable", tc.iface)
+		verdict, err := gw.LatestProperty(ctx, "dsp", "interface-reachable", tc.iface)
 		if err != nil {
 			t.Fatalf("latest verdict %s: %v", tc.iface, err)
 		}
 		if verdict == nil || verdict.Value != "up" {
 			t.Fatalf("seeded %s verdict = %+v, want value up", tc.iface, verdict)
 		}
-		transitions, err := gw.PropertyTransitions(ctx, "hq-boardroom-dsp", "interface-reachable", tc.iface, time.Time{})
+		transitions, err := gw.PropertyTransitions(ctx, "dsp", "interface-reachable", tc.iface, time.Time{})
 		if err != nil {
 			t.Fatalf("property transitions %s: %v", tc.iface, err)
 		}
 		if len(transitions) != tc.transitions {
 			t.Errorf("%s verdict transitions = %d, want %d (idempotent across two Runs)", tc.iface, len(transitions), tc.transitions)
 		}
-		tcpOpen, err := gw.LatestMetricInstance(ctx, "hq-boardroom-dsp", "tcp-open", tc.iface)
+		tcpOpen, err := gw.LatestMetricInstance(ctx, "dsp", "tcp-open", tc.iface)
 		if err != nil {
 			t.Fatalf("latest tcp-open %s: %v", tc.iface, err)
 		}
 		if tcpOpen == nil || tcpOpen.Value != 1 {
 			t.Errorf("seeded %s tcp-open = %+v, want 1", tc.iface, tcpOpen)
 		}
-		icmpReach, err := gw.LatestMetricInstance(ctx, "hq-boardroom-dsp", "icmp-reachable", tc.iface)
+		icmpReach, err := gw.LatestMetricInstance(ctx, "dsp", "icmp-reachable", tc.iface)
 		if err != nil {
 			t.Fatalf("latest icmp-reachable %s: %v", tc.iface, err)
 		}
@@ -385,36 +536,299 @@ func TestRunIdempotent(t *testing.T) {
 	// video bar, so the console's event panel comes up populated. The count is over two
 	// Runs, so a duplicate here is the seed failing to be idempotent (the event table
 	// has an auto id and no natural unique key, so only the sentinel guard keeps a re-run
-	// a no-op).
+	// a no-op). The bar is addressed the way the seed addresses it, by placement and
+	// platform-minted name, because nothing typed one for it.
 	var events int
-	if err := conn.QueryRow(ctx, `select count(*) from event where component_id = (select id from component where name = 'boardroom-a-bar')`).Scan(&events); err != nil {
-		t.Fatalf("count boardroom-a-bar events: %v", err)
+	if err := conn.QueryRow(ctx, `select count(*) from event where component_id = `+barSQL).Scan(&events); err != nil {
+		t.Fatalf("count video bar events: %v", err)
 	}
 	if events != 4 {
-		t.Errorf("boardroom-a-bar events = %d, want 4 (seed not idempotent or incomplete)", events)
+		t.Errorf("video bar events = %d, want 4 (seed not idempotent or incomplete)", events)
 	}
 	// Two occurrences carry a structured attributes payload (the call's peer and
 	// protocol); the rest are plain messages. Provenance is stamped observed by the insert.
 	var withAttrs int
 	if err := conn.QueryRow(ctx, `
 		select count(*) from event
-		where component_id = (select id from component where name = 'boardroom-a-bar')
+		where component_id = `+barSQL+`
 		  and attributes is not null and provenance = 'observed'`).Scan(&withAttrs); err != nil {
-		t.Fatalf("count boardroom-a-bar events with attributes: %v", err)
+		t.Fatalf("count video bar events with attributes: %v", err)
 	}
 	if withAttrs != 2 {
-		t.Errorf("boardroom-a-bar events with attributes = %d, want 2", withAttrs)
+		t.Errorf("video bar events with attributes = %d, want 2", withAttrs)
 	}
 
-	// The raw-log lane (ADR-0066): the lobby display carries its seeded log lines,
-	// so the console log panel comes up populated. Counted over two Runs, so a
+	// The raw-log lane (ADR-0066): the huddle room's display carries its seeded log
+	// lines, so the console log panel comes up populated. Counted over two Runs, so a
 	// duplicate is the seed failing to be idempotent.
 	var logs int
-	if err := conn.QueryRow(ctx, `select count(*) from log_line where component_id = (select id from component where name = 'lobby-display')`).Scan(&logs); err != nil {
-		t.Fatalf("count lobby-display log lines: %v", err)
+	if err := conn.QueryRow(ctx, `select count(*) from log_line where component_id = `+huddleDisplaySQL).Scan(&logs); err != nil {
+		t.Fatalf("count huddle display log lines: %v", err)
 	}
 	if logs != 6 {
-		t.Errorf("lobby-display log lines = %d, want 6 (seed not idempotent or incomplete)", logs)
+		t.Errorf("huddle display log lines = %d, want 6 (seed not idempotent or incomplete)", logs)
+	}
+}
+
+// huddleDisplaySQL and barSQL address two platform-named components the way
+// anything outside the seed has to: by placement plus the name the generator
+// minted, since a bare `display-1` matches three rows in this estate.
+const (
+	huddleDisplaySQL = `(select id from component where name = 'display-1'
+		and location_id = (select id from location where name = 'huddle'))`
+	barSQL = `(select id from component where name = 'videobar-2'
+		and location_id = (select id from location where name = 'boardroom'))`
+)
+
+// TestSeededNamesComeFromTheGenerator is the acceptance this slice exists for.
+// It asserts every seeded name BY VALUE, so a fixture that went back to
+// hand-writing them fails here on the pen (a typed name clears name_generated
+// and stores no ordinal) as well as on the value.
+//
+// The names are not incidental. `display-1` appears three times, once per room,
+// which is the placement-scoped unique index doing its job; `boardroom` carries
+// no ordinal while storing 1, which is the first-of-its-stem suppression
+// (ADR-0101); and the two floors are both `1`, each in its own building.
+func TestSeededNamesComeFromTheGenerator(t *testing.T) {
+	ctx, conn, _ := seededEstate(t)
+
+	for _, tc := range []struct {
+		what      string
+		table     string
+		place     string
+		name      string
+		ordinal   int
+		generated bool
+	}{
+		// Locations: only a positional type generates, so the two floors do and
+		// the eleven nominal rows carry the operator's own name.
+		{what: "the floor under the west building", table: "location", place: "west", name: "1", ordinal: 1, generated: true},
+		{what: "the floor under innovation hall", table: "location", place: "hall", name: "1", ordinal: 1, generated: true},
+		{what: "the west building", table: "location", place: "hq", name: "west", generated: false},
+
+		// Components: the stem comes from the product's component_type, the
+		// ordinal from the room.
+		{what: "the huddle display", table: "component", place: "huddle", name: "display-1", ordinal: 1, generated: true},
+		{what: "the shared video bar", table: "component", place: "boardroom", name: "videobar-1", ordinal: 1, generated: true},
+		{what: "the second video bar", table: "component", place: "boardroom", name: "videobar-2", ordinal: 2, generated: true},
+		{what: "the first boardroom panel", table: "component", place: "boardroom", name: "display-1", ordinal: 1, generated: true},
+		{what: "the second boardroom panel", table: "component", place: "boardroom", name: "display-2", ordinal: 2, generated: true},
+		{what: "the power conditioner", table: "component", place: "boardroom", name: "device-1", ordinal: 1, generated: true},
+		{what: "the auditorium display", table: "component", place: "auditorium", name: "display-1", ordinal: 1, generated: true},
+		{what: "the DSP", table: "component", place: "boardroom", name: "dsp", generated: false},
+
+		// Systems: the first of its stem in a bucket carries no ordinal while
+		// storing one.
+		{what: "the first boardroom half", table: "system", place: "boardroom", name: "boardroom", ordinal: 1, generated: true},
+		{what: "the second boardroom half", table: "system", place: "boardroom", name: "boardroom-2", ordinal: 2, generated: true},
+	} {
+		placeCol := "location_id"
+		if tc.table == "location" {
+			placeCol = "parent_id"
+		}
+		var gotGenerated bool
+		var gotOrdinal *int
+		err := conn.QueryRow(ctx, `select name_generated, ordinal from `+tc.table+`
+			where name = $1 and `+placeCol+` = (select id from location where name = $2)`,
+			tc.name, tc.place).Scan(&gotGenerated, &gotOrdinal)
+		if err != nil {
+			t.Errorf("%s: no %s named %q under %q: %v", tc.what, tc.table, tc.name, tc.place, err)
+			continue
+		}
+		if gotGenerated != tc.generated {
+			t.Errorf("%s (%s %q): name_generated = %v, want %v", tc.what, tc.table, tc.name, gotGenerated, tc.generated)
+		}
+		switch {
+		case tc.generated && (gotOrdinal == nil || *gotOrdinal != tc.ordinal):
+			t.Errorf("%s (%s %q): ordinal = %v, want %d (the platform owns the name, so it owns the number)", tc.what, tc.table, tc.name, gotOrdinal, tc.ordinal)
+		case !tc.generated && gotOrdinal != nil:
+			t.Errorf("%s (%s %q): ordinal = %d, want absent (an operator typed this name, so the platform owns no number for it)", tc.what, tc.table, tc.name, *gotOrdinal)
+		}
+	}
+
+	// A room is operator-named and its PARENT is not, so the estate nests a
+	// typed name under a minted one: `boardroom` sits under the floor the
+	// platform called `1`, under the building an operator called `west`.
+	var roomGenerated bool
+	var roomOrdinal *int
+	if err := conn.QueryRow(ctx, `
+		select r.name_generated, r.ordinal
+		from location r
+		join location f on f.id = r.parent_id
+		join location b on b.id = f.parent_id
+		where r.name = 'boardroom' and f.name = '1' and b.name = 'west'`).Scan(&roomGenerated, &roomOrdinal); err != nil {
+		t.Fatalf("read the boardroom under the west building's floor: %v", err)
+	}
+	if roomGenerated || roomOrdinal != nil {
+		t.Errorf("the boardroom reads (generated %v, ordinal %v), want (false, absent): a room's name is ground truth the platform cannot mint", roomGenerated, roomOrdinal)
+	}
+
+	// A bare `display-1` is three rows, which is the direct proof that the
+	// fixture could not have used a generated name as its own identity.
+	var displays int
+	if err := conn.QueryRow(ctx, `select count(*) from component where name = 'display-1'`).Scan(&displays); err != nil {
+		t.Fatalf("count display-1: %v", err)
+	}
+	if displays != 3 {
+		t.Errorf("components named display-1 = %d, want 3 (one per room; a name is unique within its placement, not across the estate)", displays)
+	}
+}
+
+// TestASeededComponentNameAgreesWithItsProductsStem derives the expected stem
+// from the catalog rather than restating it: it walks each component's
+// product -> component_type chain for the first stem set on it, exactly as the
+// generator's resolveTypeFacts does, and checks the name the row actually
+// carries was minted from that. A stem edited in the boot seed moves this
+// assertion with it, where a hand-written list of names would drift.
+func TestASeededComponentNameAgreesWithItsProductsStem(t *testing.T) {
+	ctx, conn, _ := seededEstate(t)
+
+	rows, err := conn.Query(ctx, `
+		with recursive chain as (
+			select c.id as component_id, c.name, c.ordinal, ct.id as type_id, ct.parent_id, ct.stem, 0 as depth
+			from component c
+			join product p on p.id = c.product_id
+			join component_type ct on ct.id = p.component_type_id
+			where c.name_generated
+			union all
+			select chain.component_id, chain.name, chain.ordinal, up.id, up.parent_id, up.stem, chain.depth + 1
+			from chain join component_type up on up.id = chain.parent_id
+		)
+		select distinct on (component_id) component_id, name, ordinal, coalesce(stem, '')
+		from chain
+		where stem is not null and stem <> ''
+		order by component_id, depth`)
+	if err != nil {
+		t.Fatalf("resolve component stems: %v", err)
+	}
+	defer rows.Close()
+
+	seen := 0
+	for rows.Next() {
+		var id, name, stem string
+		var ordinal *int
+		if err := rows.Scan(&id, &name, &ordinal, &stem); err != nil {
+			t.Fatalf("scan component stem: %v", err)
+		}
+		seen++
+		if ordinal == nil {
+			t.Errorf("component %q is platform-named but records no ordinal", name)
+			continue
+		}
+		// A component mint never suppresses: a rack is counted, so the first
+		// display in a room is display-1 and not display (ADR-0101).
+		if want := stem + "-" + strconv.Itoa(*ordinal); name != want {
+			t.Errorf("component %q was minted from stem %q at ordinal %d, so its name should be %q", name, stem, *ordinal, want)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate component stems: %v", err)
+	}
+	if seen != 7 {
+		t.Errorf("platform-named components with a resolvable stem = %d, want 7 (every fixture device)", seen)
+	}
+}
+
+// TestSeededLabelsRenderFromTheirRules is the label half of the demonstration.
+// A component's label comes from the shipped rule over its resolved type and the
+// ordinal the generator allocated, so it reads back what the thing is and which
+// one it is without anybody typing it. The rows that DO carry a typed label are
+// asserted to still own it, since that is the other half of what the estate
+// teaches.
+func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
+	ctx, conn, _ := seededEstate(t)
+
+	for _, tc := range []struct {
+		table    string
+		place    string
+		name     string
+		label    string
+		platform bool
+	}{
+		{table: "component", place: "huddle", name: "display-1", label: "Display 1", platform: true},
+		{table: "component", place: "boardroom", name: "videobar-1", label: "Video Bar 1", platform: true},
+		{table: "component", place: "boardroom", name: "videobar-2", label: "Video Bar 2", platform: true},
+		{table: "component", place: "boardroom", name: "display-2", label: "Display 2", platform: true},
+		{table: "component", place: "auditorium", name: "display-1", label: "Display 1", platform: true},
+		// The unclassified box: the rule can only say "Generic Device 1", so
+		// the operator's words win and keep the pen.
+		{table: "component", place: "boardroom", name: "device-1", label: "Power Conditioner", platform: false},
+		{table: "component", place: "boardroom", name: "dsp", label: "Boardroom DSP", platform: false},
+		// The two halves of the divisible room, and the two floors: facts a
+		// rule has no way to know.
+		{table: "system", place: "boardroom", name: "boardroom", label: "Boardroom A", platform: false},
+		{table: "system", place: "boardroom", name: "boardroom-2", label: "Boardroom B", platform: false},
+		{table: "location", place: "west", name: "1", label: "Level 2", platform: false},
+		{table: "location", place: "hall", name: "1", label: "Level 1", platform: false},
+	} {
+		placeCol := "location_id"
+		if tc.table == "location" {
+			placeCol = "parent_id"
+		}
+		var label string
+		var platform bool
+		err := conn.QueryRow(ctx, `select coalesce(display_name, ''), display_name_generated from `+tc.table+`
+			where name = $1 and `+placeCol+` = (select id from location where name = $2)`,
+			tc.name, tc.place).Scan(&label, &platform)
+		if err != nil {
+			t.Errorf("no %s named %q under %q: %v", tc.table, tc.name, tc.place, err)
+			continue
+		}
+		if label != tc.label {
+			t.Errorf("%s %q under %q: label = %q, want %q", tc.table, tc.name, tc.place, label, tc.label)
+		}
+		if platform != tc.platform {
+			t.Errorf("%s %q under %q: display_name_generated = %v, want %v", tc.table, tc.name, tc.place, platform, tc.platform)
+		}
+	}
+}
+
+// TestTheSameFloorNumberMeansTwoDifferentThings is the friction this slice found
+// and chose to keep rather than hide (ADR-0103). A positional name is ALLOCATION
+// ORDER, not a real-world designation, and the estate seeds both cases side by
+// side on one type: the floor under Innovation Hall is named 1 and is Level 1,
+// and the floor under the West Building is also named 1 and is Level 2. The
+// second is why the label exists.
+func TestTheSameFloorNumberMeansTwoDifferentThings(t *testing.T) {
+	ctx, conn, _ := seededEstate(t)
+
+	rows, err := conn.Query(ctx, `
+		select p.name, f.name, coalesce(f.display_name, ''), f.name_generated
+		from location f join location p on p.id = f.parent_id
+		where f.location_type = (select id from location_type where name = 'floor')
+		order by p.name`)
+	if err != nil {
+		t.Fatalf("read floors: %v", err)
+	}
+	defer rows.Close()
+	got := map[string][2]string{}
+	for rows.Next() {
+		var building, name, label string
+		var generated bool
+		if err := rows.Scan(&building, &name, &label, &generated); err != nil {
+			t.Fatalf("scan floor: %v", err)
+		}
+		if !generated {
+			t.Errorf("the floor under %q was named by hand; a floor is the one seeded location type the platform names", building)
+		}
+		got[building] = [2]string{name, label}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate floors: %v", err)
+	}
+
+	want := map[string][2]string{
+		"hall": {"1", "Level 1"},
+		"west": {"1", "Level 2"},
+	}
+	for building, w := range want {
+		if got[building] != w {
+			t.Errorf("the floor under %q reads (name %q, label %q), want (name %q, label %q)",
+				building, got[building][0], got[building][1], w[0], w[1])
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("seeded floors = %d %v, want %d", len(got), got, len(want))
 	}
 }
 
@@ -426,20 +840,7 @@ func TestRunIdempotent(t *testing.T) {
 // top falls back to the install-wide `platform` value, which is the case a
 // synthetic root location would have hidden.
 func TestSeededEstateTeachesPlatformReach(t *testing.T) {
-	dsn := storagetest.NewDSN(t)
-	ctx := context.Background()
-
-	gw, err := storage.NewPG(ctx, dsn)
-	if err != nil {
-		t.Fatalf("open gateway: %v", err)
-	}
-	defer gw.Close()
-	if err := seed.Run(ctx, gw); err != nil {
-		t.Fatalf("boot seed: %v", err)
-	}
-	if err := devseed.Run(ctx, gw, ""); err != nil {
-		t.Fatalf("devseed run: %v", err)
-	}
+	ctx, conn, gw := seededEstate(t)
 
 	doc, err := devseed.Fixtures()
 	if err != nil {
@@ -452,11 +853,6 @@ func TestSeededEstateTeachesPlatformReach(t *testing.T) {
 		}
 	}
 
-	conn, err := pgx.Connect(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer conn.Close(ctx)
 	var tops int
 	if err := conn.QueryRow(ctx, `select count(*) from location where parent_id is null`).Scan(&tops); err != nil {
 		t.Fatalf("count tops: %v", err)
@@ -467,26 +863,67 @@ func TestSeededEstateTeachesPlatformReach(t *testing.T) {
 
 	// The two placed components, one per top. Their effective tags are the whole
 	// point: same key, different rung, because the location binding stops at its
-	// own top's subtree.
-	all := scope.Set{All: true}
-	underHQ, err := gw.GetComponent(ctx, "lobby-display", all)
-	if err != nil {
-		t.Fatalf("get hq component: %v", err)
-	}
-	underEast, err := gw.GetComponent(ctx, "auditorium-display", all)
-	if err != nil {
-		t.Fatalf("get east component: %v", err)
-	}
+	// own top's subtree. Both are called display-1, so both are addressed by the
+	// id their room resolves them to.
+	underHQ := componentIn(t, ctx, conn, gw, "huddle", "display-1")
+	underEast := componentIn(t, ctx, conn, gw, "auditorium", "display-1")
 	eff, err := gw.EffectiveTags(ctx, "component", []string{underHQ.ID, underEast.ID})
 	if err != nil {
 		t.Fatalf("effective tags: %v", err)
 	}
 	if got := eff[underHQ.ID]["environment"]; got != "staging" {
-		t.Errorf("lobby-display environment = %q, want staging (the hq-west location binding wins)", got)
+		t.Errorf("huddle display environment = %q, want staging (the west building's location binding wins)", got)
 	}
 	if got := eff[underEast.ID]["environment"]; got != "prod" {
-		t.Errorf("auditorium-display environment = %q, want prod (a different top, so only the platform binding reaches it)", got)
+		t.Errorf("auditorium display environment = %q, want prod (a different top, so only the platform binding reaches it)", got)
 	}
+}
+
+// seededEstate brings up a database with the boot seed and one devseed Run, and
+// hands back the raw connection and the gateway. One Run rather than two: the
+// idempotency property has its own test, and every other case here is about what
+// the estate IS.
+func seededEstate(t *testing.T) (context.Context, *pgx.Conn, storage.Gateway) {
+	t.Helper()
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	t.Cleanup(gw.Close)
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("boot seed: %v", err)
+	}
+	if err := devseed.Run(ctx, gw, ""); err != nil {
+		t.Fatalf("devseed run: %v", err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close(ctx) })
+	return ctx, conn, gw
+}
+
+// componentIn resolves a component by its room and its platform-minted name, and
+// then reads it back through the gateway by ID. The two steps are the point: a
+// bare `display-1` is ambiguous by design in this estate, so the id is the
+// reference, exactly as devseed itself resolves one.
+func componentIn(t *testing.T, ctx context.Context, conn *pgx.Conn, gw storage.Gateway, room, name string) *storage.Component {
+	t.Helper()
+	var id string
+	if err := conn.QueryRow(ctx, `
+		select c.id from component c join location l on l.id = c.location_id
+		where l.name = $1 and c.name = $2`, room, name).Scan(&id); err != nil {
+		t.Fatalf("resolve component %q in %q: %v", name, room, err)
+	}
+	c, err := gw.GetComponent(ctx, id, scope.Set{All: true})
+	if err != nil {
+		t.Fatalf("get component %q in %q: %v", name, room, err)
+	}
+	return c
 }
 
 // assertGrant checks a seeded user holds exactly the expected role at the

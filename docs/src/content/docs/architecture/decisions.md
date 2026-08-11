@@ -138,6 +138,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0100](#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate) | 2026-08-10 | Accepted | A label rule reads its entity's PLACEMENT (a component's location label and its primary system's type label, a system's location label), reversing ADR-0098's exclusion, and the write paths that keep those honest are derived from the map rather than enumerated. The line is BLAST RADIUS, not ownership: bounded by a placement (the rows at one location, one system's members, one component's membership) it cascades inside the act's own transaction; bounded only by the estate (a rule at any tier, a classification row's display_name, the acronym list) it waits for the preview-then-apply verb. A preview is an apply that rolls back, so it lists exactly what the apply changes including the second hop. One audit row per operation, keyed on the rule, never one per changed entity |
 | [ADR-0101](#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests) | 2026-08-10 | Accepted | A generated **system** name suppresses the ordinal on the first of its stem in a placement bucket (`boardroom`, then `boardroom-2`), and the order dependence is accepted: deleting the bare one while the second survives frees the bare name again, and `boardroom-1` never exists. Suppression is a field on the MINT rather than a change to the shape (a component still reads `display-1`), and the ALLOCATOR takes that same mint, so a suppressing mint and a non-suppressing allocator cannot disagree on ordinal 1 and turn the second create into a `23505`. A placement bucket becomes a value per entity kind, so a location's two buckets cannot be written as a system's three, and the allocation lock loses the stem from its key, since two stems can now mint one name. The pen and both verbs spread to system and location; only a system generates, and a location's `:resetName` refuses with the missing fact named. No backfill: the default false is the right value for a row an operator already named |
 | [ADR-0102](#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing) | 2026-08-10 | Accepted | A **`location_type.name_rule`** (nullable jsonb) is a type's opt-in to naming the locations it classifies, and it is a **declaration** (a stem, possibly empty, plus the first-ordinal suppression flag) rather than the `label_rule` template beside it. A name has to satisfy `validateEntityName`, it lands in a scoped-unique index, and other things reference it, so an unrenderable rule has no safe degradation the way a label's does; a declaration IS a `nameMint`, so a rule is refused at RULE-EDIT time by minting from it (ordinal 1 and a nine-digit ceiling bound the whole output space), which a template's output could only be sampled. Null is the opt-out and there is no boolean beside it. A rule change **renames nothing**: there is no name-side recompute verb, deliberately, because relabelling in bulk is recoverable and renaming is not. A positional type permitted at root allocates `1`, `2` across the estate and that is legal, since the bucket is the placement and two positional types under one parent already share an ordinal space |
+| [ADR-0103](#adr-0103-a-positional-name-is-allocation-order-and-the-real-world-designation-is-a-label) | 2026-08-11 | Accepted | A positional name is **allocation order**, never a claim about the world: the dev estate's West Building holds one floor, the building's Level 2, and the generator calls it `1`. The divergence is kept rather than removed, because a name is an address (unique under its parent, typeable, ownable by the platform so nobody has to invent one) and a label is what a human reads (a floor's designation is signage, a fact the platform has no access to). The seeded estate ships both cases of one type side by side, a floor named `1` labelled Level 1 and a floor named `1` labelled Level 2. The rule this generalises to: a stem-less positional name fits an arbitrary disambiguator and not a number an operator reads as a designation, which puts `floor` on the line rather than safely inside it; making it nominal (the plain reversal of ADR-0102) is declined on cost, not principle, and stays available. Seeding a Level 1 so the numbers line up, and shipping a `Floor {{.Name}}` label rule, are both refused as the same defect with better manners |
 
 ## Entries
 
@@ -4182,4 +4183,50 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   a reason of its own: `location_type` carries no `abbrev` at all, so there is no compact form to
   substitute into, and a positional location's name already is its ordinal.
 - **Tracked under** [#687](https://github.com/hyperscaleav/omniglass/issues/687), the seventh slice of
+  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
+
+### ADR-0103: A positional name is allocation order, and the real-world designation is a label
+
+- **Date:** 2026-08-11 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
+  [location types](/guides/admin/location-types/)
+- **Context:** [ADR-0102](#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing)
+  shipped `floor` as the one auto-nameable location type, positional and stem-less, on the argument
+  that "a floor has a name the platform can know". The dev estate is the first real data to meet
+  that argument, and it falsifies the sentence as written: the West Building's only seeded floor is
+  the building's **Level 2**, and the generator calls it `1`, because a positional ordinal is the
+  lowest free number in the parent's bucket and nothing else.
+- **Decision:** `floor` stays positional, and the divergence is **kept rather than removed**, because
+  the two fields are answering two different questions. A **name** is an address: it has to be
+  unique under its parent, legal, and typeable, and the platform owning it means an operator did not
+  have to think of one. A **label** is what a human reads, and a building's own designation for a
+  floor ("Level 2", "B1", "Mezzanine", the skipped 13) is signage, a real-world fact the platform has
+  no access to. So the platform allocates the name and the operator types the label, and the seeded
+  estate ships both cases of the same type side by side: the floor under Innovation Hall is named `1`
+  and labelled Level 1 (they coincide), and the floor under the West Building is named `1` and
+  labelled Level 2 (they do not).
+- **Decision (the sharper rule this generalises to):** a stem-less positional name is right where the
+  position is an **arbitrary disambiguator** and wrong where the number is a real-world fact. It is
+  never a claim about the world, so a type whose ordinal an operator will read as a designation
+  (a rack unit, an output, a channel) wants its number **typed**, not allocated. `floor` sits on that
+  line rather than safely inside it, and it stays shipped-positional on the strength of the workflow
+  it serves: building out a tower floor by floor, where typing forty names is the cost and the
+  designations arrive later as labels.
+- **Rejected, and why each:**
+  - **Make `floor` nominal and drop its rule** (the plain reversal of ADR-0102). It is the more
+    honest reading of "a floor has a name the platform can know", and it was rejected on cost rather
+    than principle: it leaves the shipped estate with **no** auto-nameable location type, so the
+    feature is inert everywhere until an operator defines one, and it moves nine storage cases and an
+    e2e that assert against the seeded `floor` rule. The reversal stays available and this entry is
+    where it starts.
+  - **Seed a Level 1 under the West Building so the numbers line up.** It makes the estate agree by
+    construction and teaches the wrong lesson: correspondence would look like a guarantee, and it is
+    a coincidence of enumerating from the bottom in order.
+  - **Ship a `floor` label rule (`Floor {{.Name}}`).** It renders "Floor 1" for a floor that is
+    Level 2, which is the same defect with a nicer typeface.
+- **Consequence:** the shipped **location** label rule stays empty and the dev estate labels all
+  thirteen of its locations by hand, which is not a gap in the demonstration but the demonstration:
+  a location's label is operator space by design, and the two floors are where that stops being an
+  abstraction. It also means a positional name is not safe to read as a designation anywhere in the
+  product, so a console surface that shows a floor must show its label.
+- **Tracked under** [#689](https://github.com/hyperscaleav/omniglass/issues/689), the ninth slice of
   epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
