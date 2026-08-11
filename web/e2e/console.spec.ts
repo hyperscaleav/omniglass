@@ -56,29 +56,38 @@ test.describe("operator console", () => {
     await expect(page.locator("main")).not.toContainText(name);
   });
 
-  // The acceptance of #688, and the only tier that can witness it. The console
-  // shows the SHAPE of the name a nameless create will be given, resolved from
-  // the chosen product's component_type chain in the browser; the gateway mints
-  // the actual name from its own walk of the same chain, inside the create's
-  // transaction. Nothing below this tier can prove the two agree: a page test
-  // asserts what the form rendered, and a storage test asserts what the gateway
-  // minted, and each is blind to the other.
-  test("a component created with no name lands with the name the console said it would", async ({ page }) => {
+  // The acceptance of #688 and #699, and the only tier that can witness either.
+  //
+  // The console shows the SHAPE of the name a nameless create will be given,
+  // resolved from the chosen product's component_type chain in the browser; the
+  // gateway mints the actual name from its own walk of the same chain, inside
+  // the create's transaction. And the console shows the LABEL the platform will
+  // write, rendered by the server against a row that does not exist yet; the
+  // gateway stamps the real one inside that same transaction. Nothing below
+  // this tier can prove either pair agrees: a page test asserts what the form
+  // rendered and a storage test asserts what the gateway wrote, and each is
+  // blind to the other.
+  test("a component created with both fields locked lands with the name and the label the console showed", async ({ page }) => {
     await page.goto("/web/components/create");
 
     // Choose what it is. Generic Device is the classification floor's fallback
     // and ships in every install, so this needs no fixture of its own.
     await page.getByLabel("Product").selectOption({ label: "Generic Device" });
 
-    // The console now says what the platform will call it, with the ordinal
-    // written as a token because it does not exist yet.
-    await expect(page.getByText("Generated name", { exact: true })).toBeVisible();
-    const shape = ((await page.getByText(/^[a-z0-9-]+-n$/).first().textContent()) ?? "").trim();
+    // Both identity fields are LOCKED on what the platform will use, and a
+    // locked field posts nothing (#699). The name's ordinal is written as a
+    // token because it does not exist yet.
+    const nameField = page.getByLabel("Name", { exact: true });
+    await expect(nameField).toBeDisabled();
+    const shape = (await nameField.inputValue()).trim();
     expect(shape).toMatch(/^[a-z0-9-]+-n$/);
     const stem = shape.slice(0, -2);
 
-    // Leave the name blank: that IS the request to have the platform name it.
-    await expect(page.getByLabel("Name", { exact: true })).toHaveValue("");
+    const labelField = page.getByLabel("Display name", { exact: true });
+    await expect(labelField).toBeDisabled();
+    await expect(labelField).not.toHaveValue("");
+    const drafted = (await labelField.inputValue()).trim();
+
     await page.getByRole("button", { name: /create component/i }).click();
     await page.waitForURL(/\/web\/components\/[0-9a-f-]{36}/);
 
@@ -92,8 +101,18 @@ test.describe("operator console", () => {
     // between the two walks fails here and nowhere else.
     const minted = page.getByText(new RegExp(`^${stem}-\\d+$`)).first();
     await expect(minted).toBeVisible();
+    const mintedName = ((await minted.textContent()) ?? "").trim();
+    const ordinal = mintedName.slice(stem.length + 1);
 
-    // And the platform holds the pen on it, which is what makes the name the
+    // And the LABEL the row carries is the one the form showed, with the ordinal
+    // filled into the one place the render could not know it. The token is
+    // substituted only where it stands alone as a word, so a type name carrying
+    // the letter is left intact.
+    const expected = drafted.replace(/\bn\b/, ordinal);
+    expect(expected).not.toBe(drafted);
+    await expect(page.locator("main")).toContainText(expected);
+
+    // And the platform holds the pen on both, which is what makes them the
     // platform's to keep current through a later move or reclassify.
     await expect(page.getByText("Generated", { exact: true }).first()).toBeVisible();
 

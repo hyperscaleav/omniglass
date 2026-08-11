@@ -154,7 +154,9 @@ export default function CreateIdentity(props: CreateIdentityProps): JSX.Element 
                 ? "Working out what the rule renders…"
                 : labelAvailable()
                   ? `Rendered from ${props.label()!.rule}`
-                  : "No label rule applies to this classification, so the name is what an operator reads. Override it to write one yourself."
+                  : nameText().trim() === ""
+                    ? "No label rule applies to this classification, so whatever you name this above is what an operator will read. Override it to write a label yourself."
+                    : "No label rule applies to this classification, so the name is what an operator reads. Override it to write one yourself."
           }
         >
           <input
