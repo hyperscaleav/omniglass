@@ -249,10 +249,17 @@ for anyone passing one, which is the failure mode a per-page test cannot catch.
 
 The write side does differ, page by page. `createIdentity` derives the name from the display name as
 an operator types and stops the moment they edit the name by hand, and an edit form seeds it with
-the existing name so relabelling can never rewrite a live address. The three signal registries
-(`property_type`, `event_type`, `command_type`) do not wire it, because a signal name is chosen to
-match what an interface reports rather than derived from prose somebody typed, and that was as true
-when those names carried dots as it is now they are single tokens. `tag`, `variable`, and `secret`
+the existing name so relabelling can never rewrite a live address. That path belongs to the
+registries, whose names have no generator and stay globally unique.
+
+The three estate entities do not wire it. A component, a system, and a location get their names
+from the platform, minted from the resolved type stem and the placement bucket, so deriving a name
+from whatever prose an operator typed would claim the pen on their behalf the moment they typed a
+label. Their create forms ask what and where first, then show the shape the name will take
+(`display-n`), and leave the name field empty to mean "the platform names this one". The three
+signal registries (`property_type`, `event_type`, `command_type`) do not wire it either, because a
+signal name is chosen to match what an interface reports rather than derived from prose somebody
+typed, and that was as true when those names carried dots as it is now they are single tokens. `tag`, `variable`, and `secret`
 invite an exception because their prose calls them keys; they get none, and take the one rule like
 everything else.
 
