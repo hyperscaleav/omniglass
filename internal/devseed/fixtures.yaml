@@ -47,12 +47,25 @@
 # all of them, which is why the seed places devices under two different tops (see
 # components, below): with everything under one top, a binding there would look
 # like it covered the estate.
+#
+# LABELS. The shipped location rule reads a location's own name as words and
+# titles it (#657), so most of these rows need no display_name at all: a room
+# named `boardroom` renders "Boardroom" from the rule, and pinning that same
+# string would hide the feature behind a hand-typed copy of its own output. A
+# display_name survives here only where it says something the NAME cannot, and
+# each survivor states which. `TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint`
+# pins the set by key.
 locations:
   # Headquarters: the deepest site (campus -> building -> floor -> rooms).
+  #
+  # Pinned: the rule would render "Hq". The word an operator says is
+  # "Headquarters", and no dictionary entry turns a name into a longer word.
   - key: hq
     name: hq
     display_name: Headquarters
     type: campus
+  # Pinned: the name is a bearing, the label is the building. `west` renders
+  # "West", which is a direction rather than a place.
   - key: west
     name: west
     display_name: West Building
@@ -66,6 +79,10 @@ locations:
   # it lives in the label. The two deliberately disagree, and the floor under
   # Innovation Hall below is the same shape with the two agreeing: one estate,
   # both cases, which is the clearest thing this fixture teaches (ADR-0103).
+  #
+  # Pinned, and this is the load-bearing pin: the rule would render "1" from the
+  # allocated name, which is an address and not a designation. Releasing it is
+  # how ADR-0103's worked example disappears.
   - key: west-l2
     display_name: Level 2
     type: floor
@@ -74,11 +91,15 @@ locations:
   # needs no ancestry in it: names are unique within their parent (not across the
   # estate), so `boardroom` under this floor is a complete name and
   # `hq.west.1.boardroom` is the address that disambiguates it.
+  #
+  # No display_name: the shipped rule renders "Boardroom" from this name, and a
+  # pin restating it would only hide which of the two produced it.
   - key: boardroom
     name: boardroom
-    display_name: Boardroom
     type: room
     parent: west-l2
+  # Pinned: "Huddle" is not what anybody calls the room, and the noun is not in
+  # the name. Compare the media lab below, whose name carries both words.
   - key: huddle
     name: huddle
     display_name: Huddle Room
@@ -86,10 +107,14 @@ locations:
     parent: west-l2
 
   # East Campus: a second site.
+  #
+  # Pinned for the reason `west` is: a bearing is not a place.
   - key: east
     name: east
     display_name: East Campus
     type: campus
+  # Pinned: "Innovation" is a fact about this building that its name does not
+  # carry and no rule can invent.
   - key: hall
     name: hall
     display_name: Innovation Hall
@@ -97,32 +122,39 @@ locations:
     parent: east
   # The other floor: platform-named `1` in its own building's bucket (two
   # locations named `1`, which is the placement-scoped name index working), and
-  # here the allocation order and the real-world designation agree.
+  # here the allocation order and the real-world designation agree. Pinned for
+  # the reason its twin is: the pair is the worked example, and half of it says
+  # nothing on its own.
   - key: hall-l1
     display_name: Level 1
     type: floor
     parent: hall
+  # No display_name: the rule renders "Auditorium".
   - key: auditorium
     name: auditorium
-    display_name: Auditorium
     type: room
     parent: hall-l1
+  # No display_name, and this is the row that shows what the rule actually DOES:
+  # a two-word name, which the rule reads as words and titles into "Media Lab".
+  # The other rooms are one word, so they show only the casing half.
   - key: lab
-    name: lab
-    display_name: Media Lab
+    name: media-lab
     type: room
     parent: hall-l1
 
   # Airport Office: a small third site (campus -> building -> room).
+  #
+  # Pinned: `airport` is where the site is, "Airport Office" is what it is.
   - key: airport
     name: airport
     display_name: Airport Office
     type: campus
+  # No display_name: the rule renders "Annex".
   - key: annex
     name: annex
-    display_name: Annex
     type: building
     parent: airport
+  # Pinned for the reason the huddle room is: the noun is not in the name.
   - key: briefing
     name: briefing
     display_name: Briefing Room

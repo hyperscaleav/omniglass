@@ -214,12 +214,30 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 		}
 	}
 
-	// Every location: the shipped location label rule is deliberately empty
-	// (internal/seed/label_rules.yaml argues why), so a location's label is the
-	// operator's or it is nothing and the console falls back to the name.
+	// Locations, which the shipped rule reaches as of #657: it reads the name as
+	// words and titles it, so a pin restating what the rule would render hides
+	// the feature behind a hand-typed copy of its own output. The survivors are
+	// pinned by key with the reason in the fixture beside each:
+	//
+	//	hq, west, east, airport   the name is a bearing or an abbreviation, and
+	//	                          the label is the place ("West" is a direction)
+	//	huddle, briefing          the room's noun is not in its name
+	//	hall                      "Innovation" is not derivable from "hall"
+	//	west-l2, hall-l1          ADR-0103: a positional name is allocation order
+	//	                          and the designation is signage. Releasing these
+	//	                          two deletes that worked example from the estate.
+	//
+	// boardroom, auditorium, annex and the media lab carry none, which is what
+	// makes the estate demonstrate the rule instead of masking it.
+	wantLocationLabels := map[string]bool{
+		"hq": true, "west": true, "east": true, "airport": true,
+		"huddle": true, "briefing": true, "hall": true,
+		"west-l2": true, "hall-l1": true,
+	}
 	for _, l := range doc.Locations {
-		if l.DisplayName == "" {
-			t.Errorf("location %q has no display_name; the shipped location rule is empty, so nothing would render one", l.Key)
+		if (l.DisplayName != "") != wantLocationLabels[l.Key] {
+			t.Errorf("location %q display_name = %q, want set = %v (everything else lets the shipped location rule render)",
+				l.Key, l.DisplayName, wantLocationLabels[l.Key])
 		}
 	}
 }
@@ -799,6 +817,32 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		}
 		if platform != tc.platform {
 			t.Errorf("%s %q under %q: display_name_generated = %v, want %v", tc.table, tc.name, tc.place, platform, tc.platform)
+		}
+	}
+
+	// The locations the shipped rule labels (#657), addressed by name alone
+	// because each of these four is estate-unique (the two floors above are not,
+	// which is why they are looked up under their parent). This is the half of
+	// the demonstration that would otherwise be asserted by nothing: releasing a
+	// pin leaves no test behind unless the rendered value is pinned instead.
+	for _, tc := range []struct{ name, label string }{
+		{"boardroom", "Boardroom"},
+		{"auditorium", "Auditorium"},
+		{"annex", "Annex"},
+		// The two-word one: the rule reads the separator as a space, which is
+		// the whole of what `words` does and the only row here that shows it.
+		{"media-lab", "Media Lab"},
+	} {
+		var label string
+		var platform bool
+		if err := conn.QueryRow(ctx,
+			`select coalesce(display_name, ''), display_name_generated from location where name = $1`,
+			tc.name).Scan(&label, &platform); err != nil {
+			t.Errorf("no location named %q: %v", tc.name, err)
+			continue
+		}
+		if label != tc.label || !platform {
+			t.Errorf("location %q: label = %q generated = %v, want %q rendered by the shipped rule", tc.name, label, platform, tc.label)
 		}
 	}
 }
