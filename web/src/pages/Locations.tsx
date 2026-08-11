@@ -22,7 +22,8 @@ import {
 } from "../lib/locations";
 import { LOCATION_TYPES_KEY, ROOT_PLACEMENT, listLocationTypes } from "../lib/location_types";
 import CreateIdentity from "../components/CreateIdentity";
-import { bucketPhrase, locationMint, nameBucket } from "../lib/namegen";
+import { bucketPhrase, createPen, locationMint, nameBucket, penIncomplete } from "../lib/namegen";
+import { useLabelDraft } from "../lib/labeldraft";
 import { pathTo, type TreeNode } from "../lib/treeselect";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -547,8 +548,8 @@ export default function Locations() {
     // claimed the pen the moment the operator typed a label, and the
     // always-required name gate meant the console could not reach the generator
     // at all. createIdentity keeps its place on the registry pages.
-    const [display, setDisplay] = createSignal("");
-    const [name, setName] = createSignal("");
+    const displayPen = createPen();
+    const namePen = createPen();
     const [type, setType] = createSignal("");
     const [parent, setParent] = createSignal("");
     const [busy, setBusy] = createSignal(false);
@@ -563,6 +564,19 @@ export default function Locations() {
     // A location has TWO buckets, not three: it has no located-at column, so
     // the shape falls out of asking for the bucket with no location at all.
     const parentItems = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 })));
+    // The label the platform would write. A shipped estate answers with
+    // nothing here (the global location rule ships deliberately empty and no
+    // seeded location_type carries one), which is the state the form has to be
+    // honest about rather than the exception.
+    const labelDraft = useLabelDraft(() =>
+      type().trim()
+        ? {
+            kind: "location" as const,
+            body: { location_type: type().trim(), name: namePen.value().trim() || undefined },
+          }
+        : null,
+    );
+
     const bucket = createMemo(() => nameBucket(parent()));
     const bucketText = createMemo(() => bucketPhrase("location", bucket(), pathTo(parentItems(), bucket().id)));
 
@@ -570,7 +584,7 @@ export default function Locations() {
       e.preventDefault();
       setBusy(true);
       setFormErr(null);
-      const nm = name().trim();
+      const nm = namePen.value().trim();
       try {
         // Bind the create response (#627 Task 15c): see Components.tsx's
         // own create() for why the id, not the locally typed name, is what
@@ -578,7 +592,7 @@ export default function Locations() {
         // An empty name is OMITTED rather than posted as "": omitted is
         // "generate one from the type's rule", where "" is a name of nothing
         // the API refuses against the entity-name pattern.
-        const created = await createLocation({ name: nm || undefined, location_type: type().trim(), display_name: display().trim() || undefined, parent: parent() || undefined });
+        const created = await createLocation({ name: nm || undefined, location_type: type().trim(), display_name: displayPen.value().trim() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
         openInEdit(created.id);
         navigate(`/locations/${encodeURIComponent(created.id)}`);
@@ -635,10 +649,10 @@ export default function Locations() {
           kind="location"
           mint={mint}
           bucket={bucketText}
-          name={name}
-          setName={setName}
-          display={display}
-          setDisplay={setDisplay}
+          namePen={namePen}
+          displayPen={displayPen}
+          label={() => labelDraft.data}
+          labelPending={() => labelDraft.isFetching}
           namePlaceholder="boardroom"
           displayPlaceholder="Conf Room 301"
         />
@@ -649,7 +663,7 @@ export default function Locations() {
           {/* A name is required only when the chosen type carries no name
               rule, which is every shipped type but floor. The type itself
               stays required: for a location it is the only shape-definer. */}
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !type().trim() || (!name().trim() && !mint())}>Create location</Button>
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !type().trim() || penIncomplete(mint() !== null, namePen)}>Create location</Button>
         </div>
 
         <div class="flex flex-col gap-1 opacity-50">

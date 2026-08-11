@@ -1,8 +1,12 @@
 import { describe, it, expect } from "vitest";
+import { createRoot } from "solid-js";
 import {
   ORDINAL_TOKEN,
   bucketPhrase,
   componentMint,
+  createPen,
+  penIncomplete,
+  penState,
   locationMint,
   mintNote,
   mintShape,
@@ -179,5 +183,64 @@ describe("bucketPhrase", () => {
     // beats printing an empty path that reads as "no scope at all".
     expect(bucketPhrase("component", { under: "location", id: "l" }, [])).toBe("at the chosen location");
     expect(bucketPhrase("component", { under: "parent", id: "p" }, [])).toBe("under the chosen parent");
+  });
+});
+
+// The pen (#699): one identity field's ownership, and the invariant that keeps a
+// locked field and what gets posted from disagreeing.
+describe("the pen", () => {
+  // createPen calls createSignal, so it needs an owner: createRoot is the
+  // smallest one, and disposing it is what keeps a test from leaking a
+  // reactive scope into the next.
+  const withPen = (fn: (p: ReturnType<typeof createPen>) => void) =>
+    createRoot((dispose) => {
+      fn(createPen());
+      dispose();
+    });
+
+  it("starts locked and holding nothing, so a create body omits the field", () => {
+    withPen((p) => {
+      expect(p.overridden()).toBe(false);
+      expect(p.value()).toBe("");
+    });
+  });
+
+  it("clears the value when the pen goes back to the platform", () => {
+    // The whole wire contract, in one place: re-locking cannot leave a value
+    // behind for the create body to pick up, so "locked" and "posts nothing"
+    // are the same state rather than two that have to be kept in step.
+    withPen((p) => {
+      p.setOverridden(true);
+      p.setValue("front-mic");
+      p.setOverridden(false);
+      expect(p.value()).toBe("");
+    });
+  });
+
+  it("reads a typed value as overridden even when the flag says otherwise", () => {
+    // A name typed while nothing could generate one survives the operator then
+    // choosing a classification that can: the value is the stronger signal.
+    withPen((p) => {
+      p.setValue("one-off");
+      expect(penState(true, p)).toBe("overridden");
+    });
+  });
+
+  it("is generated when available and untouched, unavailable when not", () => {
+    withPen((p) => {
+      expect(penState(true, p)).toBe("generated");
+      expect(penState(false, p)).toBe("unavailable");
+    });
+  });
+
+  it("blocks the submit only where nothing generates and nothing is typed", () => {
+    withPen((p) => {
+      // Locked over a value the platform will supply: complete.
+      expect(penIncomplete(true, p)).toBe(false);
+      // Nothing will generate and the operator has typed nothing: incomplete.
+      expect(penIncomplete(false, p)).toBe(true);
+      p.setValue("one-off");
+      expect(penIncomplete(false, p)).toBe(false);
+    });
   });
 });

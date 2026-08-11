@@ -75,6 +75,15 @@ export const MapPin: Component<P> = (p) => (
 export const Sliders: Component<P> = (p) => (
   <Svg size={p.size}><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4" /><circle cx="16" cy="6" r="2" /><circle cx="8" cy="12" r="2" /><circle cx="14" cy="18" r="2" /></Svg>
 );
+// Lock / LockOpen: who holds the pen on a field. The shackle is the whole of
+// the difference between them, so the two read as one state and its opposite
+// rather than as two unrelated glyphs.
+export const Lock: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></Svg>
+);
+export const LockOpen: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 7.5-2" /></Svg>
+);
 export const Pencil: Component<P> = (p) => (
   <Svg size={p.size}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></Svg>
 );

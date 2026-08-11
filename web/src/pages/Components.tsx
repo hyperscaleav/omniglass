@@ -21,7 +21,8 @@ import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { COMPONENT_TYPES_KEY, componentTypeByName, listComponentTypes } from "../lib/component_types";
-import { bucketPhrase, componentMint, nameBucket } from "../lib/namegen";
+import { bucketPhrase, componentMint, createPen, nameBucket, penIncomplete } from "../lib/namegen";
+import { useLabelDraft } from "../lib/labeldraft";
 import { pathTo, type TreeNode } from "../lib/treeselect";
 import CreateIdentity from "../components/CreateIdentity";
 import { useMe, can } from "../lib/auth";
@@ -536,8 +537,8 @@ export default function Components() {
     // same footing, and createIdentity's derive path stays in use on the
     // registry and identity pages, whose names have no generator and stay
     // globally unique.
-    const [display, setDisplay] = createSignal("");
-    const [name, setName] = createSignal("");
+    const displayPen = createPen();
+    const namePen = createPen();
     const [system, setSystem] = createSignal("");
     const [location, setLocation] = createSignal("");
     const [parent, setParent] = createSignal("");
@@ -563,6 +564,25 @@ export default function Components() {
     // The placement bucket the name has to be unique in, in the server's own
     // precedence (a parent wins over a location, and neither is the unplaced
     // bucket), rendered as the path of whichever one applies.
+    // What the platform would LABEL this, which only the server can answer: a
+    // rule is a Go template over a closed map, so the console asks rather than
+    // re-implements (ADR-0098). Asked with the same body the create posts, and
+    // only once the classification is chosen, so a half-filled form is never
+    // sent a question it cannot answer.
+    const labelDraft = useLabelDraft(() =>
+      product()
+        ? {
+            kind: "component" as const,
+            body: {
+              product: product(),
+              name: namePen.value().trim() || undefined,
+              location: location() || undefined,
+              system: system() || undefined,
+            },
+          }
+        : null,
+    );
+
     const bucket = createMemo(() => nameBucket(parent(), location()));
     const bucketText = createMemo(() => {
       const b = bucket();
@@ -574,7 +594,7 @@ export default function Components() {
       e.preventDefault();
       setBusy(true);
       setFormErr(null);
-      const nm = name().trim();
+      const nm = namePen.value().trim();
       try {
         // Bind the create response (#627 Task 15c): under uuid addressing
         // the locally typed name is not a reliable handle to navigate by,
@@ -585,7 +605,7 @@ export default function Components() {
         // nothing."
         const created = await createComponent({
           name: nm || undefined,
-          display_name: display().trim() || undefined,
+          display_name: displayPen.value().trim() || undefined,
           system: system() || undefined,
           location: location() || undefined,
           parent: parent() || undefined,
@@ -649,10 +669,10 @@ export default function Components() {
           kind="component"
           mint={mint}
           bucket={bucketText}
-          name={name}
-          setName={setName}
-          display={display}
-          setDisplay={setDisplay}
+          namePen={namePen}
+          displayPen={displayPen}
+          label={() => labelDraft.data}
+          labelPending={() => labelDraft.isFetching}
           namePlaceholder="mic-2 (optional)"
           displayPlaceholder="Ceiling Mic 2"
         />
@@ -660,10 +680,12 @@ export default function Components() {
         <div class="flex items-center gap-2 border-t border-base-300 pt-4">
           <Button icon={X} onClick={() => navigate("/components")}>Cancel</Button>
           <span class="flex-1" />
-          {/* No !name().trim() gate (#627 Task 15d): the name is optional now,
-              the whole point of the affordance. Product stays required (the
-              #614 classification floor, and the generator's own stem source). */}
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !product()}>Create component</Button>
+          {/* A name is required only where nothing will mint one: a product
+              whose component_type chain carries no stem (#699 closes the
+              asymmetry the other two forms did not have). Product stays
+              required, the #614 classification floor and the generator's own
+              stem source. */}
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !product() || penIncomplete(mint() !== null, namePen)}>Create component</Button>
         </div>
 
         <div class="flex flex-col gap-1 opacity-50">

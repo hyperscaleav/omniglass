@@ -17,6 +17,12 @@ type FieldRowBase = {
   docHref?: string;
   // A hint rendered under the control (optional; distinct from the tooltip).
   hint?: string;
+  // An affordance rendered on the label row, pushed to its trailing edge: the
+  // lock/override toggle a generated field carries (#699). It sits OUTSIDE the
+  // <label> for the same reason the (i) trigger does, and it is not a cosmetic
+  // detail: a labelable button inside a <label> steals the control's accessible
+  // name and swallows the click that should have focused the input.
+  action?: JSX.Element;
   // Label the field with the small-caps eyebrow instead of the form label style.
   // A blade field reads as a fact when it is not being edited (KVStacked, which
   // is eyebrow-labelled), so an eyebrow here is what keeps the label from
@@ -55,6 +61,10 @@ export default function FieldRow(p: FieldRowProps): JSX.Element {
           {label()}
         </label>
         <Show when={p.info}><InfoTip text={p.info!} label={label()} href={p.docHref} hrefText="Docs" /></Show>
+        <Show when={p.action}>
+          <span class="flex-1" />
+          {p.action}
+        </Show>
       </span>
       {resolved()}
       <Show when={p.hint}><span class="text-[11px] text-base-content/40">{p.hint}</span></Show>

@@ -1,3 +1,4 @@
+import { createSignal } from "solid-js";
 import { type ComponentType } from "./component_types";
 import { type LocationType } from "./location_types";
 import { type SystemType } from "./system_types";
@@ -152,4 +153,58 @@ export function bucketPhrase(kind: EstateKind, bucket: NameBucket, path: string[
     default:
       return kind === "location" ? "at the estate root" : `among the unplaced ${kind}s`;
   }
+}
+
+// A PEN is one identity field's ownership: the value, and whether the operator
+// has claimed it (#699). The two travel together because they are one fact told
+// two ways, and separating them is how a form ends up locked while posting a
+// value, or unlocked while posting none.
+//
+// The invariant is enforced in one place, setOverridden: handing the pen BACK
+// clears the value. So "locked" and "posts nothing" are the same state rather
+// than two states a caller has to keep in step, and a page's create body stays
+// the `value || undefined` it already was.
+export interface Pen {
+  value: () => string;
+  setValue: (v: string) => void;
+  overridden: () => boolean;
+  setOverridden: (v: boolean) => void;
+}
+
+export function createPen(): Pen {
+  const [value, setValue] = createSignal("");
+  const [overridden, setOverridden] = createSignal(false);
+  return {
+    value,
+    setValue,
+    overridden,
+    setOverridden: (v: boolean) => {
+      setOverridden(v);
+      if (!v) setValue("");
+    },
+  };
+}
+
+// penState is which of the three a field is in, and it is derived rather than
+// stored so the three cannot disagree.
+//
+// available is "the platform will produce a value here". False is not a loading
+// state: a location_type with no name rule, an unclassified system, and a
+// component_type chain with no stem are all permanent answers, and each means
+// the operator has to type one. A field with a typed value reads as overridden
+// even if the flag says otherwise, which is what makes a name typed while
+// nothing could generate one survive the operator then choosing a type that
+// could.
+export type PenState = "generated" | "overridden" | "unavailable";
+
+export function penState(available: boolean, p: Pen): PenState {
+  if (p.overridden() || p.value().trim() !== "") return available ? "overridden" : "unavailable";
+  return available ? "generated" : "unavailable";
+}
+
+// penIncomplete is the submit gate: a field the operator owns and has left
+// empty. A LOCKED field is never incomplete, whatever it is showing, because
+// the platform is the one filling it in.
+export function penIncomplete(available: boolean, p: Pen): boolean {
+  return !available && p.value().trim() === "";
 }

@@ -74,6 +74,17 @@ function mount(path: string) {
   ));
 }
 
+// Both identity fields open LOCKED on the platform's answer (#699), so a test
+// that means to type into one takes the pen first, exactly as an operator does.
+// The name's toggle leads and the label's follows, in field order.
+function unlockName() {
+  fireEvent.click(screen.getAllByText("Override")[0].closest("button") as HTMLButtonElement);
+}
+function unlockLabel() {
+  const all = screen.getAllByText("Override");
+  fireEvent.click(all[all.length - 1].closest("button") as HTMLButtonElement);
+}
+
 describe("Components create-as-route", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
@@ -214,9 +225,14 @@ describe("Components create-as-route", () => {
     // derive-from-display coupling would have filled it anyway (#627 Task
     // 15d retires that path for this form specifically).
     const displayInput = screen.getByPlaceholderText("Ceiling Mic 2") as HTMLInputElement;
+    unlockLabel();
     fireEvent.input(displayInput, { target: { value: "Ceiling Mic 9" } });
+    // The name field is LOCKED (#699), so what it shows is the platform's
+    // answer and its pen holds nothing: that is what makes the body below omit
+    // the field rather than post the shape as a literal name.
     const nameInput = screen.getByPlaceholderText("mic-2 (optional)") as HTMLInputElement;
-    expect(nameInput.value).toBe("");
+    expect(nameInput.disabled).toBe(true);
+    expect(nameInput.value).toBe("mic-n");
     let captured: unknown;
     const seen: string[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -920,30 +936,34 @@ describe("Components create identity", () => {
   });
 
   it("resolves the stem up the product's component_type chain", async () => {
-    const { product } = await fields();
-    expect(screen.queryByText("Generated name")).toBeNull();
+    const { product, key } = await fields();
+    // Nothing to lock before a classification is chosen: what comes first is
+    // what the rule reads.
+    expect(key.disabled).toBe(false);
     // shure-mxa920 classifies as ceiling-mic, which sets no stem of its own and
     // inherits "mic". A preview reading the product's own type alone would show
     // nothing here, and the row would still arrive named mic-1.
     fireEvent.change(product, { target: { value: "shure-mxa920" } });
-    await waitFor(() => expect(screen.getByText("Generated name")).toBeTruthy());
-    expect(screen.getByText("mic-n")).toBeTruthy();
+    await waitFor(() => expect(key.value).toBe("mic-n"));
+    // Locked on it, which is the affordance: the platform's answer is the
+    // default in effect, not a hint over an empty box.
+    expect(key.disabled).toBe(true);
     // Never a number: the ordinal is allocated against live siblings inside the
     // create's transaction and does not exist yet.
-    expect(screen.queryByText("mic-1")).toBeNull();
+    expect(key.value).not.toBe("mic-1");
   });
 
   it("never suppresses a component's first ordinal", async () => {
-    const { product } = await fields();
+    const { product, key } = await fields();
     fireEvent.change(product, { target: { value: "generic-app" } });
-    await waitFor(() => expect(screen.getByText("app-n")).toBeTruthy());
+    await waitFor(() => expect(key.value).toBe("app-n"));
     expect(screen.queryByText(/app-2/)).toBeNull();
   });
 
   it("shows the placement bucket, and moves it when the placement moves", async () => {
-    const { product } = await fields();
+    const { product, key } = await fields();
     fireEvent.change(product, { target: { value: "shure-mxa920" } });
-    await waitFor(() => expect(screen.getByText("Generated name")).toBeTruthy());
+    await waitFor(() => expect(key.value).toBe("mic-n"));
     expect(screen.getByText(/Unique among the unplaced components/)).toBeTruthy();
 
     const location = screen.getByLabelText("Location") as HTMLSelectElement;
@@ -959,8 +979,58 @@ describe("Components create identity", () => {
     expect(screen.queryByText(/Unique at Boardroom/)).toBeNull();
   });
 
+  it("asks the server for the label, with the same body the create posts, and locks the field on the answer", async () => {
+    // The label cannot be rendered here: a rule is a Go template over a closed
+    // map (ADR-0098), so the console asks the one engine rather than becoming a
+    // second one. What this pins is the WIRING, and the body it asks with,
+    // which has to be the body the create posts a moment later or the two
+    // describe different rows.
+    let asked: Record<string, unknown> | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":renderLabel")) {
+        asked = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ label: "Ceiling Microphone n", rule: "{{.TypeName}} {{.Ordinal}}" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    const { product, display } = await fields();
+    fireEvent.change(product, { target: { value: "shure-mxa920" } });
+    const location = screen.getByLabelText("Location") as HTMLSelectElement;
+    fireEvent.change(location, { target: { value: room.id } });
+
+    await waitFor(() => expect(display.value).toBe("Ceiling Microphone n"));
+    expect(display.disabled).toBe(true);
+    // The rule travels with the answer, so the form says where the label came
+    // from rather than presenting it as a fact from nowhere.
+    expect(screen.getByText(/Rendered from \{\{\.TypeName\}\}/)).toBeTruthy();
+    // The name is absent from the question, exactly as it will be from the
+    // create body: omitted is "the platform names this".
+    expect(asked).toMatchObject({ product: "shure-mxa920", location: room.id });
+    expect("name" in asked!).toBe(false);
+  });
+
+  it("asks again with the operator's name once they take the pen, since the rule reads it", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":renderLabel")) {
+        bodies.push(JSON.parse(await req.clone().text()));
+        return new Response(JSON.stringify({ label: "Ceiling Microphone", rule: "{{.TypeName}}" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    const { product, key } = await fields();
+    fireEvent.change(product, { target: { value: "shure-mxa920" } });
+    await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
+    unlockName();
+    fireEvent.input(key, { target: { value: "front-mic" } });
+    await waitFor(() => expect(bodies.some((b) => b.name === "front-mic")).toBe(true));
+  });
+
   it("never rewrites the key from the display name", async () => {
     const { display, key } = await fields();
+    unlockLabel();
     fireEvent.input(display, { target: { value: "Front Ceiling Mic" } });
     await waitFor(() => expect(display.value).toBe("Front Ceiling Mic"));
     expect(key.value).toBe("");

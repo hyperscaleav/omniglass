@@ -242,7 +242,7 @@ describe("Locations create-as-route", () => {
     let captured: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "POST" && req.url.includes("/locations")) {
+      if (req.method === "POST" && req.url.endsWith("/locations")) {
         captured = JSON.parse(await req.clone().text());
         return new Response(JSON.stringify({ id: uuidFor("l-annex"), name: "annex", location_type: "campus" }), { status: 201, headers: { "Content-Type": "application/json" } });
       }
@@ -611,6 +611,18 @@ describe("Locations list identity", () => {
 //   - components/CreateIdentity.test.tsx proves the section's own contract, and
 //     lib/namegen.test.ts the shape and bucket rules. Neither can tell you a page
 //     forgot to use them.
+// Both identity fields open LOCKED on the platform's answer (#699), so a test
+// that means to type into one takes the pen first, exactly as an operator does.
+// The name's toggle leads and the label's follows, in field order; where the
+// name generates nothing there is only the label's.
+function unlockName() {
+  fireEvent.click(screen.getAllByText("Override")[0].closest("button") as HTMLButtonElement);
+}
+function unlockLabel() {
+  const all = screen.getAllByText("Override");
+  fireEvent.click(all[all.length - 1].closest("button") as HTMLButtonElement);
+}
+
 describe("Locations create identity", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
@@ -626,6 +638,7 @@ describe("Locations create identity", () => {
 
   it("never rewrites the key from the display name", async () => {
     const { display, key } = await fields();
+    unlockLabel();
     fireEvent.input(display, { target: { value: "Conf Room 301" } });
     // The old behaviour filled this in with "conf-room-301".
     await waitFor(() => expect(display.value).toBe("Conf Room 301"));
@@ -634,13 +647,13 @@ describe("Locations create identity", () => {
   });
 
   it("shows what the platform will name it once a generating type is chosen", async () => {
-    const { typeSelect } = await fields();
-    // Nothing to preview before a classification is chosen: what comes first is
+    const { typeSelect, key } = await fields();
+    // Nothing to lock before a classification is chosen: what comes first is
     // what the rule reads.
-    expect(screen.queryByText("Generated name")).toBeNull();
+    expect(key.disabled).toBe(false);
     fireEvent.change(typeSelect, { target: { value: "room" } });
-    await waitFor(() => expect(screen.getByText("Generated name")).toBeTruthy());
-    expect(screen.getByText("room")).toBeTruthy();
+    await waitFor(() => expect(key.value).toBe("room"));
+    expect(key.disabled).toBe(true);
     // The suppressed first ordinal reappears on the next one, and the form says so.
     expect(screen.getByText(/room-2/)).toBeTruthy();
   });
@@ -648,14 +661,36 @@ describe("Locations create identity", () => {
   it("shows the placement path the name has to be unique in, as context and not as a prefix", async () => {
     const { typeSelect, key } = await fields();
     fireEvent.change(typeSelect, { target: { value: "room" } });
-    await waitFor(() => expect(screen.getByText("Generated name")).toBeTruthy());
+    await waitFor(() => expect(key.value).toBe("room"));
     expect(screen.getByText(/Unique at the estate root/)).toBeTruthy();
 
     const parentSelect = screen.getByText("Root (no parent)").closest("select") as HTMLSelectElement;
     fireEvent.change(parentSelect, { target: { value: hqB1.id } });
     await waitFor(() => expect(screen.getByText(/Unique under HQ \/ HQ B1/)).toBeTruthy());
-    // Context only: the path never lands in the field the operator types into.
-    expect(key.value).toBe("");
+    // Context only: the path never lands in the field the operator types into,
+    // which still holds the bare stem the mint resolved.
+    expect(key.value).toBe("room");
+  });
+
+  it("falls back to the name in the locked label field, which is where a shipped estate lands", async () => {
+    // No location rule ships at any tier (internal/seed/label_rules.yaml is
+    // deliberately empty for this kind, and no seeded location_type carries
+    // one), so this is the DEFAULT state of the location create form rather
+    // than an edge case. A locked field showing nothing at all would be worse
+    // than the form this replaces, so it shows what an operator will actually
+    // read, which is the name.
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":renderLabel")) {
+        return new Response(JSON.stringify({ label: "", rule: "" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    const { typeSelect, display } = await fields();
+    fireEvent.change(typeSelect, { target: { value: "room" } });
+    await waitFor(() => expect(screen.getByText(/No label rule applies/)).toBeTruthy());
+    expect(display.value).toBe("room");
+    expect(display.disabled).toBe(true);
   });
 
   it("lets a nameless create through for a generating type, and refuses one without a rule", async () => {
@@ -673,7 +708,7 @@ describe("Locations create identity", () => {
     let captured: Record<string, unknown> | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "POST" && req.url.includes("/locations")) {
+      if (req.method === "POST" && req.url.endsWith("/locations")) {
         captured = JSON.parse(await req.clone().text());
         return new Response(JSON.stringify({ id: uuidFor("l-new"), name: "room", location_type: "room" }), { status: 201, headers: { "Content-Type": "application/json" } });
       }
@@ -681,9 +716,10 @@ describe("Locations create identity", () => {
     });
     const { typeSelect, display } = await fields();
     fireEvent.change(typeSelect, { target: { value: "room" } });
-    // A label is typed and the name is not: the two are independent now, and an
-    // empty name has to be OMITTED rather than posted as "", which the API
-    // refuses against the entity-name pattern.
+    // A label is typed and the name is left locked: the two pens are
+    // independent, and a locked name has to be OMITTED rather than posted as
+    // "", which the API refuses against the entity-name pattern.
+    unlockLabel();
     fireEvent.input(display, { target: { value: "Conf Room 301" } });
     fireEvent.click(screen.getByText("Create location"));
     await waitFor(() => expect(captured).toBeTruthy());
@@ -695,7 +731,7 @@ describe("Locations create identity", () => {
     let captured: Record<string, unknown> | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "POST" && req.url.includes("/locations")) {
+      if (req.method === "POST" && req.url.endsWith("/locations")) {
         captured = JSON.parse(await req.clone().text());
         return new Response(JSON.stringify({ id: uuidFor("l-new"), name: "war-room", location_type: "room" }), { status: 201, headers: { "Content-Type": "application/json" } });
       }
@@ -703,7 +739,9 @@ describe("Locations create identity", () => {
     });
     const { typeSelect, display, key } = await fields();
     fireEvent.change(typeSelect, { target: { value: "room" } });
+    unlockLabel();
     fireEvent.input(display, { target: { value: "War Room" } });
+    unlockName();
     fireEvent.input(key, { target: { value: "war-room" } });
     // Overriding one does not disturb the other.
     expect(display.value).toBe("War Room");

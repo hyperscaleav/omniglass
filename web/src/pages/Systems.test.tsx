@@ -455,6 +455,13 @@ describe("Systems properties panel", () => {
 // refused to submit without one, which together made the system-tier generator
 // (#686) unreachable from the console: every console-created system arrived with
 // an operator-owned name whether the operator meant that or not.
+// Both identity fields open LOCKED on the platform's answer (#699), so a test
+// that means to type into one takes the pen first, exactly as an operator does.
+function unlockLabel() {
+  const all = screen.getAllByText("Override");
+  fireEvent.click(all[all.length - 1].closest("button") as HTMLButtonElement);
+}
+
 describe("Systems create identity", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
@@ -471,6 +478,7 @@ describe("Systems create identity", () => {
 
   it("never rewrites the key from the display name", async () => {
     const { display, key } = await fields();
+    unlockLabel();
     fireEvent.input(display, { target: { value: "Executive Boardroom" } });
     await waitFor(() => expect(display.value).toBe("Executive Boardroom"));
     expect(key.value).toBe("");
@@ -478,13 +486,15 @@ describe("Systems create identity", () => {
   });
 
   it("shows the stem the chosen type resolves to, with the first ordinal suppressed", async () => {
-    const { type } = await fields();
-    expect(screen.queryByText("Generated name")).toBeNull();
+    const { type, key } = await fields();
+    // Unclassified is the default and generates nothing, so there is no lock to
+    // show until a type is chosen.
+    expect(key.disabled).toBe(false);
     // "class" carries stem "classroom" of its own; the suppression is ADR-0101's,
     // and it is a property of the system tier rather than of this type.
     fireEvent.change(type, { target: { value: "class" } });
-    await waitFor(() => expect(screen.getByText("Generated name")).toBeTruthy());
-    expect(screen.getByText("classroom")).toBeTruthy();
+    await waitFor(() => expect(key.value).toBe("classroom"));
+    expect(key.disabled).toBe(true);
     expect(screen.getByText(/classroom-2/)).toBeTruthy();
     expect(screen.getByText(/Unique among the unplaced systems/)).toBeTruthy();
   });
@@ -493,9 +503,9 @@ describe("Systems create identity", () => {
     // "room" carries its own stem; a type that inherits would answer from an
     // ancestor. The fixture's deepest type is the inheriting case for the icon,
     // and this pins the same walk for the stem.
-    const { type } = await fields();
+    const { type, key } = await fields();
     fireEvent.change(type, { target: { value: "room" } });
-    await waitFor(() => expect(screen.getByText("room")).toBeTruthy());
+    await waitFor(() => expect(key.value).toBe("room"));
   });
 
   it("requires a name only for an unclassified system, which has no stem", async () => {
@@ -516,7 +526,7 @@ describe("Systems create identity", () => {
     let captured: Record<string, unknown> | undefined;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "POST" && req.url.includes("/systems")) {
+      if (req.method === "POST" && req.url.endsWith("/systems")) {
         captured = JSON.parse(await req.clone().text());
         return new Response(JSON.stringify({ id: uuidFor("s-new"), name: "classroom" }), { status: 201, headers: { "Content-Type": "application/json" } });
       }
@@ -524,6 +534,7 @@ describe("Systems create identity", () => {
     });
     const { type, display } = await fields();
     fireEvent.change(type, { target: { value: "class" } });
+    unlockLabel();
     fireEvent.input(display, { target: { value: "Lecture Hall" } });
     fireEvent.click(screen.getByText("Create system"));
     await waitFor(() => expect(captured).toBeTruthy());

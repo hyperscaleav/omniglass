@@ -25,7 +25,8 @@ import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { SYSTEM_TYPES_KEY, listSystemTypes, systemTypeByName } from "../lib/system_types";
 import SystemTypeSelect from "../components/SystemTypeSelect";
 import CreateIdentity from "../components/CreateIdentity";
-import { bucketPhrase, nameBucket, systemMint } from "../lib/namegen";
+import { bucketPhrase, createPen, nameBucket, penIncomplete, systemMint } from "../lib/namegen";
+import { useLabelDraft } from "../lib/labeldraft";
 import { pathTo } from "../lib/treeselect";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -474,8 +475,8 @@ export default function Systems() {
     // from a typed label claimed the pen on the operator's behalf and made the
     // generator unreachable from the console. createIdentity keeps its place on
     // the registry pages, whose names have no generator.
-    const [display, setDisplay] = createSignal("");
-    const [name, setName] = createSignal("");
+    const displayPen = createPen();
+    const namePen = createPen();
     const [standard, setStandard] = createSignal("");
     const [systemType, setSystemType] = createSignal("");
     const [location, setLocation] = createSignal("");
@@ -489,6 +490,20 @@ export default function Systems() {
     const typesByName = createMemo(() => systemTypeByName(systemTypes.data ?? []));
     const mint = createMemo(() => systemMint(systemType(), typesByName()));
 
+    // The label the platform would write, rendered by the one engine on the
+    // server (ADR-0098 keeps the template out of the browser) from the same
+    // body this form posts. A system with no classification at all is still
+    // asked: the global rule may still render something from what it has.
+    const labelDraft = useLabelDraft(() => ({
+      kind: "system" as const,
+      body: {
+        system_type_id: systemType() || undefined,
+        standard_id: standard() || undefined,
+        name: namePen.value().trim() || undefined,
+        location: location() || undefined,
+      },
+    }));
+
     const bucket = createMemo(() => nameBucket(parent(), location()));
     const bucketText = createMemo(() => {
       const b = bucket();
@@ -500,7 +515,7 @@ export default function Systems() {
       e.preventDefault();
       setBusy(true);
       setFormErr(null);
-      const nm = name().trim();
+      const nm = namePen.value().trim();
       try {
         // Bind the create response (#627 Task 15c): see Components.tsx's
         // own create() for why the id, not the locally typed name, is what
@@ -508,7 +523,7 @@ export default function Systems() {
         // An empty name is OMITTED rather than posted as "": omitted is
         // "generate one", where "" is a name of nothing the API refuses
         // against the entity-name pattern.
-        const created = await createSystem({ name: nm || undefined, standard_id: standard() || undefined, system_type_id: systemType() || undefined, display_name: display().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
+        const created = await createSystem({ name: nm || undefined, standard_id: standard() || undefined, system_type_id: systemType() || undefined, display_name: displayPen.value().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
         openInEdit(created.id);
         navigate(`/systems/${encodeURIComponent(created.id)}`);
@@ -569,10 +584,10 @@ export default function Systems() {
           kind="system"
           mint={mint}
           bucket={bucketText}
-          name={name}
-          setName={setName}
-          display={display}
-          setDisplay={setDisplay}
+          namePen={namePen}
+          displayPen={displayPen}
+          label={() => labelDraft.data}
+          labelPending={() => labelDraft.isFetching}
           namePlaceholder="exec-boardroom"
           displayPlaceholder="Executive Boardroom"
         />
@@ -584,7 +599,7 @@ export default function Systems() {
               an unclassified system, or a type whose chain carries no stem.
               Gating on a typed name outright is what made the generator
               unreachable from the console before #688. */}
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || (!name().trim() && !mint())}>Create system</Button>
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || penIncomplete(mint() !== null, namePen)}>Create system</Button>
         </div>
 
         <div class="flex flex-col gap-1 opacity-50">
