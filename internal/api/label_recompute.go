@@ -17,11 +17,14 @@ import (
 // permission applies would be a gate the spec cannot publish and the roles view
 // cannot report. Three collections, six operations, one handler.
 //
-// Both halves are gated by :update rather than the preview by :read. A preview
-// is half of an edit, not a report: it exists to be acted on, and an operator
-// who cannot apply has no use for the blast radius of a change they cannot
-// make. Gating them alike also makes "a viewer cannot trigger a recompute" one
-// fact rather than two.
+// Both halves are gated by :update rather than the preview by :read, and both
+// pass the SAME two scopes down. A preview is half of an edit, not a report: it
+// exists to be acted on, and an operator who cannot apply has no use for the
+// blast radius of a change they cannot make. That argument decides the scoping
+// as well as the gate: a preview selected on the read scope alone would list
+// rows the apply then refuses to touch, which is the one thing a preview is for
+// promising it will not do. Alike on both counts also makes "a viewer cannot
+// trigger a recompute" one fact rather than two.
 
 // labelChangeBody is one row a recompute would alter, or did.
 //
@@ -72,9 +75,10 @@ func registerLabelRecomputeRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Method:      http.MethodPost,
 		Path:        collection + ":previewLabels",
 		Summary:     "Preview a " + kind + " label recompute",
-		Description: "Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by " + kind + ":update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.",
+		Description: "Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by " + kind + ":update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.",
 	}, kind, "update"), func(ctx context.Context, _ *struct{}) (*labelRecomputeOutput, error) {
-		changes, err := gw.PreviewLabelRecompute(ctx, kind, a.scopeFor(ctx, kind, "read"))
+		changes, err := gw.PreviewLabelRecompute(ctx, kind,
+			a.scopeFor(ctx, kind, "read"), a.scopeFor(ctx, kind, "update"))
 		if err != nil {
 			return nil, mapLabelRecomputeErr(err)
 		}

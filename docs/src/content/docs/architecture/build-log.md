@@ -3648,7 +3648,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   start whenever another worktree's dev stack held 5432.
 
 - **The epic's review pass, before it shipped** ([#657](https://github.com/hyperscaleav/omniglass/issues/657)).
-  Three defects found reading the eight slices as one diff, each fixed with the test that failed
+  Four defects found reading the eight slices as one diff, each fixed with the test that failed
   first, and each of a kind the slice that introduced it could not have seen from inside itself.
 
   **A deleted system left every member component's label stale.** `system_member_system_id_fkey` is
@@ -3686,3 +3686,14 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   nowhere to take it, since the patch that reclassifies carries no name field; it now names the
   escape the way the system tier's twin does, and the operator guide documents the two-step fix where
   an operator meets it.
+
+  **A label preview listed rows the apply would then refuse to touch.** The verb's two halves were
+  wired to different narrowings: the apply selects on the caller's read scope AND their update scope,
+  both injected into the one query, while the preview passed an all-scope action set that made the
+  second predicate a constant. So an operator with estate-wide read and a narrow grant to update was
+  shown a blast radius the apply then declined most of, with nothing on the wire explaining the gap.
+  Both ADR-0100 and the recompute file's own argument for why a preview is an apply that rolls back
+  already said a preview must list EXACTLY the rows the apply changes, so the scoping was the one
+  place the code disagreed with the reason it exists. The preview now takes the same two scopes the
+  apply does, and the e2e case that pinned the old answer (a preview of two rows against an apply of
+  one) pins the new invariant instead: the two agree, row for row.

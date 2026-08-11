@@ -26,7 +26,7 @@ func (UnimplementedGateway) GetLabelRule(context.Context, string) (*LabelRule, e
 func (UnimplementedGateway) SetLabelRule(context.Context, string, string, string) (*LabelRule, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) PreviewLabelRecompute(context.Context, string, scope.Set) ([]LabelChange, error) {
+func (UnimplementedGateway) PreviewLabelRecompute(context.Context, string, scope.Set, scope.Set) ([]LabelChange, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) RecomputeLabels(context.Context, string, string, scope.Set, scope.Set) ([]LabelChange, error) {

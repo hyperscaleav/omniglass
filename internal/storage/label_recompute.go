@@ -137,8 +137,10 @@ type labelNarrow struct {
 //
 // The two scope predicates are what makes "an operator cannot apply over rows
 // outside their read scope" and "outside their update scope" one query rather
-// than a filter pass. A preview passes an all-scope action set, so its second
-// predicate is a constant.
+// than a filter pass. A preview passes the SAME pair an apply does, which is
+// what keeps it exact: the only caller that passes an all-scope action set is a
+// cascade, which is the rest of a write the operator already made rather than a
+// query they asked for.
 func labelScanQuery(tbl scopeTable, cols string, read, action scope.Set, n labelNarrow) (string, []any) {
 	readRoots, _, readSelf := arcScopeArgs(read)
 	actionRoots, _, actionSelf := arcScopeArgs(action)
@@ -422,14 +424,22 @@ func labelTable(kind string) (scopeTable, error) {
 }
 
 // PreviewLabelRecompute lists exactly the rows a recompute would change, in the
-// caller's read scope, and leaves the estate as it found it. See the file's own
-// doc comment for why it does that by rolling back rather than by not writing.
+// caller's read AND update scope, and leaves the estate as it found it. See the
+// file's own doc comment for why it does that by rolling back rather than by
+// not writing.
+//
+// It takes the same two scopes the apply does, and for the same reason the file
+// header gives for rolling back: a preview must list EXACTLY the rows the apply
+// then changes. Bounding it by the read scope alone was a second narrowing, and
+// an operator with estate-wide read and a narrow grant to update would have been
+// promised rows the apply then declined to touch, with nothing on the wire
+// saying why (ADR-0100).
 //
 // It is also the recompute-and-compare invariant, promoted from a test shim to
 // a gateway method: "this returns nothing" IS the statement that no stored
 // label has drifted from its rule, and a test can now assert it over a whole
 // estate rather than row by row.
-func (p *PG) PreviewLabelRecompute(ctx context.Context, kind string, read scope.Set) ([]LabelChange, error) {
+func (p *PG) PreviewLabelRecompute(ctx context.Context, kind string, read, action scope.Set) ([]LabelChange, error) {
 	if _, err := labelTable(kind); err != nil {
 		return nil, err
 	}
@@ -440,7 +450,7 @@ func (p *PG) PreviewLabelRecompute(ctx context.Context, kind string, read scope.
 	// Rolled back on every path, including the happy one: that is the whole
 	// mechanism, not an error handler.
 	defer func() { _ = tx.Rollback(ctx) }()
-	return p.recomputeInTx(ctx, tx, kind, read, scope.Set{All: true})
+	return p.recomputeInTx(ctx, tx, kind, read, action)
 }
 
 // RecomputeLabels applies the recompute PreviewLabelRecompute describes, over

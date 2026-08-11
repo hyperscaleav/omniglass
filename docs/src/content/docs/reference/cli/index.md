@@ -748,7 +748,7 @@ Preview a component label recompute
 omniglass component previewLabels
 ```
 
-Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by component:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by component:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
 
 Example:
 
@@ -1646,7 +1646,7 @@ Preview a location label recompute
 omniglass location previewLabels
 ```
 
-Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by location:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by location:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
 
 Example:
 
@@ -4123,7 +4123,7 @@ Preview a system label recompute
 omniglass system previewLabels
 ```
 
-Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by system:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by system:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
 
 Example:
 

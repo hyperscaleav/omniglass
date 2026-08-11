@@ -517,7 +517,7 @@ func TestAPreviewListsExactlyWhatAnApplyThenChanges(t *testing.T) {
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.LocationLabel}}/{{.TypeName}}/{{.Ordinal}}"); err != nil {
 		t.Fatalf("set rule: %v", err)
 	}
-	preview, err := gw.PreviewLabelRecompute(ctx, "component", all)
+	preview, err := gw.PreviewLabelRecompute(ctx, "component", all, all)
 	if err != nil {
 		t.Fatalf("preview: %v", err)
 	}
@@ -567,7 +567,7 @@ func TestAPreviewListsExactlyWhatAnApplyThenChanges(t *testing.T) {
 	if len(again) != 0 {
 		t.Fatalf("a re-apply changed %d rows, want none: %+v", len(again), again)
 	}
-	repreview, err := gw.PreviewLabelRecompute(ctx, "component", all)
+	repreview, err := gw.PreviewLabelRecompute(ctx, "component", all, all)
 	if err != nil {
 		t.Fatalf("re-preview: %v", err)
 	}
@@ -599,7 +599,7 @@ func TestTheVerbRecomputesSystemsAndLocationsToo(t *testing.T) {
 	// A location recompute does not stop at locations: moving a location's
 	// label stales every row placed at it, and the returned set says so rather
 	// than leaving the operator to find out.
-	locPreview, err := gw.PreviewLabelRecompute(ctx, "location", all)
+	locPreview, err := gw.PreviewLabelRecompute(ctx, "location", all, all)
 	if err != nil {
 		t.Fatalf("preview locations: %v", err)
 	}
@@ -627,7 +627,7 @@ func TestTheVerbRecomputesSystemsAndLocationsToo(t *testing.T) {
 // nothing, which is what a typo in a generated client would otherwise be.
 func TestTheVerbRefusesAnUnknownKind(t *testing.T) {
 	gw, ctx := seededGateway(t)
-	if _, err := gw.PreviewLabelRecompute(ctx, "node", all); err == nil {
+	if _, err := gw.PreviewLabelRecompute(ctx, "node", all, all); err == nil {
 		t.Fatalf("preview over an unknown kind succeeded, want a refusal")
 	}
 	if _, err := gw.RecomputeLabels(ctx, "", "node", all, all); err == nil {
@@ -638,7 +638,7 @@ func TestTheVerbRefusesAnUnknownKind(t *testing.T) {
 // --- scope --------------------------------------------------------------
 
 // Scope is respected on both halves of the verb: a caller sees and changes
-// only the rows inside their own read scope.
+// only the rows inside both their read and their update scope.
 func TestTheVerbRespectsScope(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	mine := makeRoom(t, gw, ctx, "room-mine")
@@ -656,7 +656,7 @@ func TestTheVerbRespectsScope(t *testing.T) {
 	}
 	narrow := scope.Set{SelfIDs: []string{inMine.ID}}
 
-	preview, err := gw.PreviewLabelRecompute(ctx, "component", narrow)
+	preview, err := gw.PreviewLabelRecompute(ctx, "component", narrow, narrow)
 	if err != nil {
 		t.Fatalf("preview: %v", err)
 	}
@@ -681,8 +681,19 @@ func TestTheVerbRespectsScope(t *testing.T) {
 		t.Fatalf("an empty scope changed %d rows", len(changes))
 	}
 
-	// A caller who can READ a row but not UPDATE it changes nothing.
+	// A caller who can READ a row but not UPDATE it changes nothing, and is not
+	// shown it either: the preview takes the same two scopes so that it lists
+	// exactly what the apply then reaches.
 	readAll, updateNone := all, scope.Set{SelfIDs: []string{inMine.ID}}
+	if listed, err := gw.PreviewLabelRecompute(ctx, "component", readAll, updateNone); err != nil {
+		t.Fatalf("read-wide update-narrow preview: %v", err)
+	} else {
+		for _, ch := range listed {
+			if ch.ID == inTheirs.ID {
+				t.Fatalf("the preview listed a row outside the caller's UPDATE scope, which the apply would then refuse")
+			}
+		}
+	}
 	if changes, err := gw.RecomputeLabels(ctx, "", "component", readAll, updateNone); err != nil {
 		t.Fatalf("read-wide update-narrow apply: %v", err)
 	} else {
@@ -728,7 +739,7 @@ func sameChangeSet(a, b []storage.LabelChange) bool {
 func assertNoLabelDrift(t *testing.T, gw *storage.PG, ctx context.Context) {
 	t.Helper()
 	for _, kind := range []string{"component", "system", "location"} {
-		drift, err := gw.PreviewLabelRecompute(ctx, kind, all)
+		drift, err := gw.PreviewLabelRecompute(ctx, kind, all, all)
 		if err != nil {
 			t.Fatalf("preview %s: %v", kind, err)
 		}
@@ -878,7 +889,7 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 			t.Fatalf("%s: %v", act.what, err)
 		}
 		for _, kind := range []string{"component", "system", "location"} {
-			drift, err := gw.PreviewLabelRecompute(ctx, kind, all)
+			drift, err := gw.PreviewLabelRecompute(ctx, kind, all, all)
 			if err != nil {
 				t.Fatalf("preview %s after %q: %v", kind, act.what, err)
 			}

@@ -206,14 +206,17 @@ func TestAViewerCannotPreviewOrRecomputeLabels(t *testing.T) {
 	}
 }
 
-// The apply is bounded by the caller's UPDATE scope, not only by their read
-// scope, and the two are wired to different grants rather than to one.
+// A preview lists exactly what the apply then changes, for a caller whose read
+// scope is WIDER than their update scope: both halves are bounded by the update
+// scope, so a preview never promises a row the apply will refuse to touch.
 //
 // It has its own test because the owner every other case here uses holds both
-// at "all", so a handler that passed the read scope twice would be
-// indistinguishable. That is not hypothetical: it is exactly the mutation that
-// survived the first pass of this file.
-func TestAnApplyIsBoundedByTheUpdateScopeNotTheReadScope(t *testing.T) {
+// at "all", so a preview wired to the read scope alone, or a handler that
+// passed the read scope twice, would be indistinguishable there. Neither is
+// hypothetical: passing the read scope twice is the mutation that survived the
+// first pass of this file, and previewing on the read scope alone is what the
+// verb did until ADR-0100's scoping was applied to both halves.
+func TestAPreviewIsBoundedByTheUpdateScopeJustAsTheApplyIs(t *testing.T) {
 	c, tok, dsn, stop := recomputeHarness(t)
 	defer stop()
 	ctx := context.Background()
@@ -241,16 +244,24 @@ func TestAnApplyIsBoundedByTheUpdateScopeNotTheReadScope(t *testing.T) {
 		{role: "operator", scopeKind: "component", scopeID: mineID, scopeOp: "self"},
 	})
 
-	// The preview is the READ scope, so it sees both.
+	// The preview is bounded by the UPDATE scope too, so it lists the one row
+	// the apply can reach and not the one it cannot.
 	preview := decodeRecompute(t, "narrow preview", c.do(narrowTok, http.MethodPost, "/components:previewLabels", nil, http.StatusOK))
-	if preview.Count != 2 {
-		t.Fatalf("the preview lists %d rows, want both: it is bounded by the read scope: %+v", preview.Count, preview.Changed)
+	if preview.Count != 1 || preview.Changed[0].Name != "mine" {
+		t.Fatalf("the preview lists %+v, want only the one component in the caller's update scope", preview.Changed)
 	}
 
 	// The apply is the UPDATE scope, so it changes only one.
 	applied := decodeRecompute(t, "narrow apply", c.do(narrowTok, http.MethodPost, "/components:recomputeLabels", nil, http.StatusOK))
 	if applied.Count != 1 || applied.Changed[0].Name != "mine" {
 		t.Fatalf("the apply changed %+v, want only the one component in the caller's update scope", applied.Changed)
+	}
+	// The invariant this test exists for: the two agree, row for row. A preview
+	// that listed the row outside the update scope would be promising an edit
+	// the apply then silently declines, with nothing on the wire explaining the
+	// gap.
+	if preview.Count != applied.Count || preview.Changed[0].ID != applied.Changed[0].ID {
+		t.Fatalf("the preview promised %+v and the apply changed %+v", preview.Changed, applied.Changed)
 	}
 	// Both were hand-named, so neither carries an ordinal and the shipped rule
 	// labelled them "Display". The one outside the update scope still does.
