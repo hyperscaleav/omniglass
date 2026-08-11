@@ -108,6 +108,21 @@ describe("CreateIdentity", () => {
     expect(screen.getByText(/No label rule applies/)).toBeTruthy();
   });
 
+  it("moves the fallback label with the name the operator types, where no rule resolves", () => {
+    // The two states above, combined, which is the common location create: no
+    // rule resolves, so the label IS the name, and the operator then names it
+    // themselves. The locked label has to follow what they type or it promises
+    // a label the created row will not land with. Held separately from the
+    // locked-name fallback because the value comes from a different accessor
+    // once the pen changes hands.
+    const { name, display, unlockName } = mount(MINT, { label: "", rule: "" });
+    expect(display.value).toBe("display-n");
+    unlockName();
+    fireEvent.input(name, { target: { value: "north-wing" } });
+    expect(display.disabled).toBe(true);
+    expect(display.value).toBe("north-wing");
+  });
+
   it("hands the name to the operator when it is unlocked, and takes the value when typed", () => {
     const { name, unlockName, namePen } = mount(MINT);
     unlockName();
