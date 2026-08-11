@@ -134,6 +134,7 @@ func New(acronyms []string) *Engine {
 		"upper": strings.ToUpper,
 		"lower": strings.ToLower,
 		"slug":  slug,
+		"words": words,
 	}}
 }
 
@@ -141,7 +142,12 @@ func New(acronyms []string) *Engine {
 // documented. Exported so the set can be pinned by a test rather than only
 // described by a comment: adding a function is then a deliberate act with a
 // test to change.
-func FuncNames() []string { return []string{"title", "upper", "lower", "slug"} }
+//
+// It is also what holds the three places a function has to appear to exist
+// honest: a test walks this set and parses each name in a real rule, so a name
+// published here that is missing from the FuncMap or from [allowedFuncs] fails
+// rather than being quietly unreachable.
+func FuncNames() []string { return []string{"title", "upper", "lower", "slug", "words"} }
 
 // Rule is a compiled label rule.
 type Rule struct {
@@ -171,7 +177,7 @@ func (e *Engine) Parse(src string) (*Rule, error) {
 const rootName = "label"
 
 // allowedFuncs is the closed set of function names a rule may name: the
-// FuncMap's four, plus the comparison and logic builtins.
+// FuncMap's own ([FuncNames]), plus the comparison and logic builtins.
 //
 // The builtins are here because the parser accepts them whether or not the
 // FuncMap does, so a set that listed only our own functions would be describing
@@ -186,7 +192,7 @@ const rootName = "label"
 // is harmless, and admitting a harmless function is still widening the language
 // for nothing.
 var allowedFuncs = map[string]bool{
-	"title": true, "upper": true, "lower": true, "slug": true,
+	"title": true, "upper": true, "lower": true, "slug": true, "words": true,
 	"and": true, "or": true, "not": true,
 	"eq": true, "ne": true, "lt": true, "le": true, "gt": true, "ge": true,
 }
@@ -333,7 +339,9 @@ func (c *capped) Write(p []byte) (int, error) {
 
 // wordRe matches one word for titleWords and is deliberately letters and digits
 // only: everything between words (spaces, hyphens, parentheses, slashes) is
-// separator and is preserved untouched.
+// separator and is preserved untouched. Preserved, not replaced: turning a
+// name's hyphens into spaces is [words], and keeping the two apart is what lets
+// a rule title a display name without rewriting the punctuation in it.
 var wordRe = regexp.MustCompile(`[\p{L}\p{N}]+`)
 
 // titleWords upper-cases each word's first letter and LEAVES THE REST ALONE.
@@ -353,6 +361,43 @@ func titleWords(s string, acronyms map[string]string) string {
 		r[0] = unicode.ToUpper(r[0])
 		return string(r)
 	})
+}
+
+// sepRe matches a run of the separators a NAME is built from. Exactly two, and
+// not the general "anything that is not a letter or a digit" [wordRe] uses:
+// words runs over facts that are already prose as well as over names, and a
+// display name's parentheses, slashes and periods are punctuation somebody
+// chose rather than separators to spend.
+var sepRe = regexp.MustCompile(`[-_]+`)
+
+// words turns a kebab or snake token into the words in it, which is what lets a
+// rule read a NAME as something a person would say: `{{title (words .Name)}}`
+// renders `north-wing` as "North Wing" and, through the acronym dictionary,
+// `hq-west` as "HQ West".
+//
+// It is slug's opposite number, and the reason the dictionary reaches anything
+// at all: `title` upper-cases each word and leaves the separator standing
+// (`{{title .Name}}` gives "North-Wing"), so before this there was no rule an
+// operator could write that turned a name into a friendly label.
+//
+// The edges, all three decided rather than fallen into:
+//
+//   - A RUN of separators is one space, so `north--wing` is not "north  wing".
+//   - A leading or trailing run goes entirely rather than becoming an edge
+//     space. A name cannot begin with one, but a rule may be handed any fact,
+//     and a stored label with a space in front is a defect somebody has to
+//     notice before they can fix it.
+//   - Everything else is untouched, including whitespace the fact already
+//     carried. words rewrites separators; it is not a normalizer.
+//
+// [Rule.Render] collapses whitespace and trims on the way out, so the first two
+// are invisible in a rendered label and visible to a rule that COMPARES the
+// value (`{{if eq (words .Name) "north wing"}}`). They are pinned there rather
+// than left to the writer's normalization, because a function whose contract is
+// only true because of what happens downstream of it is one refactor from being
+// false.
+func words(s string) string {
+	return sepRe.ReplaceAllString(strings.Trim(s, "-_"), " ")
 }
 
 // slug reduces a string to one kebab token: lowercase letters, digits and

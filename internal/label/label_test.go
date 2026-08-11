@@ -2,6 +2,7 @@ package label_test
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -50,11 +51,12 @@ func TestParseRefusesAnUnparseableRule(t *testing.T) {
 	}
 }
 
-// The FuncMap is CLOSED: exactly title, upper, lower, slug. A function name
-// outside that set fails at parse time (above), and this pins the set itself so
-// growing it is a deliberate act with a test to change, not a drive-by.
+// The FuncMap is CLOSED: exactly title, upper, lower, slug, words. A function
+// name outside that set fails at parse time (above), and this pins the set
+// itself so growing it is a deliberate act with a test to change, not a
+// drive-by.
 func TestFuncMapIsExactlyTheClosedSet(t *testing.T) {
-	want := []string{"title", "upper", "lower", "slug"}
+	want := []string{"title", "upper", "lower", "slug", "words"}
 	got := label.FuncNames()
 	if len(got) != len(want) {
 		t.Fatalf("FuncNames() = %v, want %v", got, want)
@@ -62,6 +64,26 @@ func TestFuncMapIsExactlyTheClosedSet(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("FuncNames() = %v, want %v", got, want)
+		}
+	}
+}
+
+// A function lives in THREE places or it does not exist: the FuncMap (or the
+// parser refuses the name as undefined), the AST allowlist (or checkTree refuses
+// it), and FuncNames (the pinned set above). Two of the three is the shape of
+// the mistake this catches, and it is silent in either direction: a name in the
+// FuncMap alone parses nowhere, and a name in the allowlist alone is only a hole
+// in the allowlist.
+//
+// So the set is walked rather than described. Every name FuncNames publishes is
+// parsed in a real rule here, which is the assertion that the other two places
+// agree with it; the closed-set test above is what stops a name being added to
+// the FuncMap and the allowlist while FuncNames stays quiet.
+func TestEveryPublishedFuncNameIsReachableFromARule(t *testing.T) {
+	for _, name := range label.FuncNames() {
+		src := "{{.A | " + name + "}}"
+		if _, err := label.Basic.Parse(src); err != nil {
+			t.Errorf("Parse(%q) = %v; %q is published by FuncNames but not reachable: it is missing from the FuncMap or from the AST allowlist", src, err, name)
 		}
 	}
 }
@@ -411,6 +433,89 @@ func TestSlugProducesAKebabToken(t *testing.T) {
 		if got != "" && !kebab(got) {
 			t.Fatalf("slug(%q) = %q, which is not a kebab token", tc.in, got)
 		}
+	}
+}
+
+// words is slug's opposite number and the one this engine was missing: it turns
+// the separators a NAME is built from back into spaces, so a rule can read a
+// kebab name as the words an operator meant.
+//
+// The assertions run through `eq` rather than through the rendered string,
+// deliberately. Render collapses runs of whitespace and trims the ends, so a
+// bare {{words .A}} could not tell a function that collapses from one that does
+// not; comparing the intermediate value is the only way the contract is
+// asserted rather than the writer's normalization.
+func TestWordsTurnsSeparatorsIntoSpaces(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"north-wing", "north wing"},
+		{"hq-west", "hq west"},
+		{"boardroom", "boardroom"},
+		{"loading_dock", "loading dock"},
+		{"level-1-north_east", "level 1 north east"},
+		// A run of separators is ONE space, so a doubled hyphen does not open a
+		// gap in the middle of a label.
+		{"north--wing", "north wing"},
+		{"north-_-wing", "north wing"},
+		// A leading or trailing run goes entirely rather than becoming an edge
+		// space: a name may not start with one, but a rule can be handed any
+		// fact, and " North Wing" with a space in front is a stored label
+		// somebody has to notice and fix.
+		{"-north-wing-", "north wing"},
+		{"___", ""},
+		{"", ""},
+		// Everything that is not one of the two separators is left exactly as it
+		// was, including whitespace the fact already carried and the punctuation
+		// a catalog display name is full of.
+		{"Shure MXA920", "Shure MXA920"},
+		{"Wireless Mic (Handheld)", "Wireless Mic (Handheld)"},
+		{"1", "1"},
+	} {
+		r := mustParse(t, `{{if eq (words .A) `+strconv.Quote(tc.want)+`}}yes{{else}}no{{end}}`)
+		got, err := r.Render(label.Data{"A": tc.in})
+		if err != nil {
+			t.Fatalf("Render(%q): %v", tc.in, err)
+		}
+		if got != "yes" {
+			// Rendered separately so a failure reports what it actually
+			// produced rather than only that it differed.
+			shown := mustParse(t, `[{{words .A}}]`)
+			actual, _ := shown.Render(label.Data{"A": tc.in})
+			t.Errorf("words(%q) is not %q (rendered %s)", tc.in, tc.want, actual)
+		}
+	}
+}
+
+// The composition this whole function exists for, and the reason the acronym
+// dictionary (#684) finally reaches something: title alone upper-cases each word
+// and leaves the separator standing, so `{{title .Name}}` on a kebab name gives
+// "North-Wing". words in front of it is what makes a friendly label out of a
+// name, and the dictionary then runs over the words it produced.
+func TestTitleOverWordsIsHowANameBecomesALabel(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		acronyms []string
+		in, want string
+	}{
+		{"a two-word name", nil, "north-wing", "North Wing"},
+		{"a word the dictionary owns", []string{"HQ"}, "hq-west", "HQ West"},
+		{"and without it, ordinary title case", nil, "hq-west", "Hq West"},
+		{"a one-word name is just titled", nil, "boardroom", "Boardroom"},
+		{"a positional name has nothing to title", nil, "1", "1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			eng := label.New(tc.acronyms)
+			r, err := eng.Parse("{{title (words .Name)}}")
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			got, err := r.Render(label.Data{"Name": tc.in})
+			if err != nil {
+				t.Fatalf("Render(%q): %v", tc.in, err)
+			}
+			if got != tc.want {
+				t.Errorf("title(words(%q)) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
 	}
 }
 
