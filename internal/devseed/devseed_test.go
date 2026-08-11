@@ -185,8 +185,9 @@ func TestFixturesLetThePlatformNameTheEstate(t *testing.T) {
 // TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint is the label half of the
 // same guard. A set display_name takes the pen from the platform (#682), so a
 // fixture that sets one everywhere demonstrates the opposite of the label rules.
-// The survivors are listed by key, each for a stated reason, so adding a
-// fourteenth is a deliberate edit to this list rather than a quiet one.
+// The survivors are pinned by key, each for a stated reason, so setting one on a
+// row that could render its own is a deliberate edit here rather than a quiet
+// one that nothing notices.
 func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 	doc, err := devseed.Fixtures()
 	if err != nil {
