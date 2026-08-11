@@ -745,6 +745,17 @@ as a hand-typed `display-1` blocks a component's, because what has to be unique 
 system with no `system_type` cannot be named this way (422 naming the reason), and neither can it be
 un-classified while the platform owns its name: `:rename` claims the name first.
 
+**What re-mints a name is an act that changes an INPUT to the mint,** and the mint reads exactly two:
+the stem (a system's `system_type` chain, a location's `location_type` rule) and the placement
+bucket. So a reclassify that actually changes the classification re-mints, and a `:move` that
+actually changes the bucket re-mints; a patch that re-states the classification and a move that
+re-states the placement change neither input and leave the name exactly where it is. The distinction
+is not tidiness: a lower ordinal freed by an earlier `:rename` means a spurious re-mint does not
+recompute to the same answer, it MOVES the name, under `:update` or `:move` with no rename asked for
+and possibly no `:rename` grant held. A system's bucket comparison is the three-way one (a parent
+wins over a location, so relocating a parented system changes no bucket); a location's is the
+parent alone.
+
 **A location type opts in, with a rule that is a declaration**
 ([ADR-0102](/architecture/decisions/#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing)).
 `location_type.name_rule` is nullable and its presence IS the opt-in: `NULL` means an operator names

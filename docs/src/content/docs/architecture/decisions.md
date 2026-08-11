@@ -4063,6 +4063,18 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   rename that re-mint MOVES the name (`boardroom-2` becomes `boardroom`) under `system:update`, with
   no rename requested and possibly no `system:rename` grant held. A patch that re-states the type
   changes neither input to the mint.
+
+  **The epic's review pass found the same defect on `:move`, and it is fixed here rather than
+  filed.** The move arm was gated on the row being platform-named alone, so a `:move` that re-stated
+  the location the system already sat at, or supplied neither field (this verb's documented no-op),
+  re-minted and moved the name by exactly the sequence above, under `system:move`. It was left wide
+  deliberately, on the stated belief that narrowing it would move an existing expected value; that
+  premise was false, since systems had only had generated names since this same unmerged branch. The
+  guard is now the **bucket** changing, compared as a `nameScope` rather than as a pair of pointers,
+  because a parent wins over a location: relocating a parented system leaves it in the same parent
+  bucket and must not rename it either. No test expectation moved. `MoveComponent` has the identical
+  wide shape, is reachable the same way, and is genuinely pre-existing, so it is left for its own
+  issue rather than changed here.
 - **Consequence:** `Ordinal` joins the system label data map, widening
   [ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)'s closed map by one
   key, and the shipped global system rule deliberately does not use it: for a suppressed first name
@@ -4194,9 +4206,16 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   **changing**, not the field being present, because `web/src/pages/Locations.tsx` sends
   `location_type` on every save: the defect review caught on the system tier one slice ago
   (ADR-0101) is refused entry here rather than repeated. And `:move` re-mints only when the parent
-  actually moves, which is NARROWER than the system tier's, where the same re-mint runs on a move
-  that changes no bucket; nothing generated a location name before this slice, so there was no
-  existing behavior to preserve and the narrow form is simply the correct one.
+  actually moves. That was written as NARROWER than the system tier's, where the same re-mint ran on
+  a move that changed no bucket, and the reason given for leaving the system arm wide was that
+  narrowing it would move an existing expected value. The epic's review pass established that the
+  premise was false: systems gained generated names one slice earlier on the same unmerged branch,
+  so every expected value at risk had been written by that branch. **Both `:move` arms now re-mint
+  only on a bucket change**, and no test expectation moved. The two are spelled differently because
+  the kinds do not have the same number of buckets: a location has two and the parent is the whole
+  of the distinction, so comparing the parent IS comparing the bucket, while a system has three with
+  a parent winning over a location, so its arm compares the `nameScope` bucket the two placements
+  resolve to and a parented system relocated to another room keeps its name.
 - **Consequence:** `location` gains the nullable `ordinal` the previous slice deliberately withheld
   from it ("a column no writer can fill is a fact waiting to be read wrongly"), and the
   recompute-and-compare invariant now covers all three trees. The bare render stays unwired here for

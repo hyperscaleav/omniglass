@@ -1015,6 +1015,17 @@ func (p *PG) MoveSystem(ctx context.Context, actorID, name string, move SystemMo
 	// own CASE expressions apply (nil unchanged, "" clear, else set), computed
 	// here in Go because the generator needs the DESTINATION bucket to scan
 	// siblings in, not the placement the row reads right now.
+	//
+	// The guard is the BUCKET actually moving, not merely the row being
+	// platform-named, and it is the reclassify defect ADR-0101 records wearing
+	// the other verb's clothes: a :move that re-states the placement the system
+	// already has (the console's shape, and this verb's own documented no-op
+	// when neither field is supplied) changes no input to the mint, and
+	// re-minting anyway MOVES the name whenever a lower ordinal was freed in the
+	// meantime, with no rename requested and possibly no system:rename grant
+	// held. The comparison is on the bucket rather than on the two pointers
+	// because a parent WINS over a location: relocating a parented system leaves
+	// it in the same parent bucket, so its name must not move either.
 	var (
 		namePatch    *string
 		ordinalPatch *int
@@ -1038,11 +1049,15 @@ func (p *PG) MoveSystem(ctx context.Context, actorID, name string, move SystemMo
 				effParentID = &v
 			}
 		}
-		newName, newOrdinal, err := generateNameForSystemType(ctx, tx, before.SystemTypeID, effParentID, effLocationID, &before.ID)
-		if err != nil {
-			return nil, err
+		from := systemNameScope(before.ParentID, before.LocationID)
+		to := systemNameScope(effParentID, effLocationID)
+		if from.bucket != to.bucket {
+			newName, newOrdinal, err := generateNameForSystemType(ctx, tx, before.SystemTypeID, effParentID, effLocationID, &before.ID)
+			if err != nil {
+				return nil, err
+			}
+			namePatch, ordinalPatch = &newName, &newOrdinal
 		}
-		namePatch, ordinalPatch = &newName, &newOrdinal
 	}
 	after, err := scanSystem(tx.QueryRow(ctx, `
 		update system set

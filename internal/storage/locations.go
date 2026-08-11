@@ -889,10 +889,16 @@ func (p *PG) MoveLocation(ctx context.Context, actorID, name string, move Locati
 	// platform-named: a no-op move (a nil ParentName, this verb's documented
 	// no-op) changes no input to the mint, and re-minting anyway would move the
 	// NAME whenever a lower ordinal had been freed in the meantime. That is the
-	// weaker cousin of the reclassify defect ADR-0101 records, left standing on
-	// the system tier only because narrowing it there would change an existing
-	// expected value. Nothing generates a location name before this slice, so
-	// there is nothing here to preserve, and the narrow form is the correct one.
+	// reclassify defect ADR-0101 records wearing the other verb's clothes, and
+	// MoveSystem now carries the same guard: it was left wide when this arm was
+	// written, on the belief that narrowing it would move an existing expected
+	// value, which was false (systems gained generated names one slice earlier
+	// on the same unmerged branch, so every value at risk was that branch's own).
+	// The two arms spell the comparison differently because the two kinds do
+	// not have the same number of buckets: a location has TWO and the parent is
+	// the whole of the distinction, so comparing the parent IS comparing the
+	// bucket, while a system has three with a parent winning over a location,
+	// so its arm compares the nameScope bucket the two placements resolve to.
 	var (
 		namePatch    *string
 		ordinalPatch *int

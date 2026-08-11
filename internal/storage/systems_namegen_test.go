@@ -276,6 +276,99 @@ func TestSystemMoveReMintsTheOrdinal(t *testing.T) {
 	}
 }
 
+// TestSystemMoveWithoutABucketChangeKeepsTheName is TestSystemUpdateWithout-
+// AClassificationChangeKeepsTheName's twin on the other verb, and it is the
+// same defect: a re-mint gated on the row being platform-named rather than on
+// the mint's input actually moving. A :move that re-states the placement the
+// system already has changes no bucket, so it changes neither input to the
+// mint, and re-minting anyway MOVES the name whenever a lower ordinal was
+// freed in the meantime, with no rename requested and possibly no
+// system:rename grant held.
+//
+// The estate is the one that makes it visible rather than silent, the same one
+// the reclassify case uses: a rename has freed "boardroom" in this bucket, so a
+// spurious re-mint does not recompute to the same answer.
+func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
+	gw, ctx, room := newSystemNamegenDB(t)
+
+	first, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all)
+	if err != nil {
+		t.Fatalf("create the first: %v", err)
+	}
+	second, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all)
+	if err != nil {
+		t.Fatalf("create the second: %v", err)
+	}
+	if second.Name != "boardroom-2" {
+		t.Fatalf("the second create = %q, want boardroom-2", second.Name)
+	}
+	// Frees "boardroom" in this bucket.
+	if _, err := gw.RenameSystem(ctx, "", first.ID, "main-room", all, all); err != nil {
+		t.Fatalf("rename the first: %v", err)
+	}
+
+	// A move that re-states the location the system already sits at.
+	after, err := gw.MoveSystem(ctx, "", second.ID, storage.SystemMove{LocationName: &room}, all, all)
+	if err != nil {
+		t.Fatalf("move to the same location: %v", err)
+	}
+	if after.Name != "boardroom-2" {
+		t.Fatalf("a move that changed no bucket renamed the system to %q: a re-stated placement changes neither input to the mint", after.Name)
+	}
+	if after.Ordinal == nil || *after.Ordinal != 2 {
+		t.Fatalf("after.Ordinal = %s, want 2 (unchanged)", ordstr(after.Ordinal))
+	}
+
+	// A no-op move, the verb's documented shape when neither field is supplied,
+	// is the same answer by a shorter road.
+	noop, err := gw.MoveSystem(ctx, "", second.ID, storage.SystemMove{}, all, all)
+	if err != nil {
+		t.Fatalf("no-op move: %v", err)
+	}
+	if noop.Name != "boardroom-2" {
+		t.Fatalf("a no-op move renamed the system to %q", noop.Name)
+	}
+
+	// A parented system relocated to another location keeps its parent bucket
+	// (a parent wins over a location), so that move changes no bucket either.
+	parent, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "the-plant", SystemTypeID: strp("board"), LocationName: &room}, all)
+	if err != nil {
+		t.Fatalf("create the parent: %v", err)
+	}
+	child, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), ParentName: &parent.Name}, all)
+	if err != nil {
+		t.Fatalf("create the child: %v", err)
+	}
+	if child.Name != "boardroom" {
+		t.Fatalf("the child create = %q, want boardroom (its parent is its bucket)", child.Name)
+	}
+	sibling, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), ParentName: &parent.Name}, all)
+	if err != nil {
+		t.Fatalf("create the child's sibling: %v", err)
+	}
+	if _, err := gw.RenameSystem(ctx, "", child.ID, "the-annex", all, all); err != nil {
+		t.Fatalf("rename the child: %v", err)
+	}
+	relocated, err := gw.MoveSystem(ctx, "", sibling.ID, storage.SystemMove{LocationName: &room}, all, all)
+	if err != nil {
+		t.Fatalf("relocate the parented sibling: %v", err)
+	}
+	if relocated.Name != "boardroom-2" {
+		t.Fatalf("relocating a parented system renamed it to %q: its parent still wins, so its bucket never moved", relocated.Name)
+	}
+
+	// And a move that DOES change the bucket still re-mints, so the guard
+	// narrows the trigger without disabling it (TestSystemMoveReMintsTheOrdinal
+	// is the full case).
+	lifted, err := gw.MoveSystem(ctx, "", sibling.ID, storage.SystemMove{ParentName: strp("")}, all, all)
+	if err != nil {
+		t.Fatalf("lift the sibling to its location bucket: %v", err)
+	}
+	if lifted.Name != "boardroom" {
+		t.Fatalf("a move out of the parent bucket = %q, want boardroom (the room's bare name was freed by the rename)", lifted.Name)
+	}
+}
+
 // TestSystemReclassifyReMintsTheStem proves a reclassify recomputes a
 // still-platform-owned name from the NEW type's stem, the system-tier twin of a
 // component's product reclassify.
