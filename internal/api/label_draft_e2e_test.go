@@ -235,11 +235,12 @@ func TestTheRenderedLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
 	c.do(owner, http.MethodPost, "/locations:renderLabel", map[string]any{"location_type": "floor"}, http.StatusOK)
 }
 
-// TestTheRenderedLocationLabelIsEmptyInAShippedEstate documents the state every
-// location create form opens in, which is the one the console has to have an
-// answer for: no rule resolves at any tier, so nothing is stored and the name
-// is what an operator reads.
-func TestTheRenderedLocationLabelIsEmptyInAShippedEstate(t *testing.T) {
+// TestTheRenderedLocationLabelIsTheShippedRulesInAShippedEstate documents the
+// state every location create form opens in, over the wire and end to end. It
+// used to be the empty one; #657 ships a location rule, so the form now shows
+// the label the create is about to store, and the two are asserted to be the
+// same string rather than assumed to be.
+func TestTheRenderedLocationLabelIsTheShippedRulesInAShippedEstate(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -256,12 +257,12 @@ func TestTheRenderedLocationLabelIsEmptyInAShippedEstate(t *testing.T) {
 	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	got := renderLabelAt(t, c, owner, "/locations:renderLabel",
-		map[string]any{"location_type": "building", "name": "hq"}, http.StatusOK)
-	if got.Label != "" || got.Rule != "" {
-		t.Errorf("shipped location draft = %+v, want both empty", got)
+		map[string]any{"location_type": "building", "name": "north-wing"}, http.StatusOK)
+	if got.Label != "North Wing" || got.Rule != "{{title (words .Name)}}" {
+		t.Errorf("shipped location draft = %+v, want the shipped rule and %q", got, "North Wing")
 	}
 	created := c.do(owner, http.MethodPost, "/locations",
-		map[string]any{"location_type": "building", "name": "hq"}, http.StatusCreated)
+		map[string]any{"location_type": "building", "name": "north-wing"}, http.StatusCreated)
 	var loc struct {
 		DisplayName string `json:"display_name"`
 	}

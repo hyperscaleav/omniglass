@@ -686,7 +686,7 @@
   },
   {
    "entity_kind": "location",
-   "template": ""
+   "template": "{{title (words .Name)}}"
   }
  ]
 }

@@ -124,16 +124,29 @@ func TestThePlacementKeysAreExactlyTwoOnComponentAndOneOnSystem(t *testing.T) {
 }
 
 // The location read ladder, in the one place a rule consumes it: a location
-// with a typed label reads the label, one without reads its name. Without this
-// the worked example cannot produce "204B" for a room named "room-204b", and
-// every shipped estate (whose locations carry no generated label at all, since
-// the shipped location rule is empty) would read placement as blank.
+// with a typed label reads the label, one without reads its NAME, verbatim.
+// Without this the worked example cannot produce "204B" for a room named
+// "room-204b".
+//
+// The last rung is what this pins, and it is exactly what #657 did NOT change.
+// A location rule ships now, so a location created here carries a rendered
+// label and the rung is not reached by default; the shipped default is
+// therefore blanked first, which is also the state of an estate that upgraded
+// into that rule and has not run /locations:recomputeLabels yet. That estate
+// reads raw kebab names, and it has to read them EXACTLY, never a prettified
+// version invented on the read path.
 func TestLocationLabelFallsThroughToTheLocationName(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "component", "[{{.LocationLabel}}]"); err != nil {
 		t.Fatalf("set the component rule: %v", err)
 	}
+	if err := gw.UpsertLabelRuleDefault(ctx, "location", ""); err != nil {
+		t.Fatalf("blank the shipped location rule: %v", err)
+	}
 	unlabelled := makeRoom(t, gw, ctx, "room-plain")
+	if l := mustGetLocation(t, gw, ctx, unlabelled); l.DisplayName != "" {
+		t.Fatalf("precondition: the location carries the label %q, so the rung under test is unreachable", l.DisplayName)
+	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &unlabelled}, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -179,8 +192,8 @@ func TestRenamingALocationRestampsTheRowsThatReadIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create system here: %v", err)
 	}
-	if inHere.DisplayName != "room-here Display" {
-		t.Fatalf("before = %q, want %q", inHere.DisplayName, "room-here Display")
+	if inHere.DisplayName != "Room Here Display" {
+		t.Fatalf("before = %q, want %q", inHere.DisplayName, "Room Here Display")
 	}
 	beforeElsewhere := inElsewhere.UpdatedAt
 
@@ -192,15 +205,15 @@ func TestRenamingALocationRestampsTheRowsThatReadIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-read: %v", err)
 	}
-	if after.DisplayName != "room-204b Display" {
-		t.Fatalf("after the rename = %q, want %q: the label reads a location it no longer names", after.DisplayName, "room-204b Display")
+	if after.DisplayName != "Room 204b Display" {
+		t.Fatalf("after the rename = %q, want %q: the label reads a location it no longer names", after.DisplayName, "Room 204b Display")
 	}
 	afterSys, err := gw.GetSystem(ctx, sysHere.ID, all)
 	if err != nil {
 		t.Fatalf("re-read system: %v", err)
 	}
-	if afterSys.DisplayName != "room-204b Boardroom" {
-		t.Fatalf("system after the rename = %q, want %q", afterSys.DisplayName, "room-204b Boardroom")
+	if afterSys.DisplayName != "Room 204b Boardroom" {
+		t.Fatalf("system after the rename = %q, want %q", afterSys.DisplayName, "Room 204b Boardroom")
 	}
 
 	// And only those: a row in another room is not touched at all, neither its
@@ -209,8 +222,8 @@ func TestRenamingALocationRestampsTheRowsThatReadIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-read elsewhere: %v", err)
 	}
-	if other.DisplayName != "room-elsewhere Display" {
-		t.Fatalf("a component in another room reads %q, want %q", other.DisplayName, "room-elsewhere Display")
+	if other.DisplayName != "Room Elsewhere Display" {
+		t.Fatalf("a component in another room reads %q, want %q", other.DisplayName, "Room Elsewhere Display")
 	}
 	if !other.UpdatedAt.Equal(beforeElsewhere) {
 		t.Errorf("a component in another room was written (updated_at moved): the cascade is restamping rows that read nothing that changed")
@@ -253,8 +266,8 @@ func TestRelabellingALocationRestampsTheRowsThatReadIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-read after clear: %v", err)
 	}
-	if cleared.DisplayName != "room-a Display" {
-		t.Fatalf("after clearing the location label = %q, want %q", cleared.DisplayName, "room-a Display")
+	if cleared.DisplayName != "Room A Display" {
+		t.Fatalf("after clearing the location label = %q, want %q", cleared.DisplayName, "Room A Display")
 	}
 }
 
@@ -372,15 +385,15 @@ func TestMovingASystemRestampsItsOwnLabel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
-	if s.DisplayName != "room-from Boardroom" {
-		t.Fatalf("before = %q, want %q", s.DisplayName, "room-from Boardroom")
+	if s.DisplayName != "Room From Boardroom" {
+		t.Fatalf("before = %q, want %q", s.DisplayName, "Room From Boardroom")
 	}
 	moved, err := gw.MoveSystem(ctx, "", s.ID, storage.SystemMove{LocationName: &to}, all, all)
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
-	if moved.DisplayName != "room-to Boardroom" {
-		t.Fatalf("after the move = %q, want %q", moved.DisplayName, "room-to Boardroom")
+	if moved.DisplayName != "Room To Boardroom" {
+		t.Fatalf("after the move = %q, want %q", moved.DisplayName, "Room To Boardroom")
 	}
 }
 
@@ -401,8 +414,8 @@ func TestMovingAComponentRestampsItsLocationLabel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
-	if moved.DisplayName != "room-to Display" {
-		t.Fatalf("after the move = %q, want %q", moved.DisplayName, "room-to Display")
+	if moved.DisplayName != "Room To Display" {
+		t.Fatalf("after the move = %q, want %q", moved.DisplayName, "Room To Display")
 	}
 }
 
@@ -593,8 +606,8 @@ func TestTheVerbRecomputesSystemsAndLocationsToo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("recompute systems: %v", err)
 	}
-	if len(sysChanges) != 1 || sysChanges[0].To != "Boardroom at room-a" {
-		t.Fatalf("system recompute = %+v, want one row labelled %q", sysChanges, "Boardroom at room-a")
+	if len(sysChanges) != 1 || sysChanges[0].To != "Boardroom at Room A" {
+		t.Fatalf("system recompute = %+v, want one row labelled %q", sysChanges, "Boardroom at Room A")
 	}
 	// A location recompute does not stop at locations: moving a location's
 	// label stales every row placed at it, and the returned set says so rather

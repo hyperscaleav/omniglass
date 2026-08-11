@@ -149,14 +149,49 @@ func TestTheDraftSystemLabelIsExactWhereTheRuleReadsNoOrdinal(t *testing.T) {
 	}
 }
 
-// TestTheDraftLabelIsEmptyWhereNoRuleResolves is the location tier, and it is
-// not an edge case: the shipped GLOBAL location rule is deliberately empty
-// (internal/seed/label_rules.yaml) and no seeded location_type carries one
-// either, so EVERY location a shipped estate creates is in this state. The
-// answer is the empty string rather than a refusal, because the read ladder's
-// third rung is the entity's own name and that fallback is the design.
+// TestTheDraftedLocationLabelIsTheOneTheCreateStores is the location tier, and
+// it is not an edge case: the shipped GLOBAL location rule
+// (internal/seed/label_rules.yaml) is what EVERY location a shipped estate
+// creates renders through, so this is the form's ordinary answer rather than a
+// corner of it. The form shows it locked, and the create beside it must store
+// the same string or the locked field was a lie.
+func TestTheDraftedLocationLabelIsTheOneTheCreateStores(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	drafted, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{
+		LocationTypeRef: "room", Name: "north-boardroom",
+	})
+	if err != nil {
+		t.Fatalf("render draft: %v", err)
+	}
+	if drafted.Label != "North Boardroom" || drafted.Rule != "{{title (words .Name)}}" {
+		t.Errorf("drafted %+v, want the shipped location rule and the label it renders", drafted)
+	}
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all); err != nil {
+		t.Fatalf("create building: %v", err)
+	}
+	hq := "hq"
+	l, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
+		Name: "north-boardroom", LocationType: "room", ParentName: &hq,
+	}, all)
+	if err != nil {
+		t.Fatalf("create location: %v", err)
+	}
+	if l.DisplayName != drafted.Label {
+		t.Errorf("the form would have shown %q; the create stored %q", drafted.Label, l.DisplayName)
+	}
+}
+
+// The empty answer is still reachable and still means what it meant: no rule
+// resolves at any tier, so nothing is stored and the surface reads the name.
+// It stopped being a shipped estate's default state when the location rule
+// landed (#657), which is precisely why it is worth its own test now: an
+// operator who clears the rule at every tier gets an empty label rather than a
+// refusal, and the form has to have words for that.
 func TestTheDraftLabelIsEmptyWhereNoRuleResolves(t *testing.T) {
 	gw, ctx := seededGateway(t)
+	if err := gw.UpsertLabelRuleDefault(ctx, "location", ""); err != nil {
+		t.Fatalf("blank the shipped location rule: %v", err)
+	}
 	drafted, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{
 		LocationTypeRef: "room", Name: "boardroom",
 	})
@@ -164,7 +199,7 @@ func TestTheDraftLabelIsEmptyWhereNoRuleResolves(t *testing.T) {
 		t.Fatalf("render draft: %v", err)
 	}
 	if drafted.Label != "" || drafted.Rule != "" {
-		t.Errorf("drafted %+v, want an empty label and an empty rule: no location rule ships", drafted)
+		t.Errorf("drafted %+v, want an empty label and an empty rule: no rule resolves at any tier", drafted)
 	}
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all); err != nil {
 		t.Fatalf("create building: %v", err)

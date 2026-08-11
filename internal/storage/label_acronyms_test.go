@@ -22,9 +22,16 @@ import (
 // name the OPERATOR typed, which is why these tests drive locations: a location
 // has no product and no catalog display name to fall back on.
 
-// titleTheName is the rule these tests install at the global tier: the shape an
-// operator reaches for when they want the machine name read as words.
-const titleTheName = "{{.Name | title}}"
+// titleTheName is the rule these tests install at the global tier, and it is
+// the SHIPPED location rule verbatim (internal/seed/label_rules.yaml): the
+// shape an operator reaches for when they want a machine name read as words.
+//
+// It was "{{.Name | title}}" until #657, which is title with no words in front
+// of it and so leaves the separator standing: it rendered "DSP-Closet", the
+// exact defect words was added to fix. Installing the real shipped rule here
+// means the dictionary is asserted against the composition an estate actually
+// runs, so the two cannot stop composing without this failing.
+const titleTheName = "{{title (words .Name)}}"
 
 // A shipped acronym renders correctly cased with no operator configuration at
 // all, which is the whole point of shipping a list rather than an empty one.
@@ -33,8 +40,8 @@ func TestAShippedAcronymRendersCorrectlyCased(t *testing.T) {
 	setLocationRule(t, gw, ctx, titleTheName)
 
 	l := makeRoomIn(t, gw, ctx, "dsp-closet")
-	if l.DisplayName != "DSP-Closet" {
-		t.Fatalf("label = %q, want %q (the shipped dictionary did not reach the engine)", l.DisplayName, "DSP-Closet")
+	if l.DisplayName != "DSP Closet" {
+		t.Fatalf("label = %q, want %q (the shipped dictionary did not reach the engine)", l.DisplayName, "DSP Closet")
 	}
 }
 
@@ -47,8 +54,8 @@ func TestAnOperatorAddedAcronymTakesEffectWithoutARestart(t *testing.T) {
 	setLocationRule(t, gw, ctx, titleTheName)
 
 	before := makeRoomIn(t, gw, ctx, "qm55-wall")
-	if before.DisplayName != "Qm55-Wall" {
-		t.Fatalf("label before the edit = %q, want %q", before.DisplayName, "Qm55-Wall")
+	if before.DisplayName != "Qm55 Wall" {
+		t.Fatalf("label before the edit = %q, want %q", before.DisplayName, "Qm55 Wall")
 	}
 
 	addAcronyms(t, gw, ctx, "QM55")
@@ -59,14 +66,14 @@ func TestAnOperatorAddedAcronymTakesEffectWithoutARestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update location: %v", err)
 	}
-	if updated.DisplayName != "QM55-Wall" {
-		t.Fatalf("label after the edit = %q, want %q (the engine kept the dictionary it booted with)", updated.DisplayName, "QM55-Wall")
+	if updated.DisplayName != "QM55 Wall" {
+		t.Fatalf("label after the edit = %q, want %q (the engine kept the dictionary it booted with)", updated.DisplayName, "QM55 Wall")
 	}
 
 	// And a row created after the edit.
 	fresh := makeRoomIn(t, gw, ctx, "qm55-lobby")
-	if fresh.DisplayName != "QM55-Lobby" {
-		t.Fatalf("new row label = %q, want %q", fresh.DisplayName, "QM55-Lobby")
+	if fresh.DisplayName != "QM55 Lobby" {
+		t.Fatalf("new row label = %q, want %q", fresh.DisplayName, "QM55 Lobby")
 	}
 }
 
@@ -82,8 +89,8 @@ func TestAnOperatorListReplacesTheShippedOne(t *testing.T) {
 	addAcronyms(t, gw, ctx, "QM55")
 
 	l := makeRoomIn(t, gw, ctx, "dsp-closet")
-	if l.DisplayName != "Dsp-Closet" {
-		t.Fatalf("label = %q, want %q: an operator's list is the list, so a shipped entry it omits stops applying", l.DisplayName, "Dsp-Closet")
+	if l.DisplayName != "Dsp Closet" {
+		t.Fatalf("label = %q, want %q: an operator's list is the list, so a shipped entry it omits stops applying", l.DisplayName, "Dsp Closet")
 	}
 }
 
@@ -121,8 +128,8 @@ func TestTheSettingsFileLayerReachesTheEngine(t *testing.T) {
 	setLocationRule(t, gw, ctx, titleTheName)
 
 	l := makeRoomIn(t, gw, ctx, "qm55-wall")
-	if l.DisplayName != "QM55-Wall" {
-		t.Fatalf("label = %q, want %q (the file layer did not reach the engine)", l.DisplayName, "QM55-Wall")
+	if l.DisplayName != "QM55 Wall" {
+		t.Fatalf("label = %q, want %q (the file layer did not reach the engine)", l.DisplayName, "QM55 Wall")
 	}
 }
 
@@ -161,8 +168,8 @@ func TestRenderingALabelNeedsNoSecondConnection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if l.DisplayName != "DSP-Closet" {
-		t.Fatalf("label = %q, want %q", l.DisplayName, "DSP-Closet")
+	if l.DisplayName != "DSP Closet" {
+		t.Fatalf("label = %q, want %q", l.DisplayName, "DSP Closet")
 	}
 }
 

@@ -580,15 +580,15 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "room-a")
 
-	// A location ships NO global rule (a nominal location's real-world name is
-	// a fact no rule has), so it starts unlabelled and the read ladder falls
-	// through to its name. A rule on its TYPE is how an operator opts in.
+	// A location's global rule is the shipped one (#657): its own name, read as
+	// words and titled. A rule on its TYPE is the more specific tier, and it
+	// wins over the global one.
 	loc, err := gw.GetLocation(ctx, room, all)
 	if err != nil {
 		t.Fatalf("get location: %v", err)
 	}
-	if loc.DisplayName != "" {
-		t.Fatalf("location label = %q, want none shipped", loc.DisplayName)
+	if loc.DisplayName != "Room A" {
+		t.Fatalf("location label = %q, want the shipped global rule's %q", loc.DisplayName, "Room A")
 	}
 	lt, err := gw.CreateLocationType(ctx, "", storage.LocationType{
 		Name: "pod", DisplayName: "Pod", LabelRule: strptr("{{.TypeName}} {{.Name | upper}}"),
@@ -690,6 +690,87 @@ func TestTheGlobalRuleIsSeededAuthoritativelyAndStillOperatorOwned(t *testing.T)
 	// a tier rule is.
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.TypeName"); !errors.Is(err, storage.ErrInvalidLabelRule) {
 		t.Fatalf("SetLabelRule with a broken template = %v, want ErrInvalidLabelRule", err)
+	}
+}
+
+// The shipped LOCATION rule (#657). It reads the location's own name as words
+// and titles them, so a location lands with a label a person would say instead
+// of with none at all: `north-wing` reads "North Wing", and the acronym
+// dictionary runs over the words it produced.
+//
+// The rule that ships is a RESTATEMENT of the name, and that is the whole
+// argument for it: it re-cases the name and puts the operator's dictionary over
+// it, which is a different string from the name and not one a fallback could
+// have produced. The kind carries no other fact worth rendering (the type is
+// "Room" for every room in the estate), which is why this rule and not another.
+func TestTheShippedLocationRuleReadsTheNameAsWords(t *testing.T) {
+	gw, ctx := seededGateway(t)
+
+	shipped, err := gw.GetLabelRule(ctx, "location")
+	if err != nil {
+		t.Fatalf("get the location rule: %v", err)
+	}
+	if shipped.Effective != "{{title (words .Name)}}" {
+		t.Fatalf("the shipped location rule is %q, want the words form", shipped.Effective)
+	}
+
+	campus, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)
+	if err != nil {
+		t.Fatalf("create campus: %v", err)
+	}
+	if campus.DisplayName != "Hq" || !campus.DisplayNameGenerated {
+		t.Errorf("campus label = %q generated = %v, want %q from the shipped rule", campus.DisplayName, campus.DisplayNameGenerated, "Hq")
+	}
+	wing, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
+		Name: "north-wing", LocationType: "building", ParentName: &campus.Name,
+	}, all)
+	if err != nil {
+		t.Fatalf("create building: %v", err)
+	}
+	if wing.DisplayName != "North Wing" || !wing.DisplayNameGenerated {
+		t.Errorf("building label = %q generated = %v, want %q: the separator is what words turns into a space", wing.DisplayName, wing.DisplayNameGenerated, "North Wing")
+	}
+
+	// The dictionary reaches it, which is the point of connecting the two: with
+	// AV shipped, a wing named for the AV rack reads AV rather than Av.
+	rack, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
+		Name: "av-store", LocationType: "building", ParentName: &campus.Name,
+	}, all)
+	if err != nil {
+		t.Fatalf("create the second building: %v", err)
+	}
+	if rack.DisplayName != "AV Store" {
+		t.Errorf("label = %q, want %q: the shipped acronym list did not reach the shipped rule", rack.DisplayName, "AV Store")
+	}
+
+	// And an operator's own label still wins over it, pen and all: the rule
+	// renders where nobody has spoken, never over somebody who has.
+	mine, err := gw.UpdateLocation(ctx, "", wing.ID, storage.LocationPatch{DisplayName: strptr("The North Wing")}, all, all)
+	if err != nil {
+		t.Fatalf("relabel: %v", err)
+	}
+	if mine.DisplayName != "The North Wing" || mine.DisplayNameGenerated {
+		t.Errorf("after relabel = %q generated = %v, want the operator's words and the pen with them", mine.DisplayName, mine.DisplayNameGenerated)
+	}
+
+	// A re-seed restates the shipped default and does not reach an operator's
+	// own rule, which is the whole reason the two are separate columns and the
+	// reason a release can improve this rule at all.
+	if _, err := gw.SetLabelRule(ctx, "", "location", "{{.TypeName}} {{.Name}}"); err != nil {
+		t.Fatalf("set an operator rule: %v", err)
+	}
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("re-seed: %v", err)
+	}
+	after, err := gw.GetLabelRule(ctx, "location")
+	if err != nil {
+		t.Fatalf("get after re-seed: %v", err)
+	}
+	if after.Template == nil || *after.Template != "{{.TypeName}} {{.Name}}" {
+		t.Errorf("after re-seed the operator's location rule is %v, want it untouched", after.Template)
+	}
+	if after.Default != shipped.Effective {
+		t.Errorf("after re-seed the shipped default is %q, want %q restated", after.Default, shipped.Effective)
 	}
 }
 

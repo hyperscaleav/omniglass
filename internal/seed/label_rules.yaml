@@ -23,18 +23,25 @@ label_rules:
     template: "{{.TypeName}}"
 
   - entity_kind: location
-    # DELIBERATELY EMPTY, and it is the same argument the epic makes for
-    # refusing to auto-name a nominal location type.
+    # The location's own name, read as words and title-cased.
     #
-    # A campus, a building and a room have real-world names an operator already
-    # knows, and a rule cannot produce one: every fact available here is either
-    # the type ("Room", for every room in the estate) or the name itself, so any
-    # rule that runs is either a constant or a restatement. Shipping one would
-    # replace a correct fallback (the location's own name) with a worse label,
-    # for every location, on the first boot.
+    # A location kind carries only two facts: the type ("Room", for every room in
+    # the estate) or the name. So any rule here is either a CONSTANT or a
+    # RESTATEMENT, and the constant is still refused for the reason it always
+    # was: labelling every room "Room" is worse than the name it would replace.
     #
-    # A POSITIONAL type does have a rule worth shipping, since a floor's ordinal
-    # genuinely is its name, but that belongs on the type rather than the whole
-    # kind, and it arrives with the slice that gives positional types their name
-    # rules (#687).
-    template: ""
+    # The restatement was refused with it, and that half is now wrong. It was
+    # right while a restatement could only echo the name; `words` (#657) means
+    # this one RE-CASES it and runs the operator's acronym dictionary over it,
+    # so `north-wing` reads "North Wing" and `hq-west` reads "HQ West" once HQ is
+    # in the list. That is a string the read ladder's fallback cannot produce,
+    # which is exactly the test a rule at this tier has to pass.
+    #
+    # It renders a label and STORES it. The ladder's last rung is untouched and
+    # still verbatim: a row with no stored label reads its name exactly, never a
+    # prettified version of it.
+    #
+    # A shipped rule change restamps nothing by itself (ADR-0100, ADR-0102). A
+    # new estate gets this at create; an existing one keeps its raw names until
+    # an operator runs /locations:recomputeLabels.
+    template: "{{title (words .Name)}}"

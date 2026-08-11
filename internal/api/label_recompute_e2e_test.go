@@ -123,8 +123,8 @@ func TestRuleChangePreviewsThenAppliesOverHTTP(t *testing.T) {
 		t.Fatalf("the apply changed %d rows and the preview promised %d", applied.Count, preview.Count)
 	}
 	got := decodePen(t, "after apply", c.do(tok, http.MethodGet, "/components/display-1", nil, http.StatusOK))
-	if got.DisplayName != "room-a Display 1" {
-		t.Fatalf("after the apply = %q, want %q", got.DisplayName, "room-a Display 1")
+	if got.DisplayName != "Room A Display 1" {
+		t.Fatalf("after the apply = %q, want %q", got.DisplayName, "Room A Display 1")
 	}
 	if !got.DisplayNameGenerated {
 		t.Fatalf("the recompute took the pen: %+v", got)
@@ -270,8 +270,8 @@ func TestAPreviewIsBoundedByTheUpdateScopeJustAsTheApplyIs(t *testing.T) {
 		t.Fatalf("a component outside the caller's update scope was restamped to %q", after.DisplayName)
 	}
 	mineAfter := decodePen(t, "mine after", c.do(tok, http.MethodGet, "/components/mine", nil, http.StatusOK))
-	if mineAfter.DisplayName != "room-a Display" {
-		t.Fatalf("the component inside the update scope reads %q, want %q: the apply must have done something, or the assertion above passes for the wrong reason", mineAfter.DisplayName, "room-a Display")
+	if mineAfter.DisplayName != "Room A Display" {
+		t.Fatalf("the component inside the update scope reads %q, want %q: the apply must have done something, or the assertion above passes for the wrong reason", mineAfter.DisplayName, "Room A Display")
 	}
 	_ = mine
 }

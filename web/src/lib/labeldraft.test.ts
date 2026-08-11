@@ -49,8 +49,10 @@ describe("the draft label data layer", () => {
   });
 
   it("reads an empty label as an answer rather than a failure", async () => {
-    // Every location create form in a shipped estate lands here: no rule at any
-    // tier, so nothing is stored and the surface reads the name.
+    // No rule resolves at any tier, so nothing is stored and the surface reads
+    // the name. A shipped estate no longer lands here (a location rule ships as
+    // of #657), which is why the empty answer needs a test of its own rather
+    // than being the case every form happened to hit.
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ label: "", rule: "" }));
     expect(await renderLocationLabel({ location_type: "room", name: "boardroom" })).toEqual({ label: "", rule: "" });
   });
