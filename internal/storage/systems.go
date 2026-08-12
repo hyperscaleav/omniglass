@@ -30,6 +30,19 @@ var (
 	// would send an operator to the wrong picker.
 	ErrUnknownSystemType = errors.New("storage: unknown system_type")
 
+	// ErrSystemBindForbidden is a component create naming a system the caller may
+	// READ but not UPDATE. It is separate from ErrSystemForbidden because it is
+	// about a reference in a create's BODY rather than about the row the request
+	// addresses, and the two want different words: the generic one becomes a bare
+	// "forbidden" on the component route, where this one names the scope the bind
+	// resolves in and the recovery that needs no grant at all.
+	//
+	// It is deliberately NOT ErrSystemNotFound. That refusal is the right answer
+	// for a system the caller cannot see (it must not learn the row exists), and
+	// the wrong one here, where the caller can GET the row and would read "system
+	// not found" as a platform defect instead of as the missing grant it is.
+	ErrSystemBindForbidden = errors.New("storage: the system named on this create is outside the caller's system:update scope")
+
 	// ErrSystemExistsUnderParent / ErrSystemExistsInLocation / ErrSystemExistsUnplaced
 	// name which placement bucket a 23505 collided in, mirroring the component
 	// set: #627 scopes name uniqueness to placement, not the whole estate. Each

@@ -46,10 +46,10 @@ func TestInterfaceAPI(t *testing.T) {
 	}
 
 	all := scope.Set{All: true}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "comp-a"}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "comp-a"}, all, all, all, all); err != nil {
 		t.Fatalf("create comp-a: %v", err)
 	}
-	compB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "comp-b"}, all, all, all)
+	compB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "comp-b"}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create comp-b: %v", err)
 	}
@@ -133,13 +133,13 @@ func TestInterfaceCreateWithAmbiguousComponentIs409(t *testing.T) {
 	}
 
 	all := scope.Set{All: true}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all, all, all, all); err != nil {
 		t.Fatalf("create holder: %v", err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-cmp"}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-cmp"}, all, all, all, all); err != nil {
 		t.Fatalf("create root dup-cmp: %v", err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-cmp", ParentName: ptr("holder")}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-cmp", ParentName: ptr("holder")}, all, all, all, all); err != nil {
 		t.Fatalf("create nested dup-cmp: %v", err)
 	}
 

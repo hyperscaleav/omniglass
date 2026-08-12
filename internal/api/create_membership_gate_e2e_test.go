@@ -148,11 +148,19 @@ func TestTheCreatesSystemBindResolvesInTheUpdateScope(t *testing.T) {
 		"name": "panel-in", "product": "samsung-qm55", "parent": f.rackID, "system": "av-a",
 	}, http.StatusCreated)
 
-	// The one it may only read is not, with the same non-disclosing refusal an
-	// absent system gives.
-	f.c.do(floored, http.MethodPost, "/components", map[string]any{
+	// The one it may only read is not. The refusal names the missing authority
+	// rather than answering the non-disclosing not-found this expected before the
+	// #707 review: that answer denied the existence of the very row the GET above
+	// just returned, which an operator can only read as a broken platform.
+	status, body := f.c.send(floored, http.MethodPost, "/components", map[string]any{
 		"name": "panel-out", "product": "samsung-qm55", "parent": f.rackID, "system": f.wingBSys,
-	}, http.StatusUnprocessableEntity)
+	})
+	if status != http.StatusForbidden {
+		t.Fatalf("bind of a readable system outside the update scope = %d, want 403\nbody: %s", status, body)
+	}
+	if !strings.Contains(string(body), "system:update") {
+		t.Errorf("refusal = %s, want it to name the scope the bind resolves in", body)
+	}
 
 	// The owner runs the refused body and is served, so the refusal is a scope
 	// boundary rather than a broken route.

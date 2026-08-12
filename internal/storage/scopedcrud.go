@@ -737,6 +737,40 @@ func resolvePlacementRef[T any](ctx context.Context, q querier, cfg scopedConfig
 	return v, nil
 }
 
+// resolvePlacementWriteRef is resolvePlacementRef for a cross-tier reference the
+// caller WRITES THROUGH rather than only reads: a component's system, whose bind
+// inserts a membership row. It resolves in the read scope and then requires the
+// action scope, which is resolveScoped's read-then-action split applied one tier
+// over.
+//
+// # Why the split, when one scope would do
+//
+// Resolving in the ACTION set alone is what a bind that only needed the action
+// set would do, and it collapses two different facts into one answer: a system
+// the caller cannot see and a system the caller reads every day but may not
+// write both come back as cfg.notFound, which the create then reports as "system
+// not found". For the second one that is a lie about existence, and an operator
+// who can GET the row reads it as a bug in the platform rather than as the
+// missing grant it is.
+//
+// The split says the true thing in both cases without disclosing anything new.
+// Out of the READ scope is still the non-disclosing not-found, because that
+// caller cannot learn the row exists (the guard #700 added, unchanged). Inside
+// the read scope but outside the action scope is cfg.forbidden, and the caller
+// already proved it may read that row, so naming the missing authority discloses
+// nothing it could not get from a GET.
+//
+// The candidate list on an ambiguous reference keeps #697's property for the
+// same reason resolveScoped does: ambiguity is judged inside the READ set, so
+// every uuid in it is a row this caller may read.
+func resolvePlacementWriteRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string, read, action scope.Set) (*T, error) {
+	v, err := resolveScoped(ctx, q, cfg, ref, read, action)
+	if err != nil {
+		return nil, foldPathNotFound(err)
+	}
+	return v, nil
+}
+
 // scopedGet resolves an entity by name within the caller's read scope; absent,
 // out of scope, or ambiguous only outside the caller's scope is the same
 // non-disclosing notFound (scopedByNameInScope narrows to read scope first).

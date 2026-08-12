@@ -201,7 +201,7 @@ func buildBenchEstate(b *testing.B, size benchSize) *benchEstate {
 				SystemName: strptr(sysNames[i%len(sysNames)]),
 			}
 		}
-		c, err := gw.CreateComponent(ctx, "", spec, all, all, all)
+		c, err := gw.CreateComponent(ctx, "", spec, all, all, all, all)
 		if err != nil {
 			b.Fatalf("create component %d: %v", i, err)
 		}

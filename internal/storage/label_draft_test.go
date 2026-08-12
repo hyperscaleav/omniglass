@@ -74,7 +74,7 @@ func TestTheDraftLabelIsTheLabelTheCreateStores(t *testing.T) {
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "front-panel", ProductName: strptr(qm55), LocationName: &room.Name, SystemName: strptr("board-1"),
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestTheDraftIsTheIdentityTheCreateStampsForAGeneratedName(t *testing.T) {
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: &room.Name,
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestTheDraftedOrdinalIsTheLowestFreeOneInThatBucket(t *testing.T) {
 	for i := range 2 {
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 			ProductName: strptr(qm55), LocationName: &here.Name,
-		}, all, all, all); err != nil {
+		}, all, all, all, all); err != nil {
 			t.Fatalf("create %d: %v", i, err)
 		}
 	}
@@ -195,7 +195,7 @@ func TestTheDraftedNameIsWhatTheAllocatorWouldMint(t *testing.T) {
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: &room.Name,
-	}, all, all, all); err != nil {
+	}, all, all, all, all); err != nil {
 		t.Fatalf("seed the bucket: %v", err)
 	}
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
@@ -515,7 +515,7 @@ func TestTheDraftLabelAllocatesNothing(t *testing.T) {
 	// pass the statement scan above and fail this.
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: strptr("room-1"),
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}

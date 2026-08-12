@@ -228,7 +228,7 @@ func TestListComponentsSkipsAbbrevGetCompactsFully(t *testing.T) {
 	// whole. Generating it asks for what this test always meant.
 	owned, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		LocationName: &fx.r415a.Name,
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create device-1: %v", err)
 	}

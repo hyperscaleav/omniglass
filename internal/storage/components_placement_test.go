@@ -260,14 +260,14 @@ func TestMoveRecomputesGeneratedName(t *testing.T) {
 	// new ordinal.
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "mv-root-1"}, all)
 	root2 := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "mv-root-2"}, all)
-	mover, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-1"), ProductName: &qm55}, all, all, all)
+	mover, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-1"), ProductName: &qm55}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create generated mover: %v", err)
 	}
 	if mover.Name != "display-1" || !mover.NameGenerated {
 		t.Fatalf("mover before move = %q (generated=%v), want display-1/true", mover.Name, mover.NameGenerated)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-2"), ProductName: &qm55}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-2"), ProductName: &qm55}, all, all, all, all); err != nil {
 		t.Fatalf("occupy destination's display-1: %v", err)
 	}
 
@@ -289,7 +289,7 @@ func TestMoveRecomputesGeneratedName(t *testing.T) {
 	// a mic-classified component moving under a fresh, empty root becomes
 	// mic-1, not display-anything.
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "mv-mic-root"}, all)
-	genMic, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-1"), ProductName: &mic}, all, all, all)
+	genMic, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-1"), ProductName: &mic}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create generated mic: %v", err)
 	}

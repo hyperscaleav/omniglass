@@ -31,14 +31,14 @@ func TestCreateComponentDottedMissingParentMatchesBareNameForm(t *testing.T) {
 
 	_, bareErr := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "c-bare-parent", ParentName: strptr("ghost-parent"),
-	}, all, all, all)
+	}, all, all, all, all)
 	if !errors.Is(bareErr, storage.ErrParentComponentNotFound) {
 		t.Fatalf("bare-name missing parent = %v, want ErrParentComponentNotFound", bareErr)
 	}
 
 	_, dottedErr := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "c-dotted-parent", ParentName: strptr("$comp.ghost-parent"),
-	}, all, all, all)
+	}, all, all, all, all)
 	if !errors.Is(dottedErr, storage.ErrParentComponentNotFound) {
 		t.Fatalf("dotted missing parent = %v, want ErrParentComponentNotFound (same as bare-name form)", dottedErr)
 	}
@@ -53,7 +53,7 @@ func TestUpdateComponentDottedMissingParentMatchesBareNameForm(t *testing.T) {
 	ctx := context.Background()
 	all := scope.Set{All: true}
 
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "patch-target"}, all, all, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "patch-target"}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -87,14 +87,14 @@ func TestCreateComponentDottedMissingLocationMatchesBareNameForm(t *testing.T) {
 
 	_, bareErr := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "c-bare-loc", LocationName: strptr("ghost-loc"),
-	}, all, all, all)
+	}, all, all, all, all)
 	if !errors.Is(bareErr, storage.ErrLocationNotFound) {
 		t.Fatalf("bare-name missing location = %v, want ErrLocationNotFound", bareErr)
 	}
 
 	_, dottedErr := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "c-dotted-loc", LocationName: strptr("boi.nope"),
-	}, all, all, all)
+	}, all, all, all, all)
 	if !errors.Is(dottedErr, storage.ErrLocationNotFound) {
 		t.Fatalf("dotted missing location (boi.nope) = %v, want ErrLocationNotFound (same as bare-name form)", dottedErr)
 	}
@@ -110,14 +110,14 @@ func TestCreateComponentDottedMissingSystemMatchesBareNameForm(t *testing.T) {
 
 	_, bareErr := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "c-bare-sys", SystemName: strptr("ghost-sys"),
-	}, all, all, all)
+	}, all, all, all, all)
 	if !errors.Is(bareErr, storage.ErrSystemNotFound) {
 		t.Fatalf("bare-name missing system = %v, want ErrSystemNotFound", bareErr)
 	}
 
 	_, dottedErr := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "c-dotted-sys", SystemName: strptr("$sys.ghost-sys"),
-	}, all, all, all)
+	}, all, all, all, all)
 	if !errors.Is(dottedErr, storage.ErrSystemNotFound) {
 		t.Fatalf("dotted missing system = %v, want ErrSystemNotFound (same as bare-name form)", dottedErr)
 	}

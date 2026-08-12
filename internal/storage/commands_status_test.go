@@ -57,7 +57,7 @@ func TestCommandStatusRecording(t *testing.T) {
 	}
 
 	for _, name := range []string{"disp-1", "disp-2", "disp-3"} {
-		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name}, all, all, all); err != nil {
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name}, all, all, all, all); err != nil {
 			t.Fatalf("create component %s: %v", name, err)
 		}
 	}

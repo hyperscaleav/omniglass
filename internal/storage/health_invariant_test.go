@@ -115,7 +115,7 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 		product := c.product
 		if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{
 			Name: c.name, ProductName: &product,
-		}, f.all, all, all); err != nil {
+		}, f.all, all, all, all); err != nil {
 			t.Fatalf("create component %s: %v", c.name, err)
 		}
 	}
@@ -203,7 +203,7 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 	f.mustAgreeWithRecord(t, ctx, "choice-room", "outage")
 
 	bar := "cisco-room-bar"
-	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "choice-bar-1", ProductName: &bar}, f.all, all, all); err != nil {
+	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "choice-bar-1", ProductName: &bar}, f.all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	if err := f.gw.AssignRole(ctx, "", "choice-room", "conf-bar", "choice-bar-1", f.all); err != nil {
@@ -310,7 +310,7 @@ func TestHealthRecordsEveryRealChange(t *testing.T) {
 		product := c.product
 		if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{
 			Name: c.name, ProductName: &product,
-		}, f.all, all, all); err != nil {
+		}, f.all, all, all, all); err != nil {
 			t.Fatalf("create component %s: %v", c.name, err)
 		}
 	}
@@ -371,7 +371,7 @@ func (f *healthFixture) staffPair(t *testing.T, ctx context.Context, standard, s
 		product := bar
 		if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{
 			Name: c, ProductName: &product,
-		}, f.all, all, all); err != nil {
+		}, f.all, all, all, all); err != nil {
 			t.Fatalf("create component %s: %v", c, err)
 		}
 		if err := f.gw.AssignRole(ctx, "", system, "pair", c, f.all); err != nil {

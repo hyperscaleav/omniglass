@@ -149,6 +149,24 @@ const errProductRequired = "a component must be an instance of a product; name o
 // wording drifted, which is the one thing that test exists to catch.
 const ErrSystemBindNeedsUpdate = "creating a component into a system writes that system's membership, which requires system:update (the same permission PUT /systems/{name}/members/{component} requires). Create the component without a system, or ask for system:update."
 
+// ErrSystemBindOutOfScope is the 403 for the OTHER half of the same gate: the
+// caller holds system:update, but not over this system (#707 review). The
+// permission and the scope are two independent layers and both are enforced, so
+// both have to be sayable.
+//
+// It exists because the refusal it replaces was a lie. The bind used to resolve
+// in the update scope alone, so a system outside it came back as the
+// non-disclosing "system not found" (422), which a caller that had just read
+// that system on the same screen could only read as a broken platform. A
+// principal with a location-scoped deploy grant is exactly that caller: the
+// cross-tier expansion is unbuilt (#10), so its system:update scope is empty
+// while its viewer floor reads every system in the estate.
+//
+// Naming the scope discloses nothing new, because this branch is reached only
+// after the reference resolved inside the caller's own system:read scope: a
+// caller that cannot see the row still gets the not-found.
+const ErrSystemBindOutOfScope = "creating a component into a system writes that system's membership, and this system is outside the system:update scope your grants resolve to (the same scope PUT /systems/{name}/members/{component} resolves in). It is not missing: you can read it, but not write its membership. Create the component without a system, or ask for a system:update grant covering it."
+
 // registerComponentRoutes wires the component CRUD surface, on the same pattern
 // as locations and systems.
 func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
@@ -208,7 +226,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/components",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a component",
-		Description:   "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission.",
+		Description:   "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.",
 	}, "component", "create"), "system", "update"), func(ctx context.Context, in *createComponentInput) (*componentOutput, error) {
 		if in.Body.Product == nil || *in.Body.Product == "" {
 			return nil, huma.Error422UnprocessableEntity(errProductRequired)
@@ -227,7 +245,8 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			LocationName:    in.Body.Location,
 			ProductName:     in.Body.Product,
 			ExpectedOrdinal: in.Body.ExpectedOrdinal,
-		}, a.scopeFor(ctx, "component", "create"), a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "system", "update"))
+		}, a.scopeFor(ctx, "component", "create"), a.scopeFor(ctx, "location", "read"),
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
@@ -401,6 +420,11 @@ func mapComponentErr(err error) error {
 		return huma.Error422UnprocessableEntity("parent component not found")
 	case errors.Is(err, storage.ErrComponentCycle):
 		return huma.Error422UnprocessableEntity("cannot move a component under itself or a descendant")
+	// Before ErrSystemNotFound, and a 403 rather than a 422: the reference is
+	// well formed and names a row the caller can read, so what is wrong is the
+	// caller's authority over it, not the request body.
+	case errors.Is(err, storage.ErrSystemBindForbidden):
+		return huma.Error403Forbidden(ErrSystemBindOutOfScope)
 	case errors.Is(err, storage.ErrSystemNotFound):
 		return huma.Error422UnprocessableEntity("system not found")
 	case errors.Is(err, storage.ErrLocationNotFound):

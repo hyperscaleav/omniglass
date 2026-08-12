@@ -62,7 +62,7 @@ func TestEffectiveProperties(t *testing.T) {
 	product := "acme-panel"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "panel-1", ProductName: &product,
-	}, all, all, all); err != nil {
+	}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 
@@ -132,7 +132,7 @@ func TestEffectiveProperties(t *testing.T) {
 	}
 
 	// A productless component has no contract, only what it sets directly.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "loose-1"}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "loose-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create productless component: %v", err)
 	}
 	if _, err := gw.SetProperty(ctx, "", "component", "loose-1", "serial-number", "", json.RawMessage(`"SN-9"`), all); err != nil {

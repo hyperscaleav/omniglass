@@ -486,7 +486,7 @@ func TestBadStemNeverProducesAnInvalidComponentName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create product under the unrefused bad-stem type: %v", err)
 	}
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &prod.Name}, all, all, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &prod.Name}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create component under the unrefused bad-stem product: %v", err)
 	}
@@ -531,7 +531,7 @@ func TestEmptyStemRefusesGeneration(t *testing.T) {
 		t.Fatalf("create product under the stemless type: %v", err)
 	}
 
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &prod.Name}, all, all, all); !errors.Is(err, storage.ErrComponentTypeNoStem) {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &prod.Name}, all, all, all, all); !errors.Is(err, storage.ErrComponentTypeNoStem) {
 		t.Fatalf("create component under a stemless type err = %v, want ErrComponentTypeNoStem", err)
 	}
 }

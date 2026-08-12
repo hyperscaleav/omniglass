@@ -4,7 +4,7 @@ import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Components from "./Components";
 import { COMPONENTS_KEY, type Component } from "../lib/components";
-import { SYSTEMS_KEY } from "../lib/systems";
+import { SYSTEMS_KEY, type System } from "../lib/systems";
 import { LOCATIONS_KEY, type Location } from "../lib/locations";
 import { PRODUCTS_KEY, type Product } from "../lib/products";
 import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types";
@@ -53,10 +53,21 @@ const componentTypes: ComponentType[] = [
 // is invisible to a unit test of the rule.
 const room: Location = { id: uuidFor("l-room"), name: "boardroom", display_name: "Boardroom", location_type: "room", effective_tags: {} };
 
-function mount(path: string, who: Me = me) {
+// Two systems, told apart by their ACTIONS rather than by anything an operator
+// reads (#707 review). actions is the server's per-row answer computed from the
+// same per-action scope the gateway enforces, so "which systems may this caller
+// bind" is data the console filters, never a scope it resolves. board carries
+// update; annex is readable and not writable, which is what a location-scoped
+// deploy grant beside the viewer floor produces for every system in the estate.
+const systems: System[] = [
+  { id: uuidFor("s-board"), name: "board", display_name: "Boardroom AV", member_count: 0, actions: ["create", "update", "delete"] },
+  { id: uuidFor("s-annex"), name: "annex", display_name: "Annex AV", member_count: 0, actions: [] },
+];
+
+function mount(path: string, who: Me = me, sys: System[] = systems) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...COMPONENTS_KEY], [comp]);
-  qc.setQueryData([...SYSTEMS_KEY], []);
+  qc.setQueryData([...SYSTEMS_KEY], sys);
   qc.setQueryData([...LOCATIONS_KEY], [room]);
   qc.setQueryData([...PRODUCTS_KEY], products);
   qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
@@ -1119,11 +1130,52 @@ describe("Components create offers a system only to a principal who may bind one
     grants: [],
   };
 
+  // A principal holding system:update whose grants reach no system at all. That
+  // is not a corner case: applicableKinds("system") is {"system"} alone and the
+  // cross-tier expansion is unbuilt (#10), so a location-scoped deploy grant
+  // resolves system:update to the empty set while the viewer floor beside it
+  // reads every system in the estate. Every row comes back readable and none
+  // writable, which is what the actions array says.
+  const deployMe: Me = {
+    principal: { id: "u-dep", kind: "human" },
+    human: { username: "tech-east" },
+    permissions: ["system:create,update,rename,move", "component:create,update,rename,move", "*:read"],
+    grants: [],
+  };
+  const readOnlySystems: System[] = systems.map((s) => ({ ...s, actions: [] }));
+
   it("offers the picker to a principal who may write a membership", async () => {
     stubFetch();
     mount("/components/create");
     await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
     expect(screen.getByLabelText("System")).toBeTruthy();
+  });
+
+  // The picker offers what the caller may BIND, which is the update scope and
+  // not the read scope. Offering a system the caller can only read is the same
+  // defect the permission gate closed, one layer down: the form fills in, the
+  // submit is refused, and the operator learns the boundary from a 403.
+  it("offers only the systems the caller may update", async () => {
+    stubFetch();
+    mount("/components/create");
+    await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
+    const picker = screen.getByLabelText("System") as HTMLSelectElement;
+    const values = [...picker.options].map((o) => o.value);
+    expect(values).toContain(uuidFor("s-board"));
+    expect(values).not.toContain(uuidFor("s-annex"));
+  });
+
+  // The scope half of the gate, which the permission half cannot see.
+  it("hides the picker when the permission is held over no system, and says so", async () => {
+    stubFetch();
+    mount("/components/create", deployMe, readOnlySystems);
+    await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
+    expect(screen.queryByLabelText("System")).toBeNull();
+    expect(screen.getByText(/scope/)).toBeTruthy();
+    // The other placements are untouched: it is the membership that is out of
+    // reach, not the create.
+    expect(screen.getByLabelText("Location")).toBeTruthy();
+    expect(screen.getByLabelText("Parent component")).toBeTruthy();
   });
 
   it("hides it from a principal who may not, and names the permission", async () => {

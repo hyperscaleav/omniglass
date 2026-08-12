@@ -288,13 +288,16 @@ type Gateway interface {
 	// panel's rows). Not scope-injected: the caller gates on the component being
 	// in read scope first, then reads its interfaces by the verified name.
 	ListComponentInterfaces(ctx context.Context, componentName string) ([]ComponentInterface, error)
-	// CreateComponent takes the caller's location:read and system:update scopes
-	// alongside its create scope, one per placement reference it binds. Both are
-	// cross-tier, and they are deliberately not the same action: the label it
-	// stamps reads the location's label, so naming a location is a read of it
+	// CreateComponent takes the caller's placement scopes alongside its create
+	// scope. They are cross-tier and deliberately not the same action: the label
+	// it stamps reads the location's label, so naming a location is a read of it
 	// (#700), while naming a system INSERTS that system's primary membership, the
-	// row the membership route writes under system:update (#707).
-	CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create, locationRead, systemUpdate scope.Set) (*Component, error)
+	// row the membership route writes under system:update (#707). The system
+	// reference takes TWO sets, because the authority the bind needs and the
+	// refusal the caller is owed are different questions: system:update decides
+	// whether the bind happens, system:read decides whether a refusal may name the
+	// row or has to pretend it is absent.
+	CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create, locationRead, systemRead, systemUpdate scope.Set) (*Component, error)
 	UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error)
 	// RenameComponent moves the component's name, scoped exactly as the update is.
 	// Its own function, not a patch field, because a rename breaks the references

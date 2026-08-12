@@ -107,6 +107,28 @@ export default function Components() {
   // flattened to depth 0), and a name VALUE is now also potentially ambiguous.
   // The API dual-accepts uuid-or-name (ADR-0062), so posting the uuid is safe.
   const systemItems = createMemo<TreeNode[]>(() => (systems.data ?? []).map((s) => ({ id: s.id, value: s.id, label: entityLabel(s), parentId: s.parent_id })));
+  // The BINDABLE systems: the ones this caller may update (#707 review). A
+  // create that names a system inserts that system's membership and resolves the
+  // reference in the caller's system:UPDATE scope, so the systems it can choose
+  // from are the ones carrying the update action, not the ones it can read.
+  //
+  // actions is the server's own per-row answer, computed from the same per-action
+  // scope the gateway enforces (internal/api/rowactions.go), which is why this is
+  // a filter over data rather than a second scope resolver in the browser: the
+  // console cannot resolve a scope and must not try.
+  //
+  // A row whose parent is not itself bindable is promoted to a root here rather
+  // than dropped: its parentId would name a node no longer in the list, and the
+  // tree flattener would lose the row entirely. What the picker shows is the set
+  // of legal choices, not the shape of the estate.
+  const bindableSystemItems = createMemo<TreeNode[]>(() => {
+    const rows = (systems.data ?? []).filter((s) => s.actions?.includes("update"));
+    const present = new Set(rows.map((s) => s.id));
+    return rows.map((s) => ({
+      id: s.id, value: s.id, label: entityLabel(s),
+      parentId: s.parent_id && present.has(s.parent_id) ? s.parent_id : undefined,
+    }));
+  });
   const locationItems = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id })));
   const componentItems = createMemo<TreeNode[]>(() => (components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: entityLabel(c), parentId: c.parent_id })));
 
@@ -532,10 +554,20 @@ export default function Components() {
     // globally unique.
     const displayPen = createPen();
     const namePen = createPen();
-    // The gate on the membership half of this create, read from the same
-    // permission the API stamps on the route (#707). It decides what the form
-    // OFFERS, never what the caller may do, which stays the server's call.
-    const mayBindSystem = () => can(me.data, "system", "update");
+    // The gate on the membership half of this create, and it is TWO conditions
+    // because authorization is two layers and both are enforced (#707 and its
+    // review): the system:update permission the API stamps on the route, and a
+    // system:update SCOPE that actually reaches something. A permission-only gate
+    // offered the picker to a principal holding system:update over nothing at
+    // all, which is the ordinary shape of a location-scoped deploy grant while
+    // the cross-tier expansion is unbuilt (#10): the form filled in, and the
+    // submit came back refused. It decides what the form OFFERS, never what the
+    // caller may do, which stays the server's call.
+    const mayBindSystem = () => can(me.data, "system", "update") && bindableSystemItems().length > 0;
+    // Which of the two is missing, so the empty slot says the true thing. The
+    // recovery differs: one is a permission to ask for, the other is a grant that
+    // covers a system.
+    const bindNeedsPermission = () => !can(me.data, "system", "update");
     const [system, setSystem] = createSignal("");
     const [location, setLocation] = createSignal("");
     const [parent, setParent] = createSignal("");
@@ -645,25 +677,34 @@ export default function Components() {
           <div class="grid grid-cols-2 gap-3">
             {/* A system on a create is not a field on the component, it is the
                 component's primary MEMBERSHIP, so the API gates naming one on
-                system:update, the same permission the membership route takes
-                (#707). An operator holds component:create and no system
-                permission at all, so offering the picker would be offering a
-                choice the platform refuses on submit (#699's rule). The slot
-                keeps the grid and explains itself instead of vanishing: the
-                permission is the thing to ask for, so it is named. */}
+                system:update and resolves it in that scope, exactly as the
+                membership route does (#707). Offering a choice the platform
+                refuses on submit is what #699's rule exists to prevent, and both
+                layers can refuse it, so both are read here. The slot keeps the
+                grid and explains itself instead of vanishing, naming whichever of
+                the two is the thing to ask for. */}
             <Show
               when={mayBindSystem()}
               fallback={
                 <div class="flex flex-col gap-1">
                   <span class="text-[12px] font-medium text-base-content/70">System</span>
-                  <p class="text-xs text-base-content/60">
-                    Putting a component in a system writes that system's membership, which needs <code>system:update</code>. Create it here, and someone holding that permission can add it to a system after.
-                  </p>
+                  <Show
+                    when={bindNeedsPermission()}
+                    fallback={
+                      <p class="text-xs text-base-content/60">
+                        Putting a component in a system writes that system's membership, and none of the systems you can see is inside your <code>system:update</code> scope. Create it here, and someone whose grant covers the system can add it after.
+                      </p>
+                    }
+                  >
+                    <p class="text-xs text-base-content/60">
+                      Putting a component in a system writes that system's membership, which needs <code>system:update</code>. Create it here, and someone holding that permission can add it to a system after.
+                    </p>
+                  </Show>
                 </div>
               }
             >
               <FieldRow label="System">
-                <TreeSelect items={systemItems()} value={system()} onChange={setSystem} rootLabel="None" />
+                <TreeSelect items={bindableSystemItems()} value={system()} onChange={setSystem} rootLabel="None" />
               </FieldRow>
             </Show>
             <FieldRow label="Location">

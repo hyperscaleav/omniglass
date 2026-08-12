@@ -271,7 +271,7 @@ func (UnimplementedGateway) GetComponent(context.Context, string, scope.Set) (*C
 func (UnimplementedGateway) ListComponentInterfaces(context.Context, string) ([]ComponentInterface, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateComponent(context.Context, string, ComponentSpec, scope.Set, scope.Set, scope.Set) (*Component, error) {
+func (UnimplementedGateway) CreateComponent(context.Context, string, ComponentSpec, scope.Set, scope.Set, scope.Set, scope.Set) (*Component, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) UpdateComponent(context.Context, string, string, ComponentPatch, scope.Set, scope.Set) (*Component, error) {

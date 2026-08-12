@@ -50,7 +50,7 @@ func newMemberFixture(t *testing.T, ctx context.Context) *memberFixture {
 	for _, c := range []string{"dsp", "mic-a", "mic-b"} {
 		product := bar
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-			Name: c, ProductName: &product}, f.all, all, all); err != nil {
+			Name: c, ProductName: &product}, f.all, all, all, all); err != nil {
 			t.Fatalf("component %s: %v", c, err)
 		}
 	}

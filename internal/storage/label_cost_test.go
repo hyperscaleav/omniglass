@@ -74,7 +74,7 @@ func TestTheBulkRecomputeCostIsFlatInEstateSize(t *testing.T) {
 			if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 				ProductName:  strptr(products[i%len(products)]),
 				LocationName: strptr(rooms[i%len(rooms)]),
-			}, all, all, all); err != nil {
+			}, all, all, all, all); err != nil {
 				t.Fatalf("create component %d: %v", i, err)
 			}
 		}
@@ -124,7 +124,7 @@ func TestTheLocationCascadeCostIsFlatInWhatIsPlacedThere(t *testing.T) {
 		for range n {
 			if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 				ProductName: strptr(qm55), LocationName: &room,
-			}, all, all, all); err != nil {
+			}, all, all, all, all); err != nil {
 				t.Fatalf("create component: %v", err)
 			}
 		}
@@ -192,7 +192,7 @@ func TestAPlacedCreateStillCostsAFixedNumberOfStatements(t *testing.T) {
 	create := func() (int, error) {
 		_, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 			ProductName: strptr(qm55), LocationName: &rooms[0], SystemName: strptr("sys-a"),
-		}, all, all, all)
+		}, all, all, all, all)
 		return 1, err
 	}
 	first := measure(t, counter, create)

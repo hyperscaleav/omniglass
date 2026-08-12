@@ -48,7 +48,7 @@ func TestACreateHonoursTheOrdinalTheFormWasShown(t *testing.T) {
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: &room.Name, ExpectedOrdinal: &drafted.Ordinal,
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create with the expected ordinal: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestACreateRefusesAnOrdinalAnotherCreateTook(t *testing.T) {
 	// The other create, which takes the number the form is holding.
 	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: &room.Name,
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("the racing create: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestACreateRefusesAnOrdinalAnotherCreateTook(t *testing.T) {
 
 	_, err = gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: &room.Name, ExpectedOrdinal: &drafted.Ordinal,
-	}, all, all, all)
+	}, all, all, all, all)
 	var taken *storage.OrdinalTakenError
 	if !errors.As(err, &taken) {
 		t.Fatalf("create after the race = %v, want an OrdinalTakenError", err)
@@ -131,7 +131,7 @@ func TestTheOrdinalPreconditionIsRefusedOnAnOperatorTypedName(t *testing.T) {
 
 	_, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "front-panel", ProductName: strptr(qm55), LocationName: &room.Name, ExpectedOrdinal: intptr(1),
-	}, all, all, all)
+	}, all, all, all, all)
 	if !errors.Is(err, storage.ErrOrdinalExpectedOnTypedName) {
 		t.Errorf("typed name with an expectation = %v, want ErrOrdinalExpectedOnTypedName", err)
 	}
@@ -139,7 +139,7 @@ func TestTheOrdinalPreconditionIsRefusedOnAnOperatorTypedName(t *testing.T) {
 	// pairing and not about the name.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "front-panel", ProductName: strptr(qm55), LocationName: &room.Name,
-	}, all, all, all); err != nil {
+	}, all, all, all, all); err != nil {
 		t.Errorf("typed name with no expectation = %v, want no error", err)
 	}
 }
