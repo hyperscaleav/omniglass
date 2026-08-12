@@ -81,19 +81,26 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   field over empties it: you are writing the value, not editing the platform's. Restoring discards what
   you typed and hands the field back.
 
-  The locked **name** reads as `display-n`: the **stem** comes from the type (so it is known), and `n`
-  is the lowest free number in the placement, which the platform picks when the row is created and
-  which nothing can know before then, so it is shown as a letter and never as a digit. Some types carry
-  no number on the first of their kind in a place, and the form says so where that applies
-  (`boardroom`, then `boardroom-2`). Under it the form names the **placement the name has to be unique
-  in**, as a path: the name itself never carries that path, since a name is unique within its placement
-  rather than across the estate.
+  The locked **name** is the name the row will get, number and all: `display-3`, not `display-n`. The
+  **stem** comes from the type and the **number** is the lowest one free in that placement right now.
+  Some types carry no number on the first of their kind in a place, so the first boardroom in a room is
+  `boardroom` and the second is `boardroom-2`; the form shows whichever applies rather than a shape you
+  have to read. Under it the form names the **placement the name has to be unique in**, as a path: the
+  name itself never carries that path, since a name is unique within its placement rather than across
+  the estate.
+
+  **The number is true rather than reserved, and Create is where that is settled.** Nothing is created
+  and no number is held while you fill the form in, so somebody else creating in the same place can
+  take it first. When that happens your Create is **refused**, with a message naming the number that
+  moved, and the form re-reads and shows the name that is free now: press Create again to take it. You
+  are never quietly given a different name from the one you were shown, which is the whole point of a
+  field that arrives filled in.
 
   The locked **display name** is the real label, rendered by the same rule engine that will stamp it,
-  against the classification and placement you have just chosen, with the same `n` standing in for the
-  ordinal. The form also names the **rule** that produced it, so the value is traceable rather than
-  arriving from nowhere. Nothing is created to work this out and no number is reserved: it is a render,
-  not a draft row ([ADR-0104](/architecture/decisions/)).
+  against the classification and placement you have just chosen, and against that same number. The form
+  also names the **rule** that produced it, so the value is traceable rather than arriving from nowhere.
+  Nothing is created to work either of them out: it is a render, not a draft row
+  ([ADR-0104](/architecture/decisions/)).
 
   Where **no label rule applies** to what you picked, the field says so and shows the **name** instead,
   because that is what an operator will actually read on the row. You reach that state by clearing the
