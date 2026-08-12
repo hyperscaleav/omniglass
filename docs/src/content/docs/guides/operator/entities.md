@@ -70,10 +70,16 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
 
   **Both identity fields arrive locked, already filled in with what the platform will use.** That is
   the default in effect rather than an offer: you are not asked to name anything, you are shown what
-  the row is about to be called and given a lock to open if you disagree. Each field has its own
-  **Override**, and opening one leaves the other exactly where it was. A locked field sends nothing at
-  all, which is how the platform keeps the pen; **Use the generated one** closes the lock again and
-  discards whatever you typed.
+  the row is about to be called and given a lock to open if you disagree. Each field carries its own
+  lock, inside the field on the right, and opening one leaves the other exactly where it was. A locked
+  field sends nothing at all, which is how the platform keeps the pen.
+
+  The lock is a small button with no words on it: an **opening padlock** on a locked field (its tooltip
+  reads Override), and the **restore arrow** on one you have taken over (Restore to default, the same
+  button and the same words a [setting](/architecture/settings/) carries, because handing a field back
+  to the platform is the same act). Clicking the locked field itself takes it over too, and taking a
+  field over empties it: you are writing the value, not editing the platform's. Restoring discards what
+  you typed and hands the field back.
 
   The locked **name** reads as `display-n`: the **stem** comes from the type (so it is known), and `n`
   is the lowest free number in the placement, which the platform picks when the row is created and
