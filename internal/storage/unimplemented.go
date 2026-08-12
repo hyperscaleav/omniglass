@@ -174,10 +174,13 @@ func (UnimplementedGateway) WriteAuthEvent(context.Context, string, string) erro
 func (UnimplementedGateway) UpsertLocationType(context.Context, LocationType) error {
 	return nil
 }
-func (UnimplementedGateway) SeedLocationType(context.Context, LocationType) error {
-	return nil
-}
 func (UnimplementedGateway) ListLocationTypes(context.Context) ([]LocationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetLocationType(context.Context, string) (*LocationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) RestoreLocationType(context.Context, string, string) (*LocationType, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) CreateLocationType(context.Context, string, LocationType) (*LocationType, error) {

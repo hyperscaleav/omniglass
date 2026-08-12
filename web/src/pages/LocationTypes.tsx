@@ -8,6 +8,7 @@ import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import ContractEditor from "../components/ContractEditor";
+import Button from "../components/Button";
 import { Plus } from "../components/icons";
 import {
   type LocationType,
@@ -17,19 +18,24 @@ import {
   createLocationType,
   updateLocationType,
   deleteLocationType,
+  clearNameRule,
+  restoreLocationType,
 } from "../lib/location_types";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { registryLock, registryOrigin } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
 // Location types (Catalog > Locations): the place classifier registry (campus, building, floor, room,
-// and your own) on the FlatList surface. The registry is operator-owned example
-// content: the shipped rows seed only-if-absent, so every row here is normally
-// custom and writable (create, edit, delete, gated location_type:*); an official
-// row, where one exists, is official and read-only. A row's detail carries the
-// location type's declared-property contract on the shared ContractEditor.
+// and your own) on the FlatList surface. The shipped rows are OFFICIAL and the
+// platform owns them (#703), which is what lets a release withdraw a value it
+// once shipped; editing one is still allowed and FORKS it (#655, ADR-0095), so
+// origin reads three ways here exactly as it does on component types, and the
+// blade's destructive slot offers Restore instead of Delete on a forked row. A
+// row an operator created is theirs outright (create, edit, delete, gated
+// location_type:*). A row's detail carries the location type's declared-property
+// contract on the shared ContractEditor.
 //
 // This page names ONE registry on purpose. Its former home, the tabbed Types
 // page, fetched the secret_type registry jointly and threw if either fetch
@@ -40,10 +46,30 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // own page and contract editor: a system's shape is the STANDARD it conforms to
 // (Standards), and a component's is the product it is an instance of (Products).
 
-function officialBadge(official: boolean): JSX.Element {
-  return official
-    ? <span class="badge badge-ghost badge-sm">official</span>
-    : <span class="badge badge-outline badge-sm">custom</span>;
+// Origin is three-state on a fork-adopting registry: a row this release ships, a
+// row the operator made, or a shipped row the operator has overridden. The third
+// is the one that has to read unambiguously, because it is the only state where
+// what an operator sees is not what the release ships.
+function originBadge(row: { official: boolean; forked?: boolean }): JSX.Element {
+  switch (registryOrigin(row)) {
+    case "yours":
+      return <span class="badge badge-outline badge-sm">custom</span>;
+    case "overridden":
+      return <span class="badge badge-warning badge-sm">overridden</span>;
+    default:
+      return <span class="badge badge-ghost badge-sm">official</span>;
+  }
+}
+
+// How the platform names locations of this type, in the operator's words. Absent
+// is the opt-out and the state every shipped type is in (ADR-0103).
+function namingSummary(r: LocationType): string {
+  if (!r.name_rule) return "You name every location of this type.";
+  if (r.name_rule.stem === "") return "Positional: named 1, 2, 3 within their parent.";
+  const stem = r.name_rule.stem;
+  return r.name_rule.bare_first
+    ? `Named ${stem}, then ${stem}-2, within their parent.`
+    : `Named ${stem}-1, ${stem}-2, within their parent.`;
 }
 
 // Identity (the display name above the name, ADR-0062: the name is the
@@ -51,7 +77,7 @@ function officialBadge(official: boolean): JSX.Element {
 const columns: FlatColumn<LocationType>[] = [
   identityColumn<LocationType>(),
   { key: "icon", label: "Icon", width: "110px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.icon ?? "\u2014"}</span> },
-  { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => officialBadge(r.official) },
+  { key: "official", label: "Origin", width: "110px", sortVal: (r) => registryOrigin(r), cell: (r) => originBadge(r) },
 ];
 
 export default function LocationTypes() {
@@ -73,7 +99,7 @@ export default function LocationTypes() {
         error: () => types.error,
         filterKeys: [
           { key: "name", type: "string", hint: "substring", get: (r) => `${entityLabel(r)} ${r.name}`, values: () => [] },
-          { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
+          { key: "official", type: "string", hint: "exact", get: (r) => registryOrigin(r), values: () => ["shipped", "yours", "overridden"] },
         ],
         filterPlaceholder: "filter location types by name…",
         columns,
@@ -88,8 +114,9 @@ export default function LocationTypes() {
   );
 }
 
-// locationTypeBlade renders one registry row on the shared blade stack. An
-// official row is read-only; a custom row carries Edit + Delete.
+// locationTypeBlade renders one registry row on the shared blade stack. A
+// shipped row is editable (the edit forks it) and carries Restore once forked; a
+// custom row carries Edit + Delete.
 export const locationTypeBlade: BladeDef = {
   Title: (p) => <LocationTypeBladeTitle id={p.id} />,
   Body: (p) => <LocationTypeBladeBody id={p.id} />,
@@ -150,6 +177,37 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
     }
   }
 
+  // Restore keeps the blade open: the row survives, it just goes back to the
+  // shipped values, so closing would hide the very change the operator asked for.
+  async function restoreType() {
+    const r = row();
+    if (!r) return;
+    if (!confirm(`Discard your changes to "${r.name}" and go back to the shipped values?`)) return;
+    setErr(null);
+    try {
+      await restoreLocationType(r.name);
+      await qc.invalidateQueries({ queryKey: LOCATION_TYPES_KEY });
+    } catch (e) {
+      setErr(describeError(e));
+    }
+  }
+
+  // Turning naming off is its own act rather than a field, because the rule is
+  // not editable from the console at all yet: what an operator needs here is the
+  // exit (#692), and the mask is the one spelling of it.
+  async function turnNamingOff() {
+    const r = row();
+    if (!r) return;
+    if (!confirm(`Stop naming locations of type "${r.name}"? Existing names are left alone.`)) return;
+    setErr(null);
+    try {
+      await clearNameRule(r.name);
+      await qc.invalidateQueries({ queryKey: LOCATION_TYPES_KEY });
+    } catch (e) {
+      setErr(describeError(e));
+    }
+  }
+
   async function save() {
     const r = row();
     if (!r) return;
@@ -168,13 +226,26 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
   }
 
   edit.bind({
-    editable: () => !!row() && !row()!.official && can(me.data, "location_type", "update"),
+    // A shipped row is editable now: the edit forks it rather than writing it.
+    editable: () => !!row() && can(me.data, "location_type", "update"),
     save,
-    destructive: () =>
-      row() && !row()!.official && can(me.data, "location_type", "delete")
-        ? { label: "Delete", tone: "danger", onClick: removeType }
-        : undefined,
-    locked: () => registryLock(row(), me.data, "location_type"),
+    // One destructive slot, two meanings, chosen by what the row IS: a custom
+    // row is deleted, a forked shipped row has the fork discarded, and a
+    // pristine shipped row offers nothing (there is neither a row to delete nor
+    // changes to discard).
+    destructive: () => {
+      const r = row();
+      if (!r) return undefined;
+      if (r.official) {
+        return r.forked && can(me.data, "location_type", "update")
+          ? { label: "Restore shipped", tone: "danger" as const, onClick: restoreType }
+          : undefined;
+      }
+      return can(me.data, "location_type", "delete")
+        ? { label: "Delete", tone: "danger" as const, onClick: removeType }
+        : undefined;
+    },
+    locked: () => registryLock(row(), me.data, "location_type", { forkable: true }),
   });
 
   return (
@@ -185,7 +256,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
           <div class="grid grid-cols-2 gap-3 text-sm">
-            <KVStacked label="Origin" value={officialBadge(r().official)} />
+            <KVStacked label="Origin" value={originBadge(r())} />
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <BladeField
@@ -202,6 +273,20 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
             draft={icon}
             onInput={setIcon}
           />
+          <BladeField
+            label="Naming"
+            hint="How locations of this type are named. Turning it off leaves existing names alone."
+            read={<span class="text-base-content/70">{namingSummary(r())}</span>}
+          >
+            <div class="flex items-center gap-3">
+              <span class="text-sm text-base-content/70">{namingSummary(r())}</span>
+              <Show when={r().name_rule}>
+                <Button intent="warn" size="sm" onClick={() => void turnNamingOff()}>
+                  Turn naming off
+                </Button>
+              </Show>
+            </div>
+          </BladeField>
           <BladeField
             label="Allowed parents"
             hint="Empty allows any parent (or root). A non-empty set is enforced on create and move."
@@ -229,8 +314,14 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
               (metrics). The panels read the blade's edit slot from context, so
               their declare/edit/withdraw controls render only in edit mode;
               writes stay immediate (a PUT per line) once revealed. */}
-          <ContractEditor classifier="location-type" id={r().name} official={r().official} />
-          <ContractEditor classifier="location-type" lane="metric" id={r().name} official={r().official} />
+          {/* Not r().official, deliberately. The panel's flag means "this
+              classifier's contract is release-owned", which a location type's is
+              not even now that the ROW is: nothing seeds a line here, every one
+              is the operator's, and the gateway writes them on a shipped type on
+              purpose (#703). A standard's and a product's contracts do ship, so
+              those pages still pass their own official flag. */}
+          <ContractEditor classifier="location-type" id={r().name} official={false} />
+          <ContractEditor classifier="location-type" lane="metric" id={r().name} official={false} />
         </div>
       )}
     </Show>

@@ -762,12 +762,19 @@ func locationLabelChain(ctx context.Context, q querier, l *Location) (locationLa
 // row.
 func locationLabelChainWith(ctx context.Context, q querier, locationTypeID, global string) (locationLabelInputs, error) {
 	var in locationLabelInputs
-	var typeRule *string
-	if err := q.QueryRow(ctx, `select display_name, label_rule from location_type where id = $1`, locationTypeID).
-		Scan(&in.typeName, &typeRule); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	// Resolved over the operator's shadow (#703): a forked shipped type's
+	// display_name and label_rule are the ones its locations are labelled by,
+	// or the fork would be invisible on the surface it exists to change.
+	lt, err := scanLocationTypeResolved(q.QueryRow(ctx, locationTypeResolved+` where lt.id = $1`, locationTypeID))
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return in, fmt.Errorf("storage: resolve label facts for location_type %q: %w", locationTypeID, err)
 	}
-	in.rule = firstRule(derefRule(typeRule), global)
+	if lt != nil {
+		in.typeName = lt.DisplayName
+		in.rule = firstRule(derefRule(lt.LabelRule), global)
+		return in, nil
+	}
+	in.rule = firstRule("", global)
 	return in, nil
 }
 

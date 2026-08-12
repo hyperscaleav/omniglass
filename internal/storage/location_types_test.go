@@ -49,19 +49,20 @@ func TestLocationTypeCRUD(t *testing.T) {
 		t.Fatalf("update: %v", err)
 	}
 
-	// A shipped location type is operator-owned example content: the estate shapes
-	// its own place vocabulary, so it is editable.
+	// A shipped location type is still editable, by a different mechanism: the
+	// estate shapes its own place vocabulary through a FORK now rather than by
+	// owning the row (#703, ADR-0095), and TestShippedLocationTypeForksAndRestores
+	// holds the fork's own behavior.
 	if _, err := gw.UpdateLocationType(ctx, "", "campus", storage.LocationTypePatch{DisplayName: &name}); err != nil {
 		t.Fatalf("update a shipped location type: %v, want it editable", err)
 	}
 
-	// The official read-only guard still stands for a row that IS official, so
-	// prove the mechanism on one.
+	// The official guard still stands on DELETE, which is where it belongs: a
+	// fork is an overlay, not ownership, so :restore is the only removal a
+	// shipped row admits. This assertion moved rather than went away; its
+	// update half is now the fork above, where it used to be ErrTypeOfficial.
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{Name: "canon", Official: true, DisplayName: "Canonical"}); err != nil {
 		t.Fatalf("seed an official location type: %v", err)
-	}
-	if _, err := gw.UpdateLocationType(ctx, "", "canon", storage.LocationTypePatch{DisplayName: &name}); !errors.Is(err, storage.ErrTypeOfficial) {
-		t.Fatalf("update official err = %v, want ErrTypeOfficial", err)
 	}
 	if err := gw.DeleteLocationType(ctx, "", "canon"); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("delete official err = %v, want ErrTypeOfficial", err)

@@ -124,9 +124,9 @@ describe("systemMint", () => {
 // A parking deck is the honest positional place, and the campus is the shipped
 // shape, which is the opt-out.
 const locationTypes: LocationType[] = [
-  { id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", icon: "landmark", official: true, allowed_parent_types: ["root"] },
-  { id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", icon: "layers", official: false, allowed_parent_types: ["building"], name_rule: { stem: "", bare_first: false } },
-  { id: uuidFor("lt-room"), name: "room", display_name: "Room", icon: "door-open", official: false, allowed_parent_types: [], name_rule: { stem: "room", bare_first: true } },
+  { id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", icon: "landmark", official: true, forked: false, allowed_parent_types: ["root"] },
+  { id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", icon: "layers", official: false, forked: false, allowed_parent_types: ["building"], name_rule: { stem: "", bare_first: false } },
+  { id: uuidFor("lt-room"), name: "room", display_name: "Room", icon: "door-open", official: false, forked: false, allowed_parent_types: [], name_rule: { stem: "room", bare_first: true } },
 ];
 
 describe("locationMint", () => {

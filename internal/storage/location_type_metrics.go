@@ -120,11 +120,15 @@ func (p *PG) ListLocationTypeMetrics(ctx context.Context, locationTypeID string)
 }
 
 // SetLocationTypeMetric declares a metric on a location type (or revises the
-// declaration), audited. Official location types carry seed-owned contracts and
-// are read-only (ErrTypeOfficial); an unknown location type is ErrTypeNotFound
-// and an unknown metric is ErrMetricTypeNotFound. The audit names the location
-// type as the resource because the contract belongs to it, with the verb
-// reflecting whether this write added the line or revised one already there.
+// declaration), audited. An unknown location type is ErrTypeNotFound and an
+// unknown metric is ErrMetricTypeNotFound. The audit names the location type as
+// the resource because the contract belongs to it, with the verb reflecting
+// whether this write added the line or revised one already there.
+//
+// A SHIPPED location type's contract is writable, for the reason
+// SetLocationTypeProperty records on the property lane: a contract line is a row
+// in its own table rather than a column of the registry row the fork covers, and
+// no line here is seeded.
 func (p *PG) SetLocationTypeMetric(ctx context.Context, actorID, locationTypeID string, spec LocationTypeMetricSpec) (*LocationTypeMetric, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -132,7 +136,7 @@ func (p *PG) SetLocationTypeMetric(ctx context.Context, actorID, locationTypeID 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := guardTypeMutable(ctx, tx, "location_type", locationTypeID); err != nil {
+	if err := requireRegistryRow(ctx, tx, "location_type", locationTypeID); err != nil {
 		return nil, err
 	}
 	// The before-image decides create vs update and gives the audit its old side.
@@ -166,8 +170,9 @@ func (p *PG) SetLocationTypeMetric(ctx context.Context, actorID, locationTypeID 
 }
 
 // DeleteLocationTypeMetric withdraws one metric from a location type's
-// contract, audited as an update to the location type. Official location types
-// are read-only (ErrTypeOfficial); an undeclared metric is ErrTypeNotFound.
+// contract, audited as an update to the location type. An undeclared metric is
+// ErrTypeNotFound. Shipped types are writable here for the reason
+// SetLocationTypeMetric gives.
 func (p *PG) DeleteLocationTypeMetric(ctx context.Context, actorID, locationTypeID, metricName string) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -175,7 +180,7 @@ func (p *PG) DeleteLocationTypeMetric(ctx context.Context, actorID, locationType
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := guardTypeMutable(ctx, tx, "location_type", locationTypeID); err != nil {
+	if err := requireRegistryRow(ctx, tx, "location_type", locationTypeID); err != nil {
 		return err
 	}
 	// Delete and capture the before-image in one statement, so the audit records
@@ -200,9 +205,9 @@ func (p *PG) DeleteLocationTypeMetric(ctx context.Context, actorID, locationType
 }
 
 // UpsertLocationTypeMetric installs one contract line for the boot-seed phase.
-// Idempotent, and deliberately unguarded and unaudited: the seed owns the
-// official location types' contracts, so the official read-only rule (which
-// protects them from operators) does not apply to the writer that ships them.
+// Idempotent, and deliberately unaudited: a seed write is not an operator act.
+// No location type contract ships today, so this is the lane a future one would
+// arrive on rather than a writer with rows in flight.
 func (p *PG) UpsertLocationTypeMetric(ctx context.Context, locationTypeID string, spec LocationTypeMetricSpec) error {
 	_, err := upsertLocationTypeMetricRow(ctx, p.pool, locationTypeID, spec)
 	return err

@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -571,24 +570,19 @@ func generateNameForSystemType(ctx context.Context, tx pgx.Tx, systemTypeID *str
 // The querier is the caller's for the reason resolveTypeFacts takes one: a rule
 // written earlier in the same transaction has to be the rule this read sees, or
 // a create and the type edit before it would disagree about who names the row.
+// It resolves over the operator's shadow (#703, ADR-0095), which is what makes
+// #692's clear reach the generator: clearing the rule on a SHIPPED type is a
+// fork whose image carries no rule, so reading the official column here would
+// keep naming locations from a rule the operator had already turned off.
 func locationNameRule(ctx context.Context, q querier, locationTypeID string) (*NameRule, error) {
-	var raw []byte
-	err := q.QueryRow(ctx, `select name_rule from location_type where `+registryRefCol(locationTypeID)+` = $1`, locationTypeID).Scan(&raw)
+	lt, err := scanLocationTypeResolved(q.QueryRow(ctx, locationTypeResolved+` where lt.`+registryRefCol(locationTypeID)+` = $1`, locationTypeID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknownType
 	}
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve name rule for location_type %q: %w", locationTypeID, err)
 	}
-	if len(raw) == 0 {
-		return nil, nil
-	}
-	var r NameRule
-	if err := json.Unmarshal(raw, &r); err != nil {
-		return nil, fmt.Errorf("storage: decode name rule for location_type %q: %w", locationTypeID, err)
-	}
-	r = r.normalized()
-	return &r, nil
+	return lt.NameRule, nil
 }
 
 // generateNameForLocationType is generateNameForSystemType's location-tier twin

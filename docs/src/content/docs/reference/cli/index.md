@@ -2043,6 +2043,22 @@ Example:
 omniglass location-type property update <id> <property>
 ```
 
+### `omniglass location-type restore`
+
+Restore a location type's shipped values
+
+```
+omniglass location-type restore <id>
+```
+
+Discards your fork of a shipped location_type, so reads return the values this release ships, including a rule a later release WITHDREW. 409 when the row carries no fork of yours. Gated by location_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row.
+
+Example:
+
+```sh
+omniglass location-type restore <id>
+```
+
 ### `omniglass location-type update`
 
 Update a location type
@@ -2051,7 +2067,7 @@ Update a location type
 omniglass location-type update <id> [flags]
 ```
 
-Patches a location_type's display_name, icon, allowed parents, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by location_type:update.
+Patches a location_type's display_name, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2059,7 +2075,8 @@ Patches a location_type's display_name, icon, allowed parents, or label_rule. An
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--icon` | string | (none) | A new glyph key; the console falls back to map-pin when empty |
 | `--label-rule` | string | (none) | A new label template for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels |
-| `--name-rule` | string | (none) | A new name rule for locations of this type; omit to leave unchanged. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row |
+| `--name-rule` | string | (none) | A new name rule for locations of this type; omit to leave unchanged, or name name_rule in update_mask with no rule here to CLEAR it back to operator-named. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row |
+| `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (name_rule back to operator-named); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it |
 
 Example:
 

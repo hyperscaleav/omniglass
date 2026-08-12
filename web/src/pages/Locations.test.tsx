@@ -26,15 +26,15 @@ const hqB1: Location = { id: uuidFor("l-b1"), name: "hq-b1", display_name: "HQ B
 // type, so a fixture with the handle in the id slot would hide a uuid-vs-name
 // join bug (that is how #466 shipped).
 const types: LocationType[] = [
-  { id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", icon: "landmark", official: true, allowed_parent_types: ["root"] },
-  { id: uuidFor("lt-building"), name: "building", display_name: "Building", icon: "building", official: true, allowed_parent_types: ["root", "campus"] },
+  { id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", icon: "landmark", official: true, forked: false, allowed_parent_types: ["root"] },
+  { id: uuidFor("lt-building"), name: "building", display_name: "Building", icon: "building", official: true, forked: false, allowed_parent_types: ["root", "campus"] },
   // Unconstrained: any parent. Exists so the self-exclusion test below cannot
   // lean on the allowed-parents filter to hide the node's own subtree.
-  { id: uuidFor("lt-area"), name: "area", display_name: "Area", icon: "map-pin", official: false, allowed_parent_types: [] },
+  { id: uuidFor("lt-area"), name: "area", display_name: "Area", icon: "map-pin", official: false, forked: false, allowed_parent_types: [] },
   // The one type here that NAMES its own rows (#687): its rule is what the
   // create form previews, and its absence on the three above is what makes them
   // the operator-named case in the same fixture.
-  { id: uuidFor("lt-room"), name: "room", display_name: "Room", icon: "door-open", official: false, allowed_parent_types: [], name_rule: { stem: "room", bare_first: true } },
+  { id: uuidFor("lt-room"), name: "room", display_name: "Room", icon: "door-open", official: false, forked: false, allowed_parent_types: [], name_rule: { stem: "room", bare_first: true } },
 ];
 // The campus type's contract, resolved against hq: one inherited default, plus one
 // value hq sets that no contract declares.

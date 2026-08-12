@@ -2649,15 +2649,33 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "restore <id>",
+					Short:   "Restore a location type's shipped values",
+					Long:    "Discards your fork of a shipped location_type, so reads return the values this release ships, including a rule a later release WITHDREW. 409 when the row carries no fork of yours. Gated by location_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row.",
+					Example: "  omniglass location-type restore <id>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/location-types/%s:restore", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fAllowedParentTypes string
 				var fDisplayName string
 				var fIcon string
 				var fLabelRule string
 				var fNameRule string
+				var fUpdateMask string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update a location type",
-					Long:    "Patches a location_type's display_name, icon, allowed parents, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by location_type:update.",
+					Long:    "Patches a location_type's display_name, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update.",
 					Example: "  omniglass location-type update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2678,6 +2696,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name-rule") {
 							body["name_rule"] = jsonOrString(fNameRule)
 						}
+						if cmd.Flags().Changed("update-mask") {
+							body["update_mask"] = jsonOrString(fUpdateMask)
+						}
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
@@ -2685,7 +2706,8 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key; the console falls back to map-pin when empty")
 				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels")
-				cmd.Flags().StringVar(&fNameRule, "name-rule", "", "A new name rule for locations of this type; omit to leave unchanged. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row")
+				cmd.Flags().StringVar(&fNameRule, "name-rule", "", "A new name rule for locations of this type; omit to leave unchanged, or name name_rule in update_mask with no rule here to CLEAR it back to operator-named. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row")
+				cmd.Flags().StringVar(&fUpdateMask, "update-mask", "", "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (name_rule back to operator-named); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it")
 				return cmd
 			}()
 			return cmd

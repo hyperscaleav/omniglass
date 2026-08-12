@@ -7,6 +7,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/updatemask"
 )
 
 // mapRefErr translates the sentinels shared by every bare-name and dotted-
@@ -70,6 +71,15 @@ func mapRefErr(err error) (error, bool) {
 func mapTypeErr(err error, kind string) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
+	}
+	// A mask this resource cannot honor is a request fault that NAMES the
+	// field, never a silent no-op: the caller stated an intent the resource has
+	// no field for, and swallowing it would leave them believing a write landed
+	// (ADR-0091). Here rather than in one registry's own mapper because the
+	// mask is a wire primitive every registry adopting it reaches the same way.
+	var maskErr *updatemask.Error
+	if errors.As(err, &maskErr) {
+		return huma.Error422UnprocessableEntity(maskErr.Error())
 	}
 	switch {
 	case errors.Is(err, storage.ErrTypeNotFound):

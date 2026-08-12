@@ -779,6 +779,14 @@ func seedRoles(ctx context.Context, gw storage.Gateway) error {
 	return nil
 }
 
+// seedLocationTypes writes the shipped location types AUTHORITATIVELY, as
+// official rows the platform owns (#703). It was insert-if-absent, on the
+// argument that an estate shapes its own place vocabulary, and that argument
+// is now carried by the fork instead: an operator's edit of a shipped type
+// lives in registry_shadow and is resolved over the row, so the seed can
+// rewrite the row on every boot without reaching anything they own. What that
+// buys is withdrawal: a value dropped from location_types.yaml leaves an
+// estate that already seeded it, which insert-if-absent could never do.
 func seedLocationTypes(ctx context.Context, gw storage.Gateway) error {
 	var doc locationTypesDoc
 	if err := yaml.Unmarshal(locationTypesYAML, &doc); err != nil {
@@ -789,9 +797,9 @@ func seedLocationTypes(ctx context.Context, gw storage.Gateway) error {
 		if lt.NameRule != nil {
 			rule = &storage.NameRule{Stem: lt.NameRule.Stem, BareFirst: lt.NameRule.BareFirst}
 		}
-		if err := gw.SeedLocationType(ctx, storage.LocationType{
+		if err := gw.UpsertLocationType(ctx, storage.LocationType{
 			Name:               lt.ID,
-			Official:           false,
+			Official:           true,
 			DisplayName:        lt.DisplayName,
 			Icon:               lt.Icon,
 			AllowedParentTypes: lt.AllowedParentTypes,

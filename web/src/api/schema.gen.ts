@@ -1235,7 +1235,7 @@ export interface paths {
         head?: never;
         /**
          * Update a location type
-         * @description Patches a location_type's display_name, icon, allowed parents, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by location_type:update.
+         * @description Patches a location_type's display_name, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update.
          */
         patch: operations["update-location-type"];
         trace?: never;
@@ -1323,6 +1323,26 @@ export interface paths {
          * @description Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.
          */
         delete: operations["delete-location-type-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/location-types/{id}:restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore a location type's shipped values
+         * @description Discards your fork of a shipped location_type, so reads return the values this release ships, including a rule a later release WITHDREW. 409 when the row carries no fork of yours. Gated by location_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row.
+         */
+        post: operations["restore-location-type"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -5658,6 +5678,8 @@ export interface components {
             readonly $schema?: string;
             allowed_parent_types: string[] | null;
             display_name: string;
+            /** @description True when this shipped row carries changes of yours overriding it. Restore discards them */
+            forked: boolean;
             icon: string;
             /** @description The location type's uuid, the stable handle that survives a rename */
             id: string;
@@ -5667,6 +5689,7 @@ export interface components {
             name: string;
             /** @description How the platform NAMES locations of this type; absent means an operator names every one of them */
             name_rule?: components["schemas"]["NameRuleBody"];
+            /** @description True for a row this release ships. A shipped row is never written by an operator: an edit forks it */
             official: boolean;
         };
         LocationTypeMetricBody: {
@@ -7131,8 +7154,10 @@ export interface components {
             icon?: string;
             /** @description A new label template for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels */
             label_rule?: string;
-            /** @description A new name rule for locations of this type; omit to leave unchanged. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row */
+            /** @description A new name rule for locations of this type; omit to leave unchanged, or name name_rule in update_mask with no rule here to CLEAR it back to operator-named. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row */
             name_rule?: components["schemas"]["NameRuleBody"];
+            /** @description Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (name_rule back to operator-named); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it */
+            update_mask?: string[] | null;
         };
         UpdateMeInputBody: {
             /**
@@ -10216,6 +10241,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "restore-location-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location_type id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationTypeBody"];
+                };
             };
             /** @description Error */
             default: {

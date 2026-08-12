@@ -190,18 +190,24 @@ type Gateway interface {
 	// WriteAuthEvent records an auth event (login, logout) in the audit trail, off
 	// the read/no-tx auth paths.
 	WriteAuthEvent(ctx context.Context, actorID, verb string) error
-	// UpsertLocationType installs or updates an official location type by id, the
-	// boot-seed phase's write. Idempotent.
+	// UpsertLocationType installs or updates a shipped (official) location type
+	// by name, the boot-seed phase's write. Idempotent and AUTHORITATIVE, so a
+	// value a release withdraws is withdrawn from an estate that already seeded
+	// it (#703); an operator's version of the row lives in registry_shadow and
+	// is resolved over it, never stomped by this.
 	UpsertLocationType(ctx context.Context, lt LocationType) error
-	SeedLocationType(ctx context.Context, lt LocationType) error
-	// ListLocationTypes returns every location type, alphabetically by display_name.
+	// ListLocationTypes returns every location type, alphabetically by display_name,
+	// each resolved over its operator shadow. GetLocationType resolves one.
 	ListLocationTypes(ctx context.Context) ([]LocationType, error)
+	GetLocationType(ctx context.Context, ref string) (*LocationType, error)
 	// The location_type registry CRUD (capability-only, unscoped). Create writes a
-	// custom (official=false) row; update/delete refuse official rows and delete
-	// refuses a row still referenced by a location.
+	// custom (official=false) row; an update of a shipped row FORKS it into
+	// registry_shadow (ADR-0095) and RestoreLocationType discards the fork;
+	// delete refuses an official row and one still referenced by a location.
 	CreateLocationType(ctx context.Context, actorID string, lt LocationType) (*LocationType, error)
-	UpdateLocationType(ctx context.Context, actorID, id string, patch LocationTypePatch) (*LocationType, error)
-	DeleteLocationType(ctx context.Context, actorID, id string) error
+	UpdateLocationType(ctx context.Context, actorID, ref string, patch LocationTypePatch) (*LocationType, error)
+	RestoreLocationType(ctx context.Context, actorID, ref string) (*LocationType, error)
+	DeleteLocationType(ctx context.Context, actorID, ref string) error
 
 	// InScopeIDs reports which of the candidate row ids of a tree resource
 	// (location/system/component) are inside a resolved scope, applying the same

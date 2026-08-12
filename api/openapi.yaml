@@ -3412,6 +3412,9 @@ components:
             - "null"
         display_name:
           type: string
+        forked:
+          description: True when this shipped row carries changes of yours overriding it. Restore discards them
+          type: boolean
         icon:
           type: string
         id:
@@ -3427,6 +3430,7 @@ components:
           $ref: "#/components/schemas/NameRuleBody"
           description: How the platform NAMES locations of this type; absent means an operator names every one of them
         official:
+          description: "True for a row this release ships. A shipped row is never written by an operator: an edit forks it"
           type: boolean
       required:
         - id
@@ -3435,6 +3439,7 @@ components:
         - icon
         - allowed_parent_types
         - official
+        - forked
       type: object
     LocationTypeMetricBody:
       additionalProperties: false
@@ -5998,7 +6003,14 @@ components:
           type: string
         name_rule:
           $ref: "#/components/schemas/NameRuleBody"
-          description: "A new name rule for locations of this type; omit to leave unchanged. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row"
+          description: "A new name rule for locations of this type; omit to leave unchanged, or name name_rule in update_mask with no rule here to CLEAR it back to operator-named. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row"
+        update_mask:
+          description: Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (name_rule back to operator-named); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it
+          items:
+            type: string
+          type:
+            - array
+            - "null"
       type: object
     UpdateMeInputBody:
       additionalProperties: false
@@ -8428,7 +8440,7 @@ paths:
       summary: Delete a location type
       x-omniglass-permission: location_type:delete
     patch:
-      description: "Patches a location_type's display_name, icon, allowed parents, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by location_type:update."
+      description: "Patches a location_type's display_name, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update."
       operationId: update-location-type
       parameters:
         - in: path
@@ -8648,6 +8660,33 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Declare a property on a location type
+      x-omniglass-permission: location_type:update
+  /location-types/{id}:restore:
+    post:
+      description: "Discards your fork of a shipped location_type, so reads return the values this release ships, including a rule a later release WITHDREW. 409 when the row carries no fork of yours. Gated by location_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row."
+      operationId: restore-location-type
+      parameters:
+        - description: The location_type id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The location_type id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationTypeBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Restore a location type's shipped values
       x-omniglass-permission: location_type:update
   /locations:
     get:

@@ -41,10 +41,31 @@ var ErrTypeNotForked = errors.New("storage: registry row has no operator fork to
 //     column added after a fork resolve to its official value instead of to
 //     nothing.
 //
-// component_type is the first adopter. The other twelve registries carrying
-// `official` adopt later; they need no schema of their own, only a mutable-
-// column projection like componentTypeShadowImage and a resolve like
-// applyComponentTypeImage.
+// component_type is the first adopter and location_type the second (#703).
+// The other eleven registries carrying `official` adopt later; they need no
+// schema of their own, only a mutable-column projection like
+// componentTypeShadowImage and a resolve like applyComponentTypeImage.
+//
+// Fact 2 reads "structure" per registry rather than per column name.
+// location_type is FLAT, so it has no parent link to hold out of the image, and
+// its allowed_parent_types is not that link: it constrains which types a
+// location of this type may sit under, which is a fact the row states about
+// itself and one an operator legitimately reshapes. Holding it official would
+// leave a fork unable to say the thing the registry exists to say.
+
+// shadowRowID parses a registry row's own uuid, which is the shadow's key. It
+// exists because not every adopting registry holds that uuid as a uuid.UUID:
+// location_type carries it as the string its wire body and its audit rows use,
+// and a MustParse in a gateway path would turn a value the database minted into
+// a panic. The failure it names cannot happen through the gateway; a caller
+// that fabricated an id gets an error instead of a crash.
+func shadowRowID(id string) (uuid.UUID, error) {
+	rowID, err := uuid.Parse(id)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("storage: %q is not a registry row uuid: %w", id, err)
+	}
+	return rowID, nil
+}
 
 // loadShadowImage reads a registry row's shadow image, returning nil when the
 // row is not forked. nil is the unforked answer everywhere in this file, and
