@@ -74,7 +74,7 @@ func TestTheBulkRecomputeCostIsFlatInEstateSize(t *testing.T) {
 			if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 				ProductName:  strptr(products[i%len(products)]),
 				LocationName: strptr(rooms[i%len(rooms)]),
-			}, all); err != nil {
+			}, all, all, all); err != nil {
 				t.Fatalf("create component %d: %v", i, err)
 			}
 		}
@@ -124,13 +124,13 @@ func TestTheLocationCascadeCostIsFlatInWhatIsPlacedThere(t *testing.T) {
 		for range n {
 			if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 				ProductName: strptr(qm55), LocationName: &room,
-			}, all); err != nil {
+			}, all, all, all); err != nil {
 				t.Fatalf("create component: %v", err)
 			}
 		}
 		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 			Name: "sys-" + tag, SystemTypeID: strptr("board"), LocationName: &room,
-		}, all); err != nil {
+		}, all, all); err != nil {
 			t.Fatalf("create system: %v", err)
 		}
 	}
@@ -186,13 +186,13 @@ func TestAPlacedCreateStillCostsAFixedNumberOfStatements(t *testing.T) {
 	}
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "sys-a", SystemTypeID: strptr("board"), LocationName: &rooms[0],
-	}, all); err != nil {
+	}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	create := func() (int, error) {
 		_, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 			ProductName: strptr(qm55), LocationName: &rooms[0], SystemName: strptr("sys-a"),
-		}, all)
+		}, all, all, all)
 		return 1, err
 	}
 	first := measure(t, counter, create)

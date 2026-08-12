@@ -71,11 +71,11 @@ func twoDisplayOnes(t *testing.T, gw storage.Gateway) (compA, compB *storage.Com
 	if err != nil {
 		t.Fatalf("room-b: %v", err)
 	}
-	compA, err = gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", LocationName: strptr(roomA.Name)}, all)
+	compA, err = gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", LocationName: strptr(roomA.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("component in room-a: %v", err)
 	}
-	compB, err = gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", LocationName: strptr(roomB.Name)}, all)
+	compB, err = gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", LocationName: strptr(roomB.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("component in room-b: %v", err)
 	}
@@ -83,7 +83,7 @@ func twoDisplayOnes(t *testing.T, gw storage.Gateway) (compA, compB *storage.Com
 		t.Fatalf("the two components did not actually land on different rows")
 	}
 
-	sys, err = gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "duptest-sys"}, all)
+	sys, err = gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "duptest-sys"}, all, all)
 	if err != nil {
 		t.Fatalf("system: %v", err)
 	}
@@ -112,11 +112,11 @@ func twoSameNamedSystems(t *testing.T, gw storage.Gateway) (sysA, sysB *storage.
 	if err != nil {
 		t.Fatalf("sys-room-b: %v", err)
 	}
-	sysA, err = gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "huddle-1", LocationName: strptr(locA.Name)}, all)
+	sysA, err = gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "huddle-1", LocationName: strptr(locA.Name)}, all, all)
 	if err != nil {
 		t.Fatalf("system in sys-room-a: %v", err)
 	}
-	sysB, err = gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "huddle-1", LocationName: strptr(locB.Name)}, all)
+	sysB, err = gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "huddle-1", LocationName: strptr(locB.Name)}, all, all)
 	if err != nil {
 		t.Fatalf("system in sys-room-b: %v", err)
 	}
@@ -514,7 +514,7 @@ func TestResolveTagsSurvivesDuplicateSystemNames(t *testing.T) {
 	// A device that is a member of BOTH same-named systems: the shared-device
 	// case resolveTagsSQL's own comment documents as the reason ?system=
 	// exists at all.
-	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "shared-dsp"}, all)
+	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "shared-dsp"}, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}

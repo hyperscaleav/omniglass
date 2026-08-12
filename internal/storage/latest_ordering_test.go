@@ -49,7 +49,7 @@ func TestCalculatedSeriesIsCurrentAtHighestID(t *testing.T) {
 		t.Fatalf("campus: %v", err)
 	}
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
-		Name: "room-sys", LocationName: strptr("site")}, all); err != nil {
+		Name: "room-sys", LocationName: strptr("site")}, all, all); err != nil {
 		t.Fatalf("system: %v", err)
 	}
 

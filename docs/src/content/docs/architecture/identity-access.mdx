@@ -437,15 +437,33 @@ promise:
 - **The read path** (`scopedGet`/`scopedByNameInScope`) folds every failure into one non-disclosing
   404: absent, out of scope, and ambiguous-only-outside-scope are indistinguishable from outside the
   caller's grant, matching the read/act asymmetry above.
-- **The write path** (`resolveScopedRef`, used to resolve a create's or an action's placement or owner
-  reference) keeps the **notFound-versus-forbidden split** a write already makes elsewhere: absent
-  anywhere is 404, present only outside the given scope is 403, because the caller supplied this
-  reference itself in the same request, not the new disclosure a read's own uuid would be. Its
-  guarantee is narrower than it can sound: a resolved reference is one the caller may **write** a
-  binding against, not one the caller may **read**, and a bare-name 403 is a name-existence oracle by
-  construction (a caller learns a name exists somewhere in the estate from the status code alone, with
-  no candidates disclosed), predating this epic and tested (`interfaces_scope_test.go:82`), now
-  asymmetric with the read path's single 404 by design, not by omission.
+- **The write path** (`resolveScopedRef`, used to resolve a create's or an action's **same-tier**
+  parent or owner reference) keeps the **notFound-versus-forbidden split** a write already makes
+  elsewhere: absent anywhere is 404, present only outside the given scope is 403, because the caller
+  supplied this reference itself in the same request, not the new disclosure a read's own uuid would
+  be. Its guarantee is narrower than it can sound: a resolved reference is one the caller may
+  **write** a binding against, not one the caller may **read**, and a bare-name 403 is a
+  name-existence oracle by construction (a caller learns a name exists somewhere in the estate from
+  the status code alone, with no candidates disclosed), predating this epic and tested
+  (`interfaces_scope_test.go:82`), now asymmetric with the read path's single 404 by design, not by
+  omission.
+- **The cross-tier placement bind** (`resolvePlacementRef`, used by `CreateComponent`,
+  `CreateSystem`, `MoveComponent`, and `MoveSystem` for the location and system a row is placed
+  against) takes the **read path's policy on the referenced tier**: the caller's `location:read` /
+  `system:read` scope decides, and out of scope is the same non-disclosing 422 an absent reference
+  gives. Neither of the two policies above fits it. The write policy's set is resolved for the entity
+  being written, and a location's scope tree is its own unrelated ancestor chain, so checking a
+  component-tier scope against the location table can never match and would deny every non-all
+  caller; and the question a placement asks is a **read** question, because since
+  [ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)
+  the label these writes stamp is rendered from the location's own label and the primary system's
+  type label and is handed straight back in the response. Existence-only resolution therefore made a
+  create a read of a row the caller holds no grant to read. The `:renderLabel` draft route
+  ([ADR-0104](/architecture/decisions/#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it))
+  already refused exactly this, so the create it previews now shares its refusal rather than being
+  the lenient one ([#700](https://github.com/hyperscaleav/omniglass/issues/700)). A caller holding no
+  grant on a tier reads nothing there and so can bind nothing there, which is the same sentence in
+  both directions.
 
 A guard inside the same primitive panics if the caller's scope was resolved for a resource that does
 not cover the config being checked against, catching a tier mismatch (a component-tier scope compared

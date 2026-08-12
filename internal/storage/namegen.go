@@ -455,19 +455,74 @@ func componentTypeIDForProduct(ctx context.Context, q querier, productID string)
 	return id, nil
 }
 
+// stemForProduct resolves the stem a component classified by this product
+// mints its name from: the product's component_type, then that type's
+// inherited-first-non-null stem. The first half of generateNameForProduct,
+// separated so a caller can ask what a name WOULD be minted from without
+// minting one, which is what the reclassify guard needs (a product is two hops
+// from a stem, so two products can share one). The component_type id travels
+// back with it for the refusal below, which names the type rather than only
+// the product an operator picked.
+//
+// An empty stem is a real answer, not an error: the walk reached the root of
+// the ancestry with no stem set anywhere on it.
+func stemForProduct(ctx context.Context, q querier, productID string) (string, uuid.UUID, error) {
+	typeID, err := componentTypeIDForProduct(ctx, q, productID)
+	if err != nil {
+		return "", uuid.UUID{}, err
+	}
+	stem, _, _, _, _, err := resolveTypeFacts(ctx, q, typeID)
+	if err != nil {
+		return "", typeID, fmt.Errorf("storage: resolve type facts for product %q: %w", productID, err)
+	}
+	return stem, typeID, nil
+}
+
+// productStemMoved reports whether reclassifying from one product to another
+// changes the stem a platform-owned name is minted from, which is the only
+// thing about a reclassify the mint reads: the placement bucket, its other
+// input, is untouched by that verb.
+//
+// It is deliberately NOT a comparison of the two product ids. A component
+// resolves its stem THROUGH a product to a component_type chain, so two
+// products classified under one type (or under two types inheriting one stem)
+// mint identical names, and re-minting on such a swap moves the name onto a
+// lower freed ordinal for no gain (#691). An absent from-product cannot be
+// compared, so it re-mints.
+//
+// A destination with no stem at all is never "the same stem": there is nothing
+// left for a platform-owned name to derive from, so it reaches the generator
+// and is refused there rather than quietly keeping a name whose source is gone.
+func productStemMoved(ctx context.Context, q querier, fromProductID *string, toProductID string) (bool, error) {
+	if fromProductID == nil {
+		return true, nil
+	}
+	if *fromProductID == toProductID {
+		return false, nil
+	}
+	from, _, err := stemForProduct(ctx, q, *fromProductID)
+	if err != nil {
+		return false, err
+	}
+	to, _, err := stemForProduct(ctx, q, toProductID)
+	if err != nil {
+		return false, err
+	}
+	if to == "" {
+		return true, nil
+	}
+	return from != to, nil
+}
+
 // generateNameForProduct is the two-step stem-then-ordinal path every component
 // generation site (create, :resetName, a move, a product reclassify) shares:
 // resolve the product's component_type stem, then mint the ordinal within
 // the given placement scope. One function so "generate a name" has exactly
 // one implementation, never a per-call-site variant.
 func generateNameForProduct(ctx context.Context, tx pgx.Tx, productID string, parentID, locationID, excludeID *string) (string, int, error) {
-	typeID, err := componentTypeIDForProduct(ctx, tx, productID)
+	stem, typeID, err := stemForProduct(ctx, tx, productID)
 	if err != nil {
 		return "", 0, err
-	}
-	stem, _, _, _, _, err := resolveTypeFacts(ctx, tx, typeID)
-	if err != nil {
-		return "", 0, fmt.Errorf("storage: resolve type facts for product %q: %w", productID, err)
 	}
 	// A resolved stem of "" means the walk reached the root of this
 	// component_type's ancestry with no stem set anywhere on it. The mint

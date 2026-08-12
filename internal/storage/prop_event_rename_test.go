@@ -38,11 +38,11 @@ func TestPropertiesAndEventsSurviveARename(t *testing.T) {
 	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Rename"}); err != nil {
 		t.Fatalf("standard: %v", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "old-sys", StandardID: &std}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "old-sys", StandardID: &std}, all, all); err != nil {
 		t.Fatalf("system: %v", err)
 	}
 	bar := "cisco-room-bar"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "old-comp", ProductName: &bar}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "old-comp", ProductName: &bar}, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 

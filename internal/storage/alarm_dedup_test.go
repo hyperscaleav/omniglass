@@ -19,7 +19,7 @@ func TestAlarmOneOpenPerCondition(t *testing.T) {
 	ctx := context.Background()
 	all := scope.Set{All: true}
 
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "codec-1"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "codec-1"}, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 

@@ -23,11 +23,11 @@ func TestRenameSystem(t *testing.T) {
 	}
 
 	// A system with a child, so we can prove the UUID FK survives the rename.
-	root, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-root"}, all)
+	root, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-root"}, all, all)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-child", ParentName: strptr("av-root")}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-child", ParentName: strptr("av-root")}, all, all); err != nil {
 		t.Fatal(err)
 	}
 
@@ -66,7 +66,7 @@ func TestRenameSystem(t *testing.T) {
 	}
 
 	// The old name is free; a create can reuse it.
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-root"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-root"}, all, all); err != nil {
 		t.Fatalf("old name should be free after rename: %v", err)
 	}
 
@@ -75,7 +75,7 @@ func TestRenameSystem(t *testing.T) {
 	// name uniqueness to placement): av-child is a child of av-root-renamed
 	// (system_parent_name_key), so newName itself (the root/orphan bucket)
 	// can no longer collide with it; a sibling under the same parent can.
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-sibling", ParentName: strptr(newName)}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av-sibling", ParentName: strptr(newName)}, all, all); err != nil {
 		t.Fatalf("sibling for dup-rename case: %v", err)
 	}
 	if _, err := gw.RenameSystem(ctx, "", "av-child", "av-sibling", all, all); !errors.Is(err, storage.ErrSystemExistsUnderParent) {
@@ -99,7 +99,7 @@ func TestRenameSystem(t *testing.T) {
 	}
 
 	// Create-tightening: the shared validator gates create too, not just rename.
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "Bad Name"}, all); !errors.Is(err, storage.ErrInvalidEntityName) {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "Bad Name"}, all, all); !errors.Is(err, storage.ErrInvalidEntityName) {
 		t.Fatalf("bad-format create err = %v, want ErrInvalidEntityName", err)
 	}
 

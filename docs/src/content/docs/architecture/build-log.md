@@ -3856,3 +3856,66 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   nil pointer). Such an estate reaches the new default only by a direct write, and a test now pins
   both halves rather than leaving them to be discovered: the re-seed leaves the rule standing, and a
   patch that omits `name_rule` leaves it standing too.
+
+- **A create binds a placement it can read** ([#700](https://github.com/hyperscaleav/omniglass/issues/700),
+  [ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)
+  amended). `CreateComponent` and `CreateSystem` resolved their `location` and `system` references
+  existence-only, and so did the two `:move` verbs. That was defensible while a placement reference
+  was only a pointer. It stopped being defensible when
+  [ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)
+  put placement into the label data map: the label these four writes stamp is rendered from the
+  location's own label and the primary system's TYPE label, and the row comes straight back in the
+  response, so naming a location you cannot read handed you its label. The
+  [draft-render route](/architecture/decisions/#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)
+  built beside it is what made the gap visible: the console's preview was **stricter than the create
+  it previews**, so an operator could be refused a draft for a placement and then create into it
+  anyway.
+
+  All four now resolve the placement through one seam, `resolvePlacementRef`, in the caller's
+  `location:read` / `system:read` scope, which is the scope `:renderLabel` already injects for the
+  same references. The refusal is the read path's **non-disclosing not-found** rather than the write
+  path's 403: a status that separated "no such location" from "a location you may not see" would be
+  the same disclosure one level up, and sharing one refusal is what keeps the preview and the create
+  from disagreeing. The moves are in scope for the same reason the creates are, since a relocate
+  restamps the label from the DESTINATION. The reclassify paths are not: `UpdateComponent` and
+  `UpdateSystem` resolve only catalog rows (product, standard, system_type), which are not scoped
+  trees, and touch no placement reference at all.
+
+  Two consequences are stated rather than left to be discovered. A caller holding no grant on a tier
+  now binds nothing on it, because it reads nothing on it: while the cross-tier scope expansion is
+  unbuilt (#10), a component-scoped grant confers no `location:read`, so such a caller can no longer
+  place a component at any location. That is the same sentence the read side already said, and the
+  draft route already enforced. And the ambiguity redaction these binds carried (`withoutCandidates`)
+  is now belt and braces rather than the load-bearing guard it was, since narrowing to the caller's
+  read scope means a candidate list can only name rows that caller may read; making it useful again
+  is [#697](https://github.com/hyperscaleav/omniglass/issues/697).
+
+- **A re-mint follows the mint's inputs, not a field's presence**
+  ([#696](https://github.com/hyperscaleav/omniglass/issues/696),
+  [#691](https://github.com/hyperscaleav/omniglass/issues/691),
+  [ADR-0101](/architecture/decisions/#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests)
+  amended). The component tier catches up with the system tier on the two guards that decide whether
+  a platform-owned name is minted again. `MoveComponent` re-minted whenever the row was
+  platform-named, so a `:move` that re-stated the location the component already sat at moved its
+  name; `UpdateComponent` re-minted whenever the `product` field was PRESENT in the patch, so a save
+  that re-stated the product did the same. Neither is a harmless recompute, because allocation is
+  lowest-free: an ordinal freed by an earlier `:rename` means the re-mint hands `display-2` the name
+  `display-1`, under `component:move` or `component:update`, with no rename requested and possibly no
+  `component:rename` grant held. The label follows the name (it reads the ordinal), so the silent
+  rename silently relabelled too.
+
+  The move guard is the system tier's, unchanged: the placement **bucket** compared as a `nameScope`
+  value rather than as two pointers, because a parent wins over a location and a parented component
+  that merely relocates has moved a pointer and not a bucket. The reclassify guard is deliberately
+  NOT the system tier's. A system reads its stem from a `system_type` chain; a component reads it
+  from a product that points at a `component_type` chain, one hop further, so two products under one
+  type mint identical names and a product-id comparison would still move the name on a real
+  reclassify. It compares the resolved **stem**, with `stemForProduct` lifted out of
+  `generateNameForProduct` so a guard can ask what a name would be minted from without minting one.
+  The matching residual one tier up (two `system_type` rows inheriting one stem) is
+  [#706](https://github.com/hyperscaleav/omniglass/issues/706).
+
+  Six tests pin both directions on both verbs, since a guard that suppresses too much is the same
+  defect from the other side: the two no-op acts, the parented relocate a pointer comparison gets
+  wrong, the same-stem reclassify a product-id comparison gets wrong, and the two real acts that must
+  still re-mint with the label following. No existing expectation moved.

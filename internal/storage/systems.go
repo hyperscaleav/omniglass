@@ -503,7 +503,12 @@ func (p *PG) GetSystem(ctx context.Context, name string, read scope.Set) (*Syste
 // ordinal in this placement, suppressing the ordinal on the first of its stem
 // in the bucket (ADR-0101). An unclassified system cannot be named that way
 // (ErrSystemTypeRequiredForName): the stem lives on the registry row.
-func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, create scope.Set) (*System, error) {
+//
+// locationRead is the PLACEMENT's scope, the same one the draft render takes
+// for the same reference (#700): create says who may write a system, this says
+// which locations it may be placed at, because the label this stamps reads the
+// location's own. See resolvePlacementRef.
+func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, create, locationRead scope.Set) (*System, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create system: %w", err)
@@ -542,20 +547,18 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 		parentID = &parent.ID
 	}
 
-	// Resolve the optional located-at location by name to its id.
-	// scopedByName, not scopedByNameInScope: this bind is CROSS-tier (create
-	// is resolved for "system", a location's scope tree is its own,
-	// unrelated ancestor chain), so inScopeTree could never match it against
-	// the location table; threading create through denies every non-all
-	// caller instead of narrowing anything (the tier-mismatch defect a
-	// review caught). Existence-only, as before this task, and
-	// withoutCandidates since no scope is being checked, so listing every
-	// matching uuid would disclose rows the caller may hold no grant to read.
+	// Resolve the optional located-at location by name to its id, within the
+	// caller's location:read scope (#700). The bind is CROSS-tier, so create
+	// (resolved for "system") could never match a location's own ancestor chain,
+	// but the label stamped below reads that location's LABEL, so the set that
+	// decides is the caller's read scope on the location tier. Out of scope is
+	// the same non-disclosing ErrLocationNotFound an absent one gives, which is
+	// what :renderLabel already answers for the identical reference.
 	var locationID *string
 	if spec.LocationName != nil {
-		loc, err := scopedByName(ctx, tx, locationConfig, *spec.LocationName)
+		loc, err := resolvePlacementRef(ctx, tx, locationConfig, *spec.LocationName, locationRead)
 		if err != nil {
-			return nil, withoutCandidates(err) // ErrLocationNotFound -> mapped to 422 by the API
+			return nil, err // ErrLocationNotFound -> mapped to 422 by the API
 		}
 		locationID = &loc.ID
 	}
@@ -941,7 +944,7 @@ func (p *PG) ResetSystemName(ctx context.Context, actorID, name string, read, ac
 // recomputes health" (true for every component move, and for a system
 // reparent) does NOT generalize to a system's own location field, which the
 // health rollup depends on directly.
-func (p *PG) MoveSystem(ctx context.Context, actorID, name string, move SystemMove, read, action scope.Set) (*System, error) {
+func (p *PG) MoveSystem(ctx context.Context, actorID, name string, move SystemMove, read, action, locationRead scope.Set) (*System, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin move system: %w", err)
@@ -957,15 +960,15 @@ func (p *PG) MoveSystem(ctx context.Context, actorID, name string, move SystemMo
 	// (clear), and a named location becomes its id.
 	locationPatch := move.LocationName
 	if move.LocationName != nil && *move.LocationName != "" {
-		// scopedByName, not scopedByNameInScope: cross-tier, same as the
-		// create-time bind above. action is resolved for "system", and
-		// checking it against the location table's own ancestor chain can
-		// never match, so threading it through denies every non-all caller
-		// rather than narrowing anything. Existence-only, withoutCandidates
-		// for the same no-scope-to-filter-by reason.
-		loc, err := scopedByName(ctx, tx, locationConfig, *move.LocationName)
+		// resolvePlacementRef, exactly as the create binds it (#700): the
+		// destination is cross-tier, so action (resolved for "system") can never
+		// match it, and the stamp below re-renders this system's label from the
+		// DESTINATION's, so a relocate hands back a location's label the same
+		// way a create into it does. The caller's location:read scope is what
+		// decides whether it may.
+		loc, err := resolvePlacementRef(ctx, tx, locationConfig, *move.LocationName, locationRead)
 		if err != nil {
-			return nil, withoutCandidates(err) // ErrLocationNotFound -> mapped to 422 by the API
+			return nil, err // ErrLocationNotFound -> mapped to 422 by the API
 		}
 		locationPatch = &loc.ID
 	}

@@ -56,7 +56,7 @@ func TestTheDraftLabelIsTheLabelTheCreateStores(t *testing.T) {
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "board-1", SystemTypeID: strptr("board"), LocationName: &room.Name,
-	}, all); err != nil {
+	}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 
@@ -71,7 +71,7 @@ func TestTheDraftLabelIsTheLabelTheCreateStores(t *testing.T) {
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "front-panel", ProductName: strptr(qm55), LocationName: &room.Name, SystemName: strptr("board-1"),
-	}, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestTheDraftLabelIsTheLabelTheCreateStoresForAGeneratedName(t *testing.T) {
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: &room.Name,
-	}, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestTheDraftSystemLabelIsExactWhereTheRuleReadsNoOrdinal(t *testing.T) {
 	}
 	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 		SystemTypeID: strptr("board"), LocationName: &room.Name,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
@@ -344,7 +344,7 @@ func TestTheDraftComponentLabelReadsTheSystemWithinScope(t *testing.T) {
 	theirs := makeRoomWithLabel(t, gw, ctx, "room-theirs", "Theirs")
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "board-x", SystemTypeID: strptr("board"), LocationName: &theirs.Name,
-	}, all); err != nil {
+	}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	mine := makeRoomWithLabel(t, gw, ctx, "room-mine", "Mine")
@@ -406,7 +406,7 @@ func TestTheDraftLabelAllocatesNothing(t *testing.T) {
 	// pass the statement scan above and fail this.
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: strptr("room-1"),
-	}, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}

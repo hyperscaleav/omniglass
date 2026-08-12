@@ -62,7 +62,7 @@ func TestTelemetryPushAPI(t *testing.T) {
 		t.Fatalf("bootstrap: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1"}, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 
@@ -261,7 +261,7 @@ func TestTelemetryPushAPI(t *testing.T) {
 	// SCOPE IS THE FENCE that makes a caller-declared owner trustworthy. A viewer
 	// scoped to another component cannot push to bar-1, and learns nothing about
 	// whether it exists (404, not 403).
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-1"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-1"}, all, all, all); err != nil {
 		t.Fatalf("create other component: %v", err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
@@ -339,7 +339,7 @@ func TestTelemetryPushWithoutBus(t *testing.T) {
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
 		t.Fatalf("bootstrap: %v", err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1"}, scope.Set{All: true}); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1"}, scope.Set{All: true}, scope.Set{All: true}, scope.Set{All: true}); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 

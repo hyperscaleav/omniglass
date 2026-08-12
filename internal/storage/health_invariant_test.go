@@ -101,7 +101,7 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 	std := "meeting-room"
 	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "hq-boardroom", StandardID: &std,
-	}, f.all); err != nil {
+	}, f.all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	if got := f.healthSeries(t, ctx, "system", "hq-boardroom"); !sameSeq(got, []string{"degraded"}) {
@@ -115,7 +115,7 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 		product := c.product
 		if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{
 			Name: c.name, ProductName: &product,
-		}, f.all); err != nil {
+		}, f.all, all, all); err != nil {
 			t.Fatalf("create component %s: %v", c.name, err)
 		}
 	}
@@ -194,7 +194,7 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 	room := "hq-r1"
 	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "choice-room", StandardID: &std, LocationName: &room,
-	}, f.all); err != nil {
+	}, f.all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	// Before anything is staffed, both alternates are at zero: the choice
@@ -203,7 +203,7 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 	f.mustAgreeWithRecord(t, ctx, "choice-room", "outage")
 
 	bar := "cisco-room-bar"
-	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "choice-bar-1", ProductName: &bar}, f.all); err != nil {
+	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "choice-bar-1", ProductName: &bar}, f.all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	if err := f.gw.AssignRole(ctx, "", "choice-room", "conf-bar", "choice-bar-1", f.all); err != nil {
@@ -266,7 +266,7 @@ func TestAlternateTieBreaksByPosition(t *testing.T) {
 	room := "hq-r1"
 	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "tie-room", StandardID: &std, LocationName: &room,
-	}, f.all); err != nil {
+	}, f.all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 
@@ -300,7 +300,7 @@ func TestHealthRecordsEveryRealChange(t *testing.T) {
 	std := "meeting-room"
 	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "hq-boardroom", StandardID: &std,
-	}, f.all); err != nil {
+	}, f.all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	bar, panel := "cisco-room-bar", "samsung-qm55"
@@ -310,7 +310,7 @@ func TestHealthRecordsEveryRealChange(t *testing.T) {
 		product := c.product
 		if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{
 			Name: c.name, ProductName: &product,
-		}, f.all); err != nil {
+		}, f.all, all, all); err != nil {
 			t.Fatalf("create component %s: %v", c.name, err)
 		}
 	}
@@ -363,7 +363,7 @@ func (f *healthFixture) staffPair(t *testing.T, ctx context.Context, standard, s
 	room := "hq-r1"
 	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: system, StandardID: &standard, LocationName: &room,
-	}, f.all); err != nil {
+	}, f.all, all); err != nil {
 		t.Fatalf("create system %s: %v", system, err)
 	}
 	bar := "cisco-room-bar"
@@ -371,7 +371,7 @@ func (f *healthFixture) staffPair(t *testing.T, ctx context.Context, standard, s
 		product := bar
 		if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{
 			Name: c, ProductName: &product,
-		}, f.all); err != nil {
+		}, f.all, all, all); err != nil {
 			t.Fatalf("create component %s: %v", c, err)
 		}
 		if err := f.gw.AssignRole(ctx, "", system, "pair", c, f.all); err != nil {
@@ -599,7 +599,7 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 		}},
 		{"withdraw it", func() error { return f.gw.DeleteSystemRole(ctx, "", "system", "sweep-sys", "screen") }},
 		{"relocate the system, which recomputes both ends", func() error {
-			_, err := f.gw.MoveSystem(ctx, "", "sweep-sys", storage.SystemMove{LocationName: &room2}, f.all, f.all)
+			_, err := f.gw.MoveSystem(ctx, "", "sweep-sys", storage.SystemMove{LocationName: &room2}, f.all, f.all, all)
 			return err
 		}},
 		{"convert it to a one-off, dropping the inherited role", func() error {
@@ -612,7 +612,7 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 		}},
 		{"create a second conforming system in the same room", func() error {
 			_, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
-				Name: "sweep-sys-2", StandardID: &std, LocationName: &room2}, f.all)
+				Name: "sweep-sys-2", StandardID: &std, LocationName: &room2}, f.all, all)
 			return err
 		}},
 		{"open a second building for the room to move into", func() error {

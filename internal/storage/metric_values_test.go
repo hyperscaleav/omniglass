@@ -59,7 +59,7 @@ func TestEffectiveMetrics(t *testing.T) {
 		t.Fatalf("declare tcp-open: %v", err)
 	}
 	product := "acme-dsp"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dsp-1", ProductName: &product}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dsp-1", ProductName: &product}, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 
@@ -154,7 +154,7 @@ func TestEffectiveMetrics(t *testing.T) {
 		t.Fatalf("declare on standard: %v", err)
 	}
 	std := "huddle-room"
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "hq-huddle", StandardID: &std}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "hq-huddle", StandardID: &std}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	sys := metricsByName(mustEffectiveMetrics(t, gw, "system", "hq-huddle", all))

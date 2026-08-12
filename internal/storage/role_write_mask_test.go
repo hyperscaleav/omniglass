@@ -43,7 +43,7 @@ func roleMaskGateway(t *testing.T) (*storage.PG, context.Context, scope.Set) {
 // field by field.
 func TestUnrelatedEditLeavesTheRestOfTheDeclarationAlone(t *testing.T) {
 	gw, ctx, all := roleMaskGateway(t)
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-preserve-sys"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-preserve-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 
@@ -92,7 +92,7 @@ func TestUnrelatedEditLeavesTheRestOfTheDeclarationAlone(t *testing.T) {
 // only ever narrow it, and raw SQL was the only way back to unbounded.
 func TestExplicitMaskClearsCapacity(t *testing.T) {
 	gw, ctx, all := roleMaskGateway(t)
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-clear-sys"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-clear-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 
@@ -124,7 +124,7 @@ func TestExplicitMaskClearsCapacity(t *testing.T) {
 // one now means naming it in the mask rather than sending [].
 func TestExplicitMaskClearsTheTypedSlotAndLabels(t *testing.T) {
 	gw, ctx, all := roleMaskGateway(t)
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-clear-list-sys"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-clear-list-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "system", "mask-clear-list-sys", storage.SystemRoleSpec{
@@ -157,7 +157,7 @@ func TestExplicitMaskClearsTheTypedSlotAndLabels(t *testing.T) {
 // write whether the caller meant it or not.
 func TestStarMaskReplacesTheWholeDeclaration(t *testing.T) {
 	gw, ctx, all := roleMaskGateway(t)
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-star-sys"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-star-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	cap3 := 3
@@ -192,7 +192,7 @@ func TestStarMaskReplacesTheWholeDeclaration(t *testing.T) {
 // than on whatever the body happened to carry.
 func TestMaskedCreateTakesDefaultsForWhatItDoesNotName(t *testing.T) {
 	gw, ctx, all := roleMaskGateway(t)
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-create-sys"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-create-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	cap5 := 5
@@ -215,7 +215,7 @@ func TestMaskedCreateTakesDefaultsForWhatItDoesNotName(t *testing.T) {
 // named no fields, so nothing moves, however full the rest of the body is.
 func TestAnEmptyMaskWritesNothing(t *testing.T) {
 	gw, ctx, all := roleMaskGateway(t)
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-empty-sys"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "mask-empty-sys"}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "system", "mask-empty-sys", storage.SystemRoleSpec{

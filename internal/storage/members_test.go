@@ -42,7 +42,7 @@ func newMemberFixture(t *testing.T, ctx context.Context) *memberFixture {
 	}
 	std := "member-standard"
 	for _, s := range []string{"room-a", "room-b"} {
-		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: s, StandardID: &std}, f.all); err != nil {
+		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: s, StandardID: &std}, f.all, all); err != nil {
 			t.Fatalf("system %s: %v", s, err)
 		}
 	}
@@ -50,7 +50,7 @@ func newMemberFixture(t *testing.T, ctx context.Context) *memberFixture {
 	for _, c := range []string{"dsp", "mic-a", "mic-b"} {
 		product := bar
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-			Name: c, ProductName: &product}, f.all); err != nil {
+			Name: c, ProductName: &product}, f.all, all, all); err != nil {
 			t.Fatalf("component %s: %v", c, err)
 		}
 	}

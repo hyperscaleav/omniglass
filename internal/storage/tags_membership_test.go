@@ -214,14 +214,14 @@ func newResolveFixture(t *testing.T, ctx context.Context) *resolveFixture {
 	mustLoc(t, gw, "room", "room", strptr("campus"))
 	for _, s := range []string{"room-a", "room-b"} {
 		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
-			Name: s, LocationName: strptr("room")}, f.all); err != nil {
+			Name: s, LocationName: strptr("room")}, f.all, all); err != nil {
 			t.Fatalf("system %s: %v", s, err)
 		}
 	}
 	// Placed in the room, in no system. Membership is the only route into the
 	// system band, so the fixture deliberately gives it none to start with.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "roamer", LocationName: strptr("room")}, f.all); err != nil {
+		Name: "roamer", LocationName: strptr("room")}, f.all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 	return f

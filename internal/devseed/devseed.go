@@ -437,7 +437,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			prod := c.Product
 			spec.ProductName = &prod
 		}
-		created, err := gw.CreateComponent(ctx, actorID, spec, all)
+		created, err := gw.CreateComponent(ctx, actorID, spec, all, all, all)
 		if err != nil {
 			return fmt.Errorf("devseed: create component %q: %w", c.Key, err)
 		}
@@ -493,7 +493,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			l := locID
 			spec.LocationName = &l
 		}
-		created, err := gw.CreateSystem(ctx, actorID, spec, all)
+		created, err := gw.CreateSystem(ctx, actorID, spec, all, all)
 		if err != nil {
 			return fmt.Errorf("devseed: create system %q: %w", s.Key, err)
 		}
@@ -766,7 +766,7 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string, l
 			Name:         reachComponent,
 			DisplayName:  "Boardroom DSP",
 			LocationName: &roomID,
-		}, all); err != nil {
+		}, all, all, all); err != nil {
 			return fmt.Errorf("devseed: create reachability component: %w", err)
 		}
 	} else if err != nil {

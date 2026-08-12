@@ -47,7 +47,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 		t.Fatalf("create standard: %v", err)
 	}
 	std := "test-huddle"
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "hq-huddle", StandardID: &std}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "hq-huddle", StandardID: &std}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	var micRole string
@@ -90,7 +90,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 
 	// A room bar is classified video-bar, so it fills the table-mic slot.
 	bar := "cisco-room-bar"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, all, all, all); err != nil {
 		t.Fatalf("create bar: %v", err)
 	}
 	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", all); err != nil {
@@ -118,7 +118,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	// A display is not within the video-bar subtree: refused, and the refusal
 	// names both what the component is and what the role wants.
 	qm := "samsung-qm55"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1", ProductName: &qm}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1", ProductName: &qm}, all, all, all); err != nil {
 		t.Fatalf("create panel: %v", err)
 	}
 	err = gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "panel-1", all)
@@ -131,7 +131,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	}
 
 	// A second video-bar reaches quorum.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &bar}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &bar}, all, all, all); err != nil {
 		t.Fatalf("create second bar: %v", err)
 	}
 	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", all); err != nil {
@@ -187,7 +187,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	}
 
 	// A one-off system sees only what it declares itself.
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "one-off"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "one-off"}, all, all); err != nil {
 		t.Fatalf("create one-off: %v", err)
 	}
 	if got, _ := gw.EffectiveRoles(ctx, "one-off", all); len(got) != 0 {
@@ -199,7 +199,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 // test, isolated from whatever the boot seed happens to declare.
 func typedSlotSystem(t *testing.T, ctx context.Context, gw storage.Gateway, all scope.Set, name string) {
 	t.Helper()
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: name}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: name}, all, all); err != nil {
 		t.Fatalf("create system %s: %v", name, err)
 	}
 }
@@ -231,7 +231,7 @@ func TestAssignRefusesWrongType(t *testing.T) {
 	}
 
 	crestron := "crestron-tss-1070" // component_type: touch-panel
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1", ProductName: &crestron}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1", ProductName: &crestron}, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 
@@ -278,7 +278,7 @@ func TestAssignAcceptsSubtype(t *testing.T) {
 		t.Fatalf("create subtype product: %v", err)
 	}
 	sub := "test-interactive-display"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-2", ProductName: &sub}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-2", ProductName: &sub}, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 
@@ -320,7 +320,7 @@ func TestAssignProductPin(t *testing.T) {
 		t.Fatalf("create other display product: %v", err)
 	}
 	other := "other-display"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-3", ProductName: &other}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-3", ProductName: &other}, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 
@@ -335,7 +335,7 @@ func TestAssignProductPin(t *testing.T) {
 	}
 
 	qm := "samsung-qm55"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "qm-2", ProductName: &qm}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "qm-2", ProductName: &qm}, all, all, all); err != nil {
 		t.Fatalf("create pinned-product component: %v", err)
 	}
 	if err := gw.AssignRole(ctx, "", "pin-sys", "main-display", "qm-2", all); err != nil {
@@ -375,7 +375,7 @@ func TestSecondRoleSameComponentRefused(t *testing.T) {
 	}
 
 	bar := "cisco-room-bar"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	if err := gw.AssignRole(ctx, "", "double-staff-sys", "main-display", "bar-1", all); err != nil {
@@ -501,17 +501,17 @@ func TestLoweringCapacityBelowCountRefusedAcrossInheritingSystems(t *testing.T) 
 	}); err != nil {
 		t.Fatalf("declare standard role: %v", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "cap-sys-a", StandardID: &std}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "cap-sys-a", StandardID: &std}, all, all); err != nil {
 		t.Fatalf("create system a: %v", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "cap-sys-b", StandardID: &std}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "cap-sys-b", StandardID: &std}, all, all); err != nil {
 		t.Fatalf("create system b: %v", err)
 	}
 
 	bar := "cisco-room-bar"
 	newBar := func(name string) {
 		t.Helper()
-		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name, ProductName: &bar}, all); err != nil {
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name, ProductName: &bar}, all, all, all); err != nil {
 			t.Fatalf("create component %s: %v", name, err)
 		}
 	}

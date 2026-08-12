@@ -34,7 +34,7 @@ func TestCreatedComponentGetsALabelNobodyTyped(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "room-a")
 
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestCreatedComponentGetsALabelNobodyTyped(t *testing.T) {
 	// The second display in the same bucket takes the next ordinal, and the
 	// label follows it: proof the label reads the row's own facts rather than
 	// being a constant per product.
-	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all)
+	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all, all, all)
 	if err != nil {
 		t.Fatalf("create second: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestCreatedComponentGetsALabelNobodyTyped(t *testing.T) {
 func TestSettingALabelTakesThePenAndClearingItGivesItBack(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "room-a")
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestARuleRenderingNothingLeavesTheLabelUnsetRatherThanBlank(t *testing.T) {
 	if _, err := gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{LabelRule: strptr("{{.NoSuchFact}}")}); err != nil {
 		t.Fatalf("set empty-producing rule: %v", err)
 	}
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -250,7 +250,7 @@ func TestARuleThatFailsToRenderDegradesRatherThanFailingTheWrite(t *testing.T) {
 	if _, err := gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{LabelRule: strptr("{{.TypeName.Nope}}")}); err != nil {
 		t.Fatalf("store an executable-but-failing rule: %v", err)
 	}
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all, all, all)
 	if err != nil {
 		t.Fatalf("create with a failing rule: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestARuleThatFailsToRenderDegradesRatherThanFailingTheWrite(t *testing.T) {
 // is only reachable if precedence is what changed.
 func TestAMoreSpecificTierWins(t *testing.T) {
 	gw, ctx := seededGateway(t)
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -324,7 +324,7 @@ func TestARuleOnAShippedTypeForksItRatherThanWritingIt(t *testing.T) {
 		t.Fatalf("the official component_type row carries label_rule %q, want it untouched", *official)
 	}
 
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -356,7 +356,7 @@ func TestATypeRuleInheritsFromItsAncestorAndAChildOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create product: %v", err)
 	}
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &child.Name}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &child.Name}, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -376,7 +376,7 @@ func TestATypeRuleInheritsFromItsAncestorAndAChildOverrides(t *testing.T) {
 	}
 
 	// And the parent's own instances are unaffected by the child's override.
-	sibling, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all)
+	sibling, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all, all, all)
 	if err != nil {
 		t.Fatalf("create sibling: %v", err)
 	}
@@ -408,7 +408,7 @@ func TestASecretIsNotReachableFromARule(t *testing.T) {
 		t.Fatalf("create secret: %v", err)
 	}
 
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -456,7 +456,7 @@ func TestASecretIsNotReachableFromARule(t *testing.T) {
 func TestTheSystemAndLocationDataMapsAreClosedToo(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "room-a")
-	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", LocationName: &room}, all)
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
@@ -520,7 +520,7 @@ func TestALabelFollowsEveryActThatChangesItsInputs(t *testing.T) {
 	roomB := makeRoom(t, gw, ctx, "room-b")
 
 	// create
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &roomA}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &roomA}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -547,12 +547,12 @@ func TestALabelFollowsEveryActThatChangesItsInputs(t *testing.T) {
 	}
 
 	// move: a new placement bucket, so a re-minted ordinal
-	blocker, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &roomB}, all)
+	blocker, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &roomB}, all, all, all)
 	if err != nil {
 		t.Fatalf("create blocker: %v", err)
 	}
 	_ = blocker
-	moved, err := gw.MoveComponent(ctx, "", reset.ID, storage.ComponentMove{LocationName: &roomB}, all, all)
+	moved, err := gw.MoveComponent(ctx, "", reset.ID, storage.ComponentMove{LocationName: &roomB}, all, all, all)
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
@@ -606,7 +606,7 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 
 	// A system's shipped rule is its type's display_name, so an unclassified
 	// system renders nothing and a classified one renders its kind of space.
-	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", LocationName: &room}, all)
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
@@ -668,7 +668,7 @@ func TestTheGlobalRuleIsSeededAuthoritativelyAndStillOperatorOwned(t *testing.T)
 	if after.Default != shipped.Default {
 		t.Fatalf("after re-seed the shipped default is %q, want %q restated", after.Default, shipped.Default)
 	}
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -784,7 +784,7 @@ func TestASystemsLabelFollowsItsRenameAndItsReclassify(t *testing.T) {
 	if _, err := gw.SetLabelRule(ctx, "", "system", "{{.TypeName}}/{{.Name}}"); err != nil {
 		t.Fatalf("set the global system rule: %v", err)
 	}
-	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", SystemTypeID: strptr("board")}, all)
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", SystemTypeID: strptr("board")}, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -882,7 +882,7 @@ func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
 		{ProductName: strptr("shure-mxa920"), LocationName: &roomA}, // 6 renamed then reset
 		{Name: "hand-named", ProductName: strptr(qm55), LocationName: &roomB},
 	} {
-		c, err := gw.CreateComponent(ctx, "", spec, all)
+		c, err := gw.CreateComponent(ctx, "", spec, all, all, all)
 		if err != nil {
 			t.Fatalf("create %+v: %v", spec, err)
 		}
@@ -893,7 +893,7 @@ func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
 	if _, err := gw.RenameComponent(ctx, "", built[0], "kept-by-hand", all, all); err != nil {
 		t.Fatalf("rename: %v", err)
 	}
-	if _, err := gw.MoveComponent(ctx, "", built[1], storage.ComponentMove{LocationName: &roomB}, all, all); err != nil {
+	if _, err := gw.MoveComponent(ctx, "", built[1], storage.ComponentMove{LocationName: &roomB}, all, all, all); err != nil {
 		t.Fatalf("move: %v", err)
 	}
 	if _, err := gw.UpdateComponent(ctx, "", built[2], storage.ComponentPatch{ProductName: &mine.Name}, all, all); err != nil {
@@ -981,7 +981,7 @@ func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T
 		{Name: "sys-c", LocationName: &roomA},
 		{Name: "sys-d", DisplayName: "The Operator's Own", SystemTypeID: strptr("board"), LocationName: &roomB},
 	} {
-		s, err := gw.CreateSystem(ctx, "", spec, all)
+		s, err := gw.CreateSystem(ctx, "", spec, all, all)
 		if err != nil {
 			t.Fatalf("create system %d: %v", i, err)
 		}
@@ -993,7 +993,7 @@ func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T
 	if _, err := gw.UpdateSystem(ctx, "", systems[1], storage.SystemPatch{SystemTypeID: strptr("huddle")}, all, all); err != nil {
 		t.Fatalf("reclassify system: %v", err)
 	}
-	if _, err := gw.MoveSystem(ctx, "", systems[2], storage.SystemMove{LocationName: &roomB}, all, all); err != nil {
+	if _, err := gw.MoveSystem(ctx, "", systems[2], storage.SystemMove{LocationName: &roomB}, all, all, all); err != nil {
 		t.Fatalf("move system: %v", err)
 	}
 

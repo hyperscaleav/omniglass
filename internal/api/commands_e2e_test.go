@@ -41,7 +41,7 @@ func TestCommandIssueAPI(t *testing.T) {
 		t.Fatalf("bootstrap: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	// A settleable command with a zero window, so settlement is immediate.
@@ -147,7 +147,7 @@ func TestCommandIssueAPI(t *testing.T) {
 
 	// An operator with command:issue but scoped to a different component gets a
 	// non-disclosing 404 on disp-1 (permission gate passes, scope injection hides it).
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-1"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-1"}, all, all, all); err != nil {
 		t.Fatalf("create other: %v", err)
 	}
 	other, err := gw.GetComponent(ctx, "other-1", all)

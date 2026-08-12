@@ -29,7 +29,7 @@ func TestInsertLogLines(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 
@@ -126,7 +126,7 @@ func TestInsertNodeLogs(t *testing.T) {
 
 	// A node's line does not surface on a component log read: a fresh component
 	// sees nothing.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-x"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-x"}, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	compLogs, err := gw.ListComponentLogs(ctx, "disp-x", now.Add(-time.Hour), 10)

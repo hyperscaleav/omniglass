@@ -176,7 +176,7 @@ func buildBenchEstate(b *testing.B, size benchSize) *benchEstate {
 		name := fmt.Sprintf("bench-sys-%d", i)
 		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 			Name: name, StandardID: &std, LocationName: strptr(e.rooms[i%len(e.rooms)]),
-		}, all); err != nil {
+		}, all, all); err != nil {
 			b.Fatalf("create system %s: %v", name, err)
 		}
 		sysNames = append(sysNames, name)
@@ -201,7 +201,7 @@ func buildBenchEstate(b *testing.B, size benchSize) *benchEstate {
 				SystemName: strptr(sysNames[i%len(sysNames)]),
 			}
 		}
-		c, err := gw.CreateComponent(ctx, "", spec, all)
+		c, err := gw.CreateComponent(ctx, "", spec, all, all, all)
 		if err != nil {
 			b.Fatalf("create component %d: %v", i, err)
 		}

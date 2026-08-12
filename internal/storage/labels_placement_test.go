@@ -52,12 +52,12 @@ func TestTheWorkedExampleReadsPlacement(t *testing.T) {
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "board-1", SystemTypeID: strptr("board"), LocationName: &room.Name,
-	}, all); err != nil {
+	}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: &room.Name, SystemName: strptr("board-1"),
-	}, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -74,13 +74,13 @@ func TestThePlacementKeysAreExactlyTwoOnComponentAndOneOnSystem(t *testing.T) {
 	room := makeRoomWithLabel(t, gw, ctx, "room-a", "Room A")
 	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "sys-a", SystemTypeID: strptr("board"), LocationName: &room.Name,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: &room.Name, SystemName: &s.Name,
-	}, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestLocationLabelFallsThroughToTheLocationName(t *testing.T) {
 	if l := mustGetLocation(t, gw, ctx, unlabelled); l.DisplayName != "" {
 		t.Fatalf("precondition: the location carries the label %q, so the rung under test is unreachable", l.DisplayName)
 	}
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &unlabelled}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &unlabelled}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestLocationLabelFallsThroughToTheLocationName(t *testing.T) {
 
 	// And an unplaced component reads placement as absent rather than as an
 	// error or a "<no value>".
-	orphan, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all)
+	orphan, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55)}, all, all, all)
 	if err != nil {
 		t.Fatalf("create unplaced: %v", err)
 	}
@@ -180,15 +180,15 @@ func TestRenamingALocationRestampsTheRowsThatReadIt(t *testing.T) {
 	here := makeRoom(t, gw, ctx, "room-here")
 	elsewhere := makeRoom(t, gw, ctx, "room-elsewhere")
 
-	inHere, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &here}, all)
+	inHere, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &here}, all, all, all)
 	if err != nil {
 		t.Fatalf("create in here: %v", err)
 	}
-	inElsewhere, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &elsewhere}, all)
+	inElsewhere, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &elsewhere}, all, all, all)
 	if err != nil {
 		t.Fatalf("create elsewhere: %v", err)
 	}
-	sysHere, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-here", SystemTypeID: strptr("board"), LocationName: &here}, all)
+	sysHere, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-here", SystemTypeID: strptr("board"), LocationName: &here}, all, all)
 	if err != nil {
 		t.Fatalf("create system here: %v", err)
 	}
@@ -238,7 +238,7 @@ func TestRelabellingALocationRestampsTheRowsThatReadIt(t *testing.T) {
 		t.Fatalf("component rule: %v", err)
 	}
 	room := makeRoomWithLabel(t, gw, ctx, "room-a", "204B")
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room.Name}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room.Name}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -280,13 +280,13 @@ func TestReclassifyingASystemRestampsItsMembers(t *testing.T) {
 		t.Fatalf("component rule: %v", err)
 	}
 	room := makeRoom(t, gw, ctx, "room-a")
-	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", SystemTypeID: strptr("board"), LocationName: &room}, all)
+	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", SystemTypeID: strptr("board"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	member, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: &room, SystemName: &s.Name,
-	}, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("create member: %v", err)
 	}
@@ -314,15 +314,15 @@ func TestMembershipChangesRestampTheComponent(t *testing.T) {
 		t.Fatalf("component rule: %v", err)
 	}
 	room := makeRoom(t, gw, ctx, "room-a")
-	board, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-board", SystemTypeID: strptr("board"), LocationName: &room}, all)
+	board, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-board", SystemTypeID: strptr("board"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create board system: %v", err)
 	}
-	huddle, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-huddle", SystemTypeID: strptr("huddle"), LocationName: &room}, all)
+	huddle, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-huddle", SystemTypeID: strptr("huddle"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create huddle system: %v", err)
 	}
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -381,14 +381,14 @@ func TestMovingASystemRestampsItsOwnLabel(t *testing.T) {
 	}
 	from := makeRoom(t, gw, ctx, "room-from")
 	to := makeRoom(t, gw, ctx, "room-to")
-	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", SystemTypeID: strptr("board"), LocationName: &from}, all)
+	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", SystemTypeID: strptr("board"), LocationName: &from}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	if s.DisplayName != "Room From Boardroom" {
 		t.Fatalf("before = %q, want %q", s.DisplayName, "Room From Boardroom")
 	}
-	moved, err := gw.MoveSystem(ctx, "", s.ID, storage.SystemMove{LocationName: &to}, all, all)
+	moved, err := gw.MoveSystem(ctx, "", s.ID, storage.SystemMove{LocationName: &to}, all, all, all)
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
@@ -406,11 +406,11 @@ func TestMovingAComponentRestampsItsLocationLabel(t *testing.T) {
 	}
 	from := makeRoom(t, gw, ctx, "room-from")
 	to := makeRoom(t, gw, ctx, "room-to")
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &from}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &from}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	moved, err := gw.MoveComponent(ctx, "", c.ID, storage.ComponentMove{LocationName: &to}, all, all)
+	moved, err := gw.MoveComponent(ctx, "", c.ID, storage.ComponentMove{LocationName: &to}, all, all, all)
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
@@ -433,14 +433,14 @@ func TestAnOperatorOwnedLabelSurvivesEveryCascade(t *testing.T) {
 	room := makeRoom(t, gw, ctx, "room-a")
 	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "sys-a", DisplayName: "The Operator's System", SystemTypeID: strptr("board"), LocationName: &room,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "hand-named", DisplayName: "The Operator's Own", ProductName: strptr(qm55),
 		LocationName: &room, SystemName: &s.Name,
-	}, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -486,7 +486,7 @@ func TestMovingALocationChangesNoLabelUnderIt(t *testing.T) {
 	}
 	other := "campus-a"
 	room := makeRoom(t, gw, ctx, "room-a")
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -510,7 +510,7 @@ func TestAPreviewListsExactlyWhatAnApplyThenChanges(t *testing.T) {
 	room := makeRoom(t, gw, ctx, "room-a")
 	var ids []string
 	for range 4 {
-		c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all)
+		c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all, all, all)
 		if err != nil {
 			t.Fatalf("create: %v", err)
 		}
@@ -520,7 +520,7 @@ func TestAPreviewListsExactlyWhatAnApplyThenChanges(t *testing.T) {
 	// the applied set.
 	owned, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: &room, DisplayName: "The Operator's Own",
-	}, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("create owned: %v", err)
 	}
@@ -593,7 +593,7 @@ func TestAPreviewListsExactlyWhatAnApplyThenChanges(t *testing.T) {
 func TestTheVerbRecomputesSystemsAndLocationsToo(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "room-a")
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", SystemTypeID: strptr("board"), LocationName: &room}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", SystemTypeID: strptr("board"), LocationName: &room}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	if _, err := gw.SetLabelRule(ctx, "", "system", "{{.TypeName}} at {{.LocationLabel}}"); err != nil {
@@ -656,11 +656,11 @@ func TestTheVerbRespectsScope(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	mine := makeRoom(t, gw, ctx, "room-mine")
 	theirs := makeRoom(t, gw, ctx, "room-theirs")
-	inMine, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &mine}, all)
+	inMine, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &mine}, all, all, all)
 	if err != nil {
 		t.Fatalf("create mine: %v", err)
 	}
-	inTheirs, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &theirs}, all)
+	inTheirs, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &theirs}, all, all, all)
 	if err != nil {
 		t.Fatalf("create theirs: %v", err)
 	}
@@ -792,15 +792,15 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 	roomB := makeRoom(t, gw, ctx, "room-b")
 	roomC := makeRoom(t, gw, ctx, "room-c")
 
-	board, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-board", SystemTypeID: strptr("board"), LocationName: &roomA.Name}, all)
+	board, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-board", SystemTypeID: strptr("board"), LocationName: &roomA.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create board: %v", err)
 	}
-	huddle, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-huddle", SystemTypeID: strptr("huddle"), LocationName: &roomB}, all)
+	huddle, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-huddle", SystemTypeID: strptr("huddle"), LocationName: &roomB}, all, all)
 	if err != nil {
 		t.Fatalf("create huddle: %v", err)
 	}
-	mover, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-mover", SystemTypeID: strptr("class"), LocationName: &roomA.Name}, all)
+	mover, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-mover", SystemTypeID: strptr("class"), LocationName: &roomA.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create mover: %v", err)
 	}
@@ -815,7 +815,7 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 		{ProductName: strptr(qm55), LocationName: &roomC, DisplayName: "Operator's Own"}, // 5 the pen stays theirs
 		{ProductName: strptr(qm55), LocationName: &roomC, SystemName: &mover.Name},       // 6 its system moves
 	} {
-		c, err := gw.CreateComponent(ctx, "", spec, all)
+		c, err := gw.CreateComponent(ctx, "", spec, all, all, all)
 		if err != nil {
 			t.Fatalf("create %+v: %v", spec, err)
 		}
@@ -848,7 +848,7 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 			return err
 		}},
 		{"move a component to another room", func() error {
-			_, err := gw.MoveComponent(ctx, "", comps[1], storage.ComponentMove{LocationName: &roomB}, all, all)
+			_, err := gw.MoveComponent(ctx, "", comps[1], storage.ComponentMove{LocationName: &roomB}, all, all, all)
 			return err
 		}},
 		{"rename a component", func() error {
@@ -880,7 +880,7 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 			return err
 		}},
 		{"move a system to another room", func() error {
-			_, err := gw.MoveSystem(ctx, "", mover.ID, storage.SystemMove{LocationName: &roomB}, all, all)
+			_, err := gw.MoveSystem(ctx, "", mover.ID, storage.SystemMove{LocationName: &roomB}, all, all, all)
 			return err
 		}},
 		{"rename a system", func() error {
@@ -945,13 +945,13 @@ func TestStaffingARoleRestampsTheComponentItBinds(t *testing.T) {
 	room := makeRoom(t, gw, ctx, "room-a")
 	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "sys-a", SystemTypeID: strptr("board"), StandardID: strptr("huddle-room"), LocationName: &room,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	bar, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr("cisco-room-bar"), LocationName: &room,
-	}, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("create video bar: %v", err)
 	}
@@ -982,13 +982,13 @@ func TestDeletingASystemRestampsItsMembers(t *testing.T) {
 	room := makeRoom(t, gw, ctx, "room-a")
 	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "sys-a", SystemTypeID: strptr("board"), LocationName: &room,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: &room, SystemName: &s.Name,
-	}, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -1019,13 +1019,13 @@ func TestDeletingASystemPromotesTheSoleSurvivingMembership(t *testing.T) {
 	room := makeRoom(t, gw, ctx, "room-a")
 	board, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "sys-board", SystemTypeID: strptr("board"), LocationName: &room,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create board: %v", err)
 	}
 	huddle, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "sys-huddle", SystemTypeID: strptr("huddle"), LocationName: &room,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create huddle: %v", err)
 	}
@@ -1033,7 +1033,7 @@ func TestDeletingASystemPromotesTheSoleSurvivingMembership(t *testing.T) {
 	// board is primary and the huddle is the ordinary second.
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: &room, SystemName: &board.Name,
-	}, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}

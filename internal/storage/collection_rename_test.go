@@ -48,7 +48,7 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 		t.Fatalf("room: %v", err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "old-codec", LocationName: strptr("old-room")}, all); err != nil {
+		Name: "old-codec", LocationName: strptr("old-room")}, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{

@@ -704,9 +704,10 @@ abbrev in full.
 Left blank on create, the platform mints `<component_type stem>-<n>` from the resolved type and the
 lowest free ordinal in the component's placement scope; while
 `name_generated` stays true the name
-recomputes on a `:move` or a product reclassify, riding that write's own audit event. `:rename` freezes
-it; `:resetName` hands the pen back and regenerates from the component's current facts, gated by the
-same `component:rename` permission `:rename` uses.
+recomputes on a `:move` that changes the bucket or a reclassify that changes the stem, riding that
+write's own audit event (see what re-mints a name below, which is one rule across all three tiers).
+`:rename` freezes it; `:resetName` hands the pen back and regenerates from the component's current
+facts, gated by the same `component:rename` permission `:rename` uses.
 
 **The console can ask for a generated name, and shows what it will be**
 ([ADR-0104](/architecture/decisions/#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)).
@@ -746,15 +747,19 @@ system with no `system_type` cannot be named this way (422 naming the reason), a
 un-classified while the platform owns its name: `:rename` claims the name first.
 
 **What re-mints a name is an act that changes an INPUT to the mint,** and the mint reads exactly two:
-the stem (a system's `system_type` chain, a location's `location_type` rule) and the placement
-bucket. So a reclassify that actually changes the classification re-mints, and a `:move` that
-actually changes the bucket re-mints; a patch that re-states the classification and a move that
-re-states the placement change neither input and leave the name exactly where it is. The distinction
-is not tidiness: a lower ordinal freed by an earlier `:rename` means a spurious re-mint does not
-recompute to the same answer, it MOVES the name, under `:update` or `:move` with no rename asked for
-and possibly no `:rename` grant held. A system's bucket comparison is the three-way one (a parent
-wins over a location, so relocating a parented system changes no bucket); a location's is the
-parent alone.
+the stem (a component's `product` to `component_type` chain, a system's `system_type` chain, a
+location's `location_type` rule) and the placement bucket. So a reclassify that actually changes the
+stem re-mints, and a `:move` that actually changes the bucket re-mints; a patch that re-states the
+classification and a move that re-states the placement change neither input and leave the name
+exactly where it is. The distinction is not tidiness: a lower ordinal freed by an earlier `:rename`
+means a spurious re-mint does not recompute to the same answer, it MOVES the name, under `:update`
+or `:move` with no rename asked for and possibly no `:rename` grant held. One rule, spelled per tier
+because the tiers reach their two inputs differently. A component's and a system's bucket comparison
+is the three-way one (a parent wins over a location, so relocating a parented row changes no
+bucket); a location's is the parent alone. And a component is the tier whose classification is not
+its stem: it names a **product**, which points at a `component_type` chain, so two products under one
+type mint the same name and its reclassify compares the resolved stem rather than the product it was
+handed.
 
 **A location type opts in, with a rule that is a declaration**
 ([ADR-0102](/architecture/decisions/#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing)).

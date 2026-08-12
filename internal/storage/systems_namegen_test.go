@@ -42,7 +42,7 @@ func newSystemNamegenDB(t *testing.T) (*storage.PG, context.Context, string) {
 func TestSystemCreateGeneratesFromTypeStem(t *testing.T) {
 	gw, ctx, room := newSystemNamegenDB(t)
 
-	first, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all)
+	first, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create first: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestSystemCreateGeneratesFromTypeStem(t *testing.T) {
 		t.Fatalf("first.Ordinal = %s, want 1: a suppressed name still records the number it was minted from", ordstr(first.Ordinal))
 	}
 
-	second, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all)
+	second, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create second: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestSystemCreateGeneratesFromTypeStem(t *testing.T) {
 	}
 
 	// A different stem in the SAME bucket is its own allocation space.
-	class, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("class"), LocationName: &room}, all)
+	class, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("class"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create classroom: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestSystemCreateGeneratesFromTypeStem(t *testing.T) {
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-room-b", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("create second location: %v", err)
 	}
-	elsewhere, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: strp("namegen-room-b")}, all)
+	elsewhere, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: strp("namegen-room-b")}, all, all)
 	if err != nil {
 		t.Fatalf("create in the second room: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestSystemCreateGeneratesFromTypeStem(t *testing.T) {
 
 	// And the parent bucket is its own too, which is what makes system need
 	// THREE buckets where a location needs two.
-	nested, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), ParentName: &first.ID}, all)
+	nested, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), ParentName: &first.ID}, all, all)
 	if err != nil {
 		t.Fatalf("create under a parent system: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestSystemSuppressedFirstOrdinal(t *testing.T) {
 
 	names := make([]string, 0, 3)
 	for range 3 {
-		s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("br-type"), LocationName: &room}, all)
+		s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("br-type"), LocationName: &room}, all, all)
 		if err != nil {
 			t.Fatalf("create: %v", err)
 		}
@@ -140,7 +140,7 @@ func TestSystemGeneratorYieldsToAHandTypedName(t *testing.T) {
 		t.Fatalf("create system_type: %v", err)
 	}
 
-	typed, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "br", SystemTypeID: strp("br-type"), LocationName: &room}, all)
+	typed, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "br", SystemTypeID: strp("br-type"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create hand-typed br: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestSystemGeneratorYieldsToAHandTypedName(t *testing.T) {
 		t.Fatalf("a hand-typed system = (generated %v, ordinal %s), want (false, absent)", typed.NameGenerated, ordstr(typed.Ordinal))
 	}
 
-	generated, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("br-type"), LocationName: &room}, all)
+	generated, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("br-type"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("generate beside a hand-typed br: %v", err)
 	}
@@ -168,18 +168,18 @@ func TestSystemDeleteFreesTheBareName(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("create system_type: %v", err)
 	}
-	first, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("br-type"), LocationName: &room}, all)
+	first, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("br-type"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create first: %v", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("br-type"), LocationName: &room}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("br-type"), LocationName: &room}, all, all); err != nil {
 		t.Fatalf("create second: %v", err)
 	}
 	if err := gw.DeleteSystem(ctx, "", first.ID, all, all); err != nil {
 		t.Fatalf("delete the bare one: %v", err)
 	}
 
-	again, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("br-type"), LocationName: &room}, all)
+	again, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("br-type"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create after the delete: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestSystemDeleteFreesTheBareName(t *testing.T) {
 func TestSystemRenameFreezesAndResetReturnsThePen(t *testing.T) {
 	gw, ctx, room := newSystemNamegenDB(t)
 
-	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all)
+	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestSystemRenameFreezesAndResetReturnsThePen(t *testing.T) {
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-room-c", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("create the second location: %v", err)
 	}
-	moved, err := gw.MoveSystem(ctx, "", renamed.ID, storage.SystemMove{LocationName: strp("namegen-room-c")}, all, all)
+	moved, err := gw.MoveSystem(ctx, "", renamed.ID, storage.SystemMove{LocationName: strp("namegen-room-c")}, all, all, all)
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
@@ -253,10 +253,10 @@ func TestSystemMoveReMintsTheOrdinal(t *testing.T) {
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "namegen-room-d", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("create the destination: %v", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: strp("namegen-room-d")}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: strp("namegen-room-d")}, all, all); err != nil {
 		t.Fatalf("occupy the destination: %v", err)
 	}
-	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all)
+	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -264,7 +264,7 @@ func TestSystemMoveReMintsTheOrdinal(t *testing.T) {
 		t.Fatalf("pre-move name = %q, want boardroom", s.Name)
 	}
 
-	moved, err := gw.MoveSystem(ctx, "", s.ID, storage.SystemMove{LocationName: strp("namegen-room-d")}, all, all)
+	moved, err := gw.MoveSystem(ctx, "", s.ID, storage.SystemMove{LocationName: strp("namegen-room-d")}, all, all, all)
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
@@ -291,11 +291,11 @@ func TestSystemMoveReMintsTheOrdinal(t *testing.T) {
 func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
 	gw, ctx, room := newSystemNamegenDB(t)
 
-	first, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all)
+	first, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create the first: %v", err)
 	}
-	second, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all)
+	second, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create the second: %v", err)
 	}
@@ -308,7 +308,7 @@ func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
 	}
 
 	// A move that re-states the location the system already sits at.
-	after, err := gw.MoveSystem(ctx, "", second.ID, storage.SystemMove{LocationName: &room}, all, all)
+	after, err := gw.MoveSystem(ctx, "", second.ID, storage.SystemMove{LocationName: &room}, all, all, all)
 	if err != nil {
 		t.Fatalf("move to the same location: %v", err)
 	}
@@ -321,7 +321,7 @@ func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
 
 	// A no-op move, the verb's documented shape when neither field is supplied,
 	// is the same answer by a shorter road.
-	noop, err := gw.MoveSystem(ctx, "", second.ID, storage.SystemMove{}, all, all)
+	noop, err := gw.MoveSystem(ctx, "", second.ID, storage.SystemMove{}, all, all, all)
 	if err != nil {
 		t.Fatalf("no-op move: %v", err)
 	}
@@ -331,25 +331,25 @@ func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
 
 	// A parented system relocated to another location keeps its parent bucket
 	// (a parent wins over a location), so that move changes no bucket either.
-	parent, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "the-plant", SystemTypeID: strp("board"), LocationName: &room}, all)
+	parent, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "the-plant", SystemTypeID: strp("board"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create the parent: %v", err)
 	}
-	child, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), ParentName: &parent.Name}, all)
+	child, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), ParentName: &parent.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create the child: %v", err)
 	}
 	if child.Name != "boardroom" {
 		t.Fatalf("the child create = %q, want boardroom (its parent is its bucket)", child.Name)
 	}
-	sibling, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), ParentName: &parent.Name}, all)
+	sibling, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), ParentName: &parent.Name}, all, all)
 	if err != nil {
 		t.Fatalf("create the child's sibling: %v", err)
 	}
 	if _, err := gw.RenameSystem(ctx, "", child.ID, "the-annex", all, all); err != nil {
 		t.Fatalf("rename the child: %v", err)
 	}
-	relocated, err := gw.MoveSystem(ctx, "", sibling.ID, storage.SystemMove{LocationName: &room}, all, all)
+	relocated, err := gw.MoveSystem(ctx, "", sibling.ID, storage.SystemMove{LocationName: &room}, all, all, all)
 	if err != nil {
 		t.Fatalf("relocate the parented sibling: %v", err)
 	}
@@ -360,7 +360,7 @@ func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
 	// And a move that DOES change the bucket still re-mints, so the guard
 	// narrows the trigger without disabling it (TestSystemMoveReMintsTheOrdinal
 	// is the full case).
-	lifted, err := gw.MoveSystem(ctx, "", sibling.ID, storage.SystemMove{ParentName: strp("")}, all, all)
+	lifted, err := gw.MoveSystem(ctx, "", sibling.ID, storage.SystemMove{ParentName: strp("")}, all, all, all)
 	if err != nil {
 		t.Fatalf("lift the sibling to its location bucket: %v", err)
 	}
@@ -375,7 +375,7 @@ func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
 func TestSystemReclassifyReMintsTheStem(t *testing.T) {
 	gw, ctx, room := newSystemNamegenDB(t)
 
-	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all)
+	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -391,7 +391,7 @@ func TestSystemReclassifyReMintsTheStem(t *testing.T) {
 	}
 
 	// An operator-typed name is not touched by the same act.
-	typed, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "the-atrium", SystemTypeID: strp("board"), LocationName: &room}, all)
+	typed, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "the-atrium", SystemTypeID: strp("board"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create typed: %v", err)
 	}
@@ -417,11 +417,11 @@ func TestSystemReclassifyReMintsTheStem(t *testing.T) {
 func TestSystemUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 	gw, ctx, room := newSystemNamegenDB(t)
 
-	first, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all)
+	first, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create the first: %v", err)
 	}
-	second, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all)
+	second, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create the second: %v", err)
 	}
@@ -467,12 +467,12 @@ func TestSystemUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 func TestSystemWithNoTypeCannotGenerate(t *testing.T) {
 	gw, ctx, room := newSystemNamegenDB(t)
 
-	_, err := gw.CreateSystem(ctx, "", storage.SystemSpec{LocationName: &room}, all)
+	_, err := gw.CreateSystem(ctx, "", storage.SystemSpec{LocationName: &room}, all, all)
 	if !errors.Is(err, storage.ErrSystemTypeRequiredForName) {
 		t.Fatalf("a nameless create with no system_type = %v, want ErrSystemTypeRequiredForName", err)
 	}
 
-	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all)
+	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -503,15 +503,15 @@ func TestSystemWithNoTypeCannotGenerate(t *testing.T) {
 func TestSystemGeneratedNamesAreUniquePerBucket(t *testing.T) {
 	gw, ctx, room := newSystemNamegenDB(t)
 
-	orphan, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board")}, all)
+	orphan, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board")}, all, all)
 	if err != nil {
 		t.Fatalf("create unplaced: %v", err)
 	}
-	placed, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all)
+	placed, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create placed: %v", err)
 	}
-	child, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), ParentName: &orphan.ID}, all)
+	child, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), ParentName: &orphan.ID}, all, all)
 	if err != nil {
 		t.Fatalf("create child: %v", err)
 	}
@@ -531,7 +531,7 @@ func TestSystemGeneratedNamesAreUniquePerBucket(t *testing.T) {
 		{SystemTypeID: strp("board"), LocationName: &room},
 		{SystemTypeID: strp("board"), ParentName: &orphan.ID},
 	} {
-		s, err := gw.CreateSystem(ctx, "", spec, all)
+		s, err := gw.CreateSystem(ctx, "", spec, all, all)
 		if err != nil {
 			t.Fatalf("create the second in a bucket: %v", err)
 		}
@@ -560,39 +560,39 @@ func TestStoredSystemOrdinalsRecomputeToThemselves(t *testing.T) {
 	}
 
 	// Every bucket, several stems, and both pens.
-	parent, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board")}, all)
+	parent, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board")}, all, all)
 	if err != nil {
 		t.Fatalf("create the parent: %v", err)
 	}
 	for range 2 {
-		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all); err != nil {
+		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: &room}, all, all); err != nil {
 			t.Fatalf("create a placed boardroom: %v", err)
 		}
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("class"), LocationName: &room}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("class"), LocationName: &room}, all, all); err != nil {
 		t.Fatalf("create a classroom: %v", err)
 	}
 	// One already in the destination room, so the moved row below must land on
 	// ordinal 2: without it the moved row's old ordinal would still equal what
 	// a recompute produces and a move that forgot to re-record would pass.
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: strp("invariant-room-b")}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), LocationName: strp("invariant-room-b")}, all, all); err != nil {
 		t.Fatalf("occupy the destination: %v", err)
 	}
-	child, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), ParentName: &parent.ID}, all)
+	child, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("board"), ParentName: &parent.ID}, all, all)
 	if err != nil {
 		t.Fatalf("create the child: %v", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "hand-typed-room", SystemTypeID: strp("board"), LocationName: &room}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "hand-typed-room", SystemTypeID: strp("board"), LocationName: &room}, all, all); err != nil {
 		t.Fatalf("create hand-typed: %v", err)
 	}
-	frozen, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("class"), LocationName: strp("invariant-room-b")}, all)
+	frozen, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("class"), LocationName: strp("invariant-room-b")}, all, all)
 	if err != nil {
 		t.Fatalf("create the to-be-frozen row: %v", err)
 	}
 	if _, err := gw.RenameSystem(ctx, "", frozen.ID, "frozen-room", all, all); err != nil {
 		t.Fatalf("rename and leave frozen: %v", err)
 	}
-	reset, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("class"), LocationName: strp("invariant-room-b")}, all)
+	reset, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("class"), LocationName: strp("invariant-room-b")}, all, all)
 	if err != nil {
 		t.Fatalf("create the to-be-reset row: %v", err)
 	}
@@ -605,7 +605,7 @@ func TestStoredSystemOrdinalsRecomputeToThemselves(t *testing.T) {
 	// Out of the parent bucket and into a location's, a real bucket change: a
 	// parent wins over a location, so clearing it is what makes this a move
 	// BETWEEN buckets rather than within one.
-	if _, err := gw.MoveSystem(ctx, "", child.ID, storage.SystemMove{ParentName: strp(""), LocationName: strp("invariant-room-b")}, all, all); err != nil {
+	if _, err := gw.MoveSystem(ctx, "", child.ID, storage.SystemMove{ParentName: strp(""), LocationName: strp("invariant-room-b")}, all, all, all); err != nil {
 		t.Fatalf("move: %v", err)
 	}
 

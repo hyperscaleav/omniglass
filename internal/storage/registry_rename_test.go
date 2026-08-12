@@ -58,7 +58,7 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 		t.Fatalf("property: %v", err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "bar-1", ProductName: strptr("acme-bar")}, all); err != nil {
+		Name: "bar-1", ProductName: strptr("acme-bar")}, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 

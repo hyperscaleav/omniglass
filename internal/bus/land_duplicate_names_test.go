@@ -69,11 +69,11 @@ func TestLandSurvivesDuplicateComponentNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("room-b: %v", err)
 	}
-	compA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", LocationName: landStrptr(roomA.Name)}, all)
+	compA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", LocationName: landStrptr(roomA.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("component in room-a: %v", err)
 	}
-	compB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", LocationName: landStrptr(roomB.Name)}, all)
+	compB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", LocationName: landStrptr(roomB.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("component in room-b: %v", err)
 	}

@@ -34,7 +34,7 @@ func TestReferencesResolveByEitherForm(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	made, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "codec"}, all)
+	made, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "codec"}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -84,11 +84,11 @@ func TestJoinFieldsAcceptEitherForm(t *testing.T) {
 	}
 	byName := "site"
 	byID := site.ID
-	a, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "a", LocationName: &byName}, all)
+	a, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "a", LocationName: &byName}, all, all, all)
 	if err != nil {
 		t.Fatalf("create by name: %v", err)
 	}
-	b, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "b", LocationName: &byID}, all)
+	b, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "b", LocationName: &byID}, all, all, all)
 	if err != nil {
 		t.Fatalf("create by id: %v", err)
 	}
