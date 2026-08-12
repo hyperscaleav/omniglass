@@ -625,38 +625,47 @@ func TestNameRuleRoundTripsThroughTheRegistry(t *testing.T) {
 	}
 }
 
-// TestRemovingAShippedNameRuleReachesNewEstatesOnly is the honest half of
-// dropping `floor`'s rule from the seed, asserted rather than assumed.
+// TestAForkedNameRuleSurvivesTheAuthoritativeSeed holds what an estate keeps
+// when a release withdraws a shipped name rule and the operator had set one of
+// their own: their rule, still generating names, after a boot that rewrote the
+// row underneath it.
 //
-// SeedLocationType is insert-when-absent (the forked-template half of the seed
-// model: a location type is operator space, so a restart never reverts an edit),
-// so a rule cannot be UN-shipped by deleting the line any more than it could be
-// shipped to an existing estate by adding one. An estate that already seeded the
-// positional `floor` keeps it, name-generating floors and all, and its floors go
-// on being named `1`.
+// The assertion outlived its explanation and this is the corrected one. It was
+// written when a shipped location type was operator-owned and the seed was
+// insert-when-absent, so the estate kept its rule because nothing touched the
+// row, and the cost of a withdrawal was that it reached new installs only.
+// #703 inverted both halves: the four shipped types are official, every boot
+// writes them with ON CONFLICT DO UPDATE, and a withdrawn value DOES leave an
+// estate (TestWithdrawnShippedValueLeavesTheEstate is that half). What survives
+// the boot now is the fork. An edit of a shipped type stores the operator's
+// whole version in registry_shadow keyed on the row's own uuid, and every read
+// resolves it over the official row (ADR-0095, ADR-0106).
 //
-// The second half is the sharper cost: there is no request that removes it
-// either. A patch cannot spell "clear", because an omitted key and an explicit
-// null both decode to a nil pointer, so `name_rule = coalesce($6::jsonb,
-// name_rule)` leaves the stored rule standing (ADR-0102 recorded that limit for
-// the wire; this is what it means when a shipped default has to be withdrawn).
-// Such an estate reaches the new default only by a direct write.
-func TestRemovingAShippedNameRuleReachesNewEstatesOnly(t *testing.T) {
-	gw := storagetest.NewDB(t)
+// So the mechanism is asserted and not just the outcome: the official row is
+// read raw and has to be bare. A future defect that made the seed skip the row
+// would leave this test green on the old, wrong reason, and the raw read is what
+// tells the two apart.
+func TestAForkedNameRuleSurvivesTheAuthoritativeSeed(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("storage.NewPG: %v", err)
+	}
+	t.Cleanup(gw.Close)
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	// The estate that seeded the old shipped rule, in the one shape an existing
-	// estate can be in: the row carries a positional rule the seed no longer has.
+	// The estate that wants positional floors, in the shape an operator makes
+	// one: a rule on a type the release ships with none. The write forks.
 	if _, err := gw.UpdateLocationType(ctx, "", "floor", storage.LocationTypePatch{
 		NameRule: &storage.NameRule{},
 	}); err != nil {
-		t.Fatalf("install the rule an upgraded estate already has: %v", err)
+		t.Fatalf("set the estate's own rule on a shipped type: %v", err)
 	}
 
-	// Boot again with the rule gone from the seed. Insert-when-absent means the
-	// row is not touched at all.
+	// Boot again. The seed rewrites floor authoritatively, carrying the release's
+	// no-rule, which is precisely the write the old ownership model forbade.
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("re-seed: %v", err)
 	}
@@ -669,20 +678,37 @@ func TestRemovingAShippedNameRuleReachesNewEstatesOnly(t *testing.T) {
 		byName[lt.Name] = lt
 	}
 	if got := byName["floor"].NameRule; got == nil || got.Stem != "" {
-		t.Fatalf("floor's rule after re-seeding without one = %+v, want the estate's own positional rule intact: a boot seed that reverted an operator-owned row would be the defect", got)
+		t.Fatalf("floor's rule after a boot = %+v, want the estate's own positional rule: a fork the seed can flatten is not a fork", got)
 	}
-	// And it still generates, which is what "reaches new estates only" costs.
+	if !byName["floor"].Forked {
+		t.Error("floor does not report forked=true, so the console cannot offer to restore it")
+	}
+	// Why it survived. The row the seed wrote carries no rule at all, so what
+	// the read returned came from the shadow resolving over it.
+	conn := connectDSN(t, dsn)
+	var bare bool
+	if err := conn.QueryRow(ctx, `select name_rule is null from location_type where name = 'floor'`).Scan(&bare); err != nil {
+		t.Fatalf("read the official row: %v", err)
+	}
+	if !bare {
+		t.Error("the official floor row still carries a rule after the boot: the estate's rule belongs in the shadow, and a seed that left the row alone would be the withdrawal failing")
+	}
+
+	// And it still generates, which is what the fork is FOR: the overlay reaches
+	// the generator, not only the list.
 	campus := mustPlace(t, gw, storage.LocationSpec{Name: "boi", LocationType: "campus"})
 	building := mustPlace(t, gw, storage.LocationSpec{Name: "17c", LocationType: "building", ParentName: &campus.Name})
 	floor, err := gw.CreateLocation(ctx, "", storage.LocationSpec{LocationType: "floor", ParentName: &building.Name}, all)
 	if err != nil {
-		t.Fatalf("create a floor on the upgraded estate: %v", err)
+		t.Fatalf("create a floor under the forked rule: %v", err)
 	}
 	if floor.Name != "1" || !floor.NameGenerated {
-		t.Fatalf("a floor on the upgraded estate = (%q, generated %v), want (\"1\", true)", floor.Name, floor.NameGenerated)
+		t.Fatalf("a floor under the forked rule = (%q, generated %v), want (\"1\", true)", floor.Name, floor.NameGenerated)
 	}
 
-	// A patch cannot take the rule back off: an omitted rule is "leave it".
+	// An unrelated patch still leaves the rule standing: omitted is "unchanged",
+	// and clearing is spelled by naming the field in update_mask (#692, ADR-0091,
+	// driven on both type kinds by TestClearNameRuleOnBothTypeKinds).
 	if _, err := gw.UpdateLocationType(ctx, "", "floor", storage.LocationTypePatch{
 		DisplayName: strptr("Floor"),
 	}); err != nil {
@@ -694,7 +720,7 @@ func TestRemovingAShippedNameRuleReachesNewEstatesOnly(t *testing.T) {
 	}
 	for _, lt := range after {
 		if lt.Name == "floor" && lt.NameRule == nil {
-			t.Fatal("a patch that omitted name_rule cleared it; the wire has no spelling for \"clear\", and pretending it does is worse than the limit")
+			t.Fatal("a patch that omitted name_rule cleared it; an omitted key is unchanged, and a clear has to be asked for by name")
 		}
 	}
 }
