@@ -333,11 +333,33 @@ func TestStemlessAllocationWorks(t *testing.T) {
 // longer matches the number recorded beside it, fails here rather than
 // surviving unnoticed until a label is printed from it.
 //
-// The estate is built without deletes, deliberately: allocation reuses the
-// lowest free ordinal, so deleting a row genuinely does free its number for
-// the next create, and a recompute after a delete is entitled to differ from
-// what was stored. The invariant this asserts is that nothing DRIFTS, not that
-// ordinals are immutable.
+// What it does NOT assert is that stored equals recompute in any estate. It
+// holds for the estate built below, and it is narrower than "an ordinal never
+// changes": a name and its number are minted once and nothing cascades a
+// re-mint onto a live row (ADR-0101), so any act that frees a LOWER number in a
+// bucket, or moves the stem out from under a name already minted, leaves a
+// stored pair a recompute is entitled to disagree with. Three such acts, none
+// of them a bug:
+//
+//   - a DELETE frees its number for the next create, since allocation reuses
+//     the lowest free ordinal;
+//   - a :rename of a generated row surrenders its name AND its number to the
+//     same effect (the frozen row below is exactly that), so when the number it
+//     frees sits below a live generated sibling, that sibling's stored pair no
+//     longer equals its recompute: create display-1 and display-2, rename
+//     display-1 away, and display-2 recomputes to ("display-1", 1);
+//   - a component_type STEM edit changes what a row's product resolves to while
+//     leaving every existing name untouched (pinned by
+//     TestComponentTypeStemEditDoesNotRecomputeExistingNames), so the edited
+//     row's own stored name drifts from its recompute at once.
+//
+// The estate below therefore contains no delete and no stem edit, and the one
+// :rename it leaves in place frees the TOP number of its bucket (frozen is
+// display-4) rather than a low one. That is what entitles a whole-estate sweep
+// to be exact here, and it is why this catches a write path that forgot to
+// re-record an ordinal (a move, a reclassify, a reset) rather than any of the
+// three acts above. Widening it to cover them is a separate question, since it
+// would mean renumbering live rows, which ADR-0101 deliberately does not do.
 func TestStoredOrdinalsRecomputeToThemselves(t *testing.T) {
 	ctx := context.Background()
 	pg, err := storage.NewPG(ctx, storagetest.NewDSN(t))
