@@ -57,12 +57,20 @@ func TestLocationTypeCRUD(t *testing.T) {
 		t.Fatalf("update a shipped location type: %v, want it editable", err)
 	}
 
-	// The official guard still stands on DELETE, which is where it belongs: a
-	// fork is an overlay, not ownership, so :restore is the only removal a
-	// shipped row admits. This assertion moved rather than went away; its
-	// update half is now the fork above, where it used to be ErrTypeOfficial.
+	// The two halves of the official guard, converted rather than dropped. An
+	// UPDATE of an official row used to be ErrTypeOfficial and is now a FORK
+	// (#703, ADR-0095): the row is untouched and the operator's version resolves
+	// over it. A DELETE is still refused, which is where the guard belongs, since
+	// a fork is an overlay and not ownership.
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{Name: "canon", Official: true, DisplayName: "Canonical"}); err != nil {
 		t.Fatalf("seed an official location type: %v", err)
+	}
+	forked, err := gw.UpdateLocationType(ctx, "", "canon", storage.LocationTypePatch{DisplayName: &name})
+	if err != nil {
+		t.Fatalf("update official err = %v, want a fork", err)
+	}
+	if !forked.Forked || forked.DisplayName != name {
+		t.Fatalf("update official gave %+v, want the patched value marked forked", forked)
 	}
 	if err := gw.DeleteLocationType(ctx, "", "canon"); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("delete official err = %v, want ErrTypeOfficial", err)
