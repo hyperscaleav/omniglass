@@ -132,7 +132,7 @@ type renameComponentInput struct {
 // immediately actionable.
 const errProductRequired = "a component must be an instance of a product; name one, or use a generic (generic-device, generic-app, generic-service) until a real product is modeled"
 
-// errSystemBindNeedsUpdate is the 403 a component create returns when it names a
+// ErrSystemBindNeedsUpdate is the 403 a component create returns when it names a
 // system and the caller does not hold system:update (#707). The system on a
 // create is not a field on the component, it is the component's primary
 // MEMBERSHIP, the row PUT /systems/{name}/members/{component} writes under
@@ -143,7 +143,11 @@ const errProductRequired = "a component must be an instance of a product; name o
 // operator cannot act on sends them to an administrator with no ask. The second
 // sentence is the recovery that does not need a grant at all, since creating the
 // component and binding it later are separately authorized acts.
-const errSystemBindNeedsUpdate = "creating a component into a system writes that system's membership, which requires system:update (the same permission PUT /systems/{name}/members/{component} requires). Create the component without a system, or ask for system:update."
+//
+// Exported because the CLI's own test asserts this message reaches an operator's
+// stdout. A copy of the string over there would go on passing while the API's
+// wording drifted, which is the one thing that test exists to catch.
+const ErrSystemBindNeedsUpdate = "creating a component into a system writes that system's membership, which requires system:update (the same permission PUT /systems/{name}/members/{component} requires). Create the component without a system, or ask for system:update."
 
 // registerComponentRoutes wires the component CRUD surface, on the same pattern
 // as locations and systems.
@@ -213,7 +217,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		// middleware cannot see the body: a create that names no system writes no
 		// membership and costs component:create alone.
 		if in.Body.System != nil && *in.Body.System != "" && !a.allows(ctx, "system", "update") {
-			return nil, huma.Error403Forbidden(errSystemBindNeedsUpdate)
+			return nil, huma.Error403Forbidden(ErrSystemBindNeedsUpdate)
 		}
 		c, err := gw.CreateComponent(ctx, actorID(ctx), storage.ComponentSpec{
 			Name:            in.Body.Name,

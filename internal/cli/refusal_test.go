@@ -3,11 +3,13 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/hyperscaleav/omniglass/internal/api"
 	"github.com/spf13/cobra"
 )
 
@@ -22,12 +24,25 @@ import (
 // It drives the real command runtime (runAPICommand, the hand-written half every
 // generated command calls) against a real server, so what is asserted is what an
 // operator sees on stdout, not that a message exists somewhere in the response.
+//
+// The server is canned rather than the real handler, because what is under test
+// is the CLI's rendering and a real one would drag Postgres and a principal in
+// for it. So the message is taken from the API's own sentinel rather than
+// retyped: a copy would go on passing while the API's wording drifted, and the
+// wording is the whole subject. The API side of the same promise, that the
+// refusal is issued at all and names the permission, is
+// TestCreatingAComponentIntoASystemNeedsTheMembershipPermission.
 func TestARefusalReachesTheOperatorBeforeTheStatus(t *testing.T) {
-	const detail = "creating a component into a system writes that system's membership, which requires system:update (the same permission PUT /systems/{name}/members/{component} requires). Create the component without a system, or ask for system:update."
+	body, err := json.Marshal(map[string]any{
+		"title": "Forbidden", "status": http.StatusForbidden, "detail": api.ErrSystemBindNeedsUpdate,
+	})
+	if err != nil {
+		t.Fatalf("encode the refusal body: %v", err)
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/problem+json")
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{"title":"Forbidden","status":403,"detail":` + quoteJSON(detail) + `}`))
+		_, _ = w.Write(body)
 	}))
 	defer srv.Close()
 
@@ -47,17 +62,23 @@ func TestARefusalReachesTheOperatorBeforeTheStatus(t *testing.T) {
 	root.SetErr(&out)
 	root.SetArgs([]string{"create", "--server", srv.URL})
 
-	err := root.ExecuteContext(context.Background())
-	if err == nil {
+	if err := root.ExecuteContext(context.Background()); err == nil {
 		t.Fatal("a 403 returned no error, so the command would exit 0")
 	}
 	if !strings.Contains(out.String(), "system:update") {
 		t.Fatalf("stdout = %q, want the refusal to name the permission to ask for", out.String())
 	}
-}
-
-// quoteJSON is a minimal JSON string encoder for the fixture body above, so the
-// message can be written once and shared with the assertion.
-func quoteJSON(s string) string {
-	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+	// The WHOLE message, not a prefix of it: the recovery that needs no grant is
+	// the last sentence, and a renderer that truncated would drop exactly that.
+	// Decoded off the front of stdout, since cobra's own error line and usage
+	// follow the body the command printed.
+	var shown struct {
+		Detail string `json:"detail"`
+	}
+	if err := json.NewDecoder(bytes.NewReader(out.Bytes())).Decode(&shown); err != nil {
+		t.Fatalf("stdout does not open with the problem document the CLI was handed: %v (%q)", err, out.String())
+	}
+	if shown.Detail != api.ErrSystemBindNeedsUpdate {
+		t.Errorf("stdout carried detail %q, want the API's own %q", shown.Detail, api.ErrSystemBindNeedsUpdate)
+	}
 }
