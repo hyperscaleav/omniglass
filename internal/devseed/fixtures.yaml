@@ -7,6 +7,37 @@
 # every server start in every environment) and it must NEVER run in production:
 # these are operator rows. It references reference data (location types, roles) by
 # id, so the boot seed must run first.
+#
+# # key, name, display_name: three fields, three owners
+#
+# Every location, component and system carries a `key`. The key is LOCAL to this
+# document: it is how one fixture row references another (`parent: west`,
+# `location: boardroom`), it is never written to the database, and it is NOT the
+# row's name. It cannot be, because most of this estate does not know its own
+# name until the platform mints one.
+#
+# `name` is optional, and its absence is the whole point of this fixture (#657):
+# a row with no name asks the platform to name it, so what comes up demonstrates
+# the generator rather than a list of names somebody typed. A row that DOES carry
+# a name is one the platform cannot name: every LOCATION here is such a row,
+# because no shipped location_type carries a name rule (ADR-0103), and a campus,
+# a building, a floor and a room each have a real-world name an operator already
+# knows. The components and the systems are what demonstrate the generator.
+#
+# `display_name` is the LABEL, and setting one takes the pen from the platform
+# (#682), so it is set only where an operator override is the point:
+#
+#   - the power conditioner, which carries no product, so the component rule can
+#     only render "Generic Device 1" and says nothing about what the thing is;
+#   - the two boardroom halves, because which half is A and which is B is a fact
+#     about the air wall, not about the system;
+#   - the locations listed under LABELS below, each of which says something its
+#     name cannot.
+#
+# Everything else lets the rule render: a component reads "Display 1", "Video Bar
+# 2" and so on, from the shipped component rule over its resolved type and the
+# ordinal the generator allocated.
+#
 # The estate is a FOREST: three unparented tops (hq, east, airport), never one
 # root. There is no root location and no "bind this to every location", so a
 # binding at hq covers hq and nothing else, and a fourth site added next year
@@ -14,61 +45,114 @@
 # all of them, which is why the seed places devices under two different tops (see
 # components, below): with everything under one top, a binding there would look
 # like it covered the estate.
+#
+# LABELS. The shipped location rule reads a location's own name as words and
+# titles it (#657), so most of these rows need no display_name at all: a room
+# named `boardroom` renders "Boardroom" from the rule, and pinning that same
+# string would hide the feature behind a hand-typed copy of its own output. A
+# display_name survives here only where it says something the NAME cannot, and
+# each survivor states which. `TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint`
+# pins the set by key.
 locations:
   # Headquarters: the deepest site (campus -> building -> floor -> rooms).
-  - name: hq
+  #
+  # Pinned: the rule would render "Hq". The word an operator says is
+  # "Headquarters", and no dictionary entry turns a name into a longer word.
+  - key: hq
+    name: hq
     display_name: Headquarters
     type: campus
-  - name: hq-west
+  # Pinned: the name is a bearing, the label is the building. `west` renders
+  # "West", which is a direction rather than a place.
+  - key: west
+    name: west
     display_name: West Building
     type: building
     parent: hq
-  - name: hq-west-2
-    display_name: Level 2
+  # A floor is named by the operator, like every other place here. It carried
+  # the estate's one generated location name for two slices, `1`, under a
+  # positional `floor` rule; ADR-0103 reversed that, because a floor's
+  # designation is B2, LG, G, M, 12A, and an ordinal cannot spell any of them.
+  # This one's designation is Level 2, so its NAME is level-2 and the shipped
+  # location rule renders "Level 2" from it: the two agree because they are the
+  # same fact, which is the point the divergence used to make the hard way.
+  #
+  # No display_name: the rule renders it. Pinning "Level 2" here would be a
+  # hand-typed copy of the rule's own output.
+  - key: west-l2
+    name: level-2
     type: floor
-    parent: hq-west
-  - name: hq-west-2-boardroom
-    display_name: Boardroom
+    parent: west
+  # A room's name is ground truth an operator knows, so the fixture types it. It
+  # needs no ancestry in it: names are unique within their parent (not across the
+  # estate), so `boardroom` under this floor is a complete name and
+  # `hq.west.level-2.boardroom` is the address that disambiguates it.
+  #
+  # No display_name: the shipped rule renders "Boardroom" from this name, and a
+  # pin restating it would only hide which of the two produced it.
+  - key: boardroom
+    name: boardroom
     type: room
-    parent: hq-west-2
-  - name: hq-west-2-huddle
+    parent: west-l2
+  # Pinned: "Huddle" is not what anybody calls the room, and the noun is not in
+  # the name. Compare the media lab below, whose name carries both words.
+  - key: huddle
+    name: huddle
     display_name: Huddle Room
     type: room
-    parent: hq-west-2
+    parent: west-l2
 
   # East Campus: a second site.
-  - name: east
+  #
+  # Pinned for the reason `west` is: a bearing is not a place.
+  - key: east
+    name: east
     display_name: East Campus
     type: campus
-  - name: east-hall
+  # Pinned: "Innovation" is a fact about this building that its name does not
+  # carry and no rule can invent.
+  - key: hall
+    name: hall
     display_name: Innovation Hall
     type: building
     parent: east
-  - name: east-hall-1
-    display_name: Level 1
+  # The other floor, in another building, named for its own designation. No
+  # display_name: the rule renders "Level 1".
+  - key: hall-l1
+    name: level-1
     type: floor
-    parent: east-hall
-  - name: east-hall-1-auditorium
-    display_name: Auditorium
+    parent: hall
+  # No display_name: the rule renders "Auditorium".
+  - key: auditorium
+    name: auditorium
     type: room
-    parent: east-hall-1
-  - name: east-hall-1-lab
-    display_name: Media Lab
+    parent: hall-l1
+  # No display_name, and this is the row that shows what the rule actually DOES:
+  # a two-word name, which the rule reads as words and titles into "Media Lab".
+  # The other rooms are one word, so they show only the casing half.
+  - key: lab
+    name: media-lab
     type: room
-    parent: east-hall-1
+    parent: hall-l1
 
   # Airport Office: a small third site (campus -> building -> room).
-  - name: airport
+  #
+  # Pinned: `airport` is where the site is, "Airport Office" is what it is.
+  - key: airport
+    name: airport
     display_name: Airport Office
     type: campus
-  - name: airport-annex
-    display_name: Annex
+  # No display_name: the rule renders "Annex".
+  - key: annex
+    name: annex
     type: building
     parent: airport
-  - name: airport-annex-briefing
+  # Pinned for the reason the huddle room is: the noun is not in the name.
+  - key: briefing
+    name: briefing
     display_name: Briefing Room
     type: room
-    parent: airport-annex
+    parent: annex
 
 users:
   # Username convention: a user limited to a region carries that region in its name
@@ -140,7 +224,7 @@ tags:
     propagates: false
 tag_bindings:
   - key: environment
-    location: hq-west
+    location: west
     value: staging
 
 # Files: a few example handles over the content-addressed blob store, so the
@@ -177,58 +261,60 @@ product_properties:
     property: mac-address
 
 # Components: example devices placed in the estate, so the Components directory
-# comes up populated. The Lobby Display sits in the Boardroom under the west
-# building, whose subtree also carries the environment=staging tag override, so a
-# single component teaches both the property contract and the tag cascade. Its
-# shape comes from the product it is an instance of.
+# comes up populated. Not one of them names itself: each asks the platform for a
+# name, which mints it from the product's resolved component_type stem and the
+# lowest free ordinal in its own room. So the huddle display, the first boardroom
+# panel and the auditorium display are ALL called `display-1`, one per room,
+# which is the placement-scoped name index doing its job; nothing here has to
+# spell out where it is in order to be unique.
 #
-# The Auditorium Display sits under a DIFFERENT top (east), which is what makes the
-# forest consequential: it is outside the hq-west binding's subtree, so its
-# environment resolves to the platform value (prod) while the Lobby Display reads
-# staging. Same key, two rungs, because a binding at a top covers that top only and
-# no location binding can cover the whole estate.
+# The huddle display sits under the west building, whose subtree also carries the
+# environment=staging tag override, so a single component teaches both the
+# property contract and the tag cascade. The auditorium display sits under a
+# DIFFERENT top (east), which is what makes the forest consequential: it is
+# outside the west binding's subtree, so its environment resolves to the platform
+# value (prod) while the huddle display reads staging. Same key, two rungs,
+# because a binding at a top covers that top only and no location binding can
+# cover the whole estate.
 components:
-  - name: lobby-display
-    display_name: Lobby Display
+  - key: huddle-display
     product: samsung-qm55
-    location: hq-west-2-boardroom
-  - name: shared-bar
-    display_name: Shared Room Bar
+    location: huddle
+  - key: shared-bar
     product: cisco-room-bar
-    location: hq-west-2-boardroom
-  - name: boardroom-a-bar
-    display_name: Boardroom A Bar
+    location: boardroom
+  - key: bar-a
     product: cisco-room-bar
-    location: hq-west-2-boardroom
-  - name: boardroom-a-panel
-    display_name: Boardroom A Display
+    location: boardroom
+  - key: panel-a
     product: samsung-qm55
-    location: hq-west-2-boardroom
-  - name: boardroom-b-panel
-    display_name: Boardroom B Display
+    location: boardroom
+  - key: panel-b
     product: samsung-qm55
-    location: hq-west-2-boardroom
+    location: boardroom
   # No product on purpose: it classifies as generic-device, a type no role's
   # accepted_types names, so no role can want it. It is in the room and
   # accounted for, and nothing more, which is exactly the case membership
-  # exists to carry.
-  - name: boardroom-power
-    display_name: Boardroom Power Conditioner
-    location: hq-west-2-boardroom
-  - name: auditorium-display
-    display_name: Auditorium Display
+  # exists to carry. It is also the one component that keeps a typed label:
+  # with no product there is no classification for the rule to read, so the
+  # rendered label would be "Generic Device 1", and the operator's own words
+  # are the only thing that says what the box is.
+  - key: power
+    display_name: Power Conditioner
+    location: boardroom
+  - key: auditorium-display
     product: samsung-qm55
-    location: east-hall-1-auditorium
+    location: auditorium
 
-# Property values: two overrides the Lobby Display declares over its product's
+# Property values: two overrides the huddle display declares over its product's
 # contract, so the effective-properties panel teaches direct-vs-inherited.
 # `model-number` stays unset and resolves to the product default ("QM55"), and
 # `mac-address` stays unset with no default, showing the other two states.
 property_values:
-  - component: lobby-display
+  - component: huddle-display
     property: serial-number
     value: SN-1183
-  - component: lobby-display
+  - component: huddle-display
     property: firmware-version
     value: 2.1.4
 
@@ -236,17 +322,23 @@ property_values:
 # This is the case a single system pointer on a component could never express, and
 # it is why membership is many-valued: the shared room bar feeds BOTH halves and is a
 # member of each, while the mics and displays belong to one half only.
+#
+# Neither names itself either: both are `board` systems in the same room, so the
+# platform mints `boardroom` for the first (the first of its stem in a bucket
+# carries no ordinal, ADR-0101) and `boardroom-2` for the second. Which half is A
+# and which is B is a fact about the air wall rather than about the system, so
+# that one lives in the label.
 systems:
-  - name: boardroom-a
+  - key: boardroom-a
     display_name: Boardroom A
     standard: meeting-room
     system_type: board
-    location: hq-west-2-boardroom
-  - name: boardroom-b
+    location: boardroom
+  - key: boardroom-b
     display_name: Boardroom B
     standard: meeting-room
     system_type: board
-    location: hq-west-2-boardroom
+    location: boardroom
 
 # Membership without a job. The shared bar staffs the microphone role in both halves
 # (below, through assignment), but the power conditioner fills no declared role at
@@ -254,7 +346,7 @@ systems:
 # only knew about staffing would lose it.
 members:
   - system: boardroom-a
-    component: boardroom-power
+    component: power
 
 # Staffing, which creates the membership as a side effect. boardroom-a is fully
 # staffed and reads healthy; boardroom-b is one microphone short of its quorum of
@@ -265,13 +357,13 @@ role_assignments:
     component: shared-bar
   - system: boardroom-a
     role: room-mic
-    component: boardroom-a-bar
+    component: bar-a
   - system: boardroom-a
     role: main-display
-    component: boardroom-a-panel
+    component: panel-a
   - system: boardroom-b
     role: room-mic
     component: shared-bar
   - system: boardroom-b
     role: main-display
-    component: boardroom-b-panel
+    component: panel-b

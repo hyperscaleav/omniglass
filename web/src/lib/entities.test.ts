@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createIdentity, deriveName, entityLabel, hasDisplayName } from "./entities";
+import { createIdentity, deriveName, entityLabel, hasDisplayName, labelGenerated, labelIsName } from "./entities";
 
 describe("entityLabel", () => {
   it("prefers the display name", () => {
@@ -28,6 +28,40 @@ describe("entityLabel", () => {
   });
 });
 
+// labelIsName is the question a surface asks to decide the FACE it renders in:
+// the data face for an identifier, the prose face for words somebody (or some
+// rule) chose. It is deliberately blind to the pen, because a rendered label is
+// prose whoever owns it.
+describe("labelIsName", () => {
+  it("is true exactly when the label an operator reads is the identifier", () => {
+    expect(labelIsName({ name: "codec-1" })).toBe(true);
+    expect(labelIsName({ name: "codec-1", display_name: "" })).toBe(true);
+    expect(labelIsName({ name: "codec-1", display_name: "  " })).toBe(true);
+    expect(labelIsName({ name: "codec-1", display_name: "codec-1" })).toBe(true);
+    expect(labelIsName({ name: "codec-1", display_name: "Codec One" })).toBe(false);
+  });
+
+  it("does not consult the pen: a rendered label is prose whoever owns it", () => {
+    expect(labelIsName({ name: "display-1", display_name: "Display 1", display_name_generated: true })).toBe(false);
+    expect(labelIsName({ name: "display-1", display_name: "", display_name_generated: true })).toBe(true);
+  });
+});
+
+// hasDisplayName answers "did a HUMAN choose this label", which decides whether a
+// surface shows the name on a second line of its own.
+//
+// It used to answer that by comparing two strings, and that was the same question
+// only while every label was operator-typed. #682 made a label something a rule
+// can render, and a rendered label differs from the name just as an operator's
+// does, so the string comparison would have grown a second identifier line under
+// every row in the estate. The pen (display_name_generated) is the fact that was
+// missing, and #683 put it on the wire.
+//
+// The string comparison survives as the second half of a conjunction rather than
+// being replaced: a row can hold the pen and still read as its own name (a rule
+// that renders nothing stores NULL and KEEPS the pen, ADR-0098), and an entity
+// with no pen at all (every catalog registry row: a product, a vendor, a role)
+// is unchanged by this slice.
 describe("hasDisplayName", () => {
   it("is true only when the display name says something the name does not", () => {
     expect(hasDisplayName({ name: "codec-1", display_name: "Codec One" })).toBe(true);
@@ -38,6 +72,65 @@ describe("hasDisplayName", () => {
   // A display name set to exactly the name is not a second thing to show.
   it("is false when the display name merely repeats the name", () => {
     expect(hasDisplayName({ name: "codec-1", display_name: "codec-1" })).toBe(false);
+  });
+
+  // The redefinition. Same label, same name, opposite answer, and the pen is the
+  // only thing that differs.
+  it("is false for a label the platform rendered, however unlike the name it is", () => {
+    expect(hasDisplayName({ name: "display-1", display_name: "Display 1", display_name_generated: true })).toBe(false);
+  });
+
+  it("is true for a label an operator typed, which is what the pen being false means", () => {
+    expect(hasDisplayName({ name: "display-1", display_name: "Display 1", display_name_generated: false })).toBe(true);
+  });
+
+  // A registry row carries no pen at all, so undefined must read as "the operator
+  // owns it": every catalog page would otherwise lose its identifier line.
+  it("treats an absent pen as operator-owned", () => {
+    expect(hasDisplayName({ name: "shure-mxa920", display_name: "Shure MXA920" })).toBe(true);
+  });
+
+  // A rule with nothing to say about a row stores NULL and keeps the pen
+  // (ADR-0098), so the row reads as its own name and has no second line to show.
+  it("is false when the platform holds the pen but rendered nothing", () => {
+    expect(hasDisplayName({ name: "codec-1", display_name: "", display_name_generated: true })).toBe(false);
+  });
+});
+
+// labelGenerated is the other half of the pen: not "is there a second string"
+// but "whose words are these". It is what makes a platform-owned label visually
+// distinguishable from one the operator chose, which is the thing a bare
+// hasDisplayName can no longer say on its own.
+describe("labelGenerated", () => {
+  it("is true only when the platform holds the pen AND has something to show for it", () => {
+    expect(labelGenerated({ name: "display-1", display_name: "Display 1", display_name_generated: true })).toBe(true);
+    expect(labelGenerated({ name: "display-1", display_name: "Display 1", display_name_generated: false })).toBe(false);
+    expect(labelGenerated({ name: "display-1" })).toBe(false);
+  });
+
+  // Holding the pen over an empty render is not a generated label: what the row
+  // shows IS its name, and marking it "generated" would claim credit for the
+  // fallback.
+  it("is false when the pen rendered nothing, so the name is what shows", () => {
+    expect(labelGenerated({ name: "codec-1", display_name: "", display_name_generated: true })).toBe(false);
+    expect(labelGenerated({ name: "codec-1", display_name: "   ", display_name_generated: true })).toBe(false);
+    expect(labelGenerated({ name: "codec-1", display_name: "codec-1", display_name_generated: true })).toBe(false);
+  });
+});
+
+// The two predicates partition the labels that differ from their name: exactly
+// one of them is true for any row showing a label, and neither is true for a row
+// showing only its name. A surface can therefore branch on them without a third
+// state to invent.
+describe("hasDisplayName and labelGenerated", () => {
+  it.each([
+    ["operator label", { name: "n-1", display_name: "Label", display_name_generated: false }, true, false],
+    ["platform label", { name: "n-1", display_name: "Label", display_name_generated: true }, false, true],
+    ["no label", { name: "n-1", display_name: "", display_name_generated: true }, false, false],
+    ["no pen, no label", { name: "n-1" }, false, false],
+  ])("never both for %s", (_case, entity, operator, platform) => {
+    expect(hasDisplayName(entity)).toBe(operator);
+    expect(labelGenerated(entity)).toBe(platform);
   });
 });
 

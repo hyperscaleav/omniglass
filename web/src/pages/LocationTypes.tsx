@@ -20,7 +20,7 @@ import {
 } from "../lib/location_types";
 import { useMe, can } from "../lib/auth";
 import { registryLock } from "../lib/catalog";
-import { createIdentity } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -72,7 +72,7 @@ export default function LocationTypes() {
         loading: () => types.isPending,
         error: () => types.error,
         filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (r) => `${r.name} ${r.display_name}`, values: () => [] },
+          { key: "name", type: "string", hint: "substring", get: (r) => `${entityLabel(r)} ${r.name}`, values: () => [] },
           { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
         ],
         filterPlaceholder: "filter location types by name…",
@@ -117,6 +117,14 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
   const [icon, setIcon] = createSignal("");
   const allTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
   const typeOptions = () => allTypes.data ?? [];
+  // An allowed parent is stored as a type NAME (or the root sentinel), and the
+  // badge reads its label. A name with no row behind it (a type deleted out from
+  // under the constraint) shows the name itself rather than a blank badge.
+  const parentTypeLabel = (name: string) => {
+    if (name === ROOT_PLACEMENT) return "Root";
+    const row = typeOptions().find((t) => t.name === name);
+    return row ? entityLabel(row) : name;
+  };
   const [allowedParents, setAllowedParents] = createSignal<string[]>([]);
 
   createEffect(on(edit.editing, (editing) => {
@@ -206,7 +214,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
                   <For each={r().allowed_parent_types}>
                     {(pid) => (
                       <span class="badge badge-outline badge-sm">
-                        {pid === ROOT_PLACEMENT ? "Root" : typeOptions().find((t) => t.name === pid)?.display_name ?? pid}
+                        {parentTypeLabel(pid)}
                       </span>
                     )}
                   </For>

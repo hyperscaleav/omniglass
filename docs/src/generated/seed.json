@@ -671,5 +671,19 @@
    "display_name": "Generic Service",
    "kind": "service"
   }
+ ],
+ "label_rules": [
+  {
+   "entity_kind": "component",
+   "template": "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}"
+  },
+  {
+   "entity_kind": "system",
+   "template": "{{.TypeName}}"
+  },
+  {
+   "entity_kind": "location",
+   "template": "{{title (words .Name)}}"
+  }
  ]
 }

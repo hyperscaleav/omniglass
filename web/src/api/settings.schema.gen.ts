@@ -14,6 +14,11 @@ export const settingsSchema = {
       "type": "string"
     }
   },
+  "label": {
+    "acronyms": {
+      "type": "array"
+    }
+  },
   "ui": {
     "default_landing": {
       "type": "string",

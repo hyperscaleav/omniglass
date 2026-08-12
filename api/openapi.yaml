@@ -364,6 +364,9 @@ components:
             - "null"
         display_name:
           type: string
+        display_name_generated:
+          description: "Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."
+          type: boolean
         effective_tags:
           additionalProperties:
             type: string
@@ -422,6 +425,7 @@ components:
         - name
         - system_count
         - name_generated
+        - display_name_generated
       type: object
     ComponentMetricsOutputBody:
       additionalProperties: false
@@ -526,6 +530,9 @@ components:
           type: string
         id:
           description: The component_type's uuid, the stable handle that survives a rename
+          type: string
+        label_rule:
+          description: The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components
           type: string
         name:
           description: The name an operator reads and types; renameable
@@ -643,6 +650,9 @@ components:
           type: string
         icon:
           description: A glyph key; omit to inherit the parent's
+          type: string
+        label_rule:
+          description: A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422.
           type: string
         name:
           description: The globally unique name
@@ -886,7 +896,7 @@ components:
           minLength: 1
           type: string
         name:
-          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens)
+          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule.
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -895,7 +905,6 @@ components:
           description: Parent location name; omit for a root location
           type: string
       required:
-        - name
         - location_type
       type: object
     CreateLocationTypeInputBody:
@@ -922,12 +931,18 @@ components:
         icon:
           description: A glyph key; the console falls back to map-pin when empty
           type: string
+        label_rule:
+          description: The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile
+          type: string
         name:
           description: The globally unique name (e.g. wing); "root" is reserved
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
           type: string
+        name_rule:
+          $ref: "#/components/schemas/NameRuleBody"
+          description: How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name
       required:
         - name
         - display_name
@@ -1113,6 +1128,9 @@ components:
             - app
             - service
           type: string
+        label_rule:
+          description: A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422.
+          type: string
         name:
           description: The globally unique name; renameable
           maxLength: 100
@@ -1252,7 +1270,7 @@ components:
           description: Location name this system is placed at
           type: string
         name:
-          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens)
+          description: Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem.
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
@@ -1266,8 +1284,6 @@ components:
         system_type_id:
           description: The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified
           type: string
-      required:
-        - name
       type: object
     CreateSystemTypeInputBody:
       additionalProperties: false
@@ -1288,6 +1304,9 @@ components:
           type: string
         icon:
           description: A glyph key; omit to inherit the parent's
+          type: string
+        label_rule:
+          description: The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile
           type: string
         name:
           description: The globally unique name
@@ -1450,6 +1469,26 @@ components:
         - name
         - content_type
         - content
+      type: object
+    DraftLabelOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/DraftLabelOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        label:
+          description: The label the create would store, with the token "n" standing where the ordinal will go. Empty means no label is stored and the surface falls back to the name.
+          type: string
+        rule:
+          description: The label rule that produced it, resolved through the same tiers the create uses. Empty means no tier carries a rule for this classification.
+          type: string
+      required:
+        - label
+        - rule
       type: object
     DriverBody:
       additionalProperties: false
@@ -2370,6 +2409,98 @@ components:
         - close_blade
         - command_palette
       type: object
+    LabelChangeBody:
+      additionalProperties: false
+      properties:
+        from:
+          description: The label as stored now; empty when the entity has none
+          type: string
+        id:
+          description: The entity's uuid
+          type: string
+        kind:
+          description: "The entity kind this row belongs to: component, system, or location"
+          type: string
+        name:
+          description: The entity's name, for display
+          type: string
+        to:
+          description: The label its rules produce; empty when the rule renders nothing
+          type: string
+      required:
+        - kind
+        - id
+        - name
+        - from
+        - to
+      type: object
+    LabelRecomputeOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/LabelRecomputeOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        changed:
+          description: "Every row, one entry each. Bounded by the estate, not paginated: this is the whole blast radius by design"
+          items:
+            $ref: "#/components/schemas/LabelChangeBody"
+          type:
+            - array
+            - "null"
+        count:
+          description: How many rows changed, or would change
+          format: int64
+          type: integer
+      required:
+        - count
+        - changed
+      type: object
+    LabelSettings:
+      additionalProperties: false
+      properties:
+        acronyms:
+          default:
+            - AV
+            - BYOD
+            - DSP
+            - EDID
+            - HDBaseT
+            - HDCP
+            - HDMI
+            - IP
+            - IR
+            - KVM
+            - LAN
+            - LCD
+            - LED
+            - MTR
+            - NDI
+            - NVR
+            - OLED
+            - PC
+            - PoE
+            - PTZ
+            - RF
+            - SDI
+            - SIP
+            - TV
+            - UC
+            - USB
+            - VC
+            - VLAN
+            - 4K
+            - 8K
+          description: Words a generated label title-cases to a fixed form, whole-word and case-insensitive
+          items:
+            type: string
+          type: array
+      required:
+        - acronyms
+      type: object
     ListAlarmsOutputBody:
       additionalProperties: false
       properties:
@@ -3142,6 +3273,9 @@ components:
             - "null"
         display_name:
           type: string
+        display_name_generated:
+          description: "Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."
+          type: boolean
         effective_tags:
           additionalProperties:
             type: string
@@ -3157,6 +3291,9 @@ components:
           type: string
         name:
           type: string
+        name_generated:
+          description: Whether the platform picked this name (from the location_type's name rule) rather than an operator typing it.
+          type: boolean
         parent:
           description: The parent location's name, for display; absent for a site root
           type: string
@@ -3179,6 +3316,8 @@ components:
       required:
         - id
         - name
+        - name_generated
+        - display_name_generated
         - location_type
         - location_type_id
       type: object
@@ -3278,9 +3417,15 @@ components:
         id:
           description: The location type's uuid, the stable handle that survives a rename
           type: string
+        label_rule:
+          description: The label template locations of this type get; empty falls back to the global rule for locations
+          type: string
         name:
           description: The name an operator reads and types; renameable
           type: string
+        name_rule:
+          $ref: "#/components/schemas/NameRuleBody"
+          description: How the platform NAMES locations of this type; absent means an operator names every one of them
         official:
           type: boolean
       required:
@@ -3550,6 +3695,20 @@ components:
           description: Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system (requires an all-scoped move grant).
           type: string
       type: object
+    NameRuleBody:
+      additionalProperties: false
+      properties:
+        bare_first:
+          description: Suppress the ordinal on the first of this stem in a parent, so the only wing there is wing and the second is wing-2. Ignored when stem is empty.
+          type: boolean
+        stem:
+          description: The generated name's prefix (wing gives wing, wing-2); empty makes the type positional, so the name is the ordinal alone (1, 2, 3)
+          maxLength: 90
+          pattern: ^([a-z0-9][a-z0-9-]*)?$
+          type: string
+      required:
+        - stem
+      type: object
     NodeBody:
       additionalProperties: false
       properties:
@@ -3744,6 +3903,9 @@ components:
             - device
             - app
             - service
+          type: string
+        label_rule:
+          description: The label template instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule
           type: string
         name:
           description: The name an operator reads and types; renameable
@@ -4299,6 +4461,73 @@ components:
       required:
         - dash
         - bare
+      type: object
+    RenderComponentLabelInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RenderComponentLabelInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        location:
+          description: "The location this component will sit at, by name or uuid. Resolved within the caller's location:read scope: a location out of scope is refused, never rendered."
+          type: string
+        name:
+          description: The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token "n"; supply it to render the label an operator-named row would carry, which has no ordinal at all.
+          type: string
+        product:
+          description: The product this component is an instance of, by name or uuid; the classification both a label rule and a generated name are resolved from
+          type: string
+        system:
+          description: The system this component will belong to, by name or uuid. Resolved within the caller's system:read scope.
+          type: string
+      required:
+        - product
+      type: object
+    RenderLocationLabelInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RenderLocationLabelInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        location_type:
+          description: The location_type this location is classified by, by name or uuid
+          type: string
+        name:
+          description: The name the row will carry. Omit it to render the label the platform's own generated name would produce, which a location_type with no name rule refuses; supply it to render the label an operator-named location would carry.
+          type: string
+      required:
+        - location_type
+      type: object
+    RenderSystemLabelInputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/RenderSystemLabelInputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        location:
+          description: The location this system will sit at, by name or uuid. Resolved within the caller's location:read scope.
+          type: string
+        name:
+          description: The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token "n"; supply it to render the label an operator-named row would carry, which has no ordinal at all.
+          type: string
+        standard_id:
+          description: The standard this system conforms to, by name or uuid; omit for a one-off system
+          type: string
+        system_type_id:
+          description: "The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row."
+          type: string
       type: object
     ResetPasswordInputBody:
       additionalProperties: false
@@ -4990,11 +5219,14 @@ components:
       properties:
         keybindings:
           $ref: "#/components/schemas/Keybindings"
+        label:
+          $ref: "#/components/schemas/LabelSettings"
         ui:
           $ref: "#/components/schemas/UISettings"
       required:
         - ui
         - keybindings
+        - label
       type: object
     SettingsMeOutputBody:
       additionalProperties: false
@@ -5173,6 +5405,9 @@ components:
             - "null"
         display_name:
           type: string
+        display_name_generated:
+          description: "Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."
+          type: boolean
         effective_tags:
           additionalProperties:
             type: string
@@ -5192,6 +5427,9 @@ components:
           type: integer
         name:
           type: string
+        name_generated:
+          description: Whether the platform picked this name (from the system_type's stem) rather than an operator typing it.
+          type: boolean
         parent:
           description: The parent system's name, for display; absent for a root system
           type: string
@@ -5226,6 +5464,8 @@ components:
       required:
         - id
         - name
+        - name_generated
+        - display_name_generated
         - member_count
       type: object
     SystemMemberBody:
@@ -5403,6 +5643,9 @@ components:
           type: string
         id:
           description: The system_type's uuid, the stable handle that survives a rename
+          type: string
+        label_rule:
+          description: The label template systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems
           type: string
         name:
           description: The name an operator reads and types; renameable
@@ -5631,6 +5874,9 @@ components:
         icon:
           description: A new glyph key
           type: string
+        label_rule:
+          description: A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse.
+          type: string
         stem:
           description: A new name prefix. Lowercase letters, digits, and hyphens.
           maxLength: 100
@@ -5747,6 +5993,12 @@ components:
         icon:
           description: A new glyph key; the console falls back to map-pin when empty
           type: string
+        label_rule:
+          description: "A new label template for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels"
+          type: string
+        name_rule:
+          $ref: "#/components/schemas/NameRuleBody"
+          description: "A new name rule for locations of this type; omit to leave unchanged. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row"
       type: object
     UpdateMeInputBody:
       additionalProperties: false
@@ -5861,6 +6113,9 @@ components:
             - app
             - service
           type: string
+        label_rule:
+          description: A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse.
+          type: string
         parent_product_id:
           description: A new parent product, by handle or uuid
           type: string
@@ -5960,6 +6215,9 @@ components:
           type: string
         icon:
           description: A new glyph key
+          type: string
+        label_rule:
+          description: "A new label template for systems of this type; omit to leave unchanged, \"\" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels"
           type: string
         stem:
           description: A new name prefix. Lowercase letters, digits, and hyphens.
@@ -6673,7 +6931,7 @@ paths:
       summary: Delete a component type
       x-omniglass-permission: component_type:delete
     patch:
-      description: "Patches a component_type's display_name, stem, icon, abbrev, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update."
+      description: "Patches a component_type's display_name, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update."
       operationId: update-component-type
       parameters:
         - in: path
@@ -7535,6 +7793,69 @@ paths:
           description: Error
       summary: Check a component name
       x-omniglass-permission: component:update
+  /components:previewLabels:
+    post:
+      description: "Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by component:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it."
+      operationId: preview-component-labels
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabelRecomputeOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Preview a component label recompute
+      x-omniglass-permission: component:update
+  /components:recomputeLabels:
+    post:
+      description: "Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by component:update."
+      operationId: recompute-component-labels
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabelRecomputeOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Recompute component labels
+      x-omniglass-permission: component:update
+  /components:renderLabel:
+    post:
+      description: "Renders the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is written as the token \"n\", because it is allocated against live siblings inside the create's own transaction and does not exist until the row does. Omitting name renders the label the platform's own generated name would produce, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the location and system refs resolve within the caller's location:read and system:read scopes, because the rendered string can carry their labels."
+      operationId: render-component-label
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenderComponentLabelInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DraftLabelOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Render the label a component create would store
+      x-omniglass-permission: component:create
   /drivers:
     get:
       description: Lists the driver registry, ordered alphabetically by display name. Populates the driver picker on the product form. Gated by driver:read.
@@ -8060,7 +8381,7 @@ paths:
       summary: List location types
       x-omniglass-permission: location_type:read
     post:
-      description: Creates a custom (non-official) location_type. Gated by location_type:create.
+      description: Creates a custom (non-official) location_type, optionally with the label_rule locations of that type get. An unparseable rule is a 422. Gated by location_type:create.
       operationId: create-location-type
       requestBody:
         content:
@@ -8107,7 +8428,7 @@ paths:
       summary: Delete a location type
       x-omniglass-permission: location_type:delete
     patch:
-      description: Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by location_type:update.
+      description: "Patches a location_type's display_name, icon, allowed parents, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by location_type:update."
       operationId: update-location-type
       parameters:
         - in: path
@@ -8348,7 +8669,7 @@ paths:
       summary: List locations in scope
       x-omniglass-permission: location:read
     post:
-      description: Creates a location, optionally under a parent (a root needs an all-scoped grant). Gated by location:create.
+      description: Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
       operationId: create-location
       requestBody:
         content:
@@ -8421,7 +8742,7 @@ paths:
       summary: Get a location
       x-omniglass-permission: location:read
     patch:
-      description: "Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Gated by location:update; the read and update scopes drive the 404 versus 403 split."
+      description: "Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split."
       operationId: update-location
       parameters:
         - description: The location's name, or a dotted address (e.g. boi.17c.415a)
@@ -8631,7 +8952,7 @@ paths:
       x-omniglass-permission: location:read
   /locations/{name}:move:
     post:
-      description: "Re-parents a location (a tree move): parent is required (422 if omitted), cycle-guarded, and placement-validated against the resolved location_type. Moving to root is not supported (422): MoveLocation gains no clear-to-root capability locations have never had. A separate act from update, and a separately grantable one (location:move), because a placement change is an authorization act, not a label edit. Recorded under its own audit verb, move, distinct from update. Does not recompute health. A taken name at the destination is a 409. Gated by location:move; the read and move scopes drive the 404 versus 403 split."
+      description: "Re-parents a location (a tree move): parent is required (422 if omitted), cycle-guarded, and placement-validated against the resolved location_type. Moving to root is not supported (422): MoveLocation gains no clear-to-root capability locations have never had. A separate act from update, and a separately grantable one (location:move), because a placement change is an authorization act, not a label edit. Recorded under its own audit verb, move, distinct from update. Does not recompute health. A taken name at the destination is a 409. A move can RENAME the location: a platform-generated name is scoped to its parent bucket, so a move that changes the parent re-mints the name and the ordinal under the new parent, from the same location_type name rule. A move that re-states the current parent leaves the name alone, and an operator-typed name is never touched. Gated by location:move; the read and move scopes drive the 404 versus 403 split."
       operationId: move-location
       parameters:
         - description: The location's name, or a dotted address (e.g. boi.17c.415a)
@@ -8724,6 +9045,33 @@ paths:
           description: Error
       summary: Rename a location
       x-omniglass-permission: location:rename
+  /locations/{name}:resetName:
+    post:
+      description: "Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped estate has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses."
+      operationId: reset-location-name
+      parameters:
+        - description: The location's name, or a dotted address (e.g. boi.17c.415a)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The location's name, or a dotted address (e.g. boi.17c.415a)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Regenerate a location's name
+      x-omniglass-permission: location:rename
   /locations/{name}:setTag:
     post:
       description: Binds a value for a key on a location. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by location:update.
@@ -8782,6 +9130,69 @@ paths:
           description: Error
       summary: Check a location name
       x-omniglass-permission: location:update
+  /locations:previewLabels:
+    post:
+      description: "Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by location:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it."
+      operationId: preview-location-labels
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabelRecomputeOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Preview a location label recompute
+      x-omniglass-permission: location:update
+  /locations:recomputeLabels:
+    post:
+      description: "Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by location:update."
+      operationId: recompute-location-labels
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabelRecomputeOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Recompute location labels
+      x-omniglass-permission: location:update
+  /locations:renderLabel:
+    post:
+      description: The location tier of :renderLabel on components. Renders the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create. No placement scope is injected because a location's label rule reads no other estate row.
+      operationId: render-location-label
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenderLocationLabelInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DraftLabelOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Render the label a location create would store
+      x-omniglass-permission: location:create
   /metric-types:
     get:
       description: Lists every registered metric type (official and custom). The catalog is estate-wide reference data. Gated by metric_type:read.
@@ -11312,7 +11723,7 @@ paths:
       summary: List system types
       x-omniglass-permission: system_type:read
     post:
-      description: Creates a custom (non-official) system_type, optionally under a parent. A root type must carry a stem, since it has no ancestor to inherit one from. Gated by system_type:create.
+      description: Creates a custom (non-official) system_type, optionally under a parent and optionally with the label_rule systems of that type get. A root type must carry a stem, since it has no ancestor to inherit one from. An unparseable label_rule is a 422. Gated by system_type:create.
       operationId: create-system-type
       requestBody:
         content:
@@ -11359,7 +11770,7 @@ paths:
       summary: Delete a system type
       x-omniglass-permission: system_type:delete
     patch:
-      description: Patches a custom system_type's display_name, stem, icon, or abbrev. Official types are read-only (422). Gated by system_type:update.
+      description: "Patches a custom system_type's display_name, stem, icon, abbrev, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /systems:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by system_type:update."
       operationId: update-system-type
       parameters:
         - in: path
@@ -12012,7 +12423,7 @@ paths:
       x-omniglass-permission: system:read
   /systems/{name}:move:
     post:
-      description: "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. Gated by system:move; read and move scopes drive the 404 versus 403 split."
+      description: "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split."
       operationId: move-system
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
@@ -12105,6 +12516,33 @@ paths:
           description: Error
       summary: Rename a system
       x-omniglass-permission: system:rename
+  /systems/{name}:resetName:
+    post:
+      description: "Hands the pen back to the platform: regenerates the name from the system's current system_type and placement (the same rule a nameless create applies, the type's stem plus the lowest free ordinal, bare for the first of that stem in the placement) and marks it name_generated, whether or not it already was. An unclassified system is a 422: the stem lives on the system_type. Gated by system:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius."
+      operationId: reset-system-name
+      parameters:
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Regenerate a system's name
+      x-omniglass-permission: system:rename
   /systems/{name}:setTag:
     post:
       description: Binds a value for a key on a system. The key must exist and apply to this entity kind. Setting a value is the ordinary entity write, gated by system:update.
@@ -12163,6 +12601,69 @@ paths:
           description: Error
       summary: Check a system name
       x-omniglass-permission: system:update
+  /systems:previewLabels:
+    post:
+      description: "Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by system:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it."
+      operationId: preview-system-labels
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabelRecomputeOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Preview a system label recompute
+      x-omniglass-permission: system:update
+  /systems:recomputeLabels:
+    post:
+      description: "Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by system:update."
+      operationId: recompute-system-labels
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabelRecomputeOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Recompute system labels
+      x-omniglass-permission: system:update
+  /systems:renderLabel:
+    post:
+      description: The system tier of :renderLabel on components. Renders the label a system create would stamp, allocating nothing. Omitting name renders the label the platform's generated name would produce and refuses (422) an unclassified system, the same refusal a nameless create gives, since the stem lives on the system_type. Gated by system:create; the location ref resolves within the caller's location:read scope, because a system's label can carry its location's.
+      operationId: render-system-label
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenderSystemLabelInputBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DraftLabelOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Render the label a system create would store
+      x-omniglass-permission: system:create
   /tags:
     get:
       description: Lists the governed key vocabulary. Rides the tag:read floor.

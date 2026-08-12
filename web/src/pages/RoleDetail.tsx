@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { For, Show, createMemo, createSignal } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import KVStacked from "../components/KVStacked";
@@ -123,7 +124,8 @@ export function RoleDetail(props: { id: string }) {
 function RoleTitle(props: { id: string }) {
   const roles = useQuery(() => ({ queryKey: ROLES_KEY, queryFn: () => listRoles() }));
   const r = () => (roles.data ?? []).find((x) => x.id === props.id) as Role | undefined;
-  return <>{r()?.display_name || r()?.id || "Role"}</>;
+  const row = () => r();
+  return <>{row() ? entityLabel(row()!) : "Role"}</>;
 }
 
 export const roleBlade: BladeDef = {

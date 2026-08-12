@@ -79,8 +79,16 @@ set only at the `platform` level, never further down.
 - **`profile`**: cascades platform to group to user, **client-visible**, lockable, user-overridable
   in the fast-follow. `ui` and `keybindings` are the two seeded `profile` namespaces (`ui.theme` and
   `ui.default_landing`; the default keymap as data).
-- **`platform`**: platform-level only, admin-only-read, does not cascade (for example `retention`,
-  `integrations`). None is seeded in slice-0; the mechanism exists and is unit-tested.
+- **`platform`**: platform-level only, does not cascade (for example `retention`, `integrations`).
+  `label` is the first, holding the acronym dictionary the [label rule](/architecture/core-entities/)
+  engine's `title` consults.
+
+**The domain and client-visibility are two questions, not one.** The domain says how far a setting
+cascades and therefore who WRITES it; `client` says who may READ the effective value. A
+platform-domain namespace is admin-write by definition, and `label` is `platform,client` because the
+console renders a label from the same dictionary the server did, which an ordinary viewer has to be
+able to read. Omitting `client` on a platform namespace makes it admin-only-read as well
+(`retention`, `integrations`).
 
 ## Storage: one override table, unscoped
 
@@ -118,8 +126,9 @@ client and the write validator. There is no second place to drift.
 ```go
 // Settings is the canonical settings document: one field per namespace.
 type Settings struct {
-	UI          UISettings  `json:"ui"          settings:"profile,client"`
-	Keybindings Keybindings `json:"keybindings" settings:"profile,client"`
+	UI          UISettings    `json:"ui"          settings:"profile,client"`
+	Keybindings Keybindings   `json:"keybindings" settings:"profile,client"`
+	Label       LabelSettings `json:"label"       settings:"platform,client"`
 }
 
 // UISettings is the ui namespace. Adding a setting is one tagged field.
@@ -134,7 +143,7 @@ Each namespace is a struct, a closed set of developer-defined keys. The
 ([above](#domains-platform-versus-profile)), and `client` marks a namespace fed to `/settings/me`
 (omit for admin-only-read). A reflect pass in the pure `settings`
 package produces both artifacts from the tags: **`Defaults()`** walks each leaf's `default:` tag,
-coerced to the field's Go kind (replacing the retired embedded `defaults.yaml`; no tag, no default),
+coerced to the field's Go type (replacing the retired embedded `defaults.yaml`; no tag, no default),
 and **`Namespaces()`** reflects the top-level fields (replacing the hand-kept slice). Reflection
 walks a compile-time type, so a malformed tag is a boot panic, never a runtime branch.
 
@@ -168,6 +177,22 @@ type UISettings struct {
 - `enum:"a,b,c"`: constrains the value to a set (a console select, rejected inline and 422 on the
   server otherwise); `pattern:"^regex$"` likewise for a free string.
 - `doc:"..."`: the human description, carried into the schema and the client.
+
+**A list-valued setting** is a `[]string` (or any slice) field, and its `default` tag is the
+**comma-separated** form, `default:"AV,DSP,HDMI"`. That spelling is not a local convention: Huma
+reflects the same tag into the JSON Schema and splits a string array on commas, so following it
+exactly is what keeps one tag from producing two disagreeing defaults. The JSON-array spelling Huma
+also accepts (`default:"[\"AV\"]"`) is refused here rather than parsed a second way, and a bad tag is
+a boot panic like any other. Three consequences worth knowing before declaring one:
+
+- **A write replaces the whole list**, since merge is a deep merge of maps and a non-map value
+  overrides wholesale. There is no "add one entry" patch, which is also the only way an entry the
+  platform ships can be removed.
+- **The console edits it as one comma-separated line** and sends an array, translating both ways from
+  the generated `"type": "array"` constraint; a blank line is an empty list and a doubled comma is an
+  inline error, since a blank entry would be stored and match nothing.
+- **Declare it `nullable:"false"`.** Huma makes arrays nullable by default, and `null` is the merge
+  patch's delete sentinel, so a nullable list invites a write that means something else entirely.
 
 **Add a namespace.** Define the sub-struct, then add it as a field on `Settings`:
 
@@ -252,9 +277,10 @@ the API, the two permissions, the two seeded `profile` namespaces, and the Admin
 
 :::design[The fast-follow rungs and platform-domain namespaces, tracked in #270]
 **Fast-follow (not this slice):** the group and user override rungs and the Profile preferences tab
-(editable, user-scoped Gateway reads), the `settings:lock` permission split for group-admins,
-`platform`-domain namespaces (`retention`, `integrations`) with their features, a GitOps read-only
-mode, and live file reload (SIGHUP) instead of restart-to-reload.
+(editable, user-scoped Gateway reads), the `settings:lock` permission split for group-admins, the
+remaining `platform`-domain namespaces (`retention`, `integrations`) with their features (`label`
+has since landed with the acronym dictionary), a GitOps read-only mode, and live file reload (SIGHUP)
+instead of restart-to-reload.
 :::
 
 ## Slice-1 boundary

@@ -10,6 +10,7 @@ import {
 } from "../lib/listmodel";
 import ListShell from "./ListShell";
 import Drawer from "./Drawer";
+import { hasDisplayName, labelGenerated, labelIsName, type Labelled } from "../lib/entities";
 import ColumnMenu from "./ColumnMenu";
 import {
   ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash,
@@ -54,6 +55,11 @@ export interface ListNode {
   // placement (#627 Task 10) sits across.
   pathRender?: string;
   display: string;
+  // Whether the platform rendered `display` from a label rule rather than an
+  // operator typing it (#682's pen, on the wire since #683). Optional because
+  // only component, system and location carry one; absent reads as the
+  // operator's, which is right for every other page.
+  generated?: boolean;
   // The scope-aware actions the server says the caller may perform on THIS row
   // (create a child, update, delete), from the read-side `actions` field. When
   // present, the row gates its affordances on this rather than the coarse
@@ -63,6 +69,16 @@ export interface ListNode {
   // children are CompNode[]), letting pages drill without casting.
   children: this[];
 }
+
+// identityOf adapts a list node to the shape lib/entities reads. A node has
+// already resolved its label (`display`) and carries its address separately, so
+// the adapter is the one place that pairing is stated rather than a fourth copy
+// of the rule inside the row.
+export const identityOf = (n: ListNode): Labelled => ({
+  name: n.addr ?? n.id,
+  display_name: n.display,
+  display_name_generated: n.generated,
+});
 
 export type FormState<N> = { mode: "create"; parent: N | null } | { mode: "edit"; node: N };
 
@@ -549,15 +565,34 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
 
                   When the entity has no display name the label IS the key, so
                   it is rendered once, in the data face, which marks it as an
-                  identifier rather than a friendly string somebody chose. */}
-              <span
-                class="truncate"
-                classList={{ "font-data text-[13px]": n.display === (n.addr ?? n.id) }}
-                style={{ "font-weight": cfg.nameWeight ? cfg.nameWeight(n) : 500 }}
-              >
-                {n.display}
+                  identifier rather than a friendly string somebody chose.
+
+                  The three questions (which face, is there a key to show, whose
+                  words are these) go through lib/entities and not a comparison
+                  written out here (#683). This block used to compare n.display to
+                  the key by hand, which was the same answer as the flat list's
+                  IdentityCell right up until a label became something a RULE could
+                  render: a generated label differs from the key exactly as an
+                  operator's does, so the hand-written copy would have repeated the
+                  key under every platform-labelled row in the estate. */}
+              <span class="flex min-w-0 items-baseline gap-1.5">
+                <span
+                  class="truncate"
+                  classList={{ "font-data text-[13px]": labelIsName(identityOf(n)) }}
+                  style={{ "font-weight": cfg.nameWeight ? cfg.nameWeight(n) : 500 }}
+                >
+                  {n.display}
+                </span>
+                <Show when={labelGenerated(identityOf(n))}>
+                  <span
+                    class="badge badge-ghost badge-xs shrink-0"
+                    title="The platform generated this label from a label rule. Typing one of your own claims it; clearing the field hands it back."
+                  >
+                    Generated
+                  </span>
+                </Show>
               </span>
-              <Show when={n.display !== (n.addr ?? n.id)}>
+              <Show when={hasDisplayName(identityOf(n))}>
                 <span class="truncate font-data text-[11px] text-base-content/40">{n.addr ?? n.id}</span>
               </Show>
             </span>

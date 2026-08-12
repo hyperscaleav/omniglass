@@ -5,8 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Components from "./Components";
 import { COMPONENTS_KEY, type Component } from "../lib/components";
 import { SYSTEMS_KEY } from "../lib/systems";
-import { LOCATIONS_KEY } from "../lib/locations";
+import { LOCATIONS_KEY, type Location } from "../lib/locations";
 import { PRODUCTS_KEY, type Product } from "../lib/products";
+import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types";
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
@@ -33,12 +34,32 @@ const products: Product[] = [
   { id: uuidFor("prod-generic-service"), name: "generic-service", display_name: "Generic Service", kind: "service", component_type: "generic-service", component_type_id: uuidFor("ct-generic-service"), official: true },
 ];
 
+// The device-class registry the create form resolves a generated name's stem
+// through. Three tiers on purpose: ceiling-mic sets no stem of its own, so a
+// preview that read the product's own type and stopped would answer nothing
+// where the server's inheriting walk answers "mic".
+const componentTypes: ComponentType[] = [
+  { id: uuidFor("ct-device"), name: "device", display_name: "Device", official: true, forked: false, stem: "device", default_tags: [] },
+  { id: uuidFor("ct-mic"), name: "mic", display_name: "Microphone", official: true, forked: false, parent: "device", stem: "mic", default_tags: [] },
+  { id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", display_name: "Ceiling Microphone", official: true, forked: false, parent: "mic", default_tags: [] },
+  { id: uuidFor("ct-generic-device"), name: "generic-device", display_name: "Generic Device", official: true, forked: false, stem: "device", default_tags: [] },
+  { id: uuidFor("ct-generic-app"), name: "generic-app", display_name: "Generic App", official: true, forked: false, stem: "app", default_tags: [] },
+  { id: uuidFor("ct-generic-service"), name: "generic-service", display_name: "Generic Service", official: true, forked: false, stem: "service", default_tags: [] },
+];
+
+// One room, so the create form's placement has both a parent candidate and a
+// location candidate: the bucket precedence (a parent wins) cannot be witnessed
+// with only one of the two set, and a page passing the two the wrong way round
+// is invisible to a unit test of the rule.
+const room: Location = { id: uuidFor("l-room"), name: "boardroom", display_name: "Boardroom", location_type: "room", effective_tags: {} };
+
 function mount(path: string) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...COMPONENTS_KEY], [comp]);
   qc.setQueryData([...SYSTEMS_KEY], []);
-  qc.setQueryData([...LOCATIONS_KEY], []);
+  qc.setQueryData([...LOCATIONS_KEY], [room]);
   qc.setQueryData([...PRODUCTS_KEY], products);
+  qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
@@ -53,6 +74,18 @@ function mount(path: string) {
   ));
 }
 
+// Both identity fields open LOCKED on the platform's answer (#699), so a test
+// that means to type into one takes the pen first, exactly as an operator does.
+// The lock is a square icon button inside each field's join and carries no text
+// (#657), so each is addressed by its accessible name, which is also what makes
+// the two tell apart for a screen reader.
+function unlockName() {
+  fireEvent.click(screen.getByRole("button", { name: "Override the name" }));
+}
+function unlockLabel() {
+  fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
+}
+
 describe("Components create-as-route", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
@@ -64,6 +97,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], [{ id: sysId, name: "boardroom", member_count: 1 }]);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     window.history.pushState({}, "", "/components");
@@ -98,6 +132,7 @@ describe("Components create-as-route", () => {
     ]);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     window.history.pushState({}, "", `/components?system=${sysId}`);
@@ -137,6 +172,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     // Force list (flattened) mode: the tree-local ancestor path (Row.path)
@@ -190,9 +226,14 @@ describe("Components create-as-route", () => {
     // derive-from-display coupling would have filled it anyway (#627 Task
     // 15d retires that path for this form specifically).
     const displayInput = screen.getByPlaceholderText("Ceiling Mic 2") as HTMLInputElement;
+    unlockLabel();
     fireEvent.input(displayInput, { target: { value: "Ceiling Mic 9" } });
+    // The name field is LOCKED (#699), so what it shows is the platform's
+    // answer and its pen holds nothing: that is what makes the body below omit
+    // the field rather than post the shape as a literal name.
     const nameInput = screen.getByPlaceholderText("mic-2 (optional)") as HTMLInputElement;
-    expect(nameInput.value).toBe("");
+    expect(nameInput.readOnly).toBe(true);
+    expect(nameInput.value).toBe("mic-n");
     let captured: unknown;
     const seen: string[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -249,6 +290,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], [{ id: locID, name: "415a" }]);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
@@ -304,6 +346,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
@@ -341,6 +384,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], limitedMe);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
@@ -404,6 +448,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "twin")], []);
@@ -536,6 +581,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
@@ -570,6 +616,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     window.history.pushState({}, "", "/components/mic-2");
@@ -637,6 +684,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
@@ -719,6 +767,7 @@ describe("Components list survives duplicate names across placements (#627)", ()
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     window.history.pushState({}, "", "/components");
@@ -770,6 +819,7 @@ describe("Components list survives duplicate names across placements (#627)", ()
     qc.setQueryData([...SYSTEMS_KEY], []);
     qc.setQueryData([...LOCATIONS_KEY], []);
     qc.setQueryData([...PRODUCTS_KEY], products);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     window.history.pushState({}, "", "/components");
@@ -857,5 +907,136 @@ describe("Components create requires a product (#614)", () => {
     fireEvent.click(screen.getByText("Create component"));
     await waitFor(() => expect(sent).toBeTruthy());
     expect((sent as { product: string }).product).toBe("generic-device");
+  });
+});
+
+// The create form asks WHAT and WHERE first, then shows what the platform will
+// name the row. This form already had independent identity fields (#627 Task
+// 15d) and was the model the other two moved to; what it lacked was any way to
+// SEE the name it was about to be given, so an operator leaving the field blank
+// was trusting an affordance they could not read.
+describe("Components create identity", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  const fields = async () => {
+    mount("/components/create");
+    await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
+    return {
+      display: screen.getByPlaceholderText("Ceiling Mic 2") as HTMLInputElement,
+      key: screen.getByPlaceholderText("mic-2 (optional)") as HTMLInputElement,
+      product: screen.getByLabelText("Product") as HTMLSelectElement,
+      submit: screen.getByText("Create component").closest("button") as HTMLButtonElement,
+    };
+  };
+
+  it("asks what and where before it says anything about the name", async () => {
+    await fields();
+    const eyebrows = Array.from(document.querySelectorAll("form .eyebrow")).map((e) => e.textContent);
+    expect(eyebrows.indexOf("Classification")).toBeLessThan(eyebrows.indexOf("Placement"));
+    expect(eyebrows.indexOf("Placement")).toBeLessThan(eyebrows.indexOf("Identity"));
+  });
+
+  it("resolves the stem up the product's component_type chain", async () => {
+    const { product, key } = await fields();
+    // Nothing to lock before a classification is chosen: what comes first is
+    // what the rule reads.
+    expect(key.readOnly).toBe(false);
+    // shure-mxa920 classifies as ceiling-mic, which sets no stem of its own and
+    // inherits "mic". A preview reading the product's own type alone would show
+    // nothing here, and the row would still arrive named mic-1.
+    fireEvent.change(product, { target: { value: "shure-mxa920" } });
+    await waitFor(() => expect(key.value).toBe("mic-n"));
+    // Locked on it, which is the affordance: the platform's answer is the
+    // default in effect, not a hint over an empty box. Readonly and never
+    // disabled, so the value stays on the keyboard and the field itself is
+    // clickable (#657).
+    expect(key.readOnly).toBe(true);
+    expect(key.disabled).toBe(false);
+    // Never a number: the ordinal is allocated against live siblings inside the
+    // create's transaction and does not exist yet.
+    expect(key.value).not.toBe("mic-1");
+  });
+
+  it("never suppresses a component's first ordinal", async () => {
+    const { product, key } = await fields();
+    fireEvent.change(product, { target: { value: "generic-app" } });
+    await waitFor(() => expect(key.value).toBe("app-n"));
+    expect(screen.queryByText(/app-2/)).toBeNull();
+  });
+
+  it("shows the placement bucket, and moves it when the placement moves", async () => {
+    const { product, key } = await fields();
+    fireEvent.change(product, { target: { value: "shure-mxa920" } });
+    await waitFor(() => expect(key.value).toBe("mic-n"));
+    expect(screen.getByText(/Unique among the unplaced components/)).toBeTruthy();
+
+    const location = screen.getByLabelText("Location") as HTMLSelectElement;
+    fireEvent.change(location, { target: { value: room.id } });
+    await waitFor(() => expect(screen.getByText(/Unique at Boardroom/)).toBeTruthy());
+
+    // A parent wins over a location, the server's own bucket precedence. Both
+    // are set here on purpose: with only one, a page handing the two to the
+    // rule in the wrong order reads exactly the same.
+    const parent = screen.getByLabelText("Parent component") as HTMLSelectElement;
+    fireEvent.change(parent, { target: { value: comp.id } });
+    await waitFor(() => expect(screen.getByText(/Unique under Ceiling Mic 2/)).toBeTruthy());
+    expect(screen.queryByText(/Unique at Boardroom/)).toBeNull();
+  });
+
+  it("asks the server for the label, with the same body the create posts, and locks the field on the answer", async () => {
+    // The label cannot be rendered here: a rule is a Go template over a closed
+    // map (ADR-0098), so the console asks the one engine rather than becoming a
+    // second one. What this pins is the WIRING, and the body it asks with,
+    // which has to be the body the create posts a moment later or the two
+    // describe different rows.
+    let asked: Record<string, unknown> | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":renderLabel")) {
+        asked = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ label: "Ceiling Microphone n", rule: "{{.TypeName}} {{.Ordinal}}" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    const { product, display } = await fields();
+    fireEvent.change(product, { target: { value: "shure-mxa920" } });
+    const location = screen.getByLabelText("Location") as HTMLSelectElement;
+    fireEvent.change(location, { target: { value: room.id } });
+
+    await waitFor(() => expect(display.value).toBe("Ceiling Microphone n"));
+    expect(display.readOnly).toBe(true);
+    // The rule travels with the answer, so the form says where the label came
+    // from rather than presenting it as a fact from nowhere.
+    expect(screen.getByText(/Rendered from \{\{\.TypeName\}\}/)).toBeTruthy();
+    // The name is absent from the question, exactly as it will be from the
+    // create body: omitted is "the platform names this".
+    expect(asked).toMatchObject({ product: "shure-mxa920", location: room.id });
+    expect("name" in asked!).toBe(false);
+  });
+
+  it("asks again with the operator's name once they take the pen, since the rule reads it", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":renderLabel")) {
+        bodies.push(JSON.parse(await req.clone().text()));
+        return new Response(JSON.stringify({ label: "Ceiling Microphone", rule: "{{.TypeName}}" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    const { product, key } = await fields();
+    fireEvent.change(product, { target: { value: "shure-mxa920" } });
+    await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
+    unlockName();
+    fireEvent.input(key, { target: { value: "front-mic" } });
+    await waitFor(() => expect(bodies.some((b) => b.name === "front-mic")).toBe(true));
+  });
+
+  it("never rewrites the key from the display name", async () => {
+    const { display, key } = await fields();
+    unlockLabel();
+    fireEvent.input(display, { target: { value: "Front Ceiling Mic" } });
+    await waitFor(() => expect(display.value).toBe("Front Ceiling Mic"));
+    expect(key.value).toBe("");
   });
 });

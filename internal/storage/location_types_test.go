@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -76,5 +78,67 @@ func TestLocationTypeCRUD(t *testing.T) {
 	// Unknown id is ErrTypeNotFound.
 	if err := gw.DeleteLocationType(ctx, "", "nope"); !errors.Is(err, storage.ErrTypeNotFound) {
 		t.Fatalf("delete unknown err = %v, want ErrTypeNotFound", err)
+	}
+}
+
+// TestCreateLocationTypeReturnsAndAuditsItsID is the regression for a defect
+// this registry carried from the start and #687 surfaced by editing the
+// statement: the insert said `returning id` and ran through Exec, so the value
+// was discarded and nothing ever assigned it. A create answered with an empty
+// id (the field its own wire schema calls "the stable handle that survives a
+// rename"), and the audit row was keyed on the empty string, which commits
+// because resource_id is text.
+//
+// The static audit-key guard could not catch it: it reads the EXPRESSION at the
+// call site, and `lt.ID` is exactly the shape it wants. Only a round trip can
+// tell that the expression was never filled in.
+func TestCreateLocationTypeReturnsAndAuditsItsID(t *testing.T) {
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	lt, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "wing", DisplayName: "Wing"})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, parseErr := uuid.Parse(lt.ID); parseErr != nil {
+		t.Fatalf("the created type's id = %q, want the uuid the database minted: %v", lt.ID, parseErr)
+	}
+	// And it is the id the registry actually holds, not merely a well-shaped one.
+	types, err := gw.ListLocationTypes(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	var stored string
+	for _, t := range types {
+		if t.Name == "wing" {
+			stored = t.ID
+		}
+	}
+	if stored != lt.ID {
+		t.Fatalf("create returned id %q, the registry holds %q", lt.ID, stored)
+	}
+
+	entries, err := gw.ListAuditLog(ctx, storage.AuditFilter{Resource: "location_type"})
+	if err != nil {
+		t.Fatalf("audit: %v", err)
+	}
+	var keyed int
+	for _, e := range entries {
+		if e.Verb == "create" && e.ResourceID == lt.ID {
+			keyed++
+		}
+		if e.ResourceID == "" {
+			t.Errorf("a %s audit row for location_type is keyed on the empty string", e.Verb)
+		}
+	}
+	if keyed != 1 {
+		t.Fatalf("%d location_type create audit rows are keyed on %q, want 1", keyed, lt.ID)
 	}
 }

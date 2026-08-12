@@ -64,12 +64,19 @@ if (!rows) {
     </table>
   ) : kind === 'location_types' ? (
     <table class="seeded-set">
-      <thead><tr><th>Type</th><th>Allowed parents</th></tr></thead>
+      <thead><tr><th>Type</th><th>Allowed parents</th><th>Names</th></tr></thead>
       <tbody>
         {rows.map((lt) => (
           <tr>
             <td><code>{lt.id}</code> ({lt.display_name})</td>
             <td>{lt.allowed_parent_types?.length ? lt.allowed_parent_types.join(', ') : '(top level)'}</td>
+            <td>{!lt.name_rule
+              ? 'you name it'
+              : !lt.name_rule.stem
+                ? '1, 2, 3'
+                : lt.name_rule.bare_first
+                  ? `${lt.name_rule.stem}, ${lt.name_rule.stem}-2`
+                  : `${lt.name_rule.stem}-1, ${lt.name_rule.stem}-2`}</td>
           </tr>
         ))}
       </tbody>

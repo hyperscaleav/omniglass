@@ -22,7 +22,7 @@ import {
 } from "../lib/component_types";
 import { useMe, can } from "../lib/auth";
 import { registryLock, registryOrigin } from "../lib/catalog";
-import { createIdentity } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -117,7 +117,7 @@ export default function ComponentTypes() {
         loading: () => types.isPending,
         error: () => types.error,
         filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (r) => `${r.name} ${r.display_name}`, values: () => [] },
+          { key: "name", type: "string", hint: "substring", get: (r) => `${entityLabel(r)} ${r.name}`, values: () => [] },
           { key: "official", type: "string", hint: "exact", get: (r) => registryOrigin(r), values: () => ["shipped", "yours", "overridden"] },
         ],
         filterPlaceholder: "filter component types by name…",

@@ -19,6 +19,28 @@ export interface FlatOption {
   depth: number;
 }
 
+// pathTo returns the labels from the root down to and including the given node,
+// which is the placement CONTEXT a create form shows beside a name field: names
+// are unique within a placement now, so an operator has to see which placement
+// they are naming inside of.
+//
+// It walks by id (parentId), not by label, and it is bounded: a cycle a bad
+// payload could describe stops the walk instead of hanging the console. An id
+// the set does not contain is an empty path, which every caller renders as "the
+// chosen one" rather than as "no placement".
+export function pathTo(nodes: TreeNode[], id: string): string[] {
+  const byId = new Map(nodes.map((n) => [n.id, n] as const));
+  const out: string[] = [];
+  const seen = new Set<string>();
+  let cur = byId.get(id);
+  while (cur && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    out.unshift(cur.label);
+    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+  }
+  return out;
+}
+
 const bySibling = (a: TreeNode, b: TreeNode): number =>
   (a.rank ?? 0) - (b.rank ?? 0) || a.label.localeCompare(b.label);
 

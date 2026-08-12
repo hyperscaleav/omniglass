@@ -70,6 +70,14 @@ func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName s
 	if err := addMemberTx(ctx, tx, systemID, componentID); err != nil {
 		return err
 	}
+	// A component's label can read its PRIMARY system's type (#685), and the
+	// first membership a component gets becomes that primary with nobody
+	// asking, so a bind is a label write path. Restamped here rather than
+	// inside addMemberTx because CreateComponent's own stamp already runs after
+	// its membership, and a cascade there would render the same row twice.
+	if err := p.cascadeComponentLabel(ctx, tx, componentID); err != nil {
+		return err
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system_member", systemID, nil,
 		map[string]string{"system": systemName, "component": componentName}); err != nil {
 		return err
@@ -153,6 +161,12 @@ func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentNam
 	if err := promoteSolePrimary(ctx, tx, componentID); err != nil {
 		return err
 	}
+	// Unbinding moves the primary twice over: away from the system just
+	// removed, and (via the promotion above) possibly onto the sole survivor.
+	// Either way what .SystemTypeLabel reads has changed (#685).
+	if err := p.cascadeComponentLabel(ctx, tx, componentID); err != nil {
+		return err
+	}
 	if err := writeAuditRes(ctx, tx, actorID, "delete", "system_member", systemID,
 		map[string]string{"system": systemName, "component": componentName}, nil); err != nil {
 		return err
@@ -192,6 +206,72 @@ func promoteSolePrimary(ctx context.Context, q txQuerier, componentID string) er
 	return nil
 }
 
+// releaseSystemMembers unbinds every component from a system that is about to
+// be deleted, and it exists because the database was already doing this and
+// nobody could hook it: system_member_system_id_fkey is ON DELETE CASCADE, so a
+// delete has always taken the memberships with it, silently and outside every
+// consequence the gateway attaches to losing one.
+//
+// Two of those consequences are the whole point. A component whose DEFAULT
+// membership was in this system reads a different .SystemTypeLabel afterwards
+// (#685), so its stored label is stale the moment the row goes; and a component
+// left holding exactly one membership has to have it promoted, or it carries an
+// unanswered question forever, which is the rule AddMember and RemoveMember
+// both already enforce. Deleting the rows here rather than letting the cascade
+// do it is what makes both reachable: the cascade fires during the parent's
+// own DELETE, by which point the membership rows are gone and unreadable.
+//
+// The lock is taken over every affected component, not only the defaulted ones,
+// for the same reason addMemberTx takes it: deciding a default by reading the
+// other memberships is compare-then-act, so a concurrent AddMember reading this
+// system's membership as still present would decline the default that this
+// delete is about to vacate, and the component would end with none.
+func (p *PG) releaseSystemMembers(ctx context.Context, tx pgx.Tx, systemID string) error {
+	ids, err := memberComponentIDs(ctx, tx, systemID)
+	if err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	for _, id := range ids {
+		if err := lockMemberComponent(ctx, tx, id); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(ctx, `delete from system_member where system_id = $1::uuid`, systemID); err != nil {
+		return fmt.Errorf("storage: release system members: %w", err)
+	}
+	for _, id := range ids {
+		if err := promoteSolePrimary(ctx, tx, id); err != nil {
+			return err
+		}
+	}
+	// One recompute over the whole released set, not one per component: a
+	// system can hold a room's worth of them, and the restamp is the same
+	// engine either way (see cascadeComponentLabels).
+	return p.cascadeComponentLabels(ctx, tx, ids)
+}
+
+// memberComponentIDs reads the components bound into a system, ids only, for a
+// caller about to change every one of their memberships at once.
+func memberComponentIDs(ctx context.Context, q querier, systemID string) ([]string, error) {
+	rows, err := q.Query(ctx, `select component_id from system_member where system_id = $1::uuid`, systemID)
+	if err != nil {
+		return nil, fmt.Errorf("storage: read system members: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("storage: scan system member id: %w", err)
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
 // SetPrimaryMember moves the default to this membership. The move is one
 // statement per side inside one transaction, so there is never a moment with two
 // defaults (which the partial unique index would refuse) or none.
@@ -228,6 +308,13 @@ func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componen
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrMemberNotFound
+	}
+	// Re-defaulting is the purest case of the membership write path: nothing
+	// about the component or its systems changed except WHICH one answers a
+	// question asked without a system in hand, and that is exactly what
+	// .SystemTypeLabel reads (#685).
+	if err := p.cascadeComponentLabel(ctx, tx, componentID); err != nil {
+		return err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system_member", systemID, nil,
 		map[string]string{"system": systemName, "component": componentName, "primary": "true"}); err != nil {

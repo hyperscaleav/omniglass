@@ -47,6 +47,84 @@ uuid minted by the database, the internal address the handle resolves to
   The shipped set, rendered from the seed itself:
 
   <SeededSet kind="location_types" />
+- **A type can name its own locations.** A location type carries an optional **name rule**, and
+  having one is the opt-in: without it, every location of that type is named by whoever creates it,
+  which is where **all four** shipped types stay. None of them carries a rule, because a campus, a
+  building, a floor and a room each have a real-world name you hold and the platform does not, and
+  `17c` is a fact rather than a default. So in a fresh install nothing is auto-named on this page
+  until you set a rule yourself.
+
+  **A floor is named by you, and the reason is worth a sentence.** `floor` did ship with a positional
+  rule for two releases, so a nameless floor was called `1`, then `2`. That was withdrawn (ADR-0103):
+  a floor's designation is not a number in the first place. Buildings sign B2, LG, G, M, 1, 12A, P3,
+  and an allocated ordinal spells none of them, so a floor named `1` in a building whose signage says
+  Level 2 is not a small inaccuracy, it is the wrong kind of value. Name your floors what the signs
+  say (`b1`, `lg`, `level-2`, `12a`), and the shipped label rule reads that name back as
+  "B1", "Lg", "Level 2", "12a" without your typing a label at all.
+
+  **Where a rule does earn its place** is a type whose number is an **arbitrary disambiguator**
+  rather than a designation anybody reads off a wall: a parking deck, a rack row, a berth, a pad.
+  There the platform picking the next free number saves you inventing one and nothing is claimed
+  about the world. That is the test to apply before setting a rule: if your team reads the number off
+  a sign, type it.
+
+  A rule is a **stem** plus whether the first of that stem under one parent carries a number. Leave
+  the stem empty and the type is **positional**: creating a location of it with no name gives `1`,
+  then `2`, counted among that parent's own children, so every building has its own deck `1`.
+  Give it a stem, `wing`, and you get `wing-1`, `wing-2`, or `wing` then `wing-2` if you suppress
+  the first number. A rule that could produce an illegal name is refused **here, when you save the
+  rule** (422), never later as a create you cannot explain.
+
+  ```sh
+  omniglass location-type create --name deck --display-name "Deck" --name-rule '{"stem":""}'
+  ```
+
+  **Editing a rule renames nothing.** Every location that already exists keeps its name; the new
+  rule decides how the next one is named. To bring an existing location onto the rule, use its own
+  **regenerate name** verb, one row at a time and behind `location:rename`, because a rename breaks
+  the bookmarks and runbooks you keep outside Omniglass. There is no bulk rename, deliberately, and
+  that is the one place this differs from a type's **label rule**, which does have a
+  preview-then-apply recompute: a label is display, and a name is an address.
+
+  **Reclassifying a platform-named location needs its name claimed first.** A name the platform owns
+  is minted from its type's rule, so changing the type re-mints it, and moving to a type with **no**
+  rule leaves nothing to mint from: the platform would be left owning a name it can no longer
+  produce. That save is refused (422) rather than quietly handing you the pen. Every shipped type is
+  a type with no rule, so this is the ordinary case rather than a corner: reclassifying a generated
+  deck as a room, a floor, a building or a campus is refused until you claim the name. The way
+  through is two steps, and the refusal names it.
+
+  ```sh
+  omniglass location rename boi.17c.1 --name lobby       # the name is now yours
+  omniglass location update boi.17c.lobby --location-type room
+  ```
+
+  Only a **platform-named** location is affected. One you named yourself was never the platform's to
+  re-mint, so it reclassifies to anything, and its name comes through untouched. Reclassifying
+  between two types that both carry a rule is fine too: the name is simply re-minted from the new
+  one.
+
+  Two limits to know before you set one. **A rule cannot be removed once set**, only replaced: an
+  omitted field and an explicit `null` are the same thing in a PATCH body, so there is no request
+  that spells "back to operator-named". Set a rule only on a type whose names you want the platform
+  to own, since **regenerate name** on, say, a building would then mint `building-1` over the `17c`
+  you typed.
+
+  And **the shipped types are yours, so the boot seed never reasserts over them**: it installs each
+  one only when absent. That cuts both ways. A rule added to the shipped set reaches new installs
+  only, and a rule REMOVED from it, as `floor`'s was, is removed from new installs only. If your
+  estate was created while `floor` shipped positional, your `floor` still carries that rule and your
+  floors are still named `1`; no upgrade takes it away, and with the limit above there is no call
+  that clears it either. Nothing breaks, so this is a choice rather than a repair: keep it, or
+  replace it with a stem you would rather have.
+
+  ```sh
+  omniglass location-type list      # read floor's name_rule to see which estate you have
+  ```
+
+  To bring such an estate onto the new default, name each floor for its designation first
+  (`omniglass location rename ... --name b1`), which claims the name and takes the platform off it
+  row by row. The type's own rule stays, but with no platform-named floor left it decides nothing.
 - An **official** row, where one exists, is read-only: the blade keeps the Edit and Delete pair
   in place, greyed, with the reason on hover: "Official: ships with Omniglass and updates with
   it." That treatment is reserved for the **canonical

@@ -534,6 +534,14 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	if err := addMemberTx(ctx, tx, sys.ID, component.ID); err != nil {
 		return err
 	}
+	// That implicit bind is a label write path exactly as an explicit AddMember
+	// is: if this is the component's first system it is now its primary, and a
+	// label can read the primary system's type (#685). Before the health
+	// recompute below, which is the fixed lock order (membership, then label,
+	// then health).
+	if err := p.cascadeComponentLabel(ctx, tx, component.ID); err != nil {
+		return err
+	}
 	// Next free position: the lowest unused positive integer within
 	// (system, role), capped at capacity when the role declares one. Not
 	// max(position)+1: TestUnassignLeavesGapThenRefills requires a vacated

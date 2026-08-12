@@ -20,7 +20,7 @@ import {
 } from "../lib/standards";
 import { useMe, can } from "../lib/auth";
 import { registryLock } from "../lib/catalog";
-import { createIdentity } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -69,7 +69,7 @@ export default function Standards() {
         loading: () => standards.isPending,
         error: () => standards.error,
         filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (s) => `${s.name} ${s.display_name}`, values: () => [] },
+          { key: "name", type: "string", hint: "substring", get: (s) => `${entityLabel(s)} ${s.name}`, values: () => [] },
           { key: "parent", type: "string", hint: "exact", get: (s) => s.parent_standard ?? "", values: () => [] },
           { key: "official", type: "string", hint: "exact", get: (s) => (s.official ? "official" : "custom"), values: () => ["official", "custom"] },
         ],

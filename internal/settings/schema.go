@@ -11,8 +11,9 @@ import "reflect"
 // settings tag is "<domain>[,client]": domain is "profile" or "platform", and the
 // client token marks a client-visible namespace (fed to /settings/me).
 type Settings struct {
-	UI          UISettings  `json:"ui" settings:"profile,client"`
-	Keybindings Keybindings `json:"keybindings" settings:"profile,client"`
+	UI          UISettings    `json:"ui" settings:"profile,client"`
+	Keybindings Keybindings   `json:"keybindings" settings:"profile,client"`
+	Label       LabelSettings `json:"label" settings:"platform,client"`
 }
 
 // UISettings is the ui namespace.
@@ -27,6 +28,33 @@ type Keybindings struct {
 	OpenEdit       string `json:"open_edit" default:"e" doc:"Open the edit pane"`
 	CloseBlade     string `json:"close_blade" default:"Escape" doc:"Close the top blade"`
 	CommandPalette string `json:"command_palette" default:"mod+k" doc:"Open the command palette"`
+}
+
+// LabelSettings is the label namespace: how the label rule engine renders, as
+// opposed to WHAT it renders (the rules themselves are per-tier columns on the
+// registries, not a setting).
+//
+// It is the first PLATFORM-domain namespace, and the first that is platform and
+// client-visible at once. The two halves say different things and both are
+// wanted here: platform domain means one install-wide list an admin owns, never
+// cascading to a group or a user, because a label is stored once and read by
+// everybody, so a per-user dictionary would be a per-user spelling of a shared
+// row. Client-visible means any authenticated caller may READ the effective
+// list, which is what lets the console render a label the same way the server
+// did without asking for the admin settings read.
+type LabelSettings struct {
+	// Acronyms is the dictionary the rule engine's `title` function consults.
+	// Matching is whole-word and case-insensitive, and the entry is the form
+	// emitted, so "PoE" titles "poe" and "Poe" alike as "PoE".
+	//
+	// The tag is huma's comma-separated array form, which coerceDefault parses
+	// into the same list huma reflects into the schema.
+	//
+	// nullable:"false" turns off huma's default array nullability. A list-valued
+	// setting is empty or populated, never null: null is the merge patch's delete
+	// sentinel, and a schema that admitted it would be inviting a write that means
+	// something else entirely.
+	Acronyms []string `json:"acronyms" nullable:"false" default:"AV,BYOD,DSP,EDID,HDBaseT,HDCP,HDMI,IP,IR,KVM,LAN,LCD,LED,MTR,NDI,NVR,OLED,PC,PoE,PTZ,RF,SDI,SIP,TV,UC,USB,VC,VLAN,4K,8K" doc:"Words a generated label title-cases to a fixed form, whole-word and case-insensitive"`
 }
 
 // namespaceType indexes each namespace's json name to its sub-struct type, for the

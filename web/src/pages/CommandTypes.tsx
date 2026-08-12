@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -79,7 +80,7 @@ function TargetSelect(p: { value: string; onChange: (v: string) => void }): JSX.
   const properties = useQuery(() => ({ queryKey: PROPERTIES_KEY, queryFn: listProperties }));
   const metrics = useQuery(() => ({ queryKey: METRICS_KEY, queryFn: listMetricTypes }));
   const byLabel = (a: { display_name?: string; name: string }, b: { display_name?: string; name: string }) =>
-    (a.display_name || a.name).localeCompare(b.display_name || b.name);
+    entityLabel(a).localeCompare(entityLabel(b));
   const propertyOptions = createMemo(() => [...(properties.data ?? [])].sort(byLabel) as PropertyRow[]);
   const metricOptions = createMemo(() => [...(metrics.data ?? [])].sort(byLabel) as MetricRow[]);
   return (
@@ -87,12 +88,12 @@ function TargetSelect(p: { value: string; onChange: (v: string) => void }): JSX.
       <option value="">None (fire-and-forget)</option>
       <optgroup label="Properties">
         <For each={propertyOptions()}>
-          {(r) => <option value={`property:${r.name}`}>{r.display_name || r.name}</option>}
+          {(r) => <option value={`property:${r.name}`}>{entityLabel(r)}</option>}
         </For>
       </optgroup>
       <optgroup label="Metrics">
         <For each={metricOptions()}>
-          {(m) => <option value={`metric:${m.name}`}>{m.display_name || m.name}</option>}
+          {(m) => <option value={`metric:${m.name}`}>{entityLabel(m)}</option>}
         </For>
       </optgroup>
     </select>
@@ -123,7 +124,7 @@ export default function CommandTypes(): JSX.Element {
           loading: () => commandTypes.isPending,
           error: () => commandTypes.error,
           filterKeys: [
-            { key: "name", type: "string", hint: "substring", get: (r) => `${r.name} ${r.display_name ?? ""}`, values: () => [] },
+            { key: "name", type: "string", hint: "substring", get: (r) => `${entityLabel(r)} ${r.name}`, values: () => [] },
             { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
           ],
           filterPlaceholder: "filter command types by name, display name…",

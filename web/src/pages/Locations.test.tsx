@@ -31,6 +31,10 @@ const types: LocationType[] = [
   // Unconstrained: any parent. Exists so the self-exclusion test below cannot
   // lean on the allowed-parents filter to hide the node's own subtree.
   { id: uuidFor("lt-area"), name: "area", display_name: "Area", icon: "map-pin", official: false, allowed_parent_types: [] },
+  // The one type here that NAMES its own rows (#687): its rule is what the
+  // create form previews, and its absence on the three above is what makes them
+  // the operator-named case in the same fixture.
+  { id: uuidFor("lt-room"), name: "room", display_name: "Room", icon: "door-open", official: false, allowed_parent_types: [], name_rule: { stem: "room", bare_first: true } },
 ];
 // The campus type's contract, resolved against hq: one inherited default, plus one
 // value hq sets that no contract declares.
@@ -238,7 +242,7 @@ describe("Locations create-as-route", () => {
     let captured: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "POST" && req.url.includes("/locations")) {
+      if (req.method === "POST" && req.url.endsWith("/locations")) {
         captured = JSON.parse(await req.clone().text());
         return new Response(JSON.stringify({ id: uuidFor("l-annex"), name: "annex", location_type: "campus" }), { status: 201, headers: { "Content-Type": "application/json" } });
       }
@@ -247,6 +251,10 @@ describe("Locations create-as-route", () => {
     mount("/locations/create");
     await waitFor(() => expect(screen.getByText("New location")).toBeTruthy());
     fireEvent.input(screen.getByPlaceholderText("Conf Room 301"), { target: { value: "Annex" } });
+    // Typed, not derived (#688): campus carries no name rule, so nothing will
+    // mint a name here and the operator supplies one. Before this slice the
+    // display name above filled this field in on its own.
+    fireEvent.input(screen.getByPlaceholderText("boardroom"), { target: { value: "annex" } });
     const typeSelect = screen.getByText("Select a type…").closest("select") as HTMLSelectElement;
     // Pick the first real option (index 0 is the disabled placeholder); the
     // assertion below pins what its selection posts.
@@ -557,23 +565,64 @@ describe("Locations list identity", () => {
     // read as a typo and mangle every acronym in the domain).
     expect(screen.getAllByText("hq-boardroom-nvx-tx")).toHaveLength(1);
   });
+
+  // The pen (#683). TreeList kept its own copy of the identity rule, comparing the
+  // resolved label to the row's address, and that copy cannot see who chose the
+  // label. Left alone it would repeat the name under every platform-labelled row,
+  // which is the regression the flat list's IdentityCell was fixed to avoid, on the
+  // surface that renders most of the estate.
+  it("does not repeat the key beneath a label the platform rendered", async () => {
+    const generated: Location = {
+      id: uuidFor("l-gen"), name: "level-1", display_name: "Level 1",
+      display_name_generated: true, location_type: "campus", effective_tags: {},
+    };
+    mount("/locations", [generated]);
+    await waitFor(() => expect(screen.getByText("Level 1")).toBeTruthy());
+    const row = screen.getByText("Level 1").closest("tr")!;
+    expect(within(row).queryByText("level-1")).toBeNull();
+  });
+
+  it("marks a platform-rendered label so it reads apart from one an operator chose", async () => {
+    const generated: Location = {
+      id: uuidFor("l-gen"), name: "level-1", display_name: "Level 1",
+      display_name_generated: true, location_type: "campus", effective_tags: {},
+    };
+    mount("/locations", [generated]);
+    await waitFor(() => expect(screen.getByText("Level 1")).toBeTruthy());
+    const row = screen.getByText("Level 1").closest("tr")!;
+    expect(within(row).getByTitle(/platform/i)).toBeTruthy();
+    // And the operator's own label carries no such mark.
+    const mine = screen.getByText("HQ").closest("tr")!;
+    expect(within(mine).queryByTitle(/platform/i)).toBeNull();
+  });
 });
 
-// The create form leads with the display name and derives the key from it, so an
-// operator types "Conf Room 301" and never has to invent `conf-room-301` or think
-// about the character class the API enforces.
+// The create form asks WHAT and WHERE first, then shows what the platform will
+// name the row. The derivation this block used to pin (type a display name, watch
+// the key fill itself in) was removed in #688: a blank name is now the REQUEST to
+// generate one from the location_type's name rule, so deriving one claimed the
+// platform's pen the moment an operator typed a label, and the always-required
+// name gate meant the console could never reach the generator at all.
 //
-// What each tier can actually witness, which is worth being precise about:
+// What each tier can witness, which is worth being precise about:
 //
-//   - THIS file proves the page is WIRED to the primitive. Remove the derivation
-//     and both tests below fail. A unit test on the hook cannot tell you a page
-//     forgot to use it.
-//   - lib/entities.test.ts proves the SUPPRESSION: that a hand-edited key stops
-//     following. That cannot be asserted from here. Once a user types into an
-//     input, its DOM value property no longer tracks the signal, so `key.value`
-//     returns what the test typed and would pass even with the rule removed. The
-//     hint tracks ownership rather than suppression, so it cannot witness it
-//     either. Mutation-checked in both files.
+//   - THIS file proves the page is WIRED to the shared section and to the mint.
+//     Drop either and the tests below fail.
+//   - components/CreateIdentity.test.tsx proves the section's own contract, and
+//     lib/namegen.test.ts the shape and bucket rules. Neither can tell you a page
+//     forgot to use them.
+// Both identity fields open LOCKED on the platform's answer (#699), so a test
+// that means to type into one takes the pen first, exactly as an operator does.
+// The lock is a square icon button inside each field's join and carries no text
+// (#657), so each is addressed by its accessible name; where the name generates
+// nothing there is only the label's.
+function unlockName() {
+  fireEvent.click(screen.getByRole("button", { name: "Override the name" }));
+}
+function unlockLabel() {
+  fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
+}
+
 describe("Locations create identity", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
@@ -581,28 +630,143 @@ describe("Locations create identity", () => {
     mount("/locations/create");
     await waitFor(() => expect(screen.getByText("New location")).toBeTruthy());
     const display = screen.getByPlaceholderText("Conf Room 301") as HTMLInputElement;
-    const key = screen.getByPlaceholderText("hq-a-301") as HTMLInputElement;
-    return { display, key };
+    const key = screen.getByPlaceholderText("boardroom") as HTMLInputElement;
+    const typeSelect = screen.getByText("Select a type…").closest("select") as HTMLSelectElement;
+    const submit = screen.getByText("Create location").closest("button") as HTMLButtonElement;
+    return { display, key, typeSelect, submit };
   };
 
-  it("derives the key as the display name is typed", async () => {
+  it("never rewrites the key from the display name", async () => {
     const { display, key } = await fields();
+    unlockLabel();
     fireEvent.input(display, { target: { value: "Conf Room 301" } });
-    await waitFor(() => expect(key.value).toBe("conf-room-301"));
+    // The old behaviour filled this in with "conf-room-301".
+    await waitFor(() => expect(display.value).toBe("Conf Room 301"));
+    expect(key.value).toBe("");
+    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
   });
 
-  it("stops advertising the key as derived once it is edited by hand", async () => {
-    const { display, key } = await fields();
+  it("shows what the platform will name it once a generating type is chosen", async () => {
+    const { typeSelect, key } = await fields();
+    // Nothing to lock before a classification is chosen: what comes first is
+    // what the rule reads.
+    expect(key.readOnly).toBe(false);
+    fireEvent.change(typeSelect, { target: { value: "room" } });
+    await waitFor(() => expect(key.value).toBe("room"));
+    expect(key.readOnly).toBe(true);
+    expect(key.disabled).toBe(false);
+    // The suppressed first ordinal reappears on the next one, and the form says so.
+    expect(screen.getByText(/room-2/)).toBeTruthy();
+  });
+
+  it("shows the placement path the name has to be unique in, as context and not as a prefix", async () => {
+    const { typeSelect, key } = await fields();
+    fireEvent.change(typeSelect, { target: { value: "room" } });
+    await waitFor(() => expect(key.value).toBe("room"));
+    expect(screen.getByText(/Unique at the estate root/)).toBeTruthy();
+
+    const parentSelect = screen.getByText("Root (no parent)").closest("select") as HTMLSelectElement;
+    fireEvent.change(parentSelect, { target: { value: hqB1.id } });
+    await waitFor(() => expect(screen.getByText(/Unique under HQ \/ HQ B1/)).toBeTruthy());
+    // Context only: the path never lands in the field the operator types into,
+    // which still holds the bare stem the mint resolved.
+    expect(key.value).toBe("room");
+  });
+
+  it("shows the label the shipped location rule renders, and names the rule", async () => {
+    // The default state of the location create form as of #657: the global
+    // location rule reads the name as words and titles it, so the locked field
+    // carries a real value and the form says which rule produced it. The render
+    // is the server's (the browser never re-implements the engine), so the fetch
+    // is mocked with what the route actually answers.
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":renderLabel")) {
+        return new Response(JSON.stringify({ label: "North Boardroom", rule: "{{title (words .Name)}}" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    const { typeSelect, display } = await fields();
+    fireEvent.change(typeSelect, { target: { value: "room" } });
+    await waitFor(() => expect(display.value).toBe("North Boardroom"));
+    expect(display.readOnly).toBe(true);
+    expect(screen.getByText(/Rendered from/)).toBeTruthy();
+  });
+
+  it("falls back to the name in the locked label field where no rule resolves", async () => {
+    // Reachable by clearing the rule at every tier, and it stopped being the
+    // shipped estate's default when the location rule landed (#657). A locked
+    // field showing nothing at all would be worse than the form this replaces,
+    // so it shows what an operator will actually read, which is the name.
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":renderLabel")) {
+        return new Response(JSON.stringify({ label: "", rule: "" }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    const { typeSelect, display } = await fields();
+    fireEvent.change(typeSelect, { target: { value: "room" } });
+    await waitFor(() => expect(screen.getByText(/No label rule applies/)).toBeTruthy());
+    expect(display.value).toBe("room");
+    expect(display.readOnly).toBe(true);
+  });
+
+  it("lets a nameless create through for a generating type, and refuses one without a rule", async () => {
+    const { typeSelect, submit } = await fields();
+    fireEvent.change(typeSelect, { target: { value: "campus" } });
+    // Campus names nothing, so a name is the operator's to supply.
+    await waitFor(() => expect(submit.disabled).toBe(true));
+    expect(screen.getByText(/no name rule/)).toBeTruthy();
+
+    fireEvent.change(typeSelect, { target: { value: "room" } });
+    await waitFor(() => expect(submit.disabled).toBe(false));
+  });
+
+  it("omits the name from the POST body when it is left blank", async () => {
+    let captured: Record<string, unknown> | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.endsWith("/locations")) {
+        captured = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ id: uuidFor("l-new"), name: "room", location_type: "room" }), { status: 201, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    const { typeSelect, display } = await fields();
+    fireEvent.change(typeSelect, { target: { value: "room" } });
+    // A label is typed and the name is left locked: the two pens are
+    // independent, and a locked name has to be OMITTED rather than posted as
+    // "", which the API refuses against the entity-name pattern.
+    unlockLabel();
     fireEvent.input(display, { target: { value: "Conf Room 301" } });
-    await waitFor(() => expect(key.value).toBe("conf-room-301"));
+    fireEvent.click(screen.getByText("Create location"));
+    await waitFor(() => expect(captured).toBeTruthy());
+    expect("name" in captured!).toBe(false);
+    expect(captured!.display_name).toBe("Conf Room 301");
+  });
 
-    fireEvent.input(key, { target: { value: "hq-a-301" } });
-    fireEvent.input(display, { target: { value: "Conference Room 301 East" } });
-
-    // The observable this CAN assert: the field stops advertising itself as
-    // derived once the operator takes it, which is what they see.
-    await waitFor(() => expect(display.value).toBe("Conference Room 301 East"));
-    expect(screen.getByText(/Globally unique address/)).toBeTruthy();
-    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
+  it("sends an override verbatim and leaves the label alone", async () => {
+    let captured: Record<string, unknown> | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.endsWith("/locations")) {
+        captured = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ id: uuidFor("l-new"), name: "war-room", location_type: "room" }), { status: 201, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    const { typeSelect, display, key } = await fields();
+    fireEvent.change(typeSelect, { target: { value: "room" } });
+    unlockLabel();
+    fireEvent.input(display, { target: { value: "War Room" } });
+    unlockName();
+    fireEvent.input(key, { target: { value: "war-room" } });
+    // Overriding one does not disturb the other.
+    expect(display.value).toBe("War Room");
+    fireEvent.click(screen.getByText("Create location"));
+    await waitFor(() => expect(captured).toBeTruthy());
+    expect(captured!.name).toBe("war-room");
+    expect(captured!.display_name).toBe("War Room");
   });
 });

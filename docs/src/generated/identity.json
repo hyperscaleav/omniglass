@@ -78,6 +78,11 @@
       "proved_elsewhere": "seeded only, no create path on the gateway"
     },
     {
+      "table": "label_rule",
+      "shape": "fixed key, declared by the platform",
+      "reason": "keyed by the entity kind it applies to (component, system, location), a closed set the table's own CHECK enforces"
+    },
+    {
       "table": "location",
       "shape": "key-bearing"
     },

@@ -599,7 +599,10 @@ The cascade is **not** "delete everything below", because containers do not own 
 
 - a **component** (leaf) decommissions as above;
 - a **system** delete **unbinds its members** (the `system_member` rows) but keeps the components,
-  standalone and re-homeable;
+  standalone and re-homeable. The unbinding is the same act `RemoveMember` performs, and it carries
+  the same two consequences: a component left holding exactly one membership has that one promoted
+  to its default, and every released component's platform-owned label restamps, because a rule reading
+  `.SystemTypeLabel` reads the default membership's type and the default just moved;
 - a **location** delete is **refused by the API while occupied**; today the occupancy check counts
   only child locations (`parent_id` children), a still-placed system or component surfacing as the
   generic referenced error; the console offers re-homing first;
@@ -699,9 +702,205 @@ abbrev in full.
 **A component's name can generate itself**
 ([ADR-0090](/architecture/decisions/#adr-0090-a-derived-value-is-a-default-that-tracks-until-touched)).
 Left blank on create, the platform mints `<component_type stem>-<n>` from the resolved type and the
-next free ordinal among siblings sharing that stem in the component's placement scope; while
+lowest free ordinal in the component's placement scope; while
 `name_generated` stays true the name
 recomputes on a `:move` or a product reclassify, riding that write's own audit event. `:rename` freezes
 it; `:resetName` hands the pen back and regenerates from the component's current facts, gated by the
 same `component:rename` permission `:rename` uses.
+
+**The console can ask for a generated name, and shows what it will be**
+([ADR-0104](/architecture/decisions/#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)).
+A create form asks for the classification and the placement first, since those are what the rules
+read, and then renders the SHAPE of the name a blank field will be filled with: the resolved stem,
+with the ordinal written as the token `n` rather than a digit, because the ordinal is allocated
+against live siblings inside the create's own transaction and does not exist until the row does. There
+is deliberately no draft-preview verb that mints and rolls back: its answer would be provisional
+(another create can take the number in between), and the rolled-back mint takes the advisory lock real
+creates need. The label is not previewed at all, since its data map carries the row's own `Name` and
+`Ordinal`. The placement bucket is shown beside the field as a path, never as a prefix inside it: a
+name is unique within its placement rather than across the estate, so it no longer carries its
+ancestry.
+
+**The ordinal is stored, and it says who owns the name**
+([ADR-0097](/architecture/decisions/#adr-0097-allocation-tests-the-name-it-would-mint-rather-than-reading-the-ordinal-it-stored)).
+`component.ordinal` records the number a generated name was minted from, and it is `NULL` on every
+row the platform did not name: an operator-typed name, or a row `:rename` handed over (which clears
+the column in the same statement it clears `name_generated`). That is what the bare render above
+reads, so a component an operator called `rack-3` has no number to compact and keeps its own words.
+Allocation itself still reads sibling **names**, not this column, and returns the lowest ordinal
+whose minted name is free: an operator can hold `display-1` by hand while owning no ordinal, and the
+uniqueness that has to be satisfied is the name's. Asking the mint for candidates rather than picking
+siblings apart is also what makes a name that is nothing but its ordinal expressible, which is what a
+positional type (a parking deck) is named with below.
+
+**A system names itself too, and the first of a kind carries no number**
+([ADR-0101](/architecture/decisions/#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests)).
+The pen, `:rename` and `:resetName` are the same three things on a system and a location that they
+are on a component. A system left nameless on create mints its `system_type` chain's `stem` plus the
+lowest free ordinal in its placement bucket, and **suppresses the ordinal on the first of that stem
+there**: a room's only boardroom is `boardroom` and the second is `boardroom-2`. Allocation stays
+lowest-free, so deleting the bare one while the second survives frees the bare name for the next
+create, and `boardroom-1` never exists at all. A hand-typed `boardroom` blocks the generator exactly
+as a hand-typed `display-1` blocks a component's, because what has to be unique is the name. A
+system with no `system_type` cannot be named this way (422 naming the reason), and neither can it be
+un-classified while the platform owns its name: `:rename` claims the name first.
+
+**What re-mints a name is an act that changes an INPUT to the mint,** and the mint reads exactly two:
+the stem (a system's `system_type` chain, a location's `location_type` rule) and the placement
+bucket. So a reclassify that actually changes the classification re-mints, and a `:move` that
+actually changes the bucket re-mints; a patch that re-states the classification and a move that
+re-states the placement change neither input and leave the name exactly where it is. The distinction
+is not tidiness: a lower ordinal freed by an earlier `:rename` means a spurious re-mint does not
+recompute to the same answer, it MOVES the name, under `:update` or `:move` with no rename asked for
+and possibly no `:rename` grant held. A system's bucket comparison is the three-way one (a parent
+wins over a location, so relocating a parented system changes no bucket); a location's is the
+parent alone.
+
+**A location type opts in, with a rule that is a declaration**
+([ADR-0102](/architecture/decisions/#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing)).
+`location_type.name_rule` is nullable and its presence IS the opt-in: `NULL` means an operator names
+every location of that type, and there is no boolean beside it for the two to disagree about. **No
+shipped place type carries one**, so a shipped estate names every location by hand: a campus, a
+building, a floor and a room each have a real-world name an operator holds, and `17c` is ground truth
+rather than a default.
+
+`floor` was the one exception for two slices, shipped positional, and
+[ADR-0103](/architecture/decisions/#adr-0103-a-positional-name-is-allocation-order-and-the-real-world-designation-is-a-label)
+reversed it: **a floor's designation is not an integer**. Buildings sign B2, LG, G, M, 1, 12A, P3,
+so an allocated ordinal is the wrong kind of value rather than an imprecise one, and the basement
+case people reach for first (`-1` is unspellable under the name rule) turns out not to exist, since
+that floor is signed `B1`, already a legal name. The consequence is stated rather than hidden:
+location name generation ships **dormant**, correct and tested but demonstrated by nothing in a
+shipped estate, and reached when an operator declares a positional type of their own.
+
+The rule is a small declaration, a stem plus whether the first of that stem in a parent carries an
+ordinal, and it decodes straight into the same mint a component and a system are named from. An
+**empty stem is a positional type**, whose ordinal genuinely is its name: the first parking deck of a
+building is `1`, the next is `2`, allocated among that building's own decks, so every building has
+its own deck `1`. A positional type is right where the number is an arbitrary disambiguator (a deck,
+a rack row, a berth) and wrong where it is a fact somebody reads off a wall. That is deliberately not
+the `label_rule` template beside it on the same registry: a label that fails to render falls through
+to the next rung of the read ladder, and a name has no next rung, so a rule that would mint an
+illegal name is refused **when the rule is edited** by minting from it, rather than discovered by a
+create it breaks.
+
+**Editing a rule renames nothing.** The name, the ordinal and the pen of every existing location
+stand; the new rule decides how the next nameless create, `:resetName`, move or reclassify names a
+row. There is no name-side counterpart of the label's preview-then-apply recompute, and the
+asymmetry is the point: a bulk relabel is display and recoverable, a bulk rename breaks the
+bookmarks, runbooks and integration config stored outside this system. `:resetName` is the
+deliberate, one-row-at-a-time way to bring a location onto a new rule, and it is gated by
+`location:rename` because it is one.
+
+A location whose type carries no rule still refuses `:resetName` (422, naming the missing fact),
+which is what every location did before this rule existed, and the pen shipped a slice ahead of the
+generator on purpose: a location an operator named then is already frozen now.
+
+**A label generates itself too, from a rule an operator can change**
+([ADR-0098](/architecture/decisions/#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)).
+`display_name` gains the same stored pair the name has: `display_name_generated` is the pen, true
+meaning the platform owns the field. Reading a label is three rungs, the one an operator typed, else
+the one the rule produced, else the entity's name; the first two are the same column, told apart by
+the pen. Typing a label clears the pen, clearing the field returns it and the rule renders again, and
+a rule with nothing to say leaves the field unset rather than blank.
+
+Rules resolve most-specific-first, and `NULL` at a tier means "no opinion, ask the next one out":
+`product` then the `component_type` chain then the global rule for components, `standard` then the
+`system_type` chain then the global rule for systems, and `location_type` then the global rule for
+locations. Locations have two tiers rather than three because there is no location-side counterpart
+of a product, not because one is missing. On a nested registry the rule inherits by the same
+first-non-null walk `stem` and `abbrev` follow, per node across the fork boundary
+([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)),
+so setting a rule on a shipped type forks that row and leaves the official one byte-identical.
+
+The rule language is Go `text/template` over a **closed map of strings** and a **closed grammar**.
+The map is the sandbox for what a rule can READ: a component's rule can read `Name`, `Ordinal`,
+`TypeName`, `TypeAbbrev`, `Stem`, `ProductName`, `VendorName`, `LocationLabel` and `SystemTypeLabel`,
+and there is no mechanism by which any other name resolves to anything, so a secret is unreachable
+because it was never put in rather than because a filter refused it. The grammar is the sandbox for what a rule can DO: an allowlist
+over the parsed tree admits a closed set of node types and the functions `title`, `upper`, `lower`,
+`slug`, `words` plus `and`/`or`/`not` and the six comparisons, and refuses everything else text/template
+offers, `printf` and variable declarations and `{{range}}` among them. That second half is not
+tidiness: a value built inside a pipeline is never written, so a cap on rendered length cannot see
+it, and a few hundred bytes of rule can otherwise allocate gigabytes on every write to every entity
+of its type. A rule that does not parse, or that names something outside the grammar, is refused at
+rule-edit time (422) and never stored; a rule that fails while rendering one entity degrades to no
+label rather than failing the write it was riding.
+
+**A rule reads placement, and that is what the recompute verb is for**
+([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
+A component's rule can read `LocationLabel` (the label of the location it sits at, falling through to
+that location's name when it has none) and `SystemTypeLabel` (the label of its primary system's
+type); a system's rule can read `LocationLabel`. Those are the keys behind
+`{{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}` rendering `Boardroom 204B Display`. The keys
+are flat, never dotted: the map's values are strings, so there is nothing to traverse through, and
+`{{.Location.Label}}` would be a handle on another row rather than a fact copied out of one.
+
+Because a label is **stored**, every fact a rule reads is a fact some write has to re-render on, and
+those facts now live on other rows. The line is blast radius rather than ownership. Bounded by a
+placement, the estate is restamped **inside the act's own transaction**, so a reader who sees the
+rename sees the labels that follow from it: a location's rename or relabel restamps what is placed
+at it, a system's reclassify restamps its member components, and any act that moves a component's
+primary membership restamps that component. Bounded only by the estate, nothing is restamped at all
+and the operator applies it: editing a rule at any tier, or a `component_type`'s or `product`'s
+`display_name`, or the acronym list, leaves the estate exactly as it was until
+`:previewLabels` shows the blast radius and `:recomputeLabels` applies it. A preview lists exactly
+the rows the apply then changes, including the components and systems a location recompute stales,
+and both are gated by the entity's own `:update`.
+
+Renaming a location does **not** restamp what is beneath it in the tree, only what is placed at it.
+A component reads the label of the room it is in, never that room's building, so a campus rename is
+free. That is a property of the map rather than of the cascade, and if a later slice gives a location
+an ancestry fact the cascade owes it a subtree arm.
+
+**`words` is how a NAME becomes words, and `title` alone is not.** `title` upper-cases each word and
+leaves the separator standing, so `{{title .Name}}` renders `north-wing` as "North-Wing";
+`{{title (words .Name)}}` renders it "North Wing", because `words` turns a run of `-` or `_` into a
+single space (an edge run is dropped, and everything else, including whitespace the fact already
+carried, is untouched). It is `slug`'s opposite number, and it is what puts the acronym dictionary
+below within reach of a name: `hq-west` reads "HQ West" once `HQ` is in the list
+([ADR-0105](/architecture/decisions/#adr-0105-a-rule-reads-a-name-as-words-and-the-location-tier-ships-the-restatement-it-once-refused)).
+
+That composition is the **shipped global rule for locations**, `{{title (words .Name)}}`. A location
+kind carries only two facts, its type and its own name, so a rule there is either a constant or a
+restatement, and the constant is refused: labelling every room "Room" is worse than the name it would
+replace. The restatement earns its place because it re-cases the name and runs the operator's
+dictionary over it, which is a string the read ladder's last rung cannot produce. That last rung is
+unchanged and still **verbatim**: a row with no stored label renders its `name` exactly, never a
+prettified version. The difference is that a rule renders a label and STORES it.
+
+Because a rule change's blast radius is the whole estate, **shipping this rule restamps nothing on its
+own**. A new estate gets a rendered label when each location is created; an estate that already exists
+keeps its raw kebab locations until an operator runs `:previewLabels` and `:recomputeLabels` on
+locations. The upgrade is an operator's act, not a release's.
+
+**`title` reads an acronym dictionary an operator owns.** Title-casing a word by upper-casing its
+first letter turns `dsp` into `Dsp`, so the platform ships a list of words that have a fixed form,
+resolved through the [settings](/architecture/settings/) cascade as `label.acronyms` and consulted by
+`title` whole-word and case-insensitively (`av`, `Av` and `AV` all render `AV`; the entry is the form
+emitted, so `PoE` is spelled that way in the list). It is a **platform-domain, client-visible**
+namespace: one install-wide dictionary an admin writes, readable by any authenticated caller, because
+a label is stored once and read by everybody and the console renders one from the same list the
+server did. An operator's list **replaces** the shipped one rather than extending it, which is the
+settings engine's rule for every list-valued setting and the only way a shipped entry can be removed;
+provenance is what says which of the two is in force
+([ADR-0099](/architecture/decisions/#adr-0099-the-acronym-list-is-one-replaceable-setting-not-a-shipped-list-plus-operator-additions)).
+The engine follows the list without a restart: the dictionary is resolved when a label is rendered
+and the compiled engine is cached against the list itself, so an edit reaches the next write.
+
+The dictionary matters **less** than it looks, and the honest limit is worth stating rather than
+discovering. A type's `display_name` already holds correctly-cased English out of the catalog ("DSP",
+"Video Bar"), and the shipped rules render that, so the list only bites where a rule title-cases a
+name the operator typed: mostly systems and locations. Product model numbers (`qm55` wanting `QM55`)
+are unbounded and vendor-supplied, so a dictionary can never be complete, and a missing one degrades
+quietly to `Qm55` rather than failing. That is acceptable because the result is one click from being
+overridden on the row, and because the alternative, a rule that guesses at casing, is wrong more
+often than it is right.
+
+What a rule deliberately **cannot** read is the entity's **ancestry**. A component reads the label of
+the location it sits at and a location reads nothing about where it sits, so a location's own map is
+`Name` and `TypeName` and no more. That is why moving a location restamps nothing: putting its
+parent's name in the map would make one campus rename stale every label under it, and the ancestry is
+not lost anyway, since it is the `path` and the two renders above, beside the label rather than
+inside it.
 

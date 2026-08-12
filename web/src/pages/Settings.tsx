@@ -10,7 +10,7 @@ import {
   useRestoreNamespace,
   useRestoreAllDefaults,
 } from "../lib/settings";
-import { constraintFor, validateField } from "../lib/settingsValidation";
+import { constraintFor, isList, listText, textList, validateField } from "../lib/settingsValidation";
 
 // Settings is the Admin platform-settings surface (issue #271). It resolves the
 // effective settings document from the cascade (the declared defaults, the operator
@@ -199,7 +199,13 @@ function SettingRow(props: {
   editing: boolean;
   onPatch: (namespace: string, patch: Record<string, unknown>) => Promise<{ ok: true } | { ok: false; message: string }>;
 }) {
-  const current = () => (props.value == null ? "" : String(props.value));
+  // The generated constraint decides how a value is read and written, so a
+  // list-valued setting shows as one line of comma-separated entries and goes
+  // back as a JSON array. Deciding from the SCHEMA rather than from the value
+  // keeps a list that resolved empty editable as a list.
+  const constraint = () => constraintFor(props.namespace, props.settingKey);
+  const current = () =>
+    props.value == null ? "" : isList(constraint()) ? listText(props.value) : String(props.value);
   const [draft, setDraft] = createSignal(current());
   const [expanded, setExpanded] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
@@ -225,13 +231,13 @@ function SettingRow(props: {
   // The generated per-field constraint drives both the control (an enum renders as a
   // select) and inline validation. A field is only validated while it is being
   // edited, so read mode never shows an error.
-  const constraint = () => constraintFor(props.namespace, props.settingKey);
   const fieldErr = () => (rowEditing() ? validateField(constraint(), draft()) : null);
 
   async function save() {
     setBusy(true);
     setRowErr(null);
-    const r = await props.onPatch(props.namespace, { [props.settingKey]: draft() });
+    const value = isList(constraint()) ? textList(draft()) : draft();
+    const r = await props.onPatch(props.namespace, { [props.settingKey]: value });
     if (!r.ok) setRowErr(r.message);
     setBusy(false);
   }

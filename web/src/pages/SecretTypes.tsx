@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { For, Show, type JSX } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -46,7 +47,7 @@ export default function SecretTypes() {
         loading: () => types.isPending,
         error: () => types.error,
         filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (r) => `${r.name} ${r.display_name}`, values: () => [] },
+          { key: "name", type: "string", hint: "substring", get: (r) => `${entityLabel(r)} ${r.name}`, values: () => [] },
           { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
         ],
         filterPlaceholder: "filter secret types by name…",

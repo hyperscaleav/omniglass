@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -55,7 +56,7 @@ export default function EventTypes(): JSX.Element {
           loading: () => eventTypes.isPending,
           error: () => eventTypes.error,
           filterKeys: [
-            { key: "name", type: "string", hint: "substring", get: (r) => `${r.name} ${r.display_name ?? ""}`, values: () => [] },
+            { key: "name", type: "string", hint: "substring", get: (r) => `${entityLabel(r)} ${r.name}`, values: () => [] },
             { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
           ],
           filterPlaceholder: "filter event types by name, display name…",

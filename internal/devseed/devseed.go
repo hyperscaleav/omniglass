@@ -45,10 +45,13 @@ type Doc struct {
 }
 
 // System is one example system: a thing in a room that either works or does not.
-// Standard names a boot-seeded blueprint whose roles it inherits live;
-// SystemType names a boot-seeded coarse space classifier (what kind of space it
-// is, a separate axis from the standard); Location names a fixture location.
+// Key is the fixture-local identity (see identity.go); Name is optional and its
+// absence asks the platform to mint one from the system_type's stem. Standard
+// names a boot-seeded blueprint whose roles it inherits live; SystemType names a
+// boot-seeded coarse space classifier (what kind of space it is, a separate axis
+// from the standard); Location names a fixture location BY KEY.
 type System struct {
+	Key         string `yaml:"key"`
 	Name        string `yaml:"name"`
 	DisplayName string `yaml:"display_name"`
 	Standard    string `yaml:"standard"`
@@ -59,6 +62,7 @@ type System struct {
 // Member binds a component into a system without giving it a job. The dev estate
 // needs the case explicitly, because it is the one an assignment cannot produce: a
 // component that is in the room and accounted for while filling no declared role.
+// Both ends are fixture KEYS.
 type Member struct {
 	System    string `yaml:"system"`
 	Component string `yaml:"component"`
@@ -66,7 +70,8 @@ type Member struct {
 
 // RoleAssignment staffs one of a system's roles. It also produces membership as a
 // side effect, which is the point: the seed shows both ways a component comes to
-// be in a system.
+// be in a system. System and Component are fixture keys; Role names a role the
+// system's standard declares.
 type RoleAssignment struct {
 	System    string `yaml:"system"`
 	Role      string `yaml:"role"`
@@ -86,11 +91,15 @@ type ProductProperty struct {
 	Required bool   `yaml:"required"`
 }
 
-// Component is one example device placed in the estate. Location names a fixture
-// location, resolved to its id at seed time (empty for an unplaced component);
-// Product names a catalog SKU, whose contract supplies the component's properties.
-// A system binding is omitted for now (optional on create).
+// Component is one example device placed in the estate. Key is the
+// fixture-local identity; Name is optional and its absence asks the platform to
+// mint one from the product's resolved component_type stem. Location names a
+// fixture location BY KEY, resolved to its id at seed time (empty for an
+// unplaced component); Product names a catalog SKU, whose contract supplies the
+// component's properties and whose classification supplies the name's stem. A
+// system binding is omitted for now (optional on create).
 type Component struct {
+	Key         string `yaml:"key"`
 	Name        string `yaml:"name"`
 	DisplayName string `yaml:"display_name"`
 	Product     string `yaml:"product"`
@@ -99,8 +108,8 @@ type Component struct {
 
 // PropertyValue is one example literal a component declares over its product's
 // contract: an override so the effective-properties panel teaches
-// direct-vs-inherited. Value is decoded from YAML and re-encoded to jsonb, exactly
-// like a Variable.
+// direct-vs-inherited. Component is a fixture key. Value is decoded from YAML and
+// re-encoded to jsonb, exactly like a Variable.
 type Property struct {
 	Component string `yaml:"component"`
 	Property  string `yaml:"property"`
@@ -129,6 +138,7 @@ type Tag struct {
 
 // TagBinding is one example scoped binding, setting a key's value at a fixture
 // location so the effective-tags cascade comes up with an override to teach.
+// Key is the TAG's name (the governed vocabulary); Location is a fixture key.
 type TagBinding struct {
 	Key      string `yaml:"key"`
 	Location string `yaml:"location"`
@@ -144,9 +154,13 @@ type Variable struct {
 	Value     any    `yaml:"value"`
 }
 
-// Location is one node of the example tree. Parent names a location declared
-// earlier in the document (empty for a root).
+// Location is one node of the example tree. Key is the fixture-local identity;
+// Name is optional and its absence asks the platform to mint one from the
+// location_type's name rule (only a POSITIONAL type has one, so a campus, a
+// building and a room must each carry a name). Parent names a location declared
+// earlier in the document BY KEY (empty for a root).
 type Location struct {
+	Key         string `yaml:"key"`
 	Name        string `yaml:"name"`
 	DisplayName string `yaml:"display_name"`
 	Type        string `yaml:"type"`
@@ -161,8 +175,9 @@ type User struct {
 	Grants      []Grant `yaml:"grants"`
 }
 
-// Grant assigns a role at a scope. ScopeRef names a fixture location (resolved to
-// its id at seed time) for a location-scoped grant; it is empty for the all scope.
+// Grant assigns a role at a scope. ScopeRef names a fixture location BY KEY
+// (resolved to its id at seed time) for a location-scoped grant; it is empty for
+// the all scope.
 type Grant struct {
 	Role      string `yaml:"role"`
 	ScopeKind string `yaml:"scope_kind"`
@@ -192,24 +207,57 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	all := scope.Set{All: true}
 
 	// Locations first, parents before children (the fixture is ordered so) so a
-	// child's parent resolves. locIDs lets a later grant address a location by name.
+	// child's parent resolves. locIDs maps a fixture KEY to the row's id, which is
+	// what every later reference (a grant's scope, a tag binding, a component's
+	// placement) is resolved through: an id is a legal reference wherever a name
+	// is (ADR-0062), and two of these locations are called `1`.
 	locIDs := map[string]string{}
+	locIndex, err := locationGenIndex(ctx, gw, all)
+	if err != nil {
+		return err
+	}
 	for _, l := range doc.Locations {
-		if existing, err := gw.GetLocation(ctx, l.Name, all); err == nil {
-			locIDs[l.Name] = existing.ID
-			continue
-		} else if !errors.Is(err, storage.ErrLocationNotFound) {
-			return fmt.Errorf("devseed: check location %q: %w", l.Name, err)
-		}
-		spec := storage.LocationSpec{Name: l.Name, DisplayName: l.DisplayName, LocationType: l.Type}
+		var parentID string
 		if l.Parent != "" {
-			spec.ParentName = &l.Parent
+			id, ok := locIDs[l.Parent]
+			if !ok {
+				return fmt.Errorf("devseed: location %q references unknown parent key %q", l.Key, l.Parent)
+			}
+			parentID = id
+		}
+		slot := genSlot{bucket: bucketOf(parentID, ""), class: l.Type}
+		id, err := existingRowID(l.Name, l.Key, slot, locIndex, func(name string) (string, error) {
+			existing, err := gw.GetLocation(ctx, name, all)
+			if errors.Is(err, storage.ErrLocationNotFound) {
+				return "", nil
+			}
+			if err != nil {
+				return "", err
+			}
+			return existing.ID, nil
+		})
+		if err != nil {
+			return fmt.Errorf("devseed: check location %q: %w", l.Key, err)
+		}
+		if id != "" {
+			locIDs[l.Key] = id
+			continue
+		}
+		// An empty Name asks the platform to name the row, which only a
+		// positional location_type can answer (#687), and no shipped one is
+		// (ADR-0103). So every location in this estate carries a name and the
+		// spec below always supplies one; the components and the systems are
+		// what demonstrate the generator.
+		spec := storage.LocationSpec{Name: l.Name, DisplayName: l.DisplayName, LocationType: l.Type}
+		if parentID != "" {
+			p := parentID
+			spec.ParentName = &p
 		}
 		created, err := gw.CreateLocation(ctx, actorID, spec, all)
 		if err != nil {
-			return fmt.Errorf("devseed: create location %q: %w", l.Name, err)
+			return fmt.Errorf("devseed: create location %q: %w", l.Key, err)
 		}
-		locIDs[l.Name] = created.ID
+		locIDs[l.Key] = created.ID
 	}
 
 	// Users next. A user that already exists (ErrUsernameTaken) is left as is,
@@ -240,7 +288,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			if g.ScopeKind != "all" {
 				id, ok := locIDs[g.ScopeRef]
 				if !ok {
-					return fmt.Errorf("devseed: user %q grant references unknown location %q", u.Username, g.ScopeRef)
+					return fmt.Errorf("devseed: user %q grant references unknown location key %q", u.Username, g.ScopeRef)
 				}
 				spec.ScopeID = id
 			}
@@ -290,7 +338,10 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		}
 	}
 	for _, b := range doc.TagBindings {
-		loc := b.Location
+		loc, ok := locIDs[b.Location]
+		if !ok {
+			return fmt.Errorf("devseed: tag %q binds at unknown location key %q", b.Key, b.Location)
+		}
 		if _, err := gw.SetTagBinding(ctx, actorID, b.Key, "location", &loc, b.Value, all, all); err != nil {
 			return fmt.Errorf("devseed: bind tag %q at %q: %w", b.Key, b.Location, err)
 		}
@@ -341,38 +392,93 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 
 	// Components: an example device placed in the estate, so the Components directory
 	// comes up populated. Locations and products must already be seeded (above, and the
-	// boot seed) for the placement and the product binding to resolve. Like a location,
-	// a component has a stable name but no create-conflict sentinel, so check
-	// GetComponent for ErrComponentNotFound first and skip when already present,
-	// keeping the seed idempotent.
+	// boot seed) for the placement and the product binding to resolve. None of them
+	// names itself, so none can be looked up by name on a second run: each is
+	// recognised by its position among the platform-named rows of its product's
+	// classification in its own room (see identity.go).
+	compIDs := map[string]string{}
+	compIndex, err := componentGenIndex(ctx, gw, all)
+	if err != nil {
+		return err
+	}
 	for _, c := range doc.Components {
-		if _, err := gw.GetComponent(ctx, c.Name, all); err == nil {
+		var locID string
+		if c.Location != "" {
+			id, ok := locIDs[c.Location]
+			if !ok {
+				return fmt.Errorf("devseed: component %q references unknown location key %q", c.Key, c.Location)
+			}
+			locID = id
+		}
+		slot := genSlot{bucket: bucketOf("", locID), class: productClass(c.Product)}
+		id, err := existingRowID(c.Name, c.Key, slot, compIndex, func(name string) (string, error) {
+			existing, err := gw.GetComponent(ctx, name, all)
+			if errors.Is(err, storage.ErrComponentNotFound) {
+				return "", nil
+			}
+			if err != nil {
+				return "", err
+			}
+			return existing.ID, nil
+		})
+		if err != nil {
+			return fmt.Errorf("devseed: check component %q: %w", c.Key, err)
+		}
+		if id != "" {
+			compIDs[c.Key] = id
 			continue
-		} else if !errors.Is(err, storage.ErrComponentNotFound) {
-			return fmt.Errorf("devseed: check component %q: %w", c.Name, err)
 		}
 		spec := storage.ComponentSpec{Name: c.Name, DisplayName: c.DisplayName}
-		if c.Location != "" {
-			loc := c.Location
-			spec.LocationName = &loc
+		if locID != "" {
+			l := locID
+			spec.LocationName = &l
 		}
 		if c.Product != "" {
 			prod := c.Product
 			spec.ProductName = &prod
 		}
-		if _, err := gw.CreateComponent(ctx, actorID, spec, all); err != nil {
-			return fmt.Errorf("devseed: create component %q: %w", c.Name, err)
+		created, err := gw.CreateComponent(ctx, actorID, spec, all)
+		if err != nil {
+			return fmt.Errorf("devseed: create component %q: %w", c.Key, err)
 		}
+		compIDs[c.Key] = created.ID
 	}
 
 	// Systems: the thing in the room that either works or does not, conforming to a
 	// boot-seeded standard whose roles it inherits live. Locations must already be
-	// seeded for the placement to resolve. Idempotent the same way a component is.
+	// seeded for the placement to resolve. Recognised the same way a component is,
+	// with the system_type as the classification whose stem is minted.
+	sysIDs := map[string]string{}
+	sysIndex, err := systemGenIndex(ctx, gw, all)
+	if err != nil {
+		return err
+	}
 	for _, s := range doc.Systems {
-		if _, err := gw.GetSystem(ctx, s.Name, all); err == nil {
+		var locID string
+		if s.Location != "" {
+			id, ok := locIDs[s.Location]
+			if !ok {
+				return fmt.Errorf("devseed: system %q references unknown location key %q", s.Key, s.Location)
+			}
+			locID = id
+		}
+		slot := genSlot{bucket: bucketOf("", locID), class: s.SystemType}
+		id, err := existingRowID(s.Name, s.Key, slot, sysIndex, func(name string) (string, error) {
+			existing, err := gw.GetSystem(ctx, name, all)
+			if errors.Is(err, storage.ErrSystemNotFound) {
+				return "", nil
+			}
+			if err != nil {
+				return "", err
+			}
+			return existing.ID, nil
+		})
+		if err != nil {
+			return fmt.Errorf("devseed: check system %q: %w", s.Key, err)
+		}
+		if id != "" {
+			sysIDs[s.Key] = id
 			continue
-		} else if !errors.Is(err, storage.ErrSystemNotFound) {
-			return fmt.Errorf("devseed: check system %q: %w", s.Name, err)
 		}
 		spec := storage.SystemSpec{Name: s.Name, DisplayName: s.DisplayName}
 		if s.Standard != "" {
@@ -383,20 +489,27 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			st := s.SystemType
 			spec.SystemTypeID = &st
 		}
-		if s.Location != "" {
-			loc := s.Location
-			spec.LocationName = &loc
+		if locID != "" {
+			l := locID
+			spec.LocationName = &l
 		}
-		if _, err := gw.CreateSystem(ctx, actorID, spec, all); err != nil {
-			return fmt.Errorf("devseed: create system %q: %w", s.Name, err)
+		created, err := gw.CreateSystem(ctx, actorID, spec, all)
+		if err != nil {
+			return fmt.Errorf("devseed: create system %q: %w", s.Key, err)
 		}
+		sysIDs[s.Key] = created.ID
 	}
 
 	// Members: a component bound into a system without a job, which is the case an
 	// assignment cannot produce. AddMember is idempotent, so a re-run changes
-	// nothing and no existence check is needed.
+	// nothing and no existence check is needed. Both ends are addressed by id,
+	// because a generated name is unique only within its own room.
 	for _, m := range doc.Members {
-		if err := gw.AddMember(ctx, actorID, m.System, m.Component, all); err != nil {
+		sysID, compID, err := memberEnds(sysIDs, compIDs, m.System, m.Component)
+		if err != nil {
+			return err
+		}
+		if err := gw.AddMember(ctx, actorID, sysID, compID, all); err != nil {
 			return fmt.Errorf("devseed: add member %s/%s: %w", m.System, m.Component, err)
 		}
 	}
@@ -404,7 +517,11 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	// Role assignments: staffing, which also creates the membership. Last of the
 	// three, since it needs both ends to exist. Idempotent on conflict.
 	for _, ra := range doc.RoleAssignments {
-		if err := gw.AssignRole(ctx, actorID, ra.System, ra.Role, ra.Component, all); err != nil {
+		sysID, compID, err := memberEnds(sysIDs, compIDs, ra.System, ra.Component)
+		if err != nil {
+			return err
+		}
+		if err := gw.AssignRole(ctx, actorID, sysID, ra.Role, compID, all); err != nil {
 			return fmt.Errorf("devseed: assign %s to %s/%s: %w", ra.Component, ra.System, ra.Role, err)
 		}
 	}
@@ -418,23 +535,36 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		if err != nil {
 			return fmt.Errorf("devseed: encode property value %s/%s: %w", pv.Component, pv.Property, err)
 		}
-		if _, err := gw.SetProperty(ctx, actorID, "component", pv.Component, pv.Property, "", raw, all); err != nil {
+		compID, ok := compIDs[pv.Component]
+		if !ok {
+			return fmt.Errorf("devseed: property value references unknown component key %q", pv.Component)
+		}
+		if _, err := gw.SetProperty(ctx, actorID, "component", compID, pv.Property, "", raw, all); err != nil {
 			return fmt.Errorf("devseed: set property value %s/%s: %w", pv.Component, pv.Property, err)
 		}
 	}
 	// A worked reachability check on a component, so the console's Reachability panel
 	// renders a real verdict + availability strip instead of an empty "unknown".
-	if err := seedReachability(ctx, gw, actorID); err != nil {
+	if err := seedReachability(ctx, gw, actorID, locIDs); err != nil {
 		return err
 	}
 	// A handful of native call-started events on a boardroom video bar, so the
-	// console's event panel comes up populated instead of empty.
-	if err := seedEvents(ctx, gw); err != nil {
+	// console's event panel comes up populated instead of empty. Addressed by the
+	// id its fixture key resolved to: the bar's name is the platform's.
+	barID, ok := compIDs[eventComponent]
+	if !ok {
+		return fmt.Errorf("devseed: the event fixture component %q is not in the estate", eventComponent)
+	}
+	if err := seedEvents(ctx, gw, barID); err != nil {
 		return err
 	}
-	// Raw device log lines on the lobby display, so the console's log panel (the
-	// ingest lane, ADR-0066) comes up populated. These are logs, not events.
-	if err := seedLogs(ctx, gw); err != nil {
+	// Raw device log lines on the huddle room's display, so the console's log panel
+	// (the ingest lane, ADR-0066) comes up populated. These are logs, not events.
+	displayID, ok := compIDs[logComponent]
+	if !ok {
+		return fmt.Errorf("devseed: the log fixture component %q is not in the estate", logComponent)
+	}
+	if err := seedLogs(ctx, gw, displayID); err != nil {
 		return err
 	}
 	// The edge node's own self-logs, so the node blade's Self-logs panel comes up
@@ -445,9 +575,11 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	return nil
 }
 
-// logComponent hangs the example log lines on the lobby display (a device that
-// emits ordinary device logs: link, CEC, EDID, input, thermal).
-const logComponent = "lobby-display"
+// logComponent hangs the example log lines on the huddle room's display (a
+// device that emits ordinary device logs: link, CEC, EDID, input, thermal). It
+// is a fixture KEY, not a name: the platform names that display, and it names it
+// display-1, which two other rooms also hold.
+const logComponent = "huddle-display"
 
 // exampleLogs are the display's recent raw log lines (ADR-0066), each offset back
 // from now so the panel reads as a recent window (newest last). Two carry a higher
@@ -472,12 +604,13 @@ var exampleLogs = []struct {
 	{message: "backlight temperature high, throttling", severity: "warning", facility: "kern", attrs: []byte(`{"celsius":71,"limit":68}`), labels: []byte(`{"class":"firmware"}`), minsAgo: 12},
 }
 
-// seedLogs installs the example log lines on the lobby display idempotently. The
-// log_line table has an auto id and no natural unique key, so a naive re-insert
-// would pile up duplicates on every make dev; guard on the component already
-// carrying lines (ListComponentLogs from the epoch, limit 1) and skip when present.
-func seedLogs(ctx context.Context, gw storage.Gateway) error {
-	existing, err := gw.ListComponentLogs(ctx, logComponent, time.Time{}, 1)
+// seedLogs installs the example log lines on the huddle display idempotently.
+// The log_line table has an auto id and no natural unique key, so a naive
+// re-insert would pile up duplicates on every make dev; guard on the component
+// already carrying lines (ListComponentLogs from the epoch, limit 1) and skip
+// when present. componentID is the row the fixture key resolved to.
+func seedLogs(ctx context.Context, gw storage.Gateway, componentID string) error {
+	existing, err := gw.ListComponentLogs(ctx, componentID, time.Time{}, 1)
 	if err != nil {
 		return fmt.Errorf("devseed: check logs: %w", err)
 	}
@@ -489,7 +622,7 @@ func seedLogs(ctx context.Context, gw storage.Gateway) error {
 	for _, l := range exampleLogs {
 		lines = append(lines, storage.LogLineWrite{
 			OwnerKind:  "component",
-			OwnerID:    logComponent,
+			OwnerID:    componentID,
 			Source:     "syslog",
 			Severity:   l.severity,
 			Facility:   l.facility,
@@ -563,11 +696,20 @@ func seedNodeLogs(ctx context.Context, gw storage.Gateway) error {
 // we intend to call, named by its protocol, not a network interface. Each has a poll
 // task and enough samples for the panel to render a live verdict + availability
 // strip.
+// reachComponent is a NAME the operator typed, and the one component in the
+// estate that is not platform-named: there is no DSP product in the shipped
+// catalog, so the generator would classify this box as a generic device and call
+// it device-2, which says less than the operator's own word for it. It is
+// therefore also the estate's worked example of the name pen's other state,
+// sitting beside six generated siblings. It needs no ancestry in it, because a
+// component's name is unique within its room rather than across the estate.
+// reachLocation and reachNodeLocation are fixture KEYS.
 const (
-	reachComponent = "hq-boardroom-dsp"
-	reachLocation  = "hq-west-2-boardroom"
-	reachNode      = "edge-hq"
-	reachHost      = "10.20.4.12"
+	reachComponent    = "dsp"
+	reachLocation     = "boardroom"
+	reachNodeLocation = "west"
+	reachNode         = "edge-hq"
+	reachHost         = "10.20.4.12"
 )
 
 // reachChecks are the DSP's interfaces: each named by the protocol it speaks and
@@ -595,8 +737,16 @@ var reachChecks = []struct {
 // runs one (interface + poll task) and writes a handful of samples keyed by the
 // component (owner) and interface (instance), using ONLY registered canonical
 // property_type names, so a wrong name would reject-not-project.
-func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) error {
+func seedReachability(ctx context.Context, gw storage.Gateway, actorID string, locIDs map[string]string) error {
 	all := scope.Set{All: true}
+	roomID, ok := locIDs[reachLocation]
+	if !ok {
+		return fmt.Errorf("devseed: the reachability location key %q is not in the estate", reachLocation)
+	}
+	closetID, ok := locIDs[reachNodeLocation]
+	if !ok {
+		return fmt.Errorf("devseed: the reachability node location key %q is not in the estate", reachNodeLocation)
+	}
 
 	// Sentinel: the first interface. Present means this block ran on an earlier start.
 	existing, err := gw.ListComponentInterfaces(ctx, reachComponent)
@@ -612,11 +762,10 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 	// The DSP the checks hang on, placed in the HQ boardroom. Tolerate an existing
 	// component from a partial earlier run.
 	if _, err := gw.GetComponent(ctx, reachComponent, all); errors.Is(err, storage.ErrComponentNotFound) {
-		loc := reachLocation
 		if _, err := gw.CreateComponent(ctx, actorID, storage.ComponentSpec{
 			Name:         reachComponent,
 			DisplayName:  "Boardroom DSP",
-			LocationName: &loc,
+			LocationName: &roomID,
 		}, all); err != nil {
 			return fmt.Errorf("devseed: create reachability component: %w", err)
 		}
@@ -628,12 +777,11 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string) e
 	// console (enrolled_at is stamped by a claim). The token lives only long enough to
 	// claim; it is never returned or stored in cleartext. Tolerate an existing node.
 	if _, err := gw.GetNode(ctx, reachNode, all); errors.Is(err, storage.ErrNodeNotFound) {
-		reachNodeLoc := "hq-west"
 		if _, err := gw.CreateNode(ctx, actorID, storage.NodeSpec{
 			Name:         reachNode,
 			DisplayName:  "HQ Edge Node",
 			Description:  "HQ network closet",
-			LocationName: &reachNodeLoc,
+			LocationName: &closetID,
 		}, all); err != nil {
 			return fmt.Errorf("devseed: create reachability node: %w", err)
 		}
@@ -715,13 +863,13 @@ func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, fla
 
 // The example events the dev seed installs on a boardroom video bar: a conferencing
 // endpoint publishes call-started natively (an xAPI event) so the console's event
-// panel comes up populated instead of empty. eventComponent names an existing fixture
-// component (a video bar seeded above), so the event's component_id foreign key
-// resolves. Every row uses the registered event_type key call-started
-// (reject-not-project) and is stamped origin=caught: the device reported it, the
-// platform did not derive it. Raw device logs are a separate ingest lane (ADR-0066),
-// not seeded here.
-const eventComponent = "boardroom-a-bar"
+// panel comes up populated instead of empty. eventComponent is the fixture KEY of a
+// video bar seeded above (the platform names it videobar-2), resolved to an id so
+// the event's component_id foreign key resolves. Every row uses the registered
+// event_type key call-started (reject-not-project) and is stamped origin=caught: the
+// device reported it, the platform did not derive it. Raw device logs are a separate
+// ingest lane (ADR-0066), not seeded here.
+const eventComponent = "bar-a"
 
 // exampleEvents are the bar's recent call-started occurrences, each offset back from
 // now so the panel reads as a recent window (spread over the last day, newest last).
@@ -744,9 +892,10 @@ var exampleEvents = []struct {
 // already carrying events (ListComponentEvents from the epoch, limit 1) and skip when
 // present, so a second run is a no-op. Owner = the component, instance empty (a
 // device-level log, not per-interface). Mirrors seedReachability's sentinel pattern.
-func seedEvents(ctx context.Context, gw storage.Gateway) error {
+// componentID is the row the fixture key resolved to.
+func seedEvents(ctx context.Context, gw storage.Gateway, componentID string) error {
 	// Sentinel: any existing event on the component means this block already ran.
-	existing, err := gw.ListComponentEvents(ctx, eventComponent, time.Time{}, 1)
+	existing, err := gw.ListComponentEvents(ctx, componentID, time.Time{}, 1)
 	if err != nil {
 		return fmt.Errorf("devseed: check events: %w", err)
 	}
@@ -758,7 +907,7 @@ func seedEvents(ctx context.Context, gw storage.Gateway) error {
 	for _, e := range exampleEvents {
 		evs = append(evs, storage.EventWrite{
 			OwnerKind:  "component",
-			OwnerID:    eventComponent,
+			OwnerID:    componentID,
 			Key:        "call-started",
 			Origin:     "caught",
 			Message:    e.message,

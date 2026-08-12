@@ -22,6 +22,7 @@ type componentTypeWire struct {
 	Stem        string   `json:"stem"`
 	Icon        string   `json:"icon"`
 	Abbrev      string   `json:"abbrev"`
+	LabelRule   string   `json:"label_rule"`
 	DefaultTags []string `json:"default_tags"`
 	Official    bool     `json:"official"`
 	Forked      bool     `json:"forked"`
@@ -290,4 +291,70 @@ func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
 	// Restoring again has nothing to discard.
 	c.do(ownerTok, http.MethodPost, "/component-types/mic:restore", nil, http.StatusConflict)
 	c.do(ownerTok, http.MethodPost, "/component-types/no-such-type:restore", nil, http.StatusNotFound)
+}
+
+// TestLabelRuleIsRefusedAtEditTime drives the acceptance behavior that decides
+// where a broken rule is caught (#682): a label rule is operator-authored text
+// that a later WRITE PATH executes, so an unparseable one has to be refused
+// here, at the edit, with the template engine's own message. The alternative is
+// a column that silently produces no label on every component created from that
+// type, discovered whenever somebody notices.
+//
+// The three cases are three distinct ways to be unparseable (an unclosed
+// action, an unbalanced block, and a function the closed FuncMap does not
+// define), and the last assertion is the one that matters: after every refusal
+// the stored rule is still the good one.
+func TestLabelRuleIsRefusedAtEditTime(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	good := c.do(ownerTok, http.MethodPatch, "/component-types/display",
+		map[string]any{"label_rule": "{{.TypeName}} {{.Ordinal}}"}, http.StatusOK)
+	var forked componentTypeWire
+	if err := json.Unmarshal(good, &forked); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if forked.LabelRule != "{{.TypeName}} {{.Ordinal}}" {
+		t.Fatalf("label_rule = %q, want the rule just set", forked.LabelRule)
+	}
+	// A shipped row is never written: the edit forked it, under the same id.
+	if !forked.Official || !forked.Forked {
+		t.Fatalf("official = %v forked = %v, want both true", forked.Official, forked.Forked)
+	}
+
+	for _, bad := range []string{"{{.TypeName", "{{if .Ordinal}}{{.Ordinal}}", "{{.TypeName | exec}}"} {
+		c.do(ownerTok, http.MethodPatch, "/component-types/display",
+			map[string]any{"label_rule": bad}, http.StatusUnprocessableEntity)
+	}
+
+	after := c.do(ownerTok, http.MethodGet, "/component-types", nil, http.StatusOK)
+	var body struct {
+		ComponentTypes []componentTypeWire `json:"component_types"`
+	}
+	if err := json.Unmarshal(after, &body); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	for _, ct := range body.ComponentTypes {
+		if ct.Name != "display" {
+			continue
+		}
+		if ct.LabelRule != "{{.TypeName}} {{.Ordinal}}" {
+			t.Fatalf("stored label_rule = %q, want the good rule to have survived every refusal", ct.LabelRule)
+		}
+		return
+	}
+	t.Fatal("display is missing from the registry listing")
 }

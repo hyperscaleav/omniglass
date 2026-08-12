@@ -73,7 +73,11 @@ type Product struct {
 	// Icon is a product-level override of the component_type's icon (nullable:
 	// unset inherits the type's, resolved the same way ResolveTypeFacts walks
 	// component_type's own icon column).
-	Icon      *string
+	Icon *string
+	// LabelRule is this product's label template (#682), the most specific tier
+	// a component's label resolves through: null defers to the component_type
+	// chain, and then to the global tier.
+	LabelRule *string
 	Official  bool
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -91,6 +95,7 @@ type ProductPatch struct {
 	Kind            *string
 	ComponentType   *string
 	Icon            *string
+	LabelRule       *string
 }
 
 // The two arcs store uuids, so each is selected beside a scalar subquery for its
@@ -102,7 +107,7 @@ const productCols = `id, name, display_name,
 	driver_id, (select d.name from driver d where d.id = product.driver_id) as driver_handle, kind,
 	parent_product_id, (select q.name from product q where q.id = product.parent_product_id) as parent_handle,
 	(select ct.name from component_type ct where ct.id = product.component_type_id) as component_type_handle, component_type_id,
-	icon,
+	icon, label_rule,
 	official, created_at, updated_at`
 
 // resolveProductRef turns a handle or uuid into the product's uuid, for the
@@ -196,7 +201,7 @@ func genericComponentTypeForKind(kind string) string {
 
 func scanProduct(row pgx.Row) (*Product, error) {
 	var m Product
-	if err := row.Scan(&m.ID, &m.Name, &m.DisplayName, &m.VendorID, &m.VendorName, &m.DriverID, &m.DriverName, &m.Kind, &m.ParentProductID, &m.ParentProductName, &m.ComponentType, &m.ComponentTypeID, &m.Icon, &m.Official, &m.CreatedAt, &m.UpdatedAt); err != nil {
+	if err := row.Scan(&m.ID, &m.Name, &m.DisplayName, &m.VendorID, &m.VendorName, &m.DriverID, &m.DriverName, &m.Kind, &m.ParentProductID, &m.ParentProductName, &m.ComponentType, &m.ComponentTypeID, &m.Icon, &m.LabelRule, &m.Official, &m.CreatedAt, &m.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &m, nil
@@ -245,8 +250,8 @@ func (p *PG) UpsertProduct(ctx context.Context, m Product) error {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into product (name, display_name, vendor_id, driver_id, kind, parent_product_id, component_type_id, icon, official)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		insert into product (name, display_name, vendor_id, driver_id, kind, parent_product_id, component_type_id, icon, label_rule, official)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		on conflict (name) do update
 			set display_name      = excluded.display_name,
 			    vendor_id         = excluded.vendor_id,
@@ -255,9 +260,10 @@ func (p *PG) UpsertProduct(ctx context.Context, m Product) error {
 			    parent_product_id = excluded.parent_product_id,
 			    component_type_id = excluded.component_type_id,
 			    icon              = excluded.icon,
+			    label_rule        = excluded.label_rule,
 			    official          = excluded.official,
 			    updated_at        = now()`,
-		m.Name, m.DisplayName, m.VendorID, m.DriverID, m.Kind, m.ParentProductID, componentTypeID, m.Icon, m.Official); err != nil {
+		m.Name, m.DisplayName, m.VendorID, m.DriverID, m.Kind, m.ParentProductID, componentTypeID, m.Icon, nilIfEmptyRule(m.LabelRule), m.Official); err != nil {
 		return fmt.Errorf("storage: upsert product %q: %w", m.Name, err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -317,6 +323,10 @@ func (p *PG) CreateProduct(ctx context.Context, actorID string, m Product) (*Pro
 	if !validProductKind(m.Kind) {
 		return nil, ErrProductInvalidKind
 	}
+	if err := validateLabelRule(m.LabelRule); err != nil {
+		return nil, err
+	}
+	m.LabelRule = nilIfEmptyRule(m.LabelRule)
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create product: %w", err)
@@ -339,10 +349,10 @@ func (p *PG) CreateProduct(ctx context.Context, actorID string, m Product) (*Pro
 		return nil, err
 	}
 	if err := tx.QueryRow(ctx, `
-		insert into product (name, display_name, vendor_id, driver_id, kind, parent_product_id, component_type_id, icon, official)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, false)
+		insert into product (name, display_name, vendor_id, driver_id, kind, parent_product_id, component_type_id, icon, label_rule, official)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, false)
 		returning id, created_at, updated_at`,
-		m.Name, m.DisplayName, m.VendorID, m.DriverID, m.Kind, m.ParentProductID, componentTypeID, m.Icon).
+		m.Name, m.DisplayName, m.VendorID, m.DriverID, m.Kind, m.ParentProductID, componentTypeID, m.Icon, m.LabelRule).
 		Scan(&m.ID, &m.CreatedAt, &m.UpdatedAt); err != nil {
 		return nil, mapProductWriteErr(err)
 	}
@@ -365,6 +375,9 @@ func (p *PG) CreateProduct(ctx context.Context, actorID string, m Product) (*Pro
 func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch ProductPatch) (*Product, error) {
 	if patch.Kind != nil && !validProductKind(*patch.Kind) {
 		return nil, ErrProductInvalidKind
+	}
+	if err := validateLabelRule(patch.LabelRule); err != nil {
+		return nil, err
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -407,10 +420,17 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 			parent_product_id = coalesce($6, parent_product_id),
 			component_type_id = coalesce($7, component_type_id),
 			icon              = coalesce($8, icon),
+			-- An explicit empty string CLEARS the rule; see UpdateComponentType's
+			-- own label_rule CASE for why this is not a coalesce.
+			label_rule        = case
+				when $9::text is null then label_rule
+				when $9 = '' then null
+				else $9::text
+			end,
 			updated_at        = now()
 		where `+registryRefCol(id)+` = $1
 		returning `+productCols,
-		id, patch.DisplayName, resolved.VendorID, resolved.DriverID, patch.Kind, resolved.ParentProductID, componentTypeID, patch.Icon))
+		id, patch.DisplayName, resolved.VendorID, resolved.DriverID, patch.Kind, resolved.ParentProductID, componentTypeID, patch.Icon, patch.LabelRule))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound

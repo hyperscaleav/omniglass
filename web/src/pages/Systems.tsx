@@ -1,4 +1,4 @@
-import { createIdentity, entityLabel } from "../lib/entities";
+import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
@@ -22,8 +22,12 @@ import {
 } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
-import { SYSTEM_TYPES_KEY, listSystemTypes } from "../lib/system_types";
+import { SYSTEM_TYPES_KEY, listSystemTypes, systemTypeByName } from "../lib/system_types";
 import SystemTypeSelect from "../components/SystemTypeSelect";
+import CreateIdentity from "../components/CreateIdentity";
+import { bucketPhrase, createPen, nameBucket, penIncomplete, systemMint } from "../lib/namegen";
+import { useLabelDraft } from "../lib/labeldraft";
+import { pathTo } from "../lib/treeselect";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
@@ -79,13 +83,19 @@ export default function Systems() {
   const standardOptions = createMemo(() =>
     [...(standards.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name)),
   );
-  const standardLabel = (handle?: string) =>
-    handle ? (standards.data ?? []).find((s) => s.name === handle)?.display_name ?? handle : "";
+  const standardLabel = (handle?: string) => {
+    if (!handle) return "";
+    const row = (standards.data ?? []).find((s) => s.name === handle);
+    return row ? entityLabel(row) : handle;
+  };
   // The system_type picker reads through SystemTypeSelect (the tree, indented),
   // not a flat <select>: the taxonomy nests and the nesting is the point. The
   // label lookup is the same shape the standard's is.
-  const systemTypeLabel = (handle?: string) =>
-    handle ? (systemTypes.data ?? []).find((t) => t.name === handle)?.display_name ?? handle : "";
+  const systemTypeLabel = (handle?: string) => {
+    if (!handle) return "";
+    const row = (systemTypes.data ?? []).find((t) => t.name === handle);
+    return row ? entityLabel(row) : handle;
+  };
   // Keyed AND valued on uuid, not name (#627): two same-named locations or
   // systems would otherwise render as visually identical, value-identical
   // options, and posting either would name an ambiguous ref. The API
@@ -119,6 +129,7 @@ export default function Systems() {
         id: s.id,
         addr: s.name,
         display: entityLabel(s),
+        generated: s.display_name_generated,
         // See Components.tsx's own nodes memo for why this beats the
         // page's tree-local pathOf walk for a system with no system parent.
         pathRender: s.renders?.dash,
@@ -452,13 +463,20 @@ export default function Systems() {
     );
   }
 
-  // SystemCreate: the draft-create surface at /systems/create. Identity and Placement
-  // are writable; the binding sections (Tags) are shown locked until the system
-  // exists. Create commits the row and hands off to /systems/<id> in edit mode.
+  // SystemCreate: the draft-create surface at /systems/create. Classification and
+  // Placement are writable and come FIRST, because they are what the naming and
+  // labelling rules read; Identity follows and is optional throughout. The
+  // binding sections (Tags) are shown locked until the system exists. Create
+  // commits the row and hands off to /systems/<id> in edit mode.
   function SystemCreate(): JSX.Element {
-    // Display name leads and the key follows it, stopping the moment the
-    // operator edits the key by hand (lib/entities).
-    const { display, setDisplay, name, setName, nameDerived } = createIdentity();
+    // Independent fields (#688). The derive-from-display coupling this form used
+    // to carry was wrong the moment a system could name itself: a blank name is
+    // the request to GENERATE one from the system_type's stem, so filling it in
+    // from a typed label claimed the pen on the operator's behalf and made the
+    // generator unreachable from the console. createIdentity keeps its place on
+    // the registry pages, whose names have no generator.
+    const displayPen = createPen();
+    const namePen = createPen();
     const [standard, setStandard] = createSignal("");
     const [systemType, setSystemType] = createSignal("");
     const [location, setLocation] = createSignal("");
@@ -466,16 +484,46 @@ export default function Systems() {
     const [busy, setBusy] = createSignal(false);
     const [formErr, setFormErr] = createSignal<string | null>(null);
 
+    // The mint the chosen system_type resolves to, suppressing the first
+    // ordinal (ADR-0101: the only boardroom in a room is "boardroom"), and null
+    // for an unclassified system, which the gateway refuses to name.
+    const typesByName = createMemo(() => systemTypeByName(systemTypes.data ?? []));
+    const mint = createMemo(() => systemMint(systemType(), typesByName()));
+
+    // The label the platform would write, rendered by the one engine on the
+    // server (ADR-0098 keeps the template out of the browser) from the same
+    // body this form posts. A system with no classification at all is still
+    // asked: the global rule may still render something from what it has.
+    const labelDraft = useLabelDraft(() => ({
+      kind: "system" as const,
+      body: {
+        system_type_id: systemType() || undefined,
+        standard_id: standard() || undefined,
+        name: namePen.value().trim() || undefined,
+        location: location() || undefined,
+      },
+    }));
+
+    const bucket = createMemo(() => nameBucket(parent(), location()));
+    const bucketText = createMemo(() => {
+      const b = bucket();
+      const path = b.under === "parent" ? pathTo(systemItems(), b.id) : b.under === "location" ? pathTo(locationItems(), b.id) : [];
+      return bucketPhrase("system", b, path);
+    });
+
     async function create(e: Event) {
       e.preventDefault();
       setBusy(true);
       setFormErr(null);
-      const nm = name().trim();
+      const nm = namePen.value().trim();
       try {
         // Bind the create response (#627 Task 15c): see Components.tsx's
         // own create() for why the id, not the locally typed name, is what
         // this hands off to openInEdit and navigate.
-        const created = await createSystem({ name: nm, standard_id: standard() || undefined, system_type_id: systemType() || undefined, display_name: display().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
+        // An empty name is OMITTED rather than posted as "": omitted is
+        // "generate one", where "" is a name of nothing the API refuses
+        // against the entity-name pattern.
+        const created = await createSystem({ name: nm || undefined, standard_id: standard() || undefined, system_type_id: systemType() || undefined, display_name: displayPen.value().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
         openInEdit(created.id);
         navigate(`/systems/${encodeURIComponent(created.id)}`);
@@ -495,24 +543,16 @@ export default function Systems() {
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
         </Show>
 
+        {/* What it is, then where it sits, then what it is called: the type
+            carries the stem and the placement carries the ordinal's bucket, so
+            both are answered before the form has anything to say about the
+            name. */}
         <div class="flex flex-col gap-1.5">
-          <span class="eyebrow">Identity</span>
+          <span class="eyebrow">Classification</span>
           <div class="flex flex-col gap-3">
             <FieldRow
-              bind="display_name"
-              hint="What an operator reads. Optional."
-            >
-              <input class="input input-bordered w-full" value={display()} placeholder="Executive Boardroom" onInput={(e) => setDisplay(e.currentTarget.value)} />
-            </FieldRow>
-            <FieldRow
-              bind="name"
-              hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}
-            >
-              <input class="input input-bordered w-full font-data" value={name()} placeholder="exec-boardroom" onInput={(e) => setName(e.currentTarget.value)} />
-            </FieldRow>
-            <FieldRow
               label="Type"
-              hint="What kind of space this is (a boardroom, a classroom, a video wall). Separate from the standard: the type is what it IS, the standard is what it is built to. Optional."
+              hint="What kind of space this is (a boardroom, a classroom, a video wall). Separate from the standard: the type is what it IS, the standard is what it is built to. It is also where a generated name's stem comes from."
             >
               <SystemTypeSelect types={systemTypes.data ?? []} value={systemType()} onChange={setSystemType} emptyLabel="Unclassified" />
             </FieldRow>
@@ -540,10 +580,26 @@ export default function Systems() {
           </div>
         </div>
 
+        <CreateIdentity
+          kind="system"
+          mint={mint}
+          bucket={bucketText}
+          namePen={namePen}
+          displayPen={displayPen}
+          label={() => labelDraft.data}
+          labelPending={() => labelDraft.isFetching}
+          namePlaceholder="exec-boardroom"
+          displayPlaceholder="Executive Boardroom"
+        />
+
         <div class="flex items-center gap-2 border-t border-base-300 pt-4">
           <Button icon={X} onClick={() => navigate("/systems")}>Cancel</Button>
           <span class="flex-1" />
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim()}>Create system</Button>
+          {/* A name is required only when the platform will not mint one:
+              an unclassified system, or a type whose chain carries no stem.
+              Gating on a typed name outright is what made the generator
+              unreachable from the console before #688. */}
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || penIncomplete(mint() !== null, namePen)}>Create system</Button>
         </div>
 
         <div class="flex flex-col gap-1 opacity-50">

@@ -18,6 +18,21 @@ import { api } from "../api/client";
 // refuses this id, so a real type can never collide with it.
 export const ROOT_PLACEMENT = "root";
 
+// NameRule is a type's opt-in to NAMING the locations it classifies (#687,
+// ADR-0102): a declaration rather than a template, so the console can read the
+// shape a create would mint without re-implementing anything. Absent is the
+// opt-out, and means an operator names every location of this type.
+export type NameRule = {
+  // The generated name's prefix. Empty is a POSITIONAL type, whose ordinal
+  // genuinely is its name (a parking deck called "1"); no SHIPPED type is one
+  // (ADR-0103, which made `floor` nominal).
+  stem: string;
+  // Suppress the ordinal on the first of this stem under one parent, so the
+  // only wing there is "wing" and the second is "wing-2". Ignored when stem is
+  // empty.
+  bare_first?: boolean;
+};
+
 export type LocationType = {
   // The uuid, the stable handle that survives a rename; name is the kebab
   // handle the rest of the estate stores and compares (ADR-0062), so
@@ -33,6 +48,10 @@ export type LocationType = {
   // ROOT_PLACEMENT sentinel this type may be placed under. Empty means
   // unconstrained. Drives the reparent picker's candidate filter.
   allowed_parent_types: string[];
+  // How the platform names locations of this type, absent when an operator
+  // names every one of them. The create form reads it to show what a nameless
+  // create would be called (lib/namegen.ts).
+  name_rule?: NameRule;
 };
 
 // The one cache key for the registry, shared by the LocationTypes page and the
@@ -49,6 +68,7 @@ export async function listLocationTypes(): Promise<LocationType[]> {
     official: t.official,
     icon: t.icon,
     allowed_parent_types: t.allowed_parent_types ?? [],
+    name_rule: t.name_rule,
   }));
 }
 

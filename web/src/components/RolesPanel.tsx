@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { createStore } from "solid-js/store";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
@@ -112,7 +113,7 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
   // is unioned across every role.
   const staffedHere = createMemo(() => {
     const held = new Map<string, string>();
-    for (const r of roles()) for (const c of r.assigned_to ?? []) held.set(c, r.display_name || r.name);
+    for (const r of roles()) for (const c of r.assigned_to ?? []) held.set(c, entityLabel(r));
     return held;
   });
 
@@ -122,7 +123,7 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
   // is still offered, including a component staffed by a DIFFERENT role here,
   // rendered disabled rather than dropped: the disabled reason is what teaches,
   // the same principle behind showing the server's 422 verbatim.
-  const label = (c: Comp) => c.display_name || c.name;
+  const label = (c: Comp) => entityLabel(c);
   const candidates = (role: EffectiveRole): Comp[] => {
     const taken = new Set(role.assigned_to ?? []);
     // Components whose primary is this system lead, compared by system_id
@@ -218,7 +219,7 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
     return (
     <div class="flex flex-col gap-1.5 px-3 py-2.5" classList={{ "border-t border-base-300": !first() }}>
       <div class="flex flex-wrap items-baseline gap-2">
-        <span class="text-sm font-medium">{r.display_name || r.name}</span>
+        <span class="text-sm font-medium">{entityLabel(r)}</span>
         <span class="font-data text-[11px] text-base-content/45">{r.name}</span>
         <span class="flex-1" />
         {/* short/spare are occupancy-aware (health read); understaffed is pure

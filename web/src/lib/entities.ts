@@ -37,11 +37,19 @@ export const IDENTITY_LABELS = {
 export type IdentityBinding = keyof typeof IDENTITY_LABELS;
 
 // Labelled is the shape of anything the console labels: the name, plus the
-// optional display name. It is deliberately structural rather than a union of
-// entity types, so a generated body satisfies it without a cast.
+// optional display name and the pen that says who owns it. It is deliberately
+// structural rather than a union of entity types, so a generated body satisfies
+// it without a cast, and so a row that is not an estate entity at all (a
+// property, whose identifier column is named something else) can be adapted to
+// it in one expression rather than growing a seventh copy of the rule.
+//
+// display_name_generated is optional because only component, system and location
+// carry it. Every catalog registry row (a product, a vendor, a role) has a label
+// no rule renders, so its absence must read as "the operator owns it".
 export interface Labelled {
   name: string;
   display_name?: string | null;
+  display_name_generated?: boolean;
 }
 
 // entityLabel is what an operator reads. A display name of "" or whitespace is
@@ -51,11 +59,47 @@ export function entityLabel(e: Labelled): string {
   return e.display_name?.trim() || e.name;
 }
 
-// hasDisplayName reports whether the label and the name are different things,
-// which is what decides whether a surface shows the name on its own line. When
-// they are the same, showing it twice is noise.
+// labelIsName reports that the label an operator reads IS the identifier, so a
+// surface renders it in the data face and has no second line to show. Whoever
+// holds the pen: a rule that had nothing to say about a row keeps the pen and
+// stores no label (ADR-0098), and what shows is still the name.
+//
+// This is the whole of the string comparison, and the two predicates below are
+// its refinement by the pen rather than replacements for it.
+export function labelIsName(e: Labelled): boolean {
+  return entityLabel(e) === e.name;
+}
+
+// hasDisplayName reports whether a HUMAN chose this label, which is what decides
+// whether a surface shows the name on a second line of its own.
+//
+// It used to be that string comparison alone, and it was the same question only
+// while a label was only ever operator-typed. A label rule (#682, ADR-0098) renders a
+// label that differs from the name exactly as an operator's does, so the string
+// comparison alone would grow a second identifier line under every row in the
+// estate: 15,000 rows each saying their name twice, which is the noise this
+// predicate exists to prevent.
+//
+// The pen (display_name_generated) is the fact that answers it, and #683 put it
+// on the wire. The string comparison stays as the second half of the conjunction
+// rather than being replaced, because a row can hold the pen and still read as
+// its own name: a rule with nothing to say about a row stores NULL and KEEPS the
+// pen (ADR-0098), so "the platform owns this field" does not imply "there is a
+// label here".
 export function hasDisplayName(e: Labelled): boolean {
-  return entityLabel(e) !== e.name;
+  return !e.display_name_generated && !labelIsName(e);
+}
+
+// labelGenerated is the other half of the pen: not "is there a second string to
+// show" but "whose words are these". A surface uses it to mark a label the
+// platform rendered, so an operator can see at a glance which labels are theirs
+// and which follow a rule that a rule edit will rewrite.
+//
+// It is deliberately not the negation of hasDisplayName. Both are false for a
+// row showing only its name, whoever holds the pen, because there is nothing
+// rendered there to attribute.
+export function labelGenerated(e: Labelled): boolean {
+  return Boolean(e.display_name_generated) && !labelIsName(e);
 }
 
 // deriveName turns what an operator typed into the name the API will accept.
@@ -97,6 +141,19 @@ export function deriveName(display: string): string {
 // Passing an existing name marks it as already the operator's, so an edit form
 // can never rewrite a live name from its display name. Renaming is a deliberate
 // act (the API takes it explicitly), never a side effect of relabelling.
+//
+// It is for the REGISTRY and identity pages only: products, vendors, standards,
+// drivers, groups, nodes, the three type registries, and users. Their names have
+// no generator and stay globally unique, so deriving one from what the operator
+// typed is exactly the right affordance there.
+//
+// The three ESTATE entities (component, system, location) left it in #688, and
+// the reason is not stylistic. A blank name on those is the REQUEST to have the
+// platform mint one from the entity's classification, so a form that filled the
+// field in from a typed label claimed the platform's pen on the operator's
+// behalf the moment they typed a word. Their create forms use
+// components/CreateIdentity.tsx, which holds the two fields independent and
+// shows what the blank one will be filled with.
 export function createIdentity(initial?: { display?: string; name?: string }) {
   const [display, setDisplayRaw] = createSignal(initial?.display ?? "");
   const [name, setNameRaw] = createSignal(initial?.name ?? "");

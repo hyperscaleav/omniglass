@@ -965,6 +965,23 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "previewLabels",
+					Short:   "Preview a component label recompute",
+					Long:    "Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by component:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.",
+					Example: "  omniglass component previewLabels",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/components:previewLabels")
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
 				Use:   "property",
 				Short: "Commands for the property resource",
@@ -1054,6 +1071,23 @@ func generatedCommands() []*cobra.Command {
 			return parent
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "recomputeLabels",
+					Short:   "Recompute component labels",
+					Long:    "Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by component:update.",
+					Example: "  omniglass component recomputeLabels",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/components:recomputeLabels")
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
 				Use:   "reconciliation",
 				Short: "Commands for the reconciliation resource",
@@ -1121,6 +1155,45 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique within its placement (lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fLocation string
+				var fName string
+				var fProduct string
+				var fSystem string
+				cmd := &cobra.Command{
+					Use:     "renderLabel",
+					Short:   "Render the label a component create would store",
+					Long:    "Renders the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is written as the token \"n\", because it is allocated against live siblings inside the create's own transaction and does not exist until the row does. Omitting name renders the label the platform's own generated name would produce, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the location and system refs resolve within the caller's location:read and system:read scopes, because the rendered string can carry their labels.",
+					Example: "  omniglass component renderLabel --product product",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/components:renderLabel")
+						body := map[string]any{}
+						if cmd.Flags().Changed("location") {
+							body["location"] = fLocation
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("product") {
+							body["product"] = fProduct
+						}
+						if cmd.Flags().Changed("system") {
+							body["system"] = fSystem
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fLocation, "location", "", "The location this component will sit at, by name or uuid. Resolved within the caller's location:read scope: a location out of scope is refused, never rendered.")
+				cmd.Flags().StringVar(&fName, "name", "", "The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token \"n\"; supply it to render the label an operator-named row would carry, which has no ordinal at all.")
+				cmd.Flags().StringVar(&fProduct, "product", "", "The product this component is an instance of, by name or uuid; the classification both a label rule and a generated name are resolved from")
+				_ = cmd.MarkFlagRequired("product")
+				cmd.Flags().StringVar(&fSystem, "system", "", "The system this component will belong to, by name or uuid. Resolved within the caller's system:read scope.")
 				return cmd
 			}()
 			return cmd
@@ -1213,6 +1286,7 @@ func generatedCommands() []*cobra.Command {
 				var fDefaultTags string
 				var fDisplayName string
 				var fIcon string
+				var fLabelRule string
 				var fName string
 				var fParentId string
 				var fStem string
@@ -1237,6 +1311,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("icon") {
 							body["icon"] = fIcon
 						}
+						if cmd.Flags().Changed("label-rule") {
+							body["label_rule"] = fLabelRule
+						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
@@ -1254,6 +1331,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; omit to inherit the parent's")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422.")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentId, "parent-id", "", "The parent component_type, by name or uuid; omit for a root type")
@@ -1319,11 +1397,12 @@ func generatedCommands() []*cobra.Command {
 				var fDefaultTags string
 				var fDisplayName string
 				var fIcon string
+				var fLabelRule string
 				var fStem string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update a component type",
-					Long:    "Patches a component_type's display_name, stem, icon, abbrev, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.",
+					Long:    "Patches a component_type's display_name, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.",
 					Example: "  omniglass component-type update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1341,6 +1420,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("icon") {
 							body["icon"] = fIcon
 						}
+						if cmd.Flags().Changed("label-rule") {
+							body["label_rule"] = fLabelRule
+						}
 						if cmd.Flags().Changed("stem") {
 							body["stem"] = fStem
 						}
@@ -1351,6 +1433,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDefaultTags, "default-tags", "", "Replaces the default-tag set; omit to leave unchanged")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse.")
 				cmd.Flags().StringVar(&fStem, "stem", "", "A new name prefix. Lowercase letters, digits, and hyphens.")
 				return cmd
 			}()
@@ -1915,8 +1998,8 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a location",
-					Long:    "Creates a location, optionally under a parent (a root needs an all-scoped grant). Gated by location:create.",
-					Example: "  omniglass location create --location-type location_type --name name",
+					Long:    "Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.",
+					Example: "  omniglass location create --location-type location_type",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/locations")
@@ -1939,8 +2022,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the name is the address")
 				cmd.Flags().StringVar(&fLocationType, "location-type", "", "The location_type, by name or uuid (campus, building, ...)")
 				_ = cmd.MarkFlagRequired("location-type")
-				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens)")
-				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule.")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent location name; omit for a root location")
 				return cmd
 			}()
@@ -2068,7 +2150,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "move <name>",
 					Short:   "Move a location",
-					Long:    "Re-parents a location (a tree move): parent is required (422 if omitted), cycle-guarded, and placement-validated against the resolved location_type. Moving to root is not supported (422): MoveLocation gains no clear-to-root capability locations have never had. A separate act from update, and a separately grantable one (location:move), because a placement change is an authorization act, not a label edit. Recorded under its own audit verb, move, distinct from update. Does not recompute health. A taken name at the destination is a 409. Gated by location:move; the read and move scopes drive the 404 versus 403 split.",
+					Long:    "Re-parents a location (a tree move): parent is required (422 if omitted), cycle-guarded, and placement-validated against the resolved location_type. Moving to root is not supported (422): MoveLocation gains no clear-to-root capability locations have never had. A separate act from update, and a separately grantable one (location:move), because a placement change is an authorization act, not a label edit. Recorded under its own audit verb, move, distinct from update. Does not recompute health. A taken name at the destination is a 409. A move can RENAME the location: a platform-generated name is scoped to its parent bucket, so a move that changes the parent re-mints the name and the ordinal under the new parent, from the same location_type name rule. A move that re-states the current parent leaves the name alone, and an operator-typed name is never touched. Gated by location:move; the read and move scopes drive the 404 versus 403 split.",
 					Example: "  omniglass location move <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2081,6 +2163,23 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fParent, "parent", "", "Re-parents the location (a tree move) to this location name; cycle-guarded and placement-validated. Moving to root is not supported.")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "previewLabels",
+					Short:   "Preview a location label recompute",
+					Long:    "Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by location:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.",
+					Example: "  omniglass location previewLabels",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/locations:previewLabels")
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
 				return cmd
 			}()
 			return cmd
@@ -2152,6 +2251,23 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "recomputeLabels",
+					Short:   "Recompute location labels",
+					Long:    "Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by location:update.",
+					Example: "  omniglass location recomputeLabels",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/locations:recomputeLabels")
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fKey string
 				cmd := &cobra.Command{
 					Use:     "removeTag <name>",
@@ -2200,6 +2316,52 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fLocationType string
+				var fName string
+				cmd := &cobra.Command{
+					Use:     "renderLabel",
+					Short:   "Render the label a location create would store",
+					Long:    "The location tier of :renderLabel on components. Renders the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create. No placement scope is injected because a location's label rule reads no other estate row.",
+					Example: "  omniglass location renderLabel --location-type location_type",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/locations:renderLabel")
+						body := map[string]any{}
+						if cmd.Flags().Changed("location-type") {
+							body["location_type"] = fLocationType
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fLocationType, "location-type", "", "The location_type this location is classified by, by name or uuid")
+				_ = cmd.MarkFlagRequired("location-type")
+				cmd.Flags().StringVar(&fName, "name", "", "The name the row will carry. Omit it to render the label the platform's own generated name would produce, which a location_type with no name rule refuses; supply it to render the label an operator-named location would carry.")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "resetName <name>",
+					Short:   "Regenerate a location's name",
+					Long:    "Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped estate has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.",
+					Example: "  omniglass location resetName <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/locations/%s:resetName", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fKey string
 				var fValue string
 				cmd := &cobra.Command{
@@ -2235,7 +2397,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a location",
-					Long:    "Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
+					Long:    "Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
 					Example: "  omniglass location update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2268,11 +2430,13 @@ func generatedCommands() []*cobra.Command {
 				var fAllowedParentTypes string
 				var fDisplayName string
 				var fIcon string
+				var fLabelRule string
 				var fName string
+				var fNameRule string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a location type",
-					Long:    "Creates a custom (non-official) location_type. Gated by location_type:create.",
+					Long:    "Creates a custom (non-official) location_type, optionally with the label_rule locations of that type get. An unparseable rule is a 422. Gated by location_type:create.",
 					Example: "  omniglass location-type create --display-name display_name --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2287,8 +2451,14 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("icon") {
 							body["icon"] = fIcon
 						}
+						if cmd.Flags().Changed("label-rule") {
+							body["label_rule"] = fLabelRule
+						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
+						}
+						if cmd.Flags().Changed("name-rule") {
+							body["name_rule"] = jsonOrString(fNameRule)
 						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
@@ -2297,8 +2467,10 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; the console falls back to map-pin when empty")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name (e.g. wing); \"root\" is reserved")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fNameRule, "name-rule", "", "How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name")
 				return cmd
 			}()
 			return cmd
@@ -2480,10 +2652,12 @@ func generatedCommands() []*cobra.Command {
 				var fAllowedParentTypes string
 				var fDisplayName string
 				var fIcon string
+				var fLabelRule string
+				var fNameRule string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update a location type",
-					Long:    "Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by location_type:update.",
+					Long:    "Patches a location_type's display_name, icon, allowed parents, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by location_type:update.",
 					Example: "  omniglass location-type update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2498,12 +2672,20 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("icon") {
 							body["icon"] = fIcon
 						}
+						if cmd.Flags().Changed("label-rule") {
+							body["label_rule"] = fLabelRule
+						}
+						if cmd.Flags().Changed("name-rule") {
+							body["name_rule"] = jsonOrString(fNameRule)
+						}
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
 				cmd.Flags().StringVar(&fAllowedParentTypes, "allowed-parent-types", "", "Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key; the console falls back to map-pin when empty")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels")
+				cmd.Flags().StringVar(&fNameRule, "name-rule", "", "A new name rule for locations of this type; omit to leave unchanged. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row")
 				return cmd
 			}()
 			return cmd
@@ -3689,6 +3871,7 @@ func generatedCommands() []*cobra.Command {
 				var fDriverId string
 				var fIcon string
 				var fKind string
+				var fLabelRule string
 				var fName string
 				var fParentProductId string
 				var fVendorId string
@@ -3716,6 +3899,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("kind") {
 							body["kind"] = fKind
 						}
+						if cmd.Flags().Changed("label-rule") {
+							body["label_rule"] = fLabelRule
+						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
@@ -3736,6 +3922,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A product-level icon override; unset inherits the component_type's icon")
 				cmd.Flags().StringVar(&fKind, "kind", "", "What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly.")
 				_ = cmd.MarkFlagRequired("kind")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422.")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "The parent product, by handle or uuid")
@@ -3940,6 +4127,7 @@ func generatedCommands() []*cobra.Command {
 				var fDriverId string
 				var fIcon string
 				var fKind string
+				var fLabelRule string
 				var fParentProductId string
 				var fVendorId string
 				cmd := &cobra.Command{
@@ -3966,6 +4154,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("kind") {
 							body["kind"] = fKind
 						}
+						if cmd.Flags().Changed("label-rule") {
+							body["label_rule"] = fLabelRule
+						}
 						if cmd.Flags().Changed("parent-product-id") {
 							body["parent_product_id"] = fParentProductId
 						}
@@ -3980,6 +4171,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDriverId, "driver-id", "", "A new driver, by handle or uuid")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new icon override")
 				cmd.Flags().StringVar(&fKind, "kind", "", "A new product class")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse.")
 				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "A new parent product, by handle or uuid")
 				cmd.Flags().StringVar(&fVendorId, "vendor-id", "", "A new vendor, by handle or uuid")
 				return cmd
@@ -4901,7 +5093,7 @@ func generatedCommands() []*cobra.Command {
 					Use:     "create",
 					Short:   "Create a system",
 					Long:    "Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create.",
-					Example: "  omniglass system create --name name",
+					Example: "  omniglass system create",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/systems")
@@ -4929,8 +5121,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the name is the address")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Location name this system is placed at")
-				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens)")
-				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem.")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent system name; omit for a root system")
 				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "The standard it conforms to, by handle or uuid; omit for a one-off system")
 				cmd.Flags().StringVar(&fSystemTypeId, "system-type-id", "", "The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified")
@@ -5136,7 +5327,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "move <name>",
 					Short:   "Move a system",
-					Long:    "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. Gated by system:move; read and move scopes drive the 404 versus 403 split.",
+					Long:    "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split.",
 					Example: "  omniglass system move <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5153,6 +5344,23 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fLocation, "location", "", "Relocates the system to this location name. An empty string clears its placement.")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Re-parents the system within the system tree to this system name; cycle-guarded and scope-injected. An empty string makes it a root system (requires an all-scoped move grant).")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "previewLabels",
+					Short:   "Preview a system label recompute",
+					Long:    "Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by system:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.",
+					Example: "  omniglass system previewLabels",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/systems:previewLabels")
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
 				return cmd
 			}()
 			return cmd
@@ -5224,6 +5432,23 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "recomputeLabels",
+					Short:   "Recompute system labels",
+					Long:    "Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by system:update.",
+					Example: "  omniglass system recomputeLabels",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/systems:recomputeLabels")
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
 				var fKey string
 				cmd := &cobra.Command{
 					Use:     "removeTag <name>",
@@ -5266,6 +5491,61 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fName, "name", "", "The new name, unique within its placement (lowercase letters, digits, hyphens)")
 				_ = cmd.MarkFlagRequired("name")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fLocation string
+				var fName string
+				var fStandardId string
+				var fSystemTypeId string
+				cmd := &cobra.Command{
+					Use:     "renderLabel",
+					Short:   "Render the label a system create would store",
+					Long:    "The system tier of :renderLabel on components. Renders the label a system create would stamp, allocating nothing. Omitting name renders the label the platform's generated name would produce and refuses (422) an unclassified system, the same refusal a nameless create gives, since the stem lives on the system_type. Gated by system:create; the location ref resolves within the caller's location:read scope, because a system's label can carry its location's.",
+					Example: "  omniglass system renderLabel",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/systems:renderLabel")
+						body := map[string]any{}
+						if cmd.Flags().Changed("location") {
+							body["location"] = fLocation
+						}
+						if cmd.Flags().Changed("name") {
+							body["name"] = fName
+						}
+						if cmd.Flags().Changed("standard-id") {
+							body["standard_id"] = fStandardId
+						}
+						if cmd.Flags().Changed("system-type-id") {
+							body["system_type_id"] = fSystemTypeId
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fLocation, "location", "", "The location this system will sit at, by name or uuid. Resolved within the caller's location:read scope.")
+				cmd.Flags().StringVar(&fName, "name", "", "The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token \"n\"; supply it to render the label an operator-named row would carry, which has no ordinal at all.")
+				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "The standard this system conforms to, by name or uuid; omit for a one-off system")
+				cmd.Flags().StringVar(&fSystemTypeId, "system-type-id", "", "The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row.")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "resetName <name>",
+					Short:   "Regenerate a system's name",
+					Long:    "Hands the pen back to the platform: regenerates the name from the system's current system_type and placement (the same rule a nameless create applies, the type's stem plus the lowest free ordinal, bare for the first of that stem in the placement) and marks it name_generated, whether or not it already was. An unclassified system is a 422: the stem lives on the system_type. Gated by system:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.",
+					Example: "  omniglass system resetName <name>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/systems/%s:resetName", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "POST", path, nil)
+					},
+				}
 				return cmd
 			}()
 			return cmd
@@ -5520,13 +5800,14 @@ func generatedCommands() []*cobra.Command {
 				var fAbbrev string
 				var fDisplayName string
 				var fIcon string
+				var fLabelRule string
 				var fName string
 				var fParentId string
 				var fStem string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a system type",
-					Long:    "Creates a custom (non-official) system_type, optionally under a parent. A root type must carry a stem, since it has no ancestor to inherit one from. Gated by system_type:create.",
+					Long:    "Creates a custom (non-official) system_type, optionally under a parent and optionally with the label_rule systems of that type get. A root type must carry a stem, since it has no ancestor to inherit one from. An unparseable label_rule is a 422. Gated by system_type:create.",
 					Example: "  omniglass system-type create --display-name display_name --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5540,6 +5821,9 @@ func generatedCommands() []*cobra.Command {
 						}
 						if cmd.Flags().Changed("icon") {
 							body["icon"] = fIcon
+						}
+						if cmd.Flags().Changed("label-rule") {
+							body["label_rule"] = fLabelRule
 						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -5557,6 +5841,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; omit to inherit the parent's")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentId, "parent-id", "", "The parent system_type, by name or uuid; omit for a root type")
@@ -5604,11 +5889,12 @@ func generatedCommands() []*cobra.Command {
 				var fAbbrev string
 				var fDisplayName string
 				var fIcon string
+				var fLabelRule string
 				var fStem string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update a system type",
-					Long:    "Patches a custom system_type's display_name, stem, icon, or abbrev. Official types are read-only (422). Gated by system_type:update.",
+					Long:    "Patches a custom system_type's display_name, stem, icon, abbrev, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /systems:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by system_type:update.",
 					Example: "  omniglass system-type update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5623,6 +5909,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("icon") {
 							body["icon"] = fIcon
 						}
+						if cmd.Flags().Changed("label-rule") {
+							body["label_rule"] = fLabelRule
+						}
 						if cmd.Flags().Changed("stem") {
 							body["stem"] = fStem
 						}
@@ -5632,6 +5921,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fAbbrev, "abbrev", "", "A new compact form")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template for systems of this type; omit to leave unchanged, \"\" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels")
 				cmd.Flags().StringVar(&fStem, "stem", "", "A new name prefix. Lowercase letters, digits, and hyphens.")
 				return cmd
 			}()

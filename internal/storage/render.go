@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -29,13 +29,6 @@ type Renders struct {
 // derives from its own placement (its root ancestor's location, walked by
 // PathOf below), never from a system it happens to belong to.
 
-// ordinalOnlyRe matches what is left of a segment once its own stem and the
-// separator are cut away: the all-digit ordinal generateComponentName mints
-// (namegen.go's ordinalSuffixRe, anchored here against the remainder rather
-// than the whole segment, so the match is only ever consulted after the stem
-// has already been confirmed).
-var ordinalOnlyRe = regexp.MustCompile(`^[0-9]+$`)
-
 // nonAccessorSegments drops every accessor ($comp/$sys/$role) from segments,
 // keeping the rest in order: the one filter both renders below share.
 func nonAccessorSegments(segments []string) []string {
@@ -60,38 +53,40 @@ func RenderDash(segments []string) string {
 // RenderBare is the compact render: RenderDash's segments concatenated with
 // NO separator (the point of a "bare" form: a physical label has no room for
 // punctuation), with the final segment replaced by "<abbrev><ordinal>"
-// ("dsp1") when that segment is exactly this type's own "<stem>-<ordinal>"
-// ("display-1").
+// ("dsp1") when the entity carries a platform-allocated ordinal.
 //
-// stem and abbrev come from the SAME registry row (component_type's stem and
-// abbrev, resolved together through the inherited-from-parent chain
-// generateNameForProduct walks), and both are required for the substitution:
-// the abbrev says what to write, the stem says the segment is one this type
-// actually minted. Matching a bare trailing "-<n>" without confirming the stem
-// (#654) rewrote names the platform never generated, so a component an
-// operator renamed to "rack-3" rendered as "dsp3", putting a word on a cable
-// label that appears nowhere in the entity's name. An operator rename clears
-// name_generated for good, and the name they choose is theirs: "booth-2",
-// "row-14", "rack-3" all keep their own words.
+// ordinal is the number the generator STORED on the row (#681), not one read
+// back out of the name: nil means no ordinal the platform owns, which is
+// exactly the state an operator-typed name and an operator-renamed row are
+// both in. abbrev is the component_type's, resolved through the same
+// inherited-from-parent chain generateNameForProduct walks.
 //
-// A caller with no abbrev, no stem, or a final segment that is not this type's
-// stem-ordinal pair gets the concatenated segments back with the last one
-// untouched, which is the only sensible degradation when there is nothing to
-// compact it to. System and location addresses have no type-level abbreviation
-// today, so their callers pass "" for both.
-func RenderBare(segments []string, stem, abbrev string) string {
+// That the two facts now come from different places is what makes the #654
+// guarantee structural rather than defensive. This render used to confirm the
+// substitution was legitimate by re-deriving it: match a trailing "-<n>",
+// then (after #654) confirm the segment was the type's own "<stem>-<n>". Both
+// were inferences about who had named the row, drawn from the string that was
+// about to be replaced. The row now says so directly. A component an operator
+// renamed to "rack-3" has no stored ordinal, so there is no number to
+// substitute and no rule to get wrong: "booth-2", "row-14", "rack-3" all keep
+// their own words, and so does a hand-typed "display-1" that the old
+// stem-match would have compacted.
+//
+// A caller with no abbrev or no ordinal gets the concatenated segments back
+// with the last one untouched, the only sensible degradation when there is
+// nothing to compact it to. System and location addresses have no type-level
+// abbreviation and no generated ordinal today, so their callers pass nil and
+// "".
+func RenderBare(segments []string, ordinal *int, abbrev string) string {
 	kept := nonAccessorSegments(segments)
 	if len(kept) == 0 {
 		return ""
 	}
-	if stem != "" && abbrev != "" {
-		last := kept[len(kept)-1]
-		if ordinal, ok := strings.CutPrefix(last, stem+"-"); ok && ordinalOnlyRe.MatchString(ordinal) {
-			compacted := make([]string, len(kept))
-			copy(compacted, kept)
-			compacted[len(compacted)-1] = abbrev + ordinal
-			kept = compacted
-		}
+	if ordinal != nil && abbrev != "" {
+		compacted := make([]string, len(kept))
+		copy(compacted, kept)
+		compacted[len(compacted)-1] = abbrev + strconv.Itoa(*ordinal)
+		kept = compacted
 	}
 	return strings.Join(kept, "")
 }

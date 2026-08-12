@@ -7,7 +7,7 @@ import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
-import { createIdentity } from "../lib/entities";
+import { createIdentity, entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import ProductContractEditor from "../components/ProductContractEditor";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
@@ -85,7 +85,7 @@ export default function Products() {
         loading: () => products.isPending,
         error: () => products.error,
         filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (p) => `${p.name} ${p.display_name}`, values: () => [] },
+          { key: "name", type: "string", hint: "substring", get: (p) => `${entityLabel(p)} ${p.name}`, values: () => [] },
           { key: "kind", type: "string", hint: "exact", get: (p) => p.kind, values: () => PRODUCT_KINDS },
           { key: "vendor", type: "string", hint: "exact", get: (p) => p.vendor ?? "", values: () => [] },
           { key: "official", type: "string", hint: "exact", get: (p) => (p.official ? "official" : "custom"), values: () => ["official", "custom"] },

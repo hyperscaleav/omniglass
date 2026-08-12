@@ -55,11 +55,28 @@ type factsInterfaceType struct {
 	Built       bool   `json:"built"`
 }
 
+// factsLabelRule is one global label rule (#682) as the docs render it: the
+// entity kind and the template this release ships for it. An operator's own
+// override is estate data and is deliberately not a shipped fact.
+type factsLabelRule struct {
+	EntityKind string `json:"entity_kind"`
+	Template   string `json:"template"`
+}
+
 type factsLocationType struct {
-	ID                 string   `json:"id"`
-	DisplayName        string   `json:"display_name"`
-	Icon               string   `json:"icon,omitempty"`
-	AllowedParentTypes []string `json:"allowed_parent_types,omitempty"`
+	ID                 string         `json:"id"`
+	DisplayName        string         `json:"display_name"`
+	Icon               string         `json:"icon,omitempty"`
+	AllowedParentTypes []string       `json:"allowed_parent_types,omitempty"`
+	NameRule           *factsNameRule `json:"name_rule,omitempty"`
+}
+
+// factsNameRule is a location_type's name rule as the docs render it (#687):
+// absent where an operator names every location of that type, and an empty stem
+// where the type is positional and the ordinal alone is the name.
+type factsNameRule struct {
+	Stem      string `json:"stem"`
+	BareFirst bool   `json:"bare_first,omitempty"`
 }
 
 type factsStandardRole struct {
@@ -134,6 +151,7 @@ type seedFactsDoc struct {
 	Vendors        []factsVendor        `json:"vendors"`
 	Drivers        []factsDriver        `json:"drivers"`
 	Products       []factsProduct       `json:"products"`
+	LabelRules     []factsLabelRule     `json:"label_rules"`
 }
 
 // eventCommandDoc covers the shared name/display/description shape of the
@@ -174,6 +192,14 @@ func FactsJSON() ([]byte, error) {
 			Inherits: r.Inherits, Declared: r.Permissions,
 			Effective: idx.Flatten([]string{r.ID}).Strings(),
 		})
+	}
+
+	var rules labelRulesDoc
+	if err := yaml.Unmarshal(labelRulesYAML, &rules); err != nil {
+		return nil, fmt.Errorf("seed facts: label rules: %w", err)
+	}
+	for _, r := range rules.LabelRules {
+		doc.LabelRules = append(doc.LabelRules, factsLabelRule{EntityKind: r.EntityKind, Template: r.Template})
 	}
 
 	var props propertyTypesDoc
@@ -238,8 +264,13 @@ func FactsJSON() ([]byte, error) {
 		return nil, fmt.Errorf("seed facts: location types: %w", err)
 	}
 	for _, lt := range lts.LocationTypes {
+		var rule *factsNameRule
+		if lt.NameRule != nil {
+			rule = &factsNameRule{Stem: lt.NameRule.Stem, BareFirst: lt.NameRule.BareFirst}
+		}
 		doc.LocationTypes = append(doc.LocationTypes, factsLocationType{
 			ID: lt.ID, DisplayName: lt.DisplayName, Icon: lt.Icon, AllowedParentTypes: lt.AllowedParentTypes,
+			NameRule: rule,
 		})
 	}
 

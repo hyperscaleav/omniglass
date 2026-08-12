@@ -1,0 +1,47 @@
+# The global tier of the label rules (#682): the rule that applies to an entity
+# kind when neither its type nor its specific artifact has an opinion.
+#
+# Every value here is written to default_template, the column the boot seed owns
+# authoritatively. An operator's own rule lives in template beside it and is
+# never touched by re-seeding, so a release can improve these without stomping
+# anyone.
+#
+# The rule language is Go text/template over a closed data map; see
+# internal/label for the map each kind carries.
+label_rules:
+  - entity_kind: component
+    # A component's readable label is what it IS plus which one it is, and the
+    # ordinal is suppressed when the platform owns no number for this row (an
+    # operator typed the name, or renamed it): {{if}} on an absent fact is
+    # false, so the conditional is the whole of the suppression rule.
+    template: "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}"
+
+  - entity_kind: system
+    # What kind of space this system is. A standard is the blueprint it is built
+    # to, which is a different question and rarely what an operator wants read
+    # back at them in a list.
+    template: "{{.TypeName}}"
+
+  - entity_kind: location
+    # The location's own name, read as words and title-cased.
+    #
+    # A location kind carries only two facts: the type ("Room", for every room in
+    # the estate) or the name. So any rule here is either a CONSTANT or a
+    # RESTATEMENT, and the constant is still refused for the reason it always
+    # was: labelling every room "Room" is worse than the name it would replace.
+    #
+    # The restatement was refused with it, and that half is now wrong. It was
+    # right while a restatement could only echo the name; `words` (#657) means
+    # this one RE-CASES it and runs the operator's acronym dictionary over it,
+    # so `north-wing` reads "North Wing" and `hq-west` reads "HQ West" once HQ is
+    # in the list. That is a string the read ladder's fallback cannot produce,
+    # which is exactly the test a rule at this tier has to pass.
+    #
+    # It renders a label and STORES it. The ladder's last rung is untouched and
+    # still verbatim: a row with no stored label reads its name exactly, never a
+    # prettified version of it.
+    #
+    # A shipped rule change restamps nothing by itself (ADR-0100, ADR-0102). A
+    # new estate gets this at create; an existing one keeps its raw names until
+    # an operator runs /locations:recomputeLabels.
+    template: "{{title (words .Name)}}"

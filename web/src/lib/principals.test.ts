@@ -139,6 +139,18 @@ describe("roleFilterKeys", () => {
       { key: "id", op: "eq", values: ["admin"] },
     ])).toEqual(["admin"]);
   });
+  // The facet searches what the operator READS (#683). A row with no label falls
+  // back to its name, and the haystack must not carry the word "undefined" for
+  // it: several facets built their haystack by interpolating the raw column, so
+  // typing "undefined" matched every unlabelled row and nothing else did.
+  it("matches the rendered label, never the word undefined", () => {
+    const unlabelled = [role({ id: "bare" })];
+    const name = roleFilterKeys.find((k) => k.key === "name")!;
+    expect(name.get(unlabelled[0])).not.toContain("undefined");
+    expect(unlabelled.filter(buildPredicate(roleFilterKeys, [{ key: "name", op: "contains", values: ["bare"] }]))).toHaveLength(1);
+    expect(unlabelled.filter(buildPredicate(roleFilterKeys, [{ key: "name", op: "contains", values: ["undefined"] }]))).toHaveLength(0);
+  });
+
   it("offers a sorted, de-duplicated value catalog per facet", () => {
     const byKey = Object.fromEntries(roleFilterKeys.map((k) => [k.key, k]));
     expect(byKey.name.values!(roles)).toEqual(["Administrator", "Operator", "Owner", "Viewer"]);

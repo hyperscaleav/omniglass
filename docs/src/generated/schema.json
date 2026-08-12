@@ -135,6 +135,11 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "label_rule",
+      "type": "text",
+      "nullable": true
      }
     ],
     "uniques": [
@@ -267,6 +272,11 @@
      },
      {
       "name": "icon",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "label_rule",
       "type": "text",
       "nullable": true
      }
@@ -468,6 +478,11 @@
       "nullable": true,
       "fk": true,
       "fk_target": "standard.id"
+     },
+     {
+      "name": "label_rule",
+      "type": "text",
+      "nullable": true
      }
     ],
     "uniques": [
@@ -644,6 +659,11 @@
       "type": "timestamp with time zone",
       "nullable": false,
       "default": "now()"
+     },
+     {
+      "name": "label_rule",
+      "type": "text",
+      "nullable": true
      }
     ],
     "uniques": [
@@ -1006,6 +1026,45 @@
      {
       "name": "credential_secret_hash_key",
       "definition": "CREATE UNIQUE INDEX credential_secret_hash_key ON public.credential USING btree (secret_hash)"
+     }
+    ]
+   },
+   "label_rule": {
+    "columns": [
+     {
+      "name": "entity_kind",
+      "type": "text",
+      "nullable": false,
+      "pk": true
+     },
+     {
+      "name": "default_template",
+      "type": "text",
+      "nullable": false,
+      "default": "''::text"
+     },
+     {
+      "name": "template",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     }
+    ],
+    "checks": [
+     {
+      "name": "label_rule_entity_kind_check",
+      "expr": "CHECK ((entity_kind = ANY (ARRAY['component'::text, 'system'::text, 'location'::text])))"
      }
     ]
    },
@@ -1608,6 +1667,23 @@
       "type": "boolean",
       "nullable": false,
       "default": "false"
+     },
+     {
+      "name": "ordinal",
+      "type": "integer",
+      "nullable": true
+     },
+     {
+      "name": "display_name_generated",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     }
+    ],
+    "checks": [
+     {
+      "name": "component_ordinal_check",
+      "expr": "CHECK (((ordinal IS NULL) OR (ordinal \u003e= 1)))"
      }
     ],
     "uniques": [
@@ -1776,6 +1852,29 @@
       "nullable": false,
       "fk": true,
       "fk_target": "location_type.id"
+     },
+     {
+      "name": "display_name_generated",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "name_generated",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "ordinal",
+      "type": "integer",
+      "nullable": true
+     }
+    ],
+    "checks": [
+     {
+      "name": "location_ordinal_check",
+      "expr": "CHECK (((ordinal IS NULL) OR (ordinal \u003e= 1)))"
      }
     ],
     "uniques": [
@@ -1831,6 +1930,22 @@
       "nullable": false,
       "default": "uuidv7()",
       "pk": true
+     },
+     {
+      "name": "label_rule",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "name_rule",
+      "type": "jsonb",
+      "nullable": true
+     }
+    ],
+    "checks": [
+     {
+      "name": "location_type_name_rule_check",
+      "expr": "CHECK (((name_rule IS NULL) OR (jsonb_typeof(name_rule) = 'object'::text)))"
      }
     ],
     "uniques": [
@@ -2006,6 +2121,29 @@
       "nullable": true,
       "fk": true,
       "fk_target": "system_type.id"
+     },
+     {
+      "name": "display_name_generated",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "name_generated",
+      "type": "boolean",
+      "nullable": false,
+      "default": "false"
+     },
+     {
+      "name": "ordinal",
+      "type": "integer",
+      "nullable": true
+     }
+    ],
+    "checks": [
+     {
+      "name": "system_ordinal_check",
+      "expr": "CHECK (((ordinal IS NULL) OR (ordinal \u003e= 1)))"
      }
     ],
     "uniques": [

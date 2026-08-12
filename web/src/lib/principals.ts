@@ -1,6 +1,7 @@
 import { createSignal } from "solid-js";
 import { api } from "../api/client";
 import { fileToBase64 } from "./auth";
+import { entityLabel } from "./entities";
 import type { FilterKey } from "./predicate";
 
 // The principals data layer: thin typed wrappers over the generated client, so
@@ -212,14 +213,30 @@ const uniqSorted = (xs: string[]): string[] => [...new Set(xs.filter(Boolean))].
 // effective permission strings, so an admin can find every role that grants, for
 // example, `audit`. Matching is client-side over the loaded rows via lib/predicate.
 export const roleFilterKeys: FilterKey<Role>[] = [
-  { key: "name", type: "string", hint: "substring", get: (r) => `${r.display_name ?? ""} ${r.name}`, values: (rows) => uniqSorted(rows.map((r) => r.display_name || r.name)) },
+  { key: "name", type: "string", hint: "substring", get: (r) => `${entityLabel(r)} ${r.name}`, values: (rows) => uniqSorted(rows.map(entityLabel)) },
   { key: "id", type: "string", hint: "exact", get: (r) => r.name, values: (rows) => uniqSorted(rows.map((r) => r.name)) },
   { key: "permission", type: "string", hint: "substring", get: (r) => effectivePerms(r).join(" "), values: (rows) => uniqSorted(rows.flatMap((r) => permResources(effectivePerms(r)))) },
 ];
 
 // The display name for a principal: a human's display name or username, a service
 // account's label, else the bare kind.
-export function principalName(p: Principal): string {
+//
+// NOT entityLabel, and deliberately: a principal has no `name` column, and the
+// precedence here runs the other way round (a username is the identifier, and it
+// outranks a service account's label). Widening entityLabel to express it would
+// make the entity rule answer a question it does not have the columns for.
+//
+// It takes the structural shape rather than a Principal so the sidebar's `me`
+// payload reaches the same rule (#683). That payload nests the kind one level
+// deeper and used to restate all four rungs by hand, which is the same drift
+// with a different subject.
+export type PrincipalIdentity = {
+  human?: { username: string; display_name?: string };
+  service?: { label: string };
+  kind: string;
+};
+
+export function principalName(p: Principal | PrincipalIdentity): string {
   return p.human?.display_name || p.human?.username || p.service?.label || p.kind;
 }
 

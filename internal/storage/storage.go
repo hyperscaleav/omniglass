@@ -18,8 +18,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hyperscaleav/omniglass/internal/blob"
+	"github.com/hyperscaleav/omniglass/internal/label"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
+	"github.com/hyperscaleav/omniglass/internal/settings"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -226,6 +228,12 @@ type Gateway interface {
 	// it left, inside its own transaction (#642): a location's rollup folds every
 	// system in its own subtree, so the move carries that contribution across.
 	MoveLocation(ctx context.Context, actorID, name string, move LocationMove, read, action scope.Set) (*Location, error)
+	// ResetLocationName is the location's half of the name pen (#686). It
+	// refuses today (ErrLocationTypeNoNameRule, a 422): the verb exists on all
+	// three trees so the contract is one shape, and a location has no stem
+	// source to mint from until #687 gives its type a name rule. The API gates
+	// it on location:rename, exactly as the component and system verbs are.
+	ResetLocationName(ctx context.Context, actorID, name string, read, action scope.Set) (*Location, error)
 	LocationNameTaken(ctx context.Context, name string, parentRef *string) (bool, error)
 	DeleteLocation(ctx context.Context, actorID, name string, read, action scope.Set) error
 
@@ -250,6 +258,14 @@ type Gateway interface {
 	// update is. Its own function, not a patch field (#627 Task 13), because a
 	// placement change is an authorization act; the API gates it on system:move.
 	MoveSystem(ctx context.Context, actorID, name string, move SystemMove, read, action scope.Set) (*System, error)
+	// ResetSystemName hands the pen back to the platform (#686): it regenerates
+	// the system's name from its current system_type and placement, the same
+	// rule CreateSystem applies when no name is given (the type's stem plus the
+	// lowest free ordinal, bare for the first of that stem in the bucket), and
+	// marks it name_generated again, whether or not it already was. The API
+	// gates it on system:rename, the existing token whose blast radius
+	// (changing the name) this is exactly.
+	ResetSystemName(ctx context.Context, actorID, name string, read, action scope.Set) (*System, error)
 	SystemNameTaken(ctx context.Context, name string, parentRef, locationRef *string) (bool, error)
 	DeleteSystem(ctx context.Context, actorID, name string, read, action scope.Set) error
 
@@ -301,6 +317,34 @@ type Gateway interface {
 	// The component_type registry: the hierarchical taxonomy a product is
 	// classified by (mic, camera, wireless-mic under mic). ResolveTypeFacts
 	// and TypeIsWithin walk the tree in Go; no DB logic.
+	// The global tier of the label rules (#682): one row per entity kind,
+	// its shipped default rewritten authoritatively on every boot and an
+	// operator's override left alone, which is why they are two columns.
+	UpsertLabelRuleDefault(ctx context.Context, kind, template string) error
+	ListLabelRules(ctx context.Context) ([]LabelRule, error)
+	GetLabelRule(ctx context.Context, kind string) (*LabelRule, error)
+	SetLabelRule(ctx context.Context, actorID, kind, template string) (*LabelRule, error)
+
+	// The bulk recompute (#685), the verb a rule change is applied through.
+	// PreviewLabelRecompute lists exactly the rows an apply would change and
+	// leaves the estate as it found it; RecomputeLabels applies and returns
+	// what it changed. Both take the same two scopes, because a preview that
+	// selected on a wider one would promise rows the apply then refuses, and a
+	// location recompute reports the components and systems its new location
+	// labels stale.
+	PreviewLabelRecompute(ctx context.Context, kind string, read, action scope.Set) ([]LabelChange, error)
+	RecomputeLabels(ctx context.Context, actorID, kind string, read, action scope.Set) ([]LabelChange, error)
+
+	// The draft render (#699): the label a create WOULD stamp, for a form that
+	// shows the operator what the platform is about to produce. It allocates
+	// nothing, which is what separates it from the preview ADR-0104 refused;
+	// see label_draft.go. The scopes are the PLACEMENT's, because a placement
+	// fact is what the answer could otherwise leak, and a location draft takes
+	// none because a location's data map reads no other estate row.
+	RenderComponentDraftLabel(ctx context.Context, draft ComponentLabelDraft, locationRead, systemRead scope.Set) (DraftLabel, error)
+	RenderSystemDraftLabel(ctx context.Context, draft SystemLabelDraft, locationRead scope.Set) (DraftLabel, error)
+	RenderLocationDraftLabel(ctx context.Context, draft LocationLabelDraft) (DraftLabel, error)
+
 	UpsertComponentType(ctx context.Context, ct ComponentType) error
 	ListComponentTypes(ctx context.Context) ([]ComponentType, error)
 	GetComponentType(ctx context.Context, ref string) (*ComponentType, error)
@@ -649,6 +693,15 @@ type PG struct {
 	secret secret.Provider
 	blob   blob.Store
 	tracer pgx.QueryTracer
+
+	// The settings the gateway itself reads. Today that is the acronym
+	// dictionary the label engine titles with (#684); the file layer is captured
+	// at construction and the platform layer is read live off the pool, so an
+	// operator's edit reaches the next render without a restart. labelEngines
+	// holds the engine built from whatever the last read resolved.
+	settingsFile settings.Doc
+	settings     *settings.Service
+	labelEngines label.EngineCache
 }
 
 // Option configures a PG at construction. The secret provider is optional so
@@ -669,6 +722,21 @@ func WithSecretProvider(prov secret.Provider) Option {
 // Unset, the gateway uses the pgblobs backend over its own pool.
 func WithBlobStore(store blob.Store) Option {
 	return func(p *PG) { p.blob = store }
+}
+
+// WithSettingsFile installs the operator settings file layer the gateway's own
+// settings reads resolve through, the same parsed document the API's settings
+// service is built from.
+//
+// The gateway needs it because it reads a setting itself (the acronym
+// dictionary), and it needs it passed IN rather than loaded here because the
+// file's path is a bootstrap config the server owns and the other run modes do
+// not have. A lane that passes none resolves the declared defaults and the
+// database override, which is every layer that lane HAS; the alternative,
+// skipping the file quietly, would render labels from one dictionary while the
+// settings read served another.
+func WithSettingsFile(doc settings.Doc) Option {
+	return func(p *PG) { p.settingsFile = doc }
 }
 
 // WithQueryTracer installs a pgx query tracer on every connection the pool
@@ -722,8 +790,50 @@ func NewPG(ctx context.Context, dsn string, opts ...Option) (*PG, error) {
 	if p.blob == nil {
 		p.blob = NewPGBlobStore(pool)
 	}
+	// The gateway's own settings resolver. It is built here rather than injected
+	// because the only thing it needs beyond the file layer is a reader for the
+	// platform override, which is this gateway: injecting a service that closes
+	// over the gateway would make the two mutually constructing, and the settings
+	// package deliberately does not import storage.
+	p.settings = settings.NewService(p.settingsFile, func(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
+		return p.settingLevel(ctx, p.pool, scope)
+	})
 	return p, nil
 }
+
+// settingLevel reads the override rows at a scope and adapts them into a
+// settings level. The querier is a parameter because a gateway path resolving a
+// setting inside its own transaction must read it there.
+func (p *PG) settingLevel(ctx context.Context, q querier, scope string) (settings.Doc, map[string][]string, error) {
+	rows, err := settingOverridesOn(ctx, q, scope)
+	if err != nil {
+		return nil, nil, err
+	}
+	doc, locks := SettingLevel(rows)
+	return doc, locks, nil
+}
+
+// SettingLevel adapts override rows into the shape the settings resolver takes:
+// one document per namespace, plus the locked key-paths. Pure, and exported
+// because every caller building a settings.Service over this gateway needs the
+// same adaptation and there is no reason for each to spell it out.
+func SettingLevel(rows []SettingOverride) (settings.Doc, map[string][]string) {
+	doc := settings.Doc{}
+	locks := map[string][]string{}
+	for _, r := range rows {
+		doc[r.Namespace] = r.Doc
+		if len(r.Locks) > 0 {
+			locks[r.Namespace] = r.Locks
+		}
+	}
+	return doc, locks
+}
+
+// Settings is the gateway's settings resolver: the declared defaults, the
+// operator file captured at construction, and the platform override read live
+// off the pool. It is exported so the server wires ONE resolver into the API
+// rather than building a second one over the same rows.
+func (p *PG) Settings() *settings.Service { return p.settings }
 
 // Ping checks backend reachability through the pool.
 func (p *PG) Ping(ctx context.Context) error {

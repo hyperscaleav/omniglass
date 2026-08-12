@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import type { components } from "../api/schema.gen";
 import { sortAlarms } from "./alarms";
+import { entityLabel } from "./entities";
 
 // The health data layer: thin typed wrappers over the generated client plus the
 // pure read-time derivations the console renders.
@@ -105,7 +106,7 @@ export function inactiveRoles(h: EstateHealth | undefined): HealthRole[] {
 export function impairedRoles(h: EstateHealth | undefined): HealthRole[] {
   return activeRoles(h)
     .filter((r) => r.impaired)
-    .sort((a, b) => impactRank(a.impact) - impactRank(b.impact) || (a.display_name || a.name).localeCompare(b.display_name || b.name));
+    .sort((a, b) => impactRank(a.impact) - impactRank(b.impact) || entityLabel(a).localeCompare(entityLabel(b)));
 }
 
 // The roles that are holding: named too, because "which roles are fine" is half of
@@ -159,7 +160,7 @@ export function impactPhrase(impact: string): string {
 // link, because a badge that says "degraded" and nothing else is the thing
 // operators already have and do not trust.
 export function chainSentence(r: HealthRole, verdict: string): string {
-  const role = r.display_name || r.name;
+  const role = entityLabel(r);
   const alarm = worstAlarm(r);
   const down = (r.down ?? []).join(", ");
   if (!alarm) {

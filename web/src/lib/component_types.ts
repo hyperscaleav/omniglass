@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import { resolveInherited } from "./typechain";
 
 // The component_type registry data layer: the device-class genus a product is
 // classified under (ADR-0085 partially reverses ADR-0047: the shape returns
@@ -116,22 +117,15 @@ export function componentTypeByName(types: ComponentType[]): Map<string, Compone
   return new Map(types.map((t) => [t.name, t] as const));
 }
 
-// The same bound the server's ResolveTypeFacts walk uses
-// (internal/storage/component_types.go): defends an inheritance walk against
-// a cycle a client sent us, never expected against real data.
-const MAX_DEPTH = 32;
-
 // resolveComponentTypeIcon walks the type's ancestor chain for the first
 // non-empty icon (first-non-null-wins, the same rule the server's fact
 // resolver applies), falling back to "box" (generic-device's icon) only for
 // a name the registry does not contain at all.
+//
+// The walk itself lives in lib/typechain.ts, shared with the system registry's
+// icon and with the generated-name preview's stem: one climb, three facts.
 export function resolveComponentTypeIcon(typeName: string | undefined, byName: Map<string, ComponentType>): string {
-  let cur = typeName ? byName.get(typeName) : undefined;
-  for (let depth = 0; cur && depth < MAX_DEPTH; depth++) {
-    if (cur.icon) return cur.icon;
-    cur = cur.parent ? byName.get(cur.parent) : undefined;
-  }
-  return "box";
+  return resolveInherited(typeName, byName, (t) => t.icon) ?? "box";
 }
 
 export type ComponentTypeNode = ComponentType & { children: ComponentTypeNode[]; depth: number };

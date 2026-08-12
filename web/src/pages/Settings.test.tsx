@@ -116,6 +116,55 @@ describe("Settings page", () => {
     expect(screen.getByText("Console override (platform)")).toBeTruthy();
   });
 
+  // A list-valued setting (the acronym dictionary, #684) is the first setting
+  // that is not a scalar. It is edited as text, because a comma-separated line is
+  // what an operator wants to type into thirty short words, but it crosses the
+  // wire as a JSON array: sending back the joined string is a 422 the server is
+  // right to give, and the console must never offer a control whose Save cannot
+  // succeed.
+  const listRead: SettingsRead = {
+    values: { label: { acronyms: ["AV", "DSP"] } },
+    sources: { "label.acronyms": "default" },
+    locks: {},
+  };
+
+  it("renders a list-valued setting as a readable line", async () => {
+    mount(listRead);
+    expect(await screen.findByText("acronyms")).toBeTruthy();
+    expect(screen.getByText("AV, DSP")).toBeTruthy();
+  });
+
+  it("patches a list-valued setting as an array, not the joined string", async () => {
+    const calls: { url: string; body: unknown }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      const method = (typeof input === "string" || input instanceof URL ? init?.method : (input as Request).method) ?? "GET";
+      if (method === "PATCH") {
+        const raw = typeof input === "string" || input instanceof URL ? (init?.body as string | undefined) : await (input as Request).clone().text();
+        calls.push({ url, body: raw ? JSON.parse(raw) : null });
+      }
+      return new Response(JSON.stringify(listRead), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount(listRead);
+    enterEdit();
+    const input = (await screen.findByRole("textbox")) as HTMLInputElement;
+    expect(input.value).toBe("AV, DSP");
+    fireEvent.input(input, { target: { value: "AV, DSP, QM55" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls.length).toBe(1));
+    expect(calls[0].url).toContain("/settings/label");
+    expect(calls[0].body).toEqual({ acronyms: ["AV", "DSP", "QM55"] });
+  });
+
+  it("blocks Save on a list whose entries are empty", async () => {
+    mount(listRead);
+    enterEdit();
+    const input = (await screen.findByRole("textbox")) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "AV,,DSP" } });
+    expect(await screen.findByText(/empty entry/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  });
+
   it("hides every write affordance for a principal without settings:update", async () => {
     const viewer: Me = { principal: { id: "u-v", kind: "human" }, human: { username: "vi" }, permissions: ["ui:read"], grants: [] };
     mount({ values: { ui: { theme: "omniglass-light" } }, sources: { "ui.theme": "platform" }, locks: {} }, viewer);

@@ -41,12 +41,14 @@ func TestRenderDashPlainLocationHasNoAccessorToStrip(t *testing.T) {
 	}
 }
 
-// RenderBare compacts the dash render further: the final stem-ordinal segment
-// becomes <abbrev><ordinal>, and everything concatenates with no separator at
-// all, which is the point of a "bare" form (a physical label with no room for
-// punctuation).
+// RenderBare compacts the dash render further: the final segment of a
+// platform-named row becomes <abbrev><ordinal>, and everything concatenates
+// with no separator at all, which is the point of a "bare" form (a physical
+// label with no room for punctuation). The ordinal is the one the generator
+// STORED on the row (#681), so the render reads a fact rather than
+// reconstructing one from the name it is about to replace.
 func TestRenderBareReplacesStemOrdinalWithAbbrev(t *testing.T) {
-	got := RenderBare(parseOrFail(t, "boi.17c.216b.$comp.display-1"), "display", "dsp")
+	got := RenderBare(parseOrFail(t, "boi.17c.216b.$comp.display-1"), ordp(1), "dsp")
 	want := "boi17c216bdsp1"
 	if got != want {
 		t.Fatalf("RenderBare = %q, want %q", got, want)
@@ -54,7 +56,7 @@ func TestRenderBareReplacesStemOrdinalWithAbbrev(t *testing.T) {
 }
 
 func TestRenderBareMultiDigitOrdinal(t *testing.T) {
-	got := RenderBare(parseOrFail(t, "boi.$comp.display-12"), "display", "dsp")
+	got := RenderBare(parseOrFail(t, "boi.$comp.display-12"), ordp(12), "dsp")
 	want := "boidsp12"
 	if got != want {
 		t.Fatalf("RenderBare = %q, want %q", got, want)
@@ -66,43 +68,46 @@ func TestRenderBareMultiDigitOrdinal(t *testing.T) {
 // to compact the final segment TO, so RenderBare falls back to the dash
 // render's segments, just concatenated instead of dashed.
 func TestRenderBareNoAbbrevFallsBackToConcatenation(t *testing.T) {
-	got := RenderBare(parseOrFail(t, "boi.17c.216b.$comp.display-1"), "display", "")
+	got := RenderBare(parseOrFail(t, "boi.17c.216b.$comp.display-1"), ordp(1), "")
 	want := "boi17c216bdisplay-1"
 	if got != want {
 		t.Fatalf("RenderBare = %q, want %q", got, want)
 	}
 }
 
-// An operator-renamed component (RenameComponent clears name_generated
-// forever) may carry no trailing ordinal at all: "front-desk-display" has
-// nothing pickOrdinal-shaped for RenderBare to substitute, so the segment is
-// left exactly as the dash render has it.
+// An operator-renamed component (RenameComponent clears name_generated and
+// nulls the ordinal in the same statement) has no ordinal the platform owns,
+// so there is nothing to substitute and the segment is left exactly as the
+// dash render has it.
 func TestRenderBareNoOrdinalTailLeavesSegmentUnchanged(t *testing.T) {
-	got := RenderBare(parseOrFail(t, "boi.$comp.front-desk-display"), "display", "dsp")
+	got := RenderBare(parseOrFail(t, "boi.$comp.front-desk-display"), nil, "dsp")
 	want := "boifront-desk-display"
 	if got != want {
 		t.Fatalf("RenderBare = %q, want %q", got, want)
 	}
 }
 
-// The abbrev substitution belongs to the type that minted the name, so it may
-// only fire on that type's own stem. An operator who renames a component takes
-// the pen for good (name_generated clears and never returns except through
-// :resetName), and the name they chose can end in a digit run for reasons of
-// their own: rack-3, booth-2, row-14. Compacting "rack-3" to "dsp3" puts a word
-// on a cable label that appears nowhere in the entity's name.
+// The #654 guarantee, now structural. An operator who renames a component
+// takes the pen for good (name_generated clears and never returns except
+// through :resetName, and the stored ordinal goes with it), and the name they
+// chose can end in a digit run for reasons of their own: rack-3, booth-2,
+// row-14. Compacting "rack-3" to "dsp3" puts a word on a cable label that
+// appears nowhere in the entity's name. A NULL ordinal cannot be compacted, so
+// the render no longer has to recognise the case, it simply has no number.
 func TestRenderBareLeavesAForeignStemAlone(t *testing.T) {
-	got := RenderBare(parseOrFail(t, "boi.$comp.rack-3"), "display", "dsp")
+	got := RenderBare(parseOrFail(t, "boi.$comp.rack-3"), nil, "dsp")
 	want := "boirack-3"
 	if got != want {
 		t.Fatalf("RenderBare = %q, want %q", got, want)
 	}
 }
 
-// A stem the caller could not resolve is not a licence to substitute on any
-// trailing digit run: with nothing to match against, the segment stands.
-func TestRenderBareEmptyStemLeavesSegmentUnchanged(t *testing.T) {
-	got := RenderBare(parseOrFail(t, "boi.$comp.display-1"), "", "dsp")
+// A row whose name merely LOOKS generated is still left alone when no ordinal
+// is stored for it: a hand-typed "display-1", or a row that predates the
+// ordinal column and the backfill could not read a number off. The digits in
+// the name are not evidence, the column is.
+func TestRenderBareNoStoredOrdinalLeavesSegmentUnchanged(t *testing.T) {
+	got := RenderBare(parseOrFail(t, "boi.$comp.display-1"), nil, "dsp")
 	want := "boidisplay-1"
 	if got != want {
 		t.Fatalf("RenderBare = %q, want %q", got, want)
@@ -110,10 +115,14 @@ func TestRenderBareEmptyStemLeavesSegmentUnchanged(t *testing.T) {
 }
 
 func TestRenderBareEmptySegments(t *testing.T) {
-	if got := RenderBare(nil, "display", "dsp"); got != "" {
+	if got := RenderBare(nil, ordp(1), "dsp"); got != "" {
 		t.Fatalf("RenderBare(nil) = %q, want empty", got)
 	}
 }
+
+// ordp is the stored-ordinal pointer these renders take: a row the platform
+// named carries a number, a row an operator named carries nil.
+func ordp(n int) *int { return &n }
 
 func TestRenderDashEmptySegments(t *testing.T) {
 	if got := RenderDash(nil); got != "" {

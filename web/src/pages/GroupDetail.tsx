@@ -1,3 +1,4 @@
+import { entityLabel } from "../lib/entities";
 import { createEffect, createMemo, createSignal, on, Show } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import GrantBuilder from "../components/GrantBuilder";
@@ -239,7 +240,7 @@ function GroupGrantEditor(props: { id: string; editing: boolean; canGrant: boole
     <GrantBuilder
       principalId={props.id}
       current={current()}
-      roles={(roles.data ?? []).map((r) => ({ id: r.id, label: r.display_name || r.id, title: [r.description, `Grants: ${(r.effective_permissions ?? r.permissions).join(", ")}`].filter(Boolean).join("\n\n") }))}
+      roles={(roles.data ?? []).map((r) => ({ id: r.id, label: entityLabel(r), title: [r.description, `Grants: ${(r.effective_permissions ?? r.permissions).join(", ")}`].filter(Boolean).join("\n\n") }))}
       entities={entities}
       scopeName={(id) => nameOf().get(id)}
       canGrant={props.editing && props.canGrant}

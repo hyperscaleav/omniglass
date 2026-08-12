@@ -13,6 +13,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -94,7 +95,7 @@ func Defaults() Doc {
 			if !ok {
 				continue
 			}
-			v, err := coerceDefault(tag, f.Type.Kind())
+			v, err := fieldDefault(tag, f.Type)
 			if err != nil {
 				panic("settings: bad default tag on " + nsType.Name() + "." + f.Name + ": " + err.Error())
 			}
@@ -105,6 +106,58 @@ func Defaults() Doc {
 		}
 	}
 	return d
+}
+
+// fieldDefault coerces a default tag into the field's TYPE. A list splits into
+// elements and coerces each one; anything else is a single scalar and only its
+// kind matters.
+//
+// The type is needed where the kind is not enough: a []string and a []int are
+// both reflect.Slice, and the element type is the only thing that says which.
+func fieldDefault(s string, t reflect.Type) (any, error) {
+	if t.Kind() == reflect.Slice {
+		return listDefault(s, t)
+	}
+	return coerceDefault(s, t.Kind())
+}
+
+// listDefault parses a comma-separated default tag into a typed slice.
+//
+// The comma form is not a choice made here, it is huma's: huma reflects the same
+// tag into the JSON Schema, splitting a string array on commas and trimming each
+// element. This layer follows it exactly so a list-valued setting's declared
+// default and its published schema default are one value rather than two
+// spellings of one fact that can disagree.
+//
+// Huma also accepts a JSON array when the tag starts with '['. This layer
+// deliberately does not, and refuses it rather than guessing: a tag that parsed
+// one way into the schema and another way into the merge layer would be exactly
+// the drift the single-declaration struct exists to prevent, and the failure is
+// a bad tag on a struct field, which is a programming defect Defaults() already
+// panics on.
+//
+// An empty tag is an empty list, never a nil one: a nil slice marshals as JSON
+// null, and null is the merge patch's delete sentinel.
+func listDefault(s string, t reflect.Type) (any, error) {
+	if strings.HasPrefix(s, "[") {
+		return nil, fmt.Errorf("a list default is comma-separated (a,b,c), not a JSON array: %q", s)
+	}
+	out := reflect.MakeSlice(t, 0, 0)
+	if s == "" {
+		return out.Interface(), nil
+	}
+	for _, part := range strings.Split(s, ",") {
+		v, err := coerceDefault(strings.TrimSpace(part), t.Elem().Kind())
+		if err != nil {
+			return nil, err
+		}
+		rv := reflect.ValueOf(v)
+		if !rv.Type().AssignableTo(t.Elem()) {
+			return nil, fmt.Errorf("element %q is a %s, not a %s", part, rv.Type(), t.Elem())
+		}
+		out = reflect.Append(out, rv)
+	}
+	return out.Interface(), nil
 }
 
 // coerceDefault parses a default tag string into the field's Go kind, so the code

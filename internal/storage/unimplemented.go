@@ -15,7 +15,32 @@ import (
 // not break as the interface grows.
 type UnimplementedGateway struct{}
 
-func (UnimplementedGateway) Ping(context.Context) error             { return nil }
+func (UnimplementedGateway) Ping(context.Context) error { return nil }
+func (UnimplementedGateway) UpsertLabelRuleDefault(context.Context, string, string) error {
+	return nil
+}
+func (UnimplementedGateway) ListLabelRules(context.Context) ([]LabelRule, error) { return nil, nil }
+func (UnimplementedGateway) GetLabelRule(context.Context, string) (*LabelRule, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) SetLabelRule(context.Context, string, string, string) (*LabelRule, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) PreviewLabelRecompute(context.Context, string, scope.Set, scope.Set) ([]LabelChange, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) RecomputeLabels(context.Context, string, string, scope.Set, scope.Set) ([]LabelChange, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) RenderComponentDraftLabel(context.Context, ComponentLabelDraft, scope.Set, scope.Set) (DraftLabel, error) {
+	return DraftLabel{}, nil
+}
+func (UnimplementedGateway) RenderSystemDraftLabel(context.Context, SystemLabelDraft, scope.Set) (DraftLabel, error) {
+	return DraftLabel{}, nil
+}
+func (UnimplementedGateway) RenderLocationDraftLabel(context.Context, LocationLabelDraft) (DraftLabel, error) {
+	return DraftLabel{}, nil
+}
 func (UnimplementedGateway) UpsertRole(context.Context, Role) error { return nil }
 func (UnimplementedGateway) BootstrapOwner(context.Context, OwnerSpec) (bool, error) {
 	return false, nil
@@ -183,6 +208,9 @@ func (UnimplementedGateway) RenameLocation(context.Context, string, string, stri
 func (UnimplementedGateway) MoveLocation(context.Context, string, string, LocationMove, scope.Set, scope.Set) (*Location, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ResetLocationName(context.Context, string, string, scope.Set, scope.Set) (*Location, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) LocationNameTaken(context.Context, string, *string) (bool, error) {
 	return false, nil
 }
@@ -220,6 +248,9 @@ func (UnimplementedGateway) RenameSystem(context.Context, string, string, string
 	return nil, nil
 }
 func (UnimplementedGateway) MoveSystem(context.Context, string, string, SystemMove, scope.Set, scope.Set) (*System, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ResetSystemName(context.Context, string, string, scope.Set, scope.Set) (*System, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) SystemNameTaken(context.Context, string, *string, *string) (bool, error) {

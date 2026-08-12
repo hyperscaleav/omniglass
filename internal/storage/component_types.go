@@ -54,9 +54,13 @@ type ComponentType struct {
 	Icon        *string
 	Abbrev      *string
 	DefaultTags []string
-	Official    bool
-	ParentID    *uuid.UUID
-	Forked      bool
+	// LabelRule is this node's label template (#682), nullable on the same
+	// inherit-from-parent rule Stem/Icon/Abbrev follow: null defers to the
+	// nearest ancestor that sets one, and then to the global tier.
+	LabelRule *string
+	Official  bool
+	ParentID  *uuid.UUID
+	Forked    bool
 }
 
 // ComponentTypePatch carries the mutable fields of a component_type update; a
@@ -66,10 +70,11 @@ type ComponentTypePatch struct {
 	Stem        *string
 	Icon        *string
 	Abbrev      *string
+	LabelRule   *string
 	DefaultTags *[]string
 }
 
-const componentTypeCols = `id, name, display_name, stem, icon, abbrev, default_tags, official, parent_id`
+const componentTypeCols = `id, name, display_name, stem, icon, abbrev, label_rule, default_tags, official, parent_id`
 
 // componentTypeRegistry is this registry's key in registry_shadow, the first
 // adopter of the fork primitive (registryshadow.go).
@@ -80,13 +85,13 @@ const componentTypeRegistry = "component_type"
 // left join on the row's own uuid, so an unforked row reads exactly as before
 // and a forked one carries the image scanComponentTypeResolved overlays.
 const componentTypeResolved = `
-	select ct.id, ct.name, ct.display_name, ct.stem, ct.icon, ct.abbrev, ct.default_tags, ct.official, ct.parent_id, s.image
+	select ct.id, ct.name, ct.display_name, ct.stem, ct.icon, ct.abbrev, ct.label_rule, ct.default_tags, ct.official, ct.parent_id, s.image
 	from component_type ct
 	left join registry_shadow s on s.registry = '` + componentTypeRegistry + `' and s.row_id = ct.id`
 
 func scanComponentType(row pgx.Row) (*ComponentType, error) {
 	var ct ComponentType
-	if err := row.Scan(&ct.ID, &ct.Name, &ct.DisplayName, &ct.Stem, &ct.Icon, &ct.Abbrev, &ct.DefaultTags, &ct.Official, &ct.ParentID); err != nil {
+	if err := row.Scan(&ct.ID, &ct.Name, &ct.DisplayName, &ct.Stem, &ct.Icon, &ct.Abbrev, &ct.LabelRule, &ct.DefaultTags, &ct.Official, &ct.ParentID); err != nil {
 		return nil, err
 	}
 	return &ct, nil
@@ -98,7 +103,7 @@ func scanComponentType(row pgx.Row) (*ComponentType, error) {
 func scanComponentTypeResolved(row pgx.Row) (*ComponentType, error) {
 	var ct ComponentType
 	var image []byte
-	if err := row.Scan(&ct.ID, &ct.Name, &ct.DisplayName, &ct.Stem, &ct.Icon, &ct.Abbrev, &ct.DefaultTags, &ct.Official, &ct.ParentID, &image); err != nil {
+	if err := row.Scan(&ct.ID, &ct.Name, &ct.DisplayName, &ct.Stem, &ct.Icon, &ct.Abbrev, &ct.LabelRule, &ct.DefaultTags, &ct.Official, &ct.ParentID, &image); err != nil {
 		return nil, err
 	}
 	resolved, err := applyComponentTypeImage(ct, image)
@@ -125,6 +130,7 @@ func componentTypeShadowImage(ct ComponentType) ([]byte, error) {
 		"stem":         ct.Stem,
 		"icon":         ct.Icon,
 		"abbrev":       ct.Abbrev,
+		"label_rule":   ct.LabelRule,
 		"default_tags": normalizeComponentTypeTags(ct.DefaultTags),
 	})
 	if err != nil {
@@ -167,6 +173,11 @@ func applyComponentTypeImage(ct ComponentType, image []byte) (ComponentType, err
 	} else if ok {
 		ct.Abbrev = v
 	}
+	if v, ok, err := shadowValue[*string](fields, "label_rule"); err != nil {
+		return ct, err
+	} else if ok {
+		ct.LabelRule = v
+	}
 	if v, ok, err := shadowValue[[]string](fields, "default_tags"); err != nil {
 		return ct, err
 	} else if ok {
@@ -206,18 +217,19 @@ func mapComponentTypeWriteErr(err error) error {
 // place, id stable.
 func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into component_type (name, display_name, stem, icon, abbrev, default_tags, official, parent_id)
-		values ($1, $2, $3, $4, $5, $6, $7, $8)
+		insert into component_type (name, display_name, stem, icon, abbrev, label_rule, default_tags, official, parent_id)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		on conflict (name) do update
 			set display_name = excluded.display_name,
 			    stem         = excluded.stem,
 			    icon         = excluded.icon,
 			    abbrev       = excluded.abbrev,
+			    label_rule   = excluded.label_rule,
 			    default_tags = excluded.default_tags,
 			    official     = excluded.official,
 			    parent_id    = excluded.parent_id,
 			    updated_at   = now()`,
-		ct.Name, ct.DisplayName, ct.Stem, ct.Icon, ct.Abbrev, normalizeComponentTypeTags(ct.DefaultTags), ct.Official, ct.ParentID)
+		ct.Name, ct.DisplayName, ct.Stem, ct.Icon, ct.Abbrev, nilIfEmptyRule(ct.LabelRule), normalizeComponentTypeTags(ct.DefaultTags), ct.Official, ct.ParentID)
 	if err != nil {
 		return fmt.Errorf("storage: upsert component_type %q: %w", ct.Name, mapComponentTypeWriteErr(err))
 	}
@@ -304,6 +316,9 @@ func (p *PG) CreateComponentType(ctx context.Context, actorID string, ct Compone
 	} else if ct.ParentID == nil {
 		return nil, ErrRootComponentTypeNeedsStem
 	}
+	if err := validateLabelRule(ct.LabelRule); err != nil {
+		return nil, err
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create component_type: %w", err)
@@ -311,10 +326,10 @@ func (p *PG) CreateComponentType(ctx context.Context, actorID string, ct Compone
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	created, err := scanComponentType(tx.QueryRow(ctx, `
-		insert into component_type (name, display_name, stem, icon, abbrev, default_tags, official, parent_id)
-		values ($1, $2, $3, $4, $5, $6, false, $7)
+		insert into component_type (name, display_name, stem, icon, abbrev, label_rule, default_tags, official, parent_id)
+		values ($1, $2, $3, $4, $5, $6, $7, false, $8)
 		returning `+componentTypeCols,
-		ct.Name, ct.DisplayName, ct.Stem, ct.Icon, ct.Abbrev, normalizeComponentTypeTags(ct.DefaultTags), ct.ParentID))
+		ct.Name, ct.DisplayName, ct.Stem, ct.Icon, ct.Abbrev, nilIfEmptyRule(ct.LabelRule), normalizeComponentTypeTags(ct.DefaultTags), ct.ParentID))
 	if err != nil {
 		return nil, mapComponentTypeWriteErr(err)
 	}
@@ -347,6 +362,12 @@ func (p *PG) UpdateComponentType(ctx context.Context, actorID, ref string, patch
 		if err := validateEntityName(*patch.Stem); err != nil {
 			return nil, err
 		}
+	}
+	// The rule is compiled before anything is written, so an unparseable one is
+	// a 422 at rule-EDIT time rather than a column a later write path executes
+	// and degrades on forever.
+	if err := validateLabelRule(patch.LabelRule); err != nil {
+		return nil, err
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -382,11 +403,20 @@ func (p *PG) UpdateComponentType(ctx context.Context, actorID, ref string, patch
 			stem         = coalesce($3, stem),
 			icon         = coalesce($4, icon),
 			abbrev       = coalesce($5, abbrev),
-			default_tags = coalesce($6, default_tags),
+			-- A rule is the one patch field with a CLEAR state: an explicit
+			-- empty string means "this tier no longer has an opinion", which
+			-- coalesce alone cannot express, so it is a CASE like the estate
+			-- tables' three-state placement fields rather than a coalesce.
+			label_rule   = case
+				when $6::text is null then label_rule
+				when $6 = '' then null
+				else $6::text
+			end,
+			default_tags = coalesce($7, default_tags),
 			updated_at   = now()
 		where `+registryRefCol(ref)+` = $1
 		returning `+componentTypeCols,
-		ref, patch.DisplayName, patch.Stem, patch.Icon, patch.Abbrev, tags))
+		ref, patch.DisplayName, patch.Stem, patch.Icon, patch.Abbrev, patch.LabelRule, tags))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -435,6 +465,9 @@ func (p *PG) forkComponentType(ctx context.Context, tx pgx.Tx, actorID string, c
 	}
 	if patch.Abbrev != nil {
 		forked.Abbrev = patch.Abbrev
+	}
+	if patch.LabelRule != nil {
+		forked.LabelRule = nilIfEmptyRule(patch.LabelRule)
 	}
 	if patch.DefaultTags != nil {
 		forked.DefaultTags = normalizeComponentTypeTags(*patch.DefaultTags)
@@ -528,6 +561,7 @@ func (p *PG) DeleteComponentType(ctx context.Context, actorID, ref string) error
 type componentTypeWalkRow struct {
 	parentID           *uuid.UUID
 	stem, icon, abbrev *string
+	labelRule          *string
 	tags               []string
 }
 
@@ -540,11 +574,11 @@ func loadComponentTypeWalk(ctx context.Context, q querier, id uuid.UUID) (*compo
 	var row componentTypeWalkRow
 	var image []byte
 	err := q.QueryRow(ctx, `
-		select ct.parent_id, ct.stem, ct.icon, ct.abbrev, ct.default_tags, s.image
+		select ct.parent_id, ct.stem, ct.icon, ct.abbrev, ct.label_rule, ct.default_tags, s.image
 		from component_type ct
 		left join registry_shadow s on s.registry = '`+componentTypeRegistry+`' and s.row_id = ct.id
 		where ct.id = $1`, id).
-		Scan(&row.parentID, &row.stem, &row.icon, &row.abbrev, &row.tags, &image)
+		Scan(&row.parentID, &row.stem, &row.icon, &row.abbrev, &row.labelRule, &row.tags, &image)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTypeNotFound
 	}
@@ -552,12 +586,13 @@ func loadComponentTypeWalk(ctx context.Context, q querier, id uuid.UUID) (*compo
 		return nil, fmt.Errorf("storage: load component_type %q: %w", id, err)
 	}
 	resolved, err := applyComponentTypeImage(ComponentType{
-		Stem: row.stem, Icon: row.icon, Abbrev: row.abbrev, DefaultTags: row.tags,
+		Stem: row.stem, Icon: row.icon, Abbrev: row.abbrev, LabelRule: row.labelRule, DefaultTags: row.tags,
 	}, image)
 	if err != nil {
 		return nil, err
 	}
 	row.stem, row.icon, row.abbrev, row.tags = resolved.Stem, resolved.Icon, resolved.Abbrev, resolved.DefaultTags
+	row.labelRule = resolved.LabelRule
 	return &row, nil
 }
 
@@ -580,19 +615,33 @@ func loadComponentTypeWalk(ctx context.Context, q querier, id uuid.UUID) (*compo
 // reclassify) calls resolveTypeFacts directly with its own querier instead:
 // this method's pool read would otherwise see the pre-transaction committed
 // state, not the write still in flight.
+//
+// The label rule the walk also resolves (#682) is deliberately NOT returned
+// here: it is a storage-side input to the label generator, never a wire field,
+// and every Gateway caller of this wants the console-facing facts.
 func (p *PG) ResolveTypeFacts(ctx context.Context, id uuid.UUID) (stem, icon, abbrev string, tags []string, err error) {
-	return resolveTypeFacts(ctx, p.pool, id)
+	stem, icon, abbrev, _, tags, err = resolveTypeFacts(ctx, p.pool, id)
+	return stem, icon, abbrev, tags, err
 }
 
 // resolveTypeFacts is ResolveTypeFacts's walk, taking a querier so it can run
 // inside a caller's transaction (loadComponentTypeWalk already does).
-func resolveTypeFacts(ctx context.Context, q querier, id uuid.UUID) (stem, icon, abbrev string, tags []string, err error) {
+// labelRule (#682) inherits by the identical first-non-null rule, and that is
+// the answer to judgement call 2: "a type's rule is forked and its parent's is
+// not, which applies?" The same one ADR-0095 already gives for stem, icon and
+// abbrev. A rule is a fact of the node that declares it, so the walk crosses
+// the fork boundary per node (the operator's rule where that node is forked,
+// the shipped one otherwise) along a chain that is always the official one.
+// Forking an ancestor's rule reaches every descendant that declares none;
+// forking a leaf's does not cut it off from the ancestors it still inherits
+// everything else from.
+func resolveTypeFacts(ctx context.Context, q querier, id uuid.UUID) (stem, icon, abbrev, labelRule string, tags []string, err error) {
 	cur := id
-	var gotStem, gotIcon, gotAbbrev, gotTags bool
+	var gotStem, gotIcon, gotAbbrev, gotRule, gotTags bool
 	for range maxComponentTypeDepth {
 		row, rerr := loadComponentTypeWalk(ctx, q, cur)
 		if rerr != nil {
-			return "", "", "", nil, rerr
+			return "", "", "", "", nil, rerr
 		}
 		if !gotStem && row.stem != nil {
 			stem, gotStem = *row.stem, true
@@ -603,15 +652,18 @@ func resolveTypeFacts(ctx context.Context, q querier, id uuid.UUID) (stem, icon,
 		if !gotAbbrev && row.abbrev != nil {
 			abbrev, gotAbbrev = *row.abbrev, true
 		}
+		if !gotRule && row.labelRule != nil {
+			labelRule, gotRule = *row.labelRule, true
+		}
 		if !gotTags && len(row.tags) > 0 {
 			tags, gotTags = row.tags, true
 		}
-		if row.parentID == nil || (gotStem && gotIcon && gotAbbrev && gotTags) {
+		if row.parentID == nil || (gotStem && gotIcon && gotAbbrev && gotRule && gotTags) {
 			break
 		}
 		cur = *row.parentID
 	}
-	return stem, icon, abbrev, normalizeComponentTypeTags(tags), nil
+	return stem, icon, abbrev, labelRule, normalizeComponentTypeTags(tags), nil
 }
 
 // TypeIsWithin reports whether id is ancestor itself or a descendant of it,

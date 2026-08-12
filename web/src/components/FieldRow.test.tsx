@@ -51,6 +51,40 @@ describe("FieldRow", () => {
     expect(getByText("Website").className).toContain("eyebrow");
   });
 
+  it("joins inline actions to the control, and still labels the control", () => {
+    // The field-level version of KVRow's join: the control and its buttons read
+    // as ONE bordered control. FieldRow builds the wrapper itself rather than
+    // taking one from the caller, and that is the whole point: it labels the
+    // first ELEMENT it resolves from children, so a caller passing its own
+    // `<div class="join">` would aim `for` at the div, and a <label> pointing at
+    // a non-labelable element labels nothing at all.
+    const { getByText, getByRole } = render(() => (
+      <FieldRow label="Name" actions={<button type="button">Override</button>}>
+        <input type="text" class="join-item" />
+      </FieldRow>
+    ));
+    const control = getByRole("textbox");
+    const action = getByRole("button");
+    expect(control.closest(".join")).toBeTruthy();
+    expect(action.closest(".join")).toBe(control.closest(".join"));
+    // The empty-string guard first: `for=""` and an unlabelled control compare
+    // equal, so without it this passes for a field that labels nothing at all.
+    expect(control.id).toBeTruthy();
+    expect((getByText("Name") as HTMLLabelElement).getAttribute("for")).toBe(control.id);
+    // And the button stays OUT of the <label>, which is what keeps a labelable
+    // element from stealing the control's accessible name.
+    expect((getByText("Name") as HTMLLabelElement).querySelector("button")).toBeNull();
+  });
+
+  it("leaves a field with no inline actions unwrapped", () => {
+    // Every other field in the console renders through here; growing a join
+    // wrapper around all of them would restyle nineteen pages by accident.
+    const { getByRole } = render(() => (
+      <FieldRow label="Website"><input type="text" /></FieldRow>
+    ));
+    expect(getByRole("textbox").closest(".join")).toBeNull();
+  });
+
   it("renders an (i) info affordance beside the label when info is given", () => {
     const { getByText } = render(() => (
       <FieldRow label="Scope" info="Where this value lives."><input type="text" /></FieldRow>

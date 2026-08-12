@@ -1,4 +1,4 @@
-import { createIdentity, entityLabel } from "../lib/entities";
+import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
@@ -21,6 +21,10 @@ import {
   deleteLocation,
 } from "../lib/locations";
 import { LOCATION_TYPES_KEY, ROOT_PLACEMENT, listLocationTypes } from "../lib/location_types";
+import CreateIdentity from "../components/CreateIdentity";
+import { bucketPhrase, createPen, locationMint, nameBucket, penIncomplete } from "../lib/namegen";
+import { useLabelDraft } from "../lib/labeldraft";
+import { pathTo, type TreeNode } from "../lib/treeselect";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
@@ -98,7 +102,7 @@ export default function Locations() {
       // path (#627 Task 15); a location's own tree never crosses a plane
       // boundary the way component/system can, but it is wired through for
       // the same reason (one server-authoritative render, not two).
-      byUuid.set(l.id, { id: l.id, addr: l.name, display: entityLabel(l), pathRender: l.renders?.dash, children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
+      byUuid.set(l.id, { id: l.id, addr: l.name, display: entityLabel(l), generated: l.display_name_generated, pathRender: l.renders?.dash, children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
     }
     const roots: LocNode[] = [];
     for (const l of list) {
@@ -263,7 +267,11 @@ export default function Locations() {
       const pool = allowed.length === 0 ? (locations.data ?? []) : (locations.data ?? []).filter((l) => allowed.includes(l.location_type));
       return pool.map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 }));
     });
-    const parentTypeLabel = (nm: string) => (nm === ROOT_PLACEMENT ? "Root" : locationTypes.data?.find((t) => t.name === nm)?.display_name ?? nm);
+    const parentTypeLabel = (nm: string) => {
+      if (nm === ROOT_PLACEMENT) return "Root";
+      const row = locationTypes.data?.find((t) => t.name === nm);
+      return row ? entityLabel(row) : nm;
+    };
     const parentHint = () =>
       allowedParentTypes().length
         ? `Restricted to: ${allowedParentTypes().map(parentTypeLabel).join(", ")}. Moving back to root is not supported here.`
@@ -534,24 +542,57 @@ export default function Locations() {
   // location exists. Create commits the row and hands off to /locations/<name> in
   // edit mode.
   function LocationCreate(): JSX.Element {
-    // Display name leads and the key follows it, stopping the moment the
-    // operator edits the key by hand (lib/entities).
-    const { display, setDisplay, name, setName, nameDerived } = createIdentity();
+    // Independent fields (#688). This form derived the name from the display
+    // name until a location_type could name its own rows (#687): a blank name is
+    // now the request to mint one from the type's name rule, so deriving one
+    // claimed the pen the moment the operator typed a label, and the
+    // always-required name gate meant the console could not reach the generator
+    // at all. createIdentity keeps its place on the registry pages.
+    const displayPen = createPen();
+    const namePen = createPen();
     const [type, setType] = createSignal("");
     const [parent, setParent] = createSignal("");
     const [busy, setBusy] = createSignal(false);
     const [formErr, setFormErr] = createSignal<string | null>(null);
 
+    // A location_type's name rule IS the mint (ADR-0102), so there is no chain
+    // to walk here and no reshaping between the stored declaration and the shape
+    // shown. Null is the opt-out, which is every shipped type (ADR-0103).
+    const chosenType = createMemo(() => (locationTypes.data ?? []).find((t) => t.name === type()));
+    const mint = createMemo(() => locationMint(chosenType()));
+
+    // A location has TWO buckets, not three: it has no located-at column, so
+    // the shape falls out of asking for the bucket with no location at all.
+    const parentItems = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 })));
+    // The label the platform would write. A shipped estate answers with the
+    // global location rule's render of the name (#657); an empty answer means no
+    // rule resolves at any tier, which the form still has to be honest about,
+    // since it shows the name there rather than a locked empty field.
+    const labelDraft = useLabelDraft(() =>
+      type().trim()
+        ? {
+            kind: "location" as const,
+            body: { location_type: type().trim(), name: namePen.value().trim() || undefined },
+          }
+        : null,
+    );
+
+    const bucket = createMemo(() => nameBucket(parent()));
+    const bucketText = createMemo(() => bucketPhrase("location", bucket(), pathTo(parentItems(), bucket().id)));
+
     async function create(e: Event) {
       e.preventDefault();
       setBusy(true);
       setFormErr(null);
-      const nm = name().trim();
+      const nm = namePen.value().trim();
       try {
         // Bind the create response (#627 Task 15c): see Components.tsx's
         // own create() for why the id, not the locally typed name, is what
         // this hands off to openInEdit and navigate.
-        const created = await createLocation({ name: nm, location_type: type().trim(), display_name: display().trim() || undefined, parent: parent() || undefined });
+        // An empty name is OMITTED rather than posted as "": omitted is
+        // "generate one from the type's rule", where "" is a name of nothing
+        // the API refuses against the entity-name pattern.
+        const created = await createLocation({ name: nm || undefined, location_type: type().trim(), display_name: displayPen.value().trim() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
         openInEdit(created.id);
         navigate(`/locations/${encodeURIComponent(created.id)}`);
@@ -571,31 +612,21 @@ export default function Locations() {
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
         </Show>
 
+        {/* What it is, then where it sits, then what it is called: the type
+            carries the name rule and the parent carries the ordinal's bucket, so
+            both are answered before the form has anything to say about the
+            name. */}
         <div class="flex flex-col gap-1.5">
-          <span class="eyebrow">Identity</span>
-          <div class="flex flex-col gap-3">
-            <FieldRow
-              bind="display_name"
-              hint="What an operator reads. Optional."
-            >
-              <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />
-            </FieldRow>
-            <FieldRow
-              bind="name"
-              hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}
-            >
-              <input class="input input-bordered w-full font-data" value={name()} placeholder="hq-a-301" onInput={(e) => setName(e.currentTarget.value)} />
-            </FieldRow>
-            <FieldRow
-              label="Location type"
-              hint="A location_type name."
-            >
-              <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
-                <option value="" disabled>Select a type…</option>
-                <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.display_name}</option>}</For>
-              </select>
-            </FieldRow>
-          </div>
+          <span class="eyebrow">Classification</span>
+          <FieldRow
+            label="Location type"
+            hint="What kind of place this is. It decides which parents are legal, and whether the platform can name it."
+          >
+            <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
+              <option value="" disabled>Select a type…</option>
+              <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.display_name}</option>}</For>
+            </select>
+          </FieldRow>
         </div>
 
         <div class="flex flex-col gap-1.5">
@@ -605,7 +636,7 @@ export default function Locations() {
               {/* Keyed AND valued on uuid, not name (#627): see
                   parentCandidates above for why. */}
               <TreeSelect
-                items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 }))}
+                items={parentItems()}
                 value={parent()}
                 onChange={setParent}
                 rootLabel="Root (no parent)"
@@ -614,10 +645,25 @@ export default function Locations() {
           </div>
         </div>
 
+        <CreateIdentity
+          kind="location"
+          mint={mint}
+          bucket={bucketText}
+          namePen={namePen}
+          displayPen={displayPen}
+          label={() => labelDraft.data}
+          labelPending={() => labelDraft.isFetching}
+          namePlaceholder="boardroom"
+          displayPlaceholder="Conf Room 301"
+        />
+
         <div class="flex items-center gap-2 border-t border-base-300 pt-4">
           <Button icon={X} onClick={() => navigate("/locations")}>Cancel</Button>
           <span class="flex-1" />
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !name().trim() || !type().trim()}>Create location</Button>
+          {/* A name is required only when the chosen type carries no name
+              rule, which is every shipped type (ADR-0103). The type itself
+              stays required: for a location it is the only shape-definer. */}
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !type().trim() || penIncomplete(mint() !== null, namePen)}>Create location</Button>
         </div>
 
         <div class="flex flex-col gap-1 opacity-50">

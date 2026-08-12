@@ -11,32 +11,36 @@ import (
 )
 
 type componentBody struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
-	DisplayName   string            `json:"display_name,omitempty"`
-	ParentID      *string           `json:"parent_id,omitempty" doc:"The parent component's id, the canonical handle"`
-	Parent        *string           `json:"parent,omitempty" doc:"The parent component's name, for display; absent for a root component"`
-	SystemID      *string           `json:"system_id,omitempty" doc:"The primary system's id, the canonical handle"`
-	System        *string           `json:"system,omitempty" doc:"Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them."`
-	SystemCount   int               `json:"system_count" doc:"How many systems this component belongs to; more than one means it is shared."`
-	LocationID    *string           `json:"location_id,omitempty" doc:"The location's id, the canonical handle"`
-	Location      *string           `json:"location,omitempty" doc:"The location's name, for display"`
-	ProductID     *string           `json:"product_id,omitempty" doc:"The product (catalog SKU) this component is an instance of, if any; the stable handle that survives a rename."`
-	Product       *string           `json:"product,omitempty" doc:"The product's name, for display; the form a body round-trips."`
-	NameGenerated bool              `json:"name_generated" doc:"Whether the platform picked this name (a server-side generator) rather than an operator typing it."`
-	Path          string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.415a.$comp.display-1): derived from the component's own placement, never from a system it belongs to. Set on a GET or LIST response; empty on a create/update/move/rename/resetName response (refetch the row to see it)."`
-	PathSegments  []string          `json:"path_segments,omitempty" doc:"path split on '.', accessors included, so the round trip through the resolver stays lossless."`
-	Renders       *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
-	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
-	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view."`
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	DisplayName   string  `json:"display_name,omitempty"`
+	ParentID      *string `json:"parent_id,omitempty" doc:"The parent component's id, the canonical handle"`
+	Parent        *string `json:"parent,omitempty" doc:"The parent component's name, for display; absent for a root component"`
+	SystemID      *string `json:"system_id,omitempty" doc:"The primary system's id, the canonical handle"`
+	System        *string `json:"system,omitempty" doc:"Name of the component's primary system, its default when no system is named. A component may belong to several; read /components/{name}/memberships for all of them."`
+	SystemCount   int     `json:"system_count" doc:"How many systems this component belongs to; more than one means it is shared."`
+	LocationID    *string `json:"location_id,omitempty" doc:"The location's id, the canonical handle"`
+	Location      *string `json:"location,omitempty" doc:"The location's name, for display"`
+	ProductID     *string `json:"product_id,omitempty" doc:"The product (catalog SKU) this component is an instance of, if any; the stable handle that survives a rename."`
+	Product       *string `json:"product,omitempty" doc:"The product's name, for display; the form a body round-trips."`
+	NameGenerated bool    `json:"name_generated" doc:"Whether the platform picked this name (a server-side generator) rather than an operator typing it."`
+	// The LABEL's pen (#682), read-only for the same reason name_generated is:
+	// an operator claims it by writing display_name and returns it by clearing
+	// display_name, so there is exactly one way to say who owns the label.
+	DisplayNameGenerated bool              `json:"display_name_generated" doc:"Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."`
+	Path                 string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.415a.$comp.display-1): derived from the component's own placement, never from a system it belongs to. Set on a GET or LIST response; empty on a create/update/move/rename/resetName response (refetch the row to see it)."`
+	PathSegments         []string          `json:"path_segments,omitempty" doc:"path split on '.', accessors included, so the round trip through the resolver stays lossless."`
+	Renders              *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
+	Actions              []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
+	EffectiveTags        map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view."`
 }
 
 func toComponentBody(c *storage.Component) componentBody {
 	return componentBody{
 		ID: c.ID, Name: c.Name, DisplayName: c.DisplayName,
 		ParentID: c.ParentID, Parent: c.ParentName, SystemID: c.PrimarySystemID, System: c.PrimarySystem, SystemCount: c.SystemCount, LocationID: c.LocationID, Location: c.LocationName, ProductID: c.ProductID, Product: c.ProductHandle,
-		NameGenerated: c.NameGenerated,
-		Path:          c.Path, PathSegments: c.PathSegments, Renders: toRenderBody(c.Path, c.Renders),
+		NameGenerated: c.NameGenerated, DisplayNameGenerated: c.DisplayNameGenerated,
+		Path: c.Path, PathSegments: c.PathSegments, Renders: toRenderBody(c.Path, c.Renders),
 	}
 }
 
@@ -125,6 +129,8 @@ const errProductRequired = "a component must be an instance of a product; name o
 // registerComponentRoutes wires the component CRUD surface, on the same pattern
 // as locations and systems.
 func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+	registerLabelRecomputeRoutes(api, a, gw, "component", "/components")
+	registerComponentLabelDraft(api, a, gw)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-components",
 		Method:      http.MethodGet,

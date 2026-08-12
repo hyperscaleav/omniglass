@@ -53,6 +53,90 @@ func liveTables(t *testing.T) map[string]bool {
 	return live
 }
 
+// TestADeclaredShapeAgreesWithThePrimaryKey turns the half of a shape that is a
+// FACT about the schema into a checked claim rather than a comment.
+//
+// ShapeIDOnly says "nobody names it, so it is addressed by uuid", and
+// cmd/identitygen publishes that sentence into a generated reference. A table
+// whose primary key is operator- or platform-authored TEXT cannot be addressed
+// by a surrogate that does not exist, so declaring it ShapeIDOnly publishes
+// something false. label_rule was declared that way and is the reason this
+// guard exists (#682): its key is entity_kind, and there is no id column at all.
+//
+// The rule is deliberately about the KEY's nature and not its exact type, since
+// a surrogate is a uuid on most tables and a bigint on the six high-volume
+// telemetry ones, and both are surrogates. What a surrogate is not is a text
+// key, which is either something a human authored (ShapeHumanNotAKey: a
+// content hash, a task's derived id) or a closed vocabulary the platform
+// declares (ShapeFixedKey).
+func TestADeclaredShapeAgreesWithThePrimaryKey(t *testing.T) {
+	pks := primaryKeys(t)
+	for table, id := range storage.IdentityShapes {
+		pk, ok := pks[table]
+		if !ok || len(pk) != 1 {
+			// No primary key in the generated schema, or a composite one: a
+			// composite key is by construction not a single surrogate, and
+			// every table carrying one is a join row nobody addresses directly.
+			continue
+		}
+		text := pk[0].Type == "text"
+		switch id.Shape {
+		case storage.ShapeIDOnly:
+			if text {
+				t.Errorf("%q is declared ShapeIDOnly, which says it is addressed by uuid, but its primary key is %s text.\n"+
+					"A text primary key is not a surrogate. If the platform declares the key set, that is ShapeFixedKey; "+
+					"if a human authors it, that is ShapeHumanNotAKey.", table, pk[0].Name)
+			}
+		case storage.ShapeFixedKey:
+			if !text {
+				t.Errorf("%q is declared ShapeFixedKey, which says its key is a closed vocabulary the platform declares, "+
+					"but its primary key is %s %s. A surrogate key is ShapeIDOnly.", table, pk[0].Name, pk[0].Type)
+			}
+		}
+	}
+}
+
+// schemaColumn is one column of the generated schema facts, projected for the
+// primary-key guard.
+type schemaColumn struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+	PK   bool   `json:"pk"`
+}
+
+// primaryKeys reads each table's primary-key columns out of the generated
+// schema facts, the same artifact liveTables reads, so this guard needs no
+// database of its own.
+func primaryKeys(t *testing.T) map[string][]schemaColumn {
+	t.Helper()
+	raw, err := os.ReadFile("../../docs/src/generated/schema.json")
+	if err != nil {
+		t.Fatalf("read generated schema: %v", err)
+	}
+	var doc struct {
+		Subsystems map[string]map[string]struct {
+			Columns []schemaColumn `json:"columns"`
+		} `json:"subsystems"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("parse generated schema: %v", err)
+	}
+	out := map[string][]schemaColumn{}
+	for _, tables := range doc.Subsystems {
+		for table, def := range tables {
+			for _, c := range def.Columns {
+				if c.PK {
+					out[table] = append(out[table], c)
+				}
+			}
+		}
+	}
+	if len(out) == 0 {
+		t.Fatal("found no primary keys, which means this guard is not reading the schema it thinks it is")
+	}
+	return out
+}
+
 // TestIdentityShapesMatchesCommitted is the drift gate for the generated reference,
 // mirroring TestConfigFactsMatchesCommitted: the committed
 // docs/src/generated/identity.json must equal a fresh render of the declaration.
@@ -93,7 +177,9 @@ func TestEveryTableHasADeclaredIdentityShape(t *testing.T) {
 			"  ShapeKeyspace      an operator types its name, on the dotted rule\n"+
 			"  ShapeHumanNotAKey  a human identifier that is not a name: a username, a filename,\n"+
 			"                     a content hash. Each looks name-shaped from a distance\n"+
-			"  ShapeIDOnly        nobody names it; it is addressed by uuid", table)
+			"  ShapeIDOnly        nobody names it; it is addressed by uuid\n"+
+			"  ShapeFixedKey      nobody names it and there is no uuid either: the primary key is\n"+
+			"                     one of a closed vocabulary the platform declares", table)
 	}
 
 	// A declaration naming a table that no longer exists is stale, and a stale entry

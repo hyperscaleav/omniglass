@@ -17,6 +17,20 @@ type FieldRowBase = {
   docHref?: string;
   // A hint rendered under the control (optional; distinct from the tooltip).
   hint?: string;
+  // Inline action buttons rendered INSIDE the field, in a daisyUI join with the
+  // control: the lock/override affordance an identity field carries (#657), the
+  // same family KVRow gives a value row (set / revert / copy / reveal). A join
+  // reads as one bordered control, which is what "inside the field boundary"
+  // means, and it is where the console already puts an in-field action.
+  //
+  // The wrapper is built HERE rather than taken from the caller, and that is
+  // load-bearing: FieldRow labels the first ELEMENT it resolves from `children`,
+  // so a caller passing its own `<div class="join">` would hand `for` to the div,
+  // and a <label> pointing at a non-labelable element labels nothing at all.
+  // Either way the buttons sit OUTSIDE the <label>, for the same reason the (i)
+  // trigger does: a labelable button inside a <label> steals the control's
+  // accessible name and swallows the click that should have focused the input.
+  actions?: JSX.Element;
   // Label the field with the small-caps eyebrow instead of the form label style.
   // A blade field reads as a fact when it is not being edited (KVStacked, which
   // is eyebrow-labelled), so an eyebrow here is what keeps the label from
@@ -56,7 +70,12 @@ export default function FieldRow(p: FieldRowProps): JSX.Element {
         </label>
         <Show when={p.info}><InfoTip text={p.info!} label={label()} href={p.docHref} hrefText="Docs" /></Show>
       </span>
-      {resolved()}
+      <Show when={p.actions !== undefined} fallback={resolved()}>
+        <div class="join w-full">
+          {resolved()}
+          {p.actions}
+        </div>
+      </Show>
       <Show when={p.hint}><span class="text-[11px] text-base-content/40">{p.hint}</span></Show>
     </div>
   );

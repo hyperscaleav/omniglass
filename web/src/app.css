@@ -199,6 +199,35 @@
   border-color: color-mix(in oklch, var(--color-base-content) 18%, transparent);
 }
 
+/* A LOCKED field: the platform holds the pen and the operator may take it (#657).
+   The field is `readonly`, never `disabled`, because a disabled input fires no
+   click (so click-to-override cannot work on one) and is out of the tab order (so
+   the value would have no keyboard path at all). That makes the locked LOOK this
+   stylesheet's job: daisyUI 5 ships NO `.input-disabled` class, only `:disabled`
+   and `[disabled]` selectors, and the attribute is exactly the one this cannot
+   use. Unlayered so it beats daisyUI's own `.input` in its later layer, the same
+   trick the intent colors above use.
+
+   Hover and the pointer cursor are AFFORDANCE only: the field's join carries a
+   persistent square action button, which is the discoverable and the keyboard
+   path. Focus is left to daisyUI's own outline, so tabbing through still shows
+   where you are, and the resting border only applies while the field is neither
+   hovered nor focused.
+
+   The fill and the border are both mixed off --color-base-content rather than
+   set to --color-base-200, which is what daisyUI's own disabled state does: on
+   the dark theme base-200 IS very nearly the card it sits on, so a locked field
+   lost its boundary entirely and read as loose text beside a stray button rather
+   than as one control. A locked field is still a FIELD. */
+.input-locked {
+  background-color: color-mix(in oklch, var(--color-base-content) 7%, transparent);
+  box-shadow: none;
+  cursor: pointer;
+  color: color-mix(in oklch, var(--color-base-content) 75%, transparent);
+}
+.input-locked:not(:focus, :hover) { border-color: color-mix(in oklch, var(--color-base-content) 14%, transparent); }
+.input-locked:hover:not(:focus)   { border-color: color-mix(in oklch, var(--color-base-content) 32%, transparent); }
+
 /* Teal TEXT on the light ground uses a darker teal than the bright brand fill: the
    bright teal is unreadable as small text on the near-white base (1.9:1), so link,
    glyph, arrow, and stat accents that use text-primary get a readable teal (4.7:1).

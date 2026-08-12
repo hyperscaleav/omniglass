@@ -54,6 +54,10 @@ type Standard struct {
 	DisplayName        string
 	ParentStandardID   *string
 	ParentStandardName *string
+	// LabelRule is this standard's label template (#682), the most specific
+	// tier a system's label resolves through: null defers to the system_type
+	// chain, and then to the global tier.
+	LabelRule *string
 }
 
 // System is a composition of components (the service tree): name-addressable,
@@ -70,15 +74,42 @@ type Standard struct {
 // the stable handle and the name the one an operator reads. Nullable, and
 // nullable it stays until the floor slice.
 type System struct {
-	ID             string
-	Name           string
-	DisplayName    string
-	StandardID     *string
-	StandardName   *string
-	SystemTypeID   *string
-	SystemTypeName *string
-	ParentID       *string
-	LocationID     *string
+	ID          string
+	Name        string
+	DisplayName string
+	// NameGenerated is the NAME's pen (#686), the same shape and polarity
+	// component's has carried since #627: true means the platform minted this
+	// name from the system_type's stem and a later act on the row (a move, a
+	// reclassify, :resetName) re-mints it; false means an operator typed it
+	// and only :resetName hands it back. False for every row that existed
+	// before the generator reached this tier.
+	NameGenerated bool
+	// Ordinal is the number the generator allocated for this row's name
+	// (#686, the system-tier twin of #681's component column). nil means the
+	// platform owns no number here: an operator typed the name, or renamed the
+	// row and took the pen (:rename nulls this in the same statement it clears
+	// NameGenerated). The two always agree, which the recompute-and-compare
+	// invariant test pins.
+	//
+	// A SUPPRESSED first name stores 1 while carrying no digits (ADR-0101):
+	// "boardroom" is ordinal 1 and "boardroom-2" is ordinal 2. That the two can
+	// differ is exactly why the number is a column of its own rather than
+	// something a reader picks back out of the name.
+	//
+	// A storage fact, not a wire field: a label rule reads it server-side, and
+	// the console learns who holds the pen from NameGenerated.
+	Ordinal *int
+	// DisplayNameGenerated is the label's pen (#682), mirroring
+	// name_generated's polarity: true means the platform owns the field and a
+	// write re-renders it from the resolved rule. Setting the label by hand
+	// clears it; clearing the field returns it.
+	DisplayNameGenerated bool
+	StandardID           *string
+	StandardName         *string
+	SystemTypeID         *string
+	SystemTypeName       *string
+	ParentID             *string
+	LocationID           *string
 	// MemberCount is how many components are bound into this system. It comes from
 	// system_member, not from any pointer on the component: membership is the
 	// relation that says what is in a system, and reading it from anywhere else is
@@ -145,11 +176,11 @@ type SystemMove struct {
 // parent_standard_id stores a uuid; the parent's handle is projected beside it,
 // as the estate arcs do.
 const standardCols = `id, name, official, display_name, parent_standard_id,
-	(select p.name from standard p where p.id = standard.parent_standard_id) as parent_handle`
+	(select p.name from standard p where p.id = standard.parent_standard_id) as parent_handle, label_rule`
 
 func scanStandard(row pgx.Row) (*Standard, error) {
 	var st Standard
-	if err := row.Scan(&st.ID, &st.Name, &st.Official, &st.DisplayName, &st.ParentStandardID, &st.ParentStandardName); err != nil {
+	if err := row.Scan(&st.ID, &st.Name, &st.Official, &st.DisplayName, &st.ParentStandardID, &st.ParentStandardName, &st.LabelRule); err != nil {
 		return nil, err
 	}
 	return &st, nil
@@ -181,10 +212,10 @@ func mapStandardWriteErr(err error) error {
 // UPDATE is the authoritative behavior the canonical catalogs want.
 func (p *PG) SeedStandard(ctx context.Context, st Standard) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into standard (name, official, display_name, parent_standard_id)
-		values ($1, $2, $3, (select id from standard where name = nullif($4, '')))
+		insert into standard (name, official, display_name, parent_standard_id, label_rule)
+		values ($1, $2, $3, (select id from standard where name = nullif($4, '')), $5)
 		on conflict (name) do nothing`,
-		st.Name, st.Official, st.DisplayName, st.ParentStandardID)
+		st.Name, st.Official, st.DisplayName, st.ParentStandardID, nilIfEmptyRule(st.LabelRule))
 	if err != nil {
 		return fmt.Errorf("storage: seed standard %q: %w", st.Name, err)
 	}
@@ -193,14 +224,15 @@ func (p *PG) SeedStandard(ctx context.Context, st Standard) error {
 
 func (p *PG) UpsertStandard(ctx context.Context, st Standard) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into standard (name, official, display_name, parent_standard_id)
-		values ($1, $2, $3, (select id from standard where name = nullif($4, '')))
+		insert into standard (name, official, display_name, parent_standard_id, label_rule)
+		values ($1, $2, $3, (select id from standard where name = nullif($4, '')), $5)
 		on conflict (name) do update
 			set official           = excluded.official,
 			    display_name       = excluded.display_name,
 			    parent_standard_id = excluded.parent_standard_id,
+			    label_rule         = excluded.label_rule,
 			    updated_at         = now()`,
-		st.Name, st.Official, st.DisplayName, st.ParentStandardID)
+		st.Name, st.Official, st.DisplayName, st.ParentStandardID, nilIfEmptyRule(st.LabelRule))
 	if err != nil {
 		return fmt.Errorf("storage: upsert standard %q: %w", st.ID, err)
 	}
@@ -243,12 +275,16 @@ func (p *PG) GetStandard(ctx context.Context, id string) (*Standard, error) {
 type StandardPatch struct {
 	DisplayName      *string
 	ParentStandardID *string
+	LabelRule        *string
 }
 
 // CreateStandard inserts a custom (official=false) standard and audits it. A
 // duplicate id is ErrTypeExists; an unknown parent is ErrParentStandardNotFound.
 func (p *PG) CreateStandard(ctx context.Context, actorID string, st Standard) (*Standard, error) {
 	if err := ValidateName("standard", st.Name); err != nil {
+		return nil, err
+	}
+	if err := validateLabelRule(st.LabelRule); err != nil {
 		return nil, err
 	}
 	st.Official = false
@@ -265,10 +301,10 @@ func (p *PG) CreateStandard(ctx context.Context, actorID string, st Standard) (*
 		}
 	}
 	created, err := scanStandard(tx.QueryRow(ctx, `
-		insert into standard (name, official, display_name, parent_standard_id)
-		values ($1, false, $2, (select id from standard where name = $3 or id::text = $3))
+		insert into standard (name, official, display_name, parent_standard_id, label_rule)
+		values ($1, false, $2, (select id from standard where name = $3 or id::text = $3), $4)
 		returning `+standardCols,
-		st.Name, st.DisplayName, st.ParentStandardID))
+		st.Name, st.DisplayName, st.ParentStandardID, nilIfEmptyRule(st.LabelRule)))
 	if err != nil {
 		return nil, mapStandardWriteErr(err)
 	}
@@ -285,6 +321,9 @@ func (p *PG) CreateStandard(ctx context.Context, actorID string, st Standard) (*
 // unchanged) and audits it. Official rows are read-only (ErrTypeOfficial); an
 // unknown id is ErrTypeNotFound; an unknown parent is ErrParentStandardNotFound.
 func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch StandardPatch) (*Standard, error) {
+	if err := validateLabelRule(patch.LabelRule); err != nil {
+		return nil, err
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin update standard: %w", err)
@@ -305,10 +344,17 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 		update standard set
 			display_name       = coalesce($2, display_name),
 			parent_standard_id = coalesce((select id from standard where name = $3 or id::text = $3), parent_standard_id),
+			-- An explicit empty string CLEARS the rule; see UpdateComponentType's
+			-- own label_rule CASE for why this is not a coalesce.
+			label_rule         = case
+				when $4::text is null then label_rule
+				when $4 = '' then null
+				else $4::text
+			end,
 			updated_at         = now()
 		where `+registryRefCol(id)+` = $1
 		returning `+standardCols,
-		id, patch.DisplayName, patch.ParentStandardID))
+		id, patch.DisplayName, patch.ParentStandardID, patch.LabelRule))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -340,7 +386,7 @@ func (p *PG) DeleteStandard(ctx context.Context, actorID, id string) error {
 // The system_type handle is a live subselect, not a stored copy: the row is
 // pinned by uuid, so renaming the registry row moves the projected name with it
 // and can never orphan the classification.
-const systemCols = `id, name, coalesce(display_name, ''), standard_id,
+const systemCols = `id, name, coalesce(display_name, ''), name_generated, ordinal, display_name_generated, standard_id,
 	(select st.name from standard st where st.id = system.standard_id) as standard_handle,
 	system_type_id,
 	(select ty.name from system_type ty where ty.id = system.system_type_id) as system_type_handle,
@@ -352,7 +398,7 @@ const systemCols = `id, name, coalesce(display_name, ''), standard_id,
 
 func scanSystem(row pgx.Row) (*System, error) {
 	var s System
-	if err := row.Scan(&s.ID, &s.Name, &s.DisplayName, &s.StandardID, &s.StandardName,
+	if err := row.Scan(&s.ID, &s.Name, &s.DisplayName, &s.NameGenerated, &s.Ordinal, &s.DisplayNameGenerated, &s.StandardID, &s.StandardName,
 		&s.SystemTypeID, &s.SystemTypeName, &s.ParentID, &s.LocationID,
 		&s.MemberCount, &s.ParentName, &s.LocationName, &s.CreatedAt, &s.UpdatedAt); err != nil {
 		return nil, err
@@ -363,13 +409,20 @@ func scanSystem(row pgx.Row) (*System, error) {
 // attachSystemPaths fills every s's Path/.PathSegments/.Renders (#627 Task
 // 15), in one batch walk however long the page (#643). A system's address
 // has the identical shape a component's does (its own plane root's location,
-// never a location derived from anything else), but no bare-render
-// abbreviation source WIRED YET: a standard (the system-side counterpart of a
-// product) carries no abbrev column the way component_type does, and the
-// system_type registry that now does carry one (ADR-0096) is not read here,
-// because the rules that consume a resolved stem and abbrev are the naming epic
-// (#657). So RenderBare still gets "" here and falls back to its no-abbrev
-// concatenation. full is unused
+// never a location derived from anything else), but it deliberately passes
+// RenderBare nil and "" even now that BOTH halves of the substitution exist:
+// system_type carries an abbrev (ADR-0096) and #686 gives a generated system a
+// stored ordinal.
+//
+// The reason is D3's suppression (ADR-0101). RenderBare stamps
+// "<abbrev><ordinal>" whenever it is given both, with no shape check, which is
+// what makes #654's guarantee structural for a component. A suppressed system
+// name carries no digits while owning ordinal 1, so wiring this would render
+// "brd1" for a room whose name is "boardroom", putting a number on a physical
+// label that appears nowhere in the entity's name: the exact defect the ordinal
+// column's own migration cites as the thing NOT to do. Making it correct means
+// teaching the render which mint produced the name, which is a rendering
+// decision this slice does not need and should not guess at. full is unused
 // here (nothing to gate: the walk is the whole cost); it exists so this
 // matches scopedConfig.attachPaths' shared signature, which
 // attachComponentPaths' own full does need (review finding 3,
@@ -391,12 +444,19 @@ func attachSystemPaths(ctx context.Context, q querier, ss []*System, full bool) 
 		segs := paths[s.ID]
 		s.PathSegments = segs
 		s.Path = strings.Join(segs, ".")
-		s.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, "", "")}
+		s.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, nil, "")}
 	}
 	return nil
 }
 
 // systemConfig drives the generic scoped-CRUD helpers for the system tree.
+//
+// beforeDelete releases the memberships. The database would take them anyway
+// (ON DELETE CASCADE), which is exactly the problem: a membership disappearing
+// moves a component's default and stales the label that reads its type, and
+// neither consequence can be attached to a cascade the gateway never sees.
+// Releasing them explicitly, one step ahead of the row's own delete, makes this
+// the same act RemoveMember performs and subject to the same rules.
 //
 // afterDelete records the room's recovery. A location's verdict is the rollup of
 // the systems in it, so deleting the system that was dragging it down improves it,
@@ -408,6 +468,9 @@ var systemConfig = scopedConfig[System]{
 	scan: scanSystem, idOf: func(s *System) string { return s.ID },
 	notFound: ErrSystemNotFound, forbidden: ErrSystemForbidden, occupied: ErrSystemOccupied,
 	attachPaths: attachSystemPaths,
+	beforeDelete: func(ctx context.Context, p *PG, tx pgx.Tx, before *System) error {
+		return p.releaseSystemMembers(ctx, tx, before.ID)
+	},
 	afterDelete: func(ctx context.Context, p *PG, q txQuerier, before *System) error {
 		if before.LocationID == nil {
 			return nil // placed nowhere: its removal rolls up to nothing
@@ -434,6 +497,12 @@ func (p *PG) GetSystem(ctx context.Context, name string, read scope.Set) (*Syste
 // CreateSystem inserts a system under an optional parent and optional location,
 // writing the audit row in the same transaction. A root system requires an all
 // create scope; a child requires the parent within the create scope.
+//
+// spec.Name empty is not an error (#686): it is the operator handing the pen to
+// the platform, which mints the system_type chain's stem plus the lowest free
+// ordinal in this placement, suppressing the ordinal on the first of its stem
+// in the bucket (ADR-0101). An unclassified system cannot be named that way
+// (ErrSystemTypeRequiredForName): the stem lives on the registry row.
 func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, create scope.Set) (*System, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -441,8 +510,17 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := ValidateName("system", spec.Name); err != nil {
-		return nil, err
+	// An operator-typed name is validated now, before any other resolve, so a
+	// bad slug fails fast (the existing behavior). A generated name is
+	// validated too, but later, inside generateName itself, the one place every
+	// generation call site funnels through: it is not knowable until the type
+	// and the placement resolve below, and an invariant a comment asserts
+	// rather than a callee enforces is exactly the shape that let "-1" through
+	// review the first time.
+	if spec.Name != "" {
+		if err := ValidateName("system", spec.Name); err != nil {
+			return nil, err
+		}
 	}
 
 	var parentID *string
@@ -512,13 +590,35 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 		systemTypeID = &tid
 	}
 
+	// name empty means "generate one" (#686): resolved now, after the type and
+	// the placement are both known, since the stem comes from the system_type
+	// chain and the ordinal from siblings in this exact bucket.
+	name := spec.Name
+	generated := name == ""
+	// nil unless the platform picked the name: an operator-typed name has no
+	// ordinal the platform owns, and the column says so by being absent.
+	var ordinal *int
+	if generated {
+		genName, n, err := generateNameForSystemType(ctx, tx, systemTypeID, parentID, locationID, nil)
+		if err != nil {
+			return nil, err
+		}
+		name, ordinal = genName, &n
+	}
+
+	// An empty display_name hands the LABEL's pen to the platform (#682); the
+	// row is inserted with no label and stamped once its classification is
+	// resolvable, which is now.
 	s, err := scanSystem(tx.QueryRow(ctx, `
-		insert into system (name, display_name, standard_id, system_type_id, parent_id, location_id)
-		values ($1, $2, $3, $4, $5, $6)
+		insert into system (name, display_name, standard_id, system_type_id, parent_id, location_id, name_generated, ordinal, display_name_generated)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		returning `+systemCols,
-		spec.Name, nullize(spec.DisplayName), standardID, systemTypeID, parentID, locationID))
+		name, nullize(spec.DisplayName), standardID, systemTypeID, parentID, locationID, generated, ordinal, spec.DisplayName == ""))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
+	}
+	if s, err = p.stampSystemLabel(ctx, tx, s); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "system", s.ID, nil, s); err != nil {
 		return nil, err
@@ -598,9 +698,56 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 		}
 		systemTypePatchID = &tid
 	}
+	// A reclassify that leaves the system still platform-named (#686) may no
+	// longer fit its old stem: a "boardroom" reclassified as a classroom needs
+	// the classroom stem, not the one it was minted from. before.NameGenerated
+	// is the read of record; an operator-typed name (RenameSystem clears the
+	// flag forever) is never touched by a reclassify. Computed before the write
+	// so the name, the ordinal and the classification all land in one UPDATE
+	// and one audit image.
+	//
+	// Un-classifying (an explicit empty string) reaches the generator with no
+	// type and is refused there, by the generator rather than by a branch here:
+	// a platform-owned name has no source once the type is gone, and silently
+	// keeping the name while quietly handing back the pen would be a change of
+	// ownership nobody asked for. :rename claims the name first, and then the
+	// unclassify goes through.
+	//
+	// The guard is the classification CHANGING, not the field being present,
+	// and that distinction is load-bearing rather than tidy. The console sends
+	// system_type_id on every save (web/src/pages/Systems.tsx keys it always, so
+	// an unclassify can clear), so a presence test re-mints on an edit to the
+	// display name alone. With a lower ordinal freed in the meantime by a
+	// rename, that re-mint MOVES THE NAME: "boardroom-2" becomes "boardroom"
+	// under system:update, with no rename asked for and possibly no
+	// system:rename grant held. The mint reads the stem and the bucket, and a
+	// patch that re-states the type changes neither, which is the derivation
+	// ADR-0101 records. sameOptional is the same comparison the member-label
+	// cascade below already makes about the same question.
+	var (
+		namePatch    *string
+		ordinalPatch *int
+	)
+	if patch.SystemTypeID != nil && before.NameGenerated && !sameOptional(before.SystemTypeID, systemTypePatchID) {
+		newName, newOrdinal, err := generateNameForSystemType(ctx, tx, systemTypePatchID, before.ParentID, before.LocationID, &before.ID)
+		if err != nil {
+			return nil, err
+		}
+		namePatch, ordinalPatch = &newName, &newOrdinal
+	}
 	after, err := scanSystem(tx.QueryRow(ctx, `
 		update system set
-			display_name = coalesce($2, display_name),
+			name    = coalesce($8, name),
+			ordinal = coalesce($9::integer, ordinal),
+			-- Three-state like the fields below it, not a coalesce: a value is
+			-- the operator typing a label and taking the pen ($7), an explicit
+			-- empty string clears it and hands the pen back (#682).
+			display_name = case
+				when $2::text is null then display_name
+				when $2 = '' then null
+				else $2::text
+			end,
+			display_name_generated = $7,
 			-- standard_id follows the house patch convention: a nil field is left
 			-- unchanged, and a provided empty string CLEARS the column, which is how a
 			-- classified system is converted back to a one-off. coalesce alone cannot
@@ -621,9 +768,27 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 			updated_at   = now()
 		where id = $1
 		returning `+systemCols,
-		before.ID, patch.DisplayName, patch.StandardID, standardPatchID, patch.SystemTypeID, systemTypePatchID))
+		before.ID, patch.DisplayName, patch.StandardID, standardPatchID, patch.SystemTypeID, systemTypePatchID,
+		labelPen(before.DisplayNameGenerated, patch.DisplayName), namePatch, ordinalPatch))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
+	}
+	// A reclassify changes the standard and system_type facts a rule reads, and
+	// clearing the label hands the pen back; both are settled by now, so the
+	// stamp runs before the audit image is taken (#682).
+	if after, err = p.stampSystemLabel(ctx, tx, after); err != nil {
+		return nil, err
+	}
+	// A system's TYPE is a fact its member components read (.SystemTypeLabel,
+	// #685), so a reclassify stales every one of them. Bounded by the system's
+	// own membership rather than by the estate, which is why it cascades here
+	// instead of waiting for the recompute verb. The label lock is taken before
+	// any health lock below, the fixed order that keeps the two from
+	// deadlocking (see label_recompute.go).
+	if !sameOptional(before.SystemTypeID, after.SystemTypeID) {
+		if err := p.cascadeSystemMemberLabels(ctx, tx, after.ID); err != nil {
+			return nil, err
+		}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "system", after.ID, before, after); err != nil {
 		return nil, err
@@ -656,6 +821,16 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 //
 // Health is not recomputed: its records address their owner by id, so the history
 // follows the row without being touched, and no verdict depends on a name.
+//
+// name_generated is always cleared to false here, whether or not it was already
+// (#686, the rule component's rename has followed since #627): an operator who
+// types a specific name is claiming the pen, and a rename is the one act whose
+// entire point is an operator-chosen name. A later move or reclassify then
+// leaves this name alone; :resetName is how an operator hands the pen back.
+//
+// ordinal goes to NULL in the same statement. The platform allocated a number
+// for a name that no longer exists, and there is no number it owns for the one
+// the operator chose, whatever digits that name happens to contain.
 func (p *PG) RenameSystem(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*System, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -671,16 +846,75 @@ func (p *PG) RenameSystem(ctx context.Context, actorID, name, newName string, re
 		return nil, err
 	}
 	after, err := scanSystem(tx.QueryRow(ctx,
-		`update system set name = $2, updated_at = now() where id = $1 returning `+systemCols,
+		`update system set name = $2, name_generated = false, ordinal = null, updated_at = now() where id = $1 returning `+systemCols,
 		before.ID, newName))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
+	}
+	// .Name is a fact a rule can read, so a platform-owned label follows the
+	// rename (#682), and so is the ordinal this write just cleared (#686).
+	if after, err = p.stampSystemLabel(ctx, tx, after); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "rename", "system", after.ID, before, after); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("storage: commit rename system: %w", err)
+	}
+	return after, nil
+}
+
+// ResetSystemName hands the pen back to the platform (#686), the system-tier
+// twin of ResetComponentName: it regenerates the name from the system's CURRENT
+// type and placement, the exact rule a nameless create applies, and marks the
+// result name_generated again, recording the ordinal it was minted from. It
+// does not matter whether the name was already platform-owned or an operator
+// had typed one: either way the answer is a fresh mint. Scoped exactly as
+// RenameSystem (the same read-then-action split), because it is the same act
+// from the permission's point of view: it changes the name, gated by
+// system:rename, no new token.
+//
+// An unclassified system is refused (ErrSystemTypeRequiredForName -> 422)
+// rather than left half-reset: there is no stem to mint from, and a reset that
+// silently kept the operator's name while claiming the pen would be a lie about
+// who owns the field.
+//
+// The audit verb is "reset", distinct from "rename": the row records what
+// actually happened (the platform picked the name, not the caller), the same
+// reasoning that gave move its own verb apart from update.
+func (p *PG) ResetSystemName(ctx context.Context, actorID, name string, read, action scope.Set) (*System, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin reset system name: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	before, err := p.resolveSystemForAction(ctx, tx, name, read, action)
+	if err != nil {
+		return nil, err
+	}
+	newName, newOrdinal, err := generateNameForSystemType(ctx, tx, before.SystemTypeID, before.ParentID, before.LocationID, &before.ID)
+	if err != nil {
+		return nil, err
+	}
+	after, err := scanSystem(tx.QueryRow(ctx,
+		`update system set name = $2, name_generated = true, ordinal = $3, updated_at = now() where id = $1 returning `+systemCols,
+		before.ID, newName, newOrdinal))
+	if err != nil {
+		return nil, mapSystemWriteErr(err)
+	}
+	// Same pair as a rename, in the other direction: a fresh name and a freshly
+	// allocated ordinal, both facts a rule reads, so a platform-owned label
+	// follows (#682).
+	if after, err = p.stampSystemLabel(ctx, tx, after); err != nil {
+		return nil, err
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "reset", "system", after.ID, before, after); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit reset system name: %w", err)
 	}
 	return after, nil
 }
@@ -768,8 +1002,70 @@ func (p *PG) MoveSystem(ctx context.Context, actorID, name string, move SystemMo
 			parentPatch = &parent.ID
 		}
 	}
+	// A still-platform-owned name (#686) is scoped to the OLD placement's
+	// siblings; a move changes that bucket, so the ordinal (and with it whether
+	// the ordinal appears at all, since the first of a stem in a bucket is
+	// bare) may no longer be what a fresh generate would pick. The type does
+	// not change on a move, so in the common case only the ordinal shifts, but
+	// the stem is re-resolved from before.SystemTypeID's chain anyway: one
+	// rule, no special case. An operator-typed name is left exactly where the
+	// operator put it.
+	//
+	// effLocationID/effParentID decode the same three-state patches the UPDATE's
+	// own CASE expressions apply (nil unchanged, "" clear, else set), computed
+	// here in Go because the generator needs the DESTINATION bucket to scan
+	// siblings in, not the placement the row reads right now.
+	//
+	// The guard is the BUCKET actually moving, not merely the row being
+	// platform-named, and it is the reclassify defect ADR-0101 records wearing
+	// the other verb's clothes: a :move that re-states the placement the system
+	// already has (the console's shape, and this verb's own documented no-op
+	// when neither field is supplied) changes no input to the mint, and
+	// re-minting anyway MOVES the name whenever a lower ordinal was freed in the
+	// meantime, with no rename requested and possibly no system:rename grant
+	// held. The comparison is on the bucket rather than on the two pointers
+	// because a parent WINS over a location: relocating a parented system leaves
+	// it in the same parent bucket, so its name must not move either.
+	var (
+		namePatch    *string
+		ordinalPatch *int
+	)
+	if before.NameGenerated {
+		effLocationID := before.LocationID
+		if locationPatch != nil {
+			if *locationPatch == "" {
+				effLocationID = nil
+			} else {
+				v := *locationPatch
+				effLocationID = &v
+			}
+		}
+		effParentID := before.ParentID
+		if parentPatch != nil {
+			if *parentPatch == "" {
+				effParentID = nil
+			} else {
+				v := *parentPatch
+				effParentID = &v
+			}
+		}
+		from := systemNameScope(before.ParentID, before.LocationID)
+		to := systemNameScope(effParentID, effLocationID)
+		if from.bucket != to.bucket {
+			newName, newOrdinal, err := generateNameForSystemType(ctx, tx, before.SystemTypeID, effParentID, effLocationID, &before.ID)
+			if err != nil {
+				return nil, err
+			}
+			namePatch, ordinalPatch = &newName, &newOrdinal
+		}
+	}
 	after, err := scanSystem(tx.QueryRow(ctx, `
 		update system set
+			name        = coalesce($4, name),
+			-- The number the new name was minted from, recorded with it: a move
+			-- changes the bucket, so the old bucket's ordinal is no more true of
+			-- the row than the old name was.
+			ordinal     = coalesce($5::integer, ordinal),
 			location_id = case
 				when $2::text is null then location_id
 				when $2 = '' then null
@@ -783,9 +1079,16 @@ func (p *PG) MoveSystem(ctx context.Context, actorID, name string, move SystemMo
 			updated_at  = now()
 		where id = $1
 		returning `+systemCols,
-		before.ID, locationPatch, parentPatch))
+		before.ID, locationPatch, parentPatch, namePatch, ordinalPatch))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
+	}
+	// A relocate changes .LocationLabel, which a rule reads (#685). This was
+	// the one write path on these three tiers that stamped no label at all,
+	// correctly so while a system's map carried nothing a move could touch; the
+	// placement key is what made it a write path.
+	if after, err = p.stampSystemLabel(ctx, tx, after); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "move", "system", after.ID, before, after); err != nil {
 		return nil, err

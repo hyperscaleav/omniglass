@@ -449,3 +449,99 @@ describe("Systems properties panel", () => {
     });
   });
 });
+
+// The create form asks WHAT and WHERE first, then shows what the platform will
+// name the row. This form derived the name from the display name until #688 and
+// refused to submit without one, which together made the system-tier generator
+// (#686) unreachable from the console: every console-created system arrived with
+// an operator-owned name whether the operator meant that or not.
+// Both identity fields open LOCKED on the platform's answer (#699), so a test
+// that means to type into one takes the pen first, exactly as an operator does.
+// The lock is a square icon button inside the field's join and carries no text
+// (#657), so it is addressed by its accessible name.
+function unlockLabel() {
+  fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
+}
+
+describe("Systems create identity", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  const fields = async () => {
+    mount("/systems/create");
+    await waitFor(() => expect(screen.getByText("New system")).toBeTruthy());
+    return {
+      display: screen.getByPlaceholderText("Executive Boardroom") as HTMLInputElement,
+      key: screen.getByPlaceholderText("exec-boardroom") as HTMLInputElement,
+      type: screen.getByLabelText("Type") as HTMLSelectElement,
+      submit: screen.getByText("Create system").closest("button") as HTMLButtonElement,
+    };
+  };
+
+  it("never rewrites the key from the display name", async () => {
+    const { display, key } = await fields();
+    unlockLabel();
+    fireEvent.input(display, { target: { value: "Executive Boardroom" } });
+    await waitFor(() => expect(display.value).toBe("Executive Boardroom"));
+    expect(key.value).toBe("");
+    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
+  });
+
+  it("shows the stem the chosen type resolves to, with the first ordinal suppressed", async () => {
+    const { type, key } = await fields();
+    // Unclassified is the default and generates nothing, so there is no lock to
+    // show until a type is chosen.
+    expect(key.readOnly).toBe(false);
+    // "class" carries stem "classroom" of its own; the suppression is ADR-0101's,
+    // and it is a property of the system tier rather than of this type.
+    fireEvent.change(type, { target: { value: "class" } });
+    await waitFor(() => expect(key.value).toBe("classroom"));
+    expect(key.readOnly).toBe(true);
+    expect(key.disabled).toBe(false);
+    expect(screen.getByText(/classroom-2/)).toBeTruthy();
+    expect(screen.getByText(/Unique among the unplaced systems/)).toBeTruthy();
+  });
+
+  it("resolves an inherited stem rather than reading the chosen type alone", async () => {
+    // "room" carries its own stem; a type that inherits would answer from an
+    // ancestor. The fixture's deepest type is the inheriting case for the icon,
+    // and this pins the same walk for the stem.
+    const { type, key } = await fields();
+    fireEvent.change(type, { target: { value: "room" } });
+    await waitFor(() => expect(key.value).toBe("room"));
+  });
+
+  it("requires a name only for an unclassified system, which has no stem", async () => {
+    const { submit, type, key } = await fields();
+    // Unclassified is the default, and it is the one the gateway refuses to
+    // name (ErrSystemTypeRequiredForName).
+    expect(submit.disabled).toBe(true);
+    expect(screen.getByText(/This system is unclassified or its type chain sets no stem/)).toBeTruthy();
+    fireEvent.input(key, { target: { value: "one-off" } });
+    await waitFor(() => expect(submit.disabled).toBe(false));
+
+    fireEvent.input(key, { target: { value: "" } });
+    fireEvent.change(type, { target: { value: "class" } });
+    await waitFor(() => expect(submit.disabled).toBe(false));
+  });
+
+  it("omits the name from the POST body when it is left blank", async () => {
+    let captured: Record<string, unknown> | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.endsWith("/systems")) {
+        captured = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ id: uuidFor("s-new"), name: "classroom" }), { status: 201, headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+    });
+    const { type, display } = await fields();
+    fireEvent.change(type, { target: { value: "class" } });
+    unlockLabel();
+    fireEvent.input(display, { target: { value: "Lecture Hall" } });
+    fireEvent.click(screen.getByText("Create system"));
+    await waitFor(() => expect(captured).toBeTruthy());
+    // Omitted is "generate one"; "" is a name of nothing the API refuses.
+    expect("name" in captured!).toBe(false);
+    expect(captured!.display_name).toBe("Lecture Hall");
+  });
+});

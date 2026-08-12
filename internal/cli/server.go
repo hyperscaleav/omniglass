@@ -51,7 +51,20 @@ func runServer(ctx context.Context, _ string) error {
 	}
 	log.Info("secret key loaded", "source", source)
 
-	gw, err := storage.NewPG(ctx, c.DSN, storage.WithSecretProvider(secret.NewStaticProvider(kek)))
+	// Settings engine: the operator file layer is captured once at boot, the
+	// declared defaults are reflected from the type, and the platform DB override
+	// is read live per call. The gateway builds the resolver (it IS the override
+	// reader) and the API is handed the same one, so the labels the gateway
+	// renders and the settings the console reads cannot come from two documents.
+	// The file is loaded BEFORE the gateway because the gateway captures it.
+	settingsFile, err := settings.LoadFile(c.SettingsFile)
+	if err != nil {
+		return fmt.Errorf("server: load settings file: %w", err)
+	}
+
+	gw, err := storage.NewPG(ctx, c.DSN,
+		storage.WithSecretProvider(secret.NewStaticProvider(kek)),
+		storage.WithSettingsFile(settingsFile))
 	if err != nil {
 		return err
 	}
@@ -72,33 +85,9 @@ func runServer(ctx context.Context, _ string) error {
 	defer busSrv.Shutdown()
 	log.Info("embedded nats-server listening", "addr", c.NatsAddr)
 
-	// Settings engine: the operator file layer is captured once at boot; the declared
-	// defaults are reflected from the type; the platform DB override is read live per
-	// request via a closure over the Gateway (a function seam so settings does not
-	// import storage).
-	settingsFile, err := settings.LoadFile(c.SettingsFile)
-	if err != nil {
-		return fmt.Errorf("server: load settings file: %w", err)
-	}
-	settingsSvc := settings.NewService(settingsFile, func(ctx context.Context, scope string) (settings.Doc, map[string][]string, error) {
-		rows, err := gw.GetSettingOverrides(ctx, scope)
-		if err != nil {
-			return nil, nil, err
-		}
-		doc := settings.Doc{}
-		locks := map[string][]string{}
-		for _, r := range rows {
-			doc[r.Namespace] = r.Doc
-			if len(r.Locks) > 0 {
-				locks[r.Namespace] = r.Locks
-			}
-		}
-		return doc, locks, nil
-	})
-
 	srv := &http.Server{
 		Addr:              c.Addr,
-		Handler:           api.NewHandler(gw, api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(c.NatsURL), api.WithSettingsService(settingsSvc), api.WithTelemetryPublisher(busSrv)),
+		Handler:           api.NewHandler(gw, api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(c.NatsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

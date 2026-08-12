@@ -12,28 +12,35 @@ import (
 
 // systemBody is the wire shape of a system.
 type systemBody struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
-	DisplayName   string            `json:"display_name,omitempty"`
-	Standard      string            `json:"standard,omitempty" doc:"The standard's handle, for display; omitted for a one-off system"`
-	StandardID    string            `json:"standard_id,omitempty" doc:"The standard's uuid; the stable form of standard"`
-	SystemType    string            `json:"system_type,omitempty" doc:"The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the blueprint it is built to."`
-	SystemTypeID  string            `json:"system_type_id,omitempty" doc:"The system_type's uuid; the stable form of system_type"`
-	ParentID      *string           `json:"parent_id,omitempty" doc:"The parent system's id, the canonical handle"`
-	Parent        *string           `json:"parent,omitempty" doc:"The parent system's name, for display; absent for a root system"`
-	LocationID    *string           `json:"location_id,omitempty" doc:"The location's id, the canonical handle"`
-	Location      *string           `json:"location,omitempty" doc:"The location's name, for display"`
-	MemberCount   int               `json:"member_count" doc:"How many components are bound into this system"`
-	Path          string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.$sys.av). Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it)."`
-	PathSegments  []string          `json:"path_segments,omitempty" doc:"path split on '.', accessors included, so the round trip through the resolver stays lossless."`
-	Renders       *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
-	Actions       []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
-	EffectiveTags map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column."`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	// The NAME's pen (#686); read-only for the same reason the label's is: an
+	// operator claims it with :rename and returns it with :resetName, so there
+	// is exactly one way to say who owns the name.
+	NameGenerated bool `json:"name_generated" doc:"Whether the platform picked this name (from the system_type's stem) rather than an operator typing it."`
+	// The LABEL's pen (#682); see componentBody for why it is read-only.
+	DisplayNameGenerated bool              `json:"display_name_generated" doc:"Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."`
+	Standard             string            `json:"standard,omitempty" doc:"The standard's handle, for display; omitted for a one-off system"`
+	StandardID           string            `json:"standard_id,omitempty" doc:"The standard's uuid; the stable form of standard"`
+	SystemType           string            `json:"system_type,omitempty" doc:"The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the blueprint it is built to."`
+	SystemTypeID         string            `json:"system_type_id,omitempty" doc:"The system_type's uuid; the stable form of system_type"`
+	ParentID             *string           `json:"parent_id,omitempty" doc:"The parent system's id, the canonical handle"`
+	Parent               *string           `json:"parent,omitempty" doc:"The parent system's name, for display; absent for a root system"`
+	LocationID           *string           `json:"location_id,omitempty" doc:"The location's id, the canonical handle"`
+	Location             *string           `json:"location,omitempty" doc:"The location's name, for display"`
+	MemberCount          int               `json:"member_count" doc:"How many components are bound into this system"`
+	Path                 string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.$sys.av). Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it)."`
+	PathSegments         []string          `json:"path_segments,omitempty" doc:"path split on '.', accessors included, so the round trip through the resolver stays lossless."`
+	Renders              *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
+	Actions              []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
+	EffectiveTags        map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column."`
 }
 
 func toSystemBody(s *storage.System) systemBody {
 	return systemBody{
 		ID: s.ID, Name: s.Name, DisplayName: s.DisplayName,
+		NameGenerated: s.NameGenerated, DisplayNameGenerated: s.DisplayNameGenerated,
 		Standard: derefStr(s.StandardName), StandardID: derefStr(s.StandardID),
 		SystemType: derefStr(s.SystemTypeName), SystemTypeID: derefStr(s.SystemTypeID),
 		ParentID: s.ParentID, Parent: s.ParentName, LocationID: s.LocationID, Location: s.LocationName,
@@ -107,7 +114,13 @@ type systemPathInput struct {
 
 type createSystemInput struct {
 	Body struct {
-		Name        string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens)"`
+		// Name is optional (#686), exactly as a component's is: omit it and the
+		// platform mints the system_type chain's stem plus the lowest free
+		// ordinal in this placement, suppressing the ordinal for the first of
+		// that stem in the bucket, and marks name_generated. Supplied, it is
+		// validated exactly as before. Omitting it without a system_type is a
+		// 422: the stem lives on that registry row.
+		Name        string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem."`
 		DisplayName string `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
 		StandardID  string `json:"standard_id,omitempty" doc:"The standard it conforms to, by handle or uuid; omit for a one-off system"`
 		// Nullable for now: a floor on system_type_id waits until the shipped
@@ -184,6 +197,8 @@ type checkNameOutput struct {
 // route declares its capability, each handler resolves the caller's per-action
 // scope and hands it to the gateway.
 func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+	registerLabelRecomputeRoutes(api, a, gw, "system", "/systems")
+	registerSystemLabelDraft(api, a, gw)
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-systems",
 		Method:      http.MethodGet,
@@ -280,7 +295,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPost,
 		Path:        "/systems/{name}:move",
 		Summary:     "Move a system",
-		Description: "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. Gated by system:move; read and move scopes drive the 404 versus 403 split.",
+		Description: "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split.",
 	}, "system", "move"), func(ctx context.Context, in *moveSystemInput) (*systemOutput, error) {
 		if in.Body.Location == nil && in.Body.Parent == nil {
 			return nil, huma.Error422UnprocessableEntity("move requires at least one of location or parent")
@@ -311,6 +326,21 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Description: "Moves the system's name, the address an operator types and every external reference stores. A separate act from an update, and a separately grantable one, because it breaks bookmarks, runbooks, and integration config outside this system; inside it nothing breaks, since every reference holds the uuid. A taken name is a 409, an illegal or uuid-shaped one a 422. Gated by system:rename; read and rename scopes drive the 404 versus 403 split.",
 	}, "system", "rename"), func(ctx context.Context, in *renameSystemInput) (*systemOutput, error) {
 		s, err := gw.RenameSystem(ctx, actorID(ctx), in.Name, in.Body.Name,
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "rename"))
+		if err != nil {
+			return nil, mapSystemErr(err)
+		}
+		return &systemOutput{Body: toSystemBody(s)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "reset-system-name",
+		Method:      http.MethodPost,
+		Path:        "/systems/{name}:resetName",
+		Summary:     "Regenerate a system's name",
+		Description: "Hands the pen back to the platform: regenerates the name from the system's current system_type and placement (the same rule a nameless create applies, the type's stem plus the lowest free ordinal, bare for the first of that stem in the placement) and marks it name_generated, whether or not it already was. An unclassified system is a 422: the stem lives on the system_type. Gated by system:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.",
+	}, "system", "rename"), func(ctx context.Context, in *systemPathInput) (*systemOutput, error) {
+		s, err := gw.ResetSystemName(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "rename"))
 		if err != nil {
 			return nil, mapSystemErr(err)
@@ -403,6 +433,10 @@ func mapSystemErr(err error) error {
 		return huma.Error422UnprocessableEntity("unknown standard")
 	case errors.Is(err, storage.ErrUnknownSystemType):
 		return huma.Error422UnprocessableEntity("unknown system_type")
+	case errors.Is(err, storage.ErrSystemTypeRequiredForName):
+		return huma.Error422UnprocessableEntity("a system with no system_type has no stem to generate a name from: supply a name, classify it, or :rename it before un-classifying it")
+	case errors.Is(err, storage.ErrSystemTypeNoStem):
+		return huma.Error422UnprocessableEntity("this system_type has no stem to generate a name from; supply a name explicitly, or fix the system_type registry")
 	case errors.Is(err, storage.ErrLocationNotFound):
 		return huma.Error422UnprocessableEntity("location not found")
 	default:

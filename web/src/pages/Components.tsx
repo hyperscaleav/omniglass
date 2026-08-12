@@ -20,6 +20,11 @@ import {
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
+import { COMPONENT_TYPES_KEY, componentTypeByName, listComponentTypes } from "../lib/component_types";
+import { bucketPhrase, componentMint, createPen, nameBucket, penIncomplete } from "../lib/namegen";
+import { useLabelDraft } from "../lib/labeldraft";
+import { pathTo, type TreeNode } from "../lib/treeselect";
+import CreateIdentity from "../components/CreateIdentity";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
@@ -89,12 +94,28 @@ export default function Components() {
   // component.product_id is NOT NULL, so every component is an instance of a
   // product; the generics fit anything not yet modeled more specifically).
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
+  // The device-class registry behind the product: what the create form reads to
+  // show the name a nameless create would be given. A component's stem lives on
+  // the component_type its product is classified under and inherits down that
+  // tree, so the product alone cannot answer it.
+  const componentTypes = useQuery(() => ({ queryKey: COMPONENT_TYPES_KEY, queryFn: listComponentTypes }));
 
   // Keyed on uuid, not name (#627: name uniqueness is scoped to placement, so
   // two systems or two locations can legally share a name; a name-keyed map
   // would silently collapse them to whichever sorted last).
   const sysById = createMemo(() => new Map((systems.data ?? []).map((s) => [s.id, s] as const)));
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
+
+  // The three placement pickers' option sets, hoisted out of the create form's
+  // JSX so the same lists answer both "what may I choose" and "what is the path
+  // of what I chose" (the placement context beside the name field). Keyed AND
+  // valued on uuid, not name (#627): a name-keyed parentId already mismatched
+  // id's uuid space before this (nothing ever matched, so the picker silently
+  // flattened to depth 0), and a name VALUE is now also potentially ambiguous.
+  // The API dual-accepts uuid-or-name (ADR-0062), so posting the uuid is safe.
+  const systemItems = createMemo<TreeNode[]>(() => (systems.data ?? []).map((s) => ({ id: s.id, value: s.id, label: entityLabel(s), parentId: s.parent_id })));
+  const locationItems = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id })));
+  const componentItems = createMemo<TreeNode[]>(() => (components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: entityLabel(c), parentId: c.parent_id })));
 
   // One filter facet per tag key present across the components, derived from
   // their effective tags, so the bar can filter by any tag like any other field.
@@ -125,6 +146,7 @@ export default function Components() {
         id: c.id,
         addr: c.name,
         display: entityLabel(c),
+        generated: c.display_name_generated,
         // The server's own dash render of this component's dotted path
         // (#627 Task 15): the list-mode ancestor sub-line falls back to it
         // for a component with no component parent, which the page's own
@@ -500,21 +522,23 @@ export default function Components() {
     );
   }
 
-  // ComponentCreate: the draft-create surface at /components/create. Identity and
-  // Placement are writable; the binding sections (Tags) are shown locked until the
-  // component exists. Create commits the row and hands off to /components/<name> in
-  // edit mode.
+  // ComponentCreate: the draft-create surface at /components/create. Classification
+  // and Placement are writable and come FIRST, because they are what the naming
+  // and labelling rules read; Identity follows and is optional throughout. The
+  // binding sections (Tags) are shown locked until the component exists. Create
+  // commits the row and hands off to /components/<id> in edit mode.
   function ComponentCreate(): JSX.Element {
     // Independent fields, NOT createIdentity's derive-from-display coupling
     // (#627 Task 15d): a blank name here means "the platform generates one
     // from the product's component_type" (the same "<stem>-<n>" rule
     // :resetName applies), so auto-filling it from whatever the operator
     // types as a display name would silently claim the pen on their behalf
-    // the moment they typed a label. createIdentity's derive path stays in
-    // use on the FlatList catalog pages, whose names have no generator and
-    // stay globally unique.
-    const [display, setDisplay] = createSignal("");
-    const [name, setName] = createSignal("");
+    // the moment they typed a label. #688 moved system and location to the
+    // same footing, and createIdentity's derive path stays in use on the
+    // registry and identity pages, whose names have no generator and stay
+    // globally unique.
+    const displayPen = createPen();
+    const namePen = createPen();
     const [system, setSystem] = createSignal("");
     const [location, setLocation] = createSignal("");
     const [parent, setParent] = createSignal("");
@@ -529,11 +553,48 @@ export default function Components() {
       [...(products.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name)),
     );
 
+    // What the platform would name this, as far as it is knowable before the row
+    // exists: the stem resolved from the chosen product's component_type chain,
+    // with the ordinal left as a token because it is allocated against live
+    // siblings inside the create's own transaction (ADR-0104).
+    const typesByName = createMemo(() => componentTypeByName(componentTypes.data ?? []));
+    const chosenProduct = createMemo(() => (products.data ?? []).find((p) => p.name === product()));
+    const mint = createMemo(() => componentMint(chosenProduct(), typesByName()));
+
+    // The placement bucket the name has to be unique in, in the server's own
+    // precedence (a parent wins over a location, and neither is the unplaced
+    // bucket), rendered as the path of whichever one applies.
+    // What the platform would LABEL this, which only the server can answer: a
+    // rule is a Go template over a closed map, so the console asks rather than
+    // re-implements (ADR-0098). Asked with the same body the create posts, and
+    // only once the classification is chosen, so a half-filled form is never
+    // sent a question it cannot answer.
+    const labelDraft = useLabelDraft(() =>
+      product()
+        ? {
+            kind: "component" as const,
+            body: {
+              product: product(),
+              name: namePen.value().trim() || undefined,
+              location: location() || undefined,
+              system: system() || undefined,
+            },
+          }
+        : null,
+    );
+
+    const bucket = createMemo(() => nameBucket(parent(), location()));
+    const bucketText = createMemo(() => {
+      const b = bucket();
+      const path = b.under === "parent" ? pathTo(componentItems(), b.id) : b.under === "location" ? pathTo(locationItems(), b.id) : [];
+      return bucketPhrase("component", b, path);
+    });
+
     async function create(e: Event) {
       e.preventDefault();
       setBusy(true);
       setFormErr(null);
-      const nm = name().trim();
+      const nm = namePen.value().trim();
       try {
         // Bind the create response (#627 Task 15c): under uuid addressing
         // the locally typed name is not a reliable handle to navigate by,
@@ -544,7 +605,7 @@ export default function Components() {
         // nothing."
         const created = await createComponent({
           name: nm || undefined,
-          display_name: display().trim() || undefined,
+          display_name: displayPen.value().trim() || undefined,
           system: system() || undefined,
           location: location() || undefined,
           parent: parent() || undefined,
@@ -569,46 +630,12 @@ export default function Components() {
           <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
         </Show>
 
+        {/* What it is, then where it sits, then what it is called. The
+            classification carries the stem and the placement carries the
+            ordinal's bucket, so both are answered before the form has anything
+            to say about the name. */}
         <div class="flex flex-col gap-1.5">
-          <span class="eyebrow">Identity</span>
-          <div class="flex flex-col gap-3">
-            <FieldRow
-              bind="display_name"
-              hint="What an operator reads. Optional."
-            >
-              <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />
-            </FieldRow>
-            <FieldRow
-              bind="name"
-              hint="Optional. Leave blank and the platform generates one from the product's type (e.g. display-1)."
-            >
-              <input class="input input-bordered w-full font-data" value={name()} placeholder="mic-2 (optional)" onInput={(e) => setName(e.currentTarget.value)} />
-            </FieldRow>
-          </div>
-        </div>
-
-        <div class="flex flex-col gap-1.5">
-          <span class="eyebrow">Placement</span>
-          <div class="grid grid-cols-2 gap-3">
-            <FieldRow label="System">
-              {/* Keyed AND valued on uuid, not name (#627): a name-keyed
-                  parentId already mismatched id's uuid space before this
-                  (nothing ever matched, so the picker silently flattened to
-                  depth 0), and a name VALUE is now also potentially
-                  ambiguous. The API dual-accepts uuid-or-name (ADR-0062), so
-                  posting the uuid is safe. */}
-              <TreeSelect items={(systems.data ?? []).map((s) => ({ id: s.id, value: s.id, label: entityLabel(s), parentId: s.parent_id }))} value={system()} onChange={setSystem} rootLabel="None" />
-            </FieldRow>
-            <FieldRow label="Location">
-              <TreeSelect items={(locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id }))} value={location()} onChange={setLocation} rootLabel="None" />
-            </FieldRow>
-          </div>
-          <FieldRow
-            label="Parent component"
-            hint="Omit for a root component."
-          >
-            <TreeSelect items={(components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: entityLabel(c), parentId: c.parent_id }))} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />
-          </FieldRow>
+          <span class="eyebrow">Classification</span>
           <FieldRow
             label="Product"
             hint="What this component is an instance of. Required; use a generic until a real product is modeled."
@@ -620,13 +647,45 @@ export default function Components() {
           </FieldRow>
         </div>
 
+        <div class="flex flex-col gap-1.5">
+          <span class="eyebrow">Placement</span>
+          <div class="grid grid-cols-2 gap-3">
+            <FieldRow label="System">
+              <TreeSelect items={systemItems()} value={system()} onChange={setSystem} rootLabel="None" />
+            </FieldRow>
+            <FieldRow label="Location">
+              <TreeSelect items={locationItems()} value={location()} onChange={setLocation} rootLabel="None" />
+            </FieldRow>
+          </div>
+          <FieldRow
+            label="Parent component"
+            hint="Omit for a root component."
+          >
+            <TreeSelect items={componentItems()} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />
+          </FieldRow>
+        </div>
+
+        <CreateIdentity
+          kind="component"
+          mint={mint}
+          bucket={bucketText}
+          namePen={namePen}
+          displayPen={displayPen}
+          label={() => labelDraft.data}
+          labelPending={() => labelDraft.isFetching}
+          namePlaceholder="mic-2 (optional)"
+          displayPlaceholder="Ceiling Mic 2"
+        />
+
         <div class="flex items-center gap-2 border-t border-base-300 pt-4">
           <Button icon={X} onClick={() => navigate("/components")}>Cancel</Button>
           <span class="flex-1" />
-          {/* No !name().trim() gate (#627 Task 15d): the name is optional now,
-              the whole point of the affordance. Product stays required (the
-              #614 classification floor, and the generator's own stem source). */}
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !product()}>Create component</Button>
+          {/* A name is required only where nothing will mint one: a product
+              whose component_type chain carries no stem (#699 closes the
+              asymmetry the other two forms did not have). Product stays
+              required, the #614 classification floor and the generator's own
+              stem source. */}
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !product() || penIncomplete(mint() !== null, namePen)}>Create component</Button>
         </div>
 
         <div class="flex flex-col gap-1 opacity-50">

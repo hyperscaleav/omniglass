@@ -38,6 +38,11 @@ var Subsystems = []Cluster{
 	}},
 	{Name: "config", Tables: []string{
 		"setting_override", "variable",
+		// label_rule is the global tier of the label rules (#682, ADR-0098),
+		// one row per labelled entity kind. It sits with config rather than
+		// with the estate it labels: it is platform-wide policy an operator
+		// tunes, not a row any entity points at.
+		"label_rule",
 		"secret", "secret_type", "credential",
 	}},
 	{Name: "content", Tables: []string{

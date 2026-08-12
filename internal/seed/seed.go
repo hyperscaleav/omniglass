@@ -59,6 +59,9 @@ var productsYAML []byte
 //go:embed secret_types.yaml
 var secretTypesYAML []byte
 
+//go:embed label_rules.yaml
+var labelRulesYAML []byte
+
 type rolesDoc struct {
 	Roles []struct {
 		ID          string   `yaml:"id"`
@@ -69,12 +72,27 @@ type rolesDoc struct {
 	} `yaml:"roles"`
 }
 
+type labelRulesDoc struct {
+	LabelRules []struct {
+		EntityKind string `yaml:"entity_kind"`
+		Template   string `yaml:"template"`
+	} `yaml:"label_rules"`
+}
+
 type locationTypesDoc struct {
 	LocationTypes []struct {
 		ID                 string   `yaml:"id"`
 		DisplayName        string   `yaml:"display_name"`
 		Icon               string   `yaml:"icon"`
 		AllowedParentTypes []string `yaml:"allowed_parent_types"`
+		// NameRule is the type's opt-in to generating the names of the
+		// locations it classifies (#687). A pointer, so absent in the YAML is
+		// absent in the column: no rule means an operator names them, which is
+		// where three of the four shipped types stay.
+		NameRule *struct {
+			Stem      string `yaml:"stem"`
+			BareFirst bool   `yaml:"bare_first"`
+		} `yaml:"name_rule"`
 	} `yaml:"location_types"`
 }
 
@@ -228,6 +246,12 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedRoles(ctx, gw); err != nil {
 		return err
 	}
+	// The global label rules before any classifier: they are the outermost tier
+	// of a ladder every other seeded row can override, and the order a
+	// resolver reads them in is the reverse of the order they are written.
+	if err := seedLabelRules(ctx, gw); err != nil {
+		return err
+	}
 	if err := seedLocationTypes(ctx, gw); err != nil {
 		return err
 	}
@@ -281,6 +305,23 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 		return err
 	}
 	return seedSecretTypes(ctx, gw)
+}
+
+// seedLabelRules writes the rule this release ships for each labelled entity
+// kind (#682). Authoritative on default_template only: an operator's own rule
+// is a separate column, so re-seeding restates what we ship and never reaches
+// what they chose.
+func seedLabelRules(ctx context.Context, gw storage.Gateway) error {
+	var doc labelRulesDoc
+	if err := yaml.Unmarshal(labelRulesYAML, &doc); err != nil {
+		return fmt.Errorf("seed: parse label_rules: %w", err)
+	}
+	for _, r := range doc.LabelRules {
+		if err := gw.UpsertLabelRuleDefault(ctx, r.EntityKind, r.Template); err != nil {
+			return fmt.Errorf("seed: label_rule %s: %w", r.EntityKind, err)
+		}
+	}
+	return nil
 }
 
 func seedInterfaceTypes(ctx context.Context, gw storage.Gateway) error {
@@ -744,12 +785,17 @@ func seedLocationTypes(ctx context.Context, gw storage.Gateway) error {
 		return fmt.Errorf("seed: parse location_types: %w", err)
 	}
 	for _, lt := range doc.LocationTypes {
+		var rule *storage.NameRule
+		if lt.NameRule != nil {
+			rule = &storage.NameRule{Stem: lt.NameRule.Stem, BareFirst: lt.NameRule.BareFirst}
+		}
 		if err := gw.SeedLocationType(ctx, storage.LocationType{
 			Name:               lt.ID,
 			Official:           false,
 			DisplayName:        lt.DisplayName,
 			Icon:               lt.Icon,
 			AllowedParentTypes: lt.AllowedParentTypes,
+			NameRule:           rule,
 		}); err != nil {
 			return err
 		}

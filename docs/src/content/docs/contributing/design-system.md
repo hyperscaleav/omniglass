@@ -190,6 +190,30 @@ look like the same product. It replaced sixteen hand-written name columns writte
 incompatible idioms, which is why the header word for one fact used to be "Name" on one page and
 "Key" on another.
 
+**Who chose the label decides the second line.** On component, system and location a display name
+can be one the platform rendered from a **label rule**
+([ADR-0098](/architecture/decisions/#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)),
+and the row says which through the pen `display_name_generated`. So the cell reads three states, not
+two: a row with no label shows its name once in the data face; a row an operator labelled shows the
+label with the name beneath it; a row the platform labelled shows the label, marked `Generated`, with
+no second line. The rule the marker states is that typing a label claims it and clearing the field
+hands it back, which is also the set of rows a rule edit would rewrite.
+
+The three predicates live in `lib/entities` and nowhere else: `labelIsName` (which face), `hasDisplayName`
+(did a human choose this) and `labelGenerated` (did the platform). The middle one used to be the
+string comparison `entityLabel(e) !== e.name`, and that was the same question only while a label was
+only ever operator-typed; unchanged, a generated label would have put a second identifier line under
+every row in the estate.
+
+**One renderer, pinned by a source guard.** `entityLabel` is the only place `display_name || name` is
+written. `one-label-renderer.test.ts` scans every non-test source file for a hand-rolled fallback and
+for the raw column interpolated into a string, and fails on either outside a short, line-precise
+allowlist of rules that are genuinely not this one (a principal's name, which has no `name` column;
+a picker that renders both facts as `name (Label)`). Both directions are asserted, so an allowlist
+entry that stops describing anything fails too. The scan catches what no page test can: a facet
+that spelled its haystack `` `${r.name} ${r.display_name}` `` searched the literal text "undefined"
+on every unlabelled row.
+
 **Three fields, no synonyms.** The identifier is the **Name**, on every column header and every
 form. The friendly string is the **Display name**. The id is never labelled because it is never
 shown outside a drill-in. "Technical name" and "Segment" are retired as field labels, and
@@ -225,10 +249,17 @@ for anyone passing one, which is the failure mode a per-page test cannot catch.
 
 The write side does differ, page by page. `createIdentity` derives the name from the display name as
 an operator types and stops the moment they edit the name by hand, and an edit form seeds it with
-the existing name so relabelling can never rewrite a live address. The three signal registries
-(`property_type`, `event_type`, `command_type`) do not wire it, because a signal name is chosen to
-match what an interface reports rather than derived from prose somebody typed, and that was as true
-when those names carried dots as it is now they are single tokens. `tag`, `variable`, and `secret`
+the existing name so relabelling can never rewrite a live address. That path belongs to the
+registries, whose names have no generator and stay globally unique.
+
+The three estate entities do not wire it. A component, a system, and a location get their names
+from the platform, minted from the resolved type stem and the placement bucket, so deriving a name
+from whatever prose an operator typed would claim the pen on their behalf the moment they typed a
+label. Their create forms ask what and where first, then show the shape the name will take
+(`display-n`), and leave the name field empty to mean "the platform names this one". The three
+signal registries (`property_type`, `event_type`, `command_type`) do not wire it either, because a
+signal name is chosen to match what an interface reports rather than derived from prose somebody
+typed, and that was as true when those names carried dots as it is now they are single tokens. `tag`, `variable`, and `secret`
 invite an exception because their prose calls them keys; they get none, and take the one rule like
 everything else.
 

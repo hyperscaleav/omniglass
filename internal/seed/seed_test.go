@@ -76,8 +76,13 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if topType != "building" {
 		t.Errorf("first-alphabetically location_type = %q, want building", topType)
 	}
-	// Each shipped type seeds its glyph key, and re-running Run keeps it (the icon
-	// is part of the idempotent upsert, not just the initial insert).
+	// Each shipped type seeds its glyph key, and re-running Run keeps it. Note WHY:
+	// SeedLocationType is `on conflict (name) do nothing`, so a second Run does not
+	// rewrite the row at all. The icon survives because nothing touches it, not
+	// because an upsert restates it. The distinction is load-bearing rather than
+	// pedantic, and #657 learned it the hard way: a value REMOVED from the shipped
+	// YAML is not withdrawn from an estate that already seeded it, because there is
+	// no update to carry the removal.
 	for name, wantIcon := range map[string]string{
 		"campus": "landmark", "building": "building", "floor": "layers", "room": "door-open",
 	} {

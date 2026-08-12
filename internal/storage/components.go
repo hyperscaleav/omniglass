@@ -66,6 +66,23 @@ type Component struct {
 	// existed before the generator landed; the gateway sets it explicitly on
 	// insert once that generator writes.
 	NameGenerated bool
+	// Ordinal is the number the generator allocated for this row's name
+	// (#681), stored rather than re-read out of the name by whoever needs it.
+	// nil means the platform owns no number here: an operator typed the name,
+	// or renamed the row and took the pen (:rename nulls this in the same
+	// statement it clears NameGenerated). The two always agree, which the
+	// recompute-and-compare invariant test pins.
+	//
+	// It is a storage fact, not a wire field: the bare render and, from #657
+	// slice 2, a label rule's .Ordinal both read it server-side, and the
+	// console already learns who holds the pen from NameGenerated.
+	Ordinal *int
+	// DisplayNameGenerated is the LABEL's pen (#682), the same shape
+	// NameGenerated is for the name: true means the platform owns
+	// display_name and re-renders it from the resolved label rule on every
+	// write that can change one of the rule's inputs. Setting the label by
+	// hand clears it; clearing the field returns it.
+	DisplayNameGenerated bool
 	// Path, PathSegments, and Renders are the dotted address and its two
 	// display-only compact forms (#627 Task 15), attached by attachComponentPaths
 	// after every GET or LIST fetch (see scopedConfig.attachPaths). Zero-value
@@ -141,13 +158,13 @@ const componentCols = `id, name, coalesce(display_name, ''), parent_id,
 	(select p.name from component p where p.id = component.parent_id) as parent_name,
 	(select l.name from location l where l.id = component.location_id) as location_name,
 	(select pr.name from product pr where pr.id = component.product_id) as product_handle,
-	name_generated,
+	name_generated, ordinal, display_name_generated,
 	created_at, updated_at`
 
 func scanComponent(row pgx.Row) (*Component, error) {
 	var c Component
 	if err := row.Scan(&c.ID, &c.Name, &c.DisplayName, &c.ParentID, &c.PrimarySystem, &c.PrimarySystemID, &c.SystemCount,
-		&c.LocationID, &c.ProductID, &c.ParentName, &c.LocationName, &c.ProductHandle, &c.NameGenerated, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		&c.LocationID, &c.ProductID, &c.ParentName, &c.LocationName, &c.ProductHandle, &c.NameGenerated, &c.Ordinal, &c.DisplayNameGenerated, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &c, nil
@@ -165,13 +182,18 @@ var componentConfig = scopedConfig[Component]{
 // size (#643), and RenderDash/RenderBare's compact forms per row. The bare
 // render's abbreviation comes from the component's own product's
 // component_type, resolved through the same inherited-from-parent chain
-// generateNameForProduct walks (resolveTypeFacts): the identical
-// stem-and-abbrev source a generated name itself came from, so a component's
-// bare render always compacts with the type its own name was minted against.
-// A component with no product (unreachable through the API, which requires
-// one, but not through a direct-gateway caller) or whose type resolves no
-// abbrev anywhere in its chain gets "" and RenderBare's own no-abbrev
-// fallback.
+// generateNameForProduct walks (resolveTypeFacts), so a component's bare
+// render always compacts with the type its own name was minted against. A
+// component with no product (unreachable through the API, which requires one,
+// but not through a direct-gateway caller) or whose type resolves no abbrev
+// anywhere in its chain gets "" and RenderBare's own no-abbrev fallback.
+//
+// The other half of the substitution, the ordinal, comes off the ROW (#681),
+// not out of the name: the type is asked what to write, the row is asked
+// whether there is a number to write at all. #654 had to resolve the stem
+// here beside the abbrev so the render could confirm the segment was one that
+// type minted; the column answers that directly now, so the stem is no longer
+// read at all.
 //
 // full gates the abbrev resolution (review finding 3, task-15-review.md #2):
 // componentTypeIDForProduct plus resolveTypeFacts' own ancestor walk (up to
@@ -197,29 +219,25 @@ func attachComponentPaths(ctx context.Context, q querier, cs []*Component, full 
 	if err != nil {
 		return err
 	}
-	// Both halves of the substitution come from one registry row, so they are
-	// resolved and memoized together: the abbrev says what to write, the stem
-	// says the segment is one this type actually minted (#654).
-	type typeFacts struct{ stem, abbrev string }
-	facts := make(map[string]typeFacts) // product id -> its type's stem and abbrev, resolved once
+	abbrevs := make(map[string]string) // product id -> its type's abbrev, resolved once
 	for _, c := range cs {
 		segs := paths[c.ID]
 		c.PathSegments = segs
 		c.Path = strings.Join(segs, ".")
-		var tf typeFacts
+		var abbrev string
 		if full && c.ProductID != nil {
-			f, done := facts[*c.ProductID]
+			a, done := abbrevs[*c.ProductID]
 			if !done {
 				if typeID, err := componentTypeIDForProduct(ctx, q, *c.ProductID); err == nil {
-					if stem, _, abbrev, _, err := resolveTypeFacts(ctx, q, typeID); err == nil {
-						f = typeFacts{stem: stem, abbrev: abbrev}
+					if _, _, resolved, _, _, err := resolveTypeFacts(ctx, q, typeID); err == nil {
+						a = resolved
 					}
 				}
-				facts[*c.ProductID] = f
+				abbrevs[*c.ProductID] = a
 			}
-			tf = f
+			abbrev = a
 		}
-		c.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, tf.stem, tf.abbrev)}
+		c.Renders = Renders{Dash: RenderDash(segs), Bare: RenderBare(segs, c.Ordinal, abbrev)}
 	}
 	return nil
 }
@@ -389,6 +407,9 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	// directly, exactly like the insert's own COALESCE.
 	name := spec.Name
 	generated := name == ""
+	// nil unless the platform picked the name: an operator-typed name has no
+	// ordinal the platform owns, and the column says so by being absent (#681).
+	var ordinal *int
 	if generated {
 		genProductID := productID
 		if genProductID == nil {
@@ -398,9 +419,11 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 			}
 			genProductID = &id
 		}
-		if name, err = generateNameForProduct(ctx, tx, *genProductID, parentID, locationID, nil); err != nil {
+		genName, n, err := generateNameForProduct(ctx, tx, *genProductID, parentID, locationID, nil)
+		if err != nil {
 			return nil, err
 		}
+		name, ordinal = genName, &n
 	}
 
 	// product is required (the floor: every component is an instance of a
@@ -409,11 +432,15 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	// requires an explicit product on create (a stricter operator-facing
 	// gate naming the generics); this default only ever fires below it, for a
 	// caller that writes the gateway directly (seed, devseed, tests).
+	// An empty display_name is the operator handing the LABEL's pen to the
+	// platform, exactly as an empty name hands over the name's (#682). The row
+	// is inserted with no label and stamped below, once it exists and its
+	// classification is resolvable.
 	c, err := scanComponent(tx.QueryRow(ctx, `
-		insert into component (name, display_name, parent_id, location_id, product_id, name_generated)
-		values ($1, $2, $3, $4, coalesce($5::uuid, (select id from product where name = 'generic-device')), $6)
+		insert into component (name, display_name, parent_id, location_id, product_id, name_generated, ordinal, display_name_generated)
+		values ($1, $2, $3, $4, coalesce($5::uuid, (select id from product where name = 'generic-device')), $6, $7, $8)
 		returning `+componentCols,
-		name, nullize(spec.DisplayName), parentID, locationID, productID, generated))
+		name, nullize(spec.DisplayName), parentID, locationID, productID, generated, ordinal, spec.DisplayName == ""))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
@@ -428,6 +455,15 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 			`select `+componentCols+` from component where id = $1`, c.ID)); err != nil {
 			return nil, fmt.Errorf("storage: re-read component after membership: %w", err)
 		}
+	}
+	// The stamp runs AFTER the membership, not before it (#685). A label can
+	// read its primary system's type, and the membership above is what decides
+	// which system that is: stamping first rendered every create-with-a-system
+	// against no system at all, wrote that, and left the row stale until some
+	// later write happened to touch it. This is also why the membership path
+	// below does not need a cascade of its own for a create.
+	if c, err = p.stampComponentLabel(ctx, tx, c); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "component", c.ID, nil, c); err != nil {
 		return nil, err
@@ -498,7 +534,14 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	// operator-typed name (RenameComponent clears the flag forever) is never
 	// touched by a reclassify. Computed before the write below so both land
 	// in the same UPDATE and the same audit image.
-	var namePatch *string
+	//
+	// ordinalPatch travels with namePatch and is non-nil exactly when it is:
+	// a recomputed name and the number it was minted from are one fact, so
+	// they land in one UPDATE and one audit image (#681).
+	var (
+		namePatch    *string
+		ordinalPatch *int
+	)
 	if patch.ProductName != nil && before.NameGenerated {
 		finalProductID := patchProductID
 		if finalProductID == nil {
@@ -512,16 +555,27 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 			}
 			finalProductID = &id
 		}
-		newName, err := generateNameForProduct(ctx, tx, *finalProductID, before.ParentID, before.LocationID, &before.ID)
+		newName, newOrdinal, err := generateNameForProduct(ctx, tx, *finalProductID, before.ParentID, before.LocationID, &before.ID)
 		if err != nil {
 			return nil, err
 		}
-		namePatch = &newName
+		namePatch, ordinalPatch = &newName, &newOrdinal
 	}
 	after, err := scanComponent(tx.QueryRow(ctx, `
 		update component set
 			name         = coalesce($5, name),
-			display_name = coalesce($2, display_name),
+			ordinal      = coalesce($6::integer, ordinal),
+			-- display_name is three-state like the placement fields, not a
+			-- coalesce: nil leaves it, a value is the operator typing a label
+			-- (and taking the pen, $7 below), and an explicit empty string
+			-- clears it and hands the pen back, which the stamp after this
+			-- statement then acts on (#682).
+			display_name = case
+				when $2::text is null then display_name
+				when $2 = '' then null
+				else $2::text
+			end,
+			display_name_generated = $7,
 			-- product_id has no clear state: the floor makes it NOT NULL, so unlike
 			-- a three-state placement field there is no empty-string-means-null
 			-- branch here to attempt (that used to be the case before the #614
@@ -542,9 +596,16 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 			updated_at   = now()
 		where id = $1
 		returning `+componentCols,
-		before.ID, patch.DisplayName, patch.ProductName, patchProductID, namePatch))
+		before.ID, patch.DisplayName, patch.ProductName, patchProductID, namePatch, ordinalPatch,
+		labelPen(before.DisplayNameGenerated, patch.DisplayName)))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
+	}
+	// A reclassify changes the type, product and vendor facts a rule reads, and
+	// clearing the label hands the pen back; both land here, after the row is
+	// final, so the audit image below carries the label it just changed (#682).
+	if after, err = p.stampComponentLabel(ctx, tx, after); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "component", after.ID, before, after); err != nil {
 		return nil, err
@@ -652,7 +713,10 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 	// set), computed here in Go because the generator needs the DESTINATION
 	// scope to scan siblings in, not the component's placement as it reads
 	// right now.
-	var namePatch *string
+	var (
+		namePatch    *string
+		ordinalPatch *int
+	)
 	if before.NameGenerated {
 		effLocationID := before.LocationID
 		if locationPatch != nil {
@@ -676,15 +740,19 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 		if before.ProductID != nil {
 			productID = *before.ProductID
 		}
-		newName, err := generateNameForProduct(ctx, tx, productID, effParentID, effLocationID, &before.ID)
+		newName, newOrdinal, err := generateNameForProduct(ctx, tx, productID, effParentID, effLocationID, &before.ID)
 		if err != nil {
 			return nil, err
 		}
-		namePatch = &newName
+		namePatch, ordinalPatch = &newName, &newOrdinal
 	}
 	after, err := scanComponent(tx.QueryRow(ctx, `
 		update component set
 			name        = coalesce($4, name),
+			-- The number the new name was minted from, recorded with it: a move
+			-- changes the bucket, so the old bucket's ordinal is no more true of
+			-- the row than the old name was (#681).
+			ordinal     = coalesce($5::integer, ordinal),
 			location_id = case
 				when $2::text is null then location_id
 				when $2 = '' then null
@@ -698,9 +766,14 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 			updated_at  = now()
 		where id = $1
 		returning `+componentCols,
-		before.ID, locationPatch, parentPatch, namePatch))
+		before.ID, locationPatch, parentPatch, namePatch, ordinalPatch))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
+	}
+	// A move re-mints the ordinal, which a rule reads, so a platform-owned
+	// label follows it (#682).
+	if after, err = p.stampComponentLabel(ctx, tx, after); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "move", "component", after.ID, before, after); err != nil {
 		return nil, err
@@ -733,6 +806,13 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 // operator-chosen name. A later move or product reclassify then leaves this
 // name alone, since it is no longer platform-owned; :resetName is how an
 // operator hands the pen back.
+//
+// ordinal goes to NULL in the same statement (#681). The platform allocated a
+// number for a name that no longer exists, and there is no number it owns for
+// the one the operator chose, whatever digits that name happens to contain.
+// This is what makes #654's guarantee structural rather than defensive: the
+// bare render cannot restamp "rack-3" as "dsp3" because after this write there
+// is no ordinal to stamp, so nothing downstream has to recognise the case.
 func (p *PG) RenameComponent(ctx context.Context, actorID, name, newName string, read, action scope.Set) (*Component, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -748,10 +828,17 @@ func (p *PG) RenameComponent(ctx context.Context, actorID, name, newName string,
 		return nil, err
 	}
 	after, err := scanComponent(tx.QueryRow(ctx,
-		`update component set name = $2, name_generated = false, updated_at = now() where id = $1 returning `+componentCols,
+		`update component set name = $2, name_generated = false, ordinal = null, updated_at = now() where id = $1 returning `+componentCols,
 		before.ID, newName))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
+	}
+	// A rename changes .Name and nulls .Ordinal, both of which a rule reads, so
+	// a platform-owned label is re-rendered against the new pair (#682). The
+	// LABEL's pen is untouched here: a rename is a claim on the name, and an
+	// operator who wants the label too says so by typing one.
+	if after, err = p.stampComponentLabel(ctx, tx, after); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "rename", "component", after.ID, before, after); err != nil {
 		return nil, err
@@ -765,7 +852,8 @@ func (p *PG) RenameComponent(ctx context.Context, actorID, name, newName string,
 // ResetComponentName hands the pen back to the platform (#627 Task 14): it
 // regenerates the component's name from its CURRENT type and placement, the
 // exact rule CreateComponent applies when no name is given, and marks the
-// result name_generated again. It does not matter whether the name was
+// result name_generated again, recording the ordinal it was minted from
+// (#681) exactly as a generated create does. It does not matter whether the name was
 // already platform-owned or an operator had typed one: either way the
 // answer is a fresh "<stem>-<n>". Scoped exactly as RenameComponent (the
 // same read-then-action split), because it is the same act from the
@@ -790,15 +878,20 @@ func (p *PG) ResetComponentName(ctx context.Context, actorID, name string, read,
 	if before.ProductID != nil {
 		productID = *before.ProductID
 	}
-	newName, err := generateNameForProduct(ctx, tx, productID, before.ParentID, before.LocationID, &before.ID)
+	newName, newOrdinal, err := generateNameForProduct(ctx, tx, productID, before.ParentID, before.LocationID, &before.ID)
 	if err != nil {
 		return nil, err
 	}
 	after, err := scanComponent(tx.QueryRow(ctx,
-		`update component set name = $2, name_generated = true, updated_at = now() where id = $1 returning `+componentCols,
-		before.ID, newName))
+		`update component set name = $2, name_generated = true, ordinal = $3, updated_at = now() where id = $1 returning `+componentCols,
+		before.ID, newName, newOrdinal))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
+	}
+	// Same pair as a rename, in the other direction: a fresh name and a freshly
+	// allocated ordinal, so a platform-owned label follows (#682).
+	if after, err = p.stampComponentLabel(ctx, tx, after); err != nil {
+		return nil, err
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "reset", "component", after.ID, before, after); err != nil {
 		return nil, err

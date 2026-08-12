@@ -84,10 +84,23 @@ func mapTypeErr(err error, kind string) error {
 		return huma.Error409Conflict(kind + " has no changes of yours to discard")
 	case errors.Is(err, storage.ErrReservedTypeID):
 		return huma.Error422UnprocessableEntity("\"root\" is a reserved " + kind + " id")
+	// Before the two name cases below, deliberately: a name rule that cannot
+	// mint a legal name wraps the very error the mint failed with, so a later
+	// arm would match it first and report the TYPE's own name as the problem
+	// when the type's name is fine (#687).
+	case errors.Is(err, storage.ErrInvalidNameRule):
+		return huma.Error422UnprocessableEntity("name rule cannot generate a legal name: " + err.Error())
 	case errors.Is(err, storage.ErrEntityNameIsUUID):
 		return huma.Error422UnprocessableEntity(kind + " name may not be a uuid")
 	case errors.Is(err, storage.ErrInvalidEntityName):
 		return huma.Error422UnprocessableEntity(kind + " name must be lowercase letters, digits, and hyphens, starting with a letter or digit")
+	// A label rule that does not compile is refused HERE, at the edit, rather
+	// than stored and discovered later by a write path rendering one entity
+	// (#682). The template engine's own message names the offending construct
+	// and its position, which is the only thing that makes a template error
+	// actionable, so it is passed through rather than replaced.
+	case errors.Is(err, storage.ErrInvalidLabelRule):
+		return huma.Error422UnprocessableEntity("label rule does not parse: " + err.Error())
 	default:
 		return huma.Error500InternalServerError("type operation failed")
 	}

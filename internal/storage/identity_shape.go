@@ -42,6 +42,18 @@ const (
 	// ShapeIDOnly: nobody names it, so it is addressed by uuid. A join row and a
 	// telemetry row: an operator names the component, not the metric.
 	ShapeIDOnly IdentityShape = "id only"
+
+	// ShapeFixedKey: nobody names it AND there is no uuid either, because the
+	// primary key is one of a closed vocabulary the PLATFORM declares and a
+	// CHECK enforces. An operator neither types a new key nor addresses a row
+	// by a surrogate: the key set is the schema.
+	//
+	// It is not ShapeIDOnly, which promises a uuid this table does not have,
+	// and a generated reference publishes that promise. It is not
+	// ShapeHumanNotAKey either: that shape is for an identifier a human
+	// AUTHORS on its own rule (a username, a filename, a hash), and nobody
+	// authors these.
+	ShapeFixedKey IdentityShape = "fixed key, declared by the platform"
 )
 
 // TableIdentity is one table's declared shape and, where the shape alone does not
@@ -110,6 +122,10 @@ var IdentityShapes = map[string]TableIdentity{
 	// (registry, row_id), and row_id is that row's uuid. Operators never see it
 	// at all, since every read resolves it over the official row.
 	"registry_shadow": {Shape: ShapeIDOnly, Reason: "addressed by the registry row it shadows, never named"},
+	// label_rule holds the global tier of the label rules (#682, ADR-0098), one
+	// row per labelled entity kind, and it is the only table in the schema with
+	// a text primary key and no uuid at all.
+	"label_rule": {Shape: ShapeFixedKey, Reason: "keyed by the entity kind it applies to (component, system, location), a closed set the table's own CHECK enforces"},
 }
 
 // KeyProvedElsewhere excuses a name-bearing table from the behavioural create sweep,

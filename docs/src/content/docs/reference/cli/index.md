@@ -740,6 +740,22 @@ Example:
 omniglass component move <name>
 ```
 
+### `omniglass component previewLabels`
+
+Preview a component label recompute
+
+```
+omniglass component previewLabels
+```
+
+Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by component:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+
+Example:
+
+```sh
+omniglass component previewLabels
+```
+
 ### `omniglass component property`
 
 Commands for the property resource
@@ -816,6 +832,22 @@ Example:
 omniglass component reachability list <name>
 ```
 
+### `omniglass component recomputeLabels`
+
+Recompute component labels
+
+```
+omniglass component recomputeLabels
+```
+
+Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by component:update.
+
+Example:
+
+```sh
+omniglass component recomputeLabels
+```
+
 ### `omniglass component reconciliation`
 
 Commands for the reconciliation resource
@@ -874,6 +906,29 @@ Example:
 
 ```sh
 omniglass component rename <name> --name name
+```
+
+### `omniglass component renderLabel`
+
+Render the label a component create would store
+
+```
+omniglass component renderLabel [flags]
+```
+
+Renders the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is written as the token "n", because it is allocated against live siblings inside the create's own transaction and does not exist until the row does. Omitting name renders the label the platform's own generated name would produce, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the location and system refs resolve within the caller's location:read and system:read scopes, because the rendered string can carry their labels.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--location` | string | (none) | The location this component will sit at, by name or uuid. Resolved within the caller's location:read scope: a location out of scope is refused, never rendered. |
+| `--name` | string | (none) | The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token "n"; supply it to render the label an operator-named row would carry, which has no ordinal at all. |
+| `--product` | string | (none) | The product this component is an instance of, by name or uuid; the classification both a label rule and a generated name are resolved from |
+| `--system` | string | (none) | The system this component will belong to, by name or uuid. Resolved within the caller's system:read scope. |
+
+Example:
+
+```sh
+omniglass component renderLabel --product product
 ```
 
 ### `omniglass component resetName`
@@ -954,6 +1009,7 @@ Creates a custom (non-official) component_type, optionally under a parent. Gated
 | `--default-tags` | string | (none) | Tags every instance of this type starts with |
 | `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--icon` | string | (none) | A glyph key; omit to inherit the parent's |
+| `--label-rule` | string | (none) | A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422. |
 | `--name` | string | (none) | The globally unique name |
 | `--parent-id` | string | (none) | The parent component_type, by name or uuid; omit for a root type |
 | `--stem` | string | (none) | The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens. |
@@ -1020,7 +1076,7 @@ Update a component type
 omniglass component-type update <id> [flags]
 ```
 
-Patches a component_type's display_name, stem, icon, abbrev, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.
+Patches a component_type's display_name, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1028,6 +1084,7 @@ Patches a component_type's display_name, stem, icon, abbrev, or default_tags. A 
 | `--default-tags` | string | (none) | Replaces the default-tag set; omit to leave unchanged |
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--icon` | string | (none) | A new glyph key |
+| `--label-rule` | string | (none) | A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse. |
 | `--stem` | string | (none) | A new name prefix. Lowercase letters, digits, and hyphens. |
 
 Example:
@@ -1465,19 +1522,19 @@ Create a location
 omniglass location create [flags]
 ```
 
-Creates a location, optionally under a parent (a root needs an all-scoped grant). Gated by location:create.
+Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--location-type` | string | (none) | The location_type, by name or uuid (campus, building, ...) |
-| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule. |
 | `--parent` | string | (none) | Parent location name; omit for a root location |
 
 Example:
 
 ```sh
-omniglass location create --location-type location_type --name name
+omniglass location create --location-type location_type
 ```
 
 ### `omniglass location delete`
@@ -1592,7 +1649,7 @@ Move a location
 omniglass location move <name> [flags]
 ```
 
-Re-parents a location (a tree move): parent is required (422 if omitted), cycle-guarded, and placement-validated against the resolved location_type. Moving to root is not supported (422): MoveLocation gains no clear-to-root capability locations have never had. A separate act from update, and a separately grantable one (location:move), because a placement change is an authorization act, not a label edit. Recorded under its own audit verb, move, distinct from update. Does not recompute health. A taken name at the destination is a 409. Gated by location:move; the read and move scopes drive the 404 versus 403 split.
+Re-parents a location (a tree move): parent is required (422 if omitted), cycle-guarded, and placement-validated against the resolved location_type. Moving to root is not supported (422): MoveLocation gains no clear-to-root capability locations have never had. A separate act from update, and a separately grantable one (location:move), because a placement change is an authorization act, not a label edit. Recorded under its own audit verb, move, distinct from update. Does not recompute health. A taken name at the destination is a 409. A move can RENAME the location: a platform-generated name is scoped to its parent bucket, so a move that changes the parent re-mints the name and the ordinal under the new parent, from the same location_type name rule. A move that re-states the current parent leaves the name alone, and an operator-typed name is never touched. Gated by location:move; the read and move scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1602,6 +1659,22 @@ Example:
 
 ```sh
 omniglass location move <name>
+```
+
+### `omniglass location previewLabels`
+
+Preview a location label recompute
+
+```
+omniglass location previewLabels
+```
+
+Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by location:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+
+Example:
+
+```sh
+omniglass location previewLabels
 ```
 
 ### `omniglass location property`
@@ -1660,6 +1733,22 @@ Example:
 omniglass location property update <name> <property> --value value
 ```
 
+### `omniglass location recomputeLabels`
+
+Recompute location labels
+
+```
+omniglass location recomputeLabels
+```
+
+Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by location:update.
+
+Example:
+
+```sh
+omniglass location recomputeLabels
+```
+
 ### `omniglass location removeTag`
 
 Remove a tag value from a location
@@ -1700,6 +1789,43 @@ Example:
 omniglass location rename <name> --name name
 ```
 
+### `omniglass location renderLabel`
+
+Render the label a location create would store
+
+```
+omniglass location renderLabel [flags]
+```
+
+The location tier of :renderLabel on components. Renders the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create. No placement scope is injected because a location's label rule reads no other estate row.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--location-type` | string | (none) | The location_type this location is classified by, by name or uuid |
+| `--name` | string | (none) | The name the row will carry. Omit it to render the label the platform's own generated name would produce, which a location_type with no name rule refuses; supply it to render the label an operator-named location would carry. |
+
+Example:
+
+```sh
+omniglass location renderLabel --location-type location_type
+```
+
+### `omniglass location resetName`
+
+Regenerate a location's name
+
+```
+omniglass location resetName <name>
+```
+
+Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped estate has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.
+
+Example:
+
+```sh
+omniglass location resetName <name>
+```
+
 ### `omniglass location setTag`
 
 Set a tag value on a location
@@ -1729,7 +1855,7 @@ Update a location
 omniglass location update <name> [flags]
 ```
 
-Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1754,14 +1880,16 @@ Create a location type
 omniglass location-type create [flags]
 ```
 
-Creates a custom (non-official) location_type. Gated by location_type:create.
+Creates a custom (non-official) location_type, optionally with the label_rule locations of that type get. An unparseable rule is a 422. Gated by location_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--allowed-parent-types` | string | (none) | location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained |
 | `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
+| `--label-rule` | string | (none) | The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile |
 | `--name` | string | (none) | The globally unique name (e.g. wing); "root" is reserved |
+| `--name-rule` | string | (none) | How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name |
 
 Example:
 
@@ -1923,13 +2051,15 @@ Update a location type
 omniglass location-type update <id> [flags]
 ```
 
-Patches a custom location_type's display_name or icon. Official types are read-only (422). Gated by location_type:update.
+Patches a location_type's display_name, icon, allowed parents, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by location_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--allowed-parent-types` | string | (none) | Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained |
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--icon` | string | (none) | A new glyph key; the console falls back to map-pin when empty |
+| `--label-rule` | string | (none) | A new label template for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels |
+| `--name-rule` | string | (none) | A new name rule for locations of this type; omit to leave unchanged. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row |
 
 Example:
 
@@ -2885,6 +3015,7 @@ Creates a custom (non-official) product, classified under a component_type. kind
 | `--driver-id` | string | (none) | The driver that talks to it, by handle or uuid |
 | `--icon` | string | (none) | A product-level icon override; unset inherits the component_type's icon |
 | `--kind` | string | (none) | What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly. |
+| `--label-rule` | string | (none) | A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422. |
 | `--name` | string | (none) | The globally unique name; renameable |
 | `--parent-product-id` | string | (none) | The parent product, by handle or uuid |
 | `--vendor-id` | string | (none) | The vendor, by handle or uuid |
@@ -3074,6 +3205,7 @@ Patches a custom product's display_name, vendor, driver, kind, component_type, i
 | `--driver-id` | string | (none) | A new driver, by handle or uuid |
 | `--icon` | string | (none) | A new icon override |
 | `--kind` | string | (none) | A new product class |
+| `--label-rule` | string | (none) | A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse. |
 | `--parent-product-id` | string | (none) | A new parent product, by handle or uuid |
 | `--vendor-id` | string | (none) | A new vendor, by handle or uuid |
 
@@ -3823,7 +3955,7 @@ Creates a system, optionally under a parent (a root needs an all-scoped grant), 
 |---|---|---|---|
 | `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--location` | string | (none) | Location name this system is placed at |
-| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens) |
+| `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem. |
 | `--parent` | string | (none) | Parent system name; omit for a root system |
 | `--standard-id` | string | (none) | The standard it conforms to, by handle or uuid; omit for a one-off system |
 | `--system-type-id` | string | (none) | The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified |
@@ -3831,7 +3963,7 @@ Creates a system, optionally under a parent (a root needs an all-scoped grant), 
 Example:
 
 ```sh
-omniglass system create --name name
+omniglass system create
 ```
 
 ### `omniglass system delete`
@@ -4014,7 +4146,7 @@ Move a system
 omniglass system move <name> [flags]
 ```
 
-Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. Gated by system:move; read and move scopes drive the 404 versus 403 split.
+Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -4025,6 +4157,22 @@ Example:
 
 ```sh
 omniglass system move <name>
+```
+
+### `omniglass system previewLabels`
+
+Preview a system label recompute
+
+```
+omniglass system previewLabels
+```
+
+Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by system:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+
+Example:
+
+```sh
+omniglass system previewLabels
 ```
 
 ### `omniglass system property`
@@ -4083,6 +4231,22 @@ Example:
 omniglass system property update <name> <property> --value value
 ```
 
+### `omniglass system recomputeLabels`
+
+Recompute system labels
+
+```
+omniglass system recomputeLabels
+```
+
+Applies what :previewLabels describes, over the rows in the caller's read and update scope, and returns exactly what it changed. Idempotent: a second call changes nothing. A label an operator typed by hand is left alone, and clearing that label by hand is how it is handed back to the platform. Recorded as ONE audit row for the operation, naming the rule tier and the affected count, rather than one row per changed entity. Gated by system:update.
+
+Example:
+
+```sh
+omniglass system recomputeLabels
+```
+
 ### `omniglass system removeTag`
 
 Remove a tag value from a system
@@ -4121,6 +4285,45 @@ Example:
 
 ```sh
 omniglass system rename <name> --name name
+```
+
+### `omniglass system renderLabel`
+
+Render the label a system create would store
+
+```
+omniglass system renderLabel [flags]
+```
+
+The system tier of :renderLabel on components. Renders the label a system create would stamp, allocating nothing. Omitting name renders the label the platform's generated name would produce and refuses (422) an unclassified system, the same refusal a nameless create gives, since the stem lives on the system_type. Gated by system:create; the location ref resolves within the caller's location:read scope, because a system's label can carry its location's.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--location` | string | (none) | The location this system will sit at, by name or uuid. Resolved within the caller's location:read scope. |
+| `--name` | string | (none) | The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token "n"; supply it to render the label an operator-named row would carry, which has no ordinal at all. |
+| `--standard-id` | string | (none) | The standard this system conforms to, by name or uuid; omit for a one-off system |
+| `--system-type-id` | string | (none) | The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row. |
+
+Example:
+
+```sh
+omniglass system renderLabel
+```
+
+### `omniglass system resetName`
+
+Regenerate a system's name
+
+```
+omniglass system resetName <name>
+```
+
+Hands the pen back to the platform: regenerates the name from the system's current system_type and placement (the same rule a nameless create applies, the type's stem plus the lowest free ordinal, bare for the first of that stem in the placement) and marks it name_generated, whether or not it already was. An unclassified system is a 422: the stem lives on the system_type. Gated by system:rename, the same token :rename uses: it changes the name, exactly that permission's blast radius.
+
+Example:
+
+```sh
+omniglass system resetName <name>
 ```
 
 ### `omniglass system role`
@@ -4299,13 +4502,14 @@ Create a system type
 omniglass system-type create [flags]
 ```
 
-Creates a custom (non-official) system_type, optionally under a parent. A root type must carry a stem, since it has no ancestor to inherit one from. Gated by system_type:create.
+Creates a custom (non-official) system_type, optionally under a parent and optionally with the label_rule systems of that type get. A root type must carry a stem, since it has no ancestor to inherit one from. An unparseable label_rule is a 422. Gated by system_type:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--abbrev` | string | (none) | A compact form of display_name; omit to inherit the parent's |
 | `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--icon` | string | (none) | A glyph key; omit to inherit the parent's |
+| `--label-rule` | string | (none) | The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile |
 | `--name` | string | (none) | The globally unique name |
 | `--parent-id` | string | (none) | The parent system_type, by name or uuid; omit for a root type |
 | `--stem` | string | (none) | The prefix a generated system name is built from; omit to inherit the parent's. Lowercase letters, digits, and hyphens. Required for a root type, which has no ancestor to inherit one from. |
@@ -4356,13 +4560,14 @@ Update a system type
 omniglass system-type update <id> [flags]
 ```
 
-Patches a custom system_type's display_name, stem, icon, or abbrev. Official types are read-only (422). Gated by system_type:update.
+Patches a custom system_type's display_name, stem, icon, abbrev, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /systems:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by system_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--abbrev` | string | (none) | A new compact form |
 | `--display-name` | string | (none) | A new operator-facing label |
 | `--icon` | string | (none) | A new glyph key |
+| `--label-rule` | string | (none) | A new label template for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels |
 | `--stem` | string | (none) | A new name prefix. Lowercase letters, digits, and hyphens. |
 
 Example:

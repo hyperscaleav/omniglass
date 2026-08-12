@@ -63,6 +63,17 @@ type scopedConfig[T any] struct {
 	notFound  error                     // 404 sentinel (absent or out of read scope)
 	forbidden error                     // 403 sentinel (readable, out of action scope)
 	occupied  error                     // 409 sentinel (delete refused: has children)
+	// beforeDelete runs inside the delete's transaction, after the occupancy
+	// check has passed and BEFORE the row is gone, receiving the entity as it
+	// was. It is where a delete takes down the rows some OTHER table's
+	// ON DELETE CASCADE would otherwise take down silently, so that the
+	// consequences of losing them (a promoted default membership, a restamped
+	// label) run in the gateway where they can be seen, rather than in the
+	// database where nothing can hook them. Before rather than after because
+	// the hook needs those rows in hand: once the cascade has fired there is
+	// nothing left to read them from. Optional; nil for entities whose removal
+	// takes nothing else with it.
+	beforeDelete func(ctx context.Context, p *PG, tx pgx.Tx, before *T) error
 	// afterDelete runs inside the delete's transaction, after the row is gone and
 	// before the commit, receiving the entity as it was. It exists for the ripples
 	// a delete causes elsewhere: removing a degraded system improves the health of
@@ -715,6 +726,11 @@ func scopedDelete[T any](ctx context.Context, p *PG, cfg scopedConfig[T], actorI
 	}
 	if childCount > 0 {
 		return cfg.occupied
+	}
+	if cfg.beforeDelete != nil {
+		if err := cfg.beforeDelete(ctx, p, tx, before); err != nil {
+			return err
+		}
 	}
 	if _, err := tx.Exec(ctx, `delete from `+string(cfg.table)+` where id = $1`, beforeID); err != nil {
 		// A row that something else still references is refused, like a row with
