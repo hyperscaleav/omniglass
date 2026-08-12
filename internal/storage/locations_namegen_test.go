@@ -663,6 +663,21 @@ func TestAForkedNameRuleSurvivesTheAuthoritativeSeed(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("set the estate's own rule on a shipped type: %v", err)
 	}
+	// The official row is untouched by that write, which is the mechanism claim
+	// and the one an outcome cannot make: the rule the reads return lives in the
+	// shadow, so the seed is free to rewrite the row under it.
+	conn := connectDSN(t, dsn)
+	officialRuleIsBare := func(when string) {
+		t.Helper()
+		var bare bool
+		if err := conn.QueryRow(ctx, `select name_rule is null from location_type where name = 'floor'`).Scan(&bare); err != nil {
+			t.Fatalf("read the official row %s: %v", when, err)
+		}
+		if !bare {
+			t.Errorf("the official floor row carries a rule %s: an edit of a shipped type forks, and a fork never writes the row", when)
+		}
+	}
+	officialRuleIsBare("after the operator's edit")
 
 	// Boot again. The seed rewrites floor authoritatively, carrying the release's
 	// no-rule, which is precisely the write the old ownership model forbade.
@@ -683,16 +698,9 @@ func TestAForkedNameRuleSurvivesTheAuthoritativeSeed(t *testing.T) {
 	if !byName["floor"].Forked {
 		t.Error("floor does not report forked=true, so the console cannot offer to restore it")
 	}
-	// Why it survived. The row the seed wrote carries no rule at all, so what
-	// the read returned came from the shadow resolving over it.
-	conn := connectDSN(t, dsn)
-	var bare bool
-	if err := conn.QueryRow(ctx, `select name_rule is null from location_type where name = 'floor'`).Scan(&bare); err != nil {
-		t.Fatalf("read the official row: %v", err)
-	}
-	if !bare {
-		t.Error("the official floor row still carries a rule after the boot: the estate's rule belongs in the shadow, and a seed that left the row alone would be the withdrawal failing")
-	}
+	// And still bare after the boot, so what the read returned came from the
+	// shadow resolving over a row the seed had just rewritten.
+	officialRuleIsBare("after the boot")
 
 	// And it still generates, which is what the fork is FOR: the overlay reaches
 	// the generator, not only the list.
