@@ -732,11 +732,24 @@ on every picker change without joining the queue every create in the estate is w
 deliberately still no draft verb that MINTS and rolls back, for the reason it never had one.
 
 The number is therefore true rather than reserved, and the create is where that is settled. The form
-posts it back as `expected_ordinal`, never as a name (a posted name would claim the pen), the create
-allocates under its own lock exactly as it always did, and one that would land a different number is
-refused with a **409** naming the number that moved. The form re-reads the draft, shows the new name,
-and the operator submits again. A refusal is honest where a silent renumber is not, and it is the
-only outcome the locked field's promise admits.
+posts the drafted NAME back as `expected_name`, the create allocates under its own lock exactly as it
+always did, and one that would stamp a different name is refused with a **409** naming what it would
+have stamped. The form re-reads the draft, shows the new name, and the operator submits again. A
+refusal is honest where a silent difference is not, and it is the only outcome the locked field's
+promise admits.
+
+The name and not the ordinal, because the name is the whole claim: it carries the stem, the
+suppression rule and the number, so a type edited under an open form invalidates it by construction
+where a number alone would have passed and landed `monitor-1` under a field showing `display-1`. And
+it is still a precondition rather than the name field: the create leaves `name` empty, so the row is
+`name_generated` and the platform still owns the number. Posting it beside a name an operator typed
+is a **422**, since nothing is allocated on that path for the expectation to be about.
+
+A draft answers only for a bucket the caller could create in. Omitting the parent names the
+parentless bucket, which every create refuses without an all-scoped grant, so the draft refuses it
+with the same **403**: the previewed ordinal is read from the bucket's sibling names, so answering
+would report which of that bucket's names are taken, for whatever stem the caller put in a type's
+name rule.
 
 The placement bucket is shown beside the field as a path, never as a prefix inside it: a name is
 unique within its placement rather than across the estate, so it no longer carries its ancestry.

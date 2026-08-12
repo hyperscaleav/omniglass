@@ -3982,11 +3982,14 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   The form re-reads and shows the new name. It posts a number and never a name, because a locked field
   posting a name would claim the pen and invert the feature; the API refuses the pair (422) where an
   operator supplied the name, since nothing is allocated there for the expectation to be about.
+  (Corrected in the review below: the field is `expected_name` and carries the drafted name, which is
+  the claim the locked field is actually making. It is still not the name field.)
 
   A create form is the one caller that cannot treat a refusal as "show it and stop", so the two
   refusals it has to act on carry a machine-readable location rather than only a sentence: the
-  conflict on `body.expected_ordinal` (with the moved ordinal as its value) and "the platform will not
-  name this row" on `body.name`. That is the RFC 9457 `errors` array the error model already publishes.
+  conflict on `body.expected_ordinal` (`body.expected_name` after that review) and "the platform will
+  not name this row" on `body.name`. That is the RFC 9457 `errors` array the error model already
+  publishes.
 
   Returning the name also ended a duplication: the console walked the type chain in TypeScript to
   resolve a stem, and the gateway walked it in Go, held together only by one browser end-to-end test
@@ -4042,3 +4045,47 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   and the permission is published as `x-omniglass-conditional-permission` beside the route's primary
   stamp, the same shape a platform-tier write already used. It joins the route-derived permission
   universe, so the roles view and the docs lint both see it without being told separately.
+
+- **The membership gate is two layers, and a refusal names the one that is missing.** The review of
+  the slice above found both halves of "the narrowing is met before the form is filled in" untrue for
+  a shipped shape. The console gate read the `system:update` PERMISSION and nothing else, so a
+  principal holding it over an empty scope was offered the picker, filled the form in and was refused
+  on submit. And the bind resolved in the `system:update` scope alone, so a system outside it came
+  back as the non-disclosing not-found and the route answered "system not found" for a row the same
+  caller could `GET`.
+
+  The principal is not exotic. `applicableKinds("system")` is `{"system"}` alone and the cross-tier
+  expansion is unbuilt (#10), so a location-scoped `deploy` grant fills no system-tier scope at all,
+  and devseed ships exactly that as `tech-east`. Driven end to end, that grant can do NO system work:
+  create, update, rename, move and all three membership writes refuse it, and without a second grant
+  it cannot even list a system. So the previous slice did not break a working role, it extended a
+  pre-existing gap to one more path, which is why the fix here is an honest refusal and a console
+  that does not offer what the server will decline, rather than the cross-tier expansion.
+
+  The bind now takes `system:read` beside `system:update`. Update still decides whether it happens;
+  read decides what the refusal may say. Out of the read scope is the same non-disclosing 422 as
+  before, so nothing new is disclosed; inside it, a **403 names the scope**, which discloses nothing
+  either, since that caller can read the row. The console gate now also requires a system carrying
+  the scope-aware `update` action (the server's own per-row answer, from the same per-action scope
+  the gateway enforces), offers only those systems, and says which of the two layers is missing.
+
+- **A draft does not preview a bucket its create refuses, and the precondition binds the name.** Two
+  more findings against the create form's identity render.
+
+  The draft resolved an empty parent to "the parentless bucket" with no gate, and every create
+  refuses that bucket without an all-scoped grant. The answer is not inert: it carries the lowest
+  free ordinal, read from the bucket's sibling NAMES, so it reports which of that bucket's names are
+  taken, and the stem asked about is the caller's to choose, since writing one into a forked type's
+  name rule needs only `location_type:create`. Driven, the root bucket answered `secret-region-2` to
+  a principal whose create there is a 403. One seam (`draftParentID`) now applies the create's own
+  gate for all three tiers.
+
+  The precondition bound the ordinal, and the ordinal is not the claim a locked field makes. A name
+  is the stem, the suppression rule and the number together, so `PATCH /component-types/display
+  {"stem":"monitor"}` under an open form left the number untouched and the row landed `monitor-1`
+  where the field showed `display-1`, precondition met. `expected_name` replaces `expected_ordinal`
+  on all three creates and carries the whole claim by construction, so no future input to a mint has
+  to be remembered here. It is still a precondition and not the name field: the create leaves `name`
+  empty, the row is still `name_generated`, and posting it beside a supplied name is the same 422.
+  The 409's machine-readable detail moves to `body.expected_name` and carries the name the create
+  would have produced, which is what the form shows next.
