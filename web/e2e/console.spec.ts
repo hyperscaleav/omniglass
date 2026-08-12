@@ -64,17 +64,21 @@ test.describe("operator console", () => {
     await expect(page.locator("main")).not.toContainText(label);
   });
 
-  // The acceptance of #688 and #699, and the only tier that can witness either.
+  // The acceptance of #688, #699 and #702, and the only tier that can witness
+  // any of them.
   //
-  // The console shows the SHAPE of the name a nameless create will be given,
-  // resolved from the chosen product's component_type chain in the browser; the
-  // gateway mints the actual name from its own walk of the same chain, inside
-  // the create's transaction. And the console shows the LABEL the platform will
-  // write, rendered by the server against a row that does not exist yet; the
-  // gateway stamps the real one inside that same transaction. Nothing below
-  // this tier can prove either pair agrees: a page test asserts what the form
-  // rendered and a storage test asserts what the gateway wrote, and each is
-  // blind to the other.
+  // The console shows the name and the label the platform is about to write,
+  // both drafted by the server against a row that does not exist yet; the
+  // gateway then mints and stamps the real ones inside the create's own
+  // transaction. Nothing below this tier can prove the pair agrees: a page test
+  // asserts what the form rendered and a storage test asserts what the gateway
+  // wrote, and each is blind to the other.
+  //
+  // Since #702 the comparison is EXACT on both fields. It used to substitute an
+  // ordinal into the shown value, because the name carried the token "n" and
+  // the label carried it too: the ordinal is read from the placement bucket
+  // before either is rendered, so the form shows the name the row lands with,
+  // digits and all, and posts that number back as the create's precondition.
   test("a component created with both fields locked lands with the name and the label the console showed", async ({ page }) => {
     await page.goto("/web/components/create");
 
@@ -83,32 +87,33 @@ test.describe("operator console", () => {
     await page.getByLabel("Product").selectOption({ label: "Generic Device" });
 
     // Both identity fields are LOCKED on what the platform will use, and a
-    // locked field posts nothing (#699). The name's ordinal is written as a
-    // token because it does not exist yet. Locked is READONLY and not disabled
-    // (#657), which a real browser is the only tier that can check properly: the
-    // field is not editable, and it is still focusable, so the value the row is
-    // about to carry has a keyboard path.
+    // locked field posts nothing but the precondition (#699, #702). Locked is
+    // READONLY and not disabled (#657), which a real browser is the only tier
+    // that can check properly: the field is not editable, and it is still
+    // focusable, so the value the row is about to carry has a keyboard path.
     const nameField = page.getByLabel("Name", { exact: true });
+    await expect(nameField).toHaveValue(/^[a-z0-9-]+-\d+$/);
     await expect(nameField).not.toBeEditable();
     await expect(nameField).toBeEnabled();
     await nameField.focus();
     await expect(nameField).toBeFocused();
-    const shape = (await nameField.inputValue()).trim();
-    expect(shape).toMatch(/^[a-z0-9-]+-n$/);
-    const stem = shape.slice(0, -2);
+    const drafted = (await nameField.inputValue()).trim();
+    // The number is real, which is the whole of #702: the field used to read
+    // "device-n" here and the row then landed "device-1".
+    expect(drafted).not.toContain("-n");
 
     const labelField = page.getByLabel("Display name", { exact: true });
     await expect(labelField).not.toBeEditable();
     await expect(labelField).toBeEnabled();
     await expect(labelField).not.toHaveValue("");
-    const drafted = (await labelField.inputValue()).trim();
+    const draftedLabel = (await labelField.inputValue()).trim();
 
     // The override action is an icon button in each field, always present and
     // never hover-only, and focusing a locked field does not claim its pen: both
     // fields are still locked on the platform's answer after the focus above.
     await expect(page.getByRole("button", { name: "Override the name" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Override the display name" })).toBeVisible();
-    await expect(nameField).toHaveValue(shape);
+    await expect(nameField).toHaveValue(drafted);
 
     await page.getByRole("button", { name: /create component/i }).click();
     await page.waitForURL(/\/web\/components\/[0-9a-f-]{36}/);
@@ -117,25 +122,16 @@ test.describe("operator console", () => {
     // it to the read-only face, where the identity is rendered rather than typed.
     await page.getByRole("button", { name: /^cancel$/i }).first().click();
 
-    // What the row actually got: the stem the console resolved in the browser,
-    // and an ordinal the console could not have known, minted by the gateway's
-    // own walk of the same chain inside the create's transaction. A disagreement
-    // between the two walks fails here and nowhere else.
-    const minted = page.getByText(new RegExp(`^${stem}-\\d+$`)).first();
-    await expect(minted).toBeVisible();
-    const mintedName = ((await minted.textContent()) ?? "").trim();
-    const ordinal = mintedName.slice(stem.length + 1);
-
-    // And the LABEL the row carries is the one the form showed, with the ordinal
-    // filled into the one place the render could not know it. The token is
-    // substituted only where it stands alone as a word, so a type name carrying
-    // the letter is left intact.
-    const expected = drafted.replace(/\bn\b/, ordinal);
-    expect(expected).not.toBe(drafted);
-    await expect(page.locator("main")).toContainText(expected);
+    // What the row actually got, compared with what the operator was shown, on
+    // both fields and with nothing substituted into either. A drift between the
+    // draft's read of the bucket and the allocator's mint fails here and nowhere
+    // else.
+    await expect(page.getByText(drafted, { exact: true }).first()).toBeVisible();
+    await expect(page.locator("main")).toContainText(draftedLabel);
 
     // And the platform holds the pen on both, which is what makes them the
-    // platform's to keep current through a later move or reclassify.
+    // platform's to keep current through a later move or reclassify. Posting the
+    // precondition is what would break this if it were ever read as a name.
     await expect(page.getByText("Generated", { exact: true }).first()).toBeVisible();
 
     // Clean up after the run.

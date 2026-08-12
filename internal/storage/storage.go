@@ -354,15 +354,17 @@ type Gateway interface {
 	PreviewLabelRecompute(ctx context.Context, kind string, read, action scope.Set) ([]LabelChange, error)
 	RecomputeLabels(ctx context.Context, actorID, kind string, read, action scope.Set) ([]LabelChange, error)
 
-	// The draft render (#699): the label a create WOULD stamp, for a form that
-	// shows the operator what the platform is about to produce. It allocates
-	// nothing, which is what separates it from the preview ADR-0104 refused;
-	// see label_draft.go. The scopes are the PLACEMENT's, because a placement
-	// fact is what the answer could otherwise leak, and a location draft takes
-	// none because a location's data map reads no other estate row.
-	RenderComponentDraftLabel(ctx context.Context, draft ComponentLabelDraft, locationRead, systemRead scope.Set) (DraftLabel, error)
-	RenderSystemDraftLabel(ctx context.Context, draft SystemLabelDraft, locationRead scope.Set) (DraftLabel, error)
-	RenderLocationDraftLabel(ctx context.Context, draft LocationLabelDraft) (DraftLabel, error)
+	// The draft render (#699, #702): the name and the label a create WOULD
+	// stamp, for a form that shows the operator what the platform is about to
+	// produce. It allocates nothing (it READS the lowest free ordinal rather
+	// than minting one), which is what separates it from the preview ADR-0104
+	// refused; see label_draft.go. Each takes the same scopes its own create
+	// takes, in the same order, because it resolves the same references: the
+	// parent decides the bucket the ordinal is read from, and the location and
+	// system decide what the rendered string may contain.
+	RenderComponentDraftLabel(ctx context.Context, draft ComponentLabelDraft, create, locationRead, systemRead scope.Set) (DraftLabel, error)
+	RenderSystemDraftLabel(ctx context.Context, draft SystemLabelDraft, create, locationRead scope.Set) (DraftLabel, error)
+	RenderLocationDraftLabel(ctx context.Context, draft LocationLabelDraft, create scope.Set) (DraftLabel, error)
 
 	UpsertComponentType(ctx context.Context, ct ComponentType) error
 	ListComponentTypes(ctx context.Context) ([]ComponentType, error)

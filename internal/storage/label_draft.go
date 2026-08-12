@@ -10,82 +10,88 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The draft label render (#699): the label a row WOULD carry, answered before
-// the row exists, for a create form that wants to show the operator what the
-// platform is about to name and label rather than only promising that it will.
+// The draft identity render (#699, #702): the name and the label a row WOULD
+// carry, answered before the row exists, for a create form that wants to show
+// the operator what the platform is about to name and label rather than only
+// promising that it will.
 //
 // # Why this is not the preview ADR-0104 refused
 //
-// That refusal is about MINTING. A draft preview that allocated an ordinal
-// bought a provisional number (another create can take it between the preview
-// and the commit) and, worse, took the same pg_advisory_xact_lock on the
-// placement bucket that real creates take, so a form previewing per picker
-// change would serialise the estate's creates behind a UI affordance.
+// That refusal is about MINTING. A draft preview that allocated an ordinal took
+// the same pg_advisory_xact_lock on the placement bucket that real creates
+// take, so a form previewing per picker change would serialise the estate's
+// creates behind a UI affordance.
 //
 // A render allocates nothing. It resolves the rule through the same tiers, over
-// the same closed data map, with the same one engine, and writes the token
-// [OrdinalToken] where the ordinal would go. No lock, no write transaction, no
-// allocation, and no second implementation of anything: every function it calls
-// is the one the create's own stamp calls. The one fact it cannot know stays
-// visibly unknown instead of being guessed at.
+// the same closed data map, with the same one engine, and it READS the lowest
+// free ordinal in the placement bucket ([previewName]) rather than allocating
+// one. No lock, no write transaction, no allocation, and no second
+// implementation of anything: every function it calls is the one the create's
+// own stamp calls.
+//
+// The other half of that refusal was that the answer is provisional, and it is:
+// another create can take the number in between. That is answered by the
+// PRECONDITION rather than by hiding the number (#702). The form posts the
+// ordinal it was shown, the create compares it with what it allocated
+// (confirmOrdinal), and a create that would land a different name is refused
+// with the number that moved. An operator is either given the name they were
+// shown or told it changed, and never quietly handed a third thing.
 //
 // # What it reuses, and why that is the point
 //
 // componentLabelChain / systemLabelChainWith / locationLabelChainWith resolve
 // the tiers; componentLabelData / systemLabelData / locationLabelData build the
 // closed map (which IS the sandbox: a key absent there is a key a rule cannot
-// reach, and this file adds none); renderLabel executes and degrades. What the
-// draft supplies differently is only the two facts a row that does not exist
-// cannot have: its own name, and its ordinal.
+// reach, and this file adds none); renderLabel executes and degrades;
+// previewName reads the ordinal from the same siblings the allocator tests, with
+// the same mint. What the draft supplies differently is only the two facts a row
+// that does not exist cannot have of its own, and it now supplies BOTH from the
+// same primitives the create uses rather than leaving either as a token.
 //
-// # Placement, and the scope that guards it
+// # Placement, and the scopes that guard it
 //
-// A component's map reads the LABEL of its location and the label of its
-// primary system's TYPE, and a system's reads its location's label. Those are
-// other rows, so the draft resolves them through the caller's read scope
-// (GetLocation, GetSystem) and an out-of-scope placement is the same
-// non-disclosing not-found a direct read would give. Rendering it anyway would
-// make this route a disclosure channel for a label the caller holds no grant to
-// read. A LOCATION's map carries no placement at all, which is why its draft
-// takes no scope: there is nothing on another estate row for it to leak.
+// The draft takes the same scopes its create takes, in the same order, because
+// it resolves the same references: a component's parent within the caller's
+// component:create scope (the set the create resolves it in), and its location
+// and system within the caller's location:read and system:read scopes (the sets
+// that decide whether the rendered string may carry their labels). An
+// out-of-scope reference is the same non-disclosing not-found a direct read
+// would give. Rendering it anyway would make this route a disclosure channel.
+//
+// The parent is new here (#702) and it is not about the label at all: a
+// location's map carries no placement (ADR-0098's exclusion survives on that
+// tier), but the ordinal is read from a BUCKET, and the bucket is exactly the
+// parent, else the location, else the unplaced one. So a location's draft now
+// takes a scope where it took none, and what it guards is the sibling read
+// rather than the render.
 
-// OrdinalToken stands where the ordinal would go in a drafted name. It is a
-// letter rather than a digit so nothing rendered from a draft can be read as
-// the value the row will actually get: "display-n" is visibly a shape, where
-// "display-4" is a promise the next create in the bucket can break.
+// DraftLabel is what a create form is told about the identity it is about to
+// produce: the name, the ordinal that name was minted from, the rendered label,
+// and the rule that rendered it.
 //
-// The console writes the same token into the name shape it resolves in the
-// browser (web/src/lib/namegen.ts's ORDINAL_TOKEN), so the two locked fields on
-// a create form agree about which character is the unknown one.
-const OrdinalToken = "n"
-
-// shape is [nameMint.name] with a token written where the number goes: the same
-// three cases in the same order, so a shape the console shows can never
-// describe a name the mint does not produce.
-//
-// The suppressing case returns the bare stem, which is exactly name(1): the
-// first of its stem in a bucket carries no ordinal at all (ADR-0101), so there
-// is no place in it for a token. The sentence that has to travel with that
-// shape (the second one is "<stem>-2") is the surface's job, not the mint's.
-func (m nameMint) shape(token string) string {
-	if m.stem == "" {
-		return token
-	}
-	if m.bareFirst {
-		return m.stem
-	}
-	return m.stem + "-" + token
-}
-
-// DraftLabel is what a create form is told about the label it is about to
-// produce: the rendered string, and the rule that rendered it.
+// The NAME is here (#702) rather than resolved a second time in the browser
+// because the label is rendered FROM it: the server has already resolved the
+// stem, the mint and the ordinal to answer at all, so returning them costs
+// nothing and removes the console's need to know what a mint looks like. It is
+// also the only way the two halves of a create form can be one answer rather
+// than two that can disagree.
 //
 // The rule travels with the answer for two reasons. It is the only way to tell
-// "no rule applies at any tier" (both fields empty, which is every location in
-// a shipped estate) from "a rule applies and had nothing to say about this row"
-// (a rule, an empty label). And a surface that shows where a value came from
-// teaches the mechanism it operates, which a bare string cannot.
+// "no rule applies at any tier" (both label fields empty, which an operator
+// reaches by clearing the rule at every tier) from "a rule applies and had
+// nothing to say about this row" (a rule, an empty label). And a surface that
+// shows where a value came from teaches the mechanism it operates, which a bare
+// string cannot.
 type DraftLabel struct {
+	// Name is the name the create would stamp: the one the caller supplied, or
+	// the one the platform would mint at Ordinal.
+	Name string
+	// Ordinal is the number Name was minted from, and 0 when the caller
+	// supplied the name, because that row carries no ordinal at all (#681). It
+	// is what a form posts back as its precondition, and 0 is deliberately not
+	// a legal value to post: absent and zero are the same state, which is "the
+	// platform allocated nothing here".
+	Ordinal int
 	// Label is the rendered label, or "" when no rule resolves or the rule
 	// renders nothing. Empty is not a failure: the read ladder's third rung is
 	// the entity's own name, so an empty label means the name shows instead.
@@ -101,8 +107,14 @@ type DraftLabel struct {
 // same shape and cannot be given different answers by a caller that fills one
 // field and not the other.
 type ComponentLabelDraft struct {
-	ProductName  string
-	Name         string
+	ProductName string
+	Name        string
+	// ParentName, LocationName and SystemName mirror the create's own placement
+	// fields. The first two are also the NAME's placement bucket (a parent wins
+	// over a location, and neither is the unplaced bucket), which is what the
+	// previewed ordinal is read from: a form that showed the ordinal of a
+	// bucket the create does not write into would be worse than showing none.
+	ParentName   string
 	LocationName string
 	SystemName   string
 }
@@ -112,26 +124,32 @@ type SystemLabelDraft struct {
 	SystemTypeRef string
 	StandardRef   string
 	Name          string
+	ParentName    string
 	LocationName  string
 }
 
-// LocationLabelDraft is ComponentLabelDraft on the location tier. It carries no
-// placement: a location's data map is its name and its type, and deliberately
-// nothing about where it sits (ADR-0098's exclusion survives on this tier).
+// LocationLabelDraft is ComponentLabelDraft on the location tier. Its LABEL
+// carries no placement: a location's data map is its name and its type, and
+// deliberately nothing about where it sits (ADR-0098's exclusion survives on
+// this tier). Its NAME does: a location has two placement buckets, under a
+// parent or at the root, so ParentName is what the previewed ordinal is read
+// from.
 type LocationLabelDraft struct {
 	LocationTypeRef string
 	Name            string
+	ParentName      string
 }
 
-// RenderComponentDraftLabel renders the label a component create would stamp,
-// without creating anything.
+// RenderComponentDraftLabel renders the name and the label a component create
+// would stamp, without creating anything.
 //
-// The two scopes are the placement's, not the component's: locationRead guards
-// the location whose label the map reads, systemRead the system whose type
-// label it reads. The permission to ASK is the component's own :create and
-// lives at the route (see internal/api/label_draft.go); these two decide what
-// the answer may contain.
-func (p *PG) RenderComponentDraftLabel(ctx context.Context, d ComponentLabelDraft, locationRead, systemRead scope.Set) (DraftLabel, error) {
+// The scopes are the create's own, in the create's own order: create resolves
+// the PARENT (the set CreateComponent resolves it in, and the bucket the
+// previewed ordinal is read from), locationRead the location whose label the
+// map reads, systemRead the system whose type label it reads. The permission to
+// ASK is the component's own :create and lives at the route (see
+// internal/api/label_draft.go); these three decide what the answer may contain.
+func (p *PG) RenderComponentDraftLabel(ctx context.Context, d ComponentLabelDraft, create, locationRead, systemRead scope.Set) (DraftLabel, error) {
 	productID, err := registryID(ctx, p.pool, "product", d.ProductName, ErrProductNotFound)
 	if err != nil {
 		return DraftLabel{}, err
@@ -140,25 +158,25 @@ func (p *PG) RenderComponentDraftLabel(ctx context.Context, d ComponentLabelDraf
 	if err != nil {
 		return DraftLabel{}, err
 	}
-	c := Component{Name: d.Name}
-	generated := d.Name == ""
-	if generated {
-		// The same refusal generateNameForProduct raises, from the same
-		// resolved stem: a form must never lock a field over a value the
-		// create then declines to produce. componentLabelChain has already
-		// walked the chain for the map's Stem key, so this costs nothing.
-		if in.stem == "" {
-			return DraftLabel{}, fmt.Errorf("%w: product %q", ErrComponentTypeNoStem, d.ProductName)
-		}
-		c.Name = componentMint(in.stem).shape(OrdinalToken)
+	// Placement first, because the NAME is read from it now: the ordinal is the
+	// lowest free one among the siblings in this exact bucket, so a draft that
+	// resolved the placement after minting would be answering about a different
+	// bucket than the create writes into.
+	parentID, err := draftParentID(ctx, p.pool, componentConfig, d.ParentName, "component", create, ErrComponentNotFound, ErrParentComponentNotFound)
+	if err != nil {
+		return DraftLabel{}, err
 	}
-	var pl componentPlacement
+	var (
+		pl         componentPlacement
+		locationID *string
+	)
 	if d.LocationName != "" {
 		loc, err := p.GetLocation(ctx, d.LocationName, locationRead)
 		if err != nil {
 			return DraftLabel{}, err
 		}
 		pl.locationLabel = locationReadLabel(loc)
+		locationID = &loc.ID
 	}
 	if d.SystemName != "" {
 		sys, err := p.GetSystem(ctx, d.SystemName, systemRead)
@@ -169,16 +187,32 @@ func (p *PG) RenderComponentDraftLabel(ctx context.Context, d ComponentLabelDraf
 			return DraftLabel{}, err
 		}
 	}
+	c := Component{Name: d.Name}
+	if d.Name == "" {
+		// The same refusal generateNameForProduct raises, from the same
+		// resolved stem: a form must never lock a field over a value the
+		// create then declines to produce. componentLabelChain has already
+		// walked the chain for the map's Stem key, so this costs nothing.
+		if in.stem == "" {
+			return DraftLabel{}, fmt.Errorf("%w: product %q", ErrComponentTypeNoStem, d.ProductName)
+		}
+		name, ordinal, err := previewName(ctx, p.pool, componentMint(in.stem), componentNameScope(parentID, locationID))
+		if err != nil {
+			return DraftLabel{}, err
+		}
+		c.Name, c.Ordinal = name, &ordinal
+	}
 	eng, err := p.labelEngine(ctx, p.pool)
 	if err != nil {
 		return DraftLabel{}, err
 	}
-	return draftedLabel(eng, in.rule, componentLabelData(&c, in, pl), generated), nil
+	return draftedLabel(eng, in.rule, componentLabelData(&c, in, pl), c.Name, c.Ordinal), nil
 }
 
-// RenderSystemDraftLabel renders the label a system create would stamp.
-// locationRead guards the one placement fact a system's map carries.
-func (p *PG) RenderSystemDraftLabel(ctx context.Context, d SystemLabelDraft, locationRead scope.Set) (DraftLabel, error) {
+// RenderSystemDraftLabel renders the name and the label a system create would
+// stamp. create resolves the parent (the name's bucket), locationRead the one
+// placement fact a system's map carries.
+func (p *PG) RenderSystemDraftLabel(ctx context.Context, d SystemLabelDraft, create, locationRead scope.Set) (DraftLabel, error) {
 	var systemTypeID, standardID *string
 	if d.SystemTypeRef != "" {
 		id, err := registryID(ctx, p.pool, "system_type", d.SystemTypeRef, ErrUnknownSystemType)
@@ -202,9 +236,24 @@ func (p *PG) RenderSystemDraftLabel(ctx context.Context, d SystemLabelDraft, loc
 	if err != nil {
 		return DraftLabel{}, err
 	}
+	parentID, err := draftParentID(ctx, p.pool, systemConfig, d.ParentName, "system", create, ErrSystemNotFound, ErrParentSystemNotFound)
+	if err != nil {
+		return DraftLabel{}, err
+	}
+	var (
+		pl         systemPlacement
+		locationID *string
+	)
+	if d.LocationName != "" {
+		loc, err := p.GetLocation(ctx, d.LocationName, locationRead)
+		if err != nil {
+			return DraftLabel{}, err
+		}
+		pl.locationLabel = locationReadLabel(loc)
+		locationID = &loc.ID
+	}
 	s := System{Name: d.Name}
-	generated := d.Name == ""
-	if generated {
+	if d.Name == "" {
 		// generateNameForSystemType's two refusals, in its order: an
 		// unclassified system has no registry row to take a stem from, and a
 		// classified one whose chain sets none anywhere is a registry defect.
@@ -216,28 +265,26 @@ func (p *PG) RenderSystemDraftLabel(ctx context.Context, d SystemLabelDraft, loc
 		if in.stem == "" {
 			return DraftLabel{}, fmt.Errorf("%w: system_type %s", ErrSystemTypeNoStem, *systemTypeID)
 		}
-		s.Name = systemMint(in.stem).shape(OrdinalToken)
-	}
-	var pl systemPlacement
-	if d.LocationName != "" {
-		loc, err := p.GetLocation(ctx, d.LocationName, locationRead)
+		name, ordinal, err := previewName(ctx, p.pool, systemMint(in.stem), systemNameScope(parentID, locationID))
 		if err != nil {
 			return DraftLabel{}, err
 		}
-		pl.locationLabel = locationReadLabel(loc)
+		s.Name, s.Ordinal = name, &ordinal
 	}
 	eng, err := p.labelEngine(ctx, p.pool)
 	if err != nil {
 		return DraftLabel{}, err
 	}
-	return draftedLabel(eng, in.rule, systemLabelData(&s, in, pl), generated), nil
+	return draftedLabel(eng, in.rule, systemLabelData(&s, in, pl), s.Name, s.Ordinal), nil
 }
 
-// RenderLocationDraftLabel renders the label a location create would stamp. It
-// takes no scope because a location's data map reads nothing off another estate
-// row: its keys are the location's own name and its type's display name, both
-// of which the caller supplied or can read from the registry.
-func (p *PG) RenderLocationDraftLabel(ctx context.Context, d LocationLabelDraft) (DraftLabel, error) {
+// RenderLocationDraftLabel renders the name and the label a location create
+// would stamp. Its one scope is the create's own, and it guards the PARENT
+// rather than the render: a location's data map reads nothing off another
+// estate row (its keys are the location's own name and its type's display
+// name), but the previewed ordinal is read from the parent's bucket, which is
+// the same reference CreateLocation resolves in this same set.
+func (p *PG) RenderLocationDraftLabel(ctx context.Context, d LocationLabelDraft, create scope.Set) (DraftLabel, error) {
 	// Resolved first and unconditionally, so an unknown location_type is the
 	// same ErrUnknownType a create gives rather than a label rendered with an
 	// empty type name. locationLabelChainWith below tolerates a missing row on
@@ -261,42 +308,77 @@ func (p *PG) RenderLocationDraftLabel(ctx context.Context, d LocationLabelDraft)
 	if err != nil {
 		return DraftLabel{}, err
 	}
+	parentID, err := draftParentID(ctx, p.pool, locationConfig, d.ParentName, "location", create, ErrLocationNotFound, ErrParentNotFound)
+	if err != nil {
+		return DraftLabel{}, err
+	}
 	l := Location{Name: d.Name}
-	generated := d.Name == ""
-	if generated {
+	if d.Name == "" {
 		if rule == nil {
 			return DraftLabel{}, fmt.Errorf("%w: location_type %s", ErrLocationTypeNoNameRule, locationTypeID)
 		}
-		l.Name = rule.mint().shape(OrdinalToken)
+		name, ordinal, err := previewName(ctx, p.pool, rule.mint(), locationNameScope(parentID))
+		if err != nil {
+			return DraftLabel{}, err
+		}
+		l.Name, l.Ordinal = name, &ordinal
 	}
 	eng, err := p.labelEngine(ctx, p.pool)
 	if err != nil {
 		return DraftLabel{}, err
 	}
-	// No ordinal override: a location's map deliberately carries no Ordinal key
-	// (labels.go), so generated is not consulted here and draftedLabel's
-	// override finds nothing to write.
-	return draftedLabel(eng, in.rule, locationLabelData(&l, in), generated), nil
+	// A location's map deliberately carries no Ordinal key (labels.go), so the
+	// previewed number reaches this tier's label only through the NAME the rule
+	// reads, which is exactly how a stored location's own label is rendered.
+	return draftedLabel(eng, in.rule, locationLabelData(&l, in), l.Name, l.Ordinal), nil
 }
 
-// draftedLabel executes a resolved rule over a drafted map, writing the ordinal
-// token into the one key a row that does not exist cannot answer.
+// draftParentID resolves the parent reference a drafted name's bucket is read
+// from, within the caller's CREATE scope on that tier, and answers the
+// parent-specific sentinel a create answers rather than the generic not-found.
 //
-// The override happens here rather than inside the three data builders because
-// those builders ARE the sandbox: what makes them safe is that a key not added
-// there is a key no rule can reach, and a draft adds none. Ordinal is already a
-// key on the two maps that have one, and its value for a generated name is
-// genuinely unknown, so the token is what an honest render puts in it. An
-// operator-typed name leaves it alone: that row will carry no ordinal at all
-// (the column is null by design, #681), so the empty string ordinalText already
-// produced is the true value and not a placeholder.
-func draftedLabel(eng *label.Engine, rule string, data label.Data, generated bool) DraftLabel {
-	if generated {
-		if _, ok := data["Ordinal"]; ok {
-			data["Ordinal"] = OrdinalToken
-		}
+// The create scope, not a read scope, and the difference matters: the reference
+// is resolved here for the same reason CreateComponent resolves it, to decide
+// which bucket the row lands in, so a draft resolving it in a wider set would
+// preview an ordinal for a create the caller cannot make. The ordinal it
+// discloses is one the caller could allocate for themselves by creating, which
+// is what makes previewing it disclose nothing new.
+//
+// An empty ref is the parentless bucket and resolves to nil, which is what both
+// nameScope constructors read as "at the root" or "unplaced". The draft
+// deliberately does NOT rehearse the create's own all-scope gate on a root
+// create: this answers what a row would be called, not whether the create is
+// permitted, and the permission is the route's gate.
+func draftParentID[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref, resource string, create scope.Set, notFound, parentNotFound error) (*string, error) {
+	if ref == "" {
+		return nil, nil
 	}
-	return DraftLabel{Label: renderLabel(eng, rule, data), Rule: rule}
+	parent, err := resolveScopedRef(ctx, q, cfg, ref, resource, create)
+	if errors.Is(err, notFound) {
+		return nil, parentNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	id := cfg.idOf(parent)
+	return &id, nil
+}
+
+// draftedLabel executes a resolved rule over a drafted map and returns it with
+// the identity it was rendered for.
+//
+// Nothing is poked into the map any more (#702). It used to write the ordinal
+// TOKEN over the Ordinal key, because the number was unknowable; the number is
+// now read from the bucket before the map is built, so the drafted row carries
+// it in the same field a stored row does and the three data builders stay what
+// makes this safe: a key not added there is a key no rule can reach, and a
+// draft adds none.
+func draftedLabel(eng *label.Engine, rule string, data label.Data, name string, ordinal *int) DraftLabel {
+	d := DraftLabel{Name: name, Label: renderLabel(eng, rule, data), Rule: rule}
+	if ordinal != nil {
+		d.Ordinal = *ordinal
+	}
+	return d
 }
 
 // registryID resolves a catalog reference (a name or a uuid) to the row's id,

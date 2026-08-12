@@ -1,151 +1,37 @@
 import { describe, it, expect } from "vitest";
 import { createRoot } from "solid-js";
 import {
-  ORDINAL_TOKEN,
   bucketPhrase,
-  componentMint,
   createPen,
+  ordinalNote,
   penIncomplete,
   penState,
-  locationMint,
-  mintNote,
-  mintShape,
   nameBucket,
-  systemMint,
 } from "./namegen";
-import { type ComponentType } from "./component_types";
-import { type SystemType } from "./system_types";
-import { type LocationType } from "./location_types";
-import { componentTypeByName } from "./component_types";
-import { systemTypeByName } from "./system_types";
-import { uuidFor } from "./testids";
 
-// The shapes below are the two the platform actually mints
-// (internal/storage/namegen.go's nameMint.name): "<stem>-<n>", the bare stem
-// when this mint suppresses the first ordinal, and the ordinal alone when the
-// type is positional.
-describe("mintShape", () => {
-  it("writes the ordinal as a token, never as a number", () => {
-    expect(mintShape({ stem: "display", bareFirst: false })).toBe(`display-${ORDINAL_TOKEN}`);
-    // The token is not a digit, so nothing here can be mistaken for the name
-    // the row will end up with.
-    expect(/\d/.test(mintShape({ stem: "display", bareFirst: false }))).toBe(false);
+// What is left of this module after #702 folded the name into the server's one
+// answer: the sentence beside a drafted name, the placement bucket it is unique
+// in, and the pen.
+//
+// The mints are GONE, and their tests with them (componentMint, systemMint,
+// locationMint, mintShape, ORDINAL_TOKEN). They resolved a stem in the browser
+// and wrote a token where the ordinal went, which is the duplication #695 was
+// filed about; the gateway answers the whole name now, so there is no second
+// implementation left here to test. The behaviours they covered are asserted
+// against the real generator instead, in internal/storage/label_draft_test.go.
+describe("ordinalNote", () => {
+  it("names the number the form is holding", () => {
+    expect(ordinalNote(3)).toMatch(/\b3\b/);
   });
 
-  it("shows the bare stem for a mint that suppresses the first ordinal", () => {
-    expect(mintShape({ stem: "boardroom", bareFirst: true })).toBe("boardroom");
-  });
-
-  it("is the ordinal alone for a positional type, whose ordinal IS its name", () => {
-    expect(mintShape({ stem: "", bareFirst: false })).toBe(ORDINAL_TOKEN);
-    // A stem-less mint ignores suppression (there would be no name left), the
-    // same collapse NameRule.normalized makes server-side.
-    expect(mintShape({ stem: "", bareFirst: true })).toBe(ORDINAL_TOKEN);
-  });
-});
-
-describe("mintNote", () => {
-  it("says the number is picked at create, for every shape", () => {
-    for (const m of [
-      { stem: "display", bareFirst: false },
-      { stem: "boardroom", bareFirst: true },
-      { stem: "", bareFirst: false },
-    ]) {
-      expect(mintNote(m)).toMatch(/create/);
-    }
-  });
-
-  it("warns that a suppressed first ordinal reappears on the ones after it", () => {
-    // Without this the operator reads "boardroom" and gets "boardroom-2", which
-    // is exactly the silent difference the preview exists to prevent.
-    expect(mintNote({ stem: "boardroom", bareFirst: true })).toMatch(/boardroom-2/);
-  });
-});
-
-const componentTypes: ComponentType[] = [
-  { id: uuidFor("ct-device"), name: "device", display_name: "Device", official: true, forked: false, stem: "device", default_tags: [] },
-  { id: uuidFor("ct-display"), name: "display", display_name: "Display", official: true, forked: false, parent: "device", stem: "display", default_tags: [] },
-  // Inherits its stem from display: the case a walk that read only the node
-  // itself would answer wrong.
-  { id: uuidFor("ct-wall"), name: "video-wall", display_name: "Video Wall", official: true, forked: false, parent: "display", default_tags: [] },
-  { id: uuidFor("ct-bare"), name: "unstemmed", display_name: "Unstemmed", official: false, forked: false, default_tags: [] },
-];
-const ctByName = componentTypeByName(componentTypes);
-
-describe("componentMint", () => {
-  const product = { component_type: "video-wall" };
-
-  it("resolves the stem through the product's component_type chain", () => {
-    expect(componentMint(product, ctByName)).toEqual({ stem: "display", bareFirst: false });
-  });
-
-  it("never suppresses the first ordinal: a component is display-1, then display-2", () => {
-    expect(componentMint({ component_type: "display" }, ctByName)!.bareFirst).toBe(false);
-  });
-
-  it("is absent with no product chosen yet", () => {
-    expect(componentMint(undefined, ctByName)).toBeNull();
-  });
-
-  it("is absent when the chain carries no stem, the refusal the gateway makes", () => {
-    // ErrComponentTypeNoStem: a bare "1" says nothing about a device, so the
-    // platform declines to name it and the operator has to.
-    expect(componentMint({ component_type: "unstemmed" }, ctByName)).toBeNull();
-  });
-});
-
-const systemTypes: SystemType[] = [
-  { id: uuidFor("st-room"), name: "room", display_name: "Room", official: true, stem: "room" },
-  { id: uuidFor("st-board"), name: "board", display_name: "Boardroom", official: true, parent: "room", stem: "boardroom" },
-  { id: uuidFor("st-div"), name: "divisible", display_name: "Divisible Boardroom", official: true, parent: "board" },
-  { id: uuidFor("st-bare"), name: "unstemmed", display_name: "Unstemmed", official: false },
-];
-const stByName = systemTypeByName(systemTypes);
-
-describe("systemMint", () => {
-  it("resolves the stem through the system_type chain and suppresses the first ordinal", () => {
-    // ADR-0101: the only boardroom in a room is "boardroom", not "boardroom-1".
-    expect(systemMint("divisible", stByName)).toEqual({ stem: "boardroom", bareFirst: true });
-  });
-
-  it("is absent for an unclassified system, which the gateway refuses to name", () => {
-    expect(systemMint("", stByName)).toBeNull();
-    expect(systemMint(undefined, stByName)).toBeNull();
-  });
-
-  it("is absent when the chain carries no stem", () => {
-    expect(systemMint("unstemmed", stByName)).toBeNull();
-  });
-});
-
-// The positional and stemmed rows are types an OPERATOR would declare, not
-// shipped ones: no seeded location type carries a name rule (ADR-0103, which
-// made `floor` nominal because a designation is B2 or 12A, never an ordinal).
-// A parking deck is the honest positional place, and the campus is the shipped
-// shape, which is the opt-out.
-const locationTypes: LocationType[] = [
-  { id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", icon: "landmark", official: true, forked: false, allowed_parent_types: ["root"] },
-  { id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", icon: "layers", official: false, forked: false, allowed_parent_types: ["building"], name_rule: { stem: "", bare_first: false } },
-  { id: uuidFor("lt-room"), name: "room", display_name: "Room", icon: "door-open", official: false, forked: false, allowed_parent_types: [], name_rule: { stem: "room", bare_first: true } },
-];
-
-describe("locationMint", () => {
-  it("takes the type's name rule verbatim: the rule IS the mint", () => {
-    expect(locationMint(locationTypes[2])).toEqual({ stem: "room", bareFirst: true });
-  });
-
-  it("is positional for a rule with an empty stem", () => {
-    expect(locationMint(locationTypes[1])).toEqual({ stem: "", bareFirst: false });
-  });
-
-  it("collapses suppression on a stem-less rule, as NameRule.normalized does", () => {
-    const odd: LocationType = { ...locationTypes[1], name_rule: { stem: "", bare_first: true } };
-    expect(locationMint(odd)).toEqual({ stem: "", bareFirst: false });
-  });
-
-  it("is absent for a type with no rule, which is the opt-out", () => {
-    expect(locationMint(locationTypes[0])).toBeNull();
-    expect(locationMint(undefined)).toBeNull();
+  it("says the number is provisional and what happens if it moves", () => {
+    // The one thing the value on screen cannot say for itself. It replaced the
+    // old "picked at create" sentence, which was true of a token and is not
+    // true of a number the form is about to post as a precondition.
+    expect(ordinalNote(1)).toMatch(/refused/);
+    // And it promises no reservation, because asking took none: the number is
+    // true now, not held.
+    expect(ordinalNote(1)).not.toMatch(/reserved|held for you/);
   });
 });
 
@@ -231,7 +117,10 @@ describe("the pen", () => {
     });
   });
 
-  it("is generated when available and untouched, unavailable when not", () => {
+  it("is generated when the platform has a value and the field is untouched", () => {
+    // available now means "the server's draft carries a name" (#702), which is
+    // why the not-yet-answered case and the never-will-be case are one state
+    // for the FIELD: both are editable, and neither is a lock over an empty box.
     withPen((p) => {
       expect(penState(true, p)).toBe("generated");
       expect(penState(false, p)).toBe("unavailable");

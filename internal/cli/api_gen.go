@@ -646,6 +646,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDisplayName string
+				var fExpectedOrdinal string
 				var fLocation string
 				var fName string
 				var fParent string
@@ -662,6 +663,9 @@ func generatedCommands() []*cobra.Command {
 						body := map[string]any{}
 						if cmd.Flags().Changed("display-name") {
 							body["display_name"] = fDisplayName
+						}
+						if cmd.Flags().Changed("expected-ordinal") {
+							body["expected_ordinal"] = jsonOrString(fExpectedOrdinal)
 						}
 						if cmd.Flags().Changed("location") {
 							body["location"] = fLocation
@@ -682,6 +686,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the name is the address")
+				cmd.Flags().StringVar(&fExpectedOrdinal, "expected-ordinal", "", "The ordinal a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming the number that moved, rather than silently renumbered, if another create took it in between. Applies only when the platform names the row: sending it beside a name is a 422.")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Location name this component is placed at")
 				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type.")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent component name; omit for a root component")
@@ -1163,12 +1168,13 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fLocation string
 				var fName string
+				var fParent string
 				var fProduct string
 				var fSystem string
 				cmd := &cobra.Command{
 					Use:     "renderLabel",
-					Short:   "Render the label a component create would store",
-					Long:    "Renders the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is written as the token \"n\", because it is allocated against live siblings inside the create's own transaction and does not exist until the row does. Omitting name renders the label the platform's own generated name would produce, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the location and system refs resolve within the caller's location:read and system:read scopes, because the rendered string can carry their labels.",
+					Short:   "Draft the name and label a component create would store",
+					Long:    "Drafts the name and the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is READ (the lowest free number among the live siblings in the placement bucket) rather than allocated. That answer is provisional, so a form posts it back as expected_ordinal on the create and is refused (409) rather than renumbered if another create takes it first. Omitting name drafts the name the platform would mint, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the parent resolves within the caller's component:create scope and the location and system refs within location:read and system:read, because the rendered string can carry their labels.",
 					Example: "  omniglass component renderLabel --product product",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1180,6 +1186,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("parent") {
+							body["parent"] = fParent
+						}
 						if cmd.Flags().Changed("product") {
 							body["product"] = fProduct
 						}
@@ -1190,7 +1199,8 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fLocation, "location", "", "The location this component will sit at, by name or uuid. Resolved within the caller's location:read scope: a location out of scope is refused, never rendered.")
-				cmd.Flags().StringVar(&fName, "name", "", "The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token \"n\"; supply it to render the label an operator-named row would carry, which has no ordinal at all.")
+				cmd.Flags().StringVar(&fName, "name", "", "The name the row will carry. Omit it to draft the name and label the platform would produce; supply it to draft the label an operator-named row would carry, which has no ordinal at all.")
+				cmd.Flags().StringVar(&fParent, "parent", "", "The parent component, by name or uuid. Part of the placement bucket a generated name's ordinal is read from, so a draft that omits it previews the wrong bucket. Resolved within the caller's component:create scope, the same set the create resolves it in.")
 				cmd.Flags().StringVar(&fProduct, "product", "", "The product this component is an instance of, by name or uuid; the classification both a label rule and a generated name are resolved from")
 				_ = cmd.MarkFlagRequired("product")
 				cmd.Flags().StringVar(&fSystem, "system", "", "The system this component will belong to, by name or uuid. Resolved within the caller's system:read scope.")
@@ -1992,6 +2002,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDisplayName string
+				var fExpectedOrdinal string
 				var fLocationType string
 				var fName string
 				var fParent string
@@ -2007,6 +2018,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("display-name") {
 							body["display_name"] = fDisplayName
 						}
+						if cmd.Flags().Changed("expected-ordinal") {
+							body["expected_ordinal"] = jsonOrString(fExpectedOrdinal)
+						}
 						if cmd.Flags().Changed("location-type") {
 							body["location_type"] = fLocationType
 						}
@@ -2020,6 +2034,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the name is the address")
+				cmd.Flags().StringVar(&fExpectedOrdinal, "expected-ordinal", "", "The ordinal a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming the number that moved, rather than silently renumbered, if another create took it in between. Applies only when the platform names the row: sending it beside a name is a 422.")
 				cmd.Flags().StringVar(&fLocationType, "location-type", "", "The location_type, by name or uuid (campus, building, ...)")
 				_ = cmd.MarkFlagRequired("location-type")
 				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule.")
@@ -2318,10 +2333,11 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fLocationType string
 				var fName string
+				var fParent string
 				cmd := &cobra.Command{
 					Use:     "renderLabel",
-					Short:   "Render the label a location create would store",
-					Long:    "The location tier of :renderLabel on components. Renders the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create. No placement scope is injected because a location's label rule reads no other estate row.",
+					Short:   "Draft the name and label a location create would store",
+					Long:    "The location tier of :renderLabel on components. Drafts the name and the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create; the parent resolves within the caller's location:create scope, because a location's two placement buckets are under a parent or at the root and that is where the ordinal is read from.",
 					Example: "  omniglass location renderLabel --location-type location_type",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2333,12 +2349,16 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("parent") {
+							body["parent"] = fParent
+						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
 				cmd.Flags().StringVar(&fLocationType, "location-type", "", "The location_type this location is classified by, by name or uuid")
 				_ = cmd.MarkFlagRequired("location-type")
-				cmd.Flags().StringVar(&fName, "name", "", "The name the row will carry. Omit it to render the label the platform's own generated name would produce, which a location_type with no name rule refuses; supply it to render the label an operator-named location would carry.")
+				cmd.Flags().StringVar(&fName, "name", "", "The name the row will carry. Omit it to draft the name and label the platform would produce, which a location_type with no name rule refuses; supply it to draft the label an operator-named location would carry.")
+				cmd.Flags().StringVar(&fParent, "parent", "", "The parent location, by name or uuid. A location has two placement buckets, under a parent or at the root, and this is which one a generated name's ordinal is read from. Resolved within the caller's location:create scope.")
 				return cmd
 			}()
 			return cmd
@@ -5106,6 +5126,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDisplayName string
+				var fExpectedOrdinal string
 				var fLocation string
 				var fName string
 				var fParent string
@@ -5122,6 +5143,9 @@ func generatedCommands() []*cobra.Command {
 						body := map[string]any{}
 						if cmd.Flags().Changed("display-name") {
 							body["display_name"] = fDisplayName
+						}
+						if cmd.Flags().Changed("expected-ordinal") {
+							body["expected_ordinal"] = jsonOrString(fExpectedOrdinal)
 						}
 						if cmd.Flags().Changed("location") {
 							body["location"] = fLocation
@@ -5142,6 +5166,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads; the name is the address")
+				cmd.Flags().StringVar(&fExpectedOrdinal, "expected-ordinal", "", "The ordinal a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming the number that moved, rather than silently renumbered, if another create took it in between. Applies only when the platform names the row: sending it beside a name is a 422.")
 				cmd.Flags().StringVar(&fLocation, "location", "", "Location name this system is placed at")
 				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem.")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent system name; omit for a root system")
@@ -5521,12 +5546,13 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fLocation string
 				var fName string
+				var fParent string
 				var fStandardId string
 				var fSystemTypeId string
 				cmd := &cobra.Command{
 					Use:     "renderLabel",
-					Short:   "Render the label a system create would store",
-					Long:    "The system tier of :renderLabel on components. Renders the label a system create would stamp, allocating nothing. Omitting name renders the label the platform's generated name would produce and refuses (422) an unclassified system, the same refusal a nameless create gives, since the stem lives on the system_type. Gated by system:create; the location ref resolves within the caller's location:read scope, because a system's label can carry its location's.",
+					Short:   "Draft the name and label a system create would store",
+					Long:    "The system tier of :renderLabel on components. Drafts the name and the label a system create would stamp, allocating nothing: the ordinal is read from the placement bucket and posted back as expected_ordinal on the create. A system suppresses the first ordinal in a bucket, so the first boardroom in a room drafts as boardroom and the second as boardroom-2. Omitting name drafts the name the platform would mint and refuses (422) an unclassified system, the same refusal a nameless create gives, since the stem lives on the system_type. Gated by system:create; the parent resolves within the caller's system:create scope and the location ref within location:read, because a system's label can carry its location's.",
 					Example: "  omniglass system renderLabel",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5538,6 +5564,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("parent") {
+							body["parent"] = fParent
+						}
 						if cmd.Flags().Changed("standard-id") {
 							body["standard_id"] = fStandardId
 						}
@@ -5548,7 +5577,8 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fLocation, "location", "", "The location this system will sit at, by name or uuid. Resolved within the caller's location:read scope.")
-				cmd.Flags().StringVar(&fName, "name", "", "The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token \"n\"; supply it to render the label an operator-named row would carry, which has no ordinal at all.")
+				cmd.Flags().StringVar(&fName, "name", "", "The name the row will carry. Omit it to draft the name and label the platform would produce; supply it to draft the label an operator-named row would carry, which has no ordinal at all.")
+				cmd.Flags().StringVar(&fParent, "parent", "", "The parent system, by name or uuid. Part of the placement bucket a generated name's ordinal is read from. Resolved within the caller's system:create scope.")
 				cmd.Flags().StringVar(&fStandardId, "standard-id", "", "The standard this system conforms to, by name or uuid; omit for a one-off system")
 				cmd.Flags().StringVar(&fSystemTypeId, "system-type-id", "", "The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row.")
 				return cmd

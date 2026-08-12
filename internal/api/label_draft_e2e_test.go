@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
@@ -26,8 +27,10 @@ import (
 // held an all scope, most recently the preview-scope bug this branch fixed.
 
 type draftLabelBody struct {
-	Label string `json:"label"`
-	Rule  string `json:"rule"`
+	Name    string `json:"name"`
+	Ordinal int    `json:"ordinal"`
+	Label   string `json:"label"`
+	Rule    string `json:"rule"`
 }
 
 func renderLabelAt(t *testing.T, c *apiClient, tok, path string, body map[string]any, status int) draftLabelBody {
@@ -109,6 +112,181 @@ func TestTheRenderedLabelIsTheLabelTheCreateStoresAPI(t *testing.T) {
 	}
 	if drafted.Rule == "" {
 		t.Error("the answer names no rule, so the form cannot say where the label came from")
+	}
+	// An operator-typed name comes back as the name, with no ordinal beside it:
+	// that row carries none, and the form must therefore post no precondition
+	// (#702). Absent and zero are the same state here on purpose.
+	if drafted.Name != "front-panel" || drafted.Ordinal != 0 {
+		t.Errorf("drafted identity for a typed name = %+v, want the name back and no ordinal", drafted)
+	}
+}
+
+// TestTheDraftedNameIsTheNameTheCreateStampsAPI is #702's acceptance at the wire:
+// the form is shown a real number, posts it back as its precondition, and the
+// row lands with exactly the name it showed. Everything below this tier can see
+// one half or the other; only this can see the round trip a form makes.
+func TestTheDraftedNameIsTheNameTheCreateStampsAPI(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+
+	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "hq", "location_type": "building"}, http.StatusCreated)
+	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "room-204b", "location_type": "room", "parent": "hq"}, http.StatusCreated)
+
+	body := map[string]any{"product": "samsung-qm55", "location": "room-204b"}
+	drafted := renderLabelAt(t, c, owner, "/components:renderLabel", body, http.StatusOK)
+	if drafted.Ordinal != 1 {
+		t.Fatalf("first draft in an empty room = %+v, want ordinal 1", drafted)
+	}
+	// No digit-free shape any more: the form is shown the name, and the name
+	// carries the number the create is about to use.
+	if !strings.HasSuffix(drafted.Name, "-1") {
+		t.Fatalf("drafted name %q, want the real ordinal in it rather than a token", drafted.Name)
+	}
+
+	created := c.do(owner, http.MethodPost, "/components",
+		withOrdinal(body, drafted.Ordinal), http.StatusCreated)
+	var comp struct {
+		Name          string `json:"name"`
+		NameGenerated bool   `json:"name_generated"`
+	}
+	if err := json.Unmarshal(created, &comp); err != nil {
+		t.Fatalf("parse component: %v", err)
+	}
+	if comp.Name != drafted.Name {
+		t.Errorf("the form showed %q; the row landed %q", drafted.Name, comp.Name)
+	}
+	// The precondition is not a name: posting it leaves the pen exactly where a
+	// body posting neither field leaves it.
+	if !comp.NameGenerated {
+		t.Error("name_generated=false: posting expected_ordinal must not claim the pen")
+	}
+
+	// The same form, submitted twice, is the race: the second submission is
+	// holding an ordinal the first one took.
+	conflict := c.do(owner, http.MethodPost, "/components",
+		withOrdinal(body, drafted.Ordinal), http.StatusConflict)
+	var problem struct {
+		Detail string `json:"detail"`
+		Errors []struct {
+			Location string `json:"location"`
+			Value    any    `json:"value"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(conflict, &problem); err != nil {
+		t.Fatalf("parse the conflict: %v", err)
+	}
+	// A form has to tell this 409 from a name-collision 409, and it does it by
+	// the location rather than by matching the sentence.
+	if len(problem.Errors) != 1 || problem.Errors[0].Location != "body.expected_ordinal" {
+		t.Fatalf("conflict errors = %+v, want one located on body.expected_ordinal", problem.Errors)
+	}
+	if n, ok := problem.Errors[0].Value.(float64); !ok || int(n) != drafted.Ordinal+1 {
+		t.Errorf("conflict value = %v, want the ordinal that moved (%d)", problem.Errors[0].Value, drafted.Ordinal+1)
+	}
+	// The form re-reads, and is shown the number that is now free.
+	next := renderLabelAt(t, c, owner, "/components:renderLabel", body, http.StatusOK)
+	if next.Ordinal != drafted.Ordinal+1 || next.Name == drafted.Name {
+		t.Errorf("re-read after the conflict = %+v, want the next ordinal and a different name", next)
+	}
+	// And the sentence names what the operator would have got, which is the
+	// same name that re-read just returned: the form's recovery is to show it
+	// rather than to say "try again".
+	if !strings.Contains(problem.Detail, next.Name) {
+		t.Errorf("conflict detail %q does not name %q, the name the create would have landed", problem.Detail, next.Name)
+	}
+	c.do(owner, http.MethodPost, "/components", withOrdinal(body, next.Ordinal), http.StatusCreated)
+
+	// An expectation beside a name the operator typed is refused, since that
+	// path allocates nothing for it to be about.
+	c.do(owner, http.MethodPost, "/components",
+		map[string]any{"product": "samsung-qm55", "location": "room-204b", "name": "front-panel", "expected_ordinal": 1},
+		http.StatusUnprocessableEntity)
+	// And zero is not a spelling of "no expectation": the schema refuses it, so
+	// a client cannot post an unevaluable precondition by accident.
+	c.do(owner, http.MethodPost, "/components", withOrdinal(body, 0), http.StatusUnprocessableEntity)
+}
+
+// withOrdinal copies a draft body and adds the precondition, so the test posts
+// the SAME object it drafted with plus one field, which is exactly what the form
+// does.
+func withOrdinal(body map[string]any, ordinal int) map[string]any {
+	out := make(map[string]any, len(body)+1)
+	for k, v := range body {
+		out[k] = v
+	}
+	out["expected_ordinal"] = ordinal
+	return out
+}
+
+// TestTheDraftedOrdinalFollowsThePlacementBucketAPI: the ordinal is per bucket,
+// and the bucket includes the PARENT, which the draft body did not carry before
+// #702. A draft that ignored it would answer 1 under a parent already holding
+// one, and the create beside it would then be refused by the very precondition
+// meant to protect it.
+func TestTheDraftedOrdinalFollowsThePlacementBucketAPI(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+
+	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "hq", "location_type": "building"}, http.StatusCreated)
+	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "room-204b", "location_type": "room", "parent": "hq"}, http.StatusCreated)
+	rack := c.do(owner, http.MethodPost, "/components",
+		map[string]any{"product": "generic-device", "location": "room-204b", "name": "rack-a"}, http.StatusCreated)
+	var parent struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(rack, &parent); err != nil {
+		t.Fatalf("parse parent: %v", err)
+	}
+	// One child already under the rack, and none at the room level.
+	c.do(owner, http.MethodPost, "/components",
+		map[string]any{"product": "samsung-qm55", "parent": parent.Name}, http.StatusCreated)
+
+	underParent := renderLabelAt(t, c, owner, "/components:renderLabel",
+		map[string]any{"product": "samsung-qm55", "parent": parent.Name}, http.StatusOK)
+	atRoom := renderLabelAt(t, c, owner, "/components:renderLabel",
+		map[string]any{"product": "samsung-qm55", "location": "room-204b"}, http.StatusOK)
+	if underParent.Ordinal != 2 {
+		t.Errorf("draft under the parent = %+v, want ordinal 2: the parent's bucket already holds one", underParent)
+	}
+	if atRoom.Ordinal != 1 {
+		t.Errorf("draft at the room = %+v, want ordinal 1: a parent's bucket is not the room's", atRoom)
+	}
+	// And the create under the parent takes the number the draft showed, which
+	// is what would fail if the draft had read the wrong bucket.
+	created := c.do(owner, http.MethodPost, "/components",
+		map[string]any{"product": "samsung-qm55", "parent": parent.Name, "expected_ordinal": underParent.Ordinal}, http.StatusCreated)
+	var child struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(created, &child); err != nil {
+		t.Fatalf("parse child: %v", err)
+	}
+	if child.Name != underParent.Name {
+		t.Errorf("the form showed %q under the parent; the row landed %q", underParent.Name, child.Name)
 	}
 }
 

@@ -212,7 +212,7 @@ func TestTheDraftAndTheCreateRefuseTheSamePlacement(t *testing.T) {
 	} {
 		_, draftErr := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 			ProductName: qm55, Name: "panel", LocationName: tc.location, SystemName: tc.system,
-		}, narrow, narrow)
+		}, all, narrow, narrow)
 		spec := storage.ComponentSpec{Name: "panel", ProductName: strptr(qm55)}
 		if tc.location != "" {
 			spec.LocationName = &tc.location

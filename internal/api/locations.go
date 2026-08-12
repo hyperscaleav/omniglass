@@ -171,6 +171,9 @@ type createLocationInput struct {
 		DisplayName  string  `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
 		LocationType string  `json:"location_type" minLength:"1" doc:"The location_type, by name or uuid (campus, building, ...)"`
 		Parent       *string `json:"parent,omitempty" doc:"Parent location name; omit for a root location"`
+		// The create form's ordinal precondition (#702); see
+		// createComponentInput for why it is a number and never a name.
+		ExpectedOrdinal *int `json:"expected_ordinal,omitempty" minimum:"1" doc:"The ordinal a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming the number that moved, rather than silently renumbered, if another create took it in between. Applies only when the platform names the row: sending it beside a name is a 422."`
 	}
 }
 
@@ -367,10 +370,11 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Description:   "Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.",
 	}, "location", "create"), func(ctx context.Context, in *createLocationInput) (*locationOutput, error) {
 		l, err := gw.CreateLocation(ctx, actorID(ctx), storage.LocationSpec{
-			Name:         in.Body.Name,
-			DisplayName:  in.Body.DisplayName,
-			LocationType: in.Body.LocationType,
-			ParentName:   in.Body.Parent,
+			Name:            in.Body.Name,
+			DisplayName:     in.Body.DisplayName,
+			LocationType:    in.Body.LocationType,
+			ParentName:      in.Body.Parent,
+			ExpectedOrdinal: in.Body.ExpectedOrdinal,
 		}, a.scopeFor(ctx, "location", "create"))
 		if err != nil {
 			return nil, mapLocationErr(err)
@@ -523,6 +527,9 @@ func mapLocationErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
 	}
+	if ordErr, ok := mapOrdinalErr(err); ok {
+		return ordErr
+	}
 	var placementErr *storage.PlacementError
 	if errors.As(err, &placementErr) {
 		return huma.Error422UnprocessableEntity(placementErr.Error())
@@ -549,7 +556,7 @@ func mapLocationErr(err error) error {
 	case errors.Is(err, storage.ErrLocationCycle):
 		return huma.Error422UnprocessableEntity("cannot move a location under itself or a descendant")
 	case errors.Is(err, storage.ErrLocationTypeNoNameRule):
-		return huma.Error422UnprocessableEntity("this location_type has no name rule, so the platform cannot generate a name for it: supply a name on create, or :rename the location to claim its name before reclassifying it to this type")
+		return errNoGeneratedName("this location_type has no name rule, so the platform cannot generate a name for it: supply a name on create, or :rename the location to claim its name before reclassifying it to this type")
 	default:
 		return huma.Error500InternalServerError("location operation failed")
 	}

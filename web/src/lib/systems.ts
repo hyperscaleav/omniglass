@@ -78,6 +78,12 @@ export type CreateSystem = {
   display_name?: string;
   parent?: string;
   location?: string;
+  // The create form's ordinal precondition (#702): the ordinal the form
+  // previewed and locked its name field on. Omitted unless the platform is
+  // naming the row, and never a name: posting a name would claim the pen. A
+  // create that would land a different number is refused with a 409 the form
+  // recovers from by re-reading the draft.
+  expected_ordinal?: number;
 };
 
 export async function createSystem(body: CreateSystem): Promise<System> {

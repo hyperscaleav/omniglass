@@ -67,6 +67,46 @@ function mount(path: string, extraLocations: Location[] = []) {
   ));
 }
 
+// The server's draft answer, which is where the locked NAME comes from since
+// #702. The console used to read the chosen type's name_rule and write the
+// token "n" where the ordinal went; it shows what this returns, ordinal and
+// all. The name below is a fixture rather than a second implementation of the
+// mint: that the gateway mints "room" for a suppressing rule is proven against
+// a real database in internal/storage, and what this file proves is that the
+// form shows what the gateway said and posts the number back.
+function draftJSON(body: { location_type?: string; name?: string }, label = "", rule = "") {
+  const drafted = body.name
+    ? { name: body.name, label, rule }
+    : { name: body.location_type === "room" ? "room" : "thing-1", ordinal: 1, label, rule };
+  return new Response(JSON.stringify(drafted), { status: 200, headers: { "Content-Type": "application/json" } });
+}
+
+// A type with no name rule is a REFUSAL from the route, located on body.name,
+// which is how the form tells "the platform will not name this" from every
+// other 422 it can get.
+function noRuleJSON() {
+  return new Response(
+    JSON.stringify({
+      status: 422,
+      detail: "this location_type has no name rule, so the platform cannot generate a name for it",
+      errors: [{ location: "body.name", message: "no name rule" }],
+    }),
+    { status: 422, headers: { "Content-Type": "application/json" } },
+  );
+}
+
+function stubFetch(rest?: (req: Request) => Promise<Response> | Response) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const req = input as Request;
+    if (req.method === "POST" && req.url.includes(":renderLabel")) {
+      const body = JSON.parse(await req.clone().text());
+      return body.name || body.location_type === "room" ? draftJSON(body) : noRuleJSON();
+    }
+    if (rest) return rest(req);
+    throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+  });
+}
+
 describe("Locations create-as-route", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
@@ -647,6 +687,7 @@ describe("Locations create identity", () => {
   });
 
   it("shows what the platform will name it once a generating type is chosen", async () => {
+    stubFetch();
     const { typeSelect, key } = await fields();
     // Nothing to lock before a classification is chosen: what comes first is
     // what the rule reads.
@@ -655,11 +696,16 @@ describe("Locations create identity", () => {
     await waitFor(() => expect(key.value).toBe("room"));
     expect(key.readOnly).toBe(true);
     expect(key.disabled).toBe(false);
-    // The suppressed first ordinal reappears on the next one, and the form says so.
-    expect(screen.getByText(/room-2/)).toBeTruthy();
+    // A suppressing rule's first name IS the bare stem, and the number beside
+    // it is 1. This used to assert a warning that the NEXT one would be
+    // "room-2", which the form needed while it was showing a shape; the shown
+    // value is the name the create will use, and the case the warning existed
+    // for is the one the precondition refuses (#702).
+    expect(screen.getByText(/1 is the lowest number free here right now/)).toBeTruthy();
   });
 
   it("shows the placement path the name has to be unique in, as context and not as a prefix", async () => {
+    stubFetch();
     const { typeSelect, key } = await fields();
     fireEvent.change(typeSelect, { target: { value: "room" } });
     await waitFor(() => expect(key.value).toBe("room"));
@@ -669,7 +715,7 @@ describe("Locations create identity", () => {
     fireEvent.change(parentSelect, { target: { value: hqB1.id } });
     await waitFor(() => expect(screen.getByText(/Unique under HQ \/ HQ B1/)).toBeTruthy());
     // Context only: the path never lands in the field the operator types into,
-    // which still holds the bare stem the mint resolved.
+    // which still holds the name the route drafted.
     expect(key.value).toBe("room");
   });
 
@@ -682,7 +728,7 @@ describe("Locations create identity", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "POST" && req.url.includes(":renderLabel")) {
-        return new Response(JSON.stringify({ label: "North Boardroom", rule: "{{title (words .Name)}}" }), { status: 200, headers: { "Content-Type": "application/json" } });
+        return draftJSON(JSON.parse(await req.clone().text()), "North Boardroom", "{{title (words .Name)}}");
       }
       throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
     });
@@ -698,13 +744,7 @@ describe("Locations create identity", () => {
     // shipped estate's default when the location rule landed (#657). A locked
     // field showing nothing at all would be worse than the form this replaces,
     // so it shows what an operator will actually read, which is the name.
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const req = input as Request;
-      if (req.method === "POST" && req.url.includes(":renderLabel")) {
-        return new Response(JSON.stringify({ label: "", rule: "" }), { status: 200, headers: { "Content-Type": "application/json" } });
-      }
-      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
-    });
+    stubFetch();
     const { typeSelect, display } = await fields();
     fireEvent.change(typeSelect, { target: { value: "room" } });
     await waitFor(() => expect(screen.getByText(/No label rule applies/)).toBeTruthy());
@@ -713,11 +753,17 @@ describe("Locations create identity", () => {
   });
 
   it("lets a nameless create through for a generating type, and refuses one without a rule", async () => {
+    // The refusal is the SERVER's now, read off the field it is located on
+    // rather than off a null the browser computed from the type's rule (#702).
+    stubFetch();
     const { typeSelect, submit } = await fields();
     fireEvent.change(typeSelect, { target: { value: "campus" } });
-    // Campus names nothing, so a name is the operator's to supply.
-    await waitFor(() => expect(submit.disabled).toBe(true));
-    expect(screen.getByText(/no name rule/)).toBeTruthy();
+    // Campus names nothing, so a name is the operator's to supply. The wait is
+    // on the REFUSAL rather than on the disabled button: the button is disabled
+    // from the first frame, so waiting on it would pass before the route had
+    // answered anything at all.
+    await waitFor(() => expect(screen.getByText(/no name rule/)).toBeTruthy());
+    expect(submit.disabled).toBe(true);
 
     fireEvent.change(typeSelect, { target: { value: "room" } });
     await waitFor(() => expect(submit.disabled).toBe(false));
@@ -725,16 +771,16 @@ describe("Locations create identity", () => {
 
   it("omits the name from the POST body when it is left blank", async () => {
     let captured: Record<string, unknown> | undefined;
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const req = input as Request;
+    stubFetch(async (req) => {
       if (req.method === "POST" && req.url.endsWith("/locations")) {
         captured = JSON.parse(await req.clone().text());
         return new Response(JSON.stringify({ id: uuidFor("l-new"), name: "room", location_type: "room" }), { status: 201, headers: { "Content-Type": "application/json" } });
       }
       throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
     });
-    const { typeSelect, display } = await fields();
+    const { typeSelect, display, key } = await fields();
     fireEvent.change(typeSelect, { target: { value: "room" } });
+    await waitFor(() => expect(key.value).toBe("room"));
     // A label is typed and the name is left locked: the two pens are
     // independent, and a locked name has to be OMITTED rather than posted as
     // "", which the API refuses against the entity-name pattern.
@@ -743,13 +789,15 @@ describe("Locations create identity", () => {
     fireEvent.click(screen.getByText("Create location"));
     await waitFor(() => expect(captured).toBeTruthy());
     expect("name" in captured!).toBe(false);
+    // The ordinal the locked field was showing goes back as the precondition,
+    // which is the one thing a locked field DOES post (#702).
+    expect(captured!.expected_ordinal).toBe(1);
     expect(captured!.display_name).toBe("Conf Room 301");
   });
 
   it("sends an override verbatim and leaves the label alone", async () => {
     let captured: Record<string, unknown> | undefined;
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const req = input as Request;
+    stubFetch(async (req) => {
       if (req.method === "POST" && req.url.endsWith("/locations")) {
         captured = JSON.parse(await req.clone().text());
         return new Response(JSON.stringify({ id: uuidFor("l-new"), name: "war-room", location_type: "room" }), { status: 201, headers: { "Content-Type": "application/json" } });
@@ -758,6 +806,7 @@ describe("Locations create identity", () => {
     });
     const { typeSelect, display, key } = await fields();
     fireEvent.change(typeSelect, { target: { value: "room" } });
+    await waitFor(() => expect(key.value).toBe("room"));
     unlockLabel();
     fireEvent.input(display, { target: { value: "War Room" } });
     unlockName();
@@ -767,6 +816,9 @@ describe("Locations create identity", () => {
     fireEvent.click(screen.getByText("Create location"));
     await waitFor(() => expect(captured).toBeTruthy());
     expect(captured!.name).toBe("war-room");
+    // And no precondition beside it: an operator-typed name allocates no
+    // ordinal, so posting one would be a claim nothing can check (a 422).
+    expect("expected_ordinal" in captured!).toBe(false);
     expect(captured!.display_name).toBe("War Room");
   });
 });

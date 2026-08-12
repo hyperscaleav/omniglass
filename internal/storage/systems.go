@@ -140,6 +140,10 @@ type SystemSpec struct {
 	SystemTypeID *string
 	ParentName   *string
 	LocationName *string
+	// ExpectedOrdinal is the create form's precondition (#702): the ordinal the
+	// form previewed and locked its name field on. Nil is no precondition. See
+	// ComponentSpec.ExpectedOrdinal for why it is a number and never a name.
+	ExpectedOrdinal *int
 }
 
 // SystemPatch is the update input: nil fields unchanged. StandardID follows the
@@ -607,6 +611,11 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 			return nil, err
 		}
 		name, ordinal = genName, &n
+	}
+	// The form's precondition (#702), checked under the lock that allocated the
+	// number and before the insert. See CreateComponent's own call.
+	if err := confirmOrdinal(spec.ExpectedOrdinal, ordinal, name); err != nil {
+		return nil, err
 	}
 
 	// An empty display_name hands the LABEL's pen to the platform (#682); the

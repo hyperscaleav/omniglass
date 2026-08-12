@@ -82,16 +82,19 @@ func (p *PG) ExportStemForProduct(ctx context.Context, productID string) (string
 	return stem, err
 }
 
-// ExportMintShape and ExportMintName expose the two halves of the mint the
-// draft render (#699) has to keep in step: the SHAPE a create form shows, with
-// the ordinal written as a token, and the NAME allocation actually produces for
-// a given ordinal. Both are pure, so the test that pins them to each other
-// needs no database; they are here rather than in production code because
-// nothing outside a test wants "what would this be called".
-func ExportMintShape(stem string, bareFirst bool) string {
-	return nameMint{stem: stem, bareFirst: bareFirst}.shape(OrdinalToken)
-}
-
+// ExportMintName is the NAME allocation produces for a given ordinal: the pure
+// half of the mint, exposed so a test can pin the drafted name (#702) to the
+// name the allocator would mint for the same number without restating the
+// format string. It is here rather than in production code because nothing
+// outside a test wants "what would this be called".
 func ExportMintName(stem string, bareFirst bool, n int) string {
 	return nameMint{stem: stem, bareFirst: bareFirst}.name(n)
+}
+
+// ExportConfirmOrdinal is the create's half of the form's ordinal precondition
+// (#702), which is pure and has cases no integration fixture can reach cheaply
+// (a nil expectation, an expectation with nothing allocated). The gateway tests
+// beside it prove the same rule end to end; this proves the rule itself.
+func ExportConfirmOrdinal(expected, allocated *int, name string) error {
+	return confirmOrdinal(expected, allocated, name)
 }

@@ -74,6 +74,12 @@ type createComponentInput struct {
 		// message (naming the generics) instead of Huma's generic
 		// missing-required-field text.
 		Product *string `json:"product,omitempty" doc:"Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled."`
+		// ExpectedOrdinal is the create form's precondition (#702) and
+		// deliberately not a name: a locked field that posted a name would
+		// claim the pen and set name_generated false, inverting the whole
+		// affordance. A pointer with a minimum of 1, so "absent" and "zero"
+		// cannot both be spellings of no expectation.
+		ExpectedOrdinal *int `json:"expected_ordinal,omitempty" minimum:"1" doc:"The ordinal a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming the number that moved, rather than silently renumbered, if another create took it in between. Applies only when the platform names the row: sending it beside a name is a 422."`
 	}
 }
 
@@ -191,12 +197,13 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			return nil, huma.Error422UnprocessableEntity(errProductRequired)
 		}
 		c, err := gw.CreateComponent(ctx, actorID(ctx), storage.ComponentSpec{
-			Name:         in.Body.Name,
-			DisplayName:  in.Body.DisplayName,
-			ParentName:   in.Body.Parent,
-			SystemName:   in.Body.System,
-			LocationName: in.Body.Location,
-			ProductName:  in.Body.Product,
+			Name:            in.Body.Name,
+			DisplayName:     in.Body.DisplayName,
+			ParentName:      in.Body.Parent,
+			SystemName:      in.Body.System,
+			LocationName:    in.Body.Location,
+			ProductName:     in.Body.Product,
+			ExpectedOrdinal: in.Body.ExpectedOrdinal,
 		}, a.scopeFor(ctx, "component", "create"), a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "system", "read"))
 		if err != nil {
 			return nil, mapComponentErr(err)
@@ -349,6 +356,9 @@ func mapComponentErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
 	}
+	if ordErr, ok := mapOrdinalErr(err); ok {
+		return ordErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrComponentNotFound):
 		return huma.Error404NotFound("component not found")
@@ -375,7 +385,7 @@ func mapComponentErr(err error) error {
 	case errors.Is(err, storage.ErrProductNotFound):
 		return huma.Error422UnprocessableEntity("product not found")
 	case errors.Is(err, storage.ErrComponentTypeNoStem):
-		return huma.Error422UnprocessableEntity("this product's component_type has no stem to generate a name from; supply a name explicitly, or fix the component_type registry")
+		return errNoGeneratedName("this product's component_type has no stem to generate a name from; supply a name explicitly, or fix the component_type registry")
 	default:
 		return huma.Error500InternalServerError("component operation failed")
 	}

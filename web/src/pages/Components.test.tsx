@@ -86,6 +86,43 @@ function unlockLabel() {
   fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
 }
 
+// The server's draft answer, which is where the locked NAME comes from since
+// #702. The console used to resolve the stem itself and write the token "n"
+// where the ordinal went; it shows what this returns, ordinal and all, so every
+// create-form test has to serve the route. The names below are fixtures, not a
+// second implementation of the mint: that the gateway mints "mic-1" is proven
+// against a real database in internal/storage, and what this file proves is
+// that the form shows what the gateway said and posts the number back.
+const DRAFTED: Record<string, string> = {
+  "shure-mxa920": "mic-1",
+  "generic-app": "app-1",
+  "generic-device": "device-1",
+};
+
+function draftJSON(body: { product?: string; name?: string }, label = "", rule = "") {
+  // An operator-typed name comes back as itself with NO ordinal, exactly as the
+  // route answers it: that row carries none, so there is no precondition to
+  // post beside it.
+  const drafted = body.name
+    ? { name: body.name, label, rule }
+    : { name: DRAFTED[body.product ?? ""] ?? "thing-1", ordinal: 1, label, rule };
+  return new Response(JSON.stringify(drafted), { status: 200, headers: { "Content-Type": "application/json" } });
+}
+
+// stubFetch serves the draft route and hands everything else to rest, which
+// throws by default: a create-form test that reaches an unexpected endpoint
+// should say so rather than hang.
+function stubFetch(rest?: (req: Request) => Promise<Response> | Response) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const req = input as Request;
+    if (req.method === "POST" && req.url.includes(":renderLabel")) {
+      return draftJSON(JSON.parse(await req.clone().text()));
+    }
+    if (rest) return rest(req);
+    throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+  });
+}
+
 describe("Components create-as-route", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
@@ -207,13 +244,18 @@ describe("Components create-as-route", () => {
   // from the product's component_type when it is left blank), and the create
   // button must not require it the way it required a product.
   it("does not require a name to submit the create form, only the product", async () => {
+    stubFetch();
     mount("/components/create");
     await waitFor(() => expect(screen.getByText("Create component")).toBeTruthy());
     const submit = screen.getByText("Create component").closest("button") as HTMLButtonElement;
     expect(submit.disabled).toBe(true); // no product chosen yet
     const productSelect = (await screen.findByLabelText("Product")) as HTMLSelectElement;
     fireEvent.change(productSelect, { target: { value: "shure-mxa920" } });
-    expect(submit.disabled).toBe(false); // name still blank, and that is fine
+    // Enabled once the platform has ANSWERED, which is a round trip since #702
+    // rather than a synchronous read of a registry the picker had loaded. The
+    // wait is the behaviour change: submitting before the answer lands would
+    // post no precondition, so the gate holds until there is one.
+    await waitFor(() => expect(submit.disabled).toBe(false)); // name still blank, and that is fine
   });
 
   it("omits name from the create POST body when the field is left blank", async () => {
@@ -232,26 +274,26 @@ describe("Components create-as-route", () => {
     // answer and its pen holds nothing: that is what makes the body below omit
     // the field rather than post the shape as a literal name.
     const nameInput = screen.getByPlaceholderText("mic-2 (optional)") as HTMLInputElement;
+    await waitFor(() => expect(nameInput.value).toBe("mic-1"));
     expect(nameInput.readOnly).toBe(true);
-    expect(nameInput.value).toBe("mic-n");
     let captured: unknown;
-    const seen: string[] = [];
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const req = input as Request;
-      const { method, url } = req;
-      if (method === "POST" && url.endsWith("/components")) {
+    stubFetch(async (req) => {
+      if (req.method === "POST" && req.url.endsWith("/components")) {
         captured = JSON.parse(await req.clone().text());
         return new Response(JSON.stringify({ ...comp, id: uuidFor("c-generated"), name: "mic-1", name_generated: true }), { status: 201, headers: { "Content-Type": "application/json" } });
       }
-      if (method === "GET") {
+      if (req.method === "GET") {
         return new Response(JSON.stringify({ components: [comp] }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
-      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
+      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
     });
     fireEvent.click(screen.getByText("Create component"));
-    await waitFor(() => expect(captured).toBeTruthy(), { timeout: 3000 }).catch(() => { throw new Error("urls seen: " + JSON.stringify(seen)); });
+    await waitFor(() => expect(captured).toBeTruthy(), { timeout: 3000 });
     const body = captured as Record<string, unknown>;
     expect("name" in body).toBe(false);
+    // What IS posted is the number the locked field was showing (#702): a
+    // precondition, never a name, so the pen stays with the platform.
+    expect(body.expected_ordinal).toBe(1);
     expect(body.display_name).toBe("Ceiling Mic 9");
   });
 
@@ -869,6 +911,7 @@ describe("Components create requires a product (#614)", () => {
   });
 
   it("renders a Product field and blocks Create component until one is chosen", async () => {
+    stubFetch();
     mount("/components/create");
     await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
     fireEvent.input(screen.getByPlaceholderText("Ceiling Mic 2"), { target: { value: "Spare Panel" } });
@@ -876,7 +919,7 @@ describe("Components create requires a product (#614)", () => {
     expect(submit.disabled).toBe(true);
     const productSelect = screen.getByLabelText("Product") as HTMLSelectElement;
     fireEvent.change(productSelect, { target: { value: "shure-mxa920" } });
-    expect(submit.disabled).toBe(false);
+    await waitFor(() => expect(submit.disabled).toBe(false));
   });
 
   it("offers the generics as fallback choices in the Product picker", async () => {
@@ -892,8 +935,7 @@ describe("Components create requires a product (#614)", () => {
 
   it("sends the chosen product on create, generic or real", async () => {
     let sent: unknown;
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const req = input as Request;
+    stubFetch(async (req) => {
       if (req.method === "POST" && req.url.endsWith("/components")) {
         sent = JSON.parse(await req.clone().text());
         return new Response(JSON.stringify({ ...comp, name: "spare-panel", product: "generic-device" }), { status: 201, headers: { "Content-Type": "application/json" } });
@@ -904,6 +946,7 @@ describe("Components create requires a product (#614)", () => {
     await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
     fireEvent.input(screen.getByPlaceholderText("Ceiling Mic 2"), { target: { value: "Spare Panel" } });
     fireEvent.change(screen.getByLabelText("Product"), { target: { value: "generic-device" } });
+    await waitFor(() => expect((screen.getByText("Create component").closest("button") as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByText("Create component"));
     await waitFor(() => expect(sent).toBeTruthy());
     expect((sent as { product: string }).product).toBe("generic-device");
@@ -936,38 +979,48 @@ describe("Components create identity", () => {
     expect(eyebrows.indexOf("Placement")).toBeLessThan(eyebrows.indexOf("Identity"));
   });
 
-  it("resolves the stem up the product's component_type chain", async () => {
+  it("locks the name field on the name the server drafted, ordinal and all", async () => {
+    // The reversal (#702). This used to assert "mic-n" and, explicitly, that the
+    // field was NEVER "mic-1", because ADR-0104 held the ordinal unknowable
+    // before the row existed; reading the lowest free ordinal is not allocating
+    // one, so the field carries the name the create is about to use. The stem
+    // walk that used to happen here happens in Go now (#695's naming half), so
+    // what this pins is the WIRING: the form shows what the route answered.
+    stubFetch();
     const { product, key } = await fields();
     // Nothing to lock before a classification is chosen: what comes first is
     // what the rule reads.
     expect(key.readOnly).toBe(false);
-    // shure-mxa920 classifies as ceiling-mic, which sets no stem of its own and
-    // inherits "mic". A preview reading the product's own type alone would show
-    // nothing here, and the row would still arrive named mic-1.
     fireEvent.change(product, { target: { value: "shure-mxa920" } });
-    await waitFor(() => expect(key.value).toBe("mic-n"));
+    await waitFor(() => expect(key.value).toBe("mic-1"));
     // Locked on it, which is the affordance: the platform's answer is the
     // default in effect, not a hint over an empty box. Readonly and never
     // disabled, so the value stays on the keyboard and the field itself is
     // clickable (#657).
     expect(key.readOnly).toBe(true);
     expect(key.disabled).toBe(false);
-    // Never a number: the ordinal is allocated against live siblings inside the
-    // create's transaction and does not exist yet.
-    expect(key.value).not.toBe("mic-1");
+    // And the sentence beside it says the number is true now rather than held.
+    expect(screen.getByText(/1 is the lowest number free here right now/)).toBeTruthy();
   });
 
-  it("never suppresses a component's first ordinal", async () => {
+  it("asks the route again when the classification moves, and shows the new answer", async () => {
+    // What "never suppresses a component's first ordinal" used to assert here,
+    // now that the suppression rule lives on the server alone: what this tier
+    // can still see is that changing the picker asks a NEW question and the
+    // field follows the answer.
+    stubFetch();
     const { product, key } = await fields();
     fireEvent.change(product, { target: { value: "generic-app" } });
-    await waitFor(() => expect(key.value).toBe("app-n"));
-    expect(screen.queryByText(/app-2/)).toBeNull();
+    await waitFor(() => expect(key.value).toBe("app-1"));
+    fireEvent.change(product, { target: { value: "shure-mxa920" } });
+    await waitFor(() => expect(key.value).toBe("mic-1"));
   });
 
   it("shows the placement bucket, and moves it when the placement moves", async () => {
+    stubFetch();
     const { product, key } = await fields();
     fireEvent.change(product, { target: { value: "shure-mxa920" } });
-    await waitFor(() => expect(key.value).toBe("mic-n"));
+    await waitFor(() => expect(key.value).toBe("mic-1"));
     expect(screen.getByText(/Unique among the unplaced components/)).toBeTruthy();
 
     const location = screen.getByLabelText("Location") as HTMLSelectElement;
@@ -1019,8 +1072,9 @@ describe("Components create identity", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "POST" && req.url.includes(":renderLabel")) {
-        bodies.push(JSON.parse(await req.clone().text()));
-        return new Response(JSON.stringify({ label: "Ceiling Microphone", rule: "{{.TypeName}}" }), { status: 200, headers: { "Content-Type": "application/json" } });
+        const body = JSON.parse(await req.clone().text());
+        bodies.push(body);
+        return draftJSON(body, "Ceiling Microphone", "{{.TypeName}}");
       }
       throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
     });

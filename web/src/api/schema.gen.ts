@@ -938,8 +938,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Render the label a component create would store
-         * @description Renders the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is written as the token "n", because it is allocated against live siblings inside the create's own transaction and does not exist until the row does. Omitting name renders the label the platform's own generated name would produce, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the location and system refs resolve within the caller's location:read and system:read scopes, because the rendered string can carry their labels.
+         * Draft the name and label a component create would store
+         * @description Drafts the name and the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is READ (the lowest free number among the live siblings in the placement bucket) rather than allocated. That answer is provisional, so a form posts it back as expected_ordinal on the create and is refused (409) rather than renumbered if another create takes it first. Omitting name drafts the name the platform would mint, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the parent resolves within the caller's component:create scope and the location and system refs within location:read and system:read, because the rendered string can carry their labels.
          */
         post: operations["render-component-label"];
         delete?: never;
@@ -1674,8 +1674,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Render the label a location create would store
-         * @description The location tier of :renderLabel on components. Renders the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create. No placement scope is injected because a location's label rule reads no other estate row.
+         * Draft the name and label a location create would store
+         * @description The location tier of :renderLabel on components. Drafts the name and the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create; the parent resolves within the caller's location:create scope, because a location's two placement buckets are under a parent or at the root and that is where the ordinal is read from.
          */
         post: operations["render-location-label"];
         delete?: never;
@@ -3530,8 +3530,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Render the label a system create would store
-         * @description The system tier of :renderLabel on components. Renders the label a system create would stamp, allocating nothing. Omitting name renders the label the platform's generated name would produce and refuses (422) an unclassified system, the same refusal a nameless create gives, since the stem lives on the system_type. Gated by system:create; the location ref resolves within the caller's location:read scope, because a system's label can carry its location's.
+         * Draft the name and label a system create would store
+         * @description The system tier of :renderLabel on components. Drafts the name and the label a system create would stamp, allocating nothing: the ordinal is read from the placement bucket and posted back as expected_ordinal on the create. A system suppresses the first ordinal in a bucket, so the first boardroom in a room drafts as boardroom and the second as boardroom-2. Omitting name drafts the name the platform would mint and refuses (422) an unclassified system, the same refusal a nameless create gives, since the stem lives on the system_type. Gated by system:create; the parent resolves within the caller's system:create scope and the location ref within location:read, because a system's label can carry its location's.
          */
         post: operations["render-system-label"];
         delete?: never;
@@ -4159,6 +4159,11 @@ export interface components {
             readonly $schema?: string;
             /** @description What an operator reads; the name is the address */
             display_name?: string;
+            /**
+             * Format: int64
+             * @description The ordinal a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming the number that moved, rather than silently renumbered, if another create took it in between. Applies only when the platform names the row: sending it beside a name is a 422.
+             */
+            expected_ordinal?: number;
             /** @description Location name this component is placed at */
             location?: string;
             /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type. */
@@ -4323,6 +4328,11 @@ export interface components {
             readonly $schema?: string;
             /** @description What an operator reads; the name is the address */
             display_name?: string;
+            /**
+             * Format: int64
+             * @description The ordinal a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming the number that moved, rather than silently renumbered, if another create took it in between. Applies only when the platform names the row: sending it beside a name is a 422.
+             */
+            expected_ordinal?: number;
             /** @description The location_type, by name or uuid (campus, building, ...) */
             location_type: string;
             /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule. */
@@ -4540,6 +4550,11 @@ export interface components {
             readonly $schema?: string;
             /** @description What an operator reads; the name is the address */
             display_name?: string;
+            /**
+             * Format: int64
+             * @description The ordinal a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming the number that moved, rather than silently renumbered, if another create took it in between. Applies only when the platform names the row: sending it beside a name is a 422.
+             */
+            expected_ordinal?: number;
             /** @description Location name this system is placed at */
             location?: string;
             /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem. */
@@ -4656,8 +4671,15 @@ export interface components {
              * @example /api/v1/schemas/DraftLabelOutputBody.json
              */
             readonly $schema?: string;
-            /** @description The label the create would store, with the token "n" standing where the ordinal will go. Empty means no label is stored and the surface falls back to the name. */
+            /** @description The label the create would store. Empty means no label is stored and the surface falls back to the name. */
             label: string;
+            /** @description The name the create would stamp: the one you supplied, or the one the platform would mint. Generated names carry the ordinal that is free in the placement bucket right now. */
+            name: string;
+            /**
+             * Format: int64
+             * @description The ordinal that name was minted from, absent when you supplied the name (an operator-named row carries no ordinal). Post it back as expected_ordinal on the create to be refused rather than renumbered if another create takes it first.
+             */
+            ordinal?: number;
             /** @description The label rule that produced it, resolved through the same tiers the create uses. Empty means no tier carries a rule for this classification. */
             rule: string;
         };
@@ -6269,8 +6291,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The location this component will sit at, by name or uuid. Resolved within the caller's location:read scope: a location out of scope is refused, never rendered. */
             location?: string;
-            /** @description The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token "n"; supply it to render the label an operator-named row would carry, which has no ordinal at all. */
+            /** @description The name the row will carry. Omit it to draft the name and label the platform would produce; supply it to draft the label an operator-named row would carry, which has no ordinal at all. */
             name?: string;
+            /** @description The parent component, by name or uuid. Part of the placement bucket a generated name's ordinal is read from, so a draft that omits it previews the wrong bucket. Resolved within the caller's component:create scope, the same set the create resolves it in. */
+            parent?: string;
             /** @description The product this component is an instance of, by name or uuid; the classification both a label rule and a generated name are resolved from */
             product: string;
             /** @description The system this component will belong to, by name or uuid. Resolved within the caller's system:read scope. */
@@ -6285,8 +6309,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The location_type this location is classified by, by name or uuid */
             location_type: string;
-            /** @description The name the row will carry. Omit it to render the label the platform's own generated name would produce, which a location_type with no name rule refuses; supply it to render the label an operator-named location would carry. */
+            /** @description The name the row will carry. Omit it to draft the name and label the platform would produce, which a location_type with no name rule refuses; supply it to draft the label an operator-named location would carry. */
             name?: string;
+            /** @description The parent location, by name or uuid. A location has two placement buckets, under a parent or at the root, and this is which one a generated name's ordinal is read from. Resolved within the caller's location:create scope. */
+            parent?: string;
         };
         RenderSystemLabelInputBody: {
             /**
@@ -6297,8 +6323,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The location this system will sit at, by name or uuid. Resolved within the caller's location:read scope. */
             location?: string;
-            /** @description The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token "n"; supply it to render the label an operator-named row would carry, which has no ordinal at all. */
+            /** @description The name the row will carry. Omit it to draft the name and label the platform would produce; supply it to draft the label an operator-named row would carry, which has no ordinal at all. */
             name?: string;
+            /** @description The parent system, by name or uuid. Part of the placement bucket a generated name's ordinal is read from. Resolved within the caller's system:create scope. */
+            parent?: string;
             /** @description The standard this system conforms to, by name or uuid; omit for a one-off system */
             standard_id?: string;
             /** @description The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row. */

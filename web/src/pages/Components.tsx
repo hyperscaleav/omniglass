@@ -20,9 +20,8 @@ import {
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
-import { COMPONENT_TYPES_KEY, componentTypeByName, listComponentTypes } from "../lib/component_types";
-import { bucketPhrase, componentMint, createPen, nameBucket, penIncomplete } from "../lib/namegen";
-import { useLabelDraft } from "../lib/labeldraft";
+import { bucketPhrase, createPen, nameBucket, penIncomplete } from "../lib/namegen";
+import { nameRefused, recoverFromTakenOrdinal, useLabelDraft } from "../lib/labeldraft";
 import { pathTo, type TreeNode } from "../lib/treeselect";
 import CreateIdentity from "../components/CreateIdentity";
 import { useMe, can } from "../lib/auth";
@@ -94,12 +93,6 @@ export default function Components() {
   // component.product_id is NOT NULL, so every component is an instance of a
   // product; the generics fit anything not yet modeled more specifically).
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
-  // The device-class registry behind the product: what the create form reads to
-  // show the name a nameless create would be given. A component's stem lives on
-  // the component_type its product is classified under and inherits down that
-  // tree, so the product alone cannot answer it.
-  const componentTypes = useQuery(() => ({ queryKey: COMPONENT_TYPES_KEY, queryFn: listComponentTypes }));
-
   // Keyed on uuid, not name (#627: name uniqueness is scoped to placement, so
   // two systems or two locations can legally share a name; a name-keyed map
   // would silently collapse them to whichever sorted last).
@@ -553,22 +546,16 @@ export default function Components() {
       [...(products.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name)),
     );
 
-    // What the platform would name this, as far as it is knowable before the row
-    // exists: the stem resolved from the chosen product's component_type chain,
-    // with the ordinal left as a token because it is allocated against live
-    // siblings inside the create's own transaction (ADR-0104).
-    const typesByName = createMemo(() => componentTypeByName(componentTypes.data ?? []));
-    const chosenProduct = createMemo(() => (products.data ?? []).find((p) => p.name === product()));
-    const mint = createMemo(() => componentMint(chosenProduct(), typesByName()));
-
-    // The placement bucket the name has to be unique in, in the server's own
-    // precedence (a parent wins over a location, and neither is the unplaced
-    // bucket), rendered as the path of whichever one applies.
-    // What the platform would LABEL this, which only the server can answer: a
-    // rule is a Go template over a closed map, so the console asks rather than
-    // re-implements (ADR-0098). Asked with the same body the create posts, and
-    // only once the classification is chosen, so a half-filled form is never
-    // sent a question it cannot answer.
+    // What the platform would NAME and LABEL this, which only the server can
+    // answer: a label rule is a Go template over a closed map and a name is a
+    // stem the gateway resolves plus the lowest ordinal free in this bucket, so
+    // the console asks rather than re-implements either (ADR-0098, ADR-0104 as
+    // amended by #702). Asked with the same body the create posts, and only once
+    // the classification is chosen, so a half-filled form is never sent a
+    // question it cannot answer.
+    //
+    // The placement is in the body because it is not decoration: the ordinal is
+    // read from the bucket a parent, else a location, else neither makes.
     const labelDraft = useLabelDraft(() =>
       product()
         ? {
@@ -576,6 +563,7 @@ export default function Components() {
             body: {
               product: product(),
               name: namePen.value().trim() || undefined,
+              parent: parent() || undefined,
               location: location() || undefined,
               system: system() || undefined,
             },
@@ -605,6 +593,7 @@ export default function Components() {
         // nothing."
         const created = await createComponent({
           name: nm || undefined,
+          expected_ordinal: nm ? undefined : labelDraft.data?.ordinal,
           display_name: displayPen.value().trim() || undefined,
           system: system() || undefined,
           location: location() || undefined,
@@ -615,7 +604,7 @@ export default function Components() {
         openInEdit(created.id);
         navigate(`/components/${encodeURIComponent(created.id)}`);
       } catch (er) {
-        setFormErr(describeError(er));
+        setFormErr(await recoverFromTakenOrdinal(er, labelDraft.refetch));
         setBusy(false);
       }
     }
@@ -667,12 +656,12 @@ export default function Components() {
 
         <CreateIdentity
           kind="component"
-          mint={mint}
+          draft={() => labelDraft.data}
+          pending={() => labelDraft.isFetching}
+          nameRefused={() => nameRefused(labelDraft.error)}
           bucket={bucketText}
           namePen={namePen}
           displayPen={displayPen}
-          label={() => labelDraft.data}
-          labelPending={() => labelDraft.isFetching}
           namePlaceholder="mic-2 (optional)"
           displayPlaceholder="Ceiling Mic 2"
         />
@@ -685,7 +674,7 @@ export default function Components() {
               asymmetry the other two forms did not have). Product stays
               required, the #614 classification floor and the generator's own
               stem source. */}
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !product() || penIncomplete(mint() !== null, namePen)}>Create component</Button>
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !product() || penIncomplete(!!labelDraft.data?.name, namePen)}>Create component</Button>
         </div>
 
         <div class="flex flex-col gap-1 opacity-50">

@@ -419,6 +419,101 @@ func generateName(ctx context.Context, tx pgx.Tx, m nameMint, sc nameScope, excl
 	return name, ordinal, nil
 }
 
+// previewName is generateName with the allocation taken out: the name and the
+// ordinal a create in this bucket would get, read from the same siblings with
+// the same mint, outside any transaction (#702).
+//
+// # Why this is not the mint ADR-0104 refused
+//
+// That refusal is about ALLOCATING. A mint takes the bucket's
+// pg_advisory_xact_lock, which real creates need, so a form previewing on every
+// picker change would serialise the estate's creates behind a UI affordance.
+// This takes no lock, opens no write transaction and writes nothing: it is the
+// same read pickOrdinal already runs over sibling names, which is a question
+// Postgres answers without anyone having to queue for it. Two forms can preview
+// the same ordinal at the same instant and both are told the truth.
+//
+// # Which is why the answer is a precondition and not a reservation
+//
+// Nothing here holds the number. The create allocates under its own lock
+// exactly as it always did, and [confirmOrdinal] refuses when the two disagree,
+// so an operator either gets the name they were shown or is told the number
+// moved. A silent difference is the one outcome the locked field exists to
+// prevent; a refusal is the honest form of the same fact.
+//
+// It shares siblingNames and pickOrdinal with generateName rather than
+// restating either, so a preview can never describe a name the mint does not
+// produce. It deliberately does NOT re-run validateEntityName: a rule is proven
+// to mint legally when it is WRITTEN (validateNameRule, ADR-0102), and a preview
+// that refused where the create succeeds would be a second, weaker gate.
+func previewName(ctx context.Context, q querier, m nameMint, sc nameScope) (string, int, error) {
+	existing, err := sc.siblingNames(ctx, q, nil)
+	if err != nil {
+		return "", 0, err
+	}
+	n := pickOrdinal(existing, m)
+	return m.name(n), n, nil
+}
+
+// ErrOrdinalTaken is a create whose form was shown one ordinal and whose
+// allocation produced another, because another create in the same bucket took
+// the number in between. It is a CONFLICT rather than a failure: the estate is
+// consistent, the operator's request is simply no longer the one they were
+// shown, and the fix is to look at the new name and submit again.
+var ErrOrdinalTaken = errors.New("storage: the ordinal the form expected was taken by another create")
+
+// OrdinalTakenError is that conflict with the three numbers a surface needs to
+// recover from it: what the form held, what this create actually allocated, and
+// the NAME that ordinal mints, which is what an operator reads. A bare "the
+// ordinal moved" would leave the form re-reading the draft just to say what
+// happened.
+type OrdinalTakenError struct {
+	// Expected is the ordinal the form posted back, the one it previewed.
+	Expected int
+	// Ordinal is the one this create allocated instead.
+	Ordinal int
+	// Name is the name Ordinal mints, the value the form shows next.
+	Name string
+}
+
+func (e *OrdinalTakenError) Error() string {
+	return fmt.Sprintf("storage: ordinal %d was taken while the form was open, so this create allocated %d and would have been named %q", e.Expected, e.Ordinal, e.Name)
+}
+
+func (e *OrdinalTakenError) Unwrap() error { return ErrOrdinalTaken }
+
+// ErrOrdinalExpectedOnTypedName is an expectation posted beside a name the
+// OPERATOR typed. That path allocates no ordinal at all (the column is null by
+// design, #681), so the expectation can never be evaluated, and a precondition
+// nobody checks reads as a guarantee while being none. Refused rather than
+// ignored, and refused at the gateway rather than only at the wire, because a
+// direct caller can post the pair too.
+var ErrOrdinalExpectedOnTypedName = errors.New("storage: an expected ordinal applies only to a name the platform generates; omit the name, or drop the expectation")
+
+// confirmOrdinal is the create's half of the form's precondition: compare what
+// the form was shown with what this create actually allocated, inside the
+// transaction that allocated it, before anything is written.
+//
+// Pure, and the same three lines on every tier, which is the point: a system
+// suppresses its first ordinal and a location has two placement buckets rather
+// than three, and neither difference reaches this comparison. What is compared
+// is the NUMBER; the mint is what turns it into a name.
+//
+// allocated is the same *int the row stores, so "the operator typed the name"
+// and "nothing was allocated" are one fact rather than two that can disagree.
+func confirmOrdinal(expected, allocated *int, name string) error {
+	if expected == nil {
+		return nil
+	}
+	if allocated == nil {
+		return ErrOrdinalExpectedOnTypedName
+	}
+	if *expected != *allocated {
+		return &OrdinalTakenError{Expected: *expected, Ordinal: *allocated, Name: name}
+	}
+	return nil
+}
+
 // generateComponentName is generateName for the component tier: the component
 // mint (no suppression) in the component's own three placement buckets.
 func generateComponentName(ctx context.Context, tx pgx.Tx, stem string, parentID, locationID, excludeID *string) (string, int, error) {

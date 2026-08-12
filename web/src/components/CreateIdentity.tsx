@@ -2,7 +2,7 @@ import { Show, type JSX } from "solid-js";
 import FieldRow from "./FieldRow";
 import Button from "./Button";
 import { LockOpen, RotateCcw } from "./icons";
-import { type EstateKind, type NameMint, type Pen, type PenState, mintNote, mintShape, penState } from "../lib/namegen";
+import { type EstateKind, type Pen, type PenState, ordinalNote, penState } from "../lib/namegen";
 import { type DraftLabel } from "../lib/labeldraft";
 
 // The Identity section of the create form for the three estate entities whose
@@ -59,33 +59,44 @@ import { type DraftLabel } from "../lib/labeldraft";
 // missing). A lock over an empty field would be worse than the form this
 // replaces, so there is nowhere in here that one can appear.
 //
-// # Why the label comes from the server and the name does not
+// # Both values come from the server, and that is now one answer
 //
 // A label is a Go text/template over a closed data map (ADR-0098), so rendering
 // one in the browser would be a second implementation of the engine; the console
-// asks :renderLabel instead. A name's SHAPE is a stem plus a token, which the
-// type registry the picker already loaded answers synchronously, so it stays
-// client-side and appears the instant a picker moves rather than a round trip
-// later (ADR-0104).
+// asks :renderLabel instead. The NAME used to be the exception: its shape was a
+// stem plus a token, resolved client-side from the type registry the picker had
+// already loaded, so it could appear the instant a picker moved (ADR-0104).
+// #702 folded it into the same answer, for two reasons that both point the same
+// way. The form makes a round trip per picker change regardless, so the
+// synchronous half bought nothing once the label was locked beside it. And a
+// name resolved twice, once in Go and once in TypeScript, is a rule that can
+// drift on either side (#695); the drift is gone because the second
+// implementation is.
+//
+// The name the server answers with carries the REAL ordinal, read from the
+// placement bucket without allocating it. The form posts that number back as
+// the create's precondition, so a name taken in between is a refusal the
+// operator can see rather than a silent renumber.
 
 export interface CreateIdentityProps {
   kind: EstateKind;
-  // The mint the chosen classification resolves to, or null when the platform
-  // has no stem to name this row from. Null is a real state, not a loading one:
-  // an unclassified system, a component_type chain with no stem, and a
-  // location_type with no name rule all land here, and all three mean the
-  // operator has to type a name.
-  mint: () => NameMint | null;
+  // The server's draft of the identity this create would stamp: the name, the
+  // ordinal it was minted from, the label, and the rule that rendered it.
+  // undefined while the question is in flight, and while the form has not
+  // chosen enough for the question to be worth asking.
+  draft: () => DraftLabel | undefined;
+  pending: () => boolean;
+  // True when the draft refused to NAME the row, which is a permanent answer
+  // rather than a loading state: an unclassified system, a component_type chain
+  // with no stem, and a location_type with no name rule all land here, and all
+  // three mean the operator has to type a name.
+  nameRefused: () => boolean;
   // The placement bucket the name has to be unique in, already rendered as a
   // phrase (lib/namegen.ts's bucketPhrase). Shown, never editable: it is
   // context for the name, not part of it.
   bucket: () => string;
   namePen: Pen;
   displayPen: Pen;
-  // The server's render of the label this row would carry, undefined while the
-  // question is in flight or while the form is not yet answerable.
-  label: () => DraftLabel | undefined;
-  labelPending: () => boolean;
   namePlaceholder: string;
   displayPlaceholder: string;
 }
@@ -99,6 +110,16 @@ const NO_MINT: Record<EstateKind, string> = {
   component: "This product's type carries no stem, so name it yourself.",
   system: "This system is unclassified or its type chain sets no stem, so name it yourself.",
   location: "This type carries no name rule, so name it yourself.",
+};
+
+// The state before the platform has answered, which is not a refusal and must
+// not read as one: nothing is chosen yet, or the answer is in flight. It names
+// the fact the form is waiting on rather than saying "loading", because for a
+// form with an empty picker that fact is the operator's next move.
+const AWAITING_MINT: Record<EstateKind, string> = {
+  component: "Choose a product and the platform names this, or name it yourself.",
+  system: "Choose a type and the platform names this, or name it yourself.",
+  location: "Choose a type and the platform names this, or name it yourself.",
 };
 
 // PenToggle is the lock, as an INLINE ACTION inside the field: a square icon
@@ -148,17 +169,19 @@ function takeOver(state: PenState, pen: Pen): void {
 }
 
 export default function CreateIdentity(props: CreateIdentityProps): JSX.Element {
-  const nameState = () => penState(props.mint() !== null, props.namePen);
-  // The name as it will read: the operator's, else the shape the platform will
-  // mint. It is what the label's own fallback shows, so it is resolved once.
-  const nameText = () => {
-    const m = props.mint();
-    return nameState() === "generated" && m ? mintShape(m) : props.namePen.value();
-  };
+  // The platform's answer for the name, empty when it has none yet or will
+  // never have one. A locked field over an empty value is the state this
+  // section exists to prevent, so "the platform has a name" is exactly what
+  // makes the field lockable.
+  const draftedName = () => props.draft()?.name ?? "";
+  const nameState = () => penState(draftedName() !== "", props.namePen);
+  // The name as it will read: the operator's, else the platform's. It is what
+  // the label's own fallback shows, so it is resolved once.
+  const nameText = () => (nameState() === "generated" ? draftedName() : props.namePen.value());
   // A label is available when a rule resolved AND rendered something. An empty
   // render is not a failure: the read ladder's third rung is the row's own name,
   // so the honest thing to show in the locked field is that name.
-  const labelText = () => props.label()?.label ?? "";
+  const labelText = () => props.draft()?.label ?? "";
   const labelAvailable = () => labelText() !== "";
   const displayState = () => penState(true, props.displayPen);
 
@@ -171,9 +194,11 @@ export default function CreateIdentity(props: CreateIdentityProps): JSX.Element 
           actions={<Show when={nameState() !== "unavailable"}><PenToggle pen={props.namePen} what="name" /></Show>}
           hint={
             nameState() === "unavailable"
-              ? NO_MINT[props.kind]
+              ? props.nameRefused()
+                ? NO_MINT[props.kind]
+                : AWAITING_MINT[props.kind]
               : nameState() === "generated"
-                ? `${mintNote(props.mint()!)} Unique ${props.bucket()}.`
+                ? `${ordinalNote(props.draft()!.ordinal ?? 0)} Unique ${props.bucket()}.`
                 : `Named by you. Unique ${props.bucket()}.`
           }
         >
@@ -194,10 +219,10 @@ export default function CreateIdentity(props: CreateIdentityProps): JSX.Element 
           hint={
             displayState() === "overridden"
               ? "Labelled by you."
-              : props.labelPending()
+              : props.pending()
                 ? "Working out what the rule renders…"
                 : labelAvailable()
-                  ? `Rendered from ${props.label()!.rule}`
+                  ? `Rendered from ${props.draft()!.rule}`
                   : nameText().trim() === ""
                     ? "No label rule applies; the name you type above is what an operator reads."
                     : "No label rule applies, so the name is what an operator reads."

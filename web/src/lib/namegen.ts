@@ -1,33 +1,24 @@
 import { createSignal } from "solid-js";
-import { type ComponentType } from "./component_types";
-import { type LocationType } from "./location_types";
-import { type SystemType } from "./system_types";
-import { resolveInherited } from "./typechain";
 
-// What the console can honestly say about a generated name BEFORE the row
-// exists, which is the shape and not the value.
+// What a create form knows about the name the platform is about to write, which
+// since #702 is the name itself and not a shape.
 //
-// The platform mints a name as "<stem>-<n>" (internal/storage/namegen.go), and
-// the two halves are knowable at very different times. The STEM comes from the
-// classification an operator has already chosen on the form: a component's
-// product resolves to a component_type chain, a system's system_type chain, a
-// location's location_type name rule. The ORDINAL is the lowest free number
-// among the LIVE siblings in the placement bucket, allocated inside the create's
-// own transaction under an advisory lock, so it does not exist until the row
-// does and no read can predict it: another create in the same bucket can take it
-// between any preview and the commit.
+// The platform mints a name from a resolved stem and the lowest ordinal free in
+// the placement bucket (internal/storage/namegen.go). Both halves used to be
+// answered here: the console walked the type chain for the stem and wrote the
+// token "n" where the number went, because ADR-0104 ruled the ordinal
+// unknowable before the row existed. The distinction that ruling missed is that
+// READING the lowest free ordinal is not allocating one, so the server now
+// answers the whole name (lib/labeldraft.ts), and this module no longer knows
+// what a mint looks like or how to resolve a stem.
 //
-// So this module renders the stem and writes the ordinal as a TOKEN. The
-// operator sees "display-n" and a sentence saying where the number comes from,
-// never a "display-4" that quietly becomes display-5. That is the whole ruling
-// (ADR-0104): show what is knowable, mark what is not, and do not mint
-// speculatively to fill the gap.
+// What is left here is what the answer is worth: the note that says the number
+// is provisional, the placement bucket it is unique in, and the pen that decides
+// whether the operator or the platform owns each field.
 //
-// What this module deliberately does NOT do is render the LABEL. A label comes
-// from a Go text/template over a closed map that carries the row's own Name and
-// Ordinal (ADR-0098), so it is unknowable for exactly the same reason and a
-// second implementation of that engine in TypeScript is the defect slice 3 of
-// this epic swept 42 copies of.
+// The number being provisional is not hidden any more, it is HANDLED: the form
+// posts it back as the create's expected_ordinal and a create that would land a
+// different name is refused rather than renumbered.
 
 // EstateKind is the three entities whose names the platform can own. The
 // registry pages (products, vendors, types, users) are not here: their names
@@ -35,86 +26,16 @@ import { resolveInherited } from "./typechain";
 // name from the display name instead (lib/entities.ts's createIdentity).
 export type EstateKind = "component" | "system" | "location";
 
-// NameMint is the SHAPE of a generated name, the client's reading of the
-// server's `nameMint`: the resolved stem, plus whether the first of that stem in
-// a bucket carries an ordinal at all (ADR-0101).
-export interface NameMint {
-  stem: string;
-  bareFirst: boolean;
-}
-
-// The stand-in for the number the platform allocates at create. A letter rather
-// than a digit or a "1", so nothing rendered from a mint can be read as the name
-// the row will actually get.
-export const ORDINAL_TOKEN = "n";
-
-// mintShape is what the name will look like, with the unknowable half written as
-// ORDINAL_TOKEN. It mirrors nameMint.name's three cases exactly, so the console
-// cannot describe a shape the gateway does not mint.
-export function mintShape(m: NameMint): string {
-  if (m.stem === "") return ORDINAL_TOKEN;
-  if (m.bareFirst) return m.stem;
-  return `${m.stem}-${ORDINAL_TOKEN}`;
-}
-
-// mintNote is the sentence that has to travel with the shape. For a suppressing
-// mint it is load-bearing rather than decorative: mintShape renders "boardroom",
-// the second one in the room is "boardroom-2", and an operator who was shown the
-// first without being told about the second was shown a value that silently
-// turned out different.
-export function mintNote(m: NameMint): string {
-  if (m.stem === "") {
-    return `The name is the lowest number free here, picked at create.`;
-  }
-  if (m.bareFirst) {
-    return `The first here carries no number, then ${m.stem}-2, ${m.stem}-3; picked at create.`;
-  }
-  return `${ORDINAL_TOKEN} is the lowest number free here, picked at create.`;
-}
-
-// componentMint resolves the mint a component would be named from: the stem of
-// the component_type its product is classified under, inherited up the chain.
+// ordinalNote is the sentence that travels with a drafted name. It says the one
+// thing the value itself cannot: that it is true right now rather than reserved.
 //
-// Null is "the platform will not name this", and it covers the gateway's own
-// refusal as well as the empty form: a chain with no stem anywhere is
-// ErrComponentTypeNoStem, because a device called "1" says nothing about what it
-// is. A component never suppresses its first ordinal (a rack's first display is
-// "display-1"), which is why bareFirst is a constant here and a resolved fact on
-// the other two.
-export function componentMint(
-  product: { component_type?: string } | undefined,
-  typesByName: Map<string, ComponentType>,
-): NameMint | null {
-  const stem = resolveInherited(product?.component_type, typesByName, (t) => t.stem);
-  return stem ? { stem, bareFirst: false } : null;
-}
-
-// systemMint is componentMint's system-tier twin: the system_type chain's stem,
-// suppressing the first ordinal (ADR-0101, a room with one boardroom in it does
-// not call it "boardroom-1"). Null for an unclassified system, which is
-// ErrSystemTypeRequiredForName: system_type_id is nullable and the stem lives on
-// it, so there is no source for a name.
-export function systemMint(
-  typeName: string | undefined,
-  typesByName: Map<string, SystemType>,
-): NameMint | null {
-  const stem = resolveInherited(typeName, typesByName, (t) => t.stem);
-  return stem ? { stem, bareFirst: true } : null;
-}
-
-// locationMint takes the location_type's name rule, which IS a mint (ADR-0102):
-// there is no chain to walk, because location_type is flat, and there is no
-// reshaping between the stored declaration and the shape allocation tests
-// against. Null is the opt-out, the state every shipped type but floor is in.
-//
-// The one collapse mirrors NameRule.normalized: a stem-less rule ignores
-// suppression, since suppressing the ordinal of a name that IS its ordinal
-// leaves nothing.
-export function locationMint(type: LocationType | undefined): NameMint | null {
-  const rule = type?.name_rule;
-  if (!rule) return null;
-  const stem = rule.stem ?? "";
-  return { stem, bareFirst: stem === "" ? false : Boolean(rule.bare_first) };
+// It replaced a per-mint sentence (#702). The old one had to explain the token
+// and, for a suppressing mint, warn that the "boardroom" on screen becomes
+// "boardroom-2" for the second one in the room; both were consequences of
+// showing a shape. The form now shows the name the create will use, and the
+// case the warning existed for is the one the precondition refuses.
+export function ordinalNote(ordinal: number): string {
+  return `${ordinal} is the lowest number free here right now. If another create takes it first, this one is refused rather than renamed.`;
 }
 
 // NameBucket is the placement scope the name has to be unique in: the client's
@@ -188,13 +109,14 @@ export function createPen(): Pen {
 // penState is which of the three a field is in, and it is derived rather than
 // stored so the three cannot disagree.
 //
-// available is "the platform will produce a value here". False is not a loading
-// state: a location_type with no name rule, an unclassified system, and a
-// component_type chain with no stem are all permanent answers, and each means
-// the operator has to type one. A field with a typed value reads as overridden
-// even if the flag says otherwise, which is what makes a name typed while
-// nothing could generate one survive the operator then choosing a type that
-// could.
+// available is "the platform HAS a value for this field", which for the name is
+// now the server's drafted name rather than a client-side reading of whether it
+// could resolve a stem (#702). That collapses two states the form used to keep
+// apart, "no value yet" and "no value ever", into one for the FIELD, and the
+// difference reappears where it belongs, in the hint: a permanent refusal names
+// the missing fact, a form still waiting for its answer says so. Both are
+// editable, and neither shows a lock over an empty box, which is the state this
+// affordance exists to prevent.
 export type PenState = "generated" | "overridden" | "unavailable";
 
 export function penState(available: boolean, p: Pen): PenState {

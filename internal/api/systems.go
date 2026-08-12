@@ -128,6 +128,9 @@ type createSystemInput struct {
 		SystemTypeID string  `json:"system_type_id,omitempty" doc:"The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified"`
 		Parent       *string `json:"parent,omitempty" doc:"Parent system name; omit for a root system"`
 		Location     *string `json:"location,omitempty" doc:"Location name this system is placed at"`
+		// The create form's ordinal precondition (#702); see
+		// createComponentInput for why it is a number and never a name.
+		ExpectedOrdinal *int `json:"expected_ordinal,omitempty" minimum:"1" doc:"The ordinal a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming the number that moved, rather than silently renumbered, if another create took it in between. Applies only when the platform names the row: sending it beside a name is a 422."`
 	}
 }
 
@@ -256,12 +259,13 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Description:   "Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.",
 	}, "system", "create"), func(ctx context.Context, in *createSystemInput) (*systemOutput, error) {
 		s, err := gw.CreateSystem(ctx, actorID(ctx), storage.SystemSpec{
-			Name:         in.Body.Name,
-			DisplayName:  in.Body.DisplayName,
-			StandardID:   ptrOrNil(in.Body.StandardID),
-			SystemTypeID: ptrOrNil(in.Body.SystemTypeID),
-			ParentName:   in.Body.Parent,
-			LocationName: in.Body.Location,
+			Name:            in.Body.Name,
+			DisplayName:     in.Body.DisplayName,
+			StandardID:      ptrOrNil(in.Body.StandardID),
+			SystemTypeID:    ptrOrNil(in.Body.SystemTypeID),
+			ParentName:      in.Body.Parent,
+			LocationName:    in.Body.Location,
+			ExpectedOrdinal: in.Body.ExpectedOrdinal,
 		}, a.scopeFor(ctx, "system", "create"), a.scopeFor(ctx, "location", "read"))
 		if err != nil {
 			return nil, mapSystemErr(err)
@@ -410,6 +414,9 @@ func mapSystemErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
 	}
+	if ordErr, ok := mapOrdinalErr(err); ok {
+		return ordErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrSystemNotFound):
 		return huma.Error404NotFound("system not found")
@@ -434,9 +441,9 @@ func mapSystemErr(err error) error {
 	case errors.Is(err, storage.ErrUnknownSystemType):
 		return huma.Error422UnprocessableEntity("unknown system_type")
 	case errors.Is(err, storage.ErrSystemTypeRequiredForName):
-		return huma.Error422UnprocessableEntity("a system with no system_type has no stem to generate a name from: supply a name, classify it, or :rename it before un-classifying it")
+		return errNoGeneratedName("a system with no system_type has no stem to generate a name from: supply a name, classify it, or :rename it before un-classifying it")
 	case errors.Is(err, storage.ErrSystemTypeNoStem):
-		return huma.Error422UnprocessableEntity("this system_type has no stem to generate a name from; supply a name explicitly, or fix the system_type registry")
+		return errNoGeneratedName("this system_type has no stem to generate a name from; supply a name explicitly, or fix the system_type registry")
 	case errors.Is(err, storage.ErrLocationNotFound):
 		return huma.Error422UnprocessableEntity("location not found")
 	default:

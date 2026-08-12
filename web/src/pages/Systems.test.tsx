@@ -463,6 +463,47 @@ function unlockLabel() {
   fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
 }
 
+// The server's draft answer, which is where the locked NAME comes from since
+// #702: the console used to walk the system_type chain for a stem and write the
+// token "n" where the ordinal went. The names below are fixtures rather than a
+// second implementation of the mint (the suppression rule is ADR-0101's and is
+// proven against a real database in internal/storage); what this file proves is
+// that the form shows what the route answered and posts the number back.
+//
+// An unclassified system is a REFUSAL located on body.name, which is how the
+// form tells "the platform will not name this" from every other 422.
+const DRAFTED: Record<string, string> = { class: "classroom", room: "room", board: "boardroom" };
+
+function draftJSON(body: { system_type_id?: string; name?: string }, label = "", rule = "") {
+  const drafted = body.name
+    ? { name: body.name, label, rule }
+    : { name: DRAFTED[body.system_type_id ?? ""] ?? "thing", ordinal: 1, label, rule };
+  return new Response(JSON.stringify(drafted), { status: 200, headers: { "Content-Type": "application/json" } });
+}
+
+function unclassifiedJSON() {
+  return new Response(
+    JSON.stringify({
+      status: 422,
+      detail: "a system with no system_type has no stem to generate a name from",
+      errors: [{ location: "body.name", message: "unclassified" }],
+    }),
+    { status: 422, headers: { "Content-Type": "application/json" } },
+  );
+}
+
+function stubFetch(rest?: (req: Request) => Promise<Response> | Response) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const req = input as Request;
+    if (req.method === "POST" && req.url.includes(":renderLabel")) {
+      const body = JSON.parse(await req.clone().text());
+      return body.name || body.system_type_id ? draftJSON(body) : unclassifiedJSON();
+    }
+    if (rest) return rest(req);
+    throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
+  });
+}
+
 describe("Systems create identity", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
@@ -486,36 +527,45 @@ describe("Systems create identity", () => {
     expect(screen.queryByText(/Derived from the display name/)).toBeNull();
   });
 
-  it("shows the stem the chosen type resolves to, with the first ordinal suppressed", async () => {
+  it("locks the name field on the name the server drafted for the chosen type", async () => {
+    // What this used to assert was the SHAPE the browser resolved ("classroom",
+    // with a warning that the next one would be "classroom-2"), because the
+    // ordinal was held unknowable. It shows the name the create will use, and
+    // the ordinal beside it, drafted by the one generator (#702).
+    stubFetch();
     const { type, key } = await fields();
     // Unclassified is the default and generates nothing, so there is no lock to
     // show until a type is chosen.
     expect(key.readOnly).toBe(false);
-    // "class" carries stem "classroom" of its own; the suppression is ADR-0101's,
-    // and it is a property of the system tier rather than of this type.
     fireEvent.change(type, { target: { value: "class" } });
     await waitFor(() => expect(key.value).toBe("classroom"));
     expect(key.readOnly).toBe(true);
     expect(key.disabled).toBe(false);
-    expect(screen.getByText(/classroom-2/)).toBeTruthy();
+    expect(screen.getByText(/1 is the lowest number free here right now/)).toBeTruthy();
     expect(screen.getByText(/Unique among the unplaced systems/)).toBeTruthy();
   });
 
-  it("resolves an inherited stem rather than reading the chosen type alone", async () => {
-    // "room" carries its own stem; a type that inherits would answer from an
-    // ancestor. The fixture's deepest type is the inheriting case for the icon,
-    // and this pins the same walk for the stem.
+  it("asks again when the type moves, so the shown name follows the classification", async () => {
+    // The stem walk this used to pin in the browser is the gateway's alone now
+    // (#695's naming half). What this tier can still see is that the question is
+    // re-asked and the field follows the answer.
+    stubFetch();
     const { type, key } = await fields();
     fireEvent.change(type, { target: { value: "room" } });
     await waitFor(() => expect(key.value).toBe("room"));
+    fireEvent.change(type, { target: { value: "class" } });
+    await waitFor(() => expect(key.value).toBe("classroom"));
   });
 
   it("requires a name only for an unclassified system, which has no stem", async () => {
+    stubFetch();
     const { submit, type, key } = await fields();
     // Unclassified is the default, and it is the one the gateway refuses to
-    // name (ErrSystemTypeRequiredForName).
+    // name (ErrSystemTypeRequiredForName). The refusal is the SERVER's since
+    // #702, so the wait is on it landing rather than on a button that is
+    // disabled from the first frame either way.
+    await waitFor(() => expect(screen.getByText(/This system is unclassified or its type chain sets no stem/)).toBeTruthy());
     expect(submit.disabled).toBe(true);
-    expect(screen.getByText(/This system is unclassified or its type chain sets no stem/)).toBeTruthy();
     fireEvent.input(key, { target: { value: "one-off" } });
     await waitFor(() => expect(submit.disabled).toBe(false));
 
@@ -526,22 +576,24 @@ describe("Systems create identity", () => {
 
   it("omits the name from the POST body when it is left blank", async () => {
     let captured: Record<string, unknown> | undefined;
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const req = input as Request;
+    stubFetch(async (req) => {
       if (req.method === "POST" && req.url.endsWith("/systems")) {
         captured = JSON.parse(await req.clone().text());
         return new Response(JSON.stringify({ id: uuidFor("s-new"), name: "classroom" }), { status: 201, headers: { "Content-Type": "application/json" } });
       }
       throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
     });
-    const { type, display } = await fields();
+    const { type, display, key } = await fields();
     fireEvent.change(type, { target: { value: "class" } });
+    await waitFor(() => expect(key.value).toBe("classroom"));
     unlockLabel();
     fireEvent.input(display, { target: { value: "Lecture Hall" } });
     fireEvent.click(screen.getByText("Create system"));
     await waitFor(() => expect(captured).toBeTruthy());
     // Omitted is "generate one"; "" is a name of nothing the API refuses.
     expect("name" in captured!).toBe(false);
+    // The ordinal the locked field was showing goes back as the precondition.
+    expect(captured!.expected_ordinal).toBe(1);
     expect(captured!.display_name).toBe("Lecture Hall");
   });
 });
