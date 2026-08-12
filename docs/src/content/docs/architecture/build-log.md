@@ -3943,14 +3943,18 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   arguing with it: clearing on a shipped type forks the row with an image carrying no rule, clearing
   on an operator's own type writes null, and an operator sees one behavior.
 
-  The part most likely to go wrong is the migration, and its interesting half is not the SQL. Estates
-  carry operator edits ON the shipped rows, so those move into shadows before the flip, and telling
-  an edit from a shipped value is NOT done by comparing the row against what this release ships: a
-  row holding a value a previous release shipped and this one withdrew looks exactly like an edit,
-  and preserving it would defeat the withdrawal the slice exists for. The **audit trail** decides,
-  because every operator write records itself in the same transaction. Proven against the old shape,
-  standing the database one migration back, writing the rows an upgraded estate holds, and migrating
-  forward with the real file.
+  The migration is one statement, and the interesting part is what it stopped doing. It first
+  captured operator edits into `registry_shadow` ahead of the flip, telling an edit from a shipped
+  value by the **audit trail**, since a row holding a value a previous release shipped and this one
+  withdrew looks exactly like an edit and preserving it would defeat the withdrawal. The architect
+  ruled that premise away: no release is cut and no operator data exists, so there is no upgraded
+  estate and nothing to preserve, and a review had already found the discriminator wrong in two ways
+  that both lose data silently with its `create` leg exercised by nothing. So the backfill is
+  `set official = true` on the four shipped names, its test asserts it writes no shadow at all, and
+  ADR-0106 records that the removal rides on the premise: the first real release has estates, and
+  owes them a migration that reasons about their rows. Still proven against the old shape, standing
+  the database one migration back, writing the rows an installed estate holds, migrating forward with
+  the real file, and driving the down leg as a round trip.
 
   One capability had to be defended rather than shipped: flipping the rows to official would have
   activated a guard dormant on this registry and silently taken away the contract editor for the four
