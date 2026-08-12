@@ -216,11 +216,26 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
+      // An empty box means "this node inherits", which on the wire is the field
+      // OMITTED, never an empty string. The three inherited facts are nullable
+      // and the walk treats only NULL as inherit (resolveTypeFacts), while the
+      // patch coalesces, so sending "" would write a real empty value that
+      // STOPS the walk for this node and every descendant under it. That is
+      // silent and permanent, and it lands on the facts the generated name and
+      // the abbrev-compacted render read. `stem` would also 422 outright on a
+      // child that legitimately has none, since it carries a minLength.
+      //
+      // Clearing a fact back to inherit is therefore not expressible here yet.
+      // The instrument for it is the house three-state string sentinel already
+      // live on label_rule in this same handler ("" clears to NULL), not the
+      // update_mask, which ADR-0106 scopes to nullable OBJECT fields. Tracked
+      // in #716 rather than papered over with a sentinel this route does not
+      // yet honour on these three columns.
       await updateComponentType(r.id, {
         display_name: displayName(),
-        stem: stem(),
-        abbrev: abbrev(),
-        icon: icon(),
+        stem: stem().trim() || undefined,
+        abbrev: abbrev().trim() || undefined,
+        icon: icon().trim() || undefined,
       });
       await qc.invalidateQueries({ queryKey: COMPONENT_TYPES_KEY });
     } catch (e) {
