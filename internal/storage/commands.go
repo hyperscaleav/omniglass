@@ -156,8 +156,14 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 		// The settle-check runs at the write, so a command whose window is
 		// already past (a zero window) is recorded terminal in this transaction.
 		// arc is already resolved above; passed through rather than left for
-		// settleCheck to re-derive.
-		if err := p.settleCheck(ctx, tx, ct, ownerKind, arc, instance, time.Now().UTC()); err != nil {
+		// settleCheck to re-derive. `now` comes from the database (dbNow, #667),
+		// which here is the very timestamp the intended row above was stamped
+		// with, since both are this transaction's now().
+		now, err := dbNow(ctx, tx)
+		if err != nil {
+			return nil, err
+		}
+		if err := p.settleCheck(ctx, tx, ct, ownerKind, arc, instance, now); err != nil {
 			return nil, err
 		}
 	}
@@ -220,7 +226,15 @@ func (p *PG) CommandSettlement(ctx context.Context, ownerKind, ownerID, commandT
 	if err != nil {
 		return "", err
 	}
-	now := time.Now().UTC()
+	// One clock for both ends of the comparison, and the database's, since that
+	// is where a sample's ts comes from (dbNow, #667). This transaction started
+	// after the one that wrote the intended value committed, so its now() is
+	// strictly later than that row's ts: the verdict is a fact about elapsed
+	// time rather than about skew between two hosts.
+	now, err := dbNow(ctx, tx)
+	if err != nil {
+		return "", err
+	}
 	if err := p.settleCheck(ctx, tx, ct, ownerKind, arc, instance, now); err != nil {
 		return "", err
 	}

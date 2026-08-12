@@ -59,6 +59,14 @@ A command's effect is judged as a pure function of the intended value, the obser
 
 This is the windowed form of the `told` versus `is` comparison the [reconciliation read](/architecture/variables/) opens.
 
+**A zero window is terminal by construction, never by arithmetic**
+([ADR-0108](/architecture/decisions/#adr-0108-settlement-reads-one-clock-and-a-zero-window-is-a-statement-of-intent)).
+`settle_window_seconds: 0` is the way to say "settle immediately", which is a claim about intent
+rather than about elapsed time, so the verdict for such a command never consults a timestamp and
+never comes back `pending`. And **the comparison reads one clock, the database's**: a sample's `ts`
+is written by Postgres, so the `now` a settle-check judges against is read from Postgres too, in the
+same transaction. A server whose clock differs from its database's gets the same verdict either way.
+
 Beside the computed verdict, the `command` row **records its lifecycle**: `status` is `issued`
 until a terminal `settled`, `failed`, or `timed-out`, and `settled_at` stamps the terminal moment
 (a CHECK ties the two: `issued` exactly while `settled_at` is null). The recorded status carries

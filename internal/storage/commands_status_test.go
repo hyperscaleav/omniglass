@@ -124,6 +124,40 @@ func TestCommandStatusRecording(t *testing.T) {
 		}
 	})
 
+	// The settle-check's `now` and the sample's `ts` are two ends of one
+	// comparison, and they used to come from two clocks: `ts` defaults to
+	// Postgres's now(), while `now` was time.Now() in the server process. Any
+	// skew between them moved the verdict, and at a zero window there is no
+	// margin at all to absorb it, so a command that genuinely failed could be
+	// reported pending forever on a deployment whose database is on another
+	// host (#667).
+	//
+	// The observable that pins the fix is settled_at, because the settle-check
+	// stamps it with the very `now` it judged against. Written inside
+	// IssueCommand's own transaction it must equal the intended sample's ts to
+	// the microsecond, since now() is the transaction's timestamp and both
+	// values are that one reading of that one clock. A Go-side now cannot land
+	// on it by accident.
+	t.Run("the settle-check judges against the database's clock", func(t *testing.T) {
+		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-1", "set-now", "", json.RawMessage(`"hdmi2"`), nil, all)
+		if err != nil {
+			t.Fatalf("issue: %v", err)
+		}
+		var intendedTS time.Time
+		if err := conn.QueryRow(ctx,
+			`select ts from property where command_id = $1 and provenance = 'intended'`, cmd.ID).Scan(&intendedTS); err != nil {
+			t.Fatalf("intended ts for command %d: %v", cmd.ID, err)
+		}
+		status, settledAt := commandStatus(t, conn, cmd.ID)
+		if status == "issued" || settledAt == nil {
+			t.Fatalf("zero-window command: status=%q settled_at=%v, want a terminal status with a moment", status, settledAt)
+		}
+		if !settledAt.Equal(intendedTS) {
+			t.Errorf("settled_at %s and the intended sample's ts %s came from different clocks (%s apart), want one reading of the database's",
+				settledAt.UTC(), intendedTS.UTC(), settledAt.Sub(intendedTS))
+		}
+	})
+
 	t.Run("zero-window mismatch fails", func(t *testing.T) {
 		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-1", "set-now", "", json.RawMessage(`"hdmi9"`), nil, all)
 		if err != nil {
@@ -150,6 +184,29 @@ func TestCommandStatusRecording(t *testing.T) {
 		}
 		if verdict != storage.SettlementFailed {
 			t.Errorf("unanswered verdict = %q, want failed (the shipped meaning)", verdict)
+		}
+	})
+
+	// The zero-window verdict is terminal by construction, not by arithmetic
+	// (#667), and this is the end-to-end shape of that: a sample stamped in the
+	// FUTURE relative to the clock the check reads, which is what any skew
+	// between the database and the server used to look like from inside Settle.
+	// The old comparison read that as "still within the window" and answered
+	// pending, forever, for the one setting whose whole meaning is "do not
+	// wait". A zero window says settle immediately, so no timestamp of any
+	// provenance can make it pending.
+	t.Run("a zero window is terminal even against a sample stamped in the future", func(t *testing.T) {
+		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-2", "set-now", "", json.RawMessage(`"hdmi7"`), nil, all)
+		if err != nil {
+			t.Fatalf("issue: %v", err)
+		}
+		mustExec(t, conn, `update property set ts = now() + interval '1 hour' where command_id = $1`, cmd.ID)
+		verdict, err := gw.CommandSettlement(ctx, "component", "disp-2", "set-now", "", all)
+		if err != nil {
+			t.Fatalf("settlement: %v", err)
+		}
+		if verdict != storage.SettlementFailed {
+			t.Errorf("zero-window verdict against a future sample = %q, want failed", verdict)
 		}
 	})
 

@@ -145,6 +145,7 @@ below from the project's history. From here it grows one slice at a time.
 
 | [ADR-0106](#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask) | 2026-08-12 | Accepted | `location_type` adopts the **registry fork** (ADR-0095) rather than growing a third ownership model: the shipped rows seed `official: true`, the boot seed writes them authoritatively, and an operator's edit forks into `registry_shadow` with `:restore` discarding it. That is what makes a shipped value **withdrawable**, which insert-if-absent could never be, since it can add a default to every estate and remove one from none. The one-time backfill moves the edits estates already hold ON those rows into shadows first, telling an edit from a shipped value by the **audit trail** rather than by comparing columns against what this release ships, because a row holding a WITHDRAWN shipped value is indistinguishable from an edit by inspection and preserving it would defeat the withdrawal. A location type's property and metric **contracts stay writable** on a shipped row: a contract line is a row in its own table, nothing seeds one, and the official guard was dormant on this registry until the flip would have activated it. On the wire, a nullable OBJECT field clears by being **named in `update_mask`** with no value, since an object has no empty value to overload and an explicit null is indistinguishable from an omitted key after decoding; `name_rule` is the first and the convention is now the API's, not that field's. **Amended (#703):** the discriminator is REMOVED and the backfill is only the `official` flip, because with no release cut and no operator data there is no edit to preserve; the argument for it stands unchanged for the first release that has estates, which owes them a new migration rather than this one |
 | [ADR-0107](#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs) | 2026-08-12 | Accepted | `POST /components` accepts a `system` and INSERTS that system's primary membership from it, the same row `PUT /systems/{name}/members/{component}` writes under `system:update`, while the create asked for no system permission at all: the create was the cheap way around the membership route's gate. The create now requires `system:update` when the reference is present and resolves it in that scope, so **two paths writing one row cost one permission**. The accepted consequence is a live narrowing: `operator` holds `component:create` and no `system:*`, so an operator can no longer create a component INTO a system, which reads as the role line rather than collateral damage (an operator maintains components, a deploy tech builds out systems and their membership). Granting `operator` the permission was refused as a much larger grant than "may bind a membership while creating". A second permission conditional on the REQUEST is published like the platform tier's, as `x-omniglass-conditional-permission`, and enforced in the handler because middleware cannot see the body; the console hides the picker from a principal that cannot use it and the API's refusal names the permission, so the narrowing is met before the form is filled in. **Amended (#707 review):** the console gate read the PERMISSION only, so a principal holding `system:update` over an empty scope (a location-scoped `deploy` grant, since the cross-tier expansion is unbuilt, #10) was offered the picker and refused on submit, and the API answered "system not found" for a system that caller could `GET`; the gate now also requires a system carrying the scope-aware `update` action, and the bind takes `system:read` beside `system:update` so a readable row is refused by AUTHORITY (403) rather than by absence |
+| [ADR-0108](#adr-0108-settlement-reads-one-clock-and-a-zero-window-is-a-statement-of-intent) | 2026-08-12 | Accepted | Settlement's two timestamps come from **one clock, the database's**: a sample's `ts` is `default now()`, so the `now` a settle-check judges against is read with `select now()` inside the same transaction rather than from `time.Now()` in the server process. Two clocks on one comparison made the verdict a function of skew, and at `settle_window_seconds: 0` there is no margin to absorb it, so a command that genuinely failed could be reported `pending` and never settle on any deployment whose database is on another host. Separately, a **zero window is terminal by construction**, checked before any arithmetic: it is the documented way to say "settle immediately", a claim about intent rather than elapsed time, so no timestamp may make it pending. Stamping samples from Go was refused as the larger ripple (every telemetry `ts` defaults to `now()` and other readers rely on database ordering), and a tolerance was refused outright as the move that stops a test failing without stopping the behavior depending on skew. `Settle` stays pure and still takes `now`; what changed is who supplies it, at the cost of one round trip on each of the two settle paths |
 
 ## Entries
 
@@ -4800,3 +4801,47 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   picker (now on both layers, per the amendment above), and a full authorization rehearsal in the
   draft is its own question.
 - **Tracked under** [#707](https://github.com/hyperscaleav/omniglass/issues/707).
+
+### ADR-0108: Settlement reads one clock, and a zero window is a statement of intent
+
+- **Date:** 2026-08-12 | **Status:** Accepted | **Pages:** [commands](/architecture/commands/)
+- **Context:** `Settle` compares a sample's `ts` against a `now` its caller supplies. Every `ts` on
+  the telemetry tables is `timestamp with time zone default now()`, so that end of the comparison is
+  written by **Postgres**, while `now` was `time.Now()` in the **server** process. Two clocks, one
+  comparison. At `settle_window_seconds: 0` the test reduces to `now.Sub(intended.TS) < 0`, true
+  exactly when the sample is stamped ahead of the host, so the verdict for the setting that most
+  wants to be decisive was decided by skew. `TestCommandIssueAPI` failed intermittently on precisely
+  that branch, and the operator-facing version is worse than a flake: a deployment whose database sits
+  on another host gets the same coin flip on every zero-window command, and a command that genuinely
+  failed can be reported `pending` and never settle.
+- **Decision (the clock):** the comparison takes `now` from the **database**, read with `select now()`
+  inside the caller's transaction (`dbNow`), at both settle sites. `now()` is
+  `transaction_timestamp`, which is the point rather than an incidental detail: a settle-check running
+  in the transaction that just opened the intended value reads exactly the timestamp that row was
+  stamped with, so the two ends of the comparison are one reading of one clock rather than two
+  readings that happen to be close. A check in a later transaction reads a strictly later timestamp
+  from the same server, so elapsed time is elapsed time and never skew. `settled_at` is stamped with
+  the same value, which also puts it in the currency the insert path's own `now()` already uses.
+- **Decision (the zero window):** a window of zero is **terminal by construction**, checked before any
+  arithmetic. `settle_window_seconds: 0` is the documented way to say "settle immediately", which is a
+  claim about **intent** rather than about elapsed time, so no timestamp of any provenance may make it
+  `pending`. Taking the clock from the database is what makes every other window honest; this is what
+  makes the zero case independent of the clock rather than merely agreeing with it, and it is the half
+  that survives a future caller that supplies `now` from somewhere else.
+- **What was refused:** **stamping the sample from Go** on the write path, which is the other way to
+  get one clock. It inverts the ripple: `ts` defaults to `now()` across every telemetry table and other
+  readers rely on database time ordering, so moving the authority to the process would touch far more
+  than settlement to fix a defect that lives in settlement. Also refused: **widening the comparison
+  with a tolerance**. A tolerance makes the test stop failing without making the behavior stop
+  depending on skew, which is the failure this repo has paid for twice.
+- **Consequence (cost, stated):** one extra round trip on each of the two settle paths, `IssueCommand`
+  and `CommandSettlement`. Both already run several statements inside one transaction, so it is a small
+  fraction of either, and it is the price of the comparison being about time rather than about which
+  host answered. `Settle` stays **pure** and still takes `now` as an argument; what changed is who
+  supplies it, which is the repo's own rule about the clock being an edge concern pushed out of the
+  core.
+- **Consequence (a shape that was already true becomes stated):** nothing in the catalog ships a zero
+  window with a target today (`reboot` is fire-and-forget), so the change moves no seeded behavior. It
+  moves what an operator's own zero-window `command_type` does, from "terminal if the clocks happen to
+  cooperate" to "terminal".
+- **Tracked under** [#667](https://github.com/hyperscaleav/omniglass/issues/667).
