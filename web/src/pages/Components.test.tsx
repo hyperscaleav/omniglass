@@ -1138,9 +1138,21 @@ describe("Components create offers a system only to a principal who may bind one
     expect(screen.getByText(/system:update/)).toBeTruthy();
   });
 
-  it("posts no system for the principal it hid the picker from", async () => {
+  // Both bodies, not just the create's. The form asks :renderLabel with the same
+  // shape it will post, so a hidden picker that still carried a system would
+  // leak it into the draft first, one request earlier and against a route gated
+  // by component:create rather than system:update. stubFetch answers the draft
+  // itself and would have swallowed that, so this test drives its own fetch.
+  it("neither drafts nor posts a system for the principal it hid the picker from", async () => {
     let sent: Record<string, unknown> | undefined;
-    stubFetch(async (req) => {
+    const drafted: Record<string, unknown>[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":renderLabel")) {
+        const body = JSON.parse(await req.clone().text());
+        drafted.push(body);
+        return draftJSON(body);
+      }
       if (req.method === "POST" && req.url.endsWith("/components")) {
         sent = JSON.parse(await req.clone().text());
         return new Response(JSON.stringify({ ...comp, id: uuidFor("c-new") }), { status: 201, headers: { "Content-Type": "application/json" } });
@@ -1154,5 +1166,7 @@ describe("Components create offers a system only to a principal who may bind one
     fireEvent.click(screen.getByText("Create component"));
     await waitFor(() => expect(sent).toBeTruthy());
     expect(sent).not.toHaveProperty("system");
+    expect(drafted.length).toBeGreaterThan(0);
+    for (const body of drafted) expect(body).not.toHaveProperty("system");
   });
 });
