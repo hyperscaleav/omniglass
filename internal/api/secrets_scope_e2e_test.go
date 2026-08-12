@@ -48,7 +48,7 @@ func TestListSecretsScopedDirectoryAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "wing-b", "location_type": "building", "parent": "hq"}, http.StatusCreated)
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "codec-b", LocationName: wingB(),
-	}, scope.Set{All: true}); err != nil {
+	}, scope.Set{All: true}, scope.Set{All: true}, scope.Set{All: true}); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 

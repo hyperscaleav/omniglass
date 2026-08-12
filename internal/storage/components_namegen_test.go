@@ -23,7 +23,7 @@ func TestCreateGeneratesFromTypeStem(t *testing.T) {
 	}
 
 	qm55 := "samsung-qm55"
-	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all)
+	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all)
 	if err != nil {
 		t.Fatalf("create first: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestCreateGeneratesFromTypeStem(t *testing.T) {
 		t.Fatalf("first.NameGenerated = false, want true")
 	}
 
-	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all)
+	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all)
 	if err != nil {
 		t.Fatalf("create second: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestCreateGeneratesFromTypeStem(t *testing.T) {
 	// A DIFFERENT placement bucket restarts the ordinal at 1: the scope is
 	// per-placement, not estate-wide.
 	root := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "namegen-root"}, all)
-	third, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, ParentName: &root.Name}, all)
+	third, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, ParentName: &root.Name}, all, all, all)
 	if err != nil {
 		t.Fatalf("create third (under a parent): %v", err)
 	}
@@ -59,14 +59,14 @@ func TestCreateGeneratesFromTypeStem(t *testing.T) {
 		t.Fatalf("create location: %v", err)
 	}
 	locName := "namegen-loc"
-	fourth, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, LocationName: &locName}, all)
+	fourth, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, LocationName: &locName}, all, all, all)
 	if err != nil {
 		t.Fatalf("create fourth (at a location): %v", err)
 	}
 	if fourth.Name != "display-1" {
 		t.Fatalf("fourth generated name (location bucket) = %q, want display-1", fourth.Name)
 	}
-	fifth, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, LocationName: &locName}, all)
+	fifth, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, LocationName: &locName}, all, all, all)
 	if err != nil {
 		t.Fatalf("create fifth (same location): %v", err)
 	}
@@ -92,7 +92,7 @@ func TestSubtypeInheritsStem(t *testing.T) {
 		t.Fatalf("create product under interactive-display: %v", err)
 	}
 
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &prod.Name}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &prod.Name}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestRenameFreezes(t *testing.T) {
 	}
 
 	qm55 := "samsung-qm55"
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestResetReturnsPen(t *testing.T) {
 	qm55 := "samsung-qm55"
 
 	// An operator-typed component from the start.
-	typed, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "operator-panel", ProductName: &qm55}, all)
+	typed, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "operator-panel", ProductName: &qm55}, all, all, all)
 	if err != nil {
 		t.Fatalf("create typed: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestReclassifyRecomputes(t *testing.T) {
 	qm55 := "samsung-qm55"
 	mic := "shure-mxa920"
 
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, DisplayName: "My Display"}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, DisplayName: "My Display"}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -271,7 +271,7 @@ func TestComponentTypeStemEditDoesNotRecomputeExistingNames(t *testing.T) {
 		t.Fatalf("create product: %v", err)
 	}
 
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &prod.Name}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &prod.Name}, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -319,7 +319,7 @@ func TestConcurrentCreateSerialisesOrdinals(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start
-			results[i], errs[i] = gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all)
+			results[i], errs[i] = gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all)
 		}(i)
 	}
 	close(start)

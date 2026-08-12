@@ -27,7 +27,7 @@ func TestGeneratedNameRecordsItsOrdinal(t *testing.T) {
 	}
 
 	qm55 := "samsung-qm55"
-	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all)
+	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all)
 	if err != nil {
 		t.Fatalf("create first: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestGeneratedNameRecordsItsOrdinal(t *testing.T) {
 		t.Fatalf("first ordinal = %v, want 1", ordstr(first.Ordinal))
 	}
 
-	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all)
+	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all)
 	if err != nil {
 		t.Fatalf("create second: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestOperatorTypedNameHasNoOrdinal(t *testing.T) {
 	}
 
 	qm55 := "samsung-qm55"
-	typed, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", ProductName: &qm55}, all)
+	typed, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", ProductName: &qm55}, all, all, all)
 	if err != nil {
 		t.Fatalf("create typed: %v", err)
 	}
@@ -95,11 +95,11 @@ func TestOperatorTypedNameHoldsItsSlot(t *testing.T) {
 	}
 
 	qm55 := "samsung-qm55"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", ProductName: &qm55}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", ProductName: &qm55}, all, all, all); err != nil {
 		t.Fatalf("create the hand-typed occupant: %v", err)
 	}
 
-	generated, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all)
+	generated, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all)
 	if err != nil {
 		t.Fatalf("create generated beside a hand-typed name in the mint's shape: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestRenameClearsTheOrdinalAndResetReMints(t *testing.T) {
 	}
 
 	qm55 := "samsung-qm55"
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -170,10 +170,10 @@ func TestMoveReRecordsTheOrdinal(t *testing.T) {
 	}
 
 	qm55 := "samsung-qm55"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all); err != nil {
 		t.Fatalf("create first: %v", err)
 	}
-	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all)
+	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all)
 	if err != nil {
 		t.Fatalf("create second: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestMoveReRecordsTheOrdinal(t *testing.T) {
 	}
 
 	root := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "ordinal-move-root"}, all)
-	moved, err := gw.MoveComponent(ctx, "", second.ID, storage.ComponentMove{ParentName: &root.Name}, all, all)
+	moved, err := gw.MoveComponent(ctx, "", second.ID, storage.ComponentMove{ParentName: &root.Name}, all, all, all)
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
@@ -207,10 +207,10 @@ func TestReclassifyReRecordsTheOrdinal(t *testing.T) {
 	qm55, mic := "samsung-qm55", "shure-mxa920"
 	// A mic already sitting in the bucket, so the reclassified row cannot land
 	// back on ordinal 1 and pass by accident.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &mic}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &mic}, all, all, all); err != nil {
 		t.Fatalf("create the sitting mic: %v", err)
 	}
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all)
 	if err != nil {
 		t.Fatalf("create the display: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestBareRenderReadsTheStoredOrdinal(t *testing.T) {
 	}
 
 	qm55 := "samsung-qm55"
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -300,7 +300,7 @@ func TestStemlessAllocationWorks(t *testing.T) {
 	// Occupy it for real, through the ordinary create path, so the second
 	// allocation reads a row the database actually holds.
 	qm55 := "samsung-qm55"
-	if _, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{Name: "1", ProductName: &qm55}, all); err != nil {
+	if _, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{Name: "1", ProductName: &qm55}, all, all, all); err != nil {
 		t.Fatalf("create a component named %q: %v", "1", err)
 	}
 	name, ordinal, err = pg.ExportGenerateName(ctx, "", nil, nil, nil)
@@ -313,7 +313,7 @@ func TestStemlessAllocationWorks(t *testing.T) {
 
 	// A stemmed sibling in the same bucket occupies nothing in the stem-less
 	// space, the same separation stems already have from each other.
-	if _, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all); err != nil {
+	if _, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all); err != nil {
 		t.Fatalf("create a stemmed sibling: %v", err)
 	}
 	name, ordinal, err = pg.ExportGenerateName(ctx, "", nil, nil, nil)
@@ -359,12 +359,12 @@ func TestStoredOrdinalsRecomputeToThemselves(t *testing.T) {
 	// Every bucket, both stems, and both pens: generated rows, an
 	// operator-typed one, a renamed one, a reset one, and a moved one.
 	for range 3 {
-		if _, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all); err != nil {
+		if _, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all); err != nil {
 			t.Fatalf("create orphan display: %v", err)
 		}
 	}
 	for range 2 {
-		if _, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &mic, LocationName: &room}, all); err != nil {
+		if _, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &mic, LocationName: &room}, all, all, all); err != nil {
 			t.Fatalf("create located mic: %v", err)
 		}
 	}
@@ -372,26 +372,26 @@ func TestStoredOrdinalsRecomputeToThemselves(t *testing.T) {
 	// below must land on ordinal 2. Without it the moved row's OLD ordinal (1,
 	// from its parent bucket) would still equal what a recompute produces, and
 	// a move that forgot to re-record would slip through unnoticed.
-	if _, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, LocationName: &room}, all); err != nil {
+	if _, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, LocationName: &room}, all, all, all); err != nil {
 		t.Fatalf("create located display: %v", err)
 	}
-	child, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, ParentName: &parent.Name}, all)
+	child, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, ParentName: &parent.Name}, all, all, all)
 	if err != nil {
 		t.Fatalf("create child display: %v", err)
 	}
-	if _, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{Name: "hand-typed-display", ProductName: &qm55}, all); err != nil {
+	if _, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{Name: "hand-typed-display", ProductName: &qm55}, all, all, all); err != nil {
 		t.Fatalf("create hand-typed: %v", err)
 	}
 	// Generated and then renamed, and LEFT renamed: the row that catches a
 	// rename which hands over the name without giving up the number.
-	frozen, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all)
+	frozen, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all)
 	if err != nil {
 		t.Fatalf("create to-be-frozen: %v", err)
 	}
 	if _, err := pg.RenameComponent(ctx, "", frozen.ID, "frozen-display", all, all); err != nil {
 		t.Fatalf("rename the frozen row: %v", err)
 	}
-	renamed, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &mic}, all)
+	renamed, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &mic}, all, all, all)
 	if err != nil {
 		t.Fatalf("create to-be-renamed: %v", err)
 	}
@@ -404,7 +404,7 @@ func TestStoredOrdinalsRecomputeToThemselves(t *testing.T) {
 	// Out of the parent bucket and into the room's, which is a real bucket
 	// change: a parent wins over a location in nameGenScopeKey, so clearing it
 	// is what makes this a move between buckets rather than within one.
-	if _, err := pg.MoveComponent(ctx, "", child.ID, storage.ComponentMove{ParentName: strptr(""), LocationName: &room}, all, all); err != nil {
+	if _, err := pg.MoveComponent(ctx, "", child.ID, storage.ComponentMove{ParentName: strptr(""), LocationName: &room}, all, all, all); err != nil {
 		t.Fatalf("move: %v", err)
 	}
 

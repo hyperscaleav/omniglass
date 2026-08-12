@@ -39,7 +39,7 @@ func TestIssueCommandParamsSchemaEnforced(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "amp-1"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "amp-1"}, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	if _, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{

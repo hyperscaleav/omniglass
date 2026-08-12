@@ -54,26 +54,26 @@ func buildAddressFixture(t *testing.T, gw storage.Gateway) addressFixture {
 
 	display1, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "display-1", LocationName: &r415a.Name,
-	}, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("create display-1: %v", err)
 	}
 	dsp1, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "dsp-1", LocationName: &r415a.Name,
-	}, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("create dsp-1: %v", err)
 	}
 	danteCard1, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "dante-card-1", ParentName: &dsp1.Name,
-	}, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("create dante-card-1: %v", err)
 	}
 
 	av, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "av", LocationName: &c17.Name,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create av: %v", err)
 	}

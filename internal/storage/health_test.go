@@ -59,7 +59,7 @@ func newHealthFixture(t *testing.T) *healthFixture {
 	std, room := "health-huddle", "hq-r1"
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "hq-huddle", StandardID: &std, LocationName: &room,
-	}, f.all); err != nil {
+	}, f.all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	// One table mic, quorum 1, an impaired one degrades its system.
@@ -72,7 +72,7 @@ func newHealthFixture(t *testing.T) *healthFixture {
 
 	// cisco-room-bar classifies as video-bar.
 	bar := "cisco-room-bar"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, f.all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, f.all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all); err != nil {
@@ -517,7 +517,7 @@ func TestHealthReportOfAFreshSystem(t *testing.T) {
 	std, room := "health-podium", "hq-r1"
 	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "fresh", StandardID: &std, LocationName: &room,
-	}, f.all); err != nil {
+	}, f.all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 
@@ -566,7 +566,7 @@ func TestHealthSurvivesARename(t *testing.T) {
 	ctx := context.Background()
 
 	room := "hq-r1"
-	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "plain", LocationName: &room}, f.all); err != nil {
+	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "plain", LocationName: &room}, f.all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	before, v := f.recorded(t, ctx, "system", "plain")
@@ -609,7 +609,7 @@ func TestHealthMovesOnStandardChange(t *testing.T) {
 	std, room := "health-podium", "hq-r1"
 	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "fresh", StandardID: &std, LocationName: &room,
-	}, f.all); err != nil {
+	}, f.all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	before, v := f.recorded(t, ctx, "system", "fresh")
@@ -722,7 +722,7 @@ func TestHealthMovesOnRelocation(t *testing.T) {
 	campus, _ := f.recorded(t, ctx, "location", "hq")
 
 	room := "hq-r2"
-	if _, err := f.gw.MoveSystem(ctx, "", "hq-huddle", storage.SystemMove{LocationName: &room}, f.all, f.all); err != nil {
+	if _, err := f.gw.MoveSystem(ctx, "", "hq-huddle", storage.SystemMove{LocationName: &room}, f.all, f.all, all); err != nil {
 		t.Fatalf("relocate: %v", err)
 	}
 
@@ -790,7 +790,7 @@ func TestHealthMovesOnLocationMove(t *testing.T) {
 	anchorRoom := "anchor-room"
 	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "anchor-sys", LocationName: &anchorRoom,
-	}, f.all); err != nil {
+	}, f.all, all); err != nil {
 		t.Fatalf("create anchor system: %v", err)
 	}
 	// Conforming to the fixture's standard with nobody staffing its role is
@@ -798,7 +798,7 @@ func TestHealthMovesOnLocationMove(t *testing.T) {
 	std, moverRoom := "health-huddle", "mover-room"
 	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "mover-sys", StandardID: &std, LocationName: &moverRoom,
-	}, f.all); err != nil {
+	}, f.all, all); err != nil {
 		t.Fatalf("create mover system: %v", err)
 	}
 
@@ -989,7 +989,7 @@ func TestAlarmOnSpareDoesNotShort(t *testing.T) {
 	ctx := context.Background()
 
 	panel := "cisco-room-bar"
-	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &panel}, f.all); err != nil {
+	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &panel}, f.all, all, all); err != nil {
 		t.Fatalf("create second component: %v", err)
 	}
 	if err := f.gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", f.all); err != nil {

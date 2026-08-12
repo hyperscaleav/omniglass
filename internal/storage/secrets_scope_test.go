@@ -28,7 +28,7 @@ func TestListSecretsScopeInjection(t *testing.T) {
 	mustLoc(t, gw, "annex", "building", strptr("campus"))
 	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "codec-1", LocationName: strptr("room"),
-	}, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("component: %v", err)
 	}

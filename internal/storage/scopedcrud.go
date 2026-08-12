@@ -665,6 +665,52 @@ func resolveScopedRef[T any](ctx context.Context, q querier, cfg scopedConfig[T]
 	return resolveRef(ctx, q, cfg, ref, resource, set, refPolicyForbid)
 }
 
+// resolvePlacementRef resolves a write's CROSS-TIER placement reference (a
+// component's or a system's location, a component's system) within the caller's
+// READ scope on the referenced tier. It is the one seam the create and the move
+// paths share for it, so the four of them cannot drift apart, and it is the
+// gateway-side twin of what the draft-render route already does (#699, #700).
+//
+// # Why the read scope, and whose
+//
+// The caller's create/action scope is the WRONG SET here, and not merely a
+// stricter one: it is resolved for the entity being written ("component",
+// "system"), and a location's scope tree is its own unrelated ancestor chain, so
+// checking it against the location table can never match and would deny every
+// non-all caller outright (the tier-mismatch defect a review caught, which is
+// why these binds were scope-blind in the first place). What resolves correctly
+// is a scope resolved FOR the referenced tier, and the action it is resolved for
+// is read: the caller is not writing the location, it is naming one, and since
+// ADR-0100 put placement into the label data map the answer CONTAINS that row's
+// label. So the question the bind has to ask is the one a read asks, and the API
+// layer injects location:read / system:read exactly as :renderLabel does.
+//
+// # Why the non-disclosing not-found rather than a forbidden
+//
+// resolveScopedRef's notFound-versus-forbidden split is right for a SAME-TIER
+// reference the caller's own grant covers (a parent component, a parent system),
+// and it stays there. It is wrong here: a 403 that separates "no such location"
+// from "a location you may not see" is precisely the disclosure this guard
+// closes, one level up, and the draft route answers the same non-disclosing
+// cfg.notFound (GetLocation/GetSystem) for both cases. Sharing that one refusal
+// is what keeps a preview and the create it previews from disagreeing.
+//
+// withoutCandidates survives the change of policy for the reason its own doc
+// gives that has nothing to do with scope: these references arrive in a request
+// BODY, and an *ErrPathNotFound leaving the gateway would be mapped by
+// mapRefErr's blanket 404 before the entity's own mapper could call a create's
+// missing location the 422 it is. Its other half, redacting an ambiguity's
+// candidates, is now belt and braces rather than the load-bearing guard it was:
+// narrowing to the caller's read scope means a candidate list can only ever name
+// rows this caller may read. Making that list useful again is #697's.
+func resolvePlacementRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string, read scope.Set) (*T, error) {
+	v, err := scopedByNameInScope(ctx, q, cfg, ref, cfg.resource, read)
+	if err != nil {
+		return nil, withoutCandidates(err)
+	}
+	return v, nil
+}
+
 // scopedGet resolves an entity by name within the caller's read scope; absent,
 // out of scope, or ambiguous only outside the caller's scope is the same
 // non-disclosing notFound (scopedByNameInScope narrows to read scope first).

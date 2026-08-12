@@ -33,7 +33,7 @@ func TestSystemReparent(t *testing.T) {
 	// registered :move with {location} only would have introduced (deleting
 	// the only entry point for a system reparent and making the cycle guard
 	// below unreachable).
-	after, err := gw.MoveSystem(ctx, "", "sys-mid", storage.SystemMove{ParentName: strptr("sys-b")}, all, all)
+	after, err := gw.MoveSystem(ctx, "", "sys-mid", storage.SystemMove{ParentName: strptr("sys-b")}, all, all, all)
 	if err != nil {
 		t.Fatalf("valid reparent: %v", err)
 	}
@@ -42,17 +42,17 @@ func TestSystemReparent(t *testing.T) {
 	}
 
 	// Cycle: sys-b cannot move under sys-leaf, now its own descendant.
-	if _, err := gw.MoveSystem(ctx, "", "sys-b", storage.SystemMove{ParentName: strptr("sys-leaf")}, all, all); !errors.Is(err, storage.ErrSystemCycle) {
+	if _, err := gw.MoveSystem(ctx, "", "sys-b", storage.SystemMove{ParentName: strptr("sys-leaf")}, all, all, all); !errors.Is(err, storage.ErrSystemCycle) {
 		t.Fatalf("move sys-b under descendant err = %v, want ErrSystemCycle", err)
 	}
 	// Cycle: a system cannot move under itself.
-	if _, err := gw.MoveSystem(ctx, "", "sys-mid", storage.SystemMove{ParentName: strptr("sys-mid")}, all, all); !errors.Is(err, storage.ErrSystemCycle) {
+	if _, err := gw.MoveSystem(ctx, "", "sys-mid", storage.SystemMove{ParentName: strptr("sys-mid")}, all, all, all); !errors.Is(err, storage.ErrSystemCycle) {
 		t.Fatalf("move sys-mid under itself err = %v, want ErrSystemCycle", err)
 	}
 
 	// Clear to root. all is an all-scoped grant, so the new authorization guard
 	// on clearing to root does not fire here.
-	after, err = gw.MoveSystem(ctx, "", "sys-mid", storage.SystemMove{ParentName: strptr("")}, all, all)
+	after, err = gw.MoveSystem(ctx, "", "sys-mid", storage.SystemMove{ParentName: strptr("")}, all, all, all)
 	if err != nil {
 		t.Fatalf("clear parent: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestSystemReparent(t *testing.T) {
 	}
 
 	// Unknown parent is a by-name 422.
-	if _, err := gw.MoveSystem(ctx, "", "sys-mid", storage.SystemMove{ParentName: strptr("ghost")}, all, all); !errors.Is(err, storage.ErrParentSystemNotFound) {
+	if _, err := gw.MoveSystem(ctx, "", "sys-mid", storage.SystemMove{ParentName: strptr("ghost")}, all, all, all); !errors.Is(err, storage.ErrParentSystemNotFound) {
 		t.Fatalf("unknown parent err = %v, want ErrParentSystemNotFound", err)
 	}
 }
@@ -84,11 +84,11 @@ func TestSystemReparentScope(t *testing.T) {
 	actorA := scope.Set{IDs: []string{rootA.ID}}
 
 	// Onto an out-of-scope parent (ss-root-b): forbidden.
-	if _, err := gw.MoveSystem(ctx, "", "ss-move", storage.SystemMove{ParentName: strptr("ss-root-b")}, actorA, actorA); !errors.Is(err, storage.ErrSystemForbidden) {
+	if _, err := gw.MoveSystem(ctx, "", "ss-move", storage.SystemMove{ParentName: strptr("ss-root-b")}, actorA, actorA, all); !errors.Is(err, storage.ErrSystemForbidden) {
 		t.Fatalf("reparent onto out-of-scope parent err = %v, want ErrSystemForbidden", err)
 	}
 	// Onto an in-scope parent (ss-in-a): allowed.
-	if _, err := gw.MoveSystem(ctx, "", "ss-move", storage.SystemMove{ParentName: strptr("ss-in-a")}, actorA, actorA); err != nil {
+	if _, err := gw.MoveSystem(ctx, "", "ss-move", storage.SystemMove{ParentName: strptr("ss-in-a")}, actorA, actorA, all); err != nil {
 		t.Fatalf("reparent onto in-scope parent: %v", err)
 	}
 }
@@ -110,13 +110,13 @@ func TestSystemScopedPrincipalCannotLiftToRoot(t *testing.T) {
 
 	scoped := scope.Set{IDs: []string{rootA.ID}}
 
-	if _, err := gw.MoveSystem(ctx, "", "sys-lift-target", storage.SystemMove{ParentName: strptr("")}, scoped, scoped); !errors.Is(err, storage.ErrSystemForbidden) {
+	if _, err := gw.MoveSystem(ctx, "", "sys-lift-target", storage.SystemMove{ParentName: strptr("")}, scoped, scoped, all); !errors.Is(err, storage.ErrSystemForbidden) {
 		t.Fatalf("scoped clear-to-root err = %v, want ErrSystemForbidden", err)
 	}
-	if _, err := gw.MoveSystem(ctx, "", "sys-lift-target", storage.SystemMove{ParentName: strptr("sys-lift-sibling")}, scoped, scoped); err != nil {
+	if _, err := gw.MoveSystem(ctx, "", "sys-lift-target", storage.SystemMove{ParentName: strptr("sys-lift-sibling")}, scoped, scoped, all); err != nil {
 		t.Fatalf("scoped reparent within own subtree: %v", err)
 	}
-	if _, err := gw.MoveSystem(ctx, "", "sys-lift-target", storage.SystemMove{ParentName: strptr("")}, all, all); err != nil {
+	if _, err := gw.MoveSystem(ctx, "", "sys-lift-target", storage.SystemMove{ParentName: strptr("")}, all, all, all); err != nil {
 		t.Fatalf("all-scoped clear-to-root: %v", err)
 	}
 }
@@ -139,7 +139,7 @@ func TestMoveSystemAudited(t *testing.T) {
 	mustCreateSystem(t, gw, storage.SystemSpec{Name: "sys-audit-root"}, all)
 	mustCreateSystem(t, gw, storage.SystemSpec{Name: "sys-audit-leaf"}, all)
 
-	if _, err := gw.MoveSystem(ctx, "", "sys-audit-leaf", storage.SystemMove{ParentName: strptr("sys-audit-root")}, all, all); err != nil {
+	if _, err := gw.MoveSystem(ctx, "", "sys-audit-leaf", storage.SystemMove{ParentName: strptr("sys-audit-root")}, all, all, all); err != nil {
 		t.Fatalf("move: %v", err)
 	}
 

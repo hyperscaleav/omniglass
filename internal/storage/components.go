@@ -303,7 +303,13 @@ func (p *PG) ComponentNameTaken(ctx context.Context, name string, parentRef, loc
 // handing the pen to the platform (#627 Task 14), which mints
 // "<resolved-stem>-<n>" from the classified product's component_type once
 // placement and product are both resolved, below.
-func (p *PG) CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create scope.Set) (*Component, error) {
+//
+// locationRead and systemRead are the PLACEMENT's scopes, not the component's,
+// and they are the same two the draft render takes for the same two references
+// (#700): create says who may write a component, these say which rows the
+// component may be placed against, because the label this stamps reads both.
+// See resolvePlacementRef.
+func (p *PG) CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create, locationRead, systemRead scope.Set) (*Component, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create component: %w", err)
@@ -354,29 +360,27 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	// scope to placement.
 	var sysID string
 	if spec.SystemName != nil {
-		// scopedByName, not scopedByNameInScope: this bind is CROSS-tier (the
-		// caller's create scope is resolved for "component", and a system's
-		// scope tree is its own, unrelated ancestor chain), so create has no
-		// id in it inScopeTree could ever match against the system table.
-		// Threading it through would not narrow the resolve, it would deny
-		// it outright for every non-all caller (the tier-mismatch defect a
-		// review caught). Existence-only, as before this task, and
-		// withoutCandidates for the same reason the *NameTaken advisories
-		// redact: no scope is being checked here, so listing every matching
-		// uuid would disclose rows the caller may hold no grant to read.
-		sys, err := scopedByName(ctx, tx, systemConfig, *spec.SystemName)
+		// resolvePlacementRef, not create-scoped and no longer existence-only
+		// (#700): the bind is CROSS-tier, so the caller's create scope (resolved
+		// for "component") can never match a system's own ancestor chain, but
+		// the caller's system:read scope can, and it is the set that decides
+		// whether this label may carry that system's TYPE label. Out of scope is
+		// the same non-disclosing ErrSystemNotFound an absent one gives, which
+		// is what :renderLabel already answers for the identical reference.
+		sys, err := resolvePlacementRef(ctx, tx, systemConfig, *spec.SystemName, systemRead)
 		if err != nil {
-			return nil, withoutCandidates(err) // ErrSystemNotFound -> 422
+			return nil, err // ErrSystemNotFound -> 422
 		}
 		sysID = sys.ID
 	}
 	var locationID *string
 	if spec.LocationName != nil {
-		// scopedByName, not scopedByNameInScope: same cross-tier reasoning as
-		// the system bind above.
-		loc, err := scopedByName(ctx, tx, locationConfig, *spec.LocationName)
+		// The same guard on the other placement fact: a component's map reads
+		// its location's LABEL, so the location resolves in the caller's own
+		// location:read scope.
+		loc, err := resolvePlacementRef(ctx, tx, locationConfig, *spec.LocationName, locationRead)
 		if err != nil {
-			return nil, withoutCandidates(err) // ErrLocationNotFound -> 422
+			return nil, err // ErrLocationNotFound -> 422
 		}
 		locationID = &loc.ID
 	}
@@ -639,7 +643,7 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 // here now requires action.All too, closing that gap. Health is unaffected: a
 // component's own verdict is purely its active alarms (#626), so neither a
 // relocate nor a reparent has ever moved it, and this move continues that.
-func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move ComponentMove, read, action scope.Set) (*Component, error) {
+func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move ComponentMove, read, action, locationRead scope.Set) (*Component, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin move component: %w", err)
@@ -655,15 +659,15 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 	// same three-state the system relocate uses.
 	locationPatch := move.LocationName
 	if move.LocationName != nil && *move.LocationName != "" {
-		// scopedByName, not scopedByNameInScope: cross-tier, same as the
-		// create-time binds above. action is resolved for "component", and
-		// checking it against the location table's own ancestor chain can
-		// never match, so threading it through denies every non-all caller
-		// rather than narrowing anything. Existence-only, withoutCandidates
-		// for the same no-scope-to-filter-by reason.
-		loc, err := scopedByName(ctx, tx, locationConfig, *move.LocationName)
+		// resolvePlacementRef, exactly as the create binds it (#700): the
+		// destination is cross-tier, so action (resolved for "component") can
+		// never match it, and the stamp below re-renders this component's label
+		// from the DESTINATION's, so a relocate hands back a location's label
+		// the same way a create into it does. The caller's location:read scope
+		// is what decides whether it may.
+		loc, err := resolvePlacementRef(ctx, tx, locationConfig, *move.LocationName, locationRead)
 		if err != nil {
-			return nil, withoutCandidates(err) // ErrLocationNotFound -> mapped to 422 by the API
+			return nil, err // ErrLocationNotFound -> mapped to 422 by the API
 		}
 		locationPatch = &loc.ID
 	}

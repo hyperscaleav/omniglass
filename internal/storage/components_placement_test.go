@@ -30,7 +30,7 @@ func TestComponentReparent(t *testing.T) {
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "leaf", ParentName: strptr("mid")}, all)
 
 	// Valid move: mid reparents from root-a to root-b (tree becomes root-b > mid > leaf).
-	after, err := gw.MoveComponent(ctx, "", "mid", storage.ComponentMove{ParentName: strptr("root-b")}, all, all)
+	after, err := gw.MoveComponent(ctx, "", "mid", storage.ComponentMove{ParentName: strptr("root-b")}, all, all, all)
 	if err != nil {
 		t.Fatalf("valid reparent: %v", err)
 	}
@@ -39,18 +39,18 @@ func TestComponentReparent(t *testing.T) {
 	}
 
 	// Cycle: root-b cannot move under leaf, which is now its own descendant.
-	if _, err := gw.MoveComponent(ctx, "", "root-b", storage.ComponentMove{ParentName: strptr("leaf")}, all, all); !errors.Is(err, storage.ErrComponentCycle) {
+	if _, err := gw.MoveComponent(ctx, "", "root-b", storage.ComponentMove{ParentName: strptr("leaf")}, all, all, all); !errors.Is(err, storage.ErrComponentCycle) {
 		t.Fatalf("move root-b under descendant leaf err = %v, want ErrComponentCycle", err)
 	}
 	// Cycle: a component cannot move under itself.
-	if _, err := gw.MoveComponent(ctx, "", "mid", storage.ComponentMove{ParentName: strptr("mid")}, all, all); !errors.Is(err, storage.ErrComponentCycle) {
+	if _, err := gw.MoveComponent(ctx, "", "mid", storage.ComponentMove{ParentName: strptr("mid")}, all, all, all); !errors.Is(err, storage.ErrComponentCycle) {
 		t.Fatalf("move mid under itself err = %v, want ErrComponentCycle", err)
 	}
 
 	// Clear to root: an empty parent lifts mid to a root component. all is an
 	// all-scoped grant, so the new authorization guard on clearing to root does
 	// not fire here; TestScopedPrincipalCannotLiftToRoot covers the refusal.
-	after, err = gw.MoveComponent(ctx, "", "mid", storage.ComponentMove{ParentName: strptr("")}, all, all)
+	after, err = gw.MoveComponent(ctx, "", "mid", storage.ComponentMove{ParentName: strptr("")}, all, all, all)
 	if err != nil {
 		t.Fatalf("clear parent: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestComponentReparent(t *testing.T) {
 	}
 
 	// Unknown parent is a by-name 422 (ErrParentComponentNotFound), not a generic miss.
-	if _, err := gw.MoveComponent(ctx, "", "mid", storage.ComponentMove{ParentName: strptr("ghost")}, all, all); !errors.Is(err, storage.ErrParentComponentNotFound) {
+	if _, err := gw.MoveComponent(ctx, "", "mid", storage.ComponentMove{ParentName: strptr("ghost")}, all, all, all); !errors.Is(err, storage.ErrParentComponentNotFound) {
 		t.Fatalf("unknown parent err = %v, want ErrParentComponentNotFound", err)
 	}
 }
@@ -77,7 +77,7 @@ func TestComponentRelocate(t *testing.T) {
 	mustCreate(t, gw, storage.LocationSpec{Name: "loc-2", LocationType: "campus"}, all)
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "cam", LocationName: strptr("loc-1")}, all)
 
-	after, err := gw.MoveComponent(ctx, "", "cam", storage.ComponentMove{LocationName: strptr("loc-2")}, all, all)
+	after, err := gw.MoveComponent(ctx, "", "cam", storage.ComponentMove{LocationName: strptr("loc-2")}, all, all, all)
 	if err != nil {
 		t.Fatalf("relocate: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestComponentRelocate(t *testing.T) {
 		t.Fatalf("relocated to %v, want loc-2", after.LocationName)
 	}
 
-	after, err = gw.MoveComponent(ctx, "", "cam", storage.ComponentMove{LocationName: strptr("")}, all, all)
+	after, err = gw.MoveComponent(ctx, "", "cam", storage.ComponentMove{LocationName: strptr("")}, all, all, all)
 	if err != nil {
 		t.Fatalf("clear location: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestComponentRelocate(t *testing.T) {
 		t.Fatalf("after clear location = %v / %v, want nil / nil", after.LocationName, after.LocationID)
 	}
 
-	if _, err := gw.MoveComponent(ctx, "", "cam", storage.ComponentMove{LocationName: strptr("nowhere")}, all, all); !errors.Is(err, storage.ErrLocationNotFound) {
+	if _, err := gw.MoveComponent(ctx, "", "cam", storage.ComponentMove{LocationName: strptr("nowhere")}, all, all, all); !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Fatalf("unknown location err = %v, want ErrLocationNotFound", err)
 	}
 }
@@ -124,19 +124,19 @@ func TestScopedPrincipalCannotLiftToRoot(t *testing.T) {
 	// Clearing to root is refused: this is the gap the ADR closes. Before this
 	// task's guard, lift-target would walk straight out of root-a's subtree with
 	// no check at all.
-	if _, err := gw.MoveComponent(ctx, "", "lift-target", storage.ComponentMove{ParentName: strptr("")}, scoped, scoped); !errors.Is(err, storage.ErrComponentForbidden) {
+	if _, err := gw.MoveComponent(ctx, "", "lift-target", storage.ComponentMove{ParentName: strptr("")}, scoped, scoped, all); !errors.Is(err, storage.ErrComponentForbidden) {
 		t.Fatalf("scoped clear-to-root err = %v, want ErrComponentForbidden", err)
 	}
 
 	// The same principal can still reparent WITHIN its own subtree: the refusal
 	// above is specific to root, not a blanket denial of the move capability.
-	if _, err := gw.MoveComponent(ctx, "", "lift-target", storage.ComponentMove{ParentName: strptr("lift-sibling")}, scoped, scoped); err != nil {
+	if _, err := gw.MoveComponent(ctx, "", "lift-target", storage.ComponentMove{ParentName: strptr("lift-sibling")}, scoped, scoped, all); err != nil {
 		t.Fatalf("scoped reparent within own subtree: %v", err)
 	}
 
 	// An all-scoped principal CAN clear the same component to root: the guard is
 	// specifically about scope, not a general prohibition on lift-to-root.
-	if _, err := gw.MoveComponent(ctx, "", "lift-target", storage.ComponentMove{ParentName: strptr("")}, all, all); err != nil {
+	if _, err := gw.MoveComponent(ctx, "", "lift-target", storage.ComponentMove{ParentName: strptr("")}, all, all, all); err != nil {
 		t.Fatalf("all-scoped clear-to-root: %v", err)
 	}
 }
@@ -161,7 +161,7 @@ func TestMoveComponentAudited(t *testing.T) {
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "audit-root"}, all)
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "audit-leaf"}, all)
 
-	if _, err := gw.MoveComponent(ctx, "", "audit-leaf", storage.ComponentMove{ParentName: strptr("audit-root")}, all, all); err != nil {
+	if _, err := gw.MoveComponent(ctx, "", "audit-leaf", storage.ComponentMove{ParentName: strptr("audit-root")}, all, all, all); err != nil {
 		t.Fatalf("move: %v", err)
 	}
 
@@ -231,7 +231,7 @@ func TestMoveCollisionNamesBothParties(t *testing.T) {
 	read := scope.Set{IDs: []string{moverRoot.ID}}
 	action := scope.Set{IDs: []string{moverRoot.ID, collideDest.ID}}
 
-	_, err := gw.MoveComponent(ctx, "", "dup", storage.ComponentMove{ParentName: strptr("collide-dest")}, read, action)
+	_, err := gw.MoveComponent(ctx, "", "dup", storage.ComponentMove{ParentName: strptr("collide-dest")}, read, action, all)
 	if !errors.Is(err, storage.ErrComponentExistsUnderParent) {
 		t.Fatalf("collision err = %v, want ErrComponentExistsUnderParent", err)
 	}
@@ -260,18 +260,18 @@ func TestMoveRecomputesGeneratedName(t *testing.T) {
 	// new ordinal.
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "mv-root-1"}, all)
 	root2 := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "mv-root-2"}, all)
-	mover, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-1"), ProductName: &qm55}, all)
+	mover, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-1"), ProductName: &qm55}, all, all, all)
 	if err != nil {
 		t.Fatalf("create generated mover: %v", err)
 	}
 	if mover.Name != "display-1" || !mover.NameGenerated {
 		t.Fatalf("mover before move = %q (generated=%v), want display-1/true", mover.Name, mover.NameGenerated)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-2"), ProductName: &qm55}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-2"), ProductName: &qm55}, all, all, all); err != nil {
 		t.Fatalf("occupy destination's display-1: %v", err)
 	}
 
-	after, err := gw.MoveComponent(ctx, "", mover.ID, storage.ComponentMove{ParentName: strptr("mv-root-2")}, all, all)
+	after, err := gw.MoveComponent(ctx, "", mover.ID, storage.ComponentMove{ParentName: strptr("mv-root-2")}, all, all, all)
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
@@ -289,14 +289,14 @@ func TestMoveRecomputesGeneratedName(t *testing.T) {
 	// a mic-classified component moving under a fresh, empty root becomes
 	// mic-1, not display-anything.
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "mv-mic-root"}, all)
-	genMic, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-1"), ProductName: &mic}, all)
+	genMic, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-1"), ProductName: &mic}, all, all, all)
 	if err != nil {
 		t.Fatalf("create generated mic: %v", err)
 	}
 	if genMic.Name != "mic-1" {
 		t.Fatalf("generated mic name = %q, want mic-1 (shure-mxa920 classifies under ceiling-mic)", genMic.Name)
 	}
-	afterReparent, err := gw.MoveComponent(ctx, "", genMic.ID, storage.ComponentMove{ParentName: strptr("mv-mic-root")}, all, all)
+	afterReparent, err := gw.MoveComponent(ctx, "", genMic.ID, storage.ComponentMove{ParentName: strptr("mv-mic-root")}, all, all, all)
 	if err != nil {
 		t.Fatalf("reparent: %v", err)
 	}
@@ -308,7 +308,7 @@ func TestMoveRecomputesGeneratedName(t *testing.T) {
 	// recompute is conditional on name_generated, not unconditional for
 	// every mover.
 	typed := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "keep-my-name", ParentName: strptr("mv-root-1"), ProductName: &qm55}, all)
-	afterTyped, err := gw.MoveComponent(ctx, "", typed.ID, storage.ComponentMove{ParentName: strptr("mv-root-2")}, all, all)
+	afterTyped, err := gw.MoveComponent(ctx, "", typed.ID, storage.ComponentMove{ParentName: strptr("mv-root-2")}, all, all, all)
 	if err != nil {
 		t.Fatalf("move operator-named component: %v", err)
 	}
@@ -426,11 +426,11 @@ func TestComponentReparentScope(t *testing.T) {
 
 	// Onto an out-of-scope parent (sc-root-b): forbidden, even though sc-move itself
 	// is in scope. The new parent is gated too.
-	if _, err := gw.MoveComponent(ctx, "", "sc-move", storage.ComponentMove{ParentName: strptr("sc-root-b")}, actorA, actorA); !errors.Is(err, storage.ErrComponentForbidden) {
+	if _, err := gw.MoveComponent(ctx, "", "sc-move", storage.ComponentMove{ParentName: strptr("sc-root-b")}, actorA, actorA, all); !errors.Is(err, storage.ErrComponentForbidden) {
 		t.Fatalf("reparent onto out-of-scope parent err = %v, want ErrComponentForbidden", err)
 	}
 	// Onto an in-scope parent (sc-in-a, under root-a): allowed.
-	if _, err := gw.MoveComponent(ctx, "", "sc-move", storage.ComponentMove{ParentName: strptr("sc-in-a")}, actorA, actorA); err != nil {
+	if _, err := gw.MoveComponent(ctx, "", "sc-move", storage.ComponentMove{ParentName: strptr("sc-in-a")}, actorA, actorA, all); err != nil {
 		t.Fatalf("reparent onto in-scope parent: %v", err)
 	}
 }

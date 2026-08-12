@@ -31,7 +31,7 @@ func declareTableMic(t *testing.T, ctx context.Context, gw storage.Gateway, all 
 func newBarInto(t *testing.T, ctx context.Context, gw storage.Gateway, all scope.Set, name string) {
 	t.Helper()
 	bar := "cisco-room-bar"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name, ProductName: &bar}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name, ProductName: &bar}, all, all, all); err != nil {
 		t.Fatalf("create component %s: %v", name, err)
 	}
 }

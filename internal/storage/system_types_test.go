@@ -291,7 +291,7 @@ func TestSystemTypeDeleteRestricted(t *testing.T) {
 
 	// A system classified by the leaf pins it just as hard.
 	childName := child.Name
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "dr-system", SystemTypeID: &childName}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "dr-system", SystemTypeID: &childName}, all, all); err != nil {
 		t.Fatalf("create classified system: %v", err)
 	}
 	if err := gw.DeleteSystemType(ctx, "", "dr-huddle"); !errors.Is(err, storage.ErrTypeInUse) {
@@ -328,7 +328,7 @@ func TestSystemCarriesItsType(t *testing.T) {
 	}
 
 	name := "board"
-	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sct-room", DisplayName: "Room 101", SystemTypeID: &name}, all)
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sct-room", DisplayName: "Room 101", SystemTypeID: &name}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
@@ -379,7 +379,7 @@ func TestSystemCarriesItsType(t *testing.T) {
 	if _, err := gw.UpdateSystem(ctx, "", "sct-room", storage.SystemPatch{SystemTypeID: &bogus}, all, all); !errors.Is(err, storage.ErrUnknownSystemType) {
 		t.Fatalf("patch to an unknown type = %v, want ErrUnknownSystemType", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sct-bogus", SystemTypeID: &bogus}, all); !errors.Is(err, storage.ErrUnknownSystemType) {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sct-bogus", SystemTypeID: &bogus}, all, all); !errors.Is(err, storage.ErrUnknownSystemType) {
 		t.Fatalf("create with an unknown type = %v, want ErrUnknownSystemType", err)
 	}
 }
@@ -408,7 +408,7 @@ func TestSystemTypeRenameKeepsItsSystems(t *testing.T) {
 		t.Fatalf("create type: %v", err)
 	}
 	ref := "rn-before"
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "rn-system", SystemTypeID: &ref}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "rn-system", SystemTypeID: &ref}, all, all); err != nil {
 		t.Fatalf("create classified system: %v", err)
 	}
 

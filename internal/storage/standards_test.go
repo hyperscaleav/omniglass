@@ -62,7 +62,7 @@ func TestStandardCRUD(t *testing.T) {
 	}
 
 	// A system conforming to kiosk holds the delete off (in use).
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "k1", StandardID: strptr("kiosk")}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "k1", StandardID: strptr("kiosk")}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	if err := gw.DeleteStandard(ctx, "", "kiosk"); !errors.Is(err, storage.ErrTypeInUse) {
@@ -110,14 +110,14 @@ func TestSystemStandardOptional(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	oneOff, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "one-off"}, all)
+	oneOff, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "one-off"}, all, all)
 	if err != nil {
 		t.Fatalf("create one-off: %v", err)
 	}
 	if oneOff.StandardID != nil {
 		t.Fatalf("one-off standard = %q, want nil", *oneOff.StandardID)
 	}
-	conforming, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "boardroom", StandardID: strptr("meeting-room")}, all)
+	conforming, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "boardroom", StandardID: strptr("meeting-room")}, all, all)
 	if err != nil {
 		t.Fatalf("create conforming: %v", err)
 	}

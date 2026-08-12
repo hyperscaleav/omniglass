@@ -253,7 +253,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/systems",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a system",
-		Description:   "Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create.",
+		Description:   "Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.",
 	}, "system", "create"), func(ctx context.Context, in *createSystemInput) (*systemOutput, error) {
 		s, err := gw.CreateSystem(ctx, actorID(ctx), storage.SystemSpec{
 			Name:         in.Body.Name,
@@ -262,7 +262,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			SystemTypeID: ptrOrNil(in.Body.SystemTypeID),
 			ParentName:   in.Body.Parent,
 			LocationName: in.Body.Location,
-		}, a.scopeFor(ctx, "system", "create"))
+		}, a.scopeFor(ctx, "system", "create"), a.scopeFor(ctx, "location", "read"))
 		if err != nil {
 			return nil, mapSystemErr(err)
 		}
@@ -295,7 +295,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPost,
 		Path:        "/systems/{name}:move",
 		Summary:     "Move a system",
-		Description: "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split.",
+		Description: "Relocates and/or re-parents a system: at least one of location or parent is required (422 otherwise). Both follow the three-state convention (an omitted field is unchanged, an explicit empty string clears, a name sets). A reparent is cycle-guarded and scope-injected; clearing parent to root requires an all-scoped move grant, the same authorization a root create already requires. A separate act from update, and a separately grantable one (system:move), because a placement change is an authorization act, not a label edit: it moves a row out from under one grant's subtree and under another's. Recorded under its own audit verb, move, distinct from update. A relocate still recomputes health at both ends (the location it left and the one it arrived at); a reparent does not, since the health rollup runs system -> location, never through the system tree. A taken name at the destination is a 409. A move can RENAME the system: a platform-generated name is scoped to its placement bucket, so a move that changes the bucket re-mints the name and the ordinal in the destination. A move that changes no bucket, including a re-stated placement and a relocate of a parented system (a parent wins over a location), leaves the name alone, and an operator-typed name is never touched. Gated by system:move; read and move scopes drive the 404 versus 403 split, and the destination location resolves within the caller's location:read scope, because the move restamps the label from it: a destination outside that scope is refused (422).",
 	}, "system", "move"), func(ctx context.Context, in *moveSystemInput) (*systemOutput, error) {
 		if in.Body.Location == nil && in.Body.Parent == nil {
 			return nil, huma.Error422UnprocessableEntity("move requires at least one of location or parent")
@@ -303,7 +303,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		s, err := gw.MoveSystem(ctx, actorID(ctx), in.Name, storage.SystemMove{
 			LocationName: in.Body.Location,
 			ParentName:   in.Body.Parent,
-		}, a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "move"))
+		}, a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "move"), a.scopeFor(ctx, "location", "read"))
 		if err != nil {
 			switch {
 			case errors.Is(err, storage.ErrSystemExistsUnderParent):

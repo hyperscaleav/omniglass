@@ -36,11 +36,11 @@ import (
 func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key string) error {
 	return map[string]func(key string) error{
 		"component": func(s string) error {
-			_, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: s}, all)
+			_, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: s}, all, all, all)
 			return err
 		},
 		"system": func(s string) error {
-			_, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: s}, all)
+			_, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: s}, all, all)
 			return err
 		},
 		"location": func(s string) error {

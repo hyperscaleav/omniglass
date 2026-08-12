@@ -3186,7 +3186,21 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
      `resolveScopedRef` (`scopedcrud.go:633-649`) narrows candidates by the caller's create- or
      action-scope, not its read scope. A resolved reference is one the caller may place a binding
      against, which is a narrower claim than the scope ruling's own wording ("scope decides before
-     ambiguity does") suggests on its own.
+     ambiguity does") suggests on its own. **Amended (#700):** that claim was too weak for a
+     CROSS-TIER placement reference, and the amendment narrows which references the edge covers
+     rather than changing the policy itself. A create's or a move's location and system references
+     (`CreateComponent`, `CreateSystem`, `MoveComponent`, `MoveSystem`) resolved existence-only,
+     because the caller's create scope is resolved for the entity being written and can never match
+     the referenced tier's own ancestor chain. Once
+     [ADR-0100](#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)
+     put placement into the label data map, the label those writes stamp and hand back is rendered
+     from the referenced row's label, so "writable here" stopped being the right question and
+     "readable here" became it. They now go through `resolvePlacementRef`, which applies the READ
+     path's policy (`scopedByNameInScope`, `refPolicyHide`) using the caller's scope on the
+     REFERENCED tier, matching what `:renderLabel` already did for the identical references
+     ([ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it))
+     so a preview and the create it previews cannot disagree. `resolveScopedRef` keeps every
+     same-tier parent and owner reference, where this edge still reads as written.
   2. **A bare-name `forbidden` is a name-existence oracle.** A name matching at least one row, none of
      them in the caller's action scope, is `cfg.forbidden` (403), not the read path's non-disclosing
      404 (`scopedcrud.go:469-475`). A caller can learn a name exists somewhere in the estate from the

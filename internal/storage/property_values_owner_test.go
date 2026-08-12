@@ -39,7 +39,7 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 		t.Fatalf("declare on standard: %v", err)
 	}
 	std := "huddle-room"
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "hq-huddle", StandardID: &std}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "hq-huddle", StandardID: &std}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 
@@ -68,7 +68,7 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 
 	// --- one-off system: no standard, so only what it sets directly -----------
 
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "one-off"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "one-off"}, all, all); err != nil {
 		t.Fatalf("create one-off system: %v", err)
 	}
 	if _, err := gw.SetProperty(ctx, "", "system", "one-off", "serial-number", "", json.RawMessage(`"S-9"`), all); err != nil {

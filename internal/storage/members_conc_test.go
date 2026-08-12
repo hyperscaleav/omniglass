@@ -46,12 +46,12 @@ func TestFirstMembershipRaceIsSerialized(t *testing.T) {
 		t.Fatalf("standard: %v", err)
 	}
 	for _, s := range []string{"race-a", "race-b"} {
-		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: s, StandardID: &std}, all); err != nil {
+		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: s, StandardID: &std}, all, all); err != nil {
 			t.Fatalf("system %s: %v", s, err)
 		}
 	}
 	bar := "cisco-room-bar"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "race-dsp", ProductName: &bar}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "race-dsp", ProductName: &bar}, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 

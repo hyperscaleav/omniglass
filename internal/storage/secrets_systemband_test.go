@@ -21,7 +21,7 @@ func TestSecretSystemBandRetired(t *testing.T) {
 	ctx := context.Background()
 	all := scope.Set{All: true}
 
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys"}, all, all); err != nil {
 		t.Fatalf("system: %v", err)
 	}
 

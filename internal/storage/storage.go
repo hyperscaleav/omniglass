@@ -248,7 +248,11 @@ type Gateway interface {
 	DeleteStandard(ctx context.Context, actorID, id string) error
 	ListSystems(ctx context.Context, read scope.Set) ([]System, error)
 	GetSystem(ctx context.Context, name string, read scope.Set) (*System, error)
-	CreateSystem(ctx context.Context, actorID string, spec SystemSpec, create scope.Set) (*System, error)
+	// CreateSystem takes the caller's location:read scope alongside its create
+	// scope: the location it binds is cross-tier, and the label it stamps reads
+	// that location's own, so the placement resolves within the scope that says
+	// whether this caller may READ it (#700).
+	CreateSystem(ctx context.Context, actorID string, spec SystemSpec, create, locationRead scope.Set) (*System, error)
 	UpdateSystem(ctx context.Context, actorID, name string, patch SystemPatch, read, action scope.Set) (*System, error)
 	// RenameSystem moves the system's name, scoped exactly as the update is. Its
 	// own function, not a patch field, because a rename breaks the references an
@@ -257,7 +261,9 @@ type Gateway interface {
 	// MoveSystem relocates and/or re-parents the system, scoped exactly as the
 	// update is. Its own function, not a patch field (#627 Task 13), because a
 	// placement change is an authorization act; the API gates it on system:move.
-	MoveSystem(ctx context.Context, actorID, name string, move SystemMove, read, action scope.Set) (*System, error)
+	// locationRead guards the destination, the same way it guards a create's
+	// (#700): a relocate restamps the label from the location it moves to.
+	MoveSystem(ctx context.Context, actorID, name string, move SystemMove, read, action, locationRead scope.Set) (*System, error)
 	// ResetSystemName hands the pen back to the platform (#686): it regenerates
 	// the system's name from its current system_type and placement, the same
 	// rule CreateSystem applies when no name is given (the type's stem plus the
@@ -276,7 +282,12 @@ type Gateway interface {
 	// panel's rows). Not scope-injected: the caller gates on the component being
 	// in read scope first, then reads its interfaces by the verified name.
 	ListComponentInterfaces(ctx context.Context, componentName string) ([]ComponentInterface, error)
-	CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create scope.Set) (*Component, error)
+	// CreateComponent takes the caller's location:read and system:read scopes
+	// alongside its create scope, one per placement reference it binds: both are
+	// cross-tier, and the label it stamps reads the location's label and the
+	// primary system's TYPE label, so each resolves within the scope that says
+	// whether this caller may READ that row (#700).
+	CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create, locationRead, systemRead scope.Set) (*Component, error)
 	UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error)
 	// RenameComponent moves the component's name, scoped exactly as the update is.
 	// Its own function, not a patch field, because a rename breaks the references
@@ -286,7 +297,9 @@ type Gateway interface {
 	// the update is. Its own function, not a patch field (#627 Task 13), because
 	// a placement change is an authorization act; the API gates it on
 	// component:move.
-	MoveComponent(ctx context.Context, actorID, name string, move ComponentMove, read, action scope.Set) (*Component, error)
+	// locationRead guards the destination, the same way it guards a create's
+	// (#700): a relocate restamps the label from the location it moves to.
+	MoveComponent(ctx context.Context, actorID, name string, move ComponentMove, read, action, locationRead scope.Set) (*Component, error)
 	// ResetComponentName hands the pen back to the platform (#627 Task 14): it
 	// regenerates the component's name from its current type and placement,
 	// the same <stem>-<n> rule CreateComponent applies when no name is given,

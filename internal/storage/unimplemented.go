@@ -238,7 +238,7 @@ func (UnimplementedGateway) ListSystems(context.Context, scope.Set) ([]System, e
 func (UnimplementedGateway) GetSystem(context.Context, string, scope.Set) (*System, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateSystem(context.Context, string, SystemSpec, scope.Set) (*System, error) {
+func (UnimplementedGateway) CreateSystem(context.Context, string, SystemSpec, scope.Set, scope.Set) (*System, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) UpdateSystem(context.Context, string, string, SystemPatch, scope.Set, scope.Set) (*System, error) {
@@ -247,7 +247,7 @@ func (UnimplementedGateway) UpdateSystem(context.Context, string, string, System
 func (UnimplementedGateway) RenameSystem(context.Context, string, string, string, scope.Set, scope.Set) (*System, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) MoveSystem(context.Context, string, string, SystemMove, scope.Set, scope.Set) (*System, error) {
+func (UnimplementedGateway) MoveSystem(context.Context, string, string, SystemMove, scope.Set, scope.Set, scope.Set) (*System, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ResetSystemName(context.Context, string, string, scope.Set, scope.Set) (*System, error) {
@@ -268,7 +268,7 @@ func (UnimplementedGateway) GetComponent(context.Context, string, scope.Set) (*C
 func (UnimplementedGateway) ListComponentInterfaces(context.Context, string) ([]ComponentInterface, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateComponent(context.Context, string, ComponentSpec, scope.Set) (*Component, error) {
+func (UnimplementedGateway) CreateComponent(context.Context, string, ComponentSpec, scope.Set, scope.Set, scope.Set) (*Component, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) UpdateComponent(context.Context, string, string, ComponentPatch, scope.Set, scope.Set) (*Component, error) {
@@ -277,7 +277,7 @@ func (UnimplementedGateway) UpdateComponent(context.Context, string, string, Com
 func (UnimplementedGateway) RenameComponent(context.Context, string, string, string, scope.Set, scope.Set) (*Component, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) MoveComponent(context.Context, string, string, ComponentMove, scope.Set, scope.Set) (*Component, error) {
+func (UnimplementedGateway) MoveComponent(context.Context, string, string, ComponentMove, scope.Set, scope.Set, scope.Set) (*Component, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ResetComponentName(context.Context, string, string, scope.Set, scope.Set) (*Component, error) {

@@ -95,27 +95,27 @@ func TestSystemScopeCRUD(t *testing.T) {
 	}
 
 	// Faults.
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "weird", StandardID: strptr("galaxy")}, all); !errors.Is(err, storage.ErrUnknownStandard) {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "weird", StandardID: strptr("galaxy")}, all, all); !errors.Is(err, storage.ErrUnknownStandard) {
 		t.Errorf("unknown standard = %v, want ErrUnknownStandard", err)
 	}
 	// A duplicate name in the SAME placement bucket still collides: av was
 	// created unparented at hq (system_location_name_key), and this one names
 	// the same location, so it lands in the identical bucket (#627 scopes name
 	// uniqueness to placement, it does not remove uniqueness within one).
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av", LocationName: strptr("hq")}, all); !errors.Is(err, storage.ErrSystemExistsInLocation) {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av", LocationName: strptr("hq")}, all, all); !errors.Is(err, storage.ErrSystemExistsInLocation) {
 		t.Errorf("dup name in same location = %v, want ErrSystemExistsInLocation", err)
 	}
 	// The same name in a DIFFERENT placement bucket is legal: two locations
 	// may each hold their own "av", because the unique index is keyed on
 	// (location_id, name), not name alone.
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av", LocationName: strptr("hq2")}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av", LocationName: strptr("hq2")}, all, all); err != nil {
 		t.Errorf("dup name in different location = %v, want ok", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "bad-loc", LocationName: strptr("nope")}, all); !errors.Is(err, storage.ErrLocationNotFound) {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "bad-loc", LocationName: strptr("nope")}, all, all); !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Errorf("unknown location = %v, want ErrLocationNotFound", err)
 	}
 	// Create under out-of-scope parent forbidden.
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "x", ParentName: strptr("lab")}, readAV); !errors.Is(err, storage.ErrSystemForbidden) {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "x", ParentName: strptr("lab")}, readAV, all); !errors.Is(err, storage.ErrSystemForbidden) {
 		t.Errorf("create under out-of-scope parent = %v, want ErrSystemForbidden", err)
 	}
 
@@ -136,7 +136,7 @@ func TestSystemScopeCRUD(t *testing.T) {
 
 func mustCreateSystem(t *testing.T, gw storage.Gateway, spec storage.SystemSpec, sc scope.Set) *storage.System {
 	t.Helper()
-	s, err := gw.CreateSystem(context.Background(), "", spec, sc)
+	s, err := gw.CreateSystem(context.Background(), "", spec, sc, all)
 	if err != nil {
 		t.Fatalf("create system %s: %v", spec.Name, err)
 	}

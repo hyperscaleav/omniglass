@@ -48,11 +48,11 @@ func TestSameNameTwoRooms(t *testing.T) {
 	if err != nil {
 		t.Fatalf("room-b: %v", err)
 	}
-	kioskA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "kiosk", LocationName: strptr(roomA.Name)}, all)
+	kioskA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "kiosk", LocationName: strptr(roomA.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("kiosk at room-a: %v", err)
 	}
-	kioskB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "kiosk", LocationName: strptr(roomB.Name)}, all)
+	kioskB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "kiosk", LocationName: strptr(roomB.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("kiosk at room-b: %v", err)
 	}
@@ -81,10 +81,10 @@ func TestSameNameSameRoomRefused(t *testing.T) {
 	if err != nil {
 		t.Fatalf("room: %v", err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "kiosk", LocationName: strptr(room.Name)}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "kiosk", LocationName: strptr(room.Name)}, all, all, all); err != nil {
 		t.Fatalf("first kiosk: %v", err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "kiosk", LocationName: strptr(room.Name)}, all); !errors.Is(err, storage.ErrComponentExistsInLocation) {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "kiosk", LocationName: strptr(room.Name)}, all, all, all); !errors.Is(err, storage.ErrComponentExistsInLocation) {
 		t.Fatalf("second kiosk in same room = %v, want ErrComponentExistsInLocation", err)
 	}
 }
@@ -98,17 +98,17 @@ func TestSameNameUnplacedRefused(t *testing.T) {
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "spare"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "spare"}, all, all, all); err != nil {
 		t.Fatalf("first spare component: %v", err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "spare"}, all); !errors.Is(err, storage.ErrComponentExistsUnplaced) {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "spare"}, all, all, all); !errors.Is(err, storage.ErrComponentExistsUnplaced) {
 		t.Fatalf("second unplaced spare component = %v, want ErrComponentExistsUnplaced", err)
 	}
 
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "spare"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "spare"}, all, all); err != nil {
 		t.Fatalf("first spare system: %v", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "spare"}, all); !errors.Is(err, storage.ErrSystemExistsUnplaced) {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "spare"}, all, all); !errors.Is(err, storage.ErrSystemExistsUnplaced) {
 		t.Fatalf("second unplaced spare system = %v, want ErrSystemExistsUnplaced", err)
 	}
 }
@@ -178,26 +178,26 @@ func TestSubComponentScopesToParent(t *testing.T) {
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	rackA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "rack-a"}, all)
+	rackA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "rack-a"}, all, all, all)
 	if err != nil {
 		t.Fatalf("rack-a: %v", err)
 	}
-	rackB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "rack-b"}, all)
+	rackB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "rack-b"}, all, all, all)
 	if err != nil {
 		t.Fatalf("rack-b: %v", err)
 	}
-	portA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "port-1", ParentName: strptr(rackA.Name)}, all)
+	portA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "port-1", ParentName: strptr(rackA.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("port-1 under rack-a: %v", err)
 	}
-	portB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "port-1", ParentName: strptr(rackB.Name)}, all)
+	portB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "port-1", ParentName: strptr(rackB.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("port-1 under rack-b (different parent, should be legal): %v", err)
 	}
 	if portA.ID == portB.ID {
 		t.Fatal("the two port-1 components did not actually land on different rows")
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "port-1", ParentName: strptr(rackA.Name)}, all); !errors.Is(err, storage.ErrComponentExistsUnderParent) {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "port-1", ParentName: strptr(rackA.Name)}, all, all, all); !errors.Is(err, storage.ErrComponentExistsUnderParent) {
 		t.Fatalf("second port-1 under rack-a (same parent) = %v, want ErrComponentExistsUnderParent", err)
 	}
 }
@@ -214,19 +214,19 @@ func TestSiblingSubsystemsUnderDifferentParentsBothLegal(t *testing.T) {
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	av, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av"}, all)
+	av, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av"}, all, all)
 	if err != nil {
 		t.Fatalf("av: %v", err)
 	}
-	lab, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "lab"}, all)
+	lab, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "lab"}, all, all)
 	if err != nil {
 		t.Fatalf("lab: %v", err)
 	}
-	edgeUnderAV, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "edge", ParentName: strptr(av.Name)}, all)
+	edgeUnderAV, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "edge", ParentName: strptr(av.Name)}, all, all)
 	if err != nil {
 		t.Fatalf("edge under av: %v", err)
 	}
-	edgeUnderLab, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "edge", ParentName: strptr(lab.Name)}, all)
+	edgeUnderLab, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "edge", ParentName: strptr(lab.Name)}, all, all)
 	if err != nil {
 		t.Fatalf("edge under lab (different parent, should be legal): %v", err)
 	}
@@ -239,14 +239,14 @@ func TestSiblingSubsystemsSameParentRefused(t *testing.T) {
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	av, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av"}, all)
+	av, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av"}, all, all)
 	if err != nil {
 		t.Fatalf("av: %v", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "edge", ParentName: strptr(av.Name)}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "edge", ParentName: strptr(av.Name)}, all, all); err != nil {
 		t.Fatalf("first edge under av: %v", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "edge", ParentName: strptr(av.Name)}, all); !errors.Is(err, storage.ErrSystemExistsUnderParent) {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "edge", ParentName: strptr(av.Name)}, all, all); !errors.Is(err, storage.ErrSystemExistsUnderParent) {
 		t.Fatalf("second edge under the same parent = %v, want ErrSystemExistsUnderParent", err)
 	}
 }
@@ -284,17 +284,17 @@ func TestNameAmbiguousGloballyButUniqueToCallerResolvesCleanly(t *testing.T) {
 	// componentTable), so the subtree root has to be a component id, not a
 	// location id: zone-a is that root, and "display-1" is its child
 	// (component_parent_name_key), inside zone-a's own subtree.
-	zoneA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "zone-a"}, all)
+	zoneA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "zone-a"}, all, all, all)
 	if err != nil {
 		t.Fatalf("zone-a: %v", err)
 	}
-	inZoneA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", ParentName: strptr(zoneA.Name)}, all)
+	inZoneA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", ParentName: strptr(zoneA.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("display-1 under zone-a: %v", err)
 	}
 	// An unrelated "display-1", entirely outside zone-a's subtree (root,
 	// unplaced): the row that makes the bare name ambiguous estate-wide.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1"}, all, all, all); err != nil {
 		t.Fatalf("display-1 outside zone-a: %v", err)
 	}
 
@@ -333,15 +333,15 @@ func TestOwnerScopedReadsResolveAmbiguousNameWithinScope(t *testing.T) {
 	// "shared" (system_parent_name_key). An unrelated root system, also
 	// named "shared" (system_orphan_name_key), is what makes the bare name
 	// ambiguous estate-wide.
-	zoneA, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "zone-a"}, all)
+	zoneA, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "zone-a"}, all, all)
 	if err != nil {
 		t.Fatalf("zone-a: %v", err)
 	}
-	sysInZone, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "shared", ParentName: strptr(zoneA.Name)}, all)
+	sysInZone, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "shared", ParentName: strptr(zoneA.Name)}, all, all)
 	if err != nil {
 		t.Fatalf("shared under zone-a: %v", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "shared"}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "shared"}, all, all); err != nil {
 		t.Fatalf("shared outside zone-a: %v", err)
 	}
 	readZoneA := scope.Set{IDs: []string{zoneA.ID}}
@@ -438,28 +438,28 @@ func TestAmbiguousNameCandidatesNeverLeakOutOfScopeRow(t *testing.T) {
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	campus, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "campus"}, all)
+	campus, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "campus"}, all, all, all)
 	if err != nil {
 		t.Fatalf("campus: %v", err)
 	}
-	wingA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "wing-a", ParentName: strptr(campus.Name)}, all)
+	wingA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "wing-a", ParentName: strptr(campus.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("wing-a: %v", err)
 	}
-	wingB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "wing-b", ParentName: strptr(campus.Name)}, all)
+	wingB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "wing-b", ParentName: strptr(campus.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("wing-b: %v", err)
 	}
-	edgeA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "edge", ParentName: strptr(wingA.Name)}, all)
+	edgeA, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "edge", ParentName: strptr(wingA.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("edge under wing-a: %v", err)
 	}
-	edgeB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "edge", ParentName: strptr(wingB.Name)}, all)
+	edgeB, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "edge", ParentName: strptr(wingB.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("edge under wing-b: %v", err)
 	}
 	// A third "edge", unrelated to campus entirely: root, no parent.
-	edgeOutside, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "edge"}, all)
+	edgeOutside, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "edge"}, all, all, all)
 	if err != nil {
 		t.Fatalf("edge outside campus: %v", err)
 	}
@@ -499,10 +499,10 @@ func TestCheckNameIsScopedToPlacement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("room-b: %v", err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "kiosk", LocationName: strptr(roomA.Name)}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "kiosk", LocationName: strptr(roomA.Name)}, all, all, all); err != nil {
 		t.Fatalf("kiosk at room-a: %v", err)
 	}
-	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av", LocationName: strptr(roomA.Name)}, all); err != nil {
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "av", LocationName: strptr(roomA.Name)}, all, all); err != nil {
 		t.Fatalf("av at room-a: %v", err)
 	}
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "sub-room", LocationType: "room", ParentName: strptr(roomA.Name)}, all); err != nil {
@@ -557,11 +557,11 @@ func TestScopedCreateBindsCrossTierSystemAndLocation(t *testing.T) {
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	container, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "container"}, all)
+	container, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "container"}, all, all, all)
 	if err != nil {
 		t.Fatalf("container: %v", err)
 	}
-	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "wing-sys"}, all)
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "wing-sys"}, all, all)
 	if err != nil {
 		t.Fatalf("wing-sys: %v", err)
 	}
@@ -581,7 +581,7 @@ func TestScopedCreateBindsCrossTierSystemAndLocation(t *testing.T) {
 	child, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "x", ParentName: strptr(container.Name),
 		SystemName: strptr(sys.Name), LocationName: strptr(loc.Name),
-	}, compScope)
+	}, compScope, all, all)
 	if err != nil {
 		t.Fatalf("scoped create with cross-tier system+location bind = %v, want ok", err)
 	}
@@ -590,7 +590,7 @@ func TestScopedCreateBindsCrossTierSystemAndLocation(t *testing.T) {
 	}
 
 	// MoveComponent's location bind, same scope.
-	updated, err := gw.MoveComponent(ctx, "", child.Name, storage.ComponentMove{LocationName: strptr(loc2.Name)}, compScope, compScope)
+	updated, err := gw.MoveComponent(ctx, "", child.Name, storage.ComponentMove{LocationName: strptr(loc2.Name)}, compScope, compScope, all)
 	if err != nil {
 		t.Fatalf("scoped move with cross-tier location bind = %v, want ok", err)
 	}
@@ -601,21 +601,21 @@ func TestScopedCreateBindsCrossTierSystemAndLocation(t *testing.T) {
 	// CreateSystem's location bind and MoveSystem's location bind, scoped
 	// to a system-tier grant this time, to prove the fix is not accidentally
 	// component-specific.
-	rootSys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "root-sys"}, all)
+	rootSys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "root-sys"}, all, all)
 	if err != nil {
 		t.Fatalf("root-sys: %v", err)
 	}
 	sysScope := scope.Set{IDs: []string{rootSys.ID}}
 	childSys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "child-sys", ParentName: strptr(rootSys.Name), LocationName: strptr(loc.Name),
-	}, sysScope)
+	}, sysScope, all)
 	if err != nil {
 		t.Fatalf("scoped system create with cross-tier location bind = %v, want ok", err)
 	}
 	if childSys.LocationID == nil || *childSys.LocationID != loc.ID {
 		t.Fatalf("child system location = %v, want %s", childSys.LocationID, loc.ID)
 	}
-	updatedSys, err := gw.MoveSystem(ctx, "", childSys.Name, storage.SystemMove{LocationName: strptr(loc2.Name)}, sysScope, sysScope)
+	updatedSys, err := gw.MoveSystem(ctx, "", childSys.Name, storage.SystemMove{LocationName: strptr(loc2.Name)}, sysScope, sysScope, all)
 	if err != nil {
 		t.Fatalf("scoped system move with cross-tier location bind = %v, want ok", err)
 	}
@@ -640,11 +640,11 @@ func TestResolveTagsSystemBandSurvivesScopedCaller(t *testing.T) {
 	if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "note", Propagates: true}, all); err != nil {
 		t.Fatalf("create tag: %v", err)
 	}
-	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "cascade-sys"}, all)
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "cascade-sys"}, all, all)
 	if err != nil {
 		t.Fatalf("cascade-sys: %v", err)
 	}
-	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "cascade-comp"}, all)
+	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "cascade-comp"}, all, all, all)
 	if err != nil {
 		t.Fatalf("cascade-comp: %v", err)
 	}
@@ -715,7 +715,7 @@ func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "role-sys"}, all)
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "role-sys"}, all, all)
 	if err != nil {
 		t.Fatalf("role-sys: %v", err)
 	}
@@ -725,14 +725,14 @@ func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 		t.Fatalf("declare role: %v", err)
 	}
 
-	holder, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all)
+	holder, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all, all, all)
 	if err != nil {
 		t.Fatalf("holder: %v", err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat"}, all, all, all); err != nil {
 		t.Fatalf("root dup-seat: %v", err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat", ParentName: strptr(holder.Name)}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat", ParentName: strptr(holder.Name)}, all, all, all); err != nil {
 		t.Fatalf("nested dup-seat: %v", err)
 	}
 
@@ -795,7 +795,7 @@ func TestUnassignRoleResolvesEstateWideDuplicateWithinOccupancy(t *testing.T) {
 	defer conn.Close(ctx)
 	all := scope.Set{All: true}
 
-	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "unassign-sys"}, all)
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "unassign-sys"}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
@@ -804,14 +804,14 @@ func TestUnassignRoleResolvesEstateWideDuplicateWithinOccupancy(t *testing.T) {
 		values ('system', $1, 'seat', 'Seat')`, sys.ID); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
-	holder, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all)
+	holder, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all, all, all)
 	if err != nil {
 		t.Fatalf("holder: %v", err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat"}, all, all, all); err != nil {
 		t.Fatalf("root dup-seat: %v", err)
 	}
-	nested, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat", ParentName: strptr(holder.Name)}, all)
+	nested, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat", ParentName: strptr(holder.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("nested dup-seat: %v", err)
 	}
@@ -871,7 +871,7 @@ func TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole(t *testing.
 	defer conn.Close(ctx)
 	all := scope.Set{All: true}
 
-	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "both-occupy-sys"}, all)
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "both-occupy-sys"}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
@@ -880,15 +880,15 @@ func TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole(t *testing.
 		values ('system', $1, 'seat', 'Seat')`, sys.ID); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
-	holder, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all)
+	holder, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all, all, all)
 	if err != nil {
 		t.Fatalf("holder: %v", err)
 	}
-	root, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat"}, all)
+	root, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat"}, all, all, all)
 	if err != nil {
 		t.Fatalf("root dup-seat: %v", err)
 	}
-	nested, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat", ParentName: strptr(holder.Name)}, all)
+	nested, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-seat", ParentName: strptr(holder.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("nested dup-seat: %v", err)
 	}
@@ -930,18 +930,18 @@ func TestRemoveMemberResolvesEstateWideDuplicateWithinMembership(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "remove-sys"}, all)
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "remove-sys"}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
-	holder, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all)
+	holder, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "holder"}, all, all, all)
 	if err != nil {
 		t.Fatalf("holder: %v", err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-member"}, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-member"}, all, all, all); err != nil {
 		t.Fatalf("root dup-member: %v", err)
 	}
-	nested, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-member", ParentName: strptr(holder.Name)}, all)
+	nested, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dup-member", ParentName: strptr(holder.Name)}, all, all, all)
 	if err != nil {
 		t.Fatalf("nested dup-member: %v", err)
 	}
