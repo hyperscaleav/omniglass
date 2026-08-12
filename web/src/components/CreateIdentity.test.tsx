@@ -289,8 +289,11 @@ describe("CreateIdentity", () => {
   });
 
   it("leaves the other field alone when a locked field is clicked", () => {
-    const { name, display, displayPen } = mount(MINT, { label: "Display n", rule: "{{.TypeName}}" });
+    const { name, display, namePen, displayPen } = mount(MINT, { label: "Display n", rule: "{{.TypeName}}" });
     fireEvent.click(name);
+    // The guard first: without it this passes for a click that did nothing at
+    // all, which is the very mutation it is here to catch.
+    expect(namePen.overridden()).toBe(true);
     expect(display.readOnly).toBe(true);
     expect(display.value).toBe("Display n");
     expect(displayPen.value()).toBe("");
@@ -316,8 +319,10 @@ describe("CreateIdentity", () => {
     // The click accelerator is one-way on purpose: the way back is the action
     // button, which is where "restore to default" reads as the deliberate act it
     // is. A toggling field would discard a typed name on a stray click.
-    const { name, namePen } = mount(MINT);
-    fireEvent.click(name);
+    const { name, unlockName, namePen } = mount(MINT);
+    // Unlocked through the BUTTON, so this case does not depend on the click
+    // accelerator working and cannot pass by both clicks doing nothing.
+    unlockName();
     fireEvent.input(name, { target: { value: "front-mic" } });
     fireEvent.click(name);
     expect(namePen.value()).toBe("front-mic");

@@ -67,6 +67,9 @@ describe("FieldRow", () => {
     const action = getByRole("button");
     expect(control.closest(".join")).toBeTruthy();
     expect(action.closest(".join")).toBe(control.closest(".join"));
+    // The empty-string guard first: `for=""` and an unlabelled control compare
+    // equal, so without it this passes for a field that labels nothing at all.
+    expect(control.id).toBeTruthy();
     expect((getByText("Name") as HTMLLabelElement).getAttribute("for")).toBe(control.id);
     // And the button stays OUT of the <label>, which is what keeps a labelable
     // element from stealing the control's accessible name.
