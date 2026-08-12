@@ -137,11 +137,11 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0099](#adr-0099-the-acronym-list-is-one-replaceable-setting-not-a-shipped-list-plus-operator-additions) | 2026-08-10 | Accepted | The acronym dictionary `title` consults is ONE key, `label.acronyms`, in a new `platform,client` settings namespace; an operator's list REPLACES the shipped one and provenance tells them apart, rather than a union of shipped plus additions (which would give one key a merge rule no other setting has, make the wire value a fragment rather than the effective dictionary, and make a shipped entry unremovable). The engine resolves the dictionary at render time and caches the compiled engine against the dictionary ITSELF, so a change builds a replacement rather than mutating one and no writer has a generation counter to forget; validation uses a dictionary-less engine, since whether a rule parses is a fact about the rule alone |
 | [ADR-0100](#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate) | 2026-08-10 | Accepted | A label rule reads its entity's PLACEMENT (a component's location label and its primary system's type label, a system's location label), reversing ADR-0098's exclusion, and the write paths that keep those honest are derived from the map rather than enumerated, a derivation the epic's review pass then caught missing the one the DATABASE performs (an `ON DELETE CASCADE` is a write path with no Go on it, so a system's delete now releases its memberships explicitly). The line is BLAST RADIUS, not ownership: bounded by a placement (the rows at one location, one system's members, one component's membership) it cascades inside the act's own transaction; bounded only by the estate (a rule at any tier, a classification row's display_name, the acronym list) it waits for the preview-then-apply verb. A preview is an apply that rolls back, so it lists exactly what the apply changes including the second hop. One audit row per operation, keyed on the rule, never one per changed entity |
 | [ADR-0101](#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests) | 2026-08-10 | Accepted | A generated **system** name suppresses the ordinal on the first of its stem in a placement bucket (`boardroom`, then `boardroom-2`), and the order dependence is accepted: deleting the bare one while the second survives frees the bare name again, and `boardroom-1` never exists. Suppression is a field on the MINT rather than a change to the shape (a component still reads `display-1`), and the ALLOCATOR takes that same mint, so a suppressing mint and a non-suppressing allocator cannot disagree on ordinal 1 and turn the second create into a `23505`. A placement bucket becomes a value per entity kind, so a location's two buckets cannot be written as a system's three, and the allocation lock loses the stem from its key, since two stems can now mint one name. The pen and both verbs spread to system and location; only a system generates, and a location's `:resetName` refuses with the missing fact named. No backfill: the default false is the right value for a row an operator already named |
-| [ADR-0102](#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing) | 2026-08-10 | Accepted | A **`location_type.name_rule`** (nullable jsonb) is a type's opt-in to naming the locations it classifies, and it is a **declaration** (a stem, possibly empty, plus the first-ordinal suppression flag) rather than the `label_rule` template beside it. A name has to satisfy `validateEntityName`, it lands in a scoped-unique index, and other things reference it, so an unrenderable rule has no safe degradation the way a label's does; a declaration IS a `nameMint`, so a rule is refused at RULE-EDIT time by minting from it (ordinal 1 and a nine-digit ceiling bound the whole output space), which a template's output could only be sampled. Null is the opt-out and there is no boolean beside it. A rule change **renames nothing**: there is no name-side recompute verb, deliberately, because relabelling in bulk is recoverable and renaming is not. A positional type permitted at root allocates `1`, `2` across the estate and that is legal, since the bucket is the placement and two positional types under one parent already share an ordinal space |
-| [ADR-0103](#adr-0103-a-positional-name-is-allocation-order-and-the-real-world-designation-is-a-label) | 2026-08-11 | Accepted | A positional name is **allocation order**, never a claim about the world: the dev estate's West Building holds one floor, the building's Level 2, and the generator calls it `1`. The divergence is kept rather than removed, because a name is an address (unique under its parent, typeable, ownable by the platform so nobody has to invent one) and a label is what a human reads (a floor's designation is signage, a fact the platform has no access to). The seeded estate ships both cases of one type side by side, a floor named `1` labelled Level 1 and a floor named `1` labelled Level 2. The rule this generalises to: a stem-less positional name fits an arbitrary disambiguator and not a number an operator reads as a designation, which puts `floor` on the line rather than safely inside it; making it nominal (the plain reversal of ADR-0102) is declined on cost, not principle, and stays available. Seeding a Level 1 so the numbers line up, and shipping a `Floor {{.Name}}` label rule, are both refused as the same defect with better manners |
+| [ADR-0102](#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing) | 2026-08-10 | Accepted | A **`location_type.name_rule`** (nullable jsonb) is a type's opt-in to naming the locations it classifies, and it is a **declaration** (a stem, possibly empty, plus the first-ordinal suppression flag) rather than the `label_rule` template beside it. A name has to satisfy `validateEntityName`, it lands in a scoped-unique index, and other things reference it, so an unrenderable rule has no safe degradation the way a label's does; a declaration IS a `nameMint`, so a rule is refused at RULE-EDIT time by minting from it (ordinal 1 and a nine-digit ceiling bound the whole output space), which a template's output could only be sampled. Null is the opt-out and there is no boolean beside it. A rule change **renames nothing**: there is no name-side recompute verb, deliberately, because relabelling in bulk is recoverable and renaming is not. A positional type permitted at root allocates `1`, `2` across the estate and that is legal, since the bucket is the placement and two positional types under one parent already share an ordinal space. **Amended (#657):** the entry's "only floor is genuinely auto-nameable" is now false in both halves, since ADR-0103 was reversed for `floor` and no shipped type carries a rule; the composed limit is that a withdrawn shipped rule cannot be un-shipped, because insert-when-absent leaves the row alone and the wire cannot spell "clear" |
+| [ADR-0103](#adr-0103-a-positional-name-is-allocation-order-and-the-real-world-designation-is-a-label) | 2026-08-11 | Accepted | A positional name is **allocation order**, never a claim about the world, and the entry first kept the dev estate's divergence (a floor named `1` labelled Level 2) on the argument that a name is an address and a label is what a human reads. **Amended (#657) and REVERSED for `floor`:** a floor's designation is not an integer at all (B2, LG, G, M, 12A), so an ordinal is the wrong KIND of value for it rather than an imprecise one, and the basement objection dissolves with it, since nobody signs a floor `-1`, they sign it `B1`, already a legal name. `floor` becomes nominal, the dev estate's floors are named `level-2` and `level-1` for their real designations so ADR-0105's rule renders those labels and the two pins are released, and the cost is stated rather than hidden: NO shipped location type carries a rule, so location name generation ships **dormant**, kept covered by a positional type the tests create rather than by a fifth seeded type invented to keep the demo alive. Removing a shipped rule reaches new estates only (insert-when-absent), and no `PATCH` can clear one, so an estate that already seeded it keeps it. What survives: a stem-less positional name is right where the position is an arbitrary disambiguator (a parking deck, a rack row) and wrong where the number is a real-world fact |
 
 | [ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it) | 2026-08-11 | Accepted | A create form shows the **stem** a generated name will carry, resolved in the browser from the classification the operator just chose, and writes the ordinal as the token `n`, because the ordinal is allocated against live siblings inside the create's own transaction and does not exist until the row does. A **draft-preview verb that mints and rolls back** is refused: its answer is provisional (another create can take the ordinal between the preview and the commit), and the rolled-back mint takes the same advisory lock real creates need, so a form that previewed on every keystroke would serialise the estate's creates behind a UI affordance. **Re-rendering the label rule in TypeScript** is refused outright, as the second implementation of an engine slice 3 swept 42 copies of. The label is therefore not previewed at all: its data map carries `Name` and `Ordinal`, so it is unknowable for the same reason. The placement bucket is shown beside the field as a PATH and never as a prefix inside it, since names became scoped to placement and a name no longer contains its ancestry. **Amended (#699):** a RENDER is not a mint, and both refusals were about allocating, so `:renderLabel` resolves the rule through the same tiers with the same one engine, writes the token where the ordinal goes, and takes no lock; the form now shows both values in LOCKED fields, gated by the entity's `:create` with the placement resolved in the caller's read scope. **Amended again (#657):** the lock is an inline square icon action in the field's join, matching Settings' own Restore to default, and a locked field is `readonly` rather than `disabled`, because a disabled input fires no click and leaves the value out of the tab order; focus does not claim the pen, since a locked field is a tab stop and tabbing past would otherwise blank both fields |
-| [ADR-0105](#adr-0105-a-rule-reads-a-name-as-words-and-the-location-tier-ships-the-restatement-it-once-refused) | 2026-08-11 | Accepted | `words` joins the closed FuncMap (a run of `-` or `_` becomes one space, an edge run is dropped, everything else untouched), which is what finally lets a rule turn a kebab NAME into words: `title` alone leaves the separator standing, so the acronym dictionary of ADR-0099 could not be reached from a name by any spelling. Adding a function is a THREE-place act (FuncMap, AST allowlist, `FuncNames`) and the published set is now walked by a test rather than described. The global LOCATION rule ships as `{{title (words .Name)}}`, reversing the seed's own argument on its restatement half only: a restatement that RE-CASES and runs the operator's dictionary produces a string the read ladder's fallback cannot, where an echo could not, and the constant half ("Room" for every room) is still refused. The ladder's last rung stays verbatim, since this renders and STORES a label rather than prettifying on read; the estate keeps only the nine pins that say something a name cannot |
+| [ADR-0105](#adr-0105-a-rule-reads-a-name-as-words-and-the-location-tier-ships-the-restatement-it-once-refused) | 2026-08-11 | Accepted | `words` joins the closed FuncMap (a run of `-` or `_` becomes one space, an edge run is dropped, everything else untouched), which is what finally lets a rule turn a kebab NAME into words: `title` alone leaves the separator standing, so the acronym dictionary of ADR-0099 could not be reached from a name by any spelling. Adding a function is a THREE-place act (FuncMap, AST allowlist, `FuncNames`) and the published set is now walked by a test rather than described. The global LOCATION rule ships as `{{title (words .Name)}}`, reversing the seed's own argument on its restatement half only: a restatement that RE-CASES and runs the operator's dictionary produces a string the read ladder's fallback cannot, where an echo could not, and the constant half ("Room" for every room) is still refused. The ladder's last rung stays verbatim, since this renders and STORES a label rather than prettifying on read; the estate keeps only the pins that say something a name cannot, nine at the time and **seven** after ADR-0103's reversal named the two floors for their designations |
 
 ## Entries
 
@@ -4089,12 +4089,20 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
 - **Date:** 2026-08-10 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
   [storage](/architecture/storage/), [glossary](/architecture/glossary/)
 - **Decision (the opt-in):** `location_type` gains a **nullable `name_rule`**, and its presence IS
-  the opt-in: null means an operator names every location of that type, which is where three of the
-  four shipped types stay. There is no boolean beside it, so "this type generates" and "this is what
-  it generates" cannot disagree. Of the shipped place vocabulary only **floor** is genuinely
-  auto-nameable, and it ships positional; a campus, a building and a room each have a real-world name
-  an operator holds and the platform does not, so generating one would be guessing. `17c` is ground
-  truth, not a default.
+  the opt-in: null means an operator names every location of that type. There is no boolean beside it,
+  so "this type generates" and "this is what it generates" cannot disagree. A campus, a building and a
+  room each have a real-world name an operator holds and the platform does not, so generating one
+  would be guessing. `17c` is ground truth, not a default.
+
+  This entry shipped saying "of the shipped place vocabulary only **floor** is genuinely
+  auto-nameable, and it ships positional", so three of the four shipped types stayed on the opt-out.
+  **Amended (#657): that is now false in both halves.**
+  [ADR-0103](#adr-0103-a-positional-name-is-allocation-order-and-the-real-world-designation-is-a-label)
+  was reversed for `floor` and the rule was dropped from the seed, on the argument that a floor's
+  designation (B2, LG, G, M, 12A) is not an integer at all, so **all four** shipped types are on the
+  opt-out and no shipped type is auto-nameable. The opt-in itself is unchanged, and it is reached by
+  an operator declaring a positional type of their own. What that costs, and why no fifth type was
+  seeded to replace it, is recorded on ADR-0103 rather than repeated here.
 - **Decision (a declaration, not a template):** The rule is `{"stem": "...", "bare_first": <bool>}`,
   decoded straight into the `nameMint`
   [ADR-0101](#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests)
@@ -4185,6 +4193,14 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   `PATCH`. Deliberately no backfill migration, since the rule it would install could not then be
   removed, and a `location_type` row is operator space rather than platform space. Both limits are
   written into the operator guide with the exact call.
+
+  **Amended (#657):** the two limits compose worse than either does alone, which is only visible when
+  a shipped rule has to be WITHDRAWN, as ADR-0103's reversal withdraws this one. Removing the line
+  reaches new estates only, by the same insert-when-absent argument read backwards, and the estate
+  that already has the rule cannot drop it with a `PATCH` either, because the wire has no spelling for
+  clearing one. So a `floor` opted in by an earlier release stays opted in until someone writes the
+  column directly. The `PATCH` above is still the whole of the opt-IN story; there is no opt-out
+  story, and the operator guide now says that rather than leaving it to be discovered.
 - **Consequence (a location label rule still cannot read `.Ordinal`, and that is not an oversight):**
   ADR-0098's closed map gains no key here, although this slice gives a location an ordinal. It would
   be redundant where it helps and wrong where it does not: a positional location's name IS its
@@ -4257,7 +4273,7 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
     than principle: it leaves the shipped estate with **no** auto-nameable location type, so the
     feature is inert everywhere until an operator defines one, and it moves nine storage cases and an
     e2e that assert against the seeded `floor` rule. The reversal stays available and this entry is
-    where it starts.
+    where it starts. **This is the option the amendment below takes.**
   - **Seed a Level 1 under the West Building so the numbers line up.** It makes the estate agree by
     construction and teaches the wrong lesson: correspondence would look like a guarantee, and it is
     a coincidence of enumerating from the bottom in order.
@@ -4267,9 +4283,58 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   thirteen of its locations by hand, which is not a gap in the demonstration but the demonstration:
   a location's label is operator space by design, and the two floors are where that stops being an
   abstraction. It also means a positional name is not safe to read as a designation anywhere in the
-  product, so a console surface that shows a floor must show its label.
+  product, so a console surface that shows a floor must show its label. (The empty half of this is
+  superseded by [ADR-0105](#adr-0105-a-rule-reads-a-name-as-words-and-the-location-tier-ships-the-restatement-it-once-refused),
+  which ships a global location rule; the operator-space half stands.)
+- **Amended (#657), and REVERSED for `floor`:** the architect rejected the divergence on this type,
+  taking the option listed as rejected-on-cost above. Two arguments, and the second is the one this
+  entry did not have.
+
+  **The allocator's answer misreads as a designation.** A building with floors 0, 1 and 2 is named
+  `1`, `2` and `3`, in whatever order somebody seeds them. This entry called that friction worth
+  keeping; the architect calls it an invitation to misread the estate, and the invitation is extended
+  by the platform rather than by the operator.
+
+  **A floor's designation is not an integer at all.** Real buildings sign B2, LG, G, M, 1, 12A, P3.
+  Modelling that as an ordinal is a **category error**, not merely an imprecision, which is what makes
+  the reversal obviously right rather than a matter of taste. It also dissolves the objection that
+  looks hardest: a negative floor cannot be spelled under `^[a-z0-9][a-z0-9-]*$`, since a leading
+  hyphen is refused, but nobody signs a floor `-1`, they sign it `B1`, which is already a legal name.
+  A rule shaped like `.Ordinal` could never have reached that name whatever the sign handling.
+
+  So `floor` becomes **nominal**: no `name_rule`, and an operator names it exactly as they name a
+  campus, a building and a room. The dev estate's two floors are named `level-2` and `level-1` for the
+  designations they actually carry, ADR-0105's shipped location rule renders "Level 2" and "Level 1"
+  from those names, and the two pins this entry made load-bearing are **released**: name and label are
+  one fact now instead of two that disagreed.
+- **Consequence of the reversal (the cost, stated rather than hidden):** of the four seeded location
+  types **none** carries a name rule, so **location name generation ships dormant**: correct, tested,
+  and demonstrated by nothing in a shipped estate. Seeding a fifth positional type to keep the
+  demonstration alive is refused for the reason seeding a Level 1 was, that a demonstration
+  constructed to make the feature look used teaches the wrong thing. The generator keeps its coverage
+  through a positional type the TESTS create (a parking deck: its number is an arbitrary
+  disambiguator, which is exactly what a floor's is not), because a feature losing its tests when its
+  last shipped user goes away is how one quietly stops working.
+- **Consequence of the reversal (an existing estate keeps the rule, and cannot drop it on the wire):**
+  `SeedLocationType` is insert-when-absent, the forked-template half of the seed model, so deleting
+  the line un-ships nothing from an estate that already booted with it: its `floor` still carries
+  `{"stem": ""}` and still names floors `1`. That is the mirror image of ADR-0102's own consequence
+  (the rule reached new estates only), and it is not fixable by a backfill, because a `location_type`
+  row is operator space. It is sharper than the shipping direction was, because ADR-0102's second
+  recorded limit bites here: a rule **cannot be cleared on the wire**, only replaced, since an omitted
+  key and an explicit `null` both decode to a nil pointer. Such an estate reaches the new default only
+  by a direct write, and the operator guide says so rather than implying a release does it. Closing
+  that needs the wire-contract change ADR-0102 costed and declined.
+- **What survives for genuinely positional types:** everything except the placement of `floor`. A
+  stem-less positional name is still right where the position is an **arbitrary disambiguator** (a
+  parking deck, a rack row, a berth) and wrong where the number is a real-world fact an operator reads
+  off a wall; `floor` sat on that line and is now placed firmly on the nominal side of it. The
+  name-versus-label distinction stands untouched: a name is an address, a label is what a human reads,
+  and the two coinciding on the dev estate's floors is a property of naming them well, not a
+  guarantee. A console surface that shows a location still shows its label.
 - **Tracked under** [#689](https://github.com/hyperscaleav/omniglass/issues/689), the ninth slice of
-  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
+  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657); the amendment folded into
+  [#698](https://github.com/hyperscaleav/omniglass/pull/698) after the rollup review.
 
 ### ADR-0104: A create form shows the name it can know, and never mints one to preview it
 
@@ -4431,7 +4496,11 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   pinned a `display_name` on all thirteen dev-estate locations, because nothing would have rendered one.
   Four of those pins now restate what the rule renders, so they are released and the RENDERED values
   pinned in their place; nine survive with a reason each, ADR-0103's two floors among them, since a
-  positional name is allocation order and releasing those deletes that worked example. The media lab's
+  positional name is allocation order and releasing those deletes that worked example. **Amended
+  (#657):** ADR-0103 was then reversed for `floor`, so those two floors are named `level-2` and
+  `level-1` for their designations, this rule renders "Level 2" and "Level 1" from those names, and
+  their pins are released too. Six rendered values are pinned in place of released ones and **seven**
+  survive. The media lab's
   name becomes `media-lab`: every other location name in the estate is one word, so without it nothing
   the console shows demonstrates a separator becoming a space.
 - **Known gap, deliberately not closed here:** `HQ` is not in the shipped acronym list, so `hq-west`

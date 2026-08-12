@@ -731,7 +731,7 @@ Allocation itself still reads sibling **names**, not this column, and returns th
 whose minted name is free: an operator can hold `display-1` by hand while owning no ordinal, and the
 uniqueness that has to be satisfied is the name's. Asking the mint for candidates rather than picking
 siblings apart is also what makes a name that is nothing but its ordinal expressible, which is what a
-positional type (a floor) is named with below.
+positional type (a parking deck) is named with below.
 
 **A system names itself too, and the first of a kind carries no number**
 ([ADR-0101](/architecture/decisions/#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests)).
@@ -759,19 +759,30 @@ parent alone.
 **A location type opts in, with a rule that is a declaration**
 ([ADR-0102](/architecture/decisions/#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing)).
 `location_type.name_rule` is nullable and its presence IS the opt-in: `NULL` means an operator names
-every location of that type, and there is no boolean beside it for the two to disagree about. Of the
-shipped place vocabulary only **floor** carries one, because only a floor has a name the platform can
-know: a campus, a building and a room each have a real-world name an operator holds, and `17c` is
-ground truth rather than a default.
+every location of that type, and there is no boolean beside it for the two to disagree about. **No
+shipped place type carries one**, so a shipped estate names every location by hand: a campus, a
+building, a floor and a room each have a real-world name an operator holds, and `17c` is ground truth
+rather than a default.
+
+`floor` was the one exception for two slices, shipped positional, and
+[ADR-0103](/architecture/decisions/#adr-0103-a-positional-name-is-allocation-order-and-the-real-world-designation-is-a-label)
+reversed it: **a floor's designation is not an integer**. Buildings sign B2, LG, G, M, 1, 12A, P3,
+so an allocated ordinal is the wrong kind of value rather than an imprecise one, and the basement
+case people reach for first (`-1` is unspellable under the name rule) turns out not to exist, since
+that floor is signed `B1`, already a legal name. The consequence is stated rather than hidden:
+location name generation ships **dormant**, correct and tested but demonstrated by nothing in a
+shipped estate, and reached when an operator declares a positional type of their own.
 
 The rule is a small declaration, a stem plus whether the first of that stem in a parent carries an
 ordinal, and it decodes straight into the same mint a component and a system are named from. An
-**empty stem is a positional type**, whose ordinal genuinely is its name: the first floor of a
-building is `1`, the next is `2`, allocated among that building's own floors, so every building has
-its own floor `1`. That is deliberately not the `label_rule` template beside it on the same registry:
-a label that fails to render falls through to the next rung of the read ladder, and a name has no
-next rung, so a rule that would mint an illegal name is refused **when the rule is edited** by
-minting from it, rather than discovered by a create it breaks.
+**empty stem is a positional type**, whose ordinal genuinely is its name: the first parking deck of a
+building is `1`, the next is `2`, allocated among that building's own decks, so every building has
+its own deck `1`. A positional type is right where the number is an arbitrary disambiguator (a deck,
+a rack row, a berth) and wrong where it is a fact somebody reads off a wall. That is deliberately not
+the `label_rule` template beside it on the same registry: a label that fails to render falls through
+to the next rung of the read ladder, and a name has no next rung, so a rule that would mint an
+illegal name is refused **when the rule is edited** by minting from it, rather than discovered by a
+create it breaks.
 
 **Editing a rule renames nothing.** The name, the ordinal and the pen of every existing location
 stand; the new rule decides how the next nameless create, `:resetName`, move or reclassify names a
