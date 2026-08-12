@@ -61,6 +61,13 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   depending on the entity). **Identity** comes last, and on these three pages both of its fields are
   optional.
 
+  On a component, the **System** slot is the one part of the form your permissions can take away.
+  Putting a component in a system writes that system's **membership**, the same act as adding a member
+  to it, so it needs `system:update`: an **Operator** holds no system permission and gets the slot with
+  the reason in it instead of a picker, while a **Deploy** tech or an administrator gets the picker.
+  Nothing else about the create changes, and the component is not stuck outside: create it, and whoever
+  holds that permission adds it to a system afterwards.
+
   Identity is two fields you may fill and one you never see: the **name** is the identifier the API,
   the CLI, and the URL carry (`display-1`, lowercase letters, digits, and hyphens, unique within its
   placement, changeable later, see Edit), the **display name** is the friendly string a human reads
