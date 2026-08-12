@@ -259,13 +259,13 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Description:   "Creates a system, optionally under a parent (a root needs an all-scoped grant), at a location, conforming to a standard, and classified as a system_type. Gated by system:create; the location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and a location outside that scope is refused (422) exactly as :renderLabel refuses to preview it.",
 	}, "system", "create"), func(ctx context.Context, in *createSystemInput) (*systemOutput, error) {
 		s, err := gw.CreateSystem(ctx, actorID(ctx), storage.SystemSpec{
-			Name:            in.Body.Name,
-			DisplayName:     in.Body.DisplayName,
-			StandardID:      ptrOrNil(in.Body.StandardID),
-			SystemTypeID:    ptrOrNil(in.Body.SystemTypeID),
-			ParentName:      in.Body.Parent,
-			LocationName:    in.Body.Location,
-			ExpectedName:    in.Body.ExpectedName,
+			Name:         in.Body.Name,
+			DisplayName:  in.Body.DisplayName,
+			StandardID:   ptrOrNil(in.Body.StandardID),
+			SystemTypeID: ptrOrNil(in.Body.SystemTypeID),
+			ParentName:   in.Body.Parent,
+			LocationName: in.Body.Location,
+			ExpectedName: in.Body.ExpectedName,
 		}, a.scopeFor(ctx, "system", "create"), a.scopeFor(ctx, "location", "read"))
 		if err != nil {
 			return nil, mapSystemErr(err)

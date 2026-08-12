@@ -370,11 +370,11 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Description:   "Creates a location, optionally under a parent (a root needs an all-scoped grant). Omit name and the platform generates one from the location_type's name rule, taking the lowest free ordinal among the siblings in that placement; a type carrying no name rule refuses (422), since a building's real name is not something the platform can know. Gated by location:create.",
 	}, "location", "create"), func(ctx context.Context, in *createLocationInput) (*locationOutput, error) {
 		l, err := gw.CreateLocation(ctx, actorID(ctx), storage.LocationSpec{
-			Name:            in.Body.Name,
-			DisplayName:     in.Body.DisplayName,
-			LocationType:    in.Body.LocationType,
-			ParentName:      in.Body.Parent,
-			ExpectedName:    in.Body.ExpectedName,
+			Name:         in.Body.Name,
+			DisplayName:  in.Body.DisplayName,
+			LocationType: in.Body.LocationType,
+			ParentName:   in.Body.Parent,
+			ExpectedName: in.Body.ExpectedName,
 		}, a.scopeFor(ctx, "location", "create"))
 		if err != nil {
 			return nil, mapLocationErr(err)

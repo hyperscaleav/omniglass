@@ -242,13 +242,13 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			return nil, huma.Error403Forbidden(ErrSystemBindNeedsUpdate)
 		}
 		c, err := gw.CreateComponent(ctx, actorID(ctx), storage.ComponentSpec{
-			Name:            in.Body.Name,
-			DisplayName:     in.Body.DisplayName,
-			ParentName:      in.Body.Parent,
-			SystemName:      in.Body.System,
-			LocationName:    in.Body.Location,
-			ProductName:     in.Body.Product,
-			ExpectedName:    in.Body.ExpectedName,
+			Name:         in.Body.Name,
+			DisplayName:  in.Body.DisplayName,
+			ParentName:   in.Body.Parent,
+			SystemName:   in.Body.System,
+			LocationName: in.Body.Location,
+			ProductName:  in.Body.Product,
+			ExpectedName: in.Body.ExpectedName,
 		}, a.scopeFor(ctx, "component", "create"), a.scopeFor(ctx, "location", "read"),
 			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
 		if err != nil {
