@@ -29,6 +29,12 @@ test.describe("operator console", () => {
     // carries no name rule, so the operator types the name: the other half of
     // the same form is proven by the component case below.
     const name = `e2e-${Date.now()}`;
+    // What the LIST will show for it. A shipped estate renders every location's
+    // label from its own name ({{title (words .Name)}}, ADR-0105), and a row
+    // whose label is generated shows that label and no second line, so the raw
+    // name is on the detail and the label is on the list. Derived from the name
+    // here rather than hard-coded, so the two stay one fact.
+    const label = name.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
     await page.getByRole("button", { name: /new location/i }).click();
     await page.getByLabel("Location type").selectOption("campus");
     await page.getByLabel("Name", { exact: true }).fill(name);
@@ -40,20 +46,22 @@ test.describe("operator console", () => {
     await page.getByRole("button", { name: /^cancel$/i }).first().click();
     await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
 
-    // It appears as a new root row back on the list.
+    // It appears as a new root row back on the list, under the label the rule
+    // rendered from the name typed above.
     await page.goto("/web/locations");
-    await expect(page.locator("main")).toContainText(name);
+    await expect(page.locator("main")).toContainText(label);
 
     // Confirm-delete it from its own detail. The detail's Delete carries its
     // word; the row's inline action is an icon-only button of the same
     // accessible name.
     page.on("dialog", (d) => d.accept());
-    await page.getByText(name, { exact: true }).first().click();
+    await page.getByText(label, { exact: true }).first().click();
+    await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
     await expect(page.locator('button:text-is("Delete")')).toBeVisible();
     await page.locator('button:text-is("Delete")').click();
 
     // It is gone from the list.
-    await expect(page.locator("main")).not.toContainText(name);
+    await expect(page.locator("main")).not.toContainText(label);
   });
 
   // The acceptance of #688 and #699, and the only tier that can witness either.
