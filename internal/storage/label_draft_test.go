@@ -244,7 +244,7 @@ func TestTheDraftLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
 	if _, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{}, all); !errors.Is(err, storage.ErrSystemTypeRequiredForName) {
 		t.Errorf("unclassified system draft = %v, want ErrSystemTypeRequiredForName", err)
 	}
-	// A location_type with no name rule, which is every shipped type but floor.
+	// A location_type with no name rule, which is every shipped type (ADR-0103).
 	if _, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{LocationTypeRef: "room"}); !errors.Is(err, storage.ErrLocationTypeNoNameRule) {
 		t.Errorf("nameless room draft = %v, want ErrLocationTypeNoNameRule", err)
 	}

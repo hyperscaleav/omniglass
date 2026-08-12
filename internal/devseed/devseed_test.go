@@ -143,31 +143,33 @@ func TestFixturesShape(t *testing.T) {
 // longer exercised at all).
 //
 // The exceptions are enumerated rather than counted, because each one is a
-// separate argument: a campus, a building and a room have a real-world name the
-// platform cannot produce (no name rule on those location types, so a nameless
-// create is refused outright), and nothing else in the fixture may carry one.
+// separate argument: every LOCATION carries a name, because no shipped
+// location_type carries a name rule (a campus, a building, a floor and a room
+// each have a real-world name the platform cannot produce, so a nameless create
+// is refused outright), and nothing else in the fixture may carry one.
+//
+// The location half was the other way around for two slices, when `floor` shipped
+// positional and the two floors were the estate's only generated location names.
+// ADR-0103 reversed that: a floor's designation is B2, LG, 12A, not an ordinal.
+// So the location tier's generator ships DORMANT, demonstrated by nothing in a
+// shipped estate, and this test now asserts the absence rather than papering over
+// it by inventing a positional type to keep the demo alive.
 func TestFixturesLetThePlatformNameTheEstate(t *testing.T) {
 	doc, err := devseed.Fixtures()
 	if err != nil {
 		t.Fatalf("parse fixtures: %v", err)
 	}
 
-	// The location types whose rows an operator must name: they carry no name
-	// rule in the boot seed, on purpose.
-	nominal := map[string]bool{"campus": true, "building": true, "room": true}
-	generated := 0
+	// Every shipped location type is nominal: a nameless create of one is
+	// refused outright, so a fixture row without a name would fail `make dev`.
+	nominal := map[string]bool{"campus": true, "building": true, "floor": true, "room": true}
 	for _, l := range doc.Locations {
 		switch {
-		case nominal[l.Type] && l.Name == "":
-			t.Errorf("location %q is a %s and carries no name, which the platform cannot mint (that type has no name rule)", l.Key, l.Type)
-		case !nominal[l.Type] && l.Name != "":
-			t.Errorf("location %q is a %s and hand-writes the name %q; a positional type is the one the platform names", l.Key, l.Type, l.Name)
+		case !nominal[l.Type]:
+			t.Errorf("location %q is a %s, which is not a shipped location_type; the fixture references the boot seed by id", l.Key, l.Type)
 		case l.Name == "":
-			generated++
+			t.Errorf("location %q is a %s and carries no name, which the platform cannot mint (that type has no name rule)", l.Key, l.Type)
 		}
-	}
-	if generated == 0 {
-		t.Errorf("no seeded location asks the platform for a name, so the estate demonstrates the location-tier generator not at all")
 	}
 
 	for _, c := range doc.Components {
@@ -223,16 +225,19 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 	//	                          the label is the place ("West" is a direction)
 	//	huddle, briefing          the room's noun is not in its name
 	//	hall                      "Innovation" is not derivable from "hall"
-	//	west-l2, hall-l1          ADR-0103: a positional name is allocation order
-	//	                          and the designation is signage. Releasing these
-	//	                          two deletes that worked example from the estate.
 	//
-	// boardroom, auditorium, annex and the media lab carry none, which is what
-	// makes the estate demonstrate the rule instead of masking it.
+	// The two floors were pinned here for two slices, because the platform
+	// allocated their names (`1`) and the designation was signage the rule could
+	// not reach. ADR-0103 reversed that: they are named level-2 and level-1 now,
+	// for the designations they actually carry, so the rule renders "Level 2" and
+	// "Level 1" and the pins are exactly the hand-typed copies of its own output
+	// that this test exists to catch. Released.
+	//
+	// boardroom, auditorium, annex, the media lab and the two floors carry none,
+	// which is what makes the estate demonstrate the rule instead of masking it.
 	wantLocationLabels := map[string]bool{
 		"hq": true, "west": true, "east": true, "airport": true,
 		"huddle": true, "briefing": true, "hall": true,
-		"west-l2": true, "hall-l1": true,
 	}
 	for _, l := range doc.Locations {
 		if (l.DisplayName != "") != wantLocationLabels[l.Key] {
@@ -623,9 +628,14 @@ const (
 // and stores no ordinal) as well as on the value.
 //
 // The names are not incidental. `display-1` appears three times, once per room,
-// which is the placement-scoped unique index doing its job; `boardroom` carries
-// no ordinal while storing 1, which is the first-of-its-stem suppression
-// (ADR-0101); and the two floors are both `1`, each in its own building.
+// which is the placement-scoped unique index doing its job; and `boardroom`
+// carries no ordinal while storing 1, which is the first-of-its-stem suppression
+// (ADR-0101).
+//
+// No LOCATION is generated any more (ADR-0103), so the location rows here are
+// the negative half: they carry the operator's own name and no ordinal, and a
+// fixture that quietly went back to letting the platform name a floor fails on
+// the pen.
 func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 	ctx, conn, _ := seededEstate(t)
 
@@ -637,10 +647,10 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 		ordinal   int
 		generated bool
 	}{
-		// Locations: only a positional type generates, so the two floors do and
-		// the eleven nominal rows carry the operator's own name.
-		{what: "the floor under the west building", table: "location", place: "west", name: "1", ordinal: 1, generated: true},
-		{what: "the floor under innovation hall", table: "location", place: "hall", name: "1", ordinal: 1, generated: true},
+		// Locations: no shipped type generates, so all thirteen carry the
+		// operator's own name. The two floors are the rows that moved.
+		{what: "the floor under the west building", table: "location", place: "west", name: "level-2", generated: false},
+		{what: "the floor under innovation hall", table: "location", place: "hall", name: "level-1", generated: false},
 		{what: "the west building", table: "location", place: "hq", name: "west", generated: false},
 
 		// Components: the stem comes from the product's component_type, the
@@ -683,9 +693,10 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 		}
 	}
 
-	// A room is operator-named and its PARENT is not, so the estate nests a
-	// typed name under a minted one: `boardroom` sits under the floor the
-	// platform called `1`, under the building an operator called `west`.
+	// The whole location chain is the operator's: `boardroom` sits under the
+	// floor they called `level-2`, under the building they called `west`. The
+	// join is kept (it used to prove a typed name nesting under a minted one)
+	// because it is what catches a fixture resolver that reparented the estate.
 	var roomGenerated bool
 	var roomOrdinal *int
 	if err := conn.QueryRow(ctx, `
@@ -693,7 +704,7 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 		from location r
 		join location f on f.id = r.parent_id
 		join location b on b.id = f.parent_id
-		where r.name = 'boardroom' and f.name = '1' and b.name = 'west'`).Scan(&roomGenerated, &roomOrdinal); err != nil {
+		where r.name = 'boardroom' and f.name = 'level-2' and b.name = 'west'`).Scan(&roomGenerated, &roomOrdinal); err != nil {
 		t.Fatalf("read the boardroom under the west building's floor: %v", err)
 	}
 	if roomGenerated || roomOrdinal != nil {
@@ -792,12 +803,17 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		// the operator's words win and keep the pen.
 		{table: "component", place: "boardroom", name: "device-1", label: "Power Conditioner", platform: false},
 		{table: "component", place: "boardroom", name: "dsp", label: "Boardroom DSP", platform: false},
-		// The two halves of the divisible room, and the two floors: facts a
-		// rule has no way to know.
+		// The two halves of the divisible room: which one is A and which is B is
+		// a fact about the air wall, and a rule has no way to know it.
 		{table: "system", place: "boardroom", name: "boardroom", label: "Boardroom A", platform: false},
 		{table: "system", place: "boardroom", name: "boardroom-2", label: "Boardroom B", platform: false},
-		{table: "location", place: "west", name: "1", label: "Level 2", platform: false},
-		{table: "location", place: "hall", name: "1", label: "Level 1", platform: false},
+		// The two floors, which used to be here as PINS over a generated name
+		// (`1` labelled Level 2). They are named for their designations now, so
+		// the rule renders those designations and the platform holds the pen.
+		// Looked up under their parent because a floor's name is unique within
+		// its building rather than across the estate.
+		{table: "location", place: "west", name: "level-2", label: "Level 2", platform: true},
+		{table: "location", place: "hall", name: "level-1", label: "Level 1", platform: true},
 	} {
 		placeCol := "location_id"
 		if tc.table == "location" {
@@ -821,16 +837,18 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 	}
 
 	// The locations the shipped rule labels (#657), addressed by name alone
-	// because each of these four is estate-unique (the two floors above are not,
-	// which is why they are looked up under their parent). This is the half of
-	// the demonstration that would otherwise be asserted by nothing: releasing a
-	// pin leaves no test behind unless the rendered value is pinned instead.
+	// because each of these is estate-unique (the two floors above are looked up
+	// under their parent instead, since a floor's name is unique only within its
+	// building). This is the half of the demonstration that would otherwise be
+	// asserted by nothing: releasing a pin leaves no test behind unless the
+	// rendered value is pinned instead.
 	for _, tc := range []struct{ name, label string }{
 		{"boardroom", "Boardroom"},
 		{"auditorium", "Auditorium"},
 		{"annex", "Annex"},
-		// The two-word one: the rule reads the separator as a space, which is
-		// the whole of what `words` does and the only row here that shows it.
+		// The two-word ones: the rule reads the separator as a space, which is
+		// the whole of what `words` does. `media-lab` was the only such row
+		// until the floors were named for their designations.
 		{"media-lab", "Media Lab"},
 	} {
 		var label string
@@ -919,17 +937,22 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 	}
 }
 
-// TestTheSameFloorNumberMeansTwoDifferentThings is the friction this slice found
-// and chose to keep rather than hide (ADR-0103). A positional name is ALLOCATION
-// ORDER, not a real-world designation, and the estate seeds both cases side by
-// side on one type: the floor under Innovation Hall is named 1 and is Level 1,
-// and the floor under the West Building is also named 1 and is Level 2. The
-// second is why the label exists.
-func TestTheSameFloorNumberMeansTwoDifferentThings(t *testing.T) {
+// TestAFloorIsNamedForItsDesignation is what ADR-0103's worked example became
+// when the architect reversed it. The estate used to ship two floors both named
+// `1`, one labelled Level 1 and one Level 2, to teach that a positional name is
+// ALLOCATION ORDER rather than a designation. The sharper reading is that a
+// floor's designation is not an integer at all (B2, LG, G, M, 12A), so an
+// ordinal is the wrong kind of value for it, not merely an imprecise one.
+//
+// So a floor is nominal: the operator names it for the designation on the
+// signage, the shipped location rule renders that designation as the label, and
+// the two AGREE because they are one fact rather than two. This test is the
+// statement of that, and it fails if a floor ever goes back to being minted.
+func TestAFloorIsNamedForItsDesignation(t *testing.T) {
 	ctx, conn, _ := seededEstate(t)
 
 	rows, err := conn.Query(ctx, `
-		select p.name, f.name, coalesce(f.display_name, ''), f.name_generated
+		select p.name, f.name, coalesce(f.display_name, ''), f.name_generated, f.ordinal, f.display_name_generated
 		from location f join location p on p.id = f.parent_id
 		where f.location_type = (select id from location_type where name = 'floor')
 		order by p.name`)
@@ -940,12 +963,17 @@ func TestTheSameFloorNumberMeansTwoDifferentThings(t *testing.T) {
 	got := map[string][2]string{}
 	for rows.Next() {
 		var building, name, label string
-		var generated bool
-		if err := rows.Scan(&building, &name, &label, &generated); err != nil {
+		var generated, labelGenerated bool
+		var ordinal *int
+		if err := rows.Scan(&building, &name, &label, &generated, &ordinal, &labelGenerated); err != nil {
 			t.Fatalf("scan floor: %v", err)
 		}
-		if !generated {
-			t.Errorf("the floor under %q was named by hand; a floor is the one seeded location type the platform names", building)
+		if generated || ordinal != nil {
+			t.Errorf("the floor under %q reads (generated %v, ordinal %v), want (false, absent): a floor is named by the operator, and the platform owns no number for it",
+				building, generated, ordinal)
+		}
+		if !labelGenerated {
+			t.Errorf("the floor under %q holds the label pen; the shipped rule renders its designation from its name, so a pin would be a hand-typed copy of that output", building)
 		}
 		got[building] = [2]string{name, label}
 	}
@@ -953,9 +981,11 @@ func TestTheSameFloorNumberMeansTwoDifferentThings(t *testing.T) {
 		t.Fatalf("iterate floors: %v", err)
 	}
 
+	// Name and label say the same thing, which is the whole change: the name is
+	// the designation in kebab, the label is what the rule renders from it.
 	want := map[string][2]string{
-		"hall": {"1", "Level 1"},
-		"west": {"1", "Level 2"},
+		"hall": {"level-1", "Level 1"},
+		"west": {"level-2", "Level 2"},
 	}
 	for building, w := range want {
 		if got[building] != w {

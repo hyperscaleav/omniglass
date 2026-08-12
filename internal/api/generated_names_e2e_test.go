@@ -131,13 +131,38 @@ func TestLocationResetNameRefusesAPI(t *testing.T) {
 
 	c.do(ownerTok, http.MethodPost, "/locations/reset-room:resetName", nil, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/locations/no-such-room:resetName", nil, http.StatusNotFound)
+
+	// A FLOOR answers the same way, which is the acceptance of ADR-0103's
+	// reversal on the one type that used to answer differently. The refusal has
+	// to name the missing fact rather than 500 or silently no-op, since this is
+	// now the only answer a shipped estate ever gets from this verb.
+	c.do(ownerTok, http.MethodPost, "/locations",
+		map[string]any{"name": "17c", "location_type": "building", "parent": "reset-room"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/locations",
+		map[string]any{"name": "b1", "location_type": "floor", "parent": "17c"}, http.StatusCreated)
+	refusal := c.do(ownerTok, http.MethodPost, "/locations/reset-room.17c.b1:resetName", nil, http.StatusUnprocessableEntity)
+	var problem struct {
+		Detail string `json:"detail"`
+	}
+	if err := json.Unmarshal(refusal, &problem); err != nil {
+		t.Fatalf("decode the floor refusal: %v", err)
+	}
+	if !strings.Contains(problem.Detail, "no name rule") {
+		t.Errorf("resetName on a floor = %q, want the missing fact named", problem.Detail)
+	}
 }
 
 // TestLocationGeneratedNameAPI drives #687 over HTTP as an operator meets it: a
-// floor created with no name comes back named, the second takes the next
-// ordinal, :rename claims the pen and :resetName returns it, and the type's own
-// rule round-trips on the registry surface so a console can show which kinds of
-// place the platform names.
+// location of a positional type created with no name comes back named, the
+// second takes the next ordinal, :rename claims the pen and :resetName returns
+// it, and the type's own rule round-trips on the registry surface so a console
+// can show which kinds of place the platform names.
+//
+// The positional type is MINTED HERE, over the same wire, because no shipped
+// location type carries a name rule (ADR-0103, reversed for `floor`: a
+// designation is B2, LG, 12A, not an ordinal). That is the shape the feature
+// actually ships in, so it is the shape the e2e drives: an operator declares a
+// positional type and the platform names its rows.
 //
 // It is the wire that is under test rather than the gateway. name_generated has
 // to reach the console for it to show who owns the name, and a create body that
@@ -164,12 +189,18 @@ func TestLocationGeneratedNameAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
+	// The positional type an operator declares, since the seed ships none.
+	c.do(ownerTok, http.MethodPost, "/location-types", map[string]any{
+		"name": "deck", "display_name": "Deck", "allowed_parent_types": []string{"building", "campus"},
+		"name_rule": map[string]any{"stem": ""},
+	}, http.StatusCreated)
+
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "boi", "location_type": "campus"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "17c", "location_type": "building", "parent": "boi"}, http.StatusCreated)
 
 	var first nameBody
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/locations",
-		map[string]any{"location_type": "floor", "parent": "17c"}, http.StatusCreated), &first); err != nil {
+		map[string]any{"location_type": "deck", "parent": "17c"}, http.StatusCreated), &first); err != nil {
 		t.Fatalf("decode the nameless create: %v", err)
 	}
 	if first.Name != "1" || !first.NameGenerated {
@@ -178,7 +209,7 @@ func TestLocationGeneratedNameAPI(t *testing.T) {
 
 	var second nameBody
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/locations",
-		map[string]any{"location_type": "floor", "parent": "17c"}, http.StatusCreated), &second); err != nil {
+		map[string]any{"location_type": "deck", "parent": "17c"}, http.StatusCreated), &second); err != nil {
 		t.Fatalf("decode the second create: %v", err)
 	}
 	if second.Name != "2" {
@@ -186,12 +217,14 @@ func TestLocationGeneratedNameAPI(t *testing.T) {
 	}
 
 	// A nameless create under a type with no rule is a 422 naming the reason,
-	// not a 500 and not a row with a blank name.
+	// not a 500 and not a row with a blank name. Every SHIPPED type is one of
+	// those now, `floor` included, which is the acceptance of this reversal.
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"location_type": "room", "parent": "17c"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"location_type": "floor", "parent": "17c"}, http.StatusUnprocessableEntity)
 
 	// The pen round trip, addressed by the dotted path: a positional name is
 	// only unique within its parent, so "1" on its own is an ambiguous address
-	// the moment a second building has a first floor.
+	// the moment a second building has a first deck.
 	var renamed nameBody
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/locations/boi.17c.1:rename",
 		map[string]any{"name": "ground"}, http.StatusOK), &renamed); err != nil {
@@ -226,12 +259,16 @@ func TestLocationGeneratedNameAPI(t *testing.T) {
 	seen := map[string]bool{}
 	for _, lt := range types.LocationTypes {
 		seen[lt.Name] = lt.NameRule != nil
-		if lt.Name == "floor" && (lt.NameRule == nil || lt.NameRule.Stem != "") {
-			t.Fatalf("the floor type's name_rule = %+v, want a positional rule", lt.NameRule)
+		if lt.Name == "deck" && (lt.NameRule == nil || lt.NameRule.Stem != "") {
+			t.Fatalf("the deck type's name_rule = %+v, want a positional rule", lt.NameRule)
 		}
 	}
-	if seen["room"] {
-		t.Error("the room type carries a name_rule on the wire, want none: a room's name is the operator's")
+	// Every shipped type reads back rule-less on the wire, which is what makes
+	// the console's "the operator names this one" the truthful default.
+	for _, shipped := range []string{"campus", "building", "floor", "room"} {
+		if seen[shipped] {
+			t.Errorf("the shipped %s type carries a name_rule on the wire, want none: a shipped place is named by the operator (ADR-0103)", shipped)
+		}
 	}
 
 	c.do(ownerTok, http.MethodPost, "/location-types",
@@ -242,9 +279,9 @@ func TestLocationGeneratedNameAPI(t *testing.T) {
 
 // A platform-named location cannot be reclassified to a type with no name rule,
 // which is intended (the platform would be left owning a name it can no longer
-// mint) and is where most operators will actually meet the refusal: `floor` is
-// the only shipped type carrying a rule, so reclassifying a generated floor as
-// a room, a building or a campus is the routine misclassification fix and it is
+// mint) and is where most operators will actually meet the refusal: every
+// SHIPPED type is rule-less, so reclassifying a generated location as a room, a
+// building, a floor or a campus is the routine misclassification fix and it is
 // refused. What the wire owes them is the WAY OUT, and ":rename it first" is
 // not something "name it yourself" says: there is no name field on the patch to
 // name it in.
@@ -269,9 +306,13 @@ func TestReclassifyingAPlatformNamedLocationNamesTheEscape(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
+	c.do(ownerTok, http.MethodPost, "/location-types", map[string]any{
+		"name": "deck", "display_name": "Deck", "allowed_parent_types": []string{"building", "campus"},
+		"name_rule": map[string]any{"stem": ""},
+	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "boi", "location_type": "campus"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "17c", "location_type": "building", "parent": "boi"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"location_type": "floor", "parent": "17c"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"location_type": "deck", "parent": "17c"}, http.StatusCreated)
 
 	body := c.do(ownerTok, http.MethodPatch, "/locations/boi.17c.1",
 		map[string]any{"location_type": "room"}, http.StatusUnprocessableEntity)

@@ -221,18 +221,26 @@ func TestTheRenderedLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
 	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	// An unclassified system, and a room: the two states a shipped estate can
-	// reach through the pickers.
+	// reach through the pickers. EVERY shipped location type is in the second
+	// state now (ADR-0103), a floor included, so the location arm of this route
+	// answers 422 for the whole shipped vocabulary.
 	c.do(owner, http.MethodPost, "/systems:renderLabel", map[string]any{}, http.StatusUnprocessableEntity)
-	c.do(owner, http.MethodPost, "/locations:renderLabel", map[string]any{"location_type": "room"}, http.StatusUnprocessableEntity)
+	for _, shipped := range []string{"campus", "building", "floor", "room"} {
+		c.do(owner, http.MethodPost, "/locations:renderLabel", map[string]any{"location_type": shipped}, http.StatusUnprocessableEntity)
+	}
 
 	// And the same two with a name supplied render fine: the refusal is about
 	// generating a NAME, never about rendering a label.
 	c.do(owner, http.MethodPost, "/systems:renderLabel", map[string]any{"name": "one-off"}, http.StatusOK)
 	c.do(owner, http.MethodPost, "/locations:renderLabel", map[string]any{"location_type": "room", "name": "boardroom"}, http.StatusOK)
 
-	// The floor is the one shipped location_type that generates, and it
-	// generates a POSITIONAL name, so its drafted name is the token alone.
-	c.do(owner, http.MethodPost, "/locations:renderLabel", map[string]any{"location_type": "floor"}, http.StatusOK)
+	// A type an OPERATOR made positional still drafts with the name omitted, so
+	// the route keeps the arm the shipped vocabulary no longer reaches: its
+	// drafted name is the ordinal token alone.
+	c.do(owner, http.MethodPost, "/location-types", map[string]any{
+		"name": "deck", "display_name": "Deck", "name_rule": map[string]any{"stem": ""},
+	}, http.StatusCreated)
+	c.do(owner, http.MethodPost, "/locations:renderLabel", map[string]any{"location_type": "deck"}, http.StatusOK)
 }
 
 // TestTheRenderedLocationLabelIsTheShippedRulesInAShippedEstate documents the
