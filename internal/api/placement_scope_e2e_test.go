@@ -153,8 +153,12 @@ func TestAComponentCreateRefusesAPlacementTheCallerCannotRead(t *testing.T) {
 	leakBody := map[string]any{
 		"name": "panel-b", "product": "samsung-qm55", "parent": f.rackID, "location": "wing-b",
 	}
+	// The draft carries the parent the create posts, which it did not before the
+	// #702 review: the parentless bucket is now gated on an all-scoped create
+	// grant, so a body without it would be refused for the bucket rather than for
+	// the location, and this assertion would stop being about wing-b at all.
 	f.c.do(f.narrow, http.MethodPost, "/components:renderLabel", map[string]any{
-		"name": "panel-b", "product": "samsung-qm55", "location": "wing-b",
+		"name": "panel-b", "product": "samsung-qm55", "parent": f.rackID, "location": "wing-b",
 	}, http.StatusUnprocessableEntity)
 	f.c.do(f.narrow, http.MethodPost, "/components", leakBody, http.StatusUnprocessableEntity)
 
@@ -194,7 +198,7 @@ func TestASystemCreateRefusesALocationTheCallerCannotRead(t *testing.T) {
 		"name": "sub-b", "system_type_id": "board", "parent": "av-a", "location": "wing-b",
 	}
 	f.c.do(f.narrow, http.MethodPost, "/systems:renderLabel", map[string]any{
-		"name": "sub-b", "system_type_id": "board", "location": "wing-b",
+		"name": "sub-b", "system_type_id": "board", "parent": "av-a", "location": "wing-b",
 	}, http.StatusUnprocessableEntity)
 	f.c.do(f.narrow, http.MethodPost, "/systems", leakBody, http.StatusUnprocessableEntity)
 

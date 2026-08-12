@@ -344,13 +344,31 @@ func (p *PG) RenderLocationDraftLabel(ctx context.Context, d LocationLabelDraft,
 // discloses is one the caller could allocate for themselves by creating, which
 // is what makes previewing it disclose nothing new.
 //
-// An empty ref is the parentless bucket and resolves to nil, which is what both
-// nameScope constructors read as "at the root" or "unplaced". The draft
-// deliberately does NOT rehearse the create's own all-scope gate on a root
-// create: this answers what a row would be called, not whether the create is
-// permitted, and the permission is the route's gate.
+// An empty ref is the PARENTLESS bucket, and it takes the create's own all-scope
+// gate rather than resolving to nil unguarded (#702 review). Every one of the
+// three creates refuses a parentless row to a caller whose create scope is not
+// all (CreateLocation, CreateComponent, CreateSystem each answer cfg.forbidden),
+// so a draft that answered it previewed a bucket the caller could never write
+// into.
+//
+// That was a disclosure and not only an inconsistency. previewName reads the
+// bucket's sibling NAMES and returns the lowest free ordinal, so the answer
+// tells the caller which names in that bucket are taken. On the root bucket the
+// probe is choosable: an operator holding location_type:create (seeded admin)
+// forks a location type, writes any stem into its name rule, and asks the draft
+// which ordinal is free for it. The function's own argument, that the caller
+// could allocate the disclosed ordinal themselves by creating, is exactly what
+// does not hold here.
+//
+// The gate is unconditional rather than only when a name is being drafted, for
+// the same reason the create's is: what a caller cannot create, a form has no
+// business rehearsing. The permission to ASK is still the route's gate; this is
+// the scope, which is the other layer and enforced separately.
 func draftParentID[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref, resource string, create scope.Set, notFound, parentNotFound error) (*string, error) {
 	if ref == "" {
+		if !create.All {
+			return nil, cfg.forbidden
+		}
 		return nil, nil
 	}
 	parent, err := resolveScopedRef(ctx, q, cfg, ref, resource, create)

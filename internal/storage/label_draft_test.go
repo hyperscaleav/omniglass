@@ -524,6 +524,80 @@ func TestTheDraftLabelAllocatesNothing(t *testing.T) {
 	}
 }
 
+// TestTheDraftRefusesTheParentlessBucketItCannotCreateIn closes the disclosure
+// the create's own all-scope gate already closed on the other side of the same
+// question (#702 review).
+//
+// All three creates refuse a PARENTLESS row unless the create scope is all
+// (CreateLocation, CreateComponent and CreateSystem each answer their forbidden
+// sentinel), and the draft resolved an empty parent to nil with no gate at all.
+// So a caller whose grant covers one subtree could ask what the ROOT bucket
+// would name a row, and previewName reads that bucket's sibling NAMES: the
+// answer says which names are taken there. It is a chosen probe rather than one
+// fixed leak, because the caller supplies the stem (a forked location_type's
+// name rule since #703, which needs only location_type:create).
+//
+// The three tiers are driven together because it is one seam (draftParentID),
+// and a per-tier fix is exactly how two of them would drift.
+func TestTheDraftRefusesTheParentlessBucketItCannotCreateIn(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	hq, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)
+	if err != nil {
+		t.Fatalf("create campus: %v", err)
+	}
+	// A location type that generates, so the location tier actually reaches the
+	// sibling read rather than refusing earlier for want of a rule.
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{
+		Name: "deck", DisplayName: "Deck", AllowedParentTypes: []string{"campus"},
+		NameRule: &storage.NameRule{Stem: "deck"},
+	}); err != nil {
+		t.Fatalf("create location type: %v", err)
+	}
+	subtree := scope.Set{IDs: []string{hq.ID}}
+
+	// Location. The parentless bucket is the estate ROOT, and this caller's
+	// create scope is one campus.
+	if _, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{
+		LocationTypeRef: "deck",
+	}, subtree); !errors.Is(err, storage.ErrLocationForbidden) {
+		t.Errorf("root-bucket location draft = %v, want ErrLocationForbidden, the same refusal the create gives", err)
+	}
+	// And the create agrees, which is the whole point: the draft answers what
+	// the create would do, so the two cannot disagree about whether it happens.
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
+		LocationType: "deck",
+	}, subtree); !errors.Is(err, storage.ErrLocationForbidden) {
+		t.Errorf("root-bucket location create = %v, want ErrLocationForbidden", err)
+	}
+
+	// Component and system: their parentless bucket is the unplaced (or
+	// location-only) one, and their creates gate it identically.
+	if _, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
+		ProductName: qm55,
+	}, subtree, all, all); !errors.Is(err, storage.ErrComponentForbidden) {
+		t.Errorf("parentless component draft = %v, want ErrComponentForbidden", err)
+	}
+	if _, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{
+		SystemTypeRef: "board",
+	}, subtree, all); !errors.Is(err, storage.ErrSystemForbidden) {
+		t.Errorf("parentless system draft = %v, want ErrSystemForbidden", err)
+	}
+
+	// An all-scoped caller still gets the answer, so the three refusals above are
+	// the scope and not a broken draft.
+	if _, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{LocationTypeRef: "deck"}, all); err != nil {
+		t.Errorf("root-bucket draft for an all-scoped caller = %v, want the answer", err)
+	}
+
+	// A parent INSIDE the subtree is unaffected: what is gated is the bucket the
+	// caller cannot write, not drafting at all.
+	if _, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{
+		LocationTypeRef: "deck", ParentName: hq.Name,
+	}, subtree); err != nil {
+		t.Errorf("in-subtree draft = %v, want the answer", err)
+	}
+}
+
 // TestTheOrdinalPreconditionIsPureAndSaysSo pins the create's half of the
 // precondition (#702) where it can be exercised exhaustively: the three states
 // no integration fixture reaches cheaply, and the one that carries the numbers a

@@ -324,13 +324,23 @@ func TestTheRenderedLabelStopsAtTheCallersReadScope(t *testing.T) {
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "wing-b", "location_type": "building", "parent": "hq", "display_name": "Secret Wing"}, http.StatusCreated)
 
 	wingA := entityID(t, c, owner, "/locations", "wing-a")
-	narrow := principalWithGrants(t, ctx, dsn, "wing-a-operator",
-		[]grant{{role: "operator", scopeKind: "location", scopeID: wingA}})
+	// A rack for the narrow principal to draft UNDER. Every body below names it,
+	// so the axis this test isolates is the location read scope alone: the
+	// parentless bucket is gated on an all-scoped create grant (#702 review), and
+	// a body that omitted the parent would be refused for that instead, which
+	// would pass this test while proving nothing about the location.
+	rack := createdID(t, c.do(owner, http.MethodPost, "/components", map[string]any{
+		"name": "rack", "product": "generic-device", "location": "wing-a",
+	}, http.StatusCreated))
+	narrow := principalWithGrants(t, ctx, dsn, "wing-a-operator", []grant{
+		{role: "operator", scopeKind: "location", scopeID: wingA},
+		{role: "operator", scopeKind: "component", scopeID: rack},
+	})
 
 	// Inside its own wing the narrow principal gets a real answer, carrying the
 	// label of the location it may read.
 	got := renderLabelAt(t, c, narrow, "/components:renderLabel",
-		map[string]any{"product": "samsung-qm55", "name": "panel", "location": "wing-a"}, http.StatusOK)
+		map[string]any{"product": "samsung-qm55", "name": "panel", "parent": rack, "location": "wing-a"}, http.StatusOK)
 	if got.Label == "" {
 		t.Fatal("the in-scope draft rendered nothing, so the refusal below proves nothing")
 	}
@@ -341,9 +351,9 @@ func TestTheRenderedLabelStopsAtTheCallersReadScope(t *testing.T) {
 	// The sibling wing is refused. The owner is shown the same request
 	// succeeding, so this is a scope refusal and not a broken route.
 	c.do(narrow, http.MethodPost, "/components:renderLabel",
-		map[string]any{"product": "samsung-qm55", "name": "panel", "location": "wing-b"}, http.StatusUnprocessableEntity)
+		map[string]any{"product": "samsung-qm55", "name": "panel", "parent": rack, "location": "wing-b"}, http.StatusUnprocessableEntity)
 	leak := renderLabelAt(t, c, owner, "/components:renderLabel",
-		map[string]any{"product": "samsung-qm55", "name": "panel", "location": "wing-b"}, http.StatusOK)
+		map[string]any{"product": "samsung-qm55", "name": "panel", "parent": rack, "location": "wing-b"}, http.StatusOK)
 	if leak.Label == "" || leak.Label[:len("Secret Wing")] != "Secret Wing" {
 		t.Errorf("owner draft %q does not carry the sibling wing's label, so the refusal above is not a scope refusal", leak.Label)
 	}
@@ -457,5 +467,52 @@ func TestTheRenderedLocationLabelIsTheShippedRulesInAShippedEstate(t *testing.T)
 	}
 	if loc.DisplayName != got.Label {
 		t.Errorf("the form would have shown %q; the create stored %q", got.Label, loc.DisplayName)
+	}
+}
+
+// TestTheDraftRefusesTheRootBucketItCannotCreateIn is the review's repro at the
+// wire (#702 review): the draft answered 200 for the ROOT bucket while the
+// create beside it answered 403.
+//
+// It is a disclosure and not only an inconsistency. The answer carries the
+// lowest free ordinal, read from the bucket's sibling NAMES, so it reports which
+// names in the estate root are taken. The probe is chosen rather than fixed: a
+// forked location type's name rule (ordinary since #703, and reachable with
+// location_type:create alone) supplies whatever stem the caller wants asked
+// about.
+func TestTheDraftRefusesTheRootBucketItCannotCreateIn(t *testing.T) {
+	f := newLocationGrantFixture(t)
+
+	// A generating type, declared the way an operator reaches one today: no
+	// shipped location type carries a name rule (ADR-0103).
+	f.c.do(f.owner, http.MethodPost, "/location-types", map[string]any{
+		"name": "region", "display_name": "Region", "allowed_parent_types": []string{},
+		"name_rule": map[string]any{"stem": "secret-region"},
+	}, http.StatusCreated)
+	// A root location occupying the first name that rule mints, so the probe has
+	// a real fact to report rather than answering 1 into an empty bucket. Whether
+	// "secret-region-1" is taken is exactly what the drafted ordinal discloses.
+	f.c.do(f.owner, http.MethodPost, "/locations", map[string]any{
+		"name": "secret-region-1", "location_type": "region",
+	}, http.StatusCreated)
+
+	// The root bucket: refused, and refused with the SAME status the create
+	// gives, which is the property that makes a form's preview honest.
+	root := map[string]any{"location_type": "region"}
+	f.c.do(f.techEast, http.MethodPost, "/locations:renderLabel", root, http.StatusForbidden)
+	f.c.do(f.techEast, http.MethodPost, "/locations", root, http.StatusForbidden)
+
+	// Inside its own subtree the same principal drafts and creates normally, so
+	// what is gated is the bucket rather than the route.
+	inside := map[string]any{"location_type": "room", "parent": "annex", "name": "studio-a"}
+	f.c.do(f.techEast, http.MethodPost, "/locations:renderLabel", inside, http.StatusOK)
+	f.c.do(f.techEast, http.MethodPost, "/locations", inside, http.StatusCreated)
+
+	// The owner asks the refused question and is answered, with the ordinal that
+	// says the root already holds one of these: the refusal above is a scope
+	// boundary, and this is the fact it was handing out.
+	got := renderLabelAt(t, f.c, f.owner, "/locations:renderLabel", root, http.StatusOK)
+	if got.Ordinal != 2 || got.Name != "secret-region-2" {
+		t.Errorf("owner root draft = %+v, want ordinal 2 / secret-region-2: the fixture is not carrying the fact the refusal protects", got)
 	}
 }

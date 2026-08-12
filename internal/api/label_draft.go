@@ -53,9 +53,22 @@ import (
 // nothing about which locations a caller may see, and threading it at the
 // location table would deny every non-all caller instead of narrowing anything.
 //
-// A LOCATION draft takes no scope at all. Its data map is the location's own
-// name and its type's display name (labels.go keeps placement off that tier
-// deliberately), so there is no other estate row in the answer to guard.
+// A LOCATION draft takes no READ scope. Its data map is the location's own name
+// and its type's display name (labels.go keeps placement off that tier
+// deliberately), so there is no other estate row's label in the answer to guard.
+// It takes the create scope like the other two, because the ordinal is read from
+// a placement bucket either way.
+//
+// # The parentless bucket, which is a scope question and not a permission one
+//
+// Omitting the parent names the bucket every create gates on an ALL create scope
+// (a root location, a parentless component, a parentless system), so the draft
+// refuses it in the same set rather than answering (#702 review). The answer is
+// not inert: it carries the lowest free ordinal, read from the bucket's sibling
+// names, so it says which of that bucket's names are taken, and the stem being
+// asked about is the caller's to choose since a forked type's name rule is
+// ordinary (#703). The gate is a scope, so it sits beside the route's permission
+// gate rather than inside it.
 
 // draftLabelOutput is the rendered answer plus the rule that produced it.
 //
@@ -122,7 +135,7 @@ func registerComponentLabelDraft(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodPost,
 		Path:        "/components:renderLabel",
 		Summary:     "Draft the name and label a component create would store",
-		Description: "Drafts the name and the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is READ (the lowest free number among the live siblings in the placement bucket) rather than allocated. That answer is provisional, so a form posts it back as expected_ordinal on the create and is refused (409) rather than renumbered if another create takes it first. Omitting name drafts the name the platform would mint, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the parent resolves within the caller's component:create scope and the location and system refs within location:read and system:read, because the rendered string can carry their labels.",
+		Description: "Drafts the name and the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is READ (the lowest free number among the live siblings in the placement bucket) rather than allocated. That answer is provisional, so a form posts it back as expected_ordinal on the create and is refused (409) rather than renumbered if another create takes it first. Omitting name drafts the name the platform would mint, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the parent resolves within the caller's component:create scope and the location and system refs within location:read and system:read, because the rendered string can carry their labels. Omitting parent is the parentless bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403): a form must not preview a bucket its create declines, and the previewed ordinal reports which names that bucket already holds.",
 	}, "component", "create"), func(ctx context.Context, in *renderComponentLabelInput) (*draftLabelOutput, error) {
 		d, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 			ProductName:  in.Body.Product,
@@ -145,7 +158,7 @@ func registerSystemLabelDraft(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodPost,
 		Path:        "/systems:renderLabel",
 		Summary:     "Draft the name and label a system create would store",
-		Description: "The system tier of :renderLabel on components. Drafts the name and the label a system create would stamp, allocating nothing: the ordinal is read from the placement bucket and posted back as expected_ordinal on the create. A system suppresses the first ordinal in a bucket, so the first boardroom in a room drafts as boardroom and the second as boardroom-2. Omitting name drafts the name the platform would mint and refuses (422) an unclassified system, the same refusal a nameless create gives, since the stem lives on the system_type. Gated by system:create; the parent resolves within the caller's system:create scope and the location ref within location:read, because a system's label can carry its location's.",
+		Description: "The system tier of :renderLabel on components. Drafts the name and the label a system create would stamp, allocating nothing: the ordinal is read from the placement bucket and posted back as expected_ordinal on the create. A system suppresses the first ordinal in a bucket, so the first boardroom in a room drafts as boardroom and the second as boardroom-2. Omitting name drafts the name the platform would mint and refuses (422) an unclassified system, the same refusal a nameless create gives, since the stem lives on the system_type. Gated by system:create; the parent resolves within the caller's system:create scope and the location ref within location:read, because a system's label can carry its location's. Omitting parent is the parentless bucket, refused (403) without an all-scoped create grant, exactly as the create refuses it.",
 	}, "system", "create"), func(ctx context.Context, in *renderSystemLabelInput) (*draftLabelOutput, error) {
 		d, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{
 			SystemTypeRef: in.Body.SystemTypeID,
@@ -175,7 +188,7 @@ func registerLocationLabelDraft(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodPost,
 		Path:        "/locations:renderLabel",
 		Summary:     "Draft the name and label a location create would store",
-		Description: "The location tier of :renderLabel on components. Drafts the name and the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create; the parent resolves within the caller's location:create scope, because a location's two placement buckets are under a parent or at the root and that is where the ordinal is read from.",
+		Description: "The location tier of :renderLabel on components. Drafts the name and the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create; the parent resolves within the caller's location:create scope, because a location's two placement buckets are under a parent or at the root and that is where the ordinal is read from. Omitting parent is the ROOT bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403) rather than reporting which names the estate root already holds.",
 	}, "location", "create"), func(ctx context.Context, in *renderLocationLabelInput) (*draftLabelOutput, error) {
 		d, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{
 			LocationTypeRef: in.Body.LocationType,
