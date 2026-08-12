@@ -64,8 +64,11 @@ type setLocationTypeMetricInput struct {
 // contract. The registry it hangs off is gated by location_type:*, so the
 // contract keeps that permission story: the read rides the location_type:read
 // viewer floor, the writes sit at location_type:update / location_type:delete.
-// Official location types ship their contract with the release, so an operator
-// write against one is refused (422) the same way its registry row is.
+// The writes do NOT consult the official flag (#703, ADR-0106): a contract line
+// is a row in its own table rather than a column of the registry row a fork
+// covers, and nothing seeds one, so every line in this table is an operator's
+// already. Refusing them on the four shipped types would have withdrawn the
+// contract editor for the types an estate actually uses.
 func registerLocationTypeMetricRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-location-type-metrics",
@@ -91,7 +94,7 @@ func registerLocationTypeMetricRoutes(api huma.API, a *authenticator, gw storage
 		Method:      http.MethodPut,
 		Path:        "/location-types/{id}/metrics/{metric}",
 		Summary:     "Declare a metric on a location type",
-		Description: "Declares a catalog metric on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a metric the catalog does not know is a 422. Gated by location_type:update.",
+		Description: "Declares a catalog metric on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a metric the catalog does not know is a 422. Gated by location_type:update.",
 	}, "location_type", "update"), func(ctx context.Context, in *setLocationTypeMetricInput) (*locationTypeMetricOutput, error) {
 		def, err := encodePropertyJSON(in.Body.DefaultValue, "default_value")
 		if err != nil {
@@ -114,7 +117,7 @@ func registerLocationTypeMetricRoutes(api huma.API, a *authenticator, gw storage
 		Path:          "/location-types/{id}/metrics/{metric}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Withdraw a metric from a location type",
-		Description:   "Removes one line from a custom location type's contract; locations of the type keep any samples the series already holds, now off-contract. A metric the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.",
+		Description:   "Removes one line from a location type's contract, a shipped (official) type's included, since nothing seeds a contract line; locations of the type keep any samples the series already holds, now off-contract. A metric the type does not declare is a 404, and so is an unknown type. Gated by location_type:delete.",
 	}, "location_type", "delete"), func(ctx context.Context, in *locationTypeMetricPathInput) (*struct{}, error) {
 		if err := gw.DeleteLocationTypeMetric(ctx, actorID(ctx), in.ID, in.Metric); err != nil {
 			return nil, mapLocationTypeMetricErr(err)
@@ -126,8 +129,10 @@ func registerLocationTypeMetricRoutes(api huma.API, a *authenticator, gw storage
 // mapLocationTypeMetricErr translates the contract storage sentinels into HTTP
 // status, mirroring the product metric contract: a metric the catalog does not
 // know is a 422 (the request names a metric that does not exist), everything
-// else falls through to the shared type-registry mapping: not-found 404,
-// official read-only 422.
+// else falls through to the shared type-registry mapping, of which these paths
+// reach the not-found 404. They cannot reach its official read-only 422: the
+// guard here is requireRegistryRow, which asks whether the type EXISTS and never
+// who owns it (#703, ADR-0106).
 func mapLocationTypeMetricErr(err error) error {
 	if errors.Is(err, storage.ErrMetricTypeNotFound) {
 		return huma.Error422UnprocessableEntity("unknown metric")

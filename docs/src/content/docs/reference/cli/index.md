@@ -1945,7 +1945,7 @@ Withdraw a metric from a location type
 omniglass location-type metric delete <id> <metric>
 ```
 
-Removes one line from a custom location type's contract; locations of the type keep any samples the series already holds, now off-contract. A metric the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.
+Removes one line from a location type's contract, a shipped (official) type's included, since nothing seeds a contract line; locations of the type keep any samples the series already holds, now off-contract. A metric the type does not declare is a 404, and so is an unknown type. Gated by location_type:delete.
 
 Example:
 
@@ -1977,7 +1977,7 @@ Declare a metric on a location type
 omniglass location-type metric update <id> <metric> [flags]
 ```
 
-Declares a catalog metric on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a metric the catalog does not know is a 422. Gated by location_type:update.
+Declares a catalog metric on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a metric the catalog does not know is a 422. Gated by location_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -2002,7 +2002,7 @@ Withdraw a property from a location type
 omniglass location-type property delete <id> <property>
 ```
 
-Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.
+Removes one line from a location type's contract, a shipped (official) type's included, since nothing seeds a contract line; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and so is an unknown type. Gated by location_type:delete.
 
 Example:
 
@@ -2034,7 +2034,7 @@ Declare a property on a location type
 omniglass location-type property update <id> <property> [flags]
 ```
 
-Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.
+Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

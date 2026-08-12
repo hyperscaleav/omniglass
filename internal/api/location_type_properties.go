@@ -63,9 +63,12 @@ type setLocationTypePropertyInput struct {
 // registerLocationTypePropertyRoutes wires the location type's declared-property
 // contract. The registry it hangs off is gated by location_type:*, so the
 // contract keeps that permission story: the read rides the location_type:read
-// viewer floor, the writes sit at location_type:update / location_type:delete. Official location types ship their
-// contract with the release, so an operator write against one is refused (422)
-// the same way its registry row is.
+// viewer floor, the writes sit at location_type:update / location_type:delete.
+// The writes do NOT consult the official flag (#703, ADR-0106): a contract line
+// is a row in its own table rather than a column of the registry row a fork
+// covers, and nothing seeds one, so every line in this table is an operator's
+// already. Refusing them on the four shipped types would have withdrawn the
+// contract editor for the types an estate actually uses.
 func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-location-type-properties",
@@ -91,7 +94,7 @@ func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw stora
 		Method:      http.MethodPut,
 		Path:        "/location-types/{id}/properties/{property}",
 		Summary:     "Declare a property on a location type",
-		Description: "Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.",
+		Description: "Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.",
 	}, "location_type", "update"), func(ctx context.Context, in *setLocationTypePropertyInput) (*locationTypePropertyOutput, error) {
 		def, err := encodePropertyJSON(in.Body.DefaultValue, "default_value")
 		if err != nil {
@@ -114,7 +117,7 @@ func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw stora
 		Path:          "/location-types/{id}/properties/{property}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Withdraw a property from a location type",
-		Description:   "Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.",
+		Description:   "Removes one line from a location type's contract, a shipped (official) type's included, since nothing seeds a contract line; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and so is an unknown type. Gated by location_type:delete.",
 	}, "location_type", "delete"), func(ctx context.Context, in *locationTypePropertyPathInput) (*struct{}, error) {
 		if err := gw.DeleteLocationTypeProperty(ctx, actorID(ctx), in.ID, in.Property); err != nil {
 			return nil, mapLocationTypePropertyErr(err)
@@ -126,8 +129,10 @@ func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw stora
 // mapLocationTypePropertyErr translates the contract storage sentinels into HTTP
 // status, mirroring the product contract: a property the catalog does not know is
 // a 422 (the request names a property that does not exist), everything else falls
-// through to the shared type-registry mapping: not-found 404, official read-only
-// 422.
+// through to the shared type-registry mapping, of which these paths reach the
+// not-found 404. They cannot reach its official read-only 422: the guard here is
+// requireRegistryRow, which asks whether the type EXISTS and never who owns it
+// (#703, ADR-0106).
 func mapLocationTypePropertyErr(err error) error {
 	if errors.Is(err, storage.ErrPropertyTypeNotFound) {
 		return huma.Error422UnprocessableEntity("unknown property")

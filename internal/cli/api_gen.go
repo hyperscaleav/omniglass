@@ -2539,7 +2539,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "delete <id> <metric>",
 						Short:   "Withdraw a metric from a location type",
-						Long:    "Removes one line from a custom location type's contract; locations of the type keep any samples the series already holds, now off-contract. A metric the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.",
+						Long:    "Removes one line from a location type's contract, a shipped (official) type's included, since nothing seeds a contract line; locations of the type keep any samples the series already holds, now off-contract. A metric the type does not declare is a 404, and so is an unknown type. Gated by location_type:delete.",
 						Example: "  omniglass location-type metric delete <id> <metric>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2575,7 +2575,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <id> <metric>",
 						Short:   "Declare a metric on a location type",
-						Long:    "Declares a catalog metric on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a metric the catalog does not know is a 422. Gated by location_type:update.",
+						Long:    "Declares a catalog metric on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a metric the catalog does not know is a 422. Gated by location_type:update.",
 						Example: "  omniglass location-type metric update <id> <metric>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2608,7 +2608,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "delete <id> <property>",
 						Short:   "Withdraw a property from a location type",
-						Long:    "Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.",
+						Long:    "Removes one line from a location type's contract, a shipped (official) type's included, since nothing seeds a contract line; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and so is an unknown type. Gated by location_type:delete.",
 						Example: "  omniglass location-type property delete <id> <property>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -2644,7 +2644,7 @@ func generatedCommands() []*cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "update <id> <property>",
 						Short:   "Declare a property on a location type",
-						Long:    "Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.",
+						Long:    "Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.",
 						Example: "  omniglass location-type property update <id> <property>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
