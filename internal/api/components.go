@@ -66,7 +66,7 @@ type createComponentInput struct {
 		Name        string  `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type."`
 		DisplayName string  `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
 		Parent      *string `json:"parent,omitempty" doc:"Parent component name; omit for a root component"`
-		System      *string `json:"system,omitempty" doc:"Primary system name this component belongs to"`
+		System      *string `json:"system,omitempty" doc:"Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone."`
 		Location    *string `json:"location,omitempty" doc:"Location name this component is placed at"`
 		// Product is required: every component is an instance of a product (the
 		// classification floor). It stays a pointer rather than a plain

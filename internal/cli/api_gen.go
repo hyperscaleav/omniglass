@@ -691,7 +691,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fName, "name", "", "Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type.")
 				cmd.Flags().StringVar(&fParent, "parent", "", "Parent component name; omit for a root component")
 				cmd.Flags().StringVar(&fProduct, "product", "", "Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled.")
-				cmd.Flags().StringVar(&fSystem, "system", "", "Primary system name this component belongs to")
+				cmd.Flags().StringVar(&fSystem, "system", "", "Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone.")
 				return cmd
 			}()
 			return cmd

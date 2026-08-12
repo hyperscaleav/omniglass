@@ -504,7 +504,7 @@ Creates a component, optionally under a parent (a root needs an all-scoped grant
 | `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type. |
 | `--parent` | string | (none) | Parent component name; omit for a root component |
 | `--product` | string | (none) | Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled. |
-| `--system` | string | (none) | Primary system name this component belongs to |
+| `--system` | string | (none) | Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone. |
 
 Example:
 

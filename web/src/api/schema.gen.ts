@@ -4172,7 +4172,7 @@ export interface components {
             parent?: string;
             /** @description Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled. */
             product?: string;
-            /** @description Primary system name this component belongs to */
+            /** @description Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone. */
             system?: string;
         };
         CreateComponentTypeInputBody: {
