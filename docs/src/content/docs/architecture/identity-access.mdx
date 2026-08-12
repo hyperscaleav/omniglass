@@ -427,7 +427,15 @@ ever runs: **scope decides before ambiguity does**. A bare name is narrowed to t
 first, then judged ambiguous only within that narrowed set, which is what lets an operator scoped to
 one room use `display-1` without being refused because an unrelated room they cannot even read holds a
 same-named row; an `ErrAmbiguousName`'s candidate list can therefore never name a uuid the caller could
-not otherwise read. A dotted address skips this step entirely on its own: the placement-scoped unique
+not otherwise read, and so it **is** listed: the refusal names the rows that collided, each of them a
+spelling of the same reference that resolves, because an ambiguity that names nothing tells an operator
+their input is ambiguous and hands them nothing to disambiguate with
+([#697](https://github.com/hyperscaleav/omniglass/issues/697)). The exception is a resolve with no
+caller scope to filter by at all, where the list stays empty by design: the three `*NameTaken`
+availability advisories (deliberately scope-blind, so availability answers about the placement bucket
+asked about rather than the caller's own grant), the component end of a membership or role write and of
+`ResolveTags`' `for_system` (whose only scope in hand is resolved for the other tier, which can never
+narrow it). A dotted address skips this step entirely on its own: the placement-scoped unique
 indexes it walks admit at most one row per hop, so there is no ambiguity to decide, only the same scope
 check every other reference gets once it resolves to a uuid.
 
@@ -463,7 +471,10 @@ promise:
   already refused exactly this, so the create it previews now shares its refusal rather than being
   the lenient one ([#700](https://github.com/hyperscaleav/omniglass/issues/700)). A caller holding no
   grant on a tier reads nothing there and so can bind nothing there, which is the same sentence in
-  both directions.
+  both directions. Because it resolves inside a caller scope, its ambiguity refusal **lists its
+  candidates**: it was the one bind that redacted them while resolving estate-wide, and it stopped
+  needing to the moment the scope narrowed
+  ([#697](https://github.com/hyperscaleav/omniglass/issues/697)).
 
 A guard inside the same primitive panics if the caller's scope was resolved for a resource that does
 not cover the config being checked against, catching a tier mismatch (a component-tier scope compared

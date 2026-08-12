@@ -315,3 +315,82 @@ func TestAGrantOnOnlyTheWrittenTierBindsNoPlacement(t *testing.T) {
 		t.Errorf("create under the read floor stored %q, want the location's label: the refusals above are about the empty read scope, and this proves it", label(t, got))
 	}
 }
+
+// TestAnAmbiguousPlacementNamesOnlyTheCandidatesTheCallerCanRead is #697 driven
+// over the wire, and it is the proof that populating the candidate list did not
+// re-open the disclosure the redaction was closing.
+//
+// Every building's first floor may be named "1" (a positional name is allocated
+// per placement bucket, and the bucket is the placement), so a bind by the bare
+// name matches one row per building and the answer has to say WHICH rows, or the
+// operator is told their input is ambiguous and handed nothing to disambiguate
+// with. Since #700 the bind resolves inside the caller's own location:read
+// scope, so every candidate is a row that caller already may read.
+//
+// The narrow principal runs first and the owner runs the identical body second:
+// the same reference is ambiguous between TWO rooms for the one and THREE for
+// the other, off the same estate, which is what makes the filtering a property of
+// the caller's scope rather than of the fixture.
+func TestAnAmbiguousPlacementNamesOnlyTheCandidatesTheCallerCanRead(t *testing.T) {
+	f := newPlacementFixture(t)
+
+	// Two floors inside wing-a, so the two rooms named "1" sit in different
+	// placement buckets and the partial-unique index legalizes both.
+	f.c.do(f.owner, http.MethodPost, "/locations", map[string]any{
+		"name": "east", "location_type": "floor", "parent": "wing-a",
+	}, http.StatusCreated)
+	f.c.do(f.owner, http.MethodPost, "/locations", map[string]any{
+		"name": "west", "location_type": "floor", "parent": "wing-a",
+	}, http.StatusCreated)
+	eastOne := createdID(t, f.c.do(f.owner, http.MethodPost, "/locations", map[string]any{
+		"name": "1", "location_type": "room", "parent": "east",
+	}, http.StatusCreated))
+	westOne := createdID(t, f.c.do(f.owner, http.MethodPost, "/locations", map[string]any{
+		"name": "1", "location_type": "room", "parent": "west",
+	}, http.StatusCreated))
+	// The third "1", in the wing this principal cannot read at all.
+	hiddenOne := createdID(t, f.c.do(f.owner, http.MethodPost, "/locations", map[string]any{
+		"name": "1", "location_type": "room", "parent": "wing-b",
+	}, http.StatusCreated))
+
+	create := map[string]any{"name": "panel-1", "product": "samsung-qm55", "parent": f.rackID, "location": "1"}
+	status, body := f.c.send(f.narrow, http.MethodPost, "/components", create)
+	if status != http.StatusConflict {
+		t.Fatalf("create against an in-scope-ambiguous location = %d, want 409\nbody: %s", status, body)
+	}
+	for _, id := range []string{eastOne, westOne} {
+		if !strings.Contains(string(body), id) {
+			t.Errorf("409 body = %s, want it to name the in-scope candidate %s the operator has to choose between", body, id)
+		}
+	}
+	if strings.Contains(string(body), hiddenOne) {
+		t.Fatalf("409 body = %s, leaks the out-of-scope room's uuid %s", body, hiddenOne)
+	}
+
+	// A uuid from the list is a spelling that resolves, so the answer is
+	// actionable and not merely descriptive.
+	f.c.do(f.narrow, http.MethodPost, "/components", map[string]any{
+		"name": "panel-1", "product": "samsung-qm55", "parent": f.rackID, "location": eastOne,
+	}, http.StatusCreated)
+
+	// So is the dotted address, which this reference has accepted since #627
+	// Task 12 (loadByRef parses one before it ever falls through to a name), so
+	// the issue's second question, whether these binds need one, is already
+	// answered by the code. It is absolute, rooted at a root location, which is
+	// exactly the string the location's own read hands back as its path.
+	f.c.do(f.narrow, http.MethodPost, "/components", map[string]any{
+		"name": "panel-2", "product": "samsung-qm55", "parent": f.rackID, "location": "hq.wing-a.west.1",
+	}, http.StatusCreated)
+
+	// The owner, whose scope holds all three, is refused with all three named:
+	// the two-row list above is this caller's scope, not the estate's shape.
+	status, body = f.c.send(f.owner, http.MethodPost, "/components", create)
+	if status != http.StatusConflict {
+		t.Fatalf("owner create against the ambiguous location = %d, want 409\nbody: %s", status, body)
+	}
+	for _, id := range []string{eastOne, westOne, hiddenOne} {
+		if !strings.Contains(string(body), id) {
+			t.Errorf("owner 409 body = %s, want it to name candidate %s", body, id)
+		}
+	}
+}

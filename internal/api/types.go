@@ -24,7 +24,11 @@ import (
 // Candidates is empty for a path that resolved with no caller scope to filter
 // by at all (the three *NameTaken advisories, storage.withoutCandidates): the
 // reference is still refused as ambiguous, the message just names no uuid,
-// since nothing on that path could tell which ones the caller may read.
+// since nothing on that path could tell which ones the caller may read. A path
+// that resolved WITHIN the caller's own read scope lists them (#697), because
+// every candidate is then a row that caller may read, and each is a spelling of
+// the same reference that resolves: this message is the only place an operator
+// is told which rows collided.
 //
 // storage.ErrPathNotFound is a dotted address that failed to resolve
 // structurally (a missing segment, or a plane mismatch): mapped to the SAME

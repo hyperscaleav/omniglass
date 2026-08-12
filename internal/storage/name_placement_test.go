@@ -3,6 +3,7 @@ package storage_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -973,5 +974,93 @@ func TestRemoveMemberResolvesEstateWideDuplicateWithinMembership(t *testing.T) {
 	}
 	if len(members) != 0 {
 		t.Fatalf("members after remove = %+v, want none", members)
+	}
+}
+
+// TestAPlacementBindNamesTheCandidatesItMatched is #697: the other side of the
+// policy the three tests above pin. A bind that resolves with NO caller scope
+// keeps its redaction (they prove it); a bind that resolves INSIDE the caller's
+// own read scope has nothing left to redact, because #700 made every candidate a
+// row the caller already proved it may read, and an ambiguity error that names
+// nothing tells an operator their input is ambiguous while handing them nothing
+// to disambiguate with.
+//
+// The fixture is the shape the issue was filed about: every building's first
+// floor may be named "1" (a positional name is allocated per placement bucket,
+// and the bucket is the placement), so a cross-tier bind by the bare name "1"
+// matches one row per building.
+//
+// The candidates are uuids rather than names because a uuid is the one spelling
+// resolveRef is guaranteed to narrow to a single row; the same reference accepts
+// a dotted address too (loadByRef parses one), which is what makes the listed
+// answer actionable rather than only informative.
+func TestAPlacementBindNamesTheCandidatesItMatched(t *testing.T) {
+	gw := openGateway(t)
+	ctx := context.Background()
+
+	for _, campus := range []string{"bldg-a", "bldg-b"} {
+		if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: campus, LocationType: "campus"}, all); err != nil {
+			t.Fatalf("create %s: %v", campus, err)
+		}
+	}
+	first := make(map[string]string, 2)
+	for _, campus := range []string{"bldg-a", "bldg-b"} {
+		floor, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
+			Name: "1", LocationType: "floor", ParentName: strptr(campus),
+		}, all)
+		if err != nil {
+			t.Fatalf("create %s floor 1: %v", campus, err)
+		}
+		first[campus] = floor.ID
+	}
+
+	_, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
+		Name: "panel", LocationName: strptr("1"),
+	}, all, all, all)
+	var ambig *storage.ErrAmbiguousName
+	if !errors.As(err, &ambig) {
+		t.Fatalf("create against the ambiguous floor name = %v, want *ErrAmbiguousName", err)
+	}
+	want := map[string]bool{first["bldg-a"]: true, first["bldg-b"]: true}
+	if len(ambig.Candidates) != len(want) {
+		t.Fatalf("candidates = %v, want the two floors named 1 (%v)", ambig.Candidates, want)
+	}
+	for _, c := range ambig.Candidates {
+		if !want[c] {
+			t.Fatalf("candidates = %v, want exactly the two floors named 1 (%v)", ambig.Candidates, want)
+		}
+	}
+	// The list has to reach the operator, not just the struct: the message is
+	// what a caller with no typed access to the error ever sees.
+	for _, id := range ambig.Candidates {
+		if !strings.Contains(ambig.Error(), id) {
+			t.Fatalf("error message %q does not name candidate %s", ambig.Error(), id)
+		}
+	}
+}
+
+// TestAPlacementBindStillFoldsAPathMiss guards withoutCandidates' OTHER job,
+// which #697 splits away from the redaction rather than deleting: a dotted
+// placement reference that fails to resolve structurally must leave the gateway
+// as the bare sentinel, or mapRefErr's blanket *ErrPathNotFound case turns a
+// create's missing location into a 404 before the entity's own mapper can call
+// it the 422 it is. path_body_ref_test.go drives the same fold through every
+// other call site; this one pins it on the seam the redaction just left.
+func TestAPlacementBindStillFoldsAPathMiss(t *testing.T) {
+	gw := openGateway(t)
+	ctx := context.Background()
+
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all); err != nil {
+		t.Fatalf("create hq: %v", err)
+	}
+	_, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
+		Name: "panel", LocationName: strptr("hq.nope"),
+	}, all, all, all)
+	if !errors.Is(err, storage.ErrLocationNotFound) {
+		t.Fatalf("create against a structural path miss = %v, want ErrLocationNotFound", err)
+	}
+	var leaked *storage.ErrPathNotFound
+	if errors.As(err, &leaked) {
+		t.Fatalf("error still carries *storage.ErrPathNotFound (%v): mapRefErr would answer 404 instead of the create's 422", err)
 	}
 }

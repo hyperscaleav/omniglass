@@ -609,42 +609,56 @@ func scopedByNameInScope[T any](ctx context.Context, q querier, cfg scopedConfig
 	return resolveRef(ctx, q, cfg, ref, resource, read, refPolicyHide)
 }
 
-// withoutCandidates redacts an *ErrAmbiguousName's Candidates and folds an
-// *ErrPathNotFound down to the bare cfg.notFound sentinel it wraps, for a
-// resolution path that has no caller scope to filter by at all (the three
-// *NameTaken advisories, which intentionally resolve scope-blind so
-// availability matches the placement bucket asked about rather than the
-// caller's own grant, ADR the checkName routes document; and a cross-tier
-// existence-only bind, whose caller scope is the wrong tier to apply here at
-// all). The reference is still refused as ambiguous; the response just
-// never names uuids the caller might have no scope to read, since nothing
-// here can tell which ones do.
+// foldPathNotFound replaces an *ErrPathNotFound with the bare cfg.notFound
+// sentinel it wraps. It exists for a reason its name alone does not suggest,
+// worth stating because every call site is a reference carried in a request
+// BODY, not a path parameter: #627 Task 12's resolvePath treats an
+// address-shaped body reference (a create's parent/location/system, none of
+// which carry a pattern tag) exactly like it treats a path parameter, and
+// mapRefErr's *ErrPathNotFound case is matched by errors.As on the concrete
+// type, which fires unconditionally and BEFORE the caller's own entity mapper
+// ever runs its switch (the switch that already knows a component-create's
+// missing location is 422, not the 404 a bare GET /locations/{name} would
+// give). Folding here, at the seams every body reference already routes
+// through, replaces the concrete *ErrPathNotFound with the bare sentinel
+// BEFORE it leaves the gateway, so mapRefErr's ErrPathNotFound case no longer
+// matches it and the caller's existing switch decides the status, same as it
+// already does for the bare-name and uuid forms of the same reference.
 //
-// The ErrPathNotFound fold exists for a reason the name alone does not
-// suggest, worth stating because every one of these call sites is a
-// reference carried in a request BODY, not a path parameter: #627 Task 12's
-// resolvePath treats an address-shaped body reference (a create's
-// parent/location/system, none of which carry a pattern tag) exactly like
-// it treats a path parameter, and mapRefErr's *ErrPathNotFound case is
-// matched by errors.As on the concrete type, which fires unconditionally
-// and BEFORE the caller's own entity mapper ever runs its switch (the
-// switch that already knows a component-create's missing location is 422,
-// not the 404 a bare GET /locations/{name} would give). Folding here, at
-// the one place every cross-tier bind already routes through, replaces the
-// concrete *ErrPathNotFound with the bare sentinel BEFORE it leaves the
-// gateway, so mapRefErr's ErrPathNotFound case no longer matches it and the
-// caller's existing switch decides the status, same as it already does for
-// the bare-name and uuid forms of the same reference.
-func withoutCandidates(err error) error {
-	var ambig *ErrAmbiguousName
-	if errors.As(err, &ambig) {
-		return &ErrAmbiguousName{Kind: ambig.Kind, Ref: ambig.Ref}
-	}
+// It is its own function because #697 separated the two jobs withoutCandidates
+// used to do together: a bind that resolves in the caller's own read scope
+// keeps this one and drops the redaction.
+func foldPathNotFound(err error) error {
 	var notFound *ErrPathNotFound
 	if errors.As(err, &notFound) {
 		return notFound.Unwrap()
 	}
 	return err
+}
+
+// withoutCandidates redacts an *ErrAmbiguousName's Candidates, and folds an
+// *ErrPathNotFound the same way foldPathNotFound does, for a resolution path
+// that has no caller scope to filter by AT ALL: the three *NameTaken
+// advisories, which intentionally resolve scope-blind so availability matches
+// the placement bucket asked about rather than the caller's own grant (the ADR
+// the checkName routes document); the component end of a membership or a role
+// write, whose only scope in hand is resolved for "system" and can never narrow
+// a component resolve; and ResolveTags' forSystem, the same tier mismatch in
+// the other direction. The reference is still refused as ambiguous; the
+// response just never names uuids the caller might have no scope to read, since
+// nothing on those paths can tell which ones it may.
+//
+// A bind that DOES resolve within the caller's own read scope on the referenced
+// tier is not one of these and must not route through here (#697): every
+// candidate it found is already a row that caller proved it may read, and an
+// ambiguity that names nothing tells an operator their input is ambiguous while
+// handing them nothing to disambiguate with. See resolvePlacementRef.
+func withoutCandidates(err error) error {
+	var ambig *ErrAmbiguousName
+	if errors.As(err, &ambig) {
+		return &ErrAmbiguousName{Kind: ambig.Kind, Ref: ambig.Ref}
+	}
+	return foldPathNotFound(err)
 }
 
 // resolveScopedRef resolves a create- or action-time placement or owner
@@ -695,18 +709,30 @@ func resolveScopedRef[T any](ctx context.Context, q querier, cfg scopedConfig[T]
 // cfg.notFound (GetLocation/GetSystem) for both cases. Sharing that one refusal
 // is what keeps a preview and the create it previews from disagreeing.
 //
-// withoutCandidates survives the change of policy for the reason its own doc
-// gives that has nothing to do with scope: these references arrive in a request
-// BODY, and an *ErrPathNotFound leaving the gateway would be mapped by
-// mapRefErr's blanket 404 before the entity's own mapper could call a create's
-// missing location the 422 it is. Its other half, redacting an ambiguity's
-// candidates, is now belt and braces rather than the load-bearing guard it was:
-// narrowing to the caller's read scope means a candidate list can only ever name
-// rows this caller may read. Making that list useful again is #697's.
+// # Why it folds a path miss but keeps the candidate list
+//
+// foldPathNotFound survives the change of policy for the reason that has
+// nothing to do with scope: these references arrive in a request BODY, and an
+// *ErrPathNotFound leaving the gateway would be mapped by mapRefErr's blanket
+// 404 before the entity's own mapper could call a create's missing location the
+// 422 it is.
+//
+// The redaction does not survive it (#697). It was load-bearing while this bind
+// resolved estate-wide: a candidate list could name a row the caller holds no
+// grant to read, and disclosing that such a row exists, even only as a uuid in a
+// 409, is the leak the non-disclosing not-found exists to prevent. Narrowing to
+// the caller's read scope removes the leak at the source, because resolveRef
+// filters the match set through inScopeTree BEFORE it judges ambiguity, so every
+// candidate is a row this caller may read. What the redaction cost, once it was
+// no longer buying anything, was the whole point of the error: two floors named
+// "1" answered "ambiguous (matches )", which tells an operator their input is
+// ambiguous and hands them nothing to disambiguate with. The candidates are
+// uuids, and a uuid is a spelling this same reference accepts (loadByRef tries
+// id first), so the answer is actionable and not merely descriptive.
 func resolvePlacementRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref string, read scope.Set) (*T, error) {
 	v, err := scopedByNameInScope(ctx, q, cfg, ref, cfg.resource, read)
 	if err != nil {
-		return nil, withoutCandidates(err)
+		return nil, foldPathNotFound(err)
 	}
 	return v, nil
 }
