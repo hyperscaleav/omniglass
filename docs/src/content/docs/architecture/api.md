@@ -459,6 +459,17 @@ and every settings write) the handler checks it up front; where only the stored 
 update or delete by id) the resolved capability rides into the Gateway alongside the ABAC scope, so the
 404-versus-403 split stays non-disclosing.
 
+A second permission can also be **conditional on the request** rather than on a tier, and it is stamped
+the same way, as `x-omniglass-conditional-permission`. There is one today: `POST /components` accepts a
+`system`, and what it does with it is insert that component's **primary membership**, the same row `PUT
+/systems/{name}/members/{component}` writes under `system:update`. Two routes writing one row must cost
+the same permission, or the cheaper one is the way around the other, so a create that names a system
+requires `system:update` and resolves it in that scope
+([ADR-0107](/architecture/decisions/#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs)).
+The check is in the handler rather than the middleware because the condition is a body field and
+middleware cannot see the body; the stamp is what keeps the spec a faithful map of what the route
+enforces.
+
 ## Properties: a classifier declares, an instance sets
 
 A **contract** is the set of properties a classifier's instances expose

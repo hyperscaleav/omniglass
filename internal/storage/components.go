@@ -310,12 +310,23 @@ func (p *PG) ComponentNameTaken(ctx context.Context, name string, parentRef, loc
 // "<resolved-stem>-<n>" from the classified product's component_type once
 // placement and product are both resolved, below.
 //
-// locationRead and systemRead are the PLACEMENT's scopes, not the component's,
-// and they are the same two the draft render takes for the same two references
-// (#700): create says who may write a component, these say which rows the
-// component may be placed against, because the label this stamps reads both.
+// locationRead and systemUpdate are the PLACEMENT's scopes, not the
+// component's: create says who may write a component, these say which rows the
+// component may be placed against. locationRead is the same set the draft render
+// takes for the same reference (#700), because the label this stamps is rendered
+// from the location and naming one is a read of it.
+//
+// systemUpdate is deliberately NOT its twin (#707). A system named here is not
+// decoration on this row, it is a MEMBERSHIP insert into system_member, the same
+// row PUT /systems/{name}/members/{component} writes under the system:update
+// permission and the system:update scope. Two paths that write one row must
+// agree on what it costs, so this bind takes the membership write's scope. It is
+// narrower than the read set rather than a different axis (a role allowing
+// system:update allows system:read through the read floor, so every grant in
+// this set is also in that one), which is why the disclosure guard #700 added
+// still holds: a system this can bind is a system the caller may read.
 // See resolvePlacementRef.
-func (p *PG) CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create, locationRead, systemRead scope.Set) (*Component, error) {
+func (p *PG) CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create, locationRead, systemUpdate scope.Set) (*Component, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create component: %w", err)
@@ -368,12 +379,13 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	if spec.SystemName != nil {
 		// resolvePlacementRef, not create-scoped and no longer existence-only
 		// (#700): the bind is CROSS-tier, so the caller's create scope (resolved
-		// for "component") can never match a system's own ancestor chain, but
-		// the caller's system:read scope can, and it is the set that decides
-		// whether this label may carry that system's TYPE label. Out of scope is
-		// the same non-disclosing ErrSystemNotFound an absent one gives, which
-		// is what :renderLabel already answers for the identical reference.
-		sys, err := resolvePlacementRef(ctx, tx, systemConfig, *spec.SystemName, systemRead)
+		// for "component") can never match a system's own ancestor chain, but a
+		// scope resolved for the system tier can. That set is the system:UPDATE
+		// one (#707), because the insert below is a membership write and not
+		// only a label read. Out of scope is the same non-disclosing
+		// ErrSystemNotFound an absent one gives, so this refusal discloses no
+		// more than the reference the caller already supplied.
+		sys, err := resolvePlacementRef(ctx, tx, systemConfig, *spec.SystemName, systemUpdate)
 		if err != nil {
 			return nil, err // ErrSystemNotFound -> 422
 		}

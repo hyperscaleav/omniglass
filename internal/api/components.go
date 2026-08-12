@@ -132,6 +132,19 @@ type renameComponentInput struct {
 // immediately actionable.
 const errProductRequired = "a component must be an instance of a product; name one, or use a generic (generic-device, generic-app, generic-service) until a real product is modeled"
 
+// errSystemBindNeedsUpdate is the 403 a component create returns when it names a
+// system and the caller does not hold system:update (#707). The system on a
+// create is not a field on the component, it is the component's primary
+// MEMBERSHIP, the row PUT /systems/{name}/members/{component} writes under
+// system:update, so the create cannot be the cheaper way to write it.
+//
+// It names the permission rather than answering a bare "forbidden" because this
+// message is what the CLI prints and what the console falls back to: a refusal an
+// operator cannot act on sends them to an administrator with no ask. The second
+// sentence is the recovery that does not need a grant at all, since creating the
+// component and binding it later are separately authorized acts.
+const errSystemBindNeedsUpdate = "creating a component into a system writes that system's membership, which requires system:update (the same permission PUT /systems/{name}/members/{component} requires). Create the component without a system, or ask for system:update."
+
 // registerComponentRoutes wires the component CRUD surface, on the same pattern
 // as locations and systems.
 func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
@@ -185,16 +198,22 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return &componentOutput{Body: toComponentBody(c)}, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "create-component",
 		Method:        http.MethodPost,
 		Path:          "/components",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a component",
-		Description:   "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create; the location and system references resolve within the caller's location:read and system:read scopes, because the label this stores is rendered from them, and one outside those scopes is refused (422) exactly as :renderLabel refuses to preview it.",
-	}, "component", "create"), func(ctx context.Context, in *createComponentInput) (*componentOutput, error) {
+		Description:   "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission.",
+	}, "component", "create"), "system", "update"), func(ctx context.Context, in *createComponentInput) (*componentOutput, error) {
 		if in.Body.Product == nil || *in.Body.Product == "" {
 			return nil, huma.Error422UnprocessableEntity(errProductRequired)
+		}
+		// The membership gate (#707), checked here and not in middleware because
+		// middleware cannot see the body: a create that names no system writes no
+		// membership and costs component:create alone.
+		if in.Body.System != nil && *in.Body.System != "" && !a.allows(ctx, "system", "update") {
+			return nil, huma.Error403Forbidden(errSystemBindNeedsUpdate)
 		}
 		c, err := gw.CreateComponent(ctx, actorID(ctx), storage.ComponentSpec{
 			Name:            in.Body.Name,
@@ -204,7 +223,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			LocationName:    in.Body.Location,
 			ProductName:     in.Body.Product,
 			ExpectedOrdinal: in.Body.ExpectedOrdinal,
-		}, a.scopeFor(ctx, "component", "create"), a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "system", "read"))
+		}, a.scopeFor(ctx, "component", "create"), a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "system", "update"))
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}

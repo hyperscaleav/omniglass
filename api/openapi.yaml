@@ -7051,7 +7051,7 @@ paths:
       summary: List components in scope
       x-omniglass-permission: component:read
     post:
-      description: Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create; the location and system references resolve within the caller's location:read and system:read scopes, because the label this stores is rendered from them, and one outside those scopes is refused (422) exactly as :renderLabel refuses to preview it.
+      description: "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission."
       operationId: create-component
       requestBody:
         content:
@@ -7073,6 +7073,7 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Create a component
+      x-omniglass-conditional-permission: system:update
       x-omniglass-permission: component:create
   /components/{name}:
     delete:

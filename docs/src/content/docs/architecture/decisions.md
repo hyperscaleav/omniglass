@@ -144,6 +144,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0105](#adr-0105-a-rule-reads-a-name-as-words-and-the-location-tier-ships-the-restatement-it-once-refused) | 2026-08-11 | Accepted | `words` joins the closed FuncMap (a run of `-` or `_` becomes one space, an edge run is dropped, everything else untouched), which is what finally lets a rule turn a kebab NAME into words: `title` alone leaves the separator standing, so the acronym dictionary of ADR-0099 could not be reached from a name by any spelling. Adding a function is a THREE-place act (FuncMap, AST allowlist, `FuncNames`) and the published set is now walked by a test rather than described. The global LOCATION rule ships as `{{title (words .Name)}}`, reversing the seed's own argument on its restatement half only: a restatement that RE-CASES and runs the operator's dictionary produces a string the read ladder's fallback cannot, where an echo could not, and the constant half ("Room" for every room) is still refused. The ladder's last rung stays verbatim, since this renders and STORES a label rather than prettifying on read; the estate keeps only the pins that say something a name cannot, nine at the time and **seven** after ADR-0103's reversal named the two floors for their designations |
 
 | [ADR-0106](#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask) | 2026-08-12 | Accepted | `location_type` adopts the **registry fork** (ADR-0095) rather than growing a third ownership model: the shipped rows seed `official: true`, the boot seed writes them authoritatively, and an operator's edit forks into `registry_shadow` with `:restore` discarding it. That is what makes a shipped value **withdrawable**, which insert-if-absent could never be, since it can add a default to every estate and remove one from none. The one-time backfill moves the edits estates already hold ON those rows into shadows first, telling an edit from a shipped value by the **audit trail** rather than by comparing columns against what this release ships, because a row holding a WITHDRAWN shipped value is indistinguishable from an edit by inspection and preserving it would defeat the withdrawal. A location type's property and metric **contracts stay writable** on a shipped row: a contract line is a row in its own table, nothing seeds one, and the official guard was dormant on this registry until the flip would have activated it. On the wire, a nullable OBJECT field clears by being **named in `update_mask`** with no value, since an object has no empty value to overload and an explicit null is indistinguishable from an omitted key after decoding; `name_rule` is the first and the convention is now the API's, not that field's |
+| [ADR-0107](#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs) | 2026-08-12 | Accepted | `POST /components` accepts a `system` and INSERTS that system's primary membership from it, the same row `PUT /systems/{name}/members/{component}` writes under `system:update`, while the create asked for no system permission at all: the create was the cheap way around the membership route's gate. The create now requires `system:update` when the reference is present and resolves it in that scope, so **two paths writing one row cost one permission**. The accepted consequence is a live narrowing: `operator` holds `component:create` and no `system:*`, so an operator can no longer create a component INTO a system, which reads as the role line rather than collateral damage (an operator maintains components, a deploy tech builds out systems and their membership). Granting `operator` the permission was refused as a much larger grant than "may bind a membership while creating". A second permission conditional on the REQUEST is published like the platform tier's, as `x-omniglass-conditional-permission`, and enforced in the handler because middleware cannot see the body; the console hides the picker from a principal that cannot use it and the API's refusal names the permission, so the narrowing is met before the form is filled in |
 
 ## Entries
 
@@ -4677,3 +4678,58 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   this: it is written in place, it never carries a shadow, and `:restore` has nothing to give it back.
 - **Tracked under** [#703](https://github.com/hyperscaleav/omniglass/issues/703) and
   [#692](https://github.com/hyperscaleav/omniglass/issues/692).
+
+### ADR-0107: A create that writes a membership costs what the membership route costs
+
+- **Date:** 2026-08-12 | **Status:** Accepted | **Pages:**
+  [identity and access](/architecture/identity-access/), [API](/architecture/api/),
+  [core entities](/architecture/core-entities/)
+- **Context:** `POST /components` accepts a `system` reference, and what it does with it is insert the
+  component's **primary membership** into `system_member`. That is the same row
+  `PUT /systems/{name}/members/{component}` writes, and that route is gated on the `system:update`
+  permission and resolves its system in the `system:update` scope. The create asked for neither: the
+  reference resolved existence-only until
+  [#700](https://github.com/hyperscaleav/omniglass/issues/700) made it resolve in `system:read`, and
+  the route required `component:create` alone. A principal holding `component:create` and no system
+  permission at all could therefore write a membership through the create that the membership route
+  refused it, which makes the gate on the membership route decorative rather than binding.
+- **Decision:** the create's `system` reference resolves in the caller's **`system:update` scope**,
+  and the route requires the **`system:update` permission** when the reference is present. Two paths
+  that write one row cost one permission. The scope half is not implied by the permission half and is
+  the one a test has to drive separately: a principal holding `system:update` on one system and the
+  all-scoped viewer floor beside it may READ every system in the estate, and before this could bind
+  any of them on a create.
+- **Decision (where the check lives):** in the handler, not the middleware, because the condition is a
+  **body field** and Huma's operation middleware cannot see the body. To keep the generated spec a
+  faithful map of what a route enforces rather than of what it always enforces, the second permission
+  is **published** as an `x-omniglass-conditional-permission` extension beside the primary
+  `x-omniglass-permission` stamp, exactly as a platform-tier write publishes
+  `x-omniglass-platform-permission`, and it joins the route-derived permission universe the roles view
+  and the docs lint both read. Reusing the existing stamp mechanism was preferred to a hand-written
+  note in prose, which is the drift the generate-first rule exists to prevent.
+- **Consequence (accepted, and the reason it is not a bug):** `operator` holds
+  `component:create,update,rename,move` and **no `system:*` permission at all**; `deploy` holds
+  `system:create,update,rename,move` beside the same component set. So an operator can no longer
+  create a component INTO a system. That is the role line the seed already draws rather than damage
+  from this change: an operator maintains components, a deploy tech builds out systems and their
+  membership. The alternative, granting `operator` the `system:update` permission, was refused as a
+  much larger grant than "may bind a membership while creating a component": it would also let an
+  operator edit systems generally, which is exactly the line the two roles are drawn along. The
+  recovery needs no grant at all, since creating the component and binding it are separately
+  authorized acts: the operator creates it, and whoever holds the permission adds it after.
+- **Consequence (the narrowing has to be met before the form is filled in):** a live narrowing
+  discovered as a 403 after an operator has filled in a create form is the outcome
+  [#699](https://github.com/hyperscaleav/omniglass/issues/699)'s rule exists to prevent, so the
+  console does not offer the system picker to a principal that cannot use it, and the slot explains
+  itself and names the permission rather than vanishing. The API's refusal names `system:update` too,
+  which is what the CLI prints, because a refusal an operator cannot act on sends them to an
+  administrator with no ask.
+- **What this does NOT change:** the LOCATION reference on the same create still resolves in
+  `location:read`, because a location is read and rendered into the label rather than written
+  ([ADR-0100](#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate),
+  #700). The two references are deliberately not symmetric: what decides the action a placement
+  reference resolves for is what the write DOES with it. The `:renderLabel` draft route also keeps
+  `system:read`, since it renders a preview and writes nothing, so a preview can still be served for a
+  create the platform will refuse on the membership; the console closes that gap by not offering the
+  picker at all, and a full authorization rehearsal in the draft is its own question.
+- **Tracked under** [#707](https://github.com/hyperscaleav/omniglass/issues/707).

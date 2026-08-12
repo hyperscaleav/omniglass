@@ -457,12 +457,12 @@ promise:
   omission.
 - **The cross-tier placement bind** (`resolvePlacementRef`, used by `CreateComponent`,
   `CreateSystem`, `MoveComponent`, and `MoveSystem` for the location and system a row is placed
-  against) takes the **read path's policy on the referenced tier**: the caller's `location:read` /
-  `system:read` scope decides, and out of scope is the same non-disclosing 422 an absent reference
-  gives. Neither of the two policies above fits it. The write policy's set is resolved for the entity
+  against) takes the **read path's policy on the referenced tier**, and a scope resolved **for that
+  tier**: out of scope is the same non-disclosing 422 an absent reference gives. Neither of the two
+  policies above fits it. The write policy's set is resolved for the entity
   being written, and a location's scope tree is its own unrelated ancestor chain, so checking a
   component-tier scope against the location table can never match and would deny every non-all
-  caller; and the question a placement asks is a **read** question, because since
+  caller; and the question a **location** asks is a **read** question, because since
   [ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)
   the label these writes stamp is rendered from the location's own label and the primary system's
   type label and is handed straight back in the response. Existence-only resolution therefore made a
@@ -475,6 +475,18 @@ promise:
   candidates**: it was the one bind that redacted them while resolving estate-wide, and it stopped
   needing to the moment the scope narrowed
   ([#697](https://github.com/hyperscaleav/omniglass/issues/697)).
+
+  The **action** that scope is resolved for is not the same on both references, because the two
+  references do not do the same thing. A location is read and rendered into the label, so it resolves
+  in `location:read`. A **system on a component create is a membership**: it inserts the row `PUT
+  /systems/{name}/members/{component}` writes, so it resolves in `system:update` and the route
+  requires that permission when the reference is present
+  ([ADR-0107](/architecture/decisions/#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs)).
+  That is a live narrowing of who may create a component into a system: `operator` holds
+  `component:create` and no `system:*` at all, so it maintains components and a `deploy` tech builds
+  out systems and their membership. The console does not offer the picker to a principal that cannot
+  use it, and the API's refusal names the permission, so the narrowing is met before the form is
+  filled in rather than as a 403 after it.
 
 A guard inside the same primitive panics if the caller's scope was resolved for a resource that does
 not cover the config being checked against, catching a tier mismatch (a component-tier scope compared

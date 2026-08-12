@@ -357,6 +357,13 @@ ordinary (the spare on the shelf).
 *without a system in hand*: a default, never a rule overriding a caller who named a system. The
 first membership takes it automatically; a partial unique index forbids a second primary.
 
+A component create naming a `system` writes exactly this row, which is why it **costs what the
+membership route costs**: `system:update`, the same permission and the same scope as
+`PUT /systems/{name}/members/{component}`, and not the `component:create` that admits the rest of the
+form ([ADR-0107](/architecture/decisions/#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs)).
+An `operator` holds no system permission, so it creates components and a `deploy` tech binds them
+into systems.
+
 Membership **cascades from both ends**, and does not restrict the component the way
 `system_role_assignment` does: that restrict is load-bearing (deleting a filler would silently break
 health); a role-less membership is not worth blocking a delete over.

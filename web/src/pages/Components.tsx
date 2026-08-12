@@ -532,6 +532,10 @@ export default function Components() {
     // globally unique.
     const displayPen = createPen();
     const namePen = createPen();
+    // The gate on the membership half of this create, read from the same
+    // permission the API stamps on the route (#707). It decides what the form
+    // OFFERS, never what the caller may do, which stays the server's call.
+    const mayBindSystem = () => can(me.data, "system", "update");
     const [system, setSystem] = createSignal("");
     const [location, setLocation] = createSignal("");
     const [parent, setParent] = createSignal("");
@@ -639,9 +643,29 @@ export default function Components() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-3">
-            <FieldRow label="System">
-              <TreeSelect items={systemItems()} value={system()} onChange={setSystem} rootLabel="None" />
-            </FieldRow>
+            {/* A system on a create is not a field on the component, it is the
+                component's primary MEMBERSHIP, so the API gates naming one on
+                system:update, the same permission the membership route takes
+                (#707). An operator holds component:create and no system
+                permission at all, so offering the picker would be offering a
+                choice the platform refuses on submit (#699's rule). The slot
+                keeps the grid and explains itself instead of vanishing: the
+                permission is the thing to ask for, so it is named. */}
+            <Show
+              when={mayBindSystem()}
+              fallback={
+                <div class="flex flex-col gap-1">
+                  <span class="text-[12px] font-medium text-base-content/70">System</span>
+                  <p class="text-xs text-base-content/60">
+                    Putting a component in a system writes that system's membership, which needs <code>system:update</code>. Create it here, and someone holding that permission can add it to a system after.
+                  </p>
+                </div>
+              }
+            >
+              <FieldRow label="System">
+                <TreeSelect items={systemItems()} value={system()} onChange={setSystem} rootLabel="None" />
+              </FieldRow>
+            </Show>
             <FieldRow label="Location">
               <TreeSelect items={locationItems()} value={location()} onChange={setLocation} rootLabel="None" />
             </FieldRow>

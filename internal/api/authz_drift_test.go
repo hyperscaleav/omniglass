@@ -50,6 +50,10 @@ func TestSeedGrantsResolveToUniverse(t *testing.T) {
 		// top of its resource gate, published as its own stamp, so it belongs in the
 		// universe too: it is enforced, and a role blade must be able to show it.
 		add(op.platformPerm)
+		// Same for a conditional second gate (a create that names a system writes
+		// that system's membership, #707): enforced on some requests is still
+		// enforced.
+		add(op.condPerm)
 	}
 	if len(universe) == 0 {
 		t.Fatal("permission universe is empty; the x-omniglass-permission stamps are missing from the spec")

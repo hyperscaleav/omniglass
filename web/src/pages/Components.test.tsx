@@ -53,14 +53,14 @@ const componentTypes: ComponentType[] = [
 // is invisible to a unit test of the rule.
 const room: Location = { id: uuidFor("l-room"), name: "boardroom", display_name: "Boardroom", location_type: "room", effective_tags: {} };
 
-function mount(path: string) {
+function mount(path: string, who: Me = me) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...COMPONENTS_KEY], [comp]);
   qc.setQueryData([...SYSTEMS_KEY], []);
   qc.setQueryData([...LOCATIONS_KEY], [room]);
   qc.setQueryData([...PRODUCTS_KEY], products);
   qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
-  qc.setQueryData([...ME_KEY], me);
+  qc.setQueryData([...ME_KEY], who);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
   window.history.pushState({}, "", path);
@@ -1092,5 +1092,67 @@ describe("Components create identity", () => {
     fireEvent.input(display, { target: { value: "Front Ceiling Mic" } });
     await waitFor(() => expect(display.value).toBe("Front Ceiling Mic"));
     expect(key.value).toBe("");
+  });
+});
+
+// A create that names a system writes that system's MEMBERSHIP, so the API gates
+// it on system:update, the same permission the membership route takes (#707).
+// The operator tier holds component:create and no system permission at all, so
+// the form must not offer a picker whose use the platform will refuse: #699
+// established that a create form does not present what the platform refuses, and
+// a 403 discovered after the form is filled in is the outcome that pattern
+// exists to prevent.
+describe("Components create offers a system only to a principal who may bind one", () => {
+  afterEach(() => {
+    window.history.pushState({}, "", "/");
+    vi.restoreAllMocks();
+  });
+
+  // The operator tier as roles.yaml seeds it, beside the all-scoped viewer floor
+  // a real principal carries: system:READ is held, system:update is not, which is
+  // what makes this test about the permission that gates the membership rather
+  // than about visibility.
+  const operatorMe: Me = {
+    principal: { id: "u-op", kind: "human" },
+    human: { username: "op" },
+    permissions: ["component:create,update,rename,move", "*:read"],
+    grants: [],
+  };
+
+  it("offers the picker to a principal who may write a membership", async () => {
+    stubFetch();
+    mount("/components/create");
+    await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
+    expect(screen.getByLabelText("System")).toBeTruthy();
+  });
+
+  it("hides it from a principal who may not, and names the permission", async () => {
+    stubFetch();
+    mount("/components/create", operatorMe);
+    await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
+    expect(screen.queryByLabelText("System")).toBeNull();
+    // The rest of the form is untouched: only the membership is out of reach,
+    // not the create, and not the other placement the create also binds.
+    expect(screen.getByLabelText("Location")).toBeTruthy();
+    expect(screen.getByLabelText("Parent component")).toBeTruthy();
+    expect(screen.getByText(/system:update/)).toBeTruthy();
+  });
+
+  it("posts no system for the principal it hid the picker from", async () => {
+    let sent: Record<string, unknown> | undefined;
+    stubFetch(async (req) => {
+      if (req.method === "POST" && req.url.endsWith("/components")) {
+        sent = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({ ...comp, id: uuidFor("c-new") }), { status: 201, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ components: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount("/components/create", operatorMe);
+    await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
+    fireEvent.change(screen.getByLabelText("Product"), { target: { value: "generic-device" } });
+    await waitFor(() => expect((screen.getByText("Create component").closest("button") as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByText("Create component"));
+    await waitFor(() => expect(sent).toBeTruthy());
+    expect(sent).not.toHaveProperty("system");
   });
 });
