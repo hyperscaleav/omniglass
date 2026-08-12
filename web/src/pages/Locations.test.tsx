@@ -789,9 +789,9 @@ describe("Locations create identity", () => {
     fireEvent.click(screen.getByText("Create location"));
     await waitFor(() => expect(captured).toBeTruthy());
     expect("name" in captured!).toBe(false);
-    // The ordinal the locked field was showing goes back as the precondition,
+    // The NAME the locked field was showing goes back as the precondition,
     // which is the one thing a locked field DOES post (#702).
-    expect(captured!.expected_ordinal).toBe(1);
+    expect(captured!.expected_name).toBe("room");
     expect(captured!.display_name).toBe("Conf Room 301");
   });
 
@@ -818,7 +818,7 @@ describe("Locations create identity", () => {
     expect(captured!.name).toBe("war-room");
     // And no precondition beside it: an operator-typed name allocates no
     // ordinal, so posting one would be a claim nothing can check (a 422).
-    expect("expected_ordinal" in captured!).toBe(false);
+    expect("expected_name" in captured!).toBe(false);
     expect(captured!.display_name).toBe("War Room");
   });
 });

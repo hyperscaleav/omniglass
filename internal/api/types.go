@@ -81,16 +81,17 @@ func mapRefErr(err error) (error, bool) {
 //     with no name rule). The form unlocks the name field and asks the operator
 //     to type one. Every other 422 on the same route means the body is wrong,
 //     and unlocking on those would blank a field for no reason.
-//   - the ordinal MOVED between the preview and the submit. The form re-reads
+//   - the drafted NAME moved between the preview and the submit, because the
+//     ordinal was taken or the type that mints it was edited. The form re-reads
 //     the draft and shows the new name. Every other 409 on a create is a name
 //     collision the operator has to resolve themselves.
 //
 // Matching on the sentence would tie the console to server copy, so each is
 // stamped with a huma.ErrorDetail whose Location names the request field the
-// recovery acts on: body.name for the first, body.expected_ordinal for the
-// second, which also carries the number that moved as its Value. That is the
-// RFC 9457 errors array the ErrorModel already publishes, so it costs no new
-// wire shape and shows up in the generated client for free.
+// recovery acts on: body.name for the first, body.expected_name for the second,
+// which also carries the name the create would have produced as its Value. That
+// is the RFC 9457 errors array the ErrorModel already publishes, so it costs no
+// new wire shape and shows up in the generated client for free.
 
 // errNoGeneratedName is the 422 for "the platform will not name this row",
 // located on body.name because supplying one is the fix and the field is where
@@ -99,32 +100,35 @@ func errNoGeneratedName(msg string) error {
 	return huma.Error422UnprocessableEntity(msg, &huma.ErrorDetail{Message: msg, Location: "body.name"})
 }
 
-// mapOrdinalErr translates the create form's ordinal-precondition sentinels
+// mapDraftedNameErr translates the create form's name-precondition sentinels
 // (#702). Called first by every create mapper that can generate a name, on the
 // same fall-through shape as mapRefErr, because the precondition is one wire
 // contract shared by three tiers rather than three similar ones.
 //
 // The conflict is a 409 and not a 422: the request is well formed and was legal
 // when it was composed, and the estate simply moved underneath it, which is the
-// definition of a conflict. It names the ordinal that moved and the name that
-// ordinal mints, because "try again" is not the recovery, "here is what you
-// would get instead" is.
-func mapOrdinalErr(err error) (error, bool) {
-	var taken *storage.OrdinalTakenError
-	if errors.As(err, &taken) {
+// definition of a conflict. It names both the name the form was shown and the
+// one this create would produce, because "try again" is not the recovery, "here
+// is what you would get instead" is. The message deliberately does not assert
+// WHY the two differ: another create taking the number and an edit to the type's
+// stem produce the same fact and the same recovery, and a message that named
+// only the first would be wrong half the time.
+func mapDraftedNameErr(err error) (error, bool) {
+	var moved *storage.DraftedNameMovedError
+	if errors.As(err, &moved) {
 		msg := fmt.Sprintf(
-			"ordinal %d was taken by another create while this form was open, so this one would be named %q instead of what you were shown. Nothing was created.",
-			taken.Expected, taken.Name)
+			"this create would name the row %q, not %q as the form was shown, because the number was taken or the type that names it changed while the form was open. Nothing was created.",
+			moved.Name, moved.Expected)
 		return huma.Error409Conflict(msg, &huma.ErrorDetail{
 			Message:  msg,
-			Location: "body.expected_ordinal",
-			Value:    taken.Ordinal,
+			Location: "body.expected_name",
+			Value:    moved.Name,
 		}), true
 	}
-	if errors.Is(err, storage.ErrOrdinalExpectedOnTypedName) {
+	if errors.Is(err, storage.ErrNameExpectedOnTypedName) {
 		return huma.Error422UnprocessableEntity(
-			"expected_ordinal applies only to a name the platform generates: omit the name to have one generated, or drop expected_ordinal",
-			&huma.ErrorDetail{Location: "body.expected_ordinal", Message: "sent beside a name"}), true
+			"expected_name applies only to a name the platform generates: omit the name to have one generated, or drop expected_name",
+			&huma.ErrorDetail{Location: "body.expected_name", Message: "sent beside a name"}), true
 	}
 	return nil, false
 }

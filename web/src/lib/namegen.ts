@@ -17,7 +17,7 @@ import { createSignal } from "solid-js";
 // whether the operator or the platform owns each field.
 //
 // The number being provisional is not hidden any more, it is HANDLED: the form
-// posts it back as the create's expected_ordinal and a create that would land a
+// posts it back as the create's expected_name and a create that would land a
 // different name is refused rather than renumbered.
 
 // EstateKind is the three entities whose names the platform can own. The

@@ -25,7 +25,7 @@ import (
 // what this is: the same tier resolution, the same closed data map, the same one
 // engine, and the lowest free ordinal READ from the bucket's siblings rather
 // than minted. The provisional half is answered by the create's precondition
-// (ordinal_precondition_test.go), not by hiding the number.
+// (name_precondition_test.go), not by hiding the number.
 //
 // So the properties this file holds are, in order of what would hurt most if
 // they broke:
@@ -598,33 +598,42 @@ func TestTheDraftRefusesTheParentlessBucketItCannotCreateIn(t *testing.T) {
 	}
 }
 
-// TestTheOrdinalPreconditionIsPureAndSaysSo pins the create's half of the
-// precondition (#702) where it can be exercised exhaustively: the three states
-// no integration fixture reaches cheaply, and the one that carries the numbers a
+// TestTheNamePreconditionIsPureAndSaysSo pins the create's half of the
+// precondition (#702) where it can be exercised exhaustively: the states no
+// integration fixture reaches cheaply, and the one that carries the values a
 // surface recovers with.
-func TestTheOrdinalPreconditionIsPureAndSaysSo(t *testing.T) {
+//
+// The last case is the one the review moved. The two ordinals AGREE and the
+// names do not, which is a stem edit under an open form: an ordinal claim passes
+// it and lands a name nobody was shown, and a name claim refuses it.
+func TestTheNamePreconditionIsPureAndSaysSo(t *testing.T) {
 	one, two := 1, 2
-	if err := storage.ExportConfirmOrdinal(nil, &one, "display-1"); err != nil {
+	display1, display2 := "display-1", "display-2"
+	if err := storage.ExportConfirmDraftedName(nil, &one, "display-1"); err != nil {
 		t.Errorf("no expectation = %v, want no error: a caller that did not preview is not making a claim", err)
 	}
-	if err := storage.ExportConfirmOrdinal(nil, nil, "front-panel"); err != nil {
+	if err := storage.ExportConfirmDraftedName(nil, nil, "front-panel"); err != nil {
 		t.Errorf("no expectation and no allocation = %v, want no error", err)
 	}
-	if err := storage.ExportConfirmOrdinal(&one, &one, "display-1"); err != nil {
+	if err := storage.ExportConfirmDraftedName(&display1, &one, "display-1"); err != nil {
 		t.Errorf("an expectation the create met = %v, want no error", err)
 	}
-	if err := storage.ExportConfirmOrdinal(&one, nil, "front-panel"); !errors.Is(err, storage.ErrOrdinalExpectedOnTypedName) {
-		t.Errorf("an expectation with nothing allocated = %v, want ErrOrdinalExpectedOnTypedName", err)
+	if err := storage.ExportConfirmDraftedName(&display1, nil, "front-panel"); !errors.Is(err, storage.ErrNameExpectedOnTypedName) {
+		t.Errorf("an expectation with nothing allocated = %v, want ErrNameExpectedOnTypedName", err)
 	}
-	err := storage.ExportConfirmOrdinal(&one, &two, "display-2")
-	var taken *storage.OrdinalTakenError
-	if !errors.As(err, &taken) {
-		t.Fatalf("a moved ordinal = %v, want an OrdinalTakenError", err)
+	err := storage.ExportConfirmDraftedName(&display1, &two, "display-2")
+	var moved *storage.DraftedNameMovedError
+	if !errors.As(err, &moved) {
+		t.Fatalf("a moved name = %v, want a DraftedNameMovedError", err)
 	}
-	if taken.Expected != 1 || taken.Ordinal != 2 || taken.Name != "display-2" {
-		t.Errorf("refusal = %+v, want the number the form held, the one allocated, and the name it mints", taken)
+	if moved.Expected != display1 || moved.Name != display2 || moved.Ordinal != 2 {
+		t.Errorf("refusal = %+v, want the name the form held, the name produced, and the ordinal behind it", moved)
 	}
-	if !strings.Contains(taken.Error(), "display-2") {
-		t.Errorf("refusal message %q does not name the name the operator would get", taken.Error())
+	if !strings.Contains(moved.Error(), "display-2") {
+		t.Errorf("refusal message %q does not name the name the operator would get", moved.Error())
+	}
+	// The ordinals agree and the names do not: a stem that moved under the form.
+	if err := storage.ExportConfirmDraftedName(&display1, &one, "monitor-1"); !errors.Is(err, storage.ErrDraftedNameMoved) {
+		t.Errorf("same ordinal, different stem = %v, want ErrDraftedNameMoved: the number is not the claim", err)
 	}
 }

@@ -74,12 +74,16 @@ type createComponentInput struct {
 		// message (naming the generics) instead of Huma's generic
 		// missing-required-field text.
 		Product *string `json:"product,omitempty" doc:"Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled."`
-		// ExpectedOrdinal is the create form's precondition (#702) and
-		// deliberately not a name: a locked field that posted a name would
-		// claim the pen and set name_generated false, inverting the whole
-		// affordance. A pointer with a minimum of 1, so "absent" and "zero"
-		// cannot both be spellings of no expectation.
-		ExpectedOrdinal *int `json:"expected_ordinal,omitempty" minimum:"1" doc:"The ordinal a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming the number that moved, rather than silently renumbered, if another create took it in between. Applies only when the platform names the row: sending it beside a name is a 422."`
+		// ExpectedName is the create form's precondition (#702, and its
+		// review). It carries the drafted NAME rather than the ordinal,
+		// because the name is what the form showed and what the operator is
+		// owed: it holds the stem, the suppression and the number together, so
+		// a type edit under the open form invalidates the claim where a number
+		// would have passed. It is still a precondition and NOT the name field:
+		// the create leaves name empty, so the row stays name_generated and the
+		// pen never moves. A pointer, so "absent" is the only spelling of no
+		// expectation.
+		ExpectedName *string `json:"expected_name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The name a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."`
 	}
 }
 
@@ -244,7 +248,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			SystemName:      in.Body.System,
 			LocationName:    in.Body.Location,
 			ProductName:     in.Body.Product,
-			ExpectedOrdinal: in.Body.ExpectedOrdinal,
+			ExpectedName:    in.Body.ExpectedName,
 		}, a.scopeFor(ctx, "component", "create"), a.scopeFor(ctx, "location", "read"),
 			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
 		if err != nil {
@@ -398,7 +402,7 @@ func mapComponentErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
 	}
-	if ordErr, ok := mapOrdinalErr(err); ok {
+	if ordErr, ok := mapDraftedNameErr(err); ok {
 		return ordErr
 	}
 	switch {

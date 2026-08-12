@@ -21,11 +21,14 @@ import (
 // can be one answer rather than two that can disagree (#702 removes the
 // console's own walk of the type chain for this).
 //
-// The ordinal it carries is REAL rather than a token, and it is provisional:
-// nothing is allocated or reserved by asking. A form does not post it back as a
-// name, which would claim the pen; it posts it as expected_ordinal, the create's
-// precondition, and a create that would land a different number is refused with
-// a 409 naming the one that moved.
+// The name it carries is REAL rather than a token, and it is provisional:
+// nothing is allocated or reserved by asking. A form does not post it back as
+// the name field, which would claim the pen; it posts it as expected_name, the
+// create's precondition, and a create that would stamp a different name is
+// refused with a 409 naming the one it would stamp. The NAME rather than the
+// ordinal beside it, because the name is the whole claim: it carries the stem
+// and the suppression rule as well as the number, so an edit to the type that
+// mints it invalidates the claim where a number would have passed (#702 review).
 //
 // # The gate, and why it is :create rather than :read or :update
 //
@@ -81,7 +84,7 @@ import (
 type draftLabelOutput struct {
 	Body struct {
 		Name    string `json:"name" doc:"The name the create would stamp: the one you supplied, or the one the platform would mint. Generated names carry the ordinal that is free in the placement bucket right now."`
-		Ordinal int    `json:"ordinal,omitempty" doc:"The ordinal that name was minted from, absent when you supplied the name (an operator-named row carries no ordinal). Post it back as expected_ordinal on the create to be refused rather than renumbered if another create takes it first."`
+		Ordinal int    `json:"ordinal,omitempty" doc:"The ordinal that name was minted from, absent when you supplied the name (an operator-named row carries no ordinal). Informational: what a form posts back as the create's precondition is the NAME above, since that carries the stem and the suppression rule as well as this number."`
 		Label   string `json:"label" doc:"The label the create would store. Empty means no label is stored and the surface falls back to the name."`
 		Rule    string `json:"rule" doc:"The label rule that produced it, resolved through the same tiers the create uses. Empty means no tier carries a rule for this classification."`
 	}
@@ -135,7 +138,7 @@ func registerComponentLabelDraft(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodPost,
 		Path:        "/components:renderLabel",
 		Summary:     "Draft the name and label a component create would store",
-		Description: "Drafts the name and the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is READ (the lowest free number among the live siblings in the placement bucket) rather than allocated. That answer is provisional, so a form posts it back as expected_ordinal on the create and is refused (409) rather than renumbered if another create takes it first. Omitting name drafts the name the platform would mint, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the parent resolves within the caller's component:create scope and the location and system refs within location:read and system:read, because the rendered string can carry their labels. Omitting parent is the parentless bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403): a form must not preview a bucket its create declines, and the previewed ordinal reports which names that bucket already holds.",
+		Description: "Drafts the name and the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is READ (the lowest free number among the live siblings in the placement bucket) rather than allocated. That answer is provisional, so a form posts the NAME back as expected_name on the create and is refused (409) rather than silently renamed if another create takes the number or the type's stem moves first. Omitting name drafts the name the platform would mint, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the parent resolves within the caller's component:create scope and the location and system refs within location:read and system:read, because the rendered string can carry their labels. Omitting parent is the parentless bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403): a form must not preview a bucket its create declines, and the previewed ordinal reports which names that bucket already holds.",
 	}, "component", "create"), func(ctx context.Context, in *renderComponentLabelInput) (*draftLabelOutput, error) {
 		d, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 			ProductName:  in.Body.Product,
@@ -158,7 +161,7 @@ func registerSystemLabelDraft(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodPost,
 		Path:        "/systems:renderLabel",
 		Summary:     "Draft the name and label a system create would store",
-		Description: "The system tier of :renderLabel on components. Drafts the name and the label a system create would stamp, allocating nothing: the ordinal is read from the placement bucket and posted back as expected_ordinal on the create. A system suppresses the first ordinal in a bucket, so the first boardroom in a room drafts as boardroom and the second as boardroom-2. Omitting name drafts the name the platform would mint and refuses (422) an unclassified system, the same refusal a nameless create gives, since the stem lives on the system_type. Gated by system:create; the parent resolves within the caller's system:create scope and the location ref within location:read, because a system's label can carry its location's. Omitting parent is the parentless bucket, refused (403) without an all-scoped create grant, exactly as the create refuses it.",
+		Description: "The system tier of :renderLabel on components. Drafts the name and the label a system create would stamp, allocating nothing: the ordinal is read from the placement bucket and the drafted name is posted back as expected_name on the create. A system suppresses the first ordinal in a bucket, so the first boardroom in a room drafts as boardroom and the second as boardroom-2. Omitting name drafts the name the platform would mint and refuses (422) an unclassified system, the same refusal a nameless create gives, since the stem lives on the system_type. Gated by system:create; the parent resolves within the caller's system:create scope and the location ref within location:read, because a system's label can carry its location's. Omitting parent is the parentless bucket, refused (403) without an all-scoped create grant, exactly as the create refuses it.",
 	}, "system", "create"), func(ctx context.Context, in *renderSystemLabelInput) (*draftLabelOutput, error) {
 		d, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{
 			SystemTypeRef: in.Body.SystemTypeID,

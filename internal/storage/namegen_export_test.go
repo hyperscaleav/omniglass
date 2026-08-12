@@ -91,10 +91,10 @@ func ExportMintName(stem string, bareFirst bool, n int) string {
 	return nameMint{stem: stem, bareFirst: bareFirst}.name(n)
 }
 
-// ExportConfirmOrdinal is the create's half of the form's ordinal precondition
+// ExportConfirmDraftedName is the create's half of the form's name precondition
 // (#702), which is pure and has cases no integration fixture can reach cheaply
 // (a nil expectation, an expectation with nothing allocated). The gateway tests
 // beside it prove the same rule end to end; this proves the rule itself.
-func ExportConfirmOrdinal(expected, allocated *int, name string) error {
-	return confirmOrdinal(expected, allocated, name)
+func ExportConfirmDraftedName(expected *string, allocated *int, name string) error {
+	return confirmDraftedName(expected, allocated, name)
 }

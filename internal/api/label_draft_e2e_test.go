@@ -122,9 +122,9 @@ func TestTheRenderedLabelIsTheLabelTheCreateStoresAPI(t *testing.T) {
 }
 
 // TestTheDraftedNameIsTheNameTheCreateStampsAPI is #702's acceptance at the wire:
-// the form is shown a real number, posts it back as its precondition, and the
-// row lands with exactly the name it showed. Everything below this tier can see
-// one half or the other; only this can see the round trip a form makes.
+// the form is shown a real name, posts it back as its precondition, and the row
+// lands with exactly the name it showed. Everything below this tier can see one
+// half or the other; only this can see the round trip a form makes.
 func TestTheDraftedNameIsTheNameTheCreateStampsAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -156,7 +156,7 @@ func TestTheDraftedNameIsTheNameTheCreateStampsAPI(t *testing.T) {
 	}
 
 	created := c.do(owner, http.MethodPost, "/components",
-		withOrdinal(body, drafted.Ordinal), http.StatusCreated)
+		withDraftedName(body, drafted.Name), http.StatusCreated)
 	var comp struct {
 		Name          string `json:"name"`
 		NameGenerated bool   `json:"name_generated"`
@@ -170,13 +170,13 @@ func TestTheDraftedNameIsTheNameTheCreateStampsAPI(t *testing.T) {
 	// The precondition is not a name: posting it leaves the pen exactly where a
 	// body posting neither field leaves it.
 	if !comp.NameGenerated {
-		t.Error("name_generated=false: posting expected_ordinal must not claim the pen")
+		t.Error("name_generated=false: posting expected_name must not claim the pen")
 	}
 
 	// The same form, submitted twice, is the race: the second submission is
 	// holding an ordinal the first one took.
 	conflict := c.do(owner, http.MethodPost, "/components",
-		withOrdinal(body, drafted.Ordinal), http.StatusConflict)
+		withDraftedName(body, drafted.Name), http.StatusConflict)
 	var problem struct {
 		Detail string `json:"detail"`
 		Errors []struct {
@@ -189,16 +189,18 @@ func TestTheDraftedNameIsTheNameTheCreateStampsAPI(t *testing.T) {
 	}
 	// A form has to tell this 409 from a name-collision 409, and it does it by
 	// the location rather than by matching the sentence.
-	if len(problem.Errors) != 1 || problem.Errors[0].Location != "body.expected_ordinal" {
-		t.Fatalf("conflict errors = %+v, want one located on body.expected_ordinal", problem.Errors)
+	if len(problem.Errors) != 1 || problem.Errors[0].Location != "body.expected_name" {
+		t.Fatalf("conflict errors = %+v, want one located on body.expected_name", problem.Errors)
 	}
-	if n, ok := problem.Errors[0].Value.(float64); !ok || int(n) != drafted.Ordinal+1 {
-		t.Errorf("conflict value = %v, want the ordinal that moved (%d)", problem.Errors[0].Value, drafted.Ordinal+1)
-	}
-	// The form re-reads, and is shown the number that is now free.
+	// The form re-reads, and is shown the name that is now free.
 	next := renderLabelAt(t, c, owner, "/components:renderLabel", body, http.StatusOK)
 	if next.Ordinal != drafted.Ordinal+1 || next.Name == drafted.Name {
 		t.Errorf("re-read after the conflict = %+v, want the next ordinal and a different name", next)
+	}
+	// The machine-readable value is that same name, so a surface can show what
+	// the create would have produced without waiting for the re-read.
+	if v, ok := problem.Errors[0].Value.(string); !ok || v != next.Name {
+		t.Errorf("conflict value = %v, want the name this create would have landed (%q)", problem.Errors[0].Value, next.Name)
 	}
 	// And the sentence names what the operator would have got, which is the
 	// same name that re-read just returned: the form's recovery is to show it
@@ -206,27 +208,30 @@ func TestTheDraftedNameIsTheNameTheCreateStampsAPI(t *testing.T) {
 	if !strings.Contains(problem.Detail, next.Name) {
 		t.Errorf("conflict detail %q does not name %q, the name the create would have landed", problem.Detail, next.Name)
 	}
-	c.do(owner, http.MethodPost, "/components", withOrdinal(body, next.Ordinal), http.StatusCreated)
+	c.do(owner, http.MethodPost, "/components", withDraftedName(body, next.Name), http.StatusCreated)
 
 	// An expectation beside a name the operator typed is refused, since that
-	// path allocates nothing for it to be about.
+	// path allocates nothing for it to be about, even when the two agree.
 	c.do(owner, http.MethodPost, "/components",
-		map[string]any{"product": "samsung-qm55", "location": "room-204b", "name": "front-panel", "expected_ordinal": 1},
+		map[string]any{"product": "samsung-qm55", "location": "room-204b", "name": "front-panel", "expected_name": "front-panel"},
 		http.StatusUnprocessableEntity)
-	// And zero is not a spelling of "no expectation": the schema refuses it, so
-	// a client cannot post an unevaluable precondition by accident.
-	c.do(owner, http.MethodPost, "/components", withOrdinal(body, 0), http.StatusUnprocessableEntity)
+	// And the empty string is not a spelling of "no expectation": the schema
+	// refuses it, so a client cannot post an unevaluable precondition by
+	// accident.
+	c.do(owner, http.MethodPost, "/components", withDraftedName(body, ""), http.StatusUnprocessableEntity)
 }
 
-// withOrdinal copies a draft body and adds the precondition, so the test posts
-// the SAME object it drafted with plus one field, which is exactly what the form
-// does.
-func withOrdinal(body map[string]any, ordinal int) map[string]any {
+// withDraftedName copies a draft body and adds the precondition, so the test
+// posts the SAME object it drafted with plus one field, which is exactly what
+// the form does. The field carries the drafted NAME (#702 review): it asserts
+// what the row will be called and never sets it, so the created row is still
+// name_generated.
+func withDraftedName(body map[string]any, name string) map[string]any {
 	out := make(map[string]any, len(body)+1)
 	for k, v := range body {
 		out[k] = v
 	}
-	out["expected_ordinal"] = ordinal
+	out["expected_name"] = name
 	return out
 }
 
@@ -278,7 +283,7 @@ func TestTheDraftedOrdinalFollowsThePlacementBucketAPI(t *testing.T) {
 	// And the create under the parent takes the number the draft showed, which
 	// is what would fail if the draft had read the wrong bucket.
 	created := c.do(owner, http.MethodPost, "/components",
-		map[string]any{"product": "samsung-qm55", "parent": parent.Name, "expected_ordinal": underParent.Ordinal}, http.StatusCreated)
+		map[string]any{"product": "samsung-qm55", "parent": parent.Name, "expected_name": underParent.Name}, http.StatusCreated)
 	var child struct {
 		Name string `json:"name"`
 	}
@@ -514,5 +519,76 @@ func TestTheDraftRefusesTheRootBucketItCannotCreateIn(t *testing.T) {
 	got := renderLabelAt(t, f.c, f.owner, "/locations:renderLabel", root, http.StatusOK)
 	if got.Ordinal != 2 || got.Name != "secret-region-2" {
 		t.Errorf("owner root draft = %+v, want ordinal 2 / secret-region-2: the fixture is not carrying the fact the refusal protects", got)
+	}
+}
+
+// TestThePreconditionBindsTheNameTheFormShowed is the review's repro of what the
+// ordinal-only precondition could not see (#702 review).
+//
+// The precondition exists so a create lands the name the form displayed, or is
+// refused. The ordinal is not that claim: the NAME is the stem, the suppression
+// rule and the number together, and a claim on the number alone passes unchanged
+// while the other two move. Forking a type and rewriting what it mints is
+// ordinary since #703, so this is not a contrived race, and the console was
+// shielded only by an accident (the stem is not in the draft body, so it is not
+// in the query key that would have re-asked); a CLI or API caller had no shield
+// at all.
+func TestThePreconditionBindsTheNameTheFormShowed(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+
+	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "hq", "location_type": "building"}, http.StatusCreated)
+	body := map[string]any{"product": "samsung-qm55", "location": "hq"}
+	drafted := renderLabelAt(t, c, owner, "/components:renderLabel", body, http.StatusOK)
+	if drafted.Name != "display-1" || drafted.Ordinal != 1 {
+		t.Fatalf("draft = %+v, want display-1 at ordinal 1", drafted)
+	}
+
+	// The stem moves under the open form. Nothing about the placement bucket
+	// changes, so the ordinal the form is holding is still the one this create
+	// allocates: the claim is met and the name is not.
+	c.do(owner, http.MethodPatch, "/component-types/display", map[string]any{"stem": "monitor"}, http.StatusOK)
+
+	status, raw := c.send(owner, http.MethodPost, "/components", withDraftedName(body, drafted.Name))
+	if status != http.StatusConflict {
+		t.Fatalf("create after the stem moved = %d, want 409: the form showed %q\nbody: %s", status, drafted.Name, raw)
+	}
+	if !strings.Contains(string(raw), "monitor-1") || !strings.Contains(string(raw), drafted.Name) {
+		t.Errorf("409 body = %s, want it to name both what the form showed and what the create would produce", raw)
+	}
+	// Nothing was created, so re-drafting is the whole recovery.
+	c.do(owner, http.MethodGet, "/components/monitor-1", nil, http.StatusNotFound)
+
+	// Re-drafted, the form is shown the new name and the create takes it.
+	redrafted := renderLabelAt(t, c, owner, "/components:renderLabel", body, http.StatusOK)
+	if redrafted.Name != "monitor-1" {
+		t.Fatalf("re-draft = %+v, want monitor-1", redrafted)
+	}
+	created := c.do(owner, http.MethodPost, "/components", withDraftedName(body, redrafted.Name), http.StatusCreated)
+	var row struct {
+		Name          string `json:"name"`
+		NameGenerated bool   `json:"name_generated"`
+	}
+	if err := json.Unmarshal(created, &row); err != nil {
+		t.Fatalf("parse created: %v", err)
+	}
+	if row.Name != "monitor-1" {
+		t.Errorf("created row = %q, want monitor-1", row.Name)
+	}
+	// The precondition is not the name field: posting it must not claim the pen.
+	if !row.NameGenerated {
+		t.Errorf("created row is not name_generated: the precondition took the pen instead of checking it")
 	}
 }

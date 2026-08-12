@@ -23,7 +23,7 @@ import {
 import { LOCATION_TYPES_KEY, ROOT_PLACEMENT, listLocationTypes } from "../lib/location_types";
 import CreateIdentity from "../components/CreateIdentity";
 import { bucketPhrase, createPen, nameBucket, penIncomplete } from "../lib/namegen";
-import { nameRefused, recoverFromTakenOrdinal, useLabelDraft } from "../lib/labeldraft";
+import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
 import { pathTo, type TreeNode } from "../lib/treeselect";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -590,12 +590,12 @@ export default function Locations() {
         // An empty name is OMITTED rather than posted as "": omitted is
         // "generate one from the type's rule", where "" is a name of nothing
         // the API refuses against the entity-name pattern.
-        const created = await createLocation({ name: nm || undefined, expected_ordinal: nm ? undefined : labelDraft.data?.ordinal, location_type: type().trim(), display_name: displayPen.value().trim() || undefined, parent: parent() || undefined });
+        const created = await createLocation({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, location_type: type().trim(), display_name: displayPen.value().trim() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
         openInEdit(created.id);
         navigate(`/locations/${encodeURIComponent(created.id)}`);
       } catch (er) {
-        setFormErr(await recoverFromTakenOrdinal(er, labelDraft.refetch));
+        setFormErr(await recoverFromMovedName(er, labelDraft.refetch));
         setBusy(false);
       }
     }

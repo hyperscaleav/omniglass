@@ -455,61 +455,84 @@ func previewName(ctx context.Context, q querier, m nameMint, sc nameScope) (stri
 	return m.name(n), n, nil
 }
 
-// ErrOrdinalTaken is a create whose form was shown one ordinal and whose
-// allocation produced another, because another create in the same bucket took
-// the number in between. It is a CONFLICT rather than a failure: the estate is
-// consistent, the operator's request is simply no longer the one they were
-// shown, and the fix is to look at the new name and submit again.
-var ErrOrdinalTaken = errors.New("storage: the ordinal the form expected was taken by another create")
+// ErrDraftedNameMoved is a create whose form was shown one name and whose
+// allocation would produce another. It is a CONFLICT rather than a failure: the
+// estate is consistent, the operator's request is simply no longer the one they
+// were shown, and the fix is to look at the new name and submit again.
+var ErrDraftedNameMoved = errors.New("storage: the name the form was shown is not the name this create would produce")
 
-// OrdinalTakenError is that conflict with the three numbers a surface needs to
-// recover from it: what the form held, what this create actually allocated, and
-// the NAME that ordinal mints, which is what an operator reads. A bare "the
-// ordinal moved" would leave the form re-reading the draft just to say what
-// happened.
-type OrdinalTakenError struct {
-	// Expected is the ordinal the form posted back, the one it previewed.
-	Expected int
-	// Ordinal is the one this create allocated instead.
-	Ordinal int
-	// Name is the name Ordinal mints, the value the form shows next.
+// DraftedNameMovedError is that conflict with the values a surface needs to
+// recover from it: what the form held, what this create would name the row, and
+// the ordinal it allocated. A bare "it moved" would leave the form re-reading
+// the draft just to say what happened.
+type DraftedNameMovedError struct {
+	// Expected is the name the form posted back, the one it previewed and
+	// displayed in its locked field.
+	Expected string
+	// Name is what this create would have named the row instead, the value the
+	// form shows next.
 	Name string
+	// Ordinal is the number Name was minted from. It is reported rather than
+	// compared: two names can share an ordinal and one name can be reached from
+	// two, so it explains the answer instead of deciding it.
+	Ordinal int
 }
 
-func (e *OrdinalTakenError) Error() string {
-	return fmt.Sprintf("storage: ordinal %d was taken while the form was open, so this create allocated %d and would have been named %q", e.Expected, e.Ordinal, e.Name)
+func (e *DraftedNameMovedError) Error() string {
+	return fmt.Sprintf("storage: the form was shown %q, but this create would name the row %q (ordinal %d)", e.Expected, e.Name, e.Ordinal)
 }
 
-func (e *OrdinalTakenError) Unwrap() error { return ErrOrdinalTaken }
+func (e *DraftedNameMovedError) Unwrap() error { return ErrDraftedNameMoved }
 
-// ErrOrdinalExpectedOnTypedName is an expectation posted beside a name the
-// OPERATOR typed. That path allocates no ordinal at all (the column is null by
-// design, #681), so the expectation can never be evaluated, and a precondition
-// nobody checks reads as a guarantee while being none. Refused rather than
-// ignored, and refused at the gateway rather than only at the wire, because a
-// direct caller can post the pair too.
-var ErrOrdinalExpectedOnTypedName = errors.New("storage: an expected ordinal applies only to a name the platform generates; omit the name, or drop the expectation")
+// ErrNameExpectedOnTypedName is an expectation posted beside a name the OPERATOR
+// typed. That path allocates nothing (the ordinal column is null by design,
+// #681) and the name is already the caller's own, so the expectation can never
+// be evaluated, and a precondition nobody checks reads as a guarantee while
+// being none. Refused rather than ignored, and refused at the gateway rather
+// than only at the wire, because a direct caller can post the pair too.
+var ErrNameExpectedOnTypedName = errors.New("storage: an expected name applies only to a name the platform generates; omit the name, or drop the expectation")
 
-// confirmOrdinal is the create's half of the form's precondition: compare what
-// the form was shown with what this create actually allocated, inside the
+// confirmDraftedName is the create's half of the form's precondition: compare
+// what the form was SHOWN with what this create would actually stamp, inside the
 // transaction that allocated it, before anything is written.
 //
-// Pure, and the same three lines on every tier, which is the point: a system
+// # Why the name and not the ordinal
+//
+// The claim the form is making is "the row will be called what I am displaying",
+// and the ordinal is not that claim, it is one of three inputs to it. A name is
+// <stem><suppression><number>, so a claim on the number alone survives a stem
+// that moved and a suppression rule that flipped, and the row lands under a name
+// the operator was never shown. That is exactly the outcome the precondition
+// exists to prevent, and it is reachable without a race: forking a type and
+// rewriting what it mints is ordinary (#703), and a drafted display-1 then lands
+// as monitor-1 with the ordinal claim met.
+//
+// The name carries all three by construction, so nothing has to be enumerated
+// here and no future input to a mint can be forgotten: whatever a rule grows,
+// the value the operator read is the value compared.
+//
+// # Why it is still not the name field
+//
+// This never becomes the row's name. The pen is spec.Name, and a create that
+// posts one of these has left it empty, so name_generated stays true and the
+// ordinal column is still the platform's. A precondition asserts what is about
+// to happen; it does not ask for it.
+//
+// Pure, and the same lines on every tier, which is the point: a system
 // suppresses its first ordinal and a location has two placement buckets rather
-// than three, and neither difference reaches this comparison. What is compared
-// is the NUMBER; the mint is what turns it into a name.
+// than three, and neither difference reaches this comparison.
 //
 // allocated is the same *int the row stores, so "the operator typed the name"
 // and "nothing was allocated" are one fact rather than two that can disagree.
-func confirmOrdinal(expected, allocated *int, name string) error {
+func confirmDraftedName(expected *string, allocated *int, name string) error {
 	if expected == nil {
 		return nil
 	}
 	if allocated == nil {
-		return ErrOrdinalExpectedOnTypedName
+		return ErrNameExpectedOnTypedName
 	}
-	if *expected != *allocated {
-		return &OrdinalTakenError{Expected: *expected, Ordinal: *allocated, Name: name}
+	if *expected != name {
+		return &DraftedNameMovedError{Expected: *expected, Name: name, Ordinal: *allocated}
 	}
 	return nil
 }

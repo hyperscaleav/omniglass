@@ -592,8 +592,8 @@ describe("Systems create identity", () => {
     await waitFor(() => expect(captured).toBeTruthy());
     // Omitted is "generate one"; "" is a name of nothing the API refuses.
     expect("name" in captured!).toBe(false);
-    // The ordinal the locked field was showing goes back as the precondition.
-    expect(captured!.expected_ordinal).toBe(1);
+    // The NAME the locked field was showing goes back as the precondition.
+    expect(captured!.expected_name).toBe("classroom");
     expect(captured!.display_name).toBe("Lecture Hall");
   });
 });

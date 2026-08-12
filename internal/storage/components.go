@@ -108,12 +108,20 @@ type ComponentSpec struct {
 	SystemName   *string
 	LocationName *string
 	ProductName  *string
-	// ExpectedOrdinal is the create form's precondition (#702): the ordinal the
-	// form previewed and locked its name field on. Nil is no precondition,
-	// which is every caller that did not preview. It is deliberately not a
-	// name: posting a name would claim the pen and set name_generated false,
-	// inverting the feature the locked field exists for.
-	ExpectedOrdinal *int
+	// ExpectedName is the create form's precondition (#702, and its review): the
+	// NAME the form previewed and locked its name field on. Nil is no
+	// precondition, which is every caller that did not preview.
+	//
+	// The name rather than the ordinal, because the name is the claim: it carries
+	// the stem, the suppression and the number in one value, so an edit to the
+	// type that mints it invalidates the claim by construction where a number
+	// would have passed. See confirmDraftedName.
+	//
+	// It is a precondition and NOT the name field. This never becomes the row's
+	// name: the pen is Name above, and a create posting this has left it empty,
+	// so the row stays name_generated. Posting it beside a typed name is refused
+	// rather than ignored (ErrNameExpectedOnTypedName).
+	ExpectedName *string
 }
 
 // ComponentPatch is the update input: nil fields unchanged.
@@ -451,9 +459,9 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	}
 	// The form's precondition, checked under the lock that allocated the number
 	// and before anything is written (#702): a create that would land a name the
-	// operator was never shown is refused with the number that moved, not
-	// silently renumbered.
-	if err := confirmOrdinal(spec.ExpectedOrdinal, ordinal, name); err != nil {
+	// operator was never shown is refused with the name it would have landed, not
+	// silently renamed.
+	if err := confirmDraftedName(spec.ExpectedName, ordinal, name); err != nil {
 		return nil, err
 	}
 

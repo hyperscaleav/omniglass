@@ -193,10 +193,11 @@ type LocationSpec struct {
 	DisplayName  string
 	LocationType string
 	ParentName   *string
-	// ExpectedOrdinal is the create form's precondition (#702): the ordinal the
-	// form previewed and locked its name field on. Nil is no precondition. See
-	// ComponentSpec.ExpectedOrdinal for why it is a number and never a name.
-	ExpectedOrdinal *int
+	// ExpectedName is the create form's precondition (#702): the name the form
+	// previewed and locked its name field on. Nil is no precondition. See
+	// ComponentSpec.ExpectedName for why it is the name and not the ordinal, and
+	// why it is still not the name field.
+	ExpectedName *string
 }
 
 // LocationPatch is the update input: nil fields are left unchanged.
@@ -1010,7 +1011,7 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 	}
 	// The form's precondition (#702), checked under the lock that allocated the
 	// number and before the insert. See CreateComponent's own call.
-	if err := confirmOrdinal(spec.ExpectedOrdinal, ordinal, name); err != nil {
+	if err := confirmDraftedName(spec.ExpectedName, ordinal, name); err != nil {
 		return nil, err
 	}
 

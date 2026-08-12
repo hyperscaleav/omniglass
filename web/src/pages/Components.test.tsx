@@ -302,9 +302,11 @@ describe("Components create-as-route", () => {
     await waitFor(() => expect(captured).toBeTruthy(), { timeout: 3000 });
     const body = captured as Record<string, unknown>;
     expect("name" in body).toBe(false);
-    // What IS posted is the number the locked field was showing (#702): a
-    // precondition, never a name, so the pen stays with the platform.
-    expect(body.expected_ordinal).toBe(1);
+    // What IS posted is the NAME the locked field was showing (#702, and its
+    // review): a precondition, never the name field, so the pen stays with the
+    // platform. The name and not the ordinal, because the name is what the
+    // operator was shown and it carries the stem as well as the number.
+    expect(body.expected_name).toBe("mic-1");
     expect(body.display_name).toBe("Ceiling Mic 9");
   });
 

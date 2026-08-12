@@ -27,10 +27,13 @@ import { describeError } from "./format";
 // DraftLabel is the answer: the name, the ordinal that name was minted from,
 // the label, and the rule that produced it.
 //
-// The ordinal is what a form posts back as expected_ordinal, and it is absent
-// exactly when the caller supplied the name, because an operator-named row
-// carries no ordinal at all. So "the field is locked" and "there is a
-// precondition to post" are one fact rather than two.
+// The NAME is what a form posts back as expected_name, and the ordinal beside it
+// is informational (#702 review): a name carries the stem, the suppression rule
+// and the number in one value, so a claim on it survives a type edited under the
+// open form where a claim on the number alone would pass and land a name nobody
+// was shown. Both are absent exactly when the caller supplied the name, because
+// an operator-named row carries no ordinal at all. So "the field is locked" and
+// "there is a precondition to post" are one fact rather than two.
 //
 // An empty label is a real state rather than an error: it means the platform
 // stores nothing and the surface reads the name instead. It is reached by
@@ -170,33 +173,37 @@ export function nameRefused(e: unknown): boolean {
   return details(e).some((d) => d.location === "body.name");
 }
 
-// ordinalTaken is "another create took the number this form was holding",
-// returning the ordinal that moved so a surface can say what happened without
-// waiting for the re-read. Null when the refusal is anything else, including
-// the OTHER 409 a create can give (a name collision), whose recovery is the
-// operator's rather than the form's.
-export function ordinalTaken(e: unknown): number | null {
-  const d = details(e).find((x) => x.location === "body.expected_ordinal");
-  return typeof d?.value === "number" ? d.value : null;
+// draftedNameMoved is "this create would not produce the name the form was
+// holding", returning the name it WOULD produce so a surface can say what
+// happened without waiting for the re-read. Null when the refusal is anything
+// else, including the OTHER 409 a create can give (a name collision), whose
+// recovery is the operator's rather than the form's.
+//
+// Two causes reach it, another create taking the number and an edit to the type
+// that mints the name, and the console deliberately does not tell them apart:
+// the recovery is identical, so a distinction here would be decoration.
+export function draftedNameMoved(e: unknown): string | null {
+  const d = details(e).find((x) => x.location === "body.expected_name");
+  return typeof d?.value === "string" ? d.value : null;
 }
 
-// recoverFromTakenOrdinal is what a create form does with a refused submit, and
-// it is one function rather than three because the recovery is the same on every
+// recoverFromMovedName is what a create form does with a refused submit, and it
+// is one function rather than three because the recovery is the same on every
 // tier: re-read the draft so the locked field shows the name that is free now,
 // and hand back the sentence to put in front of the operator.
 //
 // Everything else falls through unchanged, which is the point of asking
-// ordinalTaken rather than the status: a name collision is a 409 too, and
+// draftedNameMoved rather than the status: a name collision is a 409 too, and
 // re-reading the draft would tell that operator nothing.
 //
 // The extra sentence is the console's, not the server's: the server says what
 // happened to the request, and only the form knows that it has just refreshed a
 // field further down the page.
-export async function recoverFromTakenOrdinal(
+export async function recoverFromMovedName(
   e: unknown,
   refetch: () => Promise<unknown>,
 ): Promise<string> {
-  if (ordinalTaken(e) === null) return describeError(e);
+  if (draftedNameMoved(e) === null) return describeError(e);
   await refetch();
   return `${describeError(e)} The name below now shows what is free; create again to take it.`;
 }

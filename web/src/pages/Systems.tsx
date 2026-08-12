@@ -26,7 +26,7 @@ import { SYSTEM_TYPES_KEY, listSystemTypes } from "../lib/system_types";
 import SystemTypeSelect from "../components/SystemTypeSelect";
 import CreateIdentity from "../components/CreateIdentity";
 import { bucketPhrase, createPen, nameBucket, penIncomplete } from "../lib/namegen";
-import { nameRefused, recoverFromTakenOrdinal, useLabelDraft } from "../lib/labeldraft";
+import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
 import { pathTo } from "../lib/treeselect";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -524,12 +524,12 @@ export default function Systems() {
         // An empty name is OMITTED rather than posted as "": omitted is
         // "generate one", where "" is a name of nothing the API refuses
         // against the entity-name pattern.
-        const created = await createSystem({ name: nm || undefined, expected_ordinal: nm ? undefined : labelDraft.data?.ordinal, standard_id: standard() || undefined, system_type_id: systemType() || undefined, display_name: displayPen.value().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
+        const created = await createSystem({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, standard_id: standard() || undefined, system_type_id: systemType() || undefined, display_name: displayPen.value().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
         openInEdit(created.id);
         navigate(`/systems/${encodeURIComponent(created.id)}`);
       } catch (er) {
-        setFormErr(await recoverFromTakenOrdinal(er, labelDraft.refetch));
+        setFormErr(await recoverFromMovedName(er, labelDraft.refetch));
         setBusy(false);
       }
     }

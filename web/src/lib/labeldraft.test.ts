@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   nameRefused,
-  ordinalTaken,
-  recoverFromTakenOrdinal,
+  draftedNameMoved,
+  recoverFromMovedName,
   renderComponentLabel,
   renderLocationLabel,
   renderSystemLabel,
@@ -97,8 +97,8 @@ describe("the draft label data layer", () => {
 
 // The two refusals, read out of the RFC 9457 errors array. A form that matched
 // on the sentence would break the first time the server rewrote it, and a form
-// that matched on the STATUS would confuse a moved ordinal with a name
-// collision, whose recovery is the operator's rather than the form's.
+// that matched on the STATUS would confuse a drafted name that moved with a
+// name collision, whose recovery is the operator's rather than the form's.
 describe("the refusals a create form acts on", () => {
   const refusal = (location: string, value?: unknown) => ({
     status: 409,
@@ -113,20 +113,24 @@ describe("the refusals a create form acts on", () => {
     expect(nameRefused(null)).toBe(false);
   });
 
-  it("reads the ordinal that moved out of the conflict", () => {
-    expect(ordinalTaken(refusal("body.expected_ordinal", 4))).toBe(4);
+  it("reads the name this create would produce out of the conflict", () => {
+    expect(draftedNameMoved(refusal("body.expected_name", "display-4"))).toBe("display-4");
+    // The stem case is the same channel and the same recovery: nothing about a
+    // moved stem reads differently from a taken number here, which is why the
+    // console does not try to tell them apart.
+    expect(draftedNameMoved(refusal("body.expected_name", "monitor-1"))).toBe("monitor-1");
   });
 
   it("is not fooled by the other 409 a create can give", () => {
     // A name collision: same status, different recovery, and re-reading the
     // draft would tell that operator nothing.
-    expect(ordinalTaken({ status: 409, detail: "component name already exists" })).toBeNull();
-    expect(ordinalTaken(refusal("body.name"))).toBeNull();
+    expect(draftedNameMoved({ status: 409, detail: "component name already exists" })).toBeNull();
+    expect(draftedNameMoved(refusal("body.name"))).toBeNull();
   });
 
-  it("re-reads the draft only for the ordinal conflict, and says it did", async () => {
+  it("re-reads the draft only for the moved-name conflict, and says it did", async () => {
     const refetch = vi.fn().mockResolvedValue(undefined);
-    const msg = await recoverFromTakenOrdinal(refusal("body.expected_ordinal", 4), refetch);
+    const msg = await recoverFromMovedName(refusal("body.expected_name", "display-4"), refetch);
     expect(refetch).toHaveBeenCalledTimes(1);
     expect(msg).toContain("something happened");
     expect(msg).toMatch(/create again/i);
@@ -134,7 +138,7 @@ describe("the refusals a create form acts on", () => {
 
   it("leaves every other refusal exactly as it reads, and re-reads nothing", async () => {
     const refetch = vi.fn().mockResolvedValue(undefined);
-    const msg = await recoverFromTakenOrdinal({ detail: "component name already exists" }, refetch);
+    const msg = await recoverFromMovedName({ detail: "component name already exists" }, refetch);
     expect(refetch).not.toHaveBeenCalled();
     expect(msg).toBe("component name already exists");
   });

@@ -21,7 +21,7 @@ import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { bucketPhrase, createPen, nameBucket, penIncomplete } from "../lib/namegen";
-import { nameRefused, recoverFromTakenOrdinal, useLabelDraft } from "../lib/labeldraft";
+import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
 import { pathTo, type TreeNode } from "../lib/treeselect";
 import CreateIdentity from "../components/CreateIdentity";
 import { useMe, can } from "../lib/auth";
@@ -106,11 +106,11 @@ export default function Components() {
   // id's uuid space before this (nothing ever matched, so the picker silently
   // flattened to depth 0), and a name VALUE is now also potentially ambiguous.
   // The API dual-accepts uuid-or-name (ADR-0062), so posting the uuid is safe.
-  const systemItems = createMemo<TreeNode[]>(() => (systems.data ?? []).map((s) => ({ id: s.id, value: s.id, label: entityLabel(s), parentId: s.parent_id })));
-  // The BINDABLE systems: the ones this caller may update (#707 review). A
-  // create that names a system inserts that system's membership and resolves the
-  // reference in the caller's system:UPDATE scope, so the systems it can choose
-  // from are the ones carrying the update action, not the ones it can read.
+  // The system picker's options are the BINDABLE systems, not every readable one
+  // (#707 review). A create that names a system inserts that system's membership
+  // and resolves the reference in the caller's system:UPDATE scope, so the
+  // systems it may choose from are the ones carrying the update action, not the
+  // ones it can read.
   //
   // actions is the server's own per-row answer, computed from the same per-action
   // scope the gateway enforces (internal/api/rowactions.go), which is why this is
@@ -629,7 +629,7 @@ export default function Components() {
         // nothing."
         const created = await createComponent({
           name: nm || undefined,
-          expected_ordinal: nm ? undefined : labelDraft.data?.ordinal,
+          expected_name: nm ? undefined : labelDraft.data?.name,
           display_name: displayPen.value().trim() || undefined,
           system: system() || undefined,
           location: location() || undefined,
@@ -640,7 +640,7 @@ export default function Components() {
         openInEdit(created.id);
         navigate(`/components/${encodeURIComponent(created.id)}`);
       } catch (er) {
-        setFormErr(await recoverFromTakenOrdinal(er, labelDraft.refetch));
+        setFormErr(await recoverFromMovedName(er, labelDraft.refetch));
         setBusy(false);
       }
     }

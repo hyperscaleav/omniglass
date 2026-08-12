@@ -130,7 +130,7 @@ type createSystemInput struct {
 		Location     *string `json:"location,omitempty" doc:"Location name this system is placed at"`
 		// The create form's ordinal precondition (#702); see
 		// createComponentInput for why it is a number and never a name.
-		ExpectedOrdinal *int `json:"expected_ordinal,omitempty" minimum:"1" doc:"The ordinal a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming the number that moved, rather than silently renumbered, if another create took it in between. Applies only when the platform names the row: sending it beside a name is a 422."`
+		ExpectedName *string `json:"expected_name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The name a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the system_type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."`
 	}
 }
 
@@ -265,7 +265,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			SystemTypeID:    ptrOrNil(in.Body.SystemTypeID),
 			ParentName:      in.Body.Parent,
 			LocationName:    in.Body.Location,
-			ExpectedOrdinal: in.Body.ExpectedOrdinal,
+			ExpectedName:    in.Body.ExpectedName,
 		}, a.scopeFor(ctx, "system", "create"), a.scopeFor(ctx, "location", "read"))
 		if err != nil {
 			return nil, mapSystemErr(err)
@@ -414,7 +414,7 @@ func mapSystemErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
 	}
-	if ordErr, ok := mapOrdinalErr(err); ok {
+	if ordErr, ok := mapDraftedNameErr(err); ok {
 		return ordErr
 	}
 	switch {
