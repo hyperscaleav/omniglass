@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -420,6 +419,124 @@ func generateName(ctx context.Context, tx pgx.Tx, m nameMint, sc nameScope, excl
 	return name, ordinal, nil
 }
 
+// previewName is generateName with the allocation taken out: the name and the
+// ordinal a create in this bucket would get, read from the same siblings with
+// the same mint, outside any transaction (#702).
+//
+// # Why this is not the mint ADR-0104 refused
+//
+// That refusal is about ALLOCATING. A mint takes the bucket's
+// pg_advisory_xact_lock, which real creates need, so a form previewing on every
+// picker change would serialise the estate's creates behind a UI affordance.
+// This takes no lock, opens no write transaction and writes nothing: it is the
+// same read pickOrdinal already runs over sibling names, which is a question
+// Postgres answers without anyone having to queue for it. Two forms can preview
+// the same ordinal at the same instant and both are told the truth.
+//
+// # Which is why the answer is a precondition and not a reservation
+//
+// Nothing here holds the number. The create allocates under its own lock
+// exactly as it always did, and [confirmOrdinal] refuses when the two disagree,
+// so an operator either gets the name they were shown or is told the number
+// moved. A silent difference is the one outcome the locked field exists to
+// prevent; a refusal is the honest form of the same fact.
+//
+// It shares siblingNames and pickOrdinal with generateName rather than
+// restating either, so a preview can never describe a name the mint does not
+// produce. It deliberately does NOT re-run validateEntityName: a rule is proven
+// to mint legally when it is WRITTEN (validateNameRule, ADR-0102), and a preview
+// that refused where the create succeeds would be a second, weaker gate.
+func previewName(ctx context.Context, q querier, m nameMint, sc nameScope) (string, int, error) {
+	existing, err := sc.siblingNames(ctx, q, nil)
+	if err != nil {
+		return "", 0, err
+	}
+	n := pickOrdinal(existing, m)
+	return m.name(n), n, nil
+}
+
+// ErrDraftedNameMoved is a create whose form was shown one name and whose
+// allocation would produce another. It is a CONFLICT rather than a failure: the
+// estate is consistent, the operator's request is simply no longer the one they
+// were shown, and the fix is to look at the new name and submit again.
+var ErrDraftedNameMoved = errors.New("storage: the name the form was shown is not the name this create would produce")
+
+// DraftedNameMovedError is that conflict with the values a surface needs to
+// recover from it: what the form held, what this create would name the row, and
+// the ordinal it allocated. A bare "it moved" would leave the form re-reading
+// the draft just to say what happened.
+type DraftedNameMovedError struct {
+	// Expected is the name the form posted back, the one it previewed and
+	// displayed in its locked field.
+	Expected string
+	// Name is what this create would have named the row instead, the value the
+	// form shows next.
+	Name string
+	// Ordinal is the number Name was minted from. It is reported rather than
+	// compared: two names can share an ordinal and one name can be reached from
+	// two, so it explains the answer instead of deciding it.
+	Ordinal int
+}
+
+func (e *DraftedNameMovedError) Error() string {
+	return fmt.Sprintf("storage: the form was shown %q, but this create would name the row %q (ordinal %d)", e.Expected, e.Name, e.Ordinal)
+}
+
+func (e *DraftedNameMovedError) Unwrap() error { return ErrDraftedNameMoved }
+
+// ErrNameExpectedOnTypedName is an expectation posted beside a name the OPERATOR
+// typed. That path allocates nothing (the ordinal column is null by design,
+// #681) and the name is already the caller's own, so the expectation can never
+// be evaluated, and a precondition nobody checks reads as a guarantee while
+// being none. Refused rather than ignored, and refused at the gateway rather
+// than only at the wire, because a direct caller can post the pair too.
+var ErrNameExpectedOnTypedName = errors.New("storage: an expected name applies only to a name the platform generates; omit the name, or drop the expectation")
+
+// confirmDraftedName is the create's half of the form's precondition: compare
+// what the form was SHOWN with what this create would actually stamp, inside the
+// transaction that allocated it, before anything is written.
+//
+// # Why the name and not the ordinal
+//
+// The claim the form is making is "the row will be called what I am displaying",
+// and the ordinal is not that claim, it is one of three inputs to it. A name is
+// <stem><suppression><number>, so a claim on the number alone survives a stem
+// that moved and a suppression rule that flipped, and the row lands under a name
+// the operator was never shown. That is exactly the outcome the precondition
+// exists to prevent, and it is reachable without a race: forking a type and
+// rewriting what it mints is ordinary (#703), and a drafted display-1 then lands
+// as monitor-1 with the ordinal claim met.
+//
+// The name carries all three by construction, so nothing has to be enumerated
+// here and no future input to a mint can be forgotten: whatever a rule grows,
+// the value the operator read is the value compared.
+//
+// # Why it is still not the name field
+//
+// This never becomes the row's name. The pen is spec.Name, and a create that
+// posts one of these has left it empty, so name_generated stays true and the
+// ordinal column is still the platform's. A precondition asserts what is about
+// to happen; it does not ask for it.
+//
+// Pure, and the same lines on every tier, which is the point: a system
+// suppresses its first ordinal and a location has two placement buckets rather
+// than three, and neither difference reaches this comparison.
+//
+// allocated is the same *int the row stores, so "the operator typed the name"
+// and "nothing was allocated" are one fact rather than two that can disagree.
+func confirmDraftedName(expected *string, allocated *int, name string) error {
+	if expected == nil {
+		return nil
+	}
+	if allocated == nil {
+		return ErrNameExpectedOnTypedName
+	}
+	if *expected != name {
+		return &DraftedNameMovedError{Expected: *expected, Name: name, Ordinal: *allocated}
+	}
+	return nil
+}
+
 // generateComponentName is generateName for the component tier: the component
 // mint (no suppression) in the component's own three placement buckets.
 func generateComponentName(ctx context.Context, tx pgx.Tx, stem string, parentID, locationID, excludeID *string) (string, int, error) {
@@ -571,24 +688,19 @@ func generateNameForSystemType(ctx context.Context, tx pgx.Tx, systemTypeID *str
 // The querier is the caller's for the reason resolveTypeFacts takes one: a rule
 // written earlier in the same transaction has to be the rule this read sees, or
 // a create and the type edit before it would disagree about who names the row.
+// It resolves over the operator's shadow (#703, ADR-0095), which is what makes
+// #692's clear reach the generator: clearing the rule on a SHIPPED type is a
+// fork whose image carries no rule, so reading the official column here would
+// keep naming locations from a rule the operator had already turned off.
 func locationNameRule(ctx context.Context, q querier, locationTypeID string) (*NameRule, error) {
-	var raw []byte
-	err := q.QueryRow(ctx, `select name_rule from location_type where `+registryRefCol(locationTypeID)+` = $1`, locationTypeID).Scan(&raw)
+	lt, err := scanLocationTypeResolved(q.QueryRow(ctx, locationTypeResolved+` where lt.`+registryRefCol(locationTypeID)+` = $1`, locationTypeID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknownType
 	}
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve name rule for location_type %q: %w", locationTypeID, err)
 	}
-	if len(raw) == 0 {
-		return nil, nil
-	}
-	var r NameRule
-	if err := json.Unmarshal(raw, &r); err != nil {
-		return nil, fmt.Errorf("storage: decode name rule for location_type %q: %w", locationTypeID, err)
-	}
-	r = r.normalized()
-	return &r, nil
+	return lt.NameRule, nil
 }
 
 // generateNameForLocationType is generateNameForSystemType's location-tier twin

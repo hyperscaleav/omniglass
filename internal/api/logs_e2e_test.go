@@ -59,7 +59,7 @@ func TestLogsAPI(t *testing.T) {
 	}
 
 	all := scope.Set{All: true}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 
@@ -97,7 +97,7 @@ func TestLogsAPI(t *testing.T) {
 
 	// A viewer out of scope on disp-1 gets a non-disclosing 404; its own in-scope
 	// component returns an empty log.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-1"}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create other component: %v", err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)

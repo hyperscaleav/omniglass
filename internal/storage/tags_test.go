@@ -274,7 +274,7 @@ func seedTree(t *testing.T, gw storage.Gateway) *storage.Component {
 	}
 	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "codec-1", SystemName: strptr("sys"), LocationName: strptr("room"),
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("component: %v", err)
 	}

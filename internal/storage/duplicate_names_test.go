@@ -71,11 +71,11 @@ func twoDisplayOnes(t *testing.T, gw storage.Gateway) (compA, compB *storage.Com
 	if err != nil {
 		t.Fatalf("room-b: %v", err)
 	}
-	compA, err = gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", LocationName: strptr(roomA.Name)}, all, all, all)
+	compA, err = gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", LocationName: strptr(roomA.Name)}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("component in room-a: %v", err)
 	}
-	compB, err = gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", LocationName: strptr(roomB.Name)}, all, all, all)
+	compB, err = gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", LocationName: strptr(roomB.Name)}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("component in room-b: %v", err)
 	}
@@ -514,7 +514,7 @@ func TestResolveTagsSurvivesDuplicateSystemNames(t *testing.T) {
 	// A device that is a member of BOTH same-named systems: the shared-device
 	// case resolveTagsSQL's own comment documents as the reason ?system=
 	// exists at all.
-	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "shared-dsp"}, all, all, all)
+	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "shared-dsp"}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}

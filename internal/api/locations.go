@@ -8,6 +8,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/updatemask"
 )
 
 // locationBody is the wire shape of a location: name-addressable, classified by
@@ -63,7 +64,8 @@ type locationTypeBody struct {
 	AllowedParentTypes []string      `json:"allowed_parent_types"`
 	LabelRule          string        `json:"label_rule,omitempty" doc:"The label template locations of this type get; empty falls back to the global rule for locations"`
 	NameRule           *nameRuleBody `json:"name_rule,omitempty" doc:"How the platform NAMES locations of this type; absent means an operator names every one of them"`
-	Official           bool          `json:"official"`
+	Official           bool          `json:"official" doc:"True for a row this release ships. A shipped row is never written by an operator: an edit forks it"`
+	Forked             bool          `json:"forked" doc:"True when this shipped row carries changes of yours overriding it. Restore discards them"`
 }
 
 // nameRuleBody is the wire shape of a location_type's name rule (#687): a
@@ -87,7 +89,7 @@ func toLocationTypeBody(lt *storage.LocationType) locationTypeBody {
 	return locationTypeBody{
 		ID: lt.ID, Name: lt.Name, DisplayName: lt.DisplayName, Icon: lt.Icon,
 		AllowedParentTypes: lt.AllowedParentTypes, LabelRule: derefStr(lt.LabelRule),
-		NameRule: toNameRuleBody(lt.NameRule), Official: lt.Official,
+		NameRule: toNameRuleBody(lt.NameRule), Official: lt.Official, Forked: lt.Forked,
 	}
 }
 
@@ -132,15 +134,17 @@ type createLocationTypeInput struct {
 type updateLocationTypeInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		DisplayName        *string   `json:"display_name,omitempty" doc:"A new operator-facing label"`
-		Icon               *string   `json:"icon,omitempty" doc:"A new glyph key; the console falls back to map-pin when empty"`
-		AllowedParentTypes *[]string `json:"allowed_parent_types,omitempty" doc:"Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained"`
-		LabelRule          *string   `json:"label_rule,omitempty" doc:"A new label template for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels"`
-		// Omitted leaves the rule alone. There is no spelling that CLEARS it,
-		// the same limit component_type's stem patch carries: an omitted key and
-		// an explicit null both decode to nil, so an object field has no third
-		// state to read.
-		NameRule *nameRuleBody `json:"name_rule,omitempty" doc:"A new name rule for locations of this type; omit to leave unchanged. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row"`
+		// The mask is what makes a nullable OBJECT field clearable, and it is
+		// the house answer for every one that follows (#692, ADR-0091): an
+		// omitted key and an explicit null both decode to the same nil in Go,
+		// so the body alone can never spell "clear". The mask carries the
+		// intent instead, which is the reason AIP-134 has one.
+		UpdateMask         []string      `json:"update_mask,omitempty" doc:"Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (name_rule back to operator-named); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it"`
+		DisplayName        *string       `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		Icon               *string       `json:"icon,omitempty" doc:"A new glyph key; the console falls back to map-pin when empty"`
+		AllowedParentTypes *[]string     `json:"allowed_parent_types,omitempty" doc:"Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained"`
+		LabelRule          *string       `json:"label_rule,omitempty" doc:"A new label template for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels"`
+		NameRule           *nameRuleBody `json:"name_rule,omitempty" doc:"A new name rule for locations of this type; omit to leave unchanged, or name name_rule in update_mask with no rule here to CLEAR it back to operator-named. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row"`
 	}
 }
 
@@ -167,6 +171,9 @@ type createLocationInput struct {
 		DisplayName  string  `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
 		LocationType string  `json:"location_type" minLength:"1" doc:"The location_type, by name or uuid (campus, building, ...)"`
 		Parent       *string `json:"parent,omitempty" doc:"Parent location name; omit for a root location"`
+		// The create form's ordinal precondition (#702); see
+		// createComponentInput for why it is a number and never a name.
+		ExpectedName *string `json:"expected_name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The name a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the location_type's name rule moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."`
 	}
 }
 
@@ -289,13 +296,37 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/location-types/{id}",
 		Summary:     "Update a location type",
-		Description: "Patches a location_type's display_name, icon, allowed parents, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by location_type:update.",
+		Description: "Patches a location_type's display_name, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update.",
 	}, "location_type", "update"), func(ctx context.Context, in *updateLocationTypeInput) (*locationTypeOutput, error) {
-		lt, err := gw.UpdateLocationType(ctx, actorID(ctx), in.ID, storage.LocationTypePatch{
+		patch := storage.LocationTypePatch{
 			DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
 			AllowedParentTypes: in.Body.AllowedParentTypes, LabelRule: in.Body.LabelRule,
 			NameRule: toStorageNameRule(in.Body.NameRule),
-		})
+		}
+		// The implied mask is read off the PATCH the write is about to store,
+		// not off the body field by field, so "which fields did the caller
+		// send" is defined once for both layers instead of once per layer,
+		// where the two definitions would drift.
+		write, err := updatemask.Resolve(in.Body.UpdateMask, storage.LocationTypePatchFields, patch.Populated())
+		if err != nil {
+			return nil, mapTypeErr(err, "location_type")
+		}
+		patch.Write = write
+		lt, err := gw.UpdateLocationType(ctx, actorID(ctx), in.ID, patch)
+		if err != nil {
+			return nil, mapTypeErr(err, "location_type")
+		}
+		return &locationTypeOutput{Body: toLocationTypeBody(lt)}, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "restore-location-type",
+		Method:      http.MethodPost,
+		Path:        "/location-types/{id}:restore",
+		Summary:     "Restore a location type's shipped values",
+		Description: "Discards your fork of a shipped location_type, so reads return the values this release ships, including a rule a later release WITHDREW. 409 when the row carries no fork of yours. Gated by location_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row.",
+	}, "location_type", "update"), func(ctx context.Context, in *locationTypePathInput) (*locationTypeOutput, error) {
+		lt, err := gw.RestoreLocationType(ctx, actorID(ctx), in.ID)
 		if err != nil {
 			return nil, mapTypeErr(err, "location_type")
 		}
@@ -343,6 +374,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			DisplayName:  in.Body.DisplayName,
 			LocationType: in.Body.LocationType,
 			ParentName:   in.Body.Parent,
+			ExpectedName: in.Body.ExpectedName,
 		}, a.scopeFor(ctx, "location", "create"))
 		if err != nil {
 			return nil, mapLocationErr(err)
@@ -495,6 +527,9 @@ func mapLocationErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
 	}
+	if ordErr, ok := mapDraftedNameErr(err); ok {
+		return ordErr
+	}
 	var placementErr *storage.PlacementError
 	if errors.As(err, &placementErr) {
 		return huma.Error422UnprocessableEntity(placementErr.Error())
@@ -521,7 +556,7 @@ func mapLocationErr(err error) error {
 	case errors.Is(err, storage.ErrLocationCycle):
 		return huma.Error422UnprocessableEntity("cannot move a location under itself or a descendant")
 	case errors.Is(err, storage.ErrLocationTypeNoNameRule):
-		return huma.Error422UnprocessableEntity("this location_type has no name rule, so the platform cannot generate a name for it: supply a name on create, or :rename the location to claim its name before reclassifying it to this type")
+		return errNoGeneratedName("this location_type has no name rule, so the platform cannot generate a name for it: supply a name on create, or :rename the location to claim its name before reclassifying it to this type")
 	default:
 		return huma.Error500InternalServerError("location operation failed")
 	}

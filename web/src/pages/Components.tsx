@@ -20,9 +20,8 @@ import {
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
-import { COMPONENT_TYPES_KEY, componentTypeByName, listComponentTypes } from "../lib/component_types";
-import { bucketPhrase, componentMint, createPen, nameBucket, penIncomplete } from "../lib/namegen";
-import { useLabelDraft } from "../lib/labeldraft";
+import { bucketPhrase, createPen, nameBucket, penIncomplete } from "../lib/namegen";
+import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
 import { pathTo, type TreeNode } from "../lib/treeselect";
 import CreateIdentity from "../components/CreateIdentity";
 import { useMe, can } from "../lib/auth";
@@ -94,12 +93,6 @@ export default function Components() {
   // component.product_id is NOT NULL, so every component is an instance of a
   // product; the generics fit anything not yet modeled more specifically).
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
-  // The device-class registry behind the product: what the create form reads to
-  // show the name a nameless create would be given. A component's stem lives on
-  // the component_type its product is classified under and inherits down that
-  // tree, so the product alone cannot answer it.
-  const componentTypes = useQuery(() => ({ queryKey: COMPONENT_TYPES_KEY, queryFn: listComponentTypes }));
-
   // Keyed on uuid, not name (#627: name uniqueness is scoped to placement, so
   // two systems or two locations can legally share a name; a name-keyed map
   // would silently collapse them to whichever sorted last).
@@ -113,7 +106,29 @@ export default function Components() {
   // id's uuid space before this (nothing ever matched, so the picker silently
   // flattened to depth 0), and a name VALUE is now also potentially ambiguous.
   // The API dual-accepts uuid-or-name (ADR-0062), so posting the uuid is safe.
-  const systemItems = createMemo<TreeNode[]>(() => (systems.data ?? []).map((s) => ({ id: s.id, value: s.id, label: entityLabel(s), parentId: s.parent_id })));
+  // The system picker's options are the BINDABLE systems, not every readable one
+  // (#707 review). A create that names a system inserts that system's membership
+  // and resolves the reference in the caller's system:UPDATE scope, so the
+  // systems it may choose from are the ones carrying the update action, not the
+  // ones it can read.
+  //
+  // actions is the server's own per-row answer, computed from the same per-action
+  // scope the gateway enforces (internal/api/rowactions.go), which is why this is
+  // a filter over data rather than a second scope resolver in the browser: the
+  // console cannot resolve a scope and must not try.
+  //
+  // A row whose parent is not itself bindable is promoted to a root here rather
+  // than dropped: its parentId would name a node no longer in the list, and the
+  // tree flattener would lose the row entirely. What the picker shows is the set
+  // of legal choices, not the shape of the estate.
+  const bindableSystemItems = createMemo<TreeNode[]>(() => {
+    const rows = (systems.data ?? []).filter((s) => s.actions?.includes("update"));
+    const present = new Set(rows.map((s) => s.id));
+    return rows.map((s) => ({
+      id: s.id, value: s.id, label: entityLabel(s),
+      parentId: s.parent_id && present.has(s.parent_id) ? s.parent_id : undefined,
+    }));
+  });
   const locationItems = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id })));
   const componentItems = createMemo<TreeNode[]>(() => (components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: entityLabel(c), parentId: c.parent_id })));
 
@@ -539,6 +554,20 @@ export default function Components() {
     // globally unique.
     const displayPen = createPen();
     const namePen = createPen();
+    // The gate on the membership half of this create, and it is TWO conditions
+    // because authorization is two layers and both are enforced (#707 and its
+    // review): the system:update permission the API stamps on the route, and a
+    // system:update SCOPE that actually reaches something. A permission-only gate
+    // offered the picker to a principal holding system:update over nothing at
+    // all, which is the ordinary shape of a location-scoped deploy grant while
+    // the cross-tier expansion is unbuilt (#10): the form filled in, and the
+    // submit came back refused. It decides what the form OFFERS, never what the
+    // caller may do, which stays the server's call.
+    const mayBindSystem = () => can(me.data, "system", "update") && bindableSystemItems().length > 0;
+    // Which of the two is missing, so the empty slot says the true thing. The
+    // recovery differs: one is a permission to ask for, the other is a grant that
+    // covers a system.
+    const bindNeedsPermission = () => !can(me.data, "system", "update");
     const [system, setSystem] = createSignal("");
     const [location, setLocation] = createSignal("");
     const [parent, setParent] = createSignal("");
@@ -553,22 +582,16 @@ export default function Components() {
       [...(products.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name)),
     );
 
-    // What the platform would name this, as far as it is knowable before the row
-    // exists: the stem resolved from the chosen product's component_type chain,
-    // with the ordinal left as a token because it is allocated against live
-    // siblings inside the create's own transaction (ADR-0104).
-    const typesByName = createMemo(() => componentTypeByName(componentTypes.data ?? []));
-    const chosenProduct = createMemo(() => (products.data ?? []).find((p) => p.name === product()));
-    const mint = createMemo(() => componentMint(chosenProduct(), typesByName()));
-
-    // The placement bucket the name has to be unique in, in the server's own
-    // precedence (a parent wins over a location, and neither is the unplaced
-    // bucket), rendered as the path of whichever one applies.
-    // What the platform would LABEL this, which only the server can answer: a
-    // rule is a Go template over a closed map, so the console asks rather than
-    // re-implements (ADR-0098). Asked with the same body the create posts, and
-    // only once the classification is chosen, so a half-filled form is never
-    // sent a question it cannot answer.
+    // What the platform would NAME and LABEL this, which only the server can
+    // answer: a label rule is a Go template over a closed map and a name is a
+    // stem the gateway resolves plus the lowest ordinal free in this bucket, so
+    // the console asks rather than re-implements either (ADR-0098, ADR-0104 as
+    // amended by #702). Asked with the same body the create posts, and only once
+    // the classification is chosen, so a half-filled form is never sent a
+    // question it cannot answer.
+    //
+    // The placement is in the body because it is not decoration: the ordinal is
+    // read from the bucket a parent, else a location, else neither makes.
     const labelDraft = useLabelDraft(() =>
       product()
         ? {
@@ -576,6 +599,7 @@ export default function Components() {
             body: {
               product: product(),
               name: namePen.value().trim() || undefined,
+              parent: parent() || undefined,
               location: location() || undefined,
               system: system() || undefined,
             },
@@ -605,6 +629,7 @@ export default function Components() {
         // nothing."
         const created = await createComponent({
           name: nm || undefined,
+          expected_name: nm ? undefined : labelDraft.data?.name,
           display_name: displayPen.value().trim() || undefined,
           system: system() || undefined,
           location: location() || undefined,
@@ -615,7 +640,7 @@ export default function Components() {
         openInEdit(created.id);
         navigate(`/components/${encodeURIComponent(created.id)}`);
       } catch (er) {
-        setFormErr(describeError(er));
+        setFormErr(await recoverFromMovedName(er, labelDraft.refetch));
         setBusy(false);
       }
     }
@@ -650,9 +675,38 @@ export default function Components() {
         <div class="flex flex-col gap-1.5">
           <span class="eyebrow">Placement</span>
           <div class="grid grid-cols-2 gap-3">
-            <FieldRow label="System">
-              <TreeSelect items={systemItems()} value={system()} onChange={setSystem} rootLabel="None" />
-            </FieldRow>
+            {/* A system on a create is not a field on the component, it is the
+                component's primary MEMBERSHIP, so the API gates naming one on
+                system:update and resolves it in that scope, exactly as the
+                membership route does (#707). Offering a choice the platform
+                refuses on submit is what #699's rule exists to prevent, and both
+                layers can refuse it, so both are read here. The slot keeps the
+                grid and explains itself instead of vanishing, naming whichever of
+                the two is the thing to ask for. */}
+            <Show
+              when={mayBindSystem()}
+              fallback={
+                <div class="flex flex-col gap-1">
+                  <span class="text-[12px] font-medium text-base-content/70">System</span>
+                  <Show
+                    when={bindNeedsPermission()}
+                    fallback={
+                      <p class="text-xs text-base-content/60">
+                        Putting a component in a system writes that system's membership, and none of the systems you can see is inside your <code>system:update</code> scope. Create it here, and someone whose grant covers the system can add it after.
+                      </p>
+                    }
+                  >
+                    <p class="text-xs text-base-content/60">
+                      Putting a component in a system writes that system's membership, which needs <code>system:update</code>. Create it here, and someone holding that permission can add it to a system after.
+                    </p>
+                  </Show>
+                </div>
+              }
+            >
+              <FieldRow label="System">
+                <TreeSelect items={bindableSystemItems()} value={system()} onChange={setSystem} rootLabel="None" />
+              </FieldRow>
+            </Show>
             <FieldRow label="Location">
               <TreeSelect items={locationItems()} value={location()} onChange={setLocation} rootLabel="None" />
             </FieldRow>
@@ -667,12 +721,12 @@ export default function Components() {
 
         <CreateIdentity
           kind="component"
-          mint={mint}
+          draft={() => labelDraft.data}
+          pending={() => labelDraft.isFetching}
+          nameRefused={() => nameRefused(labelDraft.error)}
           bucket={bucketText}
           namePen={namePen}
           displayPen={displayPen}
-          label={() => labelDraft.data}
-          labelPending={() => labelDraft.isFetching}
           namePlaceholder="mic-2 (optional)"
           displayPlaceholder="Ceiling Mic 2"
         />
@@ -685,7 +739,7 @@ export default function Components() {
               asymmetry the other two forms did not have). Product stays
               required, the #614 classification floor and the generator's own
               stem source. */}
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !product() || penIncomplete(mint() !== null, namePen)}>Create component</Button>
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !product() || penIncomplete(!!labelDraft.data?.name, namePen)}>Create component</Button>
         </div>
 
         <div class="flex flex-col gap-1 opacity-50">

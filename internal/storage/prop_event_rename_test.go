@@ -42,7 +42,7 @@ func TestPropertiesAndEventsSurviveARename(t *testing.T) {
 		t.Fatalf("system: %v", err)
 	}
 	bar := "cisco-room-bar"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "old-comp", ProductName: &bar}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "old-comp", ProductName: &bar}, all, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 

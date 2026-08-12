@@ -190,18 +190,24 @@ type Gateway interface {
 	// WriteAuthEvent records an auth event (login, logout) in the audit trail, off
 	// the read/no-tx auth paths.
 	WriteAuthEvent(ctx context.Context, actorID, verb string) error
-	// UpsertLocationType installs or updates an official location type by id, the
-	// boot-seed phase's write. Idempotent.
+	// UpsertLocationType installs or updates a shipped (official) location type
+	// by name, the boot-seed phase's write. Idempotent and AUTHORITATIVE, so a
+	// value a release withdraws is withdrawn from an estate that already seeded
+	// it (#703); an operator's version of the row lives in registry_shadow and
+	// is resolved over it, never stomped by this.
 	UpsertLocationType(ctx context.Context, lt LocationType) error
-	SeedLocationType(ctx context.Context, lt LocationType) error
-	// ListLocationTypes returns every location type, alphabetically by display_name.
+	// ListLocationTypes returns every location type, alphabetically by display_name,
+	// each resolved over its operator shadow. GetLocationType resolves one.
 	ListLocationTypes(ctx context.Context) ([]LocationType, error)
+	GetLocationType(ctx context.Context, ref string) (*LocationType, error)
 	// The location_type registry CRUD (capability-only, unscoped). Create writes a
-	// custom (official=false) row; update/delete refuse official rows and delete
-	// refuses a row still referenced by a location.
+	// custom (official=false) row; an update of a shipped row FORKS it into
+	// registry_shadow (ADR-0095) and RestoreLocationType discards the fork;
+	// delete refuses an official row and one still referenced by a location.
 	CreateLocationType(ctx context.Context, actorID string, lt LocationType) (*LocationType, error)
-	UpdateLocationType(ctx context.Context, actorID, id string, patch LocationTypePatch) (*LocationType, error)
-	DeleteLocationType(ctx context.Context, actorID, id string) error
+	UpdateLocationType(ctx context.Context, actorID, ref string, patch LocationTypePatch) (*LocationType, error)
+	RestoreLocationType(ctx context.Context, actorID, ref string) (*LocationType, error)
+	DeleteLocationType(ctx context.Context, actorID, ref string) error
 
 	// InScopeIDs reports which of the candidate row ids of a tree resource
 	// (location/system/component) are inside a resolved scope, applying the same
@@ -282,12 +288,16 @@ type Gateway interface {
 	// panel's rows). Not scope-injected: the caller gates on the component being
 	// in read scope first, then reads its interfaces by the verified name.
 	ListComponentInterfaces(ctx context.Context, componentName string) ([]ComponentInterface, error)
-	// CreateComponent takes the caller's location:read and system:read scopes
-	// alongside its create scope, one per placement reference it binds: both are
-	// cross-tier, and the label it stamps reads the location's label and the
-	// primary system's TYPE label, so each resolves within the scope that says
-	// whether this caller may READ that row (#700).
-	CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create, locationRead, systemRead scope.Set) (*Component, error)
+	// CreateComponent takes the caller's placement scopes alongside its create
+	// scope. They are cross-tier and deliberately not the same action: the label
+	// it stamps reads the location's label, so naming a location is a read of it
+	// (#700), while naming a system INSERTS that system's primary membership, the
+	// row the membership route writes under system:update (#707). The system
+	// reference takes TWO sets, because the authority the bind needs and the
+	// refusal the caller is owed are different questions: system:update decides
+	// whether the bind happens, system:read decides whether a refusal may name the
+	// row or has to pretend it is absent.
+	CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create, locationRead, systemRead, systemUpdate scope.Set) (*Component, error)
 	UpdateComponent(ctx context.Context, actorID, name string, patch ComponentPatch, read, action scope.Set) (*Component, error)
 	// RenameComponent moves the component's name, scoped exactly as the update is.
 	// Its own function, not a patch field, because a rename breaks the references
@@ -348,15 +358,17 @@ type Gateway interface {
 	PreviewLabelRecompute(ctx context.Context, kind string, read, action scope.Set) ([]LabelChange, error)
 	RecomputeLabels(ctx context.Context, actorID, kind string, read, action scope.Set) ([]LabelChange, error)
 
-	// The draft render (#699): the label a create WOULD stamp, for a form that
-	// shows the operator what the platform is about to produce. It allocates
-	// nothing, which is what separates it from the preview ADR-0104 refused;
-	// see label_draft.go. The scopes are the PLACEMENT's, because a placement
-	// fact is what the answer could otherwise leak, and a location draft takes
-	// none because a location's data map reads no other estate row.
-	RenderComponentDraftLabel(ctx context.Context, draft ComponentLabelDraft, locationRead, systemRead scope.Set) (DraftLabel, error)
-	RenderSystemDraftLabel(ctx context.Context, draft SystemLabelDraft, locationRead scope.Set) (DraftLabel, error)
-	RenderLocationDraftLabel(ctx context.Context, draft LocationLabelDraft) (DraftLabel, error)
+	// The draft render (#699, #702): the name and the label a create WOULD
+	// stamp, for a form that shows the operator what the platform is about to
+	// produce. It allocates nothing (it READS the lowest free ordinal rather
+	// than minting one), which is what separates it from the preview ADR-0104
+	// refused; see label_draft.go. Each takes the same scopes its own create
+	// takes, in the same order, because it resolves the same references: the
+	// parent decides the bucket the ordinal is read from, and the location and
+	// system decide what the rendered string may contain.
+	RenderComponentDraftLabel(ctx context.Context, draft ComponentLabelDraft, create, locationRead, systemRead scope.Set) (DraftLabel, error)
+	RenderSystemDraftLabel(ctx context.Context, draft SystemLabelDraft, create, locationRead scope.Set) (DraftLabel, error)
+	RenderLocationDraftLabel(ctx context.Context, draft LocationLabelDraft, create scope.Set) (DraftLabel, error)
 
 	UpsertComponentType(ctx context.Context, ct ComponentType) error
 	ListComponentTypes(ctx context.Context) ([]ComponentType, error)

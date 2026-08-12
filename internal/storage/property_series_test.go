@@ -34,7 +34,7 @@ func TestDeclaredValuesAppendToSeries(t *testing.T) {
 	}
 	conn := connectDSN(t, dsn)
 	all := scope.Set{All: true}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "series-1"}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "series-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 

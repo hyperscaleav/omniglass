@@ -54,8 +54,17 @@ func TestSeedRolesIdempotent(t *testing.T) {
 
 	// The four shipped location types seed alongside the roles, in alphabetical
 	// order by display_name, and idempotently (the second Run above must not have
-	// duplicated them). They are operator-owned example content (the estate shapes
-	// its own place vocabulary), so they seed if absent and are not official.
+	// duplicated them). Every one is OFFICIAL, which is the inversion #703 made
+	// deliberately: this assertion used to read "want 0 (a shipped location type
+	// is operator-owned)" and now guards the opposite claim, that the platform
+	// owns every row it ships here.
+	//
+	// What it protects is the withdrawal. Operator-owned rows are why the seed
+	// could not be authoritative, and an insert-if-absent seed can add a shipped
+	// value but never remove one. Owning the rows is what lets the boot rewrite
+	// them, and an operator loses nothing by it: their edit forks into
+	// registry_shadow and resolves over the row (ADR-0095). Read together with
+	// the count above, it also says no operator row leaked into the shipped set.
 	var typeCount, officialTypes int
 	if err := conn.QueryRow(ctx, `select count(*) from location_type`).Scan(&typeCount); err != nil {
 		t.Fatalf("count location_types: %v", err)
@@ -66,8 +75,8 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from location_type where official`).Scan(&officialTypes); err != nil {
 		t.Fatalf("count official location_types: %v", err)
 	}
-	if officialTypes != 0 {
-		t.Errorf("official location_types = %d, want 0 (a shipped location type is operator-owned)", officialTypes)
+	if officialTypes != 4 {
+		t.Errorf("official location_types = %d, want 4 (the platform owns every location type it ships, #703)", officialTypes)
 	}
 	var topType string
 	if err := conn.QueryRow(ctx, `select name from location_type order by display_name, name limit 1`).Scan(&topType); err != nil {
@@ -76,13 +85,14 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if topType != "building" {
 		t.Errorf("first-alphabetically location_type = %q, want building", topType)
 	}
-	// Each shipped type seeds its glyph key, and re-running Run keeps it. Note WHY:
-	// SeedLocationType is `on conflict (name) do nothing`, so a second Run does not
-	// rewrite the row at all. The icon survives because nothing touches it, not
-	// because an upsert restates it. The distinction is load-bearing rather than
-	// pedantic, and #657 learned it the hard way: a value REMOVED from the shipped
-	// YAML is not withdrawn from an estate that already seeded it, because there is
-	// no update to carry the removal.
+	// Each shipped type seeds its glyph key, and re-running Run RESTATES it: the
+	// seed is `on conflict (name) do update` since #703, so every boot writes
+	// the shipped value over whatever the row holds. The icon surviving here is
+	// now the upsert asserting it rather than nothing touching it, which is the
+	// distinction #657 learned the hard way in the other direction: under
+	// insert-if-absent a value REMOVED from the shipped YAML was never withdrawn
+	// from an estate that already seeded it, because no update carried the
+	// removal.
 	for name, wantIcon := range map[string]string{
 		"campus": "landmark", "building": "building", "floor": "layers", "room": "door-open",
 	} {

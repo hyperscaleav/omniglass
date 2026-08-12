@@ -72,7 +72,7 @@ func newHealthFixture(t *testing.T) *healthFixture {
 
 	// cisco-room-bar classifies as video-bar.
 	bar := "cisco-room-bar"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, f.all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, f.all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all); err != nil {
@@ -989,7 +989,7 @@ func TestAlarmOnSpareDoesNotShort(t *testing.T) {
 	ctx := context.Background()
 
 	panel := "cisco-room-bar"
-	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &panel}, f.all, all, all); err != nil {
+	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &panel}, f.all, all, all, all); err != nil {
 		t.Fatalf("create second component: %v", err)
 	}
 	if err := f.gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", f.all); err != nil {

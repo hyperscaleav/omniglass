@@ -122,11 +122,18 @@ func (p *PG) ListLocationTypeProperties(ctx context.Context, locationTypeID stri
 }
 
 // SetLocationTypeProperty declares a property on a location type (or revises the
-// declaration), audited. Official location types carry seed-owned contracts and are
-// read-only (ErrTypeOfficial); an unknown location type is ErrTypeNotFound and an
+// declaration), audited. An unknown location type is ErrTypeNotFound and an
 // unknown property is ErrPropertyNotFound. The audit names the location type as the
 // resource because the contract belongs to it, with the verb reflecting whether
 // this write added the line or revised one already there.
+//
+// A SHIPPED location type's contract is writable, and the existence check here
+// is deliberately not the official guard (#703). A contract line is a row of
+// its own in its own table, not a column of the registry row the fork covers,
+// and nothing seeds one: every line in this table was declared by an operator.
+// Flipping the shipped types to official when they adopted the fork would
+// otherwise have withdrawn a working capability as a side effect, which is the
+// one thing an ownership change must not do.
 func (p *PG) SetLocationTypeProperty(ctx context.Context, actorID, locationTypeID string, spec LocationTypePropertySpec) (*LocationTypeProperty, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -134,7 +141,7 @@ func (p *PG) SetLocationTypeProperty(ctx context.Context, actorID, locationTypeI
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := guardTypeMutable(ctx, tx, "location_type", locationTypeID); err != nil {
+	if err := requireRegistryRow(ctx, tx, "location_type", locationTypeID); err != nil {
 		return nil, err
 	}
 	// The before-image decides create vs update and gives the audit its old side.
@@ -168,8 +175,9 @@ func (p *PG) SetLocationTypeProperty(ctx context.Context, actorID, locationTypeI
 }
 
 // DeleteLocationTypeProperty withdraws one property from a location type's contract,
-// audited as an update to the location type. Official location types are read-only
-// (ErrTypeOfficial); an undeclared property is ErrTypeNotFound.
+// audited as an update to the location type. An undeclared property is
+// ErrTypeNotFound. Shipped types are writable here for the reason
+// SetLocationTypeProperty gives.
 func (p *PG) DeleteLocationTypeProperty(ctx context.Context, actorID, locationTypeID, propertyName string) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -177,7 +185,7 @@ func (p *PG) DeleteLocationTypeProperty(ctx context.Context, actorID, locationTy
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := guardTypeMutable(ctx, tx, "location_type", locationTypeID); err != nil {
+	if err := requireRegistryRow(ctx, tx, "location_type", locationTypeID); err != nil {
 		return err
 	}
 	// Delete and capture the before-image in one statement, so the audit records
@@ -202,9 +210,9 @@ func (p *PG) DeleteLocationTypeProperty(ctx context.Context, actorID, locationTy
 }
 
 // UpsertLocationTypeProperty installs one contract line for the boot-seed phase.
-// Idempotent, and deliberately unguarded and unaudited: the seed owns the
-// official location types' contracts, so the official read-only rule (which protects
-// them from operators) does not apply to the writer that ships them.
+// Idempotent, and deliberately unaudited: a seed write is not an operator act.
+// No location type contract ships today, so this is the lane a future one would
+// arrive on rather than a writer with rows in flight.
 func (p *PG) UpsertLocationTypeProperty(ctx context.Context, locationTypeID string, spec LocationTypePropertySpec) error {
 	_, err := upsertLocationTypePropertyRow(ctx, p.pool, locationTypeID, spec)
 	return err

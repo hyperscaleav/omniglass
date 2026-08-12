@@ -50,7 +50,7 @@ func TestNodeRunOnce(t *testing.T) {
 	}
 
 	// Seed a component + interface + enabled task on the node.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
@@ -180,7 +180,7 @@ func TestNodeVerdictPerInterface(t *testing.T) {
 		{"disp-1", "http"},
 		{"disp-2", "tcp"},
 	} {
-		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: c.comp}, all, all, all); err != nil {
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: c.comp}, all, all, all, all); err != nil {
 			t.Fatalf("create component %s: %v", c.comp, err)
 		}
 		if _, err := conn.Exec(ctx,

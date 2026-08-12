@@ -23,11 +23,11 @@ func TestRenameComponent(t *testing.T) {
 	}
 
 	// A component with a child, so we can prove the UUID FK survives the rename.
-	root, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-root"}, all, all, all)
+	root, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-root"}, all, all, all, all)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-child", ParentName: strptr("disp-root")}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-child", ParentName: strptr("disp-root")}, all, all, all, all); err != nil {
 		t.Fatal(err)
 	}
 
@@ -67,7 +67,7 @@ func TestRenameComponent(t *testing.T) {
 	}
 
 	// The old name is free; a create can reuse it.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-root"}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-root"}, all, all, all, all); err != nil {
 		t.Fatalf("old name should be free after rename: %v", err)
 	}
 
@@ -77,7 +77,7 @@ func TestRenameComponent(t *testing.T) {
 	// disp-root-renamed (component_parent_name_key), so newName itself (the
 	// root/orphan bucket) can no longer collide with it; a sibling under the
 	// same parent can.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-sibling", ParentName: strptr(newName)}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-sibling", ParentName: strptr(newName)}, all, all, all, all); err != nil {
 		t.Fatalf("sibling for dup-rename case: %v", err)
 	}
 	if _, err := gw.RenameComponent(ctx, "", "disp-child", "disp-sibling", all, all); !errors.Is(err, storage.ErrComponentExistsUnderParent) {
@@ -101,7 +101,7 @@ func TestRenameComponent(t *testing.T) {
 	}
 
 	// Create-tightening: the shared validator gates create too, not just rename.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "Bad Name"}, all, all, all); !errors.Is(err, storage.ErrInvalidEntityName) {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "Bad Name"}, all, all, all, all); !errors.Is(err, storage.ErrInvalidEntityName) {
 		t.Fatalf("bad-format create err = %v, want ErrInvalidEntityName", err)
 	}
 

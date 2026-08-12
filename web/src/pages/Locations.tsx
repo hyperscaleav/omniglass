@@ -22,8 +22,8 @@ import {
 } from "../lib/locations";
 import { LOCATION_TYPES_KEY, ROOT_PLACEMENT, listLocationTypes } from "../lib/location_types";
 import CreateIdentity from "../components/CreateIdentity";
-import { bucketPhrase, createPen, locationMint, nameBucket, penIncomplete } from "../lib/namegen";
-import { useLabelDraft } from "../lib/labeldraft";
+import { bucketPhrase, createPen, nameBucket, penIncomplete } from "../lib/namegen";
+import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
 import { pathTo, type TreeNode } from "../lib/treeselect";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -555,12 +555,6 @@ export default function Locations() {
     const [busy, setBusy] = createSignal(false);
     const [formErr, setFormErr] = createSignal<string | null>(null);
 
-    // A location_type's name rule IS the mint (ADR-0102), so there is no chain
-    // to walk here and no reshaping between the stored declaration and the shape
-    // shown. Null is the opt-out, which is every shipped type (ADR-0103).
-    const chosenType = createMemo(() => (locationTypes.data ?? []).find((t) => t.name === type()));
-    const mint = createMemo(() => locationMint(chosenType()));
-
     // A location has TWO buckets, not three: it has no located-at column, so
     // the shape falls out of asking for the bucket with no location at all.
     const parentItems = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 })));
@@ -572,7 +566,11 @@ export default function Locations() {
       type().trim()
         ? {
             kind: "location" as const,
-            body: { location_type: type().trim(), name: namePen.value().trim() || undefined },
+            body: {
+              location_type: type().trim(),
+              name: namePen.value().trim() || undefined,
+              parent: parent() || undefined,
+            },
           }
         : null,
     );
@@ -592,12 +590,12 @@ export default function Locations() {
         // An empty name is OMITTED rather than posted as "": omitted is
         // "generate one from the type's rule", where "" is a name of nothing
         // the API refuses against the entity-name pattern.
-        const created = await createLocation({ name: nm || undefined, location_type: type().trim(), display_name: displayPen.value().trim() || undefined, parent: parent() || undefined });
+        const created = await createLocation({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, location_type: type().trim(), display_name: displayPen.value().trim() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
         openInEdit(created.id);
         navigate(`/locations/${encodeURIComponent(created.id)}`);
       } catch (er) {
-        setFormErr(describeError(er));
+        setFormErr(await recoverFromMovedName(er, labelDraft.refetch));
         setBusy(false);
       }
     }
@@ -647,12 +645,12 @@ export default function Locations() {
 
         <CreateIdentity
           kind="location"
-          mint={mint}
+          draft={() => labelDraft.data}
+          pending={() => labelDraft.isFetching}
+          nameRefused={() => nameRefused(labelDraft.error)}
           bucket={bucketText}
           namePen={namePen}
           displayPen={displayPen}
-          label={() => labelDraft.data}
-          labelPending={() => labelDraft.isFetching}
           namePlaceholder="boardroom"
           displayPlaceholder="Conf Room 301"
         />
@@ -663,7 +661,7 @@ export default function Locations() {
           {/* A name is required only when the chosen type carries no name
               rule, which is every shipped type (ADR-0103). The type itself
               stays required: for a location it is the only shape-definer. */}
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !type().trim() || penIncomplete(mint() !== null, namePen)}>Create location</Button>
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !type().trim() || penIncomplete(!!labelDraft.data?.name, namePen)}>Create location</Button>
         </div>
 
         <div class="flex flex-col gap-1 opacity-50">

@@ -128,6 +128,9 @@ type createSystemInput struct {
 		SystemTypeID string  `json:"system_type_id,omitempty" doc:"The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified"`
 		Parent       *string `json:"parent,omitempty" doc:"Parent system name; omit for a root system"`
 		Location     *string `json:"location,omitempty" doc:"Location name this system is placed at"`
+		// The create form's ordinal precondition (#702); see
+		// createComponentInput for why it is a number and never a name.
+		ExpectedName *string `json:"expected_name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The name a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the system_type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."`
 	}
 }
 
@@ -262,6 +265,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			SystemTypeID: ptrOrNil(in.Body.SystemTypeID),
 			ParentName:   in.Body.Parent,
 			LocationName: in.Body.Location,
+			ExpectedName: in.Body.ExpectedName,
 		}, a.scopeFor(ctx, "system", "create"), a.scopeFor(ctx, "location", "read"))
 		if err != nil {
 			return nil, mapSystemErr(err)
@@ -410,6 +414,9 @@ func mapSystemErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
 	}
+	if ordErr, ok := mapDraftedNameErr(err); ok {
+		return ordErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrSystemNotFound):
 		return huma.Error404NotFound("system not found")
@@ -434,9 +441,9 @@ func mapSystemErr(err error) error {
 	case errors.Is(err, storage.ErrUnknownSystemType):
 		return huma.Error422UnprocessableEntity("unknown system_type")
 	case errors.Is(err, storage.ErrSystemTypeRequiredForName):
-		return huma.Error422UnprocessableEntity("a system with no system_type has no stem to generate a name from: supply a name, classify it, or :rename it before un-classifying it")
+		return errNoGeneratedName("a system with no system_type has no stem to generate a name from: supply a name, classify it, or :rename it before un-classifying it")
 	case errors.Is(err, storage.ErrSystemTypeNoStem):
-		return huma.Error422UnprocessableEntity("this system_type has no stem to generate a name from; supply a name explicitly, or fix the system_type registry")
+		return errNoGeneratedName("this system_type has no stem to generate a name from; supply a name explicitly, or fix the system_type registry")
 	case errors.Is(err, storage.ErrLocationNotFound):
 		return huma.Error422UnprocessableEntity("location not found")
 	default:

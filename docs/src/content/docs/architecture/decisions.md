@@ -140,8 +140,11 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0102](#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing) | 2026-08-10 | Accepted | A **`location_type.name_rule`** (nullable jsonb) is a type's opt-in to naming the locations it classifies, and it is a **declaration** (a stem, possibly empty, plus the first-ordinal suppression flag) rather than the `label_rule` template beside it. A name has to satisfy `validateEntityName`, it lands in a scoped-unique index, and other things reference it, so an unrenderable rule has no safe degradation the way a label's does; a declaration IS a `nameMint`, so a rule is refused at RULE-EDIT time by minting from it (ordinal 1 and a nine-digit ceiling bound the whole output space), which a template's output could only be sampled. Null is the opt-out and there is no boolean beside it. A rule change **renames nothing**: there is no name-side recompute verb, deliberately, because relabelling in bulk is recoverable and renaming is not. A positional type permitted at root allocates `1`, `2` across the estate and that is legal, since the bucket is the placement and two positional types under one parent already share an ordinal space. **Amended (#657):** the entry's "only floor is genuinely auto-nameable" is now false in both halves, since ADR-0103 was reversed for `floor` and no shipped type carries a rule; the composed limit is that a withdrawn shipped rule cannot be un-shipped, because insert-when-absent leaves the row alone and the wire cannot spell "clear" |
 | [ADR-0103](#adr-0103-a-positional-name-is-allocation-order-and-the-real-world-designation-is-a-label) | 2026-08-11 | Accepted | A positional name is **allocation order**, never a claim about the world, and the entry first kept the dev estate's divergence (a floor named `1` labelled Level 2) on the argument that a name is an address and a label is what a human reads. **Amended (#657) and REVERSED for `floor`:** a floor's designation is not an integer at all (B2, LG, G, M, 12A), so an ordinal is the wrong KIND of value for it rather than an imprecise one, and the basement objection dissolves with it, since nobody signs a floor `-1`, they sign it `B1`, already a legal name. `floor` becomes nominal, the dev estate's floors are named `level-2` and `level-1` for their real designations so ADR-0105's rule renders those labels and the two pins are released, and the cost is stated rather than hidden: NO shipped location type carries a rule, so location name generation ships **dormant**, kept covered by a positional type the tests create rather than by a fifth seeded type invented to keep the demo alive. Removing a shipped rule reaches new estates only (insert-when-absent), and no `PATCH` can clear one, so an estate that already seeded it keeps it. What survives: a stem-less positional name is right where the position is an arbitrary disambiguator (a parking deck, a rack row) and wrong where the number is a real-world fact |
 
-| [ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it) | 2026-08-11 | Accepted | A create form shows the **stem** a generated name will carry, resolved in the browser from the classification the operator just chose, and writes the ordinal as the token `n`, because the ordinal is allocated against live siblings inside the create's own transaction and does not exist until the row does. A **draft-preview verb that mints and rolls back** is refused: its answer is provisional (another create can take the ordinal between the preview and the commit), and the rolled-back mint takes the same advisory lock real creates need, so a form that previewed on every keystroke would serialise the estate's creates behind a UI affordance. **Re-rendering the label rule in TypeScript** is refused outright, as the second implementation of an engine slice 3 swept 42 copies of. The label is therefore not previewed at all: its data map carries `Name` and `Ordinal`, so it is unknowable for the same reason. The placement bucket is shown beside the field as a PATH and never as a prefix inside it, since names became scoped to placement and a name no longer contains its ancestry. **Amended (#699):** a RENDER is not a mint, and both refusals were about allocating, so `:renderLabel` resolves the rule through the same tiers with the same one engine, writes the token where the ordinal goes, and takes no lock; the form now shows both values in LOCKED fields, gated by the entity's `:create` with the placement resolved in the caller's read scope. **Amended again (#657):** the lock is an inline square icon action in the field's join, matching Settings' own Restore to default, and a locked field is `readonly` rather than `disabled`, because a disabled input fires no click and leaves the value out of the tab order; focus does not claim the pen, since a locked field is a tab stop and tabbing past would otherwise blank both fields |
+| [ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it) | 2026-08-11 | Accepted | A create form shows the **stem** a generated name will carry, resolved in the browser from the classification the operator just chose, and writes the ordinal as the token `n`, because the ordinal is allocated against live siblings inside the create's own transaction and does not exist until the row does. A **draft-preview verb that mints and rolls back** is refused: its answer is provisional (another create can take the ordinal between the preview and the commit), and the rolled-back mint takes the same advisory lock real creates need, so a form that previewed on every keystroke would serialise the estate's creates behind a UI affordance. **Re-rendering the label rule in TypeScript** is refused outright, as the second implementation of an engine slice 3 swept 42 copies of. The label is therefore not previewed at all: its data map carries `Name` and `Ordinal`, so it is unknowable for the same reason. The placement bucket is shown beside the field as a PATH and never as a prefix inside it, since names became scoped to placement and a name no longer contains its ancestry. **Amended (#699):** a RENDER is not a mint, and both refusals were about allocating, so `:renderLabel` resolves the rule through the same tiers with the same one engine, writes the token where the ordinal goes, and takes no lock; the form now shows both values in LOCKED fields, gated by the entity's `:create` with the placement resolved in the caller's read scope. **Amended again (#657):** the lock is an inline square icon action in the field's join, matching Settings' own Restore to default, and a locked field is `readonly` rather than `disabled`, because a disabled input fires no click and leaves the value out of the tab order; focus does not claim the pen, since a locked field is a tab stop and tabbing past would otherwise blank both fields. **Amended again (#702):** READING the lowest free ordinal is not minting one either, so the form shows `display-3` rather than `display-n` and the token retires; the answer is provisional, so the form posts it back as the create's `expected_ordinal` and a create that would land a different number is a 409 naming the one that moved, located on `body.expected_name` so the form can tell it from a name collision. The NAME's shape stops being client-side, which closes the naming half of #695. **Amended again (#702 review):** the precondition binds the drafted NAME rather than the ordinal, because a name carries the stem and the suppression rule as well as the number and an ordinal claim was met by a create that landed `monitor-1` where the form showed `display-1`; and the draft now REFUSES the parentless bucket its create refuses, reversing this entry's own "the draft does not rehearse the all-scope gate", since the previewed ordinal reports which of that bucket's names are taken and the stem asked about is the caller's to choose |
 | [ADR-0105](#adr-0105-a-rule-reads-a-name-as-words-and-the-location-tier-ships-the-restatement-it-once-refused) | 2026-08-11 | Accepted | `words` joins the closed FuncMap (a run of `-` or `_` becomes one space, an edge run is dropped, everything else untouched), which is what finally lets a rule turn a kebab NAME into words: `title` alone leaves the separator standing, so the acronym dictionary of ADR-0099 could not be reached from a name by any spelling. Adding a function is a THREE-place act (FuncMap, AST allowlist, `FuncNames`) and the published set is now walked by a test rather than described. The global LOCATION rule ships as `{{title (words .Name)}}`, reversing the seed's own argument on its restatement half only: a restatement that RE-CASES and runs the operator's dictionary produces a string the read ladder's fallback cannot, where an echo could not, and the constant half ("Room" for every room) is still refused. The ladder's last rung stays verbatim, since this renders and STORES a label rather than prettifying on read; the estate keeps only the pins that say something a name cannot, nine at the time and **seven** after ADR-0103's reversal named the two floors for their designations |
+
+| [ADR-0106](#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask) | 2026-08-12 | Accepted | `location_type` adopts the **registry fork** (ADR-0095) rather than growing a third ownership model: the shipped rows seed `official: true`, the boot seed writes them authoritatively, and an operator's edit forks into `registry_shadow` with `:restore` discarding it. That is what makes a shipped value **withdrawable**, which insert-if-absent could never be, since it can add a default to every estate and remove one from none. The one-time backfill moves the edits estates already hold ON those rows into shadows first, telling an edit from a shipped value by the **audit trail** rather than by comparing columns against what this release ships, because a row holding a WITHDRAWN shipped value is indistinguishable from an edit by inspection and preserving it would defeat the withdrawal. A location type's property and metric **contracts stay writable** on a shipped row: a contract line is a row in its own table, nothing seeds one, and the official guard was dormant on this registry until the flip would have activated it. On the wire, a nullable OBJECT field clears by being **named in `update_mask`** with no value, since an object has no empty value to overload and an explicit null is indistinguishable from an omitted key after decoding; `name_rule` is the first and the convention is now the API's, not that field's. **Amended (#703):** the discriminator is REMOVED and the backfill is only the `official` flip, because with no release cut and no operator data there is no edit to preserve; the argument for it stands unchanged for the first release that has estates, which owes them a new migration rather than this one |
+| [ADR-0107](#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs) | 2026-08-12 | Accepted | `POST /components` accepts a `system` and INSERTS that system's primary membership from it, the same row `PUT /systems/{name}/members/{component}` writes under `system:update`, while the create asked for no system permission at all: the create was the cheap way around the membership route's gate. The create now requires `system:update` when the reference is present and resolves it in that scope, so **two paths writing one row cost one permission**. The accepted consequence is a live narrowing: `operator` holds `component:create` and no `system:*`, so an operator can no longer create a component INTO a system, which reads as the role line rather than collateral damage (an operator maintains components, a deploy tech builds out systems and their membership). Granting `operator` the permission was refused as a much larger grant than "may bind a membership while creating". A second permission conditional on the REQUEST is published like the platform tier's, as `x-omniglass-conditional-permission`, and enforced in the handler because middleware cannot see the body; the console hides the picker from a principal that cannot use it and the API's refusal names the permission, so the narrowing is met before the form is filled in. **Amended (#707 review):** the console gate read the PERMISSION only, so a principal holding `system:update` over an empty scope (a location-scoped `deploy` grant, since the cross-tier expansion is unbuilt, #10) was offered the picker and refused on submit, and the API answered "system not found" for a system that caller could `GET`; the gate now also requires a system carrying the scope-aware `update` action, and the bind takes `system:read` beside `system:update` so a readable row is refused by AUTHORITY (403) rather than by absence |
 
 ## Entries
 
@@ -4483,10 +4486,90 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
     one-way for the same reason: the way back discards what the operator typed and belongs on the
     button. The always-present button is what makes every state keyboard-reachable, and the section's
     tab order is asserted rather than inspected.
+- **Amendment (#702, 2026-08-12): reading the lowest free ordinal is not minting one, so the form
+  shows the real number and the create carries a precondition.** This decision's two refusals were
+  both about ALLOCATING, and #699 already applied that distinction to the label render. The same
+  distinction reaches the ordinal itself, which this decision missed: the number a create will take
+  is `pickOrdinal` over the sibling names in the placement bucket, and running that computation is a
+  read. It takes no `pg_advisory_xact_lock`, opens no write transaction and allocates nothing, so the
+  serialisation argument, the one that "would not have shown up in review", does not reach it. The
+  form therefore shows `display-3`, not `display-n`, and the token is retired from the codebase
+  (`OrdinalToken`, `nameMint.shape` and the console's `ORDINAL_TOKEN` are all gone rather than left
+  unused).
+  - **The provisional-answer argument stands, and is answered rather than avoided.** Another create
+    in the same bucket really can take the number in between, and hiding the number was one way to
+    cope with that; refusing is the better one. The form posts the ordinal it was shown as
+    `expected_ordinal` on the create, the create allocates under its own lock exactly as it always
+    did, and `confirmOrdinal` compares the two inside that transaction before anything is written. A
+    create that would land a different name is a **409** naming the number that moved and the name it
+    mints; the form re-reads the draft, shows the new name, and the operator submits again. A refusal
+    is honest where a silent difference is not, and a silent difference is precisely what the locked
+    field exists to prevent.
+  - **It is a number, never a name.** A locked field that posted a name would claim the pen and set
+    `name_generated` false, inverting the whole affordance, so the precondition is the ordinal and the
+    API refuses it (422) beside a supplied name, where nothing is allocated for it to be about. It is
+    a pointer with `minimum: 1` so absent and zero cannot both spell "no expectation", and an
+    operator-named draft answers with no ordinal at all, which is what makes "the field is locked" and
+    "there is a precondition to post" one fact rather than two.
+  - **The form has to tell this refusal from every other one,** because its recovery (re-read,
+    re-show, resubmit) is specific to it and a create's OTHER 409 is a name collision the operator has
+    to resolve themselves. Matching on the message would tie the console to server copy, so both
+    refusals a form acts on carry a `huma.ErrorDetail` locating them on the request field the recovery
+    touches: `body.expected_ordinal` for the conflict, carrying the ordinal that moved as its value,
+    and `body.name` for the four "the platform will not name this row" refusals. That is the RFC 9457
+    `errors` array the `ErrorModel` already publishes, so it costs no new wire shape.
+  - **The name's shape stops being client-side, which #699 explicitly left available.** That amendment
+    called folding the name into the same answer "available and cheap, and deliberately not taken
+    here", on the grounds that a stem resolves synchronously from a loaded registry. It is taken now:
+    the draft already resolves the stem, the mint and the bucket to render the label, so returning the
+    NAME costs nothing, and the form makes a round trip per picker change regardless. The cost it
+    removes is the drift this decision accepted, which is the naming half of
+    [#695](https://github.com/hyperscaleav/omniglass/issues/695). The consequence is that "the platform
+    will not name this row" is now an ANSWER from the server rather than a null the browser computed,
+    so the field's three states are unchanged but their source is one tier instead of two, and the
+    submit gate waits for that answer rather than flipping synchronously.
+  - **The draft takes the same scopes its create takes, in the same order,** because it now resolves
+    the same references: the parent decides which bucket the ordinal is read from, so it resolves in
+    the caller's `<kind>:create` scope, the set the create resolves it in. A location's draft
+    therefore takes a scope where it took none, and what that scope guards is the sibling read rather
+    than the render (ADR-0098's exclusion of placement from a location's label data map is untouched).
+    The draft does not rehearse the create's own all-scope gate on a ROOT create: it answers what a row
+    would be called, not whether the create is permitted, and the permission is the route's gate.
+
+    **Amended (#702 review), and that last sentence is REVERSED.** The draft refuses the parentless
+    bucket in the same set the create refuses it, because the answer is not inert: it carries the
+    lowest free ordinal, read from the bucket's sibling NAMES, so it reports which of that bucket's
+    names are taken. On the root bucket the probe is chosen rather than fixed, since writing a stem
+    into a forked type's name rule is ordinary
+    ([#703](https://github.com/hyperscaleav/omniglass/issues/703)) and needs only
+    `location_type:create`. Driven, the root draft answered `secret-region-2` to a principal whose
+    create in that bucket is a 403. The gate is a SCOPE, so it sits beside the route's permission gate
+    rather than contradicting it, and it is unconditional rather than only when a name is being
+    drafted, for the same reason the create's gate is.
+  - **Amended (#702 review): the precondition binds the NAME, not the ordinal.** The claim a locked
+    field makes is "the row will be called what I am displaying", and the ordinal is one of three
+    inputs to that rather than the claim itself: a name is the stem, the suppression rule and the
+    number together, so a claim on the number alone passes unchanged while the other two move. Driven:
+    a form drafts `display-1`, `PATCH /component-types/display {"stem":"monitor"}` lands, the create
+    posts `expected_ordinal: 1`, and the row is created as `monitor-1` with the precondition MET,
+    which is exactly the silent difference the locked field exists to prevent. Nothing races there,
+    and forking a type and rewriting what it mints is an ordinary operator act since #703, so the
+    console was shielded only by an accident (the stem is not in the draft body, so it is not in the
+    query key that would have re-asked) and a CLI or API caller was not shielded at all. `expected_name`
+    replaces `expected_ordinal`, and `confirmDraftedName` compares the string. Keeping the number and
+    adding the stem and the bucket beside it was refused: it is three fields where one already carries
+    all three by construction, and it would need extending again the next time a mint grows an input.
+    **It is still a precondition and not the name field:** the create leaves `name` empty, so the row
+    is still `name_generated` and the ordinal column is still the platform's, and posting it beside a
+    supplied name is the same 422 as before. The 409's `ErrorDetail` moves to `body.expected_name` and
+    carries the name the create WOULD have produced as its value, which is what the form shows next.
+    The drafted `ordinal` stays on the render's answer as an informational fact, since a surface that
+    shows where a value came from teaches the mechanism it operates.
 - **Tracked under** [#688](https://github.com/hyperscaleav/omniglass/issues/688), the eighth slice of
   epic [#657](https://github.com/hyperscaleav/omniglass/issues/657), amended by
-  [#699](https://github.com/hyperscaleav/omniglass/issues/699), its tenth, and by the affordance pass
-  folded into [#698](https://github.com/hyperscaleav/omniglass/pull/698).
+  [#699](https://github.com/hyperscaleav/omniglass/issues/699), its tenth, by the affordance pass
+  folded into [#698](https://github.com/hyperscaleav/omniglass/pull/698), and by
+  [#702](https://github.com/hyperscaleav/omniglass/issues/702).
 
 ### ADR-0105: A rule reads a name as words, and the location tier ships the restatement it once refused
 
@@ -4547,3 +4630,173 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   slice stays what it says it is.
 - **Tracked under** epic [#657](https://github.com/hyperscaleav/omniglass/issues/657), folded into
   [#698](https://github.com/hyperscaleav/omniglass/pull/698) after the rollup review.
+
+### ADR-0106: A location type is platform-owned, and a nullable object clears under the mask
+
+- **Date:** 2026-08-12 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/),
+  [core entities](/architecture/core-entities/), [API](/architecture/api/),
+  [location types](/guides/admin/location-types/)
+- **Context:** the boot seed's contract is documented as an authoritative upsert, and
+  `SeedLocationType` was `on conflict (name) do nothing`. A shipped default was therefore a one-way
+  ratchet: adding one reached every estate, removing one reached only new installs.
+  [#657](https://github.com/hyperscaleav/omniglass/issues/657) hit it live, shipping a `name_rule` on
+  `floor` and then reversing that in
+  [ADR-0103](#adr-0103-a-positional-name-is-allocation-order-and-the-real-world-designation-is-a-label),
+  at which point the withdrawn rule could not be taken back out of an estate that had booted in
+  between, and no `PATCH` could clear one either. The do-nothing seed was not an oversight: shipped
+  location types seeded `official: false`, so the rows belonged to the operator and an authoritative
+  re-seed would have stomped their edits. The ratchet was the symptom; the ownership model was the
+  cause.
+- **Decision (ownership):** `location_type` adopts the registry-fork primitive
+  ([ADR-0095](#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)),
+  the second registry to do so after `component_type`, rather than growing a third mechanism beside
+  it. Shipped rows seed `official: true` and the platform owns them, so the seed writes them with
+  `ON CONFLICT DO UPDATE` and a withdrawal is just another write. An operator still shapes their own
+  place vocabulary: an edit of a shipped type stores their whole version of its mutable columns as a
+  shadow keyed on the row's own uuid, every read resolves the shadow over the row, and
+  `POST /location-types/{id}:restore` discards it. One uuid and one name per logical row either way,
+  so no foreign key, no URL and no audit row learns about the fork. The rejected alternative was the
+  `default_template` / `template` column pair the global label rules use, which is right for a table
+  of three rows with no operator-created siblings and wrong here: it doubles every future column on a
+  registry that already has five mutable ones, and it answers only the columns somebody thought to
+  split.
+- **Decision (what the image carries):** the fork's whole-row rule is per registry, not per column
+  name. `allowed_parent_types` is IN the image although it names other types, because a
+  `location_type` is flat: it has no parent link, and the placement constraint is a fact the row
+  states about itself, one an operator legitimately reshapes. Holding it official would leave a fork
+  unable to say the thing the registry exists to say.
+- **Decision (the migration's discriminator):** estates already carry operator edits on the shipped
+  rows themselves, so a one-time backfill moves them into shadows before the flip. Telling an edit
+  from a shipped value is the whole difficulty, and it is NOT done by comparing the row against what
+  this release ships. That comparison cannot see the case this ADR exists for: a row holding a value a
+  previous release shipped and this one withdrew differs from today's YAML and reads exactly like an
+  edit, so preserving it would defeat the withdrawal, and a row edited to a value a later release
+  happens to ship has the mirror problem. The **audit trail** decides instead, because it is a record
+  rather than an inference: every operator write of a registry row writes its audit row in the same
+  transaction, so a shipped row with no `create` and no `update` of its own has never been touched and
+  whatever it holds is what some release shipped. `create` counts as well as `update` for a case that
+  is reachable today, an operator deleting a shipped type and creating their own under the same name.
+  The known imprecision is biased toward preserving: a contract write audits against `location_type`
+  too, so one addressed by uuid looks like an edit here and leaves the row holding a shadow of the
+  values it already had, which reads identically and costs a `:restore`. The reverse mistake,
+  reverting an edit, is not recoverable from the console at all.
+
+  **Amended (#703), and the discriminator is REMOVED.** Everything above answers "how do you tell an
+  operator's edit from a shipped value", and the architect's ruling of 2026-08-12 is that there is no
+  such edit to tell apart: Omniglass has cut no release and holds no operator data, so no upgraded
+  estate exists and the capture was preserving rows that do not. A review then found the
+  discriminator wrong in two ways that both lose data silently, and its `create` leg exercised by
+  nothing, which is what a premise that never occurs does to the code written for it. The backfill is
+  now one statement, `set official = true` on the four shipped names, and its test asserts the
+  migration writes **no** shadow, so the machinery cannot grow back quietly as a fix for a problem
+  that was ruled out of existence. **This is correct only while that premise holds.** The first real
+  release creates estates carrying operator data, and from then on a change of ownership on a shipped
+  row owes those estates an answer to the question this bullet asks, in a NEW migration reasoning
+  about their rows: this one has already run, and it reasons about nothing. Whoever ships that
+  release should read the paragraphs above as the standing argument, still sound; only the machinery
+  went away.
+- **Decision (the wire):** a nullable OBJECT field clears by being named in `update_mask` with no
+  value, reusing the primitive from
+  [ADR-0091](#adr-0091-an-update_mask-says-which-fields-a-patch-writes) rather than inventing a
+  per-type spelling. The house three-state string sentinel does not generalize: `""` clears a string
+  because a string has an empty value to overload, and an object has none (`{}` is a rule with default
+  fields, not the absence of one). An explicit `null` cannot carry the intent either, since it decodes
+  to the same nil as an omitted key. **This is the convention for every nullable object field that
+  follows**, so it is recorded on the API page and not only in the handler.
+- **Consequence (a capability that had to be defended):** flipping the shipped rows to `official`
+  activates a guard that had been dormant on this registry, since no `location_type` row was official
+  before. `SetLocationTypeProperty` and its three siblings would have started refusing the four types
+  an estate actually uses, silently withdrawing the contract editor for them. They no longer consult
+  the official flag: a contract line is a row in its own table rather than a column of the registry
+  row the fork covers, and **nothing seeds one**, so every line in those tables is an operator's
+  already. An ownership change may not take a working capability away as a side effect.
+- **Consequence (an expectation inverts):** `internal/seed/seed_test.go` asserted "official
+  location_types = 0, a shipped location type is operator-owned". It now asserts 4 and guards the
+  opposite claim. The same inversion lands on the wire test and on the console, where origin reads
+  three ways (shipped, yours, overridden) exactly as it does on component types, and the blade's
+  destructive slot offers **Restore shipped** on a forked row.
+- **What this does NOT change:** the `label_rule` table's `default_template` / `template` pair stays
+  as it is ([ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)). It is one
+  row per labelled entity kind with no operator-created rows, where a per-column split is the natural
+  fit and an overlay table would be more machinery than three rows are worth. A shipped row still
+  cannot be DELETED, forked or not, and an operator-created location type is untouched by any of
+  this: it is written in place, it never carries a shadow, and `:restore` has nothing to give it back.
+- **Tracked under** [#703](https://github.com/hyperscaleav/omniglass/issues/703) and
+  [#692](https://github.com/hyperscaleav/omniglass/issues/692).
+
+### ADR-0107: A create that writes a membership costs what the membership route costs
+
+- **Date:** 2026-08-12 | **Status:** Accepted | **Pages:**
+  [identity and access](/architecture/identity-access/), [API](/architecture/api/),
+  [core entities](/architecture/core-entities/)
+- **Context:** `POST /components` accepts a `system` reference, and what it does with it is insert the
+  component's **primary membership** into `system_member`. That is the same row
+  `PUT /systems/{name}/members/{component}` writes, and that route is gated on the `system:update`
+  permission and resolves its system in the `system:update` scope. The create asked for neither: the
+  reference resolved existence-only until
+  [#700](https://github.com/hyperscaleav/omniglass/issues/700) made it resolve in `system:read`, and
+  the route required `component:create` alone. A principal holding `component:create` and no system
+  permission at all could therefore write a membership through the create that the membership route
+  refused it, which makes the gate on the membership route decorative rather than binding.
+- **Decision:** the create's `system` reference resolves in the caller's **`system:update` scope**,
+  and the route requires the **`system:update` permission** when the reference is present. Two paths
+  that write one row cost one permission. The scope half is not implied by the permission half and is
+  the one a test has to drive separately: a principal holding `system:update` on one system and the
+  all-scoped viewer floor beside it may READ every system in the estate, and before this could bind
+  any of them on a create.
+- **Decision (where the check lives):** in the handler, not the middleware, because the condition is a
+  **body field** and Huma's operation middleware cannot see the body. To keep the generated spec a
+  faithful map of what a route enforces rather than of what it always enforces, the second permission
+  is **published** as an `x-omniglass-conditional-permission` extension beside the primary
+  `x-omniglass-permission` stamp, exactly as a platform-tier write publishes
+  `x-omniglass-platform-permission`, and it joins the route-derived permission universe the roles view
+  and the docs lint both read. Reusing the existing stamp mechanism was preferred to a hand-written
+  note in prose, which is the drift the generate-first rule exists to prevent.
+- **Consequence (accepted, and the reason it is not a bug):** `operator` holds
+  `component:create,update,rename,move` and **no `system:*` permission at all**; `deploy` holds
+  `system:create,update,rename,move` beside the same component set. So an operator can no longer
+  create a component INTO a system. That is the role line the seed already draws rather than damage
+  from this change: an operator maintains components, a deploy tech builds out systems and their
+  membership. The alternative, granting `operator` the `system:update` permission, was refused as a
+  much larger grant than "may bind a membership while creating a component": it would also let an
+  operator edit systems generally, which is exactly the line the two roles are drawn along. The
+  recovery needs no grant at all, since creating the component and binding it are separately
+  authorized acts: the operator creates it, and whoever holds the permission adds it after.
+- **Consequence (the narrowing has to be met before the form is filled in):** a live narrowing
+  discovered as a 403 after an operator has filled in a create form is the outcome
+  [#699](https://github.com/hyperscaleav/omniglass/issues/699)'s rule exists to prevent, so the
+  console does not offer the system picker to a principal that cannot use it, and the slot explains
+  itself and names the permission rather than vanishing. The API's refusal names `system:update` too,
+  which is what the CLI prints, because a refusal an operator cannot act on sends them to an
+  administrator with no ask.
+
+  **Amended (#707 review): that claim was FALSE as shipped, on the layer this decision itself calls
+  out.** The console gate read the `system:update` **permission** and nothing else, while
+  authorization is two layers and this decision moved BOTH. A principal holding the permission over
+  no system at all was offered the picker, filled the form in, and was refused on submit, which is
+  the exact outcome the paragraph promised to prevent. That principal is not exotic: a
+  location-scoped `deploy` grant resolves `system:update` to the empty set, because
+  `applicableKinds("system")` is `{"system"}` alone and the cross-tier expansion is unbuilt
+  ([#10](https://github.com/hyperscaleav/omniglass/issues/10)), and devseed ships one as
+  `tech-east`. The gate now also requires a system carrying the `update` **action**, the server's own
+  per-row answer computed from the same per-action scope the gateway enforces, offers only those
+  systems, and names whichever of the two layers is missing. The console filters data rather than
+  resolving a scope in the browser, which it must not do.
+
+  **Amended (#707 review): the API's refusal denied the row's existence.** The bind resolved in the
+  `system:update` scope alone, so a system outside it came back as the non-disclosing
+  `ErrSystemNotFound` and the route answered "system not found" (422) for a row the same caller could
+  `GET`. The bind now takes `system:read` as well: update still decides whether it happens, read
+  decides what the refusal may say. Out of the read scope is the same non-disclosing 422 as before,
+  so nothing new is disclosed; inside it, the refusal is a **403 naming the scope**, which discloses
+  nothing either, since that caller can read the row.
+- **What this does NOT change:** the LOCATION reference on the same create still resolves in
+  `location:read`, because a location is read and rendered into the label rather than written
+  ([ADR-0100](#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate),
+  #700). The two references are deliberately not symmetric: what decides the action a placement
+  reference resolves for is what the write DOES with it. The `:renderLabel` draft route also keeps
+  `system:read`, since it renders a preview and writes nothing, so a preview can still be served for a
+  create the platform will refuse on the membership; the console closes that gap by not offering the
+  picker (now on both layers, per the amendment above), and a full authorization rehearsal in the
+  draft is its own question.
+- **Tracked under** [#707](https://github.com/hyperscaleav/omniglass/issues/707).

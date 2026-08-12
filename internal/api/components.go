@@ -66,7 +66,7 @@ type createComponentInput struct {
 		Name        string  `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type."`
 		DisplayName string  `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
 		Parent      *string `json:"parent,omitempty" doc:"Parent component name; omit for a root component"`
-		System      *string `json:"system,omitempty" doc:"Primary system name this component belongs to"`
+		System      *string `json:"system,omitempty" doc:"Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone."`
 		Location    *string `json:"location,omitempty" doc:"Location name this component is placed at"`
 		// Product is required: every component is an instance of a product (the
 		// classification floor). It stays a pointer rather than a plain
@@ -74,6 +74,16 @@ type createComponentInput struct {
 		// message (naming the generics) instead of Huma's generic
 		// missing-required-field text.
 		Product *string `json:"product,omitempty" doc:"Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled."`
+		// ExpectedName is the create form's precondition (#702, and its
+		// review). It carries the drafted NAME rather than the ordinal,
+		// because the name is what the form showed and what the operator is
+		// owed: it holds the stem, the suppression and the number together, so
+		// a type edit under the open form invalidates the claim where a number
+		// would have passed. It is still a precondition and NOT the name field:
+		// the create leaves name empty, so the row stays name_generated and the
+		// pen never moves. A pointer, so "absent" is the only spelling of no
+		// expectation.
+		ExpectedName *string `json:"expected_name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The name a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."`
 	}
 }
 
@@ -125,6 +135,41 @@ type renameComponentInput struct {
 // tests) that skips it. Names the three generics so the message is
 // immediately actionable.
 const errProductRequired = "a component must be an instance of a product; name one, or use a generic (generic-device, generic-app, generic-service) until a real product is modeled"
+
+// ErrSystemBindNeedsUpdate is the 403 a component create returns when it names a
+// system and the caller does not hold system:update (#707). The system on a
+// create is not a field on the component, it is the component's primary
+// MEMBERSHIP, the row PUT /systems/{name}/members/{component} writes under
+// system:update, so the create cannot be the cheaper way to write it.
+//
+// It names the permission rather than answering a bare "forbidden" because this
+// message is what the CLI prints and what the console falls back to: a refusal an
+// operator cannot act on sends them to an administrator with no ask. The second
+// sentence is the recovery that does not need a grant at all, since creating the
+// component and binding it later are separately authorized acts.
+//
+// Exported because the CLI's own test asserts this message reaches an operator's
+// stdout. A copy of the string over there would go on passing while the API's
+// wording drifted, which is the one thing that test exists to catch.
+const ErrSystemBindNeedsUpdate = "creating a component into a system writes that system's membership, which requires system:update (the same permission PUT /systems/{name}/members/{component} requires). Create the component without a system, or ask for system:update."
+
+// ErrSystemBindOutOfScope is the 403 for the OTHER half of the same gate: the
+// caller holds system:update, but not over this system (#707 review). The
+// permission and the scope are two independent layers and both are enforced, so
+// both have to be sayable.
+//
+// It exists because the refusal it replaces was a lie. The bind used to resolve
+// in the update scope alone, so a system outside it came back as the
+// non-disclosing "system not found" (422), which a caller that had just read
+// that system on the same screen could only read as a broken platform. A
+// principal with a location-scoped deploy grant is exactly that caller: the
+// cross-tier expansion is unbuilt (#10), so its system:update scope is empty
+// while its viewer floor reads every system in the estate.
+//
+// Naming the scope discloses nothing new, because this branch is reached only
+// after the reference resolved inside the caller's own system:read scope: a
+// caller that cannot see the row still gets the not-found.
+const ErrSystemBindOutOfScope = "creating a component into a system writes that system's membership, and this system is outside the system:update scope your grants resolve to (the same scope PUT /systems/{name}/members/{component} resolves in). It is not missing: you can read it, but not write its membership. Create the component without a system, or ask for a system:update grant covering it."
 
 // registerComponentRoutes wires the component CRUD surface, on the same pattern
 // as locations and systems.
@@ -179,16 +224,22 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		return &componentOutput{Body: toComponentBody(c)}, nil
 	})
 
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID:   "create-component",
 		Method:        http.MethodPost,
 		Path:          "/components",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a component",
-		Description:   "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create; the location and system references resolve within the caller's location:read and system:read scopes, because the label this stores is rendered from them, and one outside those scopes is refused (422) exactly as :renderLabel refuses to preview it.",
-	}, "component", "create"), func(ctx context.Context, in *createComponentInput) (*componentOutput, error) {
+		Description:   "Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.",
+	}, "component", "create"), "system", "update"), func(ctx context.Context, in *createComponentInput) (*componentOutput, error) {
 		if in.Body.Product == nil || *in.Body.Product == "" {
 			return nil, huma.Error422UnprocessableEntity(errProductRequired)
+		}
+		// The membership gate (#707), checked here and not in middleware because
+		// middleware cannot see the body: a create that names no system writes no
+		// membership and costs component:create alone.
+		if in.Body.System != nil && *in.Body.System != "" && !a.allows(ctx, "system", "update") {
+			return nil, huma.Error403Forbidden(ErrSystemBindNeedsUpdate)
 		}
 		c, err := gw.CreateComponent(ctx, actorID(ctx), storage.ComponentSpec{
 			Name:         in.Body.Name,
@@ -197,7 +248,9 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			SystemName:   in.Body.System,
 			LocationName: in.Body.Location,
 			ProductName:  in.Body.Product,
-		}, a.scopeFor(ctx, "component", "create"), a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "system", "read"))
+			ExpectedName: in.Body.ExpectedName,
+		}, a.scopeFor(ctx, "component", "create"), a.scopeFor(ctx, "location", "read"),
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
@@ -349,6 +402,9 @@ func mapComponentErr(err error) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
 	}
+	if ordErr, ok := mapDraftedNameErr(err); ok {
+		return ordErr
+	}
 	switch {
 	case errors.Is(err, storage.ErrComponentNotFound):
 		return huma.Error404NotFound("component not found")
@@ -368,6 +424,11 @@ func mapComponentErr(err error) error {
 		return huma.Error422UnprocessableEntity("parent component not found")
 	case errors.Is(err, storage.ErrComponentCycle):
 		return huma.Error422UnprocessableEntity("cannot move a component under itself or a descendant")
+	// Before ErrSystemNotFound, and a 403 rather than a 422: the reference is
+	// well formed and names a row the caller can read, so what is wrong is the
+	// caller's authority over it, not the request body.
+	case errors.Is(err, storage.ErrSystemBindForbidden):
+		return huma.Error403Forbidden(ErrSystemBindOutOfScope)
 	case errors.Is(err, storage.ErrSystemNotFound):
 		return huma.Error422UnprocessableEntity("system not found")
 	case errors.Is(err, storage.ErrLocationNotFound):
@@ -375,7 +436,7 @@ func mapComponentErr(err error) error {
 	case errors.Is(err, storage.ErrProductNotFound):
 		return huma.Error422UnprocessableEntity("product not found")
 	case errors.Is(err, storage.ErrComponentTypeNoStem):
-		return huma.Error422UnprocessableEntity("this product's component_type has no stem to generate a name from; supply a name explicitly, or fix the component_type registry")
+		return errNoGeneratedName("this product's component_type has no stem to generate a name from; supply a name explicitly, or fix the component_type registry")
 	default:
 		return huma.Error500InternalServerError("component operation failed")
 	}

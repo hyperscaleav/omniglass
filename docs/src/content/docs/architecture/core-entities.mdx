@@ -80,7 +80,8 @@ each role carrying an **impact**. See [implementation status](/architecture/stat
   located at a location and **conforms to a `standard`**, the blueprint it is built against; the
   pointer is optional, mirroring `component.product_id`.
 - A **location** ties systems and components to a physical place, classified by `location_type`, its
-  only shape-definer (no template). A starter type set ships seeded, operator-owned
+  only shape-definer (no template). A starter type set ships seeded and platform-owned, an
+  operator's change to one held as a fork over it
   ([the seed model](#the-seed-model-forked-templates-versus-canonical-catalogs)), read at
   `GET /location-types` to feed the location form's type picker. Each type carries an `icon` (a glyph
   key like `building`; unknown keys fall back to `map-pin`) rendered in the tree, and
@@ -356,6 +357,13 @@ ordinary (the spare on the shelf).
 *without a system in hand*: a default, never a rule overriding a caller who named a system. The
 first membership takes it automatically; a partial unique index forbids a second primary.
 
+A component create naming a `system` writes exactly this row, which is why it **costs what the
+membership route costs**: `system:update`, the same permission and the same scope as
+`PUT /systems/{name}/members/{component}`, and not the `component:create` that admits the rest of the
+form ([ADR-0107](/architecture/decisions/#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs)).
+An `operator` holds no system permission, so it creates components and a `deploy` tech binds them
+into systems.
+
 Membership **cascades from both ends**, and does not restrict the component the way
 `system_role_assignment` does: that restrict is load-bearing (deleting a filler would silently break
 health); a role-less membership is not worth blocking a delete over.
@@ -399,7 +407,7 @@ assigned is under-staffed today); health adds whether the assigned components ca
 
 Shipped content is two kinds, never conflated:
 
-- **Example content** (a `standard`, a `location_type`) is created by **forking an in-code template**
+- **Example content** (a `standard`) is created by **forking an in-code template**
   ([#317](https://github.com/hyperscaleav/omniglass/issues/317); shipped boot seeds stand in today).
   The fork is **one-time, no inheritance**: nothing points back at the template, so it can improve
   per release without touching a tenant. What lands is an **operator-owned** row (`official: false`),
@@ -410,7 +418,11 @@ Shipped content is two kinds, never conflated:
   and `command_type` registries) is the shared namespace a driver maps onto, identical install to
   install: seeded `official: true` through an **authoritative upsert** (`ON CONFLICT DO UPDATE`),
   never written by an operator. The classification catalogs (`vendor`, `driver`, `component_type`,
-  `product`) ride that path today.
+  `product`) ride that path today, and `location_type` joined them in
+  [ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask):
+  an estate still shapes its own place vocabulary, through the
+  [registry fork](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)
+  rather than by owning the row, which is what lets a release WITHDRAW a shipped value.
 
 **Forking applies to template -> row, never to classifier -> instance**: a system conforms, never
 forks.
@@ -709,18 +721,38 @@ write's own audit event (see what re-mints a name below, which is one rule acros
 `:rename` freezes it; `:resetName` hands the pen back and regenerates from the component's current
 facts, gated by the same `component:rename` permission `:rename` uses.
 
-**The console can ask for a generated name, and shows what it will be**
+**The console can ask for a generated name, and shows the one the row will get**
 ([ADR-0104](/architecture/decisions/#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)).
 A create form asks for the classification and the placement first, since those are what the rules
-read, and then renders the SHAPE of the name a blank field will be filled with: the resolved stem,
-with the ordinal written as the token `n` rather than a digit, because the ordinal is allocated
-against live siblings inside the create's own transaction and does not exist until the row does. There
-is deliberately no draft-preview verb that mints and rolls back: its answer would be provisional
-(another create can take the number in between), and the rolled-back mint takes the advisory lock real
-creates need. The label is not previewed at all, since its data map carries the row's own `Name` and
-`Ordinal`. The placement bucket is shown beside the field as a path, never as a prefix inside it: a
-name is unique within its placement rather than across the estate, so it no longer carries its
-ancestry.
+read, and then shows the name a blank field will be filled with, drafted by the server through
+`POST /components:renderLabel` (and its system and location twins): the resolved stem and the lowest ordinal free in that placement
+bucket right now, `display-3` rather than `display-n`. Reading that number is not minting one, so the
+draft still takes no advisory lock, opens no write transaction and allocates nothing; a form may ask
+on every picker change without joining the queue every create in the estate is waiting in. There is
+deliberately still no draft verb that MINTS and rolls back, for the reason it never had one.
+
+The number is therefore true rather than reserved, and the create is where that is settled. The form
+posts the drafted NAME back as `expected_name`, the create allocates under its own lock exactly as it
+always did, and one that would stamp a different name is refused with a **409** naming what it would
+have stamped. The form re-reads the draft, shows the new name, and the operator submits again. A
+refusal is honest where a silent difference is not, and it is the only outcome the locked field's
+promise admits.
+
+The name and not the ordinal, because the name is the whole claim: it carries the stem, the
+suppression rule and the number, so a type edited under an open form invalidates it by construction
+where a number alone would have passed and landed `monitor-1` under a field showing `display-1`. And
+it is still a precondition rather than the name field: the create leaves `name` empty, so the row is
+`name_generated` and the platform still owns the number. Posting it beside a name an operator typed
+is a **422**, since nothing is allocated on that path for the expectation to be about.
+
+A draft answers only for a bucket the caller could create in. Omitting the parent names the
+parentless bucket, which every create refuses without an all-scoped grant, so the draft refuses it
+with the same **403**: the previewed ordinal is read from the bucket's sibling names, so answering
+would report which of that bucket's names are taken, for whatever stem the caller put in a type's
+name rule.
+
+The placement bucket is shown beside the field as a path, never as a prefix inside it: a name is
+unique within its placement rather than across the estate, so it no longer carries its ancestry.
 
 **The ordinal is stored, and it says who owns the name**
 ([ADR-0097](/architecture/decisions/#adr-0097-allocation-tests-the-name-it-would-mint-rather-than-reading-the-ordinal-it-stored)).

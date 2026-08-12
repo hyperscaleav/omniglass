@@ -13,8 +13,8 @@ import (
 
 // The permission lint (#447), both directions. Forward: a permission token in
 // current-tense docs prose must gate at least one route (the
-// x-omniglass-permission and x-omniglass-platform-permission stamps in the
-// generated OpenAPI document), under the real rbac matching rules, wildcards
+// x-omniglass-permission, x-omniglass-platform-permission and
+// x-omniglass-conditional-permission stamps in the generated OpenAPI document), under the real rbac matching rules, wildcards
 // and the :read floor included. Inverse: every grant seeded in roles.yaml must
 // gate at least one route, so the pedagogical Roles view can never teach a
 // permission that does nothing. Fence-aware: a fenced permission is target
@@ -28,8 +28,9 @@ func permissionStamps() ([][]string, error) {
 	}
 	var doc struct {
 		Paths map[string]map[string]struct {
-			Permission         string `json:"x-omniglass-permission"`
-			PlatformPermission string `json:"x-omniglass-platform-permission"`
+			Permission            string `json:"x-omniglass-permission"`
+			PlatformPermission    string `json:"x-omniglass-platform-permission"`
+			ConditionalPermission string `json:"x-omniglass-conditional-permission"`
 		} `json:"paths"`
 	}
 	if err := json.Unmarshal(b, &doc); err != nil {
@@ -39,7 +40,7 @@ func permissionStamps() ([][]string, error) {
 	var stamps [][]string
 	for _, ops := range doc.Paths {
 		for _, op := range ops {
-			for _, p := range []string{op.Permission, op.PlatformPermission} {
+			for _, p := range []string{op.Permission, op.PlatformPermission, op.ConditionalPermission} {
 				if p == "" || seen[p] {
 					continue
 				}

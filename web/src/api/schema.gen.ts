@@ -423,7 +423,7 @@ export interface paths {
         put?: never;
         /**
          * Create a component
-         * @description Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create; the location and system references resolve within the caller's location:read and system:read scopes, because the label this stores is rendered from them, and one outside those scopes is refused (422) exactly as :renderLabel refuses to preview it.
+         * @description Creates a component, optionally under a parent (a root needs an all-scoped grant), bound to a system and a location, and classified by a product (required; naming a generic is fine until a real product is modeled). Gated by component:create. The location reference resolves within the caller's location:read scope, because the label this stores is rendered from it, and one outside that scope is refused (422) exactly as :renderLabel refuses to preview it. Naming a system additionally requires system:update, and resolves within that scope, because the component's primary membership is inserted from it: it is the same row the membership route writes, so the two paths cost the same permission. A system outside that scope is refused with a 403 naming it when the caller may read the system (denying its existence to someone who can GET it would be a lie) and with the non-disclosing 422 when the caller may not.
          */
         post: operations["create-component"];
         delete?: never;
@@ -938,8 +938,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Render the label a component create would store
-         * @description Renders the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is written as the token "n", because it is allocated against live siblings inside the create's own transaction and does not exist until the row does. Omitting name renders the label the platform's own generated name would produce, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the location and system refs resolve within the caller's location:read and system:read scopes, because the rendered string can carry their labels.
+         * Draft the name and label a component create would store
+         * @description Drafts the name and the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is READ (the lowest free number among the live siblings in the placement bucket) rather than allocated. That answer is provisional, so a form posts the NAME back as expected_name on the create and is refused (409) rather than silently renamed if another create takes the number or the type's stem moves first. Omitting name drafts the name the platform would mint, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the parent resolves within the caller's component:create scope and the location and system refs within location:read and system:read, because the rendered string can carry their labels. Omitting parent is the parentless bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403): a form must not preview a bucket its create declines, and the previewed ordinal reports which names that bucket already holds.
          */
         post: operations["render-component-label"];
         delete?: never;
@@ -1235,7 +1235,7 @@ export interface paths {
         head?: never;
         /**
          * Update a location type
-         * @description Patches a location_type's display_name, icon, allowed parents, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by location_type:update.
+         * @description Patches a location_type's display_name, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update.
          */
         patch: operations["update-location-type"];
         trace?: never;
@@ -1270,13 +1270,13 @@ export interface paths {
         get?: never;
         /**
          * Declare a metric on a location type
-         * @description Declares a catalog metric on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a metric the catalog does not know is a 422. Gated by location_type:update.
+         * @description Declares a catalog metric on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a metric the catalog does not know is a 422. Gated by location_type:update.
          */
         put: operations["set-location-type-metric"];
         post?: never;
         /**
          * Withdraw a metric from a location type
-         * @description Removes one line from a custom location type's contract; locations of the type keep any samples the series already holds, now off-contract. A metric the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.
+         * @description Removes one line from a location type's contract, a shipped (official) type's included, since nothing seeds a contract line; locations of the type keep any samples the series already holds, now off-contract. A metric the type does not declare is a 404, and so is an unknown type. Gated by location_type:delete.
          */
         delete: operations["delete-location-type-metric"];
         options?: never;
@@ -1314,15 +1314,35 @@ export interface paths {
         get?: never;
         /**
          * Declare a property on a location type
-         * @description Declares a catalog property on a custom location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). Official location types are read-only (422); an unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.
+         * @description Declares a catalog property on a location type, or revises the declaration in place (the line is addressed by name, so the write is idempotent). A shipped (official) type's contract is writable too: a contract line is a row in its own table and nothing seeds one, so every line is an operator's. An unknown type is a 404 and a property the catalog does not know is a 422. Gated by location_type:update.
          */
         put: operations["set-location-type-property"];
         post?: never;
         /**
          * Withdraw a property from a location type
-         * @description Removes one line from a custom location type's contract; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and an official type is read-only (422). Gated by location_type:delete.
+         * @description Removes one line from a location type's contract, a shipped (official) type's included, since nothing seeds a contract line; locations of the type keep any value they set for it, now off-contract. A property the type does not declare is a 404, and so is an unknown type. Gated by location_type:delete.
          */
         delete: operations["delete-location-type-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/location-types/{id}:restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore a location type's shipped values
+         * @description Discards your fork of a shipped location_type, so reads return the values this release ships, including a rule a later release WITHDREW. 409 when the row carries no fork of yours. Gated by location_type:update, the same permission that took the fork: restoring is undoing your own edit, not deleting a row.
+         */
+        post: operations["restore-location-type"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1654,8 +1674,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Render the label a location create would store
-         * @description The location tier of :renderLabel on components. Renders the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create. No placement scope is injected because a location's label rule reads no other estate row.
+         * Draft the name and label a location create would store
+         * @description The location tier of :renderLabel on components. Drafts the name and the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create; the parent resolves within the caller's location:create scope, because a location's two placement buckets are under a parent or at the root and that is where the ordinal is read from. Omitting parent is the ROOT bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403) rather than reporting which names the estate root already holds.
          */
         post: operations["render-location-label"];
         delete?: never;
@@ -3510,8 +3530,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Render the label a system create would store
-         * @description The system tier of :renderLabel on components. Renders the label a system create would stamp, allocating nothing. Omitting name renders the label the platform's generated name would produce and refuses (422) an unclassified system, the same refusal a nameless create gives, since the stem lives on the system_type. Gated by system:create; the location ref resolves within the caller's location:read scope, because a system's label can carry its location's.
+         * Draft the name and label a system create would store
+         * @description The system tier of :renderLabel on components. Drafts the name and the label a system create would stamp, allocating nothing: the ordinal is read from the placement bucket and the drafted name is posted back as expected_name on the create. A system suppresses the first ordinal in a bucket, so the first boardroom in a room drafts as boardroom and the second as boardroom-2. Omitting name drafts the name the platform would mint and refuses (422) an unclassified system, the same refusal a nameless create gives, since the stem lives on the system_type. Gated by system:create; the parent resolves within the caller's system:create scope and the location ref within location:read, because a system's label can carry its location's. Omitting parent is the parentless bucket, refused (403) without an all-scoped create grant, exactly as the create refuses it.
          */
         post: operations["render-system-label"];
         delete?: never;
@@ -4139,6 +4159,8 @@ export interface components {
             readonly $schema?: string;
             /** @description What an operator reads; the name is the address */
             display_name?: string;
+            /** @description The name a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422. */
+            expected_name?: string;
             /** @description Location name this component is placed at */
             location?: string;
             /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type. */
@@ -4147,7 +4169,7 @@ export interface components {
             parent?: string;
             /** @description Product (catalog SKU) this component is an instance of, by name or uuid. Required: use a generic (generic-device, generic-app, generic-service) until a real product is modeled. */
             product?: string;
-            /** @description Primary system name this component belongs to */
+            /** @description Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone. */
             system?: string;
         };
         CreateComponentTypeInputBody: {
@@ -4303,6 +4325,8 @@ export interface components {
             readonly $schema?: string;
             /** @description What an operator reads; the name is the address */
             display_name?: string;
+            /** @description The name a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the location_type's name rule moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422. */
+            expected_name?: string;
             /** @description The location_type, by name or uuid (campus, building, ...) */
             location_type: string;
             /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule. */
@@ -4520,6 +4544,8 @@ export interface components {
             readonly $schema?: string;
             /** @description What an operator reads; the name is the address */
             display_name?: string;
+            /** @description The name a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the system_type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422. */
+            expected_name?: string;
             /** @description Location name this system is placed at */
             location?: string;
             /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem. */
@@ -4636,8 +4662,15 @@ export interface components {
              * @example /api/v1/schemas/DraftLabelOutputBody.json
              */
             readonly $schema?: string;
-            /** @description The label the create would store, with the token "n" standing where the ordinal will go. Empty means no label is stored and the surface falls back to the name. */
+            /** @description The label the create would store. Empty means no label is stored and the surface falls back to the name. */
             label: string;
+            /** @description The name the create would stamp: the one you supplied, or the one the platform would mint. Generated names carry the ordinal that is free in the placement bucket right now. */
+            name: string;
+            /**
+             * Format: int64
+             * @description The ordinal that name was minted from, absent when you supplied the name (an operator-named row carries no ordinal). Informational: what a form posts back as the create's precondition is the NAME above, since that carries the stem and the suppression rule as well as this number.
+             */
+            ordinal?: number;
             /** @description The label rule that produced it, resolved through the same tiers the create uses. Empty means no tier carries a rule for this classification. */
             rule: string;
         };
@@ -5658,6 +5691,8 @@ export interface components {
             readonly $schema?: string;
             allowed_parent_types: string[] | null;
             display_name: string;
+            /** @description True when this shipped row carries changes of yours overriding it. Restore discards them */
+            forked: boolean;
             icon: string;
             /** @description The location type's uuid, the stable handle that survives a rename */
             id: string;
@@ -5667,6 +5702,7 @@ export interface components {
             name: string;
             /** @description How the platform NAMES locations of this type; absent means an operator names every one of them */
             name_rule?: components["schemas"]["NameRuleBody"];
+            /** @description True for a row this release ships. A shipped row is never written by an operator: an edit forks it */
             official: boolean;
         };
         LocationTypeMetricBody: {
@@ -6246,8 +6282,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The location this component will sit at, by name or uuid. Resolved within the caller's location:read scope: a location out of scope is refused, never rendered. */
             location?: string;
-            /** @description The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token "n"; supply it to render the label an operator-named row would carry, which has no ordinal at all. */
+            /** @description The name the row will carry. Omit it to draft the name and label the platform would produce; supply it to draft the label an operator-named row would carry, which has no ordinal at all. */
             name?: string;
+            /** @description The parent component, by name or uuid. Part of the placement bucket a generated name's ordinal is read from, so a draft that omits it previews the wrong bucket. Resolved within the caller's component:create scope, the same set the create resolves it in. */
+            parent?: string;
             /** @description The product this component is an instance of, by name or uuid; the classification both a label rule and a generated name are resolved from */
             product: string;
             /** @description The system this component will belong to, by name or uuid. Resolved within the caller's system:read scope. */
@@ -6262,8 +6300,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The location_type this location is classified by, by name or uuid */
             location_type: string;
-            /** @description The name the row will carry. Omit it to render the label the platform's own generated name would produce, which a location_type with no name rule refuses; supply it to render the label an operator-named location would carry. */
+            /** @description The name the row will carry. Omit it to draft the name and label the platform would produce, which a location_type with no name rule refuses; supply it to draft the label an operator-named location would carry. */
             name?: string;
+            /** @description The parent location, by name or uuid. A location has two placement buckets, under a parent or at the root, and this is which one a generated name's ordinal is read from. Resolved within the caller's location:create scope. */
+            parent?: string;
         };
         RenderSystemLabelInputBody: {
             /**
@@ -6274,8 +6314,10 @@ export interface components {
             readonly $schema?: string;
             /** @description The location this system will sit at, by name or uuid. Resolved within the caller's location:read scope. */
             location?: string;
-            /** @description The name the row will carry. Omit it to render the label the platform's own generated name would produce, with the ordinal written as the token "n"; supply it to render the label an operator-named row would carry, which has no ordinal at all. */
+            /** @description The name the row will carry. Omit it to draft the name and label the platform would produce; supply it to draft the label an operator-named row would carry, which has no ordinal at all. */
             name?: string;
+            /** @description The parent system, by name or uuid. Part of the placement bucket a generated name's ordinal is read from. Resolved within the caller's system:create scope. */
+            parent?: string;
             /** @description The standard this system conforms to, by name or uuid; omit for a one-off system */
             standard_id?: string;
             /** @description The system_type this system is classified by, by name or uuid. Required to render a generated name's label: the stem lives on that registry row. */
@@ -7131,8 +7173,10 @@ export interface components {
             icon?: string;
             /** @description A new label template for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels */
             label_rule?: string;
-            /** @description A new name rule for locations of this type; omit to leave unchanged. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row */
+            /** @description A new name rule for locations of this type; omit to leave unchanged, or name name_rule in update_mask with no rule here to CLEAR it back to operator-named. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row */
             name_rule?: components["schemas"]["NameRuleBody"];
+            /** @description Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (name_rule back to operator-named); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it */
+            update_mask?: string[] | null;
         };
         UpdateMeInputBody: {
             /**
@@ -10216,6 +10260,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "restore-location-type": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The location_type id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationTypeBody"];
+                };
             };
             /** @description Error */
             default: {

@@ -1,14 +1,20 @@
-# Example location types, seeded only when absent (ON CONFLICT DO NOTHING) and
-# owned by the operator once they land: the estate shapes its own place
-# vocabulary, so an edit is never reverted on the next boot. The registry lists
-# alphabetically by display_name; that ordering does NOT constrain nesting. allowed_parent_types is what does: a set of
+# The shipped location types, written AUTHORITATIVELY on every boot
+# (ON CONFLICT DO UPDATE) as official rows the platform owns (#703). An estate
+# still shapes its own place vocabulary: an operator's edit of one of these
+# FORKS it into registry_shadow and every read resolves the fork over the row
+# (ADR-0095), so re-seeding never reverts an edit, and `:restore` hands the row
+# back. What the authoritative write buys is the other direction, which
+# insert-if-absent could not do at all: a value REMOVED from this file is
+# actually withdrawn from an estate that already seeded it.
+#
+# The registry lists alphabetically by display_name; that ordering does NOT
+# constrain nesting. allowed_parent_types is what does: a set of
 # location_type ids and/or the reserved "root" sentinel (may sit at the top,
 # no parent) this type may be placed under. Empty means unconstrained; these
 # four ship the estate's implied hierarchy so a floor can never sit above a
 # room, but "skip a level" (a room straight under a campus) still works.
 # icon is a glyph key the console resolves to an SVG and renders as the leading
 # glyph on every location of this type; an unknown key falls back to map-pin.
-# Operator-defined types via the namespace shadow are a later slice.
 #
 # NONE of the four carries a name_rule, so an operator names every location in a
 # shipped estate. A campus, a building and a room were never in question: "17c"

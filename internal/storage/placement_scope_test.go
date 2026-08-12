@@ -45,7 +45,7 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 	// fixture is live.
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "panel-mine", ProductName: strptr(qm55), LocationName: &mine.Name,
-	}, all, narrow, narrow)
+	}, all, narrow, narrow, narrow)
 	if err != nil {
 		t.Fatalf("create into the readable room: %v", err)
 	}
@@ -58,14 +58,14 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 	// "no such room" from "a room you cannot see".
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "panel-theirs", ProductName: strptr(qm55), LocationName: &theirs.Name,
-	}, all, narrow, narrow); !errors.Is(err, storage.ErrLocationNotFound) {
+	}, all, narrow, narrow, narrow); !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Errorf("create into the unreadable room = %v, want the non-disclosing ErrLocationNotFound", err)
 	}
 	// The system reference is the map's other placement fact, guarded by the
 	// caller's system:read scope rather than its location one.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "panel-sys", ProductName: strptr(qm55), SystemName: strptr("board-theirs"),
-	}, all, narrow, narrow); !errors.Is(err, storage.ErrSystemNotFound) {
+	}, all, narrow, narrow, narrow); !errors.Is(err, storage.ErrSystemNotFound) {
 		t.Errorf("create into the unreadable system = %v, want the non-disclosing ErrSystemNotFound", err)
 	}
 
@@ -73,7 +73,7 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 	// caller was refused: these are scope refusals, not a broken create.
 	leaked, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "panel-theirs", ProductName: strptr(qm55), LocationName: &theirs.Name,
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("wide create into the same room: %v", err)
 	}
@@ -82,12 +82,64 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 	}
 	leaked, err = gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "panel-sys", ProductName: strptr(qm55), SystemName: strptr("board-theirs"),
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("wide create into the same system: %v", err)
 	}
 	if !strings.Contains(leaked.DisplayName, "Boardroom") {
 		t.Errorf("wide create stored %q, want the system type's label in it", leaked.DisplayName)
+	}
+}
+
+// TestTheSystemBindSaysWhichAuthorityIsMissing pins the OTHER half of the system
+// bind's refusal (#707 review). Both halves refuse, so nothing about whether the
+// create is served is at stake here; what is at stake is which of two opposite
+// claims about the estate the caller is handed.
+//
+// The pair this drives (system:read covering the row, system:update not) is not
+// exotic, it is the ordinary shape today: applicableKinds("system") is
+// {"system"} alone (internal/scope/scope.go) and the cross-tier expansion is
+// unbuilt (#10), so a location-scoped deploy grant beside the all-scoped viewer
+// floor a real principal carries resolves to exactly it. Answering
+// ErrSystemNotFound there tells a caller that a row it can GET does not exist.
+func TestTheSystemBindSaysWhichAuthorityIsMissing(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	room := makeRoomWithLabel(t, gw, ctx, "room-bind", "Bind")
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
+		Name: "board-bind", SystemTypeID: strptr("board"), LocationName: &room.Name,
+	}, all, all); err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	none := scope.Set{}
+	spec := func(name string) storage.ComponentSpec {
+		return storage.ComponentSpec{Name: name, ProductName: strptr(qm55), SystemName: strptr("board-bind")}
+	}
+
+	// Readable and not updatable: the refusal is about authority, and it must not
+	// ALSO satisfy the not-found sentinel, or a mapper keyed on that one would go
+	// on reporting the row as absent.
+	_, err := gw.CreateComponent(ctx, "", spec("panel-authority"), all, all, all, none)
+	if !errors.Is(err, storage.ErrSystemBindForbidden) {
+		t.Errorf("bind of a readable system outside the update scope = %v, want ErrSystemBindForbidden", err)
+	}
+	if errors.Is(err, storage.ErrSystemNotFound) {
+		t.Errorf("bind of a readable system also matched ErrSystemNotFound: the refusal still denies the row's existence")
+	}
+
+	// Not readable either: unchanged, the non-disclosing not-found, because that
+	// caller must not learn the row is there.
+	if _, err := gw.CreateComponent(ctx, "", spec("panel-hidden"), all, all, none, none); !errors.Is(err, storage.ErrSystemNotFound) {
+		t.Errorf("bind of an unreadable system = %v, want the non-disclosing ErrSystemNotFound", err)
+	}
+
+	// Both sets covering it: served, and the membership is real, so the two
+	// refusals above are scope boundaries rather than a broken bind.
+	c, err := gw.CreateComponent(ctx, "", spec("panel-ok"), all, all, all, all)
+	if err != nil {
+		t.Fatalf("bind with both scopes: %v", err)
+	}
+	if c.PrimarySystem == nil || *c.PrimarySystem != "board-bind" {
+		t.Errorf("created component's primary system = %v, want board-bind", c.PrimarySystem)
 	}
 }
 
@@ -143,7 +195,7 @@ func TestAMoveBindsOnlyADestinationItCanRead(t *testing.T) {
 	narrow := scope.Set{IDs: []string{mine.ID}}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "panel", ProductName: strptr(qm55), LocationName: &mine.Name,
-	}, all, all, all); err != nil {
+	}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
@@ -212,7 +264,7 @@ func TestTheDraftAndTheCreateRefuseTheSamePlacement(t *testing.T) {
 	} {
 		_, draftErr := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 			ProductName: qm55, Name: "panel", LocationName: tc.location, SystemName: tc.system,
-		}, narrow, narrow)
+		}, all, narrow, narrow)
 		spec := storage.ComponentSpec{Name: "panel", ProductName: strptr(qm55)}
 		if tc.location != "" {
 			spec.LocationName = &tc.location
@@ -220,7 +272,7 @@ func TestTheDraftAndTheCreateRefuseTheSamePlacement(t *testing.T) {
 		if tc.system != "" {
 			spec.SystemName = strptr(tc.system)
 		}
-		_, createErr := gw.CreateComponent(ctx, "", spec, all, narrow, narrow)
+		_, createErr := gw.CreateComponent(ctx, "", spec, all, narrow, narrow, narrow)
 		if !errors.Is(draftErr, tc.want) || !errors.Is(createErr, tc.want) {
 			t.Errorf("%s: draft = %v, create = %v, want both %v", tc.what, draftErr, createErr, tc.want)
 		}

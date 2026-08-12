@@ -49,19 +49,28 @@ func TestLocationTypeCRUD(t *testing.T) {
 		t.Fatalf("update: %v", err)
 	}
 
-	// A shipped location type is operator-owned example content: the estate shapes
-	// its own place vocabulary, so it is editable.
+	// A shipped location type is still editable, by a different mechanism: the
+	// estate shapes its own place vocabulary through a FORK now rather than by
+	// owning the row (#703, ADR-0095), and TestShippedLocationTypeForksAndRestores
+	// holds the fork's own behavior.
 	if _, err := gw.UpdateLocationType(ctx, "", "campus", storage.LocationTypePatch{DisplayName: &name}); err != nil {
 		t.Fatalf("update a shipped location type: %v, want it editable", err)
 	}
 
-	// The official read-only guard still stands for a row that IS official, so
-	// prove the mechanism on one.
+	// The two halves of the official guard, converted rather than dropped. An
+	// UPDATE of an official row used to be ErrTypeOfficial and is now a FORK
+	// (#703, ADR-0095): the row is untouched and the operator's version resolves
+	// over it. A DELETE is still refused, which is where the guard belongs, since
+	// a fork is an overlay and not ownership.
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{Name: "canon", Official: true, DisplayName: "Canonical"}); err != nil {
 		t.Fatalf("seed an official location type: %v", err)
 	}
-	if _, err := gw.UpdateLocationType(ctx, "", "canon", storage.LocationTypePatch{DisplayName: &name}); !errors.Is(err, storage.ErrTypeOfficial) {
-		t.Fatalf("update official err = %v, want ErrTypeOfficial", err)
+	forked, err := gw.UpdateLocationType(ctx, "", "canon", storage.LocationTypePatch{DisplayName: &name})
+	if err != nil {
+		t.Fatalf("update official err = %v, want a fork", err)
+	}
+	if !forked.Forked || forked.DisplayName != name {
+		t.Fatalf("update official gave %+v, want the patched value marked forked", forked)
 	}
 	if err := gw.DeleteLocationType(ctx, "", "canon"); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("delete official err = %v, want ErrTypeOfficial", err)

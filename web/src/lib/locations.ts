@@ -57,6 +57,14 @@ export type CreateLocation = {
   location_type: string;
   display_name?: string;
   parent?: string;
+  // The create form's name precondition (#702, and its review): the NAME the
+  // form previewed and locked its name field on. Omitted unless the platform is
+  // naming the row. It asserts what the row will be called and never sets it, so
+  // the row stays name_generated; the name carries the stem, the suppression and
+  // the number, so a type edited under the open form invalidates the claim where
+  // the ordinal alone would not. A create that would land a different name is
+  // refused with a 409 the form recovers from by re-reading the draft.
+  expected_name?: string;
 };
 
 export async function createLocation(body: CreateLocation): Promise<Location> {

@@ -299,6 +299,17 @@ func (a *authenticator) platformGated(op huma.Operation, action string) huma.Ope
 	return op
 }
 
+// allows reports whether the request principal's flattened permissions allow a
+// permission, given as its tokens. It is the in-handler form of the same check
+// require(...) runs as middleware, for a SECOND permission a route enforces only
+// on some requests: the middleware cannot see the body, so a gate that depends on
+// what the body carries has to ask here. Every such site pairs with a
+// conditionalGated stamp, so the spec still publishes what the route enforces.
+func (a *authenticator) allows(ctx context.Context, tokens ...string) bool {
+	perms, ok := permsFrom(ctx)
+	return ok && perms.Allows(tokens...)
+}
+
 // canPlatform reports whether the caller holds platform:<action>, the install-wide
 // authority a write at the platform tier needs on top of the resource permission.
 // Full-estate SCOPE deliberately does not imply it: a senior operator may hold an
@@ -307,8 +318,7 @@ func (a *authenticator) platformGated(op huma.Operation, action string) huma.Ope
 // request use requirePlatform; the Gateway takes this as a flag where only the
 // stored row knows its tier (update and delete by id).
 func (a *authenticator) canPlatform(ctx context.Context, action string) bool {
-	perms, ok := permsFrom(ctx)
-	return ok && perms.Allows("platform", action)
+	return a.allows(ctx, "platform", action)
 }
 
 // requirePlatform is the tier gate for a handler whose request already says the
@@ -319,6 +329,28 @@ func (a *authenticator) requirePlatform(ctx context.Context, action string) erro
 		return huma.Error403Forbidden("writing at the platform tier requires platform:" + action)
 	}
 	return nil
+}
+
+// conditionalGated declares a SECOND permission a route enforces only when the
+// request carries a particular reference, the way platformGated declares the one
+// a platform-tier write enforces. The route keeps its own gate (gated(...) is
+// what admits the request at all); this adds the conditional permission to the
+// registry so the roles view can report it, and publishes it on the operation as
+// "x-omniglass-conditional-permission" so the spec stays a faithful map of what
+// the route enforces rather than only of what it always enforces. The handler
+// runs the check itself through allows(...), because the middleware cannot see
+// the body the condition is about. Wrap gated: conditionalGated(a.gated(op,
+// "component", "create"), "system", "update").
+func (a *authenticator) conditionalGated(op huma.Operation, tokens ...string) huma.Operation {
+	perm := strings.Join(tokens, ":")
+	if a.perms != nil {
+		a.perms[perm] = struct{}{}
+	}
+	if op.Extensions == nil {
+		op.Extensions = map[string]any{}
+	}
+	op.Extensions["x-omniglass-conditional-permission"] = perm
+	return op
 }
 
 // registeredPerms returns the permission universe (every capability declared via

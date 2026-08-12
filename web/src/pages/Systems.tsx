@@ -22,11 +22,11 @@ import {
 } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
-import { SYSTEM_TYPES_KEY, listSystemTypes, systemTypeByName } from "../lib/system_types";
+import { SYSTEM_TYPES_KEY, listSystemTypes } from "../lib/system_types";
 import SystemTypeSelect from "../components/SystemTypeSelect";
 import CreateIdentity from "../components/CreateIdentity";
-import { bucketPhrase, createPen, nameBucket, penIncomplete, systemMint } from "../lib/namegen";
-import { useLabelDraft } from "../lib/labeldraft";
+import { bucketPhrase, createPen, nameBucket, penIncomplete } from "../lib/namegen";
+import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
 import { pathTo } from "../lib/treeselect";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -484,22 +484,23 @@ export default function Systems() {
     const [busy, setBusy] = createSignal(false);
     const [formErr, setFormErr] = createSignal<string | null>(null);
 
-    // The mint the chosen system_type resolves to, suppressing the first
-    // ordinal (ADR-0101: the only boardroom in a room is "boardroom"), and null
-    // for an unclassified system, which the gateway refuses to name.
-    const typesByName = createMemo(() => systemTypeByName(systemTypes.data ?? []));
-    const mint = createMemo(() => systemMint(systemType(), typesByName()));
-
-    // The label the platform would write, rendered by the one engine on the
-    // server (ADR-0098 keeps the template out of the browser) from the same
-    // body this form posts. A system with no classification at all is still
-    // asked: the global rule may still render something from what it has.
+    // The name and the label the platform would write, both rendered by the one
+    // engine on the server (ADR-0098 keeps the template out of the browser, and
+    // #702 the mint) from the same body this form posts. A system with no
+    // classification at all is still asked: the global rule may still render
+    // something from what it has, and the refusal to NAME one is the answer the
+    // name field needs rather than an error to hide.
+    //
+    // The parent is in the body because a system suppresses the first ordinal in
+    // its bucket, so which bucket it is decides whether the operator is shown
+    // "boardroom" or "boardroom-2".
     const labelDraft = useLabelDraft(() => ({
       kind: "system" as const,
       body: {
         system_type_id: systemType() || undefined,
         standard_id: standard() || undefined,
         name: namePen.value().trim() || undefined,
+        parent: parent() || undefined,
         location: location() || undefined,
       },
     }));
@@ -523,12 +524,12 @@ export default function Systems() {
         // An empty name is OMITTED rather than posted as "": omitted is
         // "generate one", where "" is a name of nothing the API refuses
         // against the entity-name pattern.
-        const created = await createSystem({ name: nm || undefined, standard_id: standard() || undefined, system_type_id: systemType() || undefined, display_name: displayPen.value().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
+        const created = await createSystem({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, standard_id: standard() || undefined, system_type_id: systemType() || undefined, display_name: displayPen.value().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
         openInEdit(created.id);
         navigate(`/systems/${encodeURIComponent(created.id)}`);
       } catch (er) {
-        setFormErr(describeError(er));
+        setFormErr(await recoverFromMovedName(er, labelDraft.refetch));
         setBusy(false);
       }
     }
@@ -582,12 +583,12 @@ export default function Systems() {
 
         <CreateIdentity
           kind="system"
-          mint={mint}
+          draft={() => labelDraft.data}
+          pending={() => labelDraft.isFetching}
+          nameRefused={() => nameRefused(labelDraft.error)}
           bucket={bucketText}
           namePen={namePen}
           displayPen={displayPen}
-          label={() => labelDraft.data}
-          labelPending={() => labelDraft.isFetching}
           namePlaceholder="exec-boardroom"
           displayPlaceholder="Executive Boardroom"
         />
@@ -599,7 +600,7 @@ export default function Systems() {
               an unclassified system, or a type whose chain carries no stem.
               Gating on a typed name outright is what made the generator
               unreachable from the console before #688. */}
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || penIncomplete(mint() !== null, namePen)}>Create system</Button>
+          <Button type="submit" intent="action" icon={Plus} disabled={busy() || penIncomplete(!!labelDraft.data?.name, namePen)}>Create system</Button>
         </div>
 
         <div class="flex flex-col gap-1 opacity-50">

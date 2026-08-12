@@ -108,6 +108,20 @@ type ComponentSpec struct {
 	SystemName   *string
 	LocationName *string
 	ProductName  *string
+	// ExpectedName is the create form's precondition (#702, and its review): the
+	// NAME the form previewed and locked its name field on. Nil is no
+	// precondition, which is every caller that did not preview.
+	//
+	// The name rather than the ordinal, because the name is the claim: it carries
+	// the stem, the suppression and the number in one value, so an edit to the
+	// type that mints it invalidates the claim by construction where a number
+	// would have passed. See confirmDraftedName.
+	//
+	// It is a precondition and NOT the name field. This never becomes the row's
+	// name: the pen is Name above, and a create posting this has left it empty,
+	// so the row stays name_generated. Posting it beside a typed name is refused
+	// rather than ignored (ErrNameExpectedOnTypedName).
+	ExpectedName *string
 }
 
 // ComponentPatch is the update input: nil fields unchanged.
@@ -304,12 +318,22 @@ func (p *PG) ComponentNameTaken(ctx context.Context, name string, parentRef, loc
 // "<resolved-stem>-<n>" from the classified product's component_type once
 // placement and product are both resolved, below.
 //
-// locationRead and systemRead are the PLACEMENT's scopes, not the component's,
-// and they are the same two the draft render takes for the same two references
-// (#700): create says who may write a component, these say which rows the
-// component may be placed against, because the label this stamps reads both.
-// See resolvePlacementRef.
-func (p *PG) CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create, locationRead, systemRead scope.Set) (*Component, error) {
+// locationRead and systemUpdate are the PLACEMENT's scopes, not the
+// component's: create says who may write a component, these say which rows the
+// component may be placed against. locationRead is the same set the draft render
+// takes for the same reference (#700), because the label this stamps is rendered
+// from the location and naming one is a read of it.
+//
+// systemRead and systemUpdate are BOTH taken for the one system reference
+// (#707, and its review). A system named here is not decoration on this row, it
+// is a MEMBERSHIP insert into system_member, the same row PUT
+// /systems/{name}/members/{component} writes under the system:update permission
+// and the system:update scope, so what the bind requires is the update set. What
+// decides the REFUSAL is the read set: a caller that cannot see the row gets the
+// non-disclosing not-found, and a caller that can gets a forbidden naming the
+// authority it is missing rather than a denial that the row exists. Two sets, two
+// different questions. See resolvePlacementWriteRef.
+func (p *PG) CreateComponent(ctx context.Context, actorID string, spec ComponentSpec, create, locationRead, systemRead, systemUpdate scope.Set) (*Component, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create component: %w", err)
@@ -360,14 +384,18 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	// scope to placement.
 	var sysID string
 	if spec.SystemName != nil {
-		// resolvePlacementRef, not create-scoped and no longer existence-only
-		// (#700): the bind is CROSS-tier, so the caller's create scope (resolved
-		// for "component") can never match a system's own ancestor chain, but
-		// the caller's system:read scope can, and it is the set that decides
-		// whether this label may carry that system's TYPE label. Out of scope is
-		// the same non-disclosing ErrSystemNotFound an absent one gives, which
-		// is what :renderLabel already answers for the identical reference.
-		sys, err := resolvePlacementRef(ctx, tx, systemConfig, *spec.SystemName, systemRead)
+		// A cross-tier bind, so neither the caller's create scope (resolved for
+		// "component", which can never match a system's own ancestor chain) nor
+		// existence alone decides it (#700): what decides is a scope resolved for
+		// the system tier. Which one depends on the question. What the bind
+		// REQUIRES is system:update, because the insert below is a membership
+		// write (#707). What the refusal MAY SAY is decided by system:read, so a
+		// system the caller can GET is refused by name of the missing authority
+		// and one it cannot is refused as absent.
+		sys, err := resolvePlacementWriteRef(ctx, tx, systemConfig, *spec.SystemName, systemRead, systemUpdate)
+		if errors.Is(err, ErrSystemForbidden) {
+			return nil, ErrSystemBindForbidden
+		}
 		if err != nil {
 			return nil, err // ErrSystemNotFound -> 422
 		}
@@ -428,6 +456,13 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 			return nil, err
 		}
 		name, ordinal = genName, &n
+	}
+	// The form's precondition, checked under the lock that allocated the number
+	// and before anything is written (#702): a create that would land a name the
+	// operator was never shown is refused with the name it would have landed, not
+	// silently renamed.
+	if err := confirmDraftedName(spec.ExpectedName, ordinal, name); err != nil {
+		return nil, err
 	}
 
 	// product is required (the floor: every component is an instance of a

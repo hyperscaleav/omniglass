@@ -74,7 +74,7 @@ func TestComponentScopeCRUD(t *testing.T) {
 	}
 
 	// FK faults.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "y", SystemName: strptr("nope")}, all, all, all); !errors.Is(err, storage.ErrSystemNotFound) {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "y", SystemName: strptr("nope")}, all, all, all, all); !errors.Is(err, storage.ErrSystemNotFound) {
 		t.Errorf("unknown system = %v, want ErrSystemNotFound", err)
 	}
 	// A duplicate name in the SAME placement bucket still collides: disp was
@@ -82,13 +82,13 @@ func TestComponentScopeCRUD(t *testing.T) {
 	// names the same location, so it lands in the identical bucket (#627
 	// scopes name uniqueness to placement, it does not remove uniqueness
 	// within one).
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp", LocationName: strptr("rm-1")}, all, all, all); !errors.Is(err, storage.ErrComponentExistsInLocation) {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp", LocationName: strptr("rm-1")}, all, all, all, all); !errors.Is(err, storage.ErrComponentExistsInLocation) {
 		t.Errorf("dup name in same location = %v, want ErrComponentExistsInLocation", err)
 	}
 	// The same name in a DIFFERENT placement bucket is legal: two rooms may
 	// each hold their own "disp", because the unique index is keyed on
 	// (location_id, name), not name alone.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp", LocationName: strptr("rm-2")}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp", LocationName: strptr("rm-2")}, all, all, all, all); err != nil {
 		t.Errorf("dup name in different location = %v, want ok", err)
 	}
 
@@ -109,7 +109,7 @@ func TestComponentScopeCRUD(t *testing.T) {
 
 func mustCreateComponent(t *testing.T, gw storage.Gateway, spec storage.ComponentSpec, sc scope.Set) *storage.Component {
 	t.Helper()
-	c, err := gw.CreateComponent(context.Background(), "", spec, sc, all, all)
+	c, err := gw.CreateComponent(context.Background(), "", spec, sc, all, all, all)
 	if err != nil {
 		t.Fatalf("create component %s: %v", spec.Name, err)
 	}

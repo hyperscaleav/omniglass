@@ -32,13 +32,13 @@ func (UnimplementedGateway) PreviewLabelRecompute(context.Context, string, scope
 func (UnimplementedGateway) RecomputeLabels(context.Context, string, string, scope.Set, scope.Set) ([]LabelChange, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) RenderComponentDraftLabel(context.Context, ComponentLabelDraft, scope.Set, scope.Set) (DraftLabel, error) {
+func (UnimplementedGateway) RenderComponentDraftLabel(context.Context, ComponentLabelDraft, scope.Set, scope.Set, scope.Set) (DraftLabel, error) {
 	return DraftLabel{}, nil
 }
-func (UnimplementedGateway) RenderSystemDraftLabel(context.Context, SystemLabelDraft, scope.Set) (DraftLabel, error) {
+func (UnimplementedGateway) RenderSystemDraftLabel(context.Context, SystemLabelDraft, scope.Set, scope.Set) (DraftLabel, error) {
 	return DraftLabel{}, nil
 }
-func (UnimplementedGateway) RenderLocationDraftLabel(context.Context, LocationLabelDraft) (DraftLabel, error) {
+func (UnimplementedGateway) RenderLocationDraftLabel(context.Context, LocationLabelDraft, scope.Set) (DraftLabel, error) {
 	return DraftLabel{}, nil
 }
 func (UnimplementedGateway) UpsertRole(context.Context, Role) error { return nil }
@@ -174,10 +174,13 @@ func (UnimplementedGateway) WriteAuthEvent(context.Context, string, string) erro
 func (UnimplementedGateway) UpsertLocationType(context.Context, LocationType) error {
 	return nil
 }
-func (UnimplementedGateway) SeedLocationType(context.Context, LocationType) error {
-	return nil
-}
 func (UnimplementedGateway) ListLocationTypes(context.Context) ([]LocationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) GetLocationType(context.Context, string) (*LocationType, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) RestoreLocationType(context.Context, string, string) (*LocationType, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) CreateLocationType(context.Context, string, LocationType) (*LocationType, error) {
@@ -268,7 +271,7 @@ func (UnimplementedGateway) GetComponent(context.Context, string, scope.Set) (*C
 func (UnimplementedGateway) ListComponentInterfaces(context.Context, string) ([]ComponentInterface, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateComponent(context.Context, string, ComponentSpec, scope.Set, scope.Set, scope.Set) (*Component, error) {
+func (UnimplementedGateway) CreateComponent(context.Context, string, ComponentSpec, scope.Set, scope.Set, scope.Set, scope.Set) (*Component, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) UpdateComponent(context.Context, string, string, ComponentPatch, scope.Set, scope.Set) (*Component, error) {

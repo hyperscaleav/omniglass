@@ -100,6 +100,11 @@ type apiOp struct {
 	// permission a route enforces when its write lands at the platform tier (the
 	// install-wide cascade level). Empty for a route that never writes there.
 	platformPerm string
+	// condPerm is the x-omniglass-conditional-permission stamp: the SECOND
+	// permission a route enforces only when the request carries the reference it
+	// is about (today, a component create naming a system, which writes that
+	// system's membership). Empty for a route with no such condition.
+	condPerm string
 }
 
 // operations parses the generated OpenAPI for the live operation set, so the
@@ -116,8 +121,9 @@ func operations(t *testing.T, gw storage.Gateway) []apiOp {
 				Name string `json:"name"`
 				In   string `json:"in"`
 			} `json:"parameters"`
-			Permission         string `json:"x-omniglass-permission"`
-			PlatformPermission string `json:"x-omniglass-platform-permission"`
+			Permission            string `json:"x-omniglass-permission"`
+			PlatformPermission    string `json:"x-omniglass-platform-permission"`
+			ConditionalPermission string `json:"x-omniglass-conditional-permission"`
 		} `json:"paths"`
 	}
 	if err := json.Unmarshal(raw, &doc); err != nil {
@@ -134,7 +140,7 @@ func operations(t *testing.T, gw storage.Gateway) []apiOp {
 			}
 			out = append(out, apiOp{
 				method: strings.ToUpper(m), path: p, pathParams: params,
-				perm: op.Permission, platformPerm: op.PlatformPermission,
+				perm: op.Permission, platformPerm: op.PlatformPermission, condPerm: op.ConditionalPermission,
 			})
 		}
 	}
@@ -159,6 +165,9 @@ func TestEveryGateIsPublished(t *testing.T) {
 			}
 			if op.platformPerm != "" {
 				t.Errorf("%s is in the ungated allow-list but carries x-omniglass-platform-permission %q; an ungated route must not be stamped", key, op.platformPerm)
+			}
+			if op.condPerm != "" {
+				t.Errorf("%s is in the ungated allow-list but carries x-omniglass-conditional-permission %q; an ungated route must not be stamped", key, op.condPerm)
 			}
 			continue
 		}

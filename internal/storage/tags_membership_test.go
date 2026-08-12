@@ -221,7 +221,7 @@ func newResolveFixture(t *testing.T, ctx context.Context) *resolveFixture {
 	// Placed in the room, in no system. Membership is the only route into the
 	// system band, so the fixture deliberately gives it none to start with.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "roamer", LocationName: strptr("room")}, f.all, all, all); err != nil {
+		Name: "roamer", LocationName: strptr("room")}, f.all, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 	return f

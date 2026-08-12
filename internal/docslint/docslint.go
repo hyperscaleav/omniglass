@@ -38,6 +38,19 @@ type BannedTerm struct {
 // Banned is the denylist. Order is presentation only.
 var Banned = []BannedTerm{
 	{
+		// The create form's precondition field, retired by ADR-0104's #702-review
+		// amendment: it binds the drafted NAME, because a name carries the stem
+		// and the suppression rule as well as the number and an ordinal claim was
+		// met by a create that landed a name the form never showed. Both spellings,
+		// since the CLI flag is the one an operator types. The three files that
+		// still carry the old word (the decision log, the build log, and the
+		// generated CLI reference) are the allowlisted historical and generated
+		// ones, so this catches a current-tense page reintroducing it.
+		Pattern:     regexp.MustCompile(`\bexpected_ordinal\b|--expected-ordinal\b`),
+		Replacement: "expected_name, the drafted NAME a create form posts back",
+		Origin:      "ADR-0104",
+	},
+	{
 		// Two synonyms the corpus invented for the identifier. Neither is a symbol,
 		// so nothing else catches them, and both survived the first vocabulary sweep
 		// on ten pages: "technical name" appeared 21 times in the generated CLI

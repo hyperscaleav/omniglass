@@ -57,7 +57,7 @@ func TestReconciliationAPI(t *testing.T) {
 	}
 
 	all := scope.Set{All: true}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	// A declared value (want) and an observed value (is) that differ, so the read
@@ -100,7 +100,7 @@ func TestReconciliationAPI(t *testing.T) {
 
 	// A viewer scoped to a different component gets a non-disclosing 404 on disp-1,
 	// and sees its own component's reconciliation.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-1"}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "other-1"}, all, all, all, all); err != nil {
 		t.Fatalf("create other component: %v", err)
 	}
 	other, err := gw.GetComponent(ctx, "other-1", all)

@@ -255,8 +255,11 @@ registries, whose names have no generator and stay globally unique.
 The three estate entities do not wire it. A component, a system, and a location get their names
 from the platform, minted from the resolved type stem and the placement bucket, so deriving a name
 from whatever prose an operator typed would claim the pen on their behalf the moment they typed a
-label. Their create forms ask what and where first, then show the shape the name will take
-(`display-n`), and leave the name field empty to mean "the platform names this one". The three
+label. Their create forms ask what and where first, then show the name the row will actually get
+(`display-3`, drafted by the server), and leave the name field empty to mean "the platform names this
+one"; the drafted NAME travels back with the create as `expected_name`, so a name that moved between
+the preview and the submit, because another create took the number or the type's stem was edited, is
+a refusal rather than a silent difference. The three
 signal registries (`property_type`, `event_type`, `command_type`) do not wire it either, because a
 signal name is chosen to match what an interface reports rather than derived from prose somebody
 typed, and that was as true when those names carried dots as it is now they are single tokens. `tag`, `variable`, and `secret`

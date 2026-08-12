@@ -12,16 +12,17 @@ import { uuidFor } from "../lib/testids";
 
 // The Location Types page is the place classifier registry alone on the shared
 // FlatList: one registry, one query, no secret_type anywhere on its path (#598
-// split the old joint Types page). An official row is read-only;
-// a custom row is writable for a caller holding location_type:*, and its detail
-// carries the location type's declared-property contract. Data is seeded into
-// the query cache so no server is needed (except where a test says otherwise).
+// split the old joint Types page). A shipped row is official and editable, since
+// the edit FORKS it (#703, ADR-0095); a custom row is writable for a caller
+// holding location_type:*, and its detail carries the location type's
+// declared-property contract. Data is seeded into the query cache so no server
+// is needed (except where a test says otherwise).
 const seed: LocationType[] = [
-  { id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", official: true, icon: "map-pin", allowed_parent_types: [] },
-  { id: uuidFor("lt-wing"), name: "wing", display_name: "Wing", official: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] },
+  { id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", official: true, forked: false, icon: "map-pin", allowed_parent_types: [] },
+  { id: uuidFor("lt-wing"), name: "wing", display_name: "Wing", official: false, forked: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] },
   // A handle its display name does not contain, so filtering by it can only
   // succeed through the name field (the addressing-honesty test below).
-  { id: uuidFor("lt-server-room"), name: "server-room", display_name: "Machine hall", official: false, icon: "map-pin", allowed_parent_types: [] },
+  { id: uuidFor("lt-server-room"), name: "server-room", display_name: "Machine hall", official: false, forked: false, icon: "map-pin", allowed_parent_types: [] },
 ];
 
 // The location type contract shown on the wing blade, plus the catalog the editor
@@ -142,7 +143,7 @@ describe("LocationTypes page", () => {
       if (req.method === "PATCH" && req.url.includes("/location-types/wing")) {
         sent = JSON.parse(await req.clone().text());
         return new Response(
-          JSON.stringify({ id: uuidFor("lt-wing"), name: "wing", display_name: "Wing", official: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] }),
+          JSON.stringify({ id: uuidFor("lt-wing"), name: "wing", display_name: "Wing", official: false, forked: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
@@ -237,7 +238,15 @@ describe("LocationTypes page", () => {
     expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", "seat_count"]);
   });
 
-  it("renders an official location type's contract read-only", async () => {
+  // This assertion INVERTED with #703, deliberately, and it now guards the
+  // capability the ownership flip would otherwise have withdrawn in silence.
+  // It used to read "renders an official location type's contract read-only",
+  // asserting the "official, read-only" hint on both lanes. A location type's
+  // contract is not release-owned: nothing seeds a line, every one is the
+  // operator's, and the gateway writes them on a shipped type on purpose. What
+  // keeps the panel quiet on a shipped row is the blade's edit mode, the same
+  // rule that governs a custom row, not the official flag.
+  it("keeps a shipped location type's contract writable, gated by edit mode rather than by official", async () => {
     mount();
     fireEvent.click(screen.getByText("campus"));
     const blade = await waitFor(() => {
@@ -245,11 +254,105 @@ describe("LocationTypes page", () => {
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
-    // Both lanes render read-only: neither panel offers a declare picker.
-    expect(within(blade).getAllByText("official, read-only")).toHaveLength(2);
+    expect(within(blade).queryAllByText("official, read-only")).toHaveLength(0);
     expect(within(blade).getByText("This location type declares no properties.")).toBeTruthy();
+    // Read mode still offers nothing; the pencil is the one route to the controls.
     expect(within(blade).queryByLabelText("Property to declare")).toBeNull();
-    expect(within(blade).queryByLabelText("Metric to declare")).toBeNull();
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    expect(within(blade).getByLabelText("Property to declare")).toBeTruthy();
+  });
+
+  // The three-state origin a fork-adopting registry shows, and the one action
+  // that only a forked shipped row carries.
+  it("reads origin three ways and offers Restore only on a forked shipped row", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...LOCATION_TYPES_KEY], [
+      ...seed,
+      { id: uuidFor("lt-room"), name: "room", display_name: "Room", official: true, forked: true, icon: "map-pin", allowed_parent_types: [] },
+    ]);
+    qc.setQueryData([...ME_KEY], admin);
+    qc.setQueryData([...PROPERTIES_KEY], catalog);
+    qc.setQueryData([...METRICS_KEY], []);
+    qc.setQueryData([...classifierPropertiesKey("location-type", "room")], []);
+    qc.setQueryData([...classifierMetricsKey("location-type", "room")], []);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <LocationTypes />
+      </QueryClientProvider>
+    ));
+    const cells = screen.getAllByRole("cell").map((c) => c.textContent ?? "");
+    expect(cells.some((t) => t.includes("official"))).toBe(true);
+    expect(cells.some((t) => t.includes("custom"))).toBe(true);
+    expect(cells.some((t) => t.includes("overridden"))).toBe(true);
+
+    // A pristine shipped row: editable (the edit forks it), nothing to discard.
+    fireEvent.click(screen.getByText("campus"));
+    let blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    expect(within(blade).queryByText("Restore shipped")).toBeNull();
+    // Delete is present but greyed with the official sentence: a shipped row is
+    // never deleted, and while it is pristine there is nothing to discard either.
+    const del = within(blade).getByText("Delete").closest("button") as HTMLButtonElement;
+    expect(del.disabled).toBe(true);
+
+    // The forked one offers Restore in the same slot a custom row puts Delete.
+    // Scoped to the table: the open blade's allowed-parents picker lists every
+    // type by name too, so a bare query matches twice.
+    fireEvent.click(within(screen.getByRole("table")).getByText("room"));
+    blade = await waitFor(() => {
+      // The newest blade on the stack: the campus one above is still open.
+      const els = asides();
+      const el = els[els.length - 1];
+      if (!el || el.getAttribute("aria-labelledby")?.includes("campus")) throw new Error("no room blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    expect(within(blade).getByText("Restore shipped")).toBeTruthy();
+  });
+
+  // #692 on the console: the exit from platform naming, spelled the one way the
+  // wire spells it (the field named in update_mask, no rule in the body).
+  it("turns naming off with a masked clear", async () => {
+    let sent: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH" && req.url.includes("/location-types/deck")) {
+        sent = JSON.parse(await req.clone().text());
+        return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ location_types: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...LOCATION_TYPES_KEY], [
+      { id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", official: false, forked: false, icon: "map-pin", allowed_parent_types: [], name_rule: { stem: "" } },
+    ]);
+    qc.setQueryData([...ME_KEY], admin);
+    qc.setQueryData([...PROPERTIES_KEY], catalog);
+    qc.setQueryData([...METRICS_KEY], []);
+    qc.setQueryData([...classifierPropertiesKey("location-type", "deck")], []);
+    qc.setQueryData([...classifierMetricsKey("location-type", "deck")], []);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <LocationTypes />
+      </QueryClientProvider>
+    ));
+    fireEvent.click(screen.getByText("deck"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    expect(within(blade).getByText(/Positional: named 1, 2, 3/)).toBeTruthy();
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    fireEvent.click(within(blade).getByText("Turn naming off"));
+    await waitFor(() => expect(sent).toBeTruthy());
+    expect(sent).toEqual({ update_mask: ["name_rule"] });
   });
 
   // The blade model (#621): a blade opens read-only, and EVERY mutating control,
@@ -328,7 +431,7 @@ describe("LocationTypes for a viewer-floor principal (#598)", () => {
       const req = input as Request;
       if (req.url.includes("/location-types")) {
         return new Response(
-          JSON.stringify({ location_types: [{ id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", official: false, icon: "map-pin", allowed_parent_types: [] }] }),
+          JSON.stringify({ location_types: [{ id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", official: false, forked: false, icon: "map-pin", allowed_parent_types: [] }] }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }

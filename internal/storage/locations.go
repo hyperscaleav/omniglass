@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/updatemask"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -96,14 +97,18 @@ func (e *PlacementError) Unwrap() error { return ErrPlacementNotAllowed }
 // call this before writing. A childType that does not exist in the registry is
 // left to the insert's FK check (ErrUnknownType), not this validator.
 func (p *PG) validatePlacement(ctx context.Context, q querier, childType string, parentType *string) error {
-	var allowed []string
-	err := q.QueryRow(ctx, `select allowed_parent_types from location_type where `+registryRefCol(childType)+` = $1`, childType).Scan(&allowed)
+	// Resolved over the operator's shadow, not read from the official row: an
+	// operator who forked a shipped type to widen where it may sit is placing
+	// locations by THEIR rule, and reading the shipped column here would
+	// enforce a constraint they had already replaced.
+	lt, err := scanLocationTypeResolved(q.QueryRow(ctx, locationTypeResolved+` where lt.`+registryRefCol(childType)+` = $1`, childType))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("storage: load allowed_parent_types for %q: %w", childType, err)
 	}
+	allowed := lt.AllowedParentTypes
 	if len(allowed) == 0 {
 		return nil
 	}
@@ -188,6 +193,11 @@ type LocationSpec struct {
 	DisplayName  string
 	LocationType string
 	ParentName   *string
+	// ExpectedName is the create form's precondition (#702): the name the form
+	// previewed and locked its name field on. Nil is no precondition. See
+	// ComponentSpec.ExpectedName for why it is the name and not the ordinal, and
+	// why it is still not the name field.
+	ExpectedName *string
 }
 
 // LocationPatch is the update input: nil fields are left unchanged.
@@ -245,30 +255,37 @@ type LocationType struct {
 	// LabelRule it has no tier above it to defer to: a name either comes from
 	// this rule or from the operator (ADR-0102).
 	NameRule *NameRule
+	// Forked is derived at read time from the presence of a registry_shadow
+	// row, never stored on the registry itself (#703, ADR-0095). Official alone
+	// is "shipped", neither is "yours", both together is "yours, overriding
+	// shipped".
+	Forked bool
 }
 
-// UpsertLocationType installs or updates a location type by id, the boot-seed
-// phase's write. Idempotent: re-seeding the same id updates it in place.
-// SeedLocationType inserts a shipped example location type only when it is
-// absent. Like a standard, a location type is content an operator shapes to their
-// organization, so re-seeding must never reassert over an edit. Deliberately not
-// UpsertLocationType, whose ON CONFLICT DO UPDATE is the authoritative behavior
-// the canonical catalogs want.
-func (p *PG) SeedLocationType(ctx context.Context, lt LocationType) error {
-	rule, err := nameRuleJSON(lt.NameRule)
-	if err != nil {
-		return fmt.Errorf("storage: seed location_type %q: %w", lt.Name, err)
-	}
-	if _, err := p.pool.Exec(ctx, `
-		insert into location_type (name, official, display_name, icon, allowed_parent_types, label_rule, name_rule)
-		values ($1, $2, $3, $4, $5, $6, $7)
-		on conflict (name) do nothing`,
-		lt.Name, lt.Official, lt.DisplayName, lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes), nilIfEmptyRule(lt.LabelRule), rule); err != nil {
-		return fmt.Errorf("storage: seed location_type %q: %w", lt.Name, err)
-	}
-	return nil
-}
+// locationTypeRegistry is this registry's key in registry_shadow. The second
+// adopter of the fork primitive (registryshadow.go), after component_type.
+const locationTypeRegistry = "location_type"
 
+// locationTypeResolved selects a location_type together with its operator
+// shadow, the read every caller outside the seed goes through. The join is a
+// left join on the row's own uuid, so an unforked row reads exactly as before
+// and a forked one carries the image scanLocationTypeResolved overlays.
+const locationTypeResolved = `
+	select lt.id, lt.name, lt.official, lt.display_name, lt.icon, lt.allowed_parent_types, lt.label_rule, lt.name_rule, s.image
+	from location_type lt
+	left join registry_shadow s on s.registry = '` + locationTypeRegistry + `' and s.row_id = lt.id`
+
+// UpsertLocationType installs or updates a location type by name, the boot-seed
+// phase's write and the authoritative one: ON CONFLICT DO UPDATE, so a value a
+// release WITHDRAWS (a rule removed from location_types.yaml) is actually gone
+// from an estate that already seeded it, rather than frozen at whatever the
+// first boot wrote (#703).
+//
+// It stomps nothing an operator owns, because an operator does not own these
+// rows any more: a shipped location type seeds official=true and their edit of
+// one is a fork in registry_shadow, resolved OVER this row on every read
+// (ADR-0095). The insert-if-absent it replaced was the other half of the same
+// bargain, and it is what made a withdrawal unreachable.
 func (p *PG) UpsertLocationType(ctx context.Context, lt LocationType) error {
 	rule, err := nameRuleJSON(lt.NameRule)
 	if err != nil {
@@ -322,23 +339,48 @@ func normalizeAllowedParentTypes(s []string) []string {
 }
 
 // ListLocationTypes returns every location type, ordered alphabetically by
-// display_name then id, for the registry view and validation.
+// display_name then name, each row resolved over its operator shadow. A forked
+// row is one row here, not two: the shadow is an overlay on the row it names,
+// never a second entry in the registry.
+//
+// The ORDER BY reads the resolved display_name (the shadow's when there is one)
+// so a relabelling fork sorts where an operator expects it, and it stays in SQL
+// so the collation the registry has always ordered by is the one it still
+// orders by.
 func (p *PG) ListLocationTypes(ctx context.Context) ([]LocationType, error) {
-	rows, err := p.pool.Query(ctx,
-		`select `+locationTypeCols+` from location_type order by display_name, name`)
+	rows, err := p.pool.Query(ctx, locationTypeResolved+`
+		order by coalesce(s.image->>'display_name', lt.display_name), lt.name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list location_types: %w", err)
 	}
 	defer rows.Close()
 	var out []LocationType
 	for rows.Next() {
-		lt, err := scanLocationType(rows)
+		lt, err := scanLocationTypeResolved(rows)
 		if err != nil {
 			return nil, fmt.Errorf("storage: scan location_type: %w", err)
 		}
 		out = append(out, *lt)
 	}
 	return out, rows.Err()
+}
+
+// GetLocationType resolves one location type by name or uuid over its operator
+// shadow. An unknown ref is ErrTypeNotFound.
+//
+// Both ref forms address the same logical row whether it is forked or not: the
+// shadow shares the official row's uuid and never touches its name, so the
+// namespace is not part of the address and never reaches a caller (ADR-0095
+// decision 1).
+func (p *PG) GetLocationType(ctx context.Context, ref string) (*LocationType, error) {
+	lt, err := scanLocationTypeResolved(p.pool.QueryRow(ctx, locationTypeResolved+` where lt.`+registryRefCol(ref)+` = $1`, ref))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrTypeNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: get location_type %q: %w", ref, err)
+	}
+	return lt, nil
 }
 
 // locationTypeCols is the column list every location_type read scans, in struct
@@ -367,6 +409,123 @@ func scanLocationType(row pgx.Row) (*LocationType, error) {
 	return &lt, nil
 }
 
+// scanLocationTypeResolved scans a locationTypeResolved row and applies the
+// operator's shadow over the official values, so no caller above the gateway
+// ever sees which of the two it got.
+func scanLocationTypeResolved(row pgx.Row) (*LocationType, error) {
+	var lt LocationType
+	var rule, image []byte
+	if err := row.Scan(&lt.ID, &lt.Name, &lt.Official, &lt.DisplayName, &lt.Icon, &lt.AllowedParentTypes, &lt.LabelRule, &rule, &image); err != nil {
+		return nil, err
+	}
+	lt.AllowedParentTypes = normalizeAllowedParentTypes(lt.AllowedParentTypes)
+	if len(rule) > 0 {
+		var r NameRule
+		if err := json.Unmarshal(rule, &r); err != nil {
+			return nil, fmt.Errorf("decode name rule: %w", err)
+		}
+		r = r.normalized()
+		lt.NameRule = &r
+	}
+	resolved, err := applyLocationTypeImage(lt, image)
+	if err != nil {
+		return nil, err
+	}
+	resolved.Forked = len(image) > 0
+	return &resolved, nil
+}
+
+// locationTypeShadowImage is the mutable-column projection a fork captures: the
+// whole set, every time (ADR-0095 decision 2), each nullable column written as
+// an explicit null rather than dropped, so a rule an operator CLEARED reads
+// back cleared instead of re-adopting the shipped one on the next read.
+//
+// It deliberately omits id, name and official. Those are structure, and
+// structure is official space: a shadow restates a row's facts, it never
+// renames the row or changes where it came from. This registry has no parent
+// link to omit, being flat.
+func locationTypeShadowImage(lt LocationType) ([]byte, error) {
+	var rule *NameRule
+	if lt.NameRule != nil {
+		n := lt.NameRule.normalized()
+		rule = &n
+	}
+	image, err := json.Marshal(map[string]any{
+		"display_name":         lt.DisplayName,
+		"icon":                 lt.Icon,
+		"allowed_parent_types": normalizeAllowedParentTypes(lt.AllowedParentTypes),
+		"label_rule":           lt.LabelRule,
+		"name_rule":            rule,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("storage: marshal location_type shadow: %w", err)
+	}
+	return image, nil
+}
+
+// applyLocationTypeImage overlays a shadow image onto the official row. An
+// empty image is the unforked case and returns the row untouched; a key the
+// image does not carry (a column added to the registry after the fork was
+// taken) falls back to the official value; a key it carries as null clears the
+// column, which on name_rule means "an operator names these locations" and is
+// the answer #692 exists to make reachable, not an absence.
+func applyLocationTypeImage(lt LocationType, image []byte) (LocationType, error) {
+	fields, err := shadowFields(image)
+	if err != nil {
+		return lt, err
+	}
+	if fields == nil {
+		return lt, nil
+	}
+	if v, ok, err := shadowValue[string](fields, "display_name"); err != nil {
+		return lt, err
+	} else if ok {
+		lt.DisplayName = v
+	}
+	if v, ok, err := shadowValue[string](fields, "icon"); err != nil {
+		return lt, err
+	} else if ok {
+		lt.Icon = v
+	}
+	if v, ok, err := shadowValue[[]string](fields, "allowed_parent_types"); err != nil {
+		return lt, err
+	} else if ok {
+		lt.AllowedParentTypes = normalizeAllowedParentTypes(v)
+	}
+	if v, ok, err := shadowValue[*string](fields, "label_rule"); err != nil {
+		return lt, err
+	} else if ok {
+		lt.LabelRule = v
+	}
+	if v, ok, err := shadowValue[*NameRule](fields, "name_rule"); err != nil {
+		return lt, err
+	} else if ok {
+		if v != nil {
+			n := v.normalized()
+			v = &n
+		}
+		lt.NameRule = v
+	}
+	return lt, nil
+}
+
+// The location_type fields a PATCH can write, spelled as the wire body spells
+// them, because an update_mask names wire fields (ADR-0091).
+const (
+	LocationTypeFieldDisplayName        = "display_name"
+	LocationTypeFieldIcon               = "icon"
+	LocationTypeFieldAllowedParentTypes = "allowed_parent_types"
+	LocationTypeFieldLabelRule          = "label_rule"
+	LocationTypeFieldNameRule           = "name_rule"
+)
+
+// LocationTypePatchFields is every field a location_type PATCH lets a write
+// set, in the order a refusal lists them.
+var LocationTypePatchFields = []string{
+	LocationTypeFieldDisplayName, LocationTypeFieldIcon, LocationTypeFieldAllowedParentTypes,
+	LocationTypeFieldLabelRule, LocationTypeFieldNameRule,
+}
+
 // LocationTypePatch carries the mutable fields of a location_type update; a nil
 // field is left unchanged. AllowedParentTypes is a pointer to a slice so a
 // caller can distinguish "leave unchanged" (nil) from "replace with this set"
@@ -377,13 +536,97 @@ type LocationTypePatch struct {
 	Icon               *string
 	AllowedParentTypes *[]string
 	LabelRule          *string
-	// NameRule sets the type's name rule; nil leaves it alone. There is no
-	// spelling that CLEARS it back to operator-named, the same limit
-	// component_type.stem's patch already carries (its wire field is
-	// minLength 1, so an inherited stem cannot be cleared either). Adding one
-	// means a three-state on an object field, which JSON cannot give a Go
-	// struct: an omitted key and an explicit null both decode to nil.
+	// NameRule sets the type's name rule. Under the IMPLIED mask (Write nil, a
+	// caller that sends no update_mask) nil still leaves it alone, which is
+	// what every caller predating #692 gets. Naming name_rule in the mask is
+	// what writes it regardless, so mask + nil is the CLEAR: back to
+	// operator-named, the state ADR-0102 calls the opt-out.
 	NameRule *NameRule
+	// Write is the resolved update_mask (#692, ADR-0091): the fields this write
+	// writes. NIL means the caller sent no mask, read as the implied mask of
+	// the fields the patch populated (a non-nil pointer). A NON-NIL empty set
+	// is a caller naming no fields, and writes nothing.
+	Write updatemask.Fields
+}
+
+// Populated is the patch's implied mask: the fields it carries a value for,
+// AIP-134's reading of an absent update_mask. Every field here is a pointer, so
+// "populated" is exactly "the caller set this pointer", which makes the implied
+// mask byte-identical to the coalesce-per-field behavior this patch had before
+// it carried a mask at all.
+//
+// Exported because the API resolves the wire mask against the same patch it is
+// about to write, so "populated" is defined once for both layers rather than
+// once per layer, where the two definitions would drift.
+func (p LocationTypePatch) Populated() updatemask.Fields {
+	f := updatemask.Fields{}
+	set := func(name string, on bool) {
+		if on {
+			f[name] = true
+		}
+	}
+	set(LocationTypeFieldDisplayName, p.DisplayName != nil)
+	set(LocationTypeFieldIcon, p.Icon != nil)
+	set(LocationTypeFieldAllowedParentTypes, p.AllowedParentTypes != nil)
+	set(LocationTypeFieldLabelRule, p.LabelRule != nil)
+	set(LocationTypeFieldNameRule, p.NameRule != nil)
+	return f
+}
+
+// writeFields is the write set this patch actually writes: the explicit mask
+// when the caller resolved one, otherwise the implied mask over what it
+// populated.
+func (p LocationTypePatch) writeFields() updatemask.Fields {
+	if p.Write != nil {
+		return p.Write
+	}
+	return updatemask.Implied(p.Populated())
+}
+
+// applyLocationTypePatch is the whole of what a patch MEANS, as a pure function
+// over the row an operator currently reads: no I/O, no transaction, no branch
+// on whether the row is shipped. The two write paths differ only in where the
+// result lands (the row itself, or a shadow of it), which is what keeps a fork
+// and a direct write from drifting into two definitions of the same edit.
+//
+// A field outside the write set keeps what the row already had. A field inside
+// it takes the patch's value, INCLUDING the zero value: that is the capability
+// the implied mask cannot express, and for name_rule it is the only way back to
+// operator-named (#692).
+func applyLocationTypePatch(lt LocationType, patch LocationTypePatch) LocationType {
+	w := patch.writeFields()
+	if w.Has(LocationTypeFieldDisplayName) {
+		lt.DisplayName = derefStrOr(patch.DisplayName, "")
+	}
+	if w.Has(LocationTypeFieldIcon) {
+		lt.Icon = derefStrOr(patch.Icon, "")
+	}
+	if w.Has(LocationTypeFieldAllowedParentTypes) {
+		var set []string
+		if patch.AllowedParentTypes != nil {
+			set = *patch.AllowedParentTypes
+		}
+		lt.AllowedParentTypes = normalizeAllowedParentTypes(set)
+	}
+	if w.Has(LocationTypeFieldLabelRule) {
+		// nilIfEmptyRule keeps the house's three-state string sentinel working
+		// alongside the mask: "" clears, as it always did, and the mask reaches
+		// the same state without a value. ADR-0091 keeps both spellings.
+		lt.LabelRule = nilIfEmptyRule(patch.LabelRule)
+	}
+	if w.Has(LocationTypeFieldNameRule) {
+		lt.NameRule = patch.NameRule
+	}
+	return lt
+}
+
+// derefStrOr reads a string pointer with an explicit fallback, for the masked
+// write where "named but absent" means the zero value rather than "unchanged".
+func derefStrOr(s *string, fallback string) string {
+	if s == nil {
+		return fallback
+	}
+	return *s
 }
 
 // CreateLocationType inserts a custom (official=false) location_type and audits
@@ -445,15 +688,23 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	return created, nil
 }
 
-// UpdateLocationType patches a custom location_type's display_name, icon, or
-// allowed_parent_types (nil fields unchanged) and audits it. Official rows are
-// read-only (ErrTypeOfficial); an unknown id is ErrTypeNotFound.
-func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch LocationTypePatch) (*LocationType, error) {
+// UpdateLocationType patches a location_type's display_name, icon,
+// allowed_parent_types, label_rule or name_rule and audits it. An unknown ref
+// is ErrTypeNotFound.
+//
+// An operator's own row is written in place, as it always was. A SHIPPED
+// (official) row is never written: the patch FORKS it (#703, ADR-0095),
+// storing the operator's whole version of the row as a shadow that every read
+// resolves over the official one. The official row is byte-identical
+// afterwards, so the next release can withdraw or improve what it ships, and
+// RestoreLocationType discards the shadow to take those changes.
+//
+// Which fields the patch writes is the resolved update_mask's business
+// (LocationTypePatch.Write): an absent mask writes the fields the patch
+// populated, which is exactly what the coalesce-per-column statement this
+// replaced did, and a mask naming name_rule with no rule CLEARS it (#692).
+func (p *PG) UpdateLocationType(ctx context.Context, actorID, ref string, patch LocationTypePatch) (*LocationType, error) {
 	if err := validateLabelRule(patch.LabelRule); err != nil {
-		return nil, err
-	}
-	rule, err := nameRuleJSON(patch.NameRule)
-	if err != nil {
 		return nil, err
 	}
 	tx, err := p.pool.Begin(ctx)
@@ -462,49 +713,59 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch L
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := guardTypeMutable(ctx, tx, "location_type", id); err != nil {
-		return nil, err
-	}
-	before, err := registryAuditImage(ctx, tx, "location_type", id)
+	// `for update of lt` locks the registry row for the life of the
+	// transaction. The patch is applied in Go over the row this read returned,
+	// so without the lock two concurrent patches of different fields could each
+	// write a whole row computed from the same starting point and the second
+	// would silently undo the first. The column-by-column coalesce this
+	// replaced was immune by construction; the lock is what buys that back.
+	current, err := scanLocationTypeResolved(tx.QueryRow(ctx, locationTypeResolved+` where lt.`+registryRefCol(ref)+` = $1 for update of lt`, ref))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
 		}
-		return nil, fmt.Errorf("storage: audit image location_type %q: %w", id, err)
+		return nil, fmt.Errorf("storage: load location_type %q: %w", ref, err)
 	}
-	var allowed *[]string
-	if patch.AllowedParentTypes != nil {
-		v := normalizeAllowedParentTypes(*patch.AllowedParentTypes)
-		allowed = &v
+	updated := applyLocationTypePatch(*current, patch)
+	// Refused here, at rule-EDIT time, which is the whole point of a rule that
+	// is a declaration: a rule that cannot mint a legal name never reaches a
+	// column some later create would have executed it from (ADR-0102). The
+	// RESOLVED rule is encoded, not the patch's, so a fork and a direct write
+	// hold the same value to the same bar.
+	rule, err := nameRuleJSON(updated.NameRule)
+	if err != nil {
+		return nil, err
+	}
+	if current.Official {
+		return p.forkLocationType(ctx, tx, actorID, *current, updated)
+	}
+
+	before, err := registryAuditImage(ctx, tx, "location_type", current.ID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTypeNotFound
+		}
+		return nil, fmt.Errorf("storage: audit image location_type %q: %w", ref, err)
 	}
 	lt, err := scanLocationType(tx.QueryRow(ctx, `
 		update location_type set
-			display_name         = coalesce($2, display_name),
-			icon                 = coalesce($3, icon),
-			allowed_parent_types = coalesce($4, allowed_parent_types),
-			-- An explicit empty string CLEARS the rule; see UpdateComponentType's
-			-- own label_rule CASE for why this is not a coalesce.
-			label_rule           = case
-				when $5::text is null then label_rule
-				when $5 = '' then null
-				else $5::text
-			end,
-			-- A plain coalesce, unlike label_rule above: a name rule has no
-			-- "clear" spelling on the wire (see LocationTypePatch.NameRule), so
-			-- there is no third state for a CASE to tell apart.
-			name_rule            = coalesce($6::jsonb, name_rule)
-		where `+registryRefCol(id)+` = $1
+			display_name         = $2,
+			icon                 = $3,
+			allowed_parent_types = $4,
+			label_rule           = $5,
+			name_rule            = $6::jsonb
+		where id = $1
 		returning `+locationTypeCols,
-		id, patch.DisplayName, patch.Icon, allowed, patch.LabelRule, rule))
+		current.ID, updated.DisplayName, updated.Icon, updated.AllowedParentTypes, updated.LabelRule, rule))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
 		}
-		return nil, fmt.Errorf("storage: update location_type %q: %w", id, err)
+		return nil, fmt.Errorf("storage: update location_type %q: %w", ref, err)
 	}
-	after, err := registryAuditImage(ctx, tx, "location_type", id)
+	after, err := registryAuditImage(ctx, tx, "location_type", current.ID)
 	if err != nil {
-		return nil, fmt.Errorf("storage: audit image location_type %q: %w", id, err)
+		return nil, fmt.Errorf("storage: audit image location_type %q: %w", ref, err)
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "update", "location_type", lt.ID, before, after); err != nil {
 		return nil, err
@@ -513,6 +774,97 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, id string, patch L
 		return nil, fmt.Errorf("storage: commit update location_type: %w", err)
 	}
 	return lt, nil
+}
+
+// forkLocationType is UpdateLocationType's shipped-row leg: it stores the row
+// as the operator now reads it (their earlier fork, patched) as a shadow and
+// leaves the official row untouched. Commits the caller's transaction.
+//
+// The audit records the operator's version before and after, keyed on the
+// shipped row's uuid, because that uuid is the only address this row has ever
+// had. A first fork has no "before" shadow, so it records the shipped values it
+// forked from: the diff an operator wants is "what changed about this row".
+func (p *PG) forkLocationType(ctx context.Context, tx pgx.Tx, actorID string, current, updated LocationType) (*LocationType, error) {
+	before, err := locationTypeShadowImage(current)
+	if err != nil {
+		return nil, err
+	}
+	after, err := locationTypeShadowImage(updated)
+	if err != nil {
+		return nil, err
+	}
+	rowID, err := shadowRowID(current.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err := putShadowImage(ctx, tx, locationTypeRegistry, rowID, after); err != nil {
+		return nil, err
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "update", locationTypeRegistry, current.ID,
+		json.RawMessage(before), json.RawMessage(after)); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit fork location_type: %w", err)
+	}
+	updated.Forked = true
+	return &updated, nil
+}
+
+// RestoreLocationType is restore-to-defaults: it deletes the operator's shadow
+// so reads return the shipped row again, including whatever a later release has
+// changed or WITHDRAWN about it. ErrTypeNotForked when the row carries no
+// shadow (there is nothing to undo, and saying so beats a silent success);
+// ErrTypeNotFound when the ref names nothing.
+//
+// This is the only delete an operator can aim at a shipped row, and it does not
+// touch it: DeleteLocationType still refuses an official row, forked or not.
+// Restoring an operator's OWN row is meaningless (there are no defaults behind
+// it) and is ErrTypeNotForked too.
+func (p *PG) RestoreLocationType(ctx context.Context, actorID, ref string) (*LocationType, error) {
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin restore location_type: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	current, err := scanLocationTypeResolved(tx.QueryRow(ctx, locationTypeResolved+` where lt.`+registryRefCol(ref)+` = $1 for update of lt`, ref))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrTypeNotFound
+		}
+		return nil, fmt.Errorf("storage: load location_type %q: %w", ref, err)
+	}
+	if !current.Forked {
+		return nil, ErrTypeNotForked
+	}
+	before, err := locationTypeShadowImage(*current)
+	if err != nil {
+		return nil, err
+	}
+	rowID, err := shadowRowID(current.ID)
+	if err != nil {
+		return nil, err
+	}
+	dropped, err := dropShadowImage(ctx, tx, locationTypeRegistry, rowID)
+	if err != nil {
+		return nil, err
+	}
+	if !dropped {
+		return nil, ErrTypeNotForked
+	}
+	shipped, err := scanLocationTypeResolved(tx.QueryRow(ctx, locationTypeResolved+` where lt.id = $1`, current.ID))
+	if err != nil {
+		return nil, fmt.Errorf("storage: reload location_type %q: %w", ref, err)
+	}
+	if err := writeAuditRes(ctx, tx, actorID, "restore", locationTypeRegistry, current.ID,
+		json.RawMessage(before), nil); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit restore location_type: %w", err)
+	}
+	return shipped, nil
 }
 
 // DeleteLocationType removes a custom location_type, refusing an official row and
@@ -656,6 +1008,11 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 			return nil, err
 		}
 		name, ordinal = genName, &n
+	}
+	// The form's precondition (#702), checked under the lock that allocated the
+	// number and before the insert. See CreateComponent's own call.
+	if err := confirmDraftedName(spec.ExpectedName, ordinal, name); err != nil {
+		return nil, err
 	}
 
 	// An empty display_name hands the LABEL's pen to the platform (#682); the

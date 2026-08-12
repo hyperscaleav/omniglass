@@ -7,6 +7,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/updatemask"
 )
 
 // mapRefErr translates the sentinels shared by every bare-name and dotted-
@@ -23,7 +24,11 @@ import (
 // Candidates is empty for a path that resolved with no caller scope to filter
 // by at all (the three *NameTaken advisories, storage.withoutCandidates): the
 // reference is still refused as ambiguous, the message just names no uuid,
-// since nothing on that path could tell which ones the caller may read.
+// since nothing on that path could tell which ones the caller may read. A path
+// that resolved WITHIN the caller's own read scope lists them (#697), because
+// every candidate is then a row that caller may read, and each is a spelling of
+// the same reference that resolves: this message is the only place an operator
+// is told which rows collided.
 //
 // storage.ErrPathNotFound is a dotted address that failed to resolve
 // structurally (a missing segment, or a plane mismatch): mapped to the SAME
@@ -64,12 +69,85 @@ func mapRefErr(err error) (error, bool) {
 	return nil, false
 }
 
+// The two refusals a create FORM has to act on, and the reason both carry a
+// machine-readable location rather than only a sentence (#702).
+//
+// A create form is the one caller that cannot treat a refusal as "show the
+// message and stop". Two of them have a specific recovery it must run, and both
+// are otherwise indistinguishable from refusals that mean something else:
+//
+//   - the platform will not NAME this row (no stem on the component_type chain,
+//     an unclassified system, a system_type chain with no stem, a location_type
+//     with no name rule). The form unlocks the name field and asks the operator
+//     to type one. Every other 422 on the same route means the body is wrong,
+//     and unlocking on those would blank a field for no reason.
+//   - the drafted NAME moved between the preview and the submit, because the
+//     ordinal was taken or the type that mints it was edited. The form re-reads
+//     the draft and shows the new name. Every other 409 on a create is a name
+//     collision the operator has to resolve themselves.
+//
+// Matching on the sentence would tie the console to server copy, so each is
+// stamped with a huma.ErrorDetail whose Location names the request field the
+// recovery acts on: body.name for the first, body.expected_name for the second,
+// which also carries the name the create would have produced as its Value. That
+// is the RFC 9457 errors array the ErrorModel already publishes, so it costs no
+// new wire shape and shows up in the generated client for free.
+
+// errNoGeneratedName is the 422 for "the platform will not name this row",
+// located on body.name because supplying one is the fix and the field is where
+// the form acts.
+func errNoGeneratedName(msg string) error {
+	return huma.Error422UnprocessableEntity(msg, &huma.ErrorDetail{Message: msg, Location: "body.name"})
+}
+
+// mapDraftedNameErr translates the create form's name-precondition sentinels
+// (#702). Called first by every create mapper that can generate a name, on the
+// same fall-through shape as mapRefErr, because the precondition is one wire
+// contract shared by three tiers rather than three similar ones.
+//
+// The conflict is a 409 and not a 422: the request is well formed and was legal
+// when it was composed, and the estate simply moved underneath it, which is the
+// definition of a conflict. It names both the name the form was shown and the
+// one this create would produce, because "try again" is not the recovery, "here
+// is what you would get instead" is. The message deliberately does not assert
+// WHY the two differ: another create taking the number and an edit to the type's
+// stem produce the same fact and the same recovery, and a message that named
+// only the first would be wrong half the time.
+func mapDraftedNameErr(err error) (error, bool) {
+	var moved *storage.DraftedNameMovedError
+	if errors.As(err, &moved) {
+		msg := fmt.Sprintf(
+			"this create would name the row %q, not %q as the form was shown, because the number was taken or the type that names it changed while the form was open. Nothing was created.",
+			moved.Name, moved.Expected)
+		return huma.Error409Conflict(msg, &huma.ErrorDetail{
+			Message:  msg,
+			Location: "body.expected_name",
+			Value:    moved.Name,
+		}), true
+	}
+	if errors.Is(err, storage.ErrNameExpectedOnTypedName) {
+		return huma.Error422UnprocessableEntity(
+			"expected_name applies only to a name the platform generates: omit the name to have one generated, or drop expected_name",
+			&huma.ErrorDetail{Location: "body.expected_name", Message: "sent beside a name"}), true
+	}
+	return nil, false
+}
+
 // mapTypeErr translates the shared type-registry storage sentinels into HTTP
 // status. kind is the wire label used in the message (e.g. "location_type").
 // Shared by the location/system/component type routes.
 func mapTypeErr(err error, kind string) error {
 	if refErr, ok := mapRefErr(err); ok {
 		return refErr
+	}
+	// A mask this resource cannot honor is a request fault that NAMES the
+	// field, never a silent no-op: the caller stated an intent the resource has
+	// no field for, and swallowing it would leave them believing a write landed
+	// (ADR-0091). Here rather than in one registry's own mapper because the
+	// mask is a wire primitive every registry adopting it reaches the same way.
+	var maskErr *updatemask.Error
+	if errors.As(err, &maskErr) {
+		return huma.Error422UnprocessableEntity(maskErr.Error())
 	}
 	switch {
 	case errors.Is(err, storage.ErrTypeNotFound):

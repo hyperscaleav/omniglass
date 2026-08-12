@@ -14,21 +14,24 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// The draft label render (#699): what a create form can be told about the label
-// a row will carry, BEFORE the row exists.
+// The draft identity render (#699, #702): what a create form can be told about
+// the name and the label a row will carry, BEFORE the row exists.
 //
 // ADR-0104 refused a draft preview that MINTS, on two grounds: the answer is
 // provisional (another create can take the ordinal between the preview and the
 // commit) and a rolled-back mint takes the same bucket advisory lock real
 // creates need, so previewing per picker change would serialise the estate's
 // creates. Neither objection reaches a render that ALLOCATES NOTHING, which is
-// what this is: the same tier resolution, the same closed data map and the same
-// one engine, with the token standing where the ordinal would go.
+// what this is: the same tier resolution, the same closed data map, the same one
+// engine, and the lowest free ordinal READ from the bucket's siblings rather
+// than minted. The provisional half is answered by the create's precondition
+// (name_precondition_test.go), not by hiding the number.
 //
 // So the properties this file holds are, in order of what would hurt most if
 // they broke:
 //
-//  1. the rendered draft is the label the gateway then STORES (the whole claim),
+//  1. the drafted name and label are the ones the gateway then STAMPS (the
+//     whole claim, and exact on both fields since #702),
 //  2. it takes no lock, opens no write transaction and allocates nothing,
 //  3. it refuses a placement the caller cannot read, and
 //  4. it refuses exactly what a nameless create would refuse, with the same
@@ -65,13 +68,13 @@ func TestTheDraftLabelIsTheLabelTheCreateStores(t *testing.T) {
 		Name:         "front-panel",
 		LocationName: room.Name,
 		SystemName:   "board-1",
-	}, all, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "front-panel", ProductName: strptr(qm55), LocationName: &room.Name, SystemName: strptr("board-1"),
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -83,41 +86,133 @@ func TestTheDraftLabelIsTheLabelTheCreateStores(t *testing.T) {
 	}
 }
 
-// TestTheDraftLabelIsTheLabelTheCreateStoresForAGeneratedName is the same
-// acceptance where the platform owns the name too, which is the case the token
-// exists for. The comparison substitutes the ordinal the create allocated back
-// into the drafted string, because that number is exactly and only what the
-// draft could not know.
-func TestTheDraftLabelIsTheLabelTheCreateStoresForAGeneratedName(t *testing.T) {
+// TestTheDraftIsTheIdentityTheCreateStampsForAGeneratedName is the same
+// acceptance where the platform owns the name too, and it is now an EXACT
+// comparison on both fields (#702). It used to substitute the create's ordinal
+// back into the drafted string, because the draft wrote a token where the number
+// went; the number is read from the bucket before the label is rendered, so
+// there is nothing left in either value for the create to fill in.
+func TestTheDraftIsTheIdentityTheCreateStampsForAGeneratedName(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55, LocationName: room.Name,
-	}, all, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: &room.Name,
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	if c.Ordinal == nil {
 		t.Fatal("a generated name stores the ordinal it was minted from")
 	}
-	// The token is substituted only where it stands alone as a word, which is
-	// what the shipped rule renders it as ("Microphone n"). A blanket
-	// replacement would corrupt any type name carrying the letter, and this
-	// fixture's does.
-	tok := regexp.MustCompile(`\b` + regexp.QuoteMeta(storage.OrdinalToken) + `\b`)
-	want := tok.ReplaceAllString(drafted.Label, strconv.Itoa(*c.Ordinal))
-	if want != c.DisplayName {
-		t.Errorf("drafted %q with the ordinal filled in = %q, stored %q", drafted.Label, want, c.DisplayName)
+	if drafted.Name != c.Name {
+		t.Errorf("drafted name %q, created %q: the form promised a name the create did not use", drafted.Name, c.Name)
 	}
-	if !strings.Contains(drafted.Label, storage.OrdinalToken) {
-		t.Errorf("drafted %q carries no ordinal token, so the substitution above proves nothing", drafted.Label)
+	if drafted.Ordinal != *c.Ordinal {
+		t.Errorf("drafted ordinal %d, allocated %d", drafted.Ordinal, *c.Ordinal)
+	}
+	if drafted.Label != c.DisplayName {
+		t.Errorf("drafted label %q, stored %q", drafted.Label, c.DisplayName)
+	}
+	// The guard: the fixture's rule reads .Ordinal, so a draft that had left the
+	// number out entirely would still pass the equality above if the create had
+	// too. The number has to be IN both.
+	if !strings.Contains(drafted.Label, strconv.Itoa(*c.Ordinal)) {
+		t.Errorf("drafted label %q carries no ordinal, so the comparisons above prove less than they look", drafted.Label)
+	}
+}
+
+// stemOf resolves the stem a product's component_type chain yields, through the
+// gateway's own walk rather than a fixture constant, so a test comparing a
+// drafted name against the mint is comparing against the rule.
+func stemOf(t *testing.T, gw *storage.PG, ctx context.Context, product string) string {
+	t.Helper()
+	pr, err := gw.GetProduct(ctx, product)
+	if err != nil {
+		t.Fatalf("get product %s: %v", product, err)
+	}
+	stem, err := gw.ExportStemForProduct(ctx, pr.ID)
+	if err != nil {
+		t.Fatalf("resolve stem for %s: %v", product, err)
+	}
+	return stem
+}
+
+// TestTheDraftedOrdinalIsTheLowestFreeOneInThatBucket is the number itself, and
+// the two things about it that are easy to get wrong: it MOVES as the bucket
+// fills, and it is per bucket rather than per estate. A draft that read the
+// wrong bucket would still show a plausible number, which is why this asserts
+// two buckets at once rather than one twice.
+func TestTheDraftedOrdinalIsTheLowestFreeOneInThatBucket(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	here := makeRoomWithLabel(t, gw, ctx, "room-here", "Here")
+	there := makeRoomWithLabel(t, gw, ctx, "room-there", "There")
+
+	draft := func(room string) storage.DraftLabel {
+		t.Helper()
+		d, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
+			ProductName: qm55, LocationName: room,
+		}, all, all, all)
+		if err != nil {
+			t.Fatalf("render draft at %s: %v", room, err)
+		}
+		return d
+	}
+	first := draft(here.Name)
+	if first.Ordinal != 1 {
+		t.Fatalf("first draft ordinal %d, want 1 in an empty bucket", first.Ordinal)
+	}
+	for i := range 2 {
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
+			ProductName: strptr(qm55), LocationName: &here.Name,
+		}, all, all, all, all); err != nil {
+			t.Fatalf("create %d: %v", i, err)
+		}
+	}
+	if got := draft(here.Name); got.Ordinal != 3 || got.Name != storage.ExportMintName(stemOf(t, gw, ctx, qm55), false, 3) {
+		t.Errorf("draft after two creates = %+v, want ordinal 3 and the name the mint gives it", got)
+	}
+	// The other bucket is untouched by them, which is the whole reason the
+	// draft has to resolve the placement before it reads the number.
+	if got := draft(there.Name); got.Ordinal != 1 {
+		t.Errorf("draft in the other room = %+v, want ordinal 1: the bucket is the placement, not the estate", got)
+	}
+}
+
+// TestTheDraftedNameIsWhatTheAllocatorWouldMint pins the previewed name against
+// the ALLOCATOR's own answer for the same bucket rather than against a restated
+// format string. previewName and generateName share siblingNames and
+// pickOrdinal, so the only way they can disagree is if one of them is handed a
+// different mint or a different bucket, which is exactly what this catches.
+func TestTheDraftedNameIsWhatTheAllocatorWouldMint(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
+		ProductName: strptr(qm55), LocationName: &room.Name,
+	}, all, all, all, all); err != nil {
+		t.Fatalf("seed the bucket: %v", err)
+	}
+	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
+		ProductName: qm55, LocationName: room.Name,
+	}, all, all, all)
+	if err != nil {
+		t.Fatalf("render draft: %v", err)
+	}
+	name, ordinal, err := gw.ExportGenerateName(ctx, stemOf(t, gw, ctx, qm55), nil, &room.ID, nil)
+	if err != nil {
+		t.Fatalf("run the allocator: %v", err)
+	}
+	if drafted.Name != name || drafted.Ordinal != ordinal {
+		t.Errorf("drafted %q/%d, the allocator would mint %q/%d", drafted.Name, drafted.Ordinal, name, ordinal)
+	}
+	if ordinal != 2 {
+		t.Errorf("the allocator returned ordinal %d in a bucket holding one sibling, want 2: this fixture is not exercising the case", ordinal)
 	}
 }
 
@@ -131,7 +226,7 @@ func TestTheDraftSystemLabelIsExactWhereTheRuleReadsNoOrdinal(t *testing.T) {
 
 	drafted, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{
 		SystemTypeRef: "board", LocationName: room.Name,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
@@ -159,7 +254,7 @@ func TestTheDraftedLocationLabelIsTheOneTheCreateStores(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	drafted, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{
 		LocationTypeRef: "room", Name: "north-boardroom",
-	})
+	}, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
@@ -194,7 +289,7 @@ func TestTheDraftLabelIsEmptyWhereNoRuleResolves(t *testing.T) {
 	}
 	drafted, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{
 		LocationTypeRef: "room", Name: "boardroom",
-	})
+	}, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
@@ -224,7 +319,7 @@ func TestTheDraftLabelReportsTheRuleItRendered(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55, Name: "front-panel",
-	}, all, all)
+	}, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
@@ -241,19 +336,19 @@ func TestTheDraftLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
 	gw, ctx := seededGateway(t)
 
 	// A system with no system_type at all: the stem lives on the registry row.
-	if _, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{}, all); !errors.Is(err, storage.ErrSystemTypeRequiredForName) {
+	if _, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{}, all, all); !errors.Is(err, storage.ErrSystemTypeRequiredForName) {
 		t.Errorf("unclassified system draft = %v, want ErrSystemTypeRequiredForName", err)
 	}
 	// A location_type with no name rule, which is every shipped type (ADR-0103).
-	if _, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{LocationTypeRef: "room"}); !errors.Is(err, storage.ErrLocationTypeNoNameRule) {
+	if _, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{LocationTypeRef: "room"}, all); !errors.Is(err, storage.ErrLocationTypeNoNameRule) {
 		t.Errorf("nameless room draft = %v, want ErrLocationTypeNoNameRule", err)
 	}
 	// And the same three, supplied with a name, render fine: the refusal is
 	// about GENERATING a name, never about rendering a label.
-	if _, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{Name: "one-off"}, all); err != nil {
+	if _, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{Name: "one-off"}, all, all); err != nil {
 		t.Errorf("named unclassified system draft = %v, want no error", err)
 	}
-	if _, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{LocationTypeRef: "room", Name: "boardroom"}); err != nil {
+	if _, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{LocationTypeRef: "room", Name: "boardroom"}, all); err != nil {
 		t.Errorf("named room draft = %v, want no error", err)
 	}
 }
@@ -275,7 +370,7 @@ func TestTheDraftLabelRefusesAComponentTypeChainWithNoStem(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("create product: %v", err)
 	}
-	_, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{ProductName: "stemless-thing"}, all, all)
+	_, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{ProductName: "stemless-thing"}, all, all, all)
 	if !errors.Is(err, storage.ErrComponentTypeNoStem) {
 		t.Errorf("stemless draft = %v, want ErrComponentTypeNoStem", err)
 	}
@@ -299,7 +394,7 @@ func TestTheDraftLabelRendersWithinTheCallersReadScope(t *testing.T) {
 	narrow := scope.Set{IDs: []string{mine.ID}}
 	got, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55, Name: "panel", LocationName: mine.Name,
-	}, narrow, narrow)
+	}, all, narrow, narrow)
 	if err != nil {
 		t.Fatalf("render inside scope: %v", err)
 	}
@@ -308,7 +403,7 @@ func TestTheDraftLabelRendersWithinTheCallersReadScope(t *testing.T) {
 	}
 	if _, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55, Name: "panel", LocationName: theirs.Name,
-	}, narrow, narrow); !errors.Is(err, storage.ErrLocationNotFound) {
+	}, all, narrow, narrow); !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Errorf("out-of-scope draft = %v, want the non-disclosing ErrLocationNotFound", err)
 	}
 }
@@ -326,12 +421,12 @@ func TestTheDraftSystemLabelRendersWithinTheCallersReadScope(t *testing.T) {
 
 	if _, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{
 		SystemTypeRef: "board", Name: "board-x", LocationName: mine.Name,
-	}, narrow); err != nil {
+	}, all, narrow); err != nil {
 		t.Fatalf("render inside scope: %v", err)
 	}
 	if _, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{
 		SystemTypeRef: "board", Name: "board-x", LocationName: theirs.Name,
-	}, narrow); !errors.Is(err, storage.ErrLocationNotFound) {
+	}, all, narrow); !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Errorf("out-of-scope draft = %v, want the non-disclosing ErrLocationNotFound", err)
 	}
 }
@@ -352,7 +447,7 @@ func TestTheDraftComponentLabelReadsTheSystemWithinScope(t *testing.T) {
 
 	if _, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55, Name: "panel", SystemName: "board-x",
-	}, narrow, narrow); !errors.Is(err, storage.ErrSystemNotFound) {
+	}, all, narrow, narrow); !errors.Is(err, storage.ErrSystemNotFound) {
 		t.Errorf("out-of-scope system draft = %v, want the non-disclosing ErrSystemNotFound", err)
 	}
 }
@@ -361,6 +456,13 @@ func TestTheDraftComponentLabelReadsTheSystemWithinScope(t *testing.T) {
 // #650's counting instrument rather than asserted. Three claims, each read off
 // the SQL the render actually issued: no advisory lock, no write transaction,
 // and no write.
+//
+// It carries MORE weight since #702, not less. The render now READS the lowest
+// free ordinal, which is the operation ADR-0104 conflated with minting one, so
+// "the number is known and nothing was allocated to know it" is the whole claim
+// of the slice rather than a side property: the statement scan below is what
+// says the read did not become a mint, and the create at the end is what says no
+// number was consumed.
 //
 // The counter is the POOL's (storagetest.NewCountingDB), not a wrapped querier:
 // the render reaches for p.pool itself, so a counter handed to it as an
@@ -384,10 +486,17 @@ func TestTheDraftLabelAllocatesNothing(t *testing.T) {
 	counter.Reset()
 
 	for range 5 {
-		if _, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
+		d, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 			ProductName: qm55, LocationName: "room-1",
-		}, all, all); err != nil {
+		}, all, all, all)
+		if err != nil {
 			t.Fatalf("render draft: %v", err)
+		}
+		// Every one of the five answers 1, which is the read half of the same
+		// claim: a render that had allocated would hand the next one a
+		// different number.
+		if d.Ordinal != 1 {
+			t.Errorf("a repeated draft answered ordinal %d, want 1 every time: a read does not consume", d.Ordinal)
 		}
 	}
 	stmts := counter.Summary()
@@ -406,7 +515,7 @@ func TestTheDraftLabelAllocatesNothing(t *testing.T) {
 	// pass the statement scan above and fail this.
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		ProductName: strptr(qm55), LocationName: strptr("room-1"),
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -415,38 +524,116 @@ func TestTheDraftLabelAllocatesNothing(t *testing.T) {
 	}
 }
 
-// TestTheDraftShapeAndTheMintAgree pins the one piece of new pure logic against
-// the allocator's own formatter. shape() writes the token where name() writes a
-// number, and if the two ever disagree the form shows a shape the platform does
-// not mint, which is the cross-tier defect this epic has now hit twice.
-func TestTheDraftShapeAndTheMintAgree(t *testing.T) {
-	for _, tc := range []struct {
-		stem      string
-		bareFirst bool
-		want      string
-	}{
-		{stem: "display", bareFirst: false, want: "display-" + storage.OrdinalToken},
-		{stem: "boardroom", bareFirst: true, want: "boardroom"},
-		{stem: "", bareFirst: false, want: storage.OrdinalToken},
-	} {
-		got := storage.ExportMintShape(tc.stem, tc.bareFirst)
-		if got != tc.want {
-			t.Errorf("shape(%q, %v) = %q, want %q", tc.stem, tc.bareFirst, got, tc.want)
-		}
-		// The shape is the mint with the token in the ordinal's place. For a
-		// suppressing mint that place is empty at n=1, so the shape IS the
-		// first name; for the other two it is name(n) with n written out.
-		if tc.bareFirst {
-			if got != storage.ExportMintName(tc.stem, tc.bareFirst, 1) {
-				t.Errorf("suppressing shape %q is not the name the first one gets, %q", got, storage.ExportMintName(tc.stem, tc.bareFirst, 1))
-			}
-			continue
-		}
-		for _, n := range []int{1, 2, 17} {
-			want := storage.ExportMintName(tc.stem, tc.bareFirst, n)
-			if strings.Replace(got, storage.OrdinalToken, strconv.Itoa(n), 1) != want {
-				t.Errorf("shape %q with %d substituted != mint name %q", got, n, want)
-			}
-		}
+// TestTheDraftRefusesTheParentlessBucketItCannotCreateIn closes the disclosure
+// the create's own all-scope gate already closed on the other side of the same
+// question (#702 review).
+//
+// All three creates refuse a PARENTLESS row unless the create scope is all
+// (CreateLocation, CreateComponent and CreateSystem each answer their forbidden
+// sentinel), and the draft resolved an empty parent to nil with no gate at all.
+// So a caller whose grant covers one subtree could ask what the ROOT bucket
+// would name a row, and previewName reads that bucket's sibling NAMES: the
+// answer says which names are taken there. It is a chosen probe rather than one
+// fixed leak, because the caller supplies the stem (a forked location_type's
+// name rule since #703, which needs only location_type:create).
+//
+// The three tiers are driven together because it is one seam (draftParentID),
+// and a per-tier fix is exactly how two of them would drift.
+func TestTheDraftRefusesTheParentlessBucketItCannotCreateIn(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	hq, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "campus"}, all)
+	if err != nil {
+		t.Fatalf("create campus: %v", err)
+	}
+	// A location type that generates, so the location tier actually reaches the
+	// sibling read rather than refusing earlier for want of a rule.
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{
+		Name: "deck", DisplayName: "Deck", AllowedParentTypes: []string{"campus"},
+		NameRule: &storage.NameRule{Stem: "deck"},
+	}); err != nil {
+		t.Fatalf("create location type: %v", err)
+	}
+	subtree := scope.Set{IDs: []string{hq.ID}}
+
+	// Location. The parentless bucket is the estate ROOT, and this caller's
+	// create scope is one campus.
+	if _, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{
+		LocationTypeRef: "deck",
+	}, subtree); !errors.Is(err, storage.ErrLocationForbidden) {
+		t.Errorf("root-bucket location draft = %v, want ErrLocationForbidden, the same refusal the create gives", err)
+	}
+	// And the create agrees, which is the whole point: the draft answers what
+	// the create would do, so the two cannot disagree about whether it happens.
+	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
+		LocationType: "deck",
+	}, subtree); !errors.Is(err, storage.ErrLocationForbidden) {
+		t.Errorf("root-bucket location create = %v, want ErrLocationForbidden", err)
+	}
+
+	// Component and system: their parentless bucket is the unplaced (or
+	// location-only) one, and their creates gate it identically.
+	if _, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
+		ProductName: qm55,
+	}, subtree, all, all); !errors.Is(err, storage.ErrComponentForbidden) {
+		t.Errorf("parentless component draft = %v, want ErrComponentForbidden", err)
+	}
+	if _, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{
+		SystemTypeRef: "board",
+	}, subtree, all); !errors.Is(err, storage.ErrSystemForbidden) {
+		t.Errorf("parentless system draft = %v, want ErrSystemForbidden", err)
+	}
+
+	// An all-scoped caller still gets the answer, so the three refusals above are
+	// the scope and not a broken draft.
+	if _, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{LocationTypeRef: "deck"}, all); err != nil {
+		t.Errorf("root-bucket draft for an all-scoped caller = %v, want the answer", err)
+	}
+
+	// A parent INSIDE the subtree is unaffected: what is gated is the bucket the
+	// caller cannot write, not drafting at all.
+	if _, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{
+		LocationTypeRef: "deck", ParentName: hq.Name,
+	}, subtree); err != nil {
+		t.Errorf("in-subtree draft = %v, want the answer", err)
+	}
+}
+
+// TestTheNamePreconditionIsPureAndSaysSo pins the create's half of the
+// precondition (#702) where it can be exercised exhaustively: the states no
+// integration fixture reaches cheaply, and the one that carries the values a
+// surface recovers with.
+//
+// The last case is the one the review moved. The two ordinals AGREE and the
+// names do not, which is a stem edit under an open form: an ordinal claim passes
+// it and lands a name nobody was shown, and a name claim refuses it.
+func TestTheNamePreconditionIsPureAndSaysSo(t *testing.T) {
+	one, two := 1, 2
+	display1, display2 := "display-1", "display-2"
+	if err := storage.ExportConfirmDraftedName(nil, &one, "display-1"); err != nil {
+		t.Errorf("no expectation = %v, want no error: a caller that did not preview is not making a claim", err)
+	}
+	if err := storage.ExportConfirmDraftedName(nil, nil, "front-panel"); err != nil {
+		t.Errorf("no expectation and no allocation = %v, want no error", err)
+	}
+	if err := storage.ExportConfirmDraftedName(&display1, &one, "display-1"); err != nil {
+		t.Errorf("an expectation the create met = %v, want no error", err)
+	}
+	if err := storage.ExportConfirmDraftedName(&display1, nil, "front-panel"); !errors.Is(err, storage.ErrNameExpectedOnTypedName) {
+		t.Errorf("an expectation with nothing allocated = %v, want ErrNameExpectedOnTypedName", err)
+	}
+	err := storage.ExportConfirmDraftedName(&display1, &two, "display-2")
+	var moved *storage.DraftedNameMovedError
+	if !errors.As(err, &moved) {
+		t.Fatalf("a moved name = %v, want a DraftedNameMovedError", err)
+	}
+	if moved.Expected != display1 || moved.Name != display2 || moved.Ordinal != 2 {
+		t.Errorf("refusal = %+v, want the name the form held, the name produced, and the ordinal behind it", moved)
+	}
+	if !strings.Contains(moved.Error(), "display-2") {
+		t.Errorf("refusal message %q does not name the name the operator would get", moved.Error())
+	}
+	// The ordinals agree and the names do not: a stem that moved under the form.
+	if err := storage.ExportConfirmDraftedName(&display1, &one, "monitor-1"); !errors.Is(err, storage.ErrDraftedNameMoved) {
+		t.Errorf("same ordinal, different stem = %v, want ErrDraftedNameMoved: the number is not the claim", err)
 	}
 }

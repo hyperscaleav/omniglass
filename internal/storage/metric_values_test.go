@@ -59,7 +59,7 @@ func TestEffectiveMetrics(t *testing.T) {
 		t.Fatalf("declare tcp-open: %v", err)
 	}
 	product := "acme-dsp"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dsp-1", ProductName: &product}, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dsp-1", ProductName: &product}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 

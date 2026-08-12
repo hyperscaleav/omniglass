@@ -47,7 +47,7 @@ func TestOwnerArcsSurviveARename(t *testing.T) {
 		t.Fatalf("location: %v", err)
 	}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "codec", LocationName: strptr("old-room")}, all, all, all); err != nil {
+		Name: "codec", LocationName: strptr("old-room")}, all, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 
