@@ -76,13 +76,14 @@ function mount(path: string) {
 
 // Both identity fields open LOCKED on the platform's answer (#699), so a test
 // that means to type into one takes the pen first, exactly as an operator does.
-// The name's toggle leads and the label's follows, in field order.
+// The lock is a square icon button inside each field's join and carries no text
+// (#657), so each is addressed by its accessible name, which is also what makes
+// the two tell apart for a screen reader.
 function unlockName() {
-  fireEvent.click(screen.getAllByText("Override")[0].closest("button") as HTMLButtonElement);
+  fireEvent.click(screen.getByRole("button", { name: "Override the name" }));
 }
 function unlockLabel() {
-  const all = screen.getAllByText("Override");
-  fireEvent.click(all[all.length - 1].closest("button") as HTMLButtonElement);
+  fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
 }
 
 describe("Components create-as-route", () => {
@@ -231,7 +232,7 @@ describe("Components create-as-route", () => {
     // answer and its pen holds nothing: that is what makes the body below omit
     // the field rather than post the shape as a literal name.
     const nameInput = screen.getByPlaceholderText("mic-2 (optional)") as HTMLInputElement;
-    expect(nameInput.disabled).toBe(true);
+    expect(nameInput.readOnly).toBe(true);
     expect(nameInput.value).toBe("mic-n");
     let captured: unknown;
     const seen: string[] = [];
@@ -939,15 +940,18 @@ describe("Components create identity", () => {
     const { product, key } = await fields();
     // Nothing to lock before a classification is chosen: what comes first is
     // what the rule reads.
-    expect(key.disabled).toBe(false);
+    expect(key.readOnly).toBe(false);
     // shure-mxa920 classifies as ceiling-mic, which sets no stem of its own and
     // inherits "mic". A preview reading the product's own type alone would show
     // nothing here, and the row would still arrive named mic-1.
     fireEvent.change(product, { target: { value: "shure-mxa920" } });
     await waitFor(() => expect(key.value).toBe("mic-n"));
     // Locked on it, which is the affordance: the platform's answer is the
-    // default in effect, not a hint over an empty box.
-    expect(key.disabled).toBe(true);
+    // default in effect, not a hint over an empty box. Readonly and never
+    // disabled, so the value stays on the keyboard and the field itself is
+    // clickable (#657).
+    expect(key.readOnly).toBe(true);
+    expect(key.disabled).toBe(false);
     // Never a number: the ordinal is allocated against live siblings inside the
     // create's transaction and does not exist yet.
     expect(key.value).not.toBe("mic-1");
@@ -1000,7 +1004,7 @@ describe("Components create identity", () => {
     fireEvent.change(location, { target: { value: room.id } });
 
     await waitFor(() => expect(display.value).toBe("Ceiling Microphone n"));
-    expect(display.disabled).toBe(true);
+    expect(display.readOnly).toBe(true);
     // The rule travels with the answer, so the form says where the label came
     // from rather than presenting it as a fact from nowhere.
     expect(screen.getByText(/Rendered from \{\{\.TypeName\}\}/)).toBeTruthy();

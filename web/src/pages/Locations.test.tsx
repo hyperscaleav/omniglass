@@ -613,14 +613,14 @@ describe("Locations list identity", () => {
 //     forgot to use them.
 // Both identity fields open LOCKED on the platform's answer (#699), so a test
 // that means to type into one takes the pen first, exactly as an operator does.
-// The name's toggle leads and the label's follows, in field order; where the
-// name generates nothing there is only the label's.
+// The lock is a square icon button inside each field's join and carries no text
+// (#657), so each is addressed by its accessible name; where the name generates
+// nothing there is only the label's.
 function unlockName() {
-  fireEvent.click(screen.getAllByText("Override")[0].closest("button") as HTMLButtonElement);
+  fireEvent.click(screen.getByRole("button", { name: "Override the name" }));
 }
 function unlockLabel() {
-  const all = screen.getAllByText("Override");
-  fireEvent.click(all[all.length - 1].closest("button") as HTMLButtonElement);
+  fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
 }
 
 describe("Locations create identity", () => {
@@ -650,10 +650,11 @@ describe("Locations create identity", () => {
     const { typeSelect, key } = await fields();
     // Nothing to lock before a classification is chosen: what comes first is
     // what the rule reads.
-    expect(key.disabled).toBe(false);
+    expect(key.readOnly).toBe(false);
     fireEvent.change(typeSelect, { target: { value: "room" } });
     await waitFor(() => expect(key.value).toBe("room"));
-    expect(key.disabled).toBe(true);
+    expect(key.readOnly).toBe(true);
+    expect(key.disabled).toBe(false);
     // The suppressed first ordinal reappears on the next one, and the form says so.
     expect(screen.getByText(/room-2/)).toBeTruthy();
   });
@@ -688,7 +689,7 @@ describe("Locations create identity", () => {
     const { typeSelect, display } = await fields();
     fireEvent.change(typeSelect, { target: { value: "room" } });
     await waitFor(() => expect(display.value).toBe("North Boardroom"));
-    expect(display.disabled).toBe(true);
+    expect(display.readOnly).toBe(true);
     expect(screen.getByText(/Rendered from/)).toBeTruthy();
   });
 
@@ -708,7 +709,7 @@ describe("Locations create identity", () => {
     fireEvent.change(typeSelect, { target: { value: "room" } });
     await waitFor(() => expect(screen.getByText(/No label rule applies/)).toBeTruthy());
     expect(display.value).toBe("room");
-    expect(display.disabled).toBe(true);
+    expect(display.readOnly).toBe(true);
   });
 
   it("lets a nameless create through for a generating type, and refuses one without a rule", async () => {

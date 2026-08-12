@@ -457,9 +457,10 @@ describe("Systems properties panel", () => {
 // an operator-owned name whether the operator meant that or not.
 // Both identity fields open LOCKED on the platform's answer (#699), so a test
 // that means to type into one takes the pen first, exactly as an operator does.
+// The lock is a square icon button inside the field's join and carries no text
+// (#657), so it is addressed by its accessible name.
 function unlockLabel() {
-  const all = screen.getAllByText("Override");
-  fireEvent.click(all[all.length - 1].closest("button") as HTMLButtonElement);
+  fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
 }
 
 describe("Systems create identity", () => {
@@ -489,12 +490,13 @@ describe("Systems create identity", () => {
     const { type, key } = await fields();
     // Unclassified is the default and generates nothing, so there is no lock to
     // show until a type is chosen.
-    expect(key.disabled).toBe(false);
+    expect(key.readOnly).toBe(false);
     // "class" carries stem "classroom" of its own; the suppression is ADR-0101's,
     // and it is a property of the system tier rather than of this type.
     fireEvent.change(type, { target: { value: "class" } });
     await waitFor(() => expect(key.value).toBe("classroom"));
-    expect(key.disabled).toBe(true);
+    expect(key.readOnly).toBe(true);
+    expect(key.disabled).toBe(false);
     expect(screen.getByText(/classroom-2/)).toBeTruthy();
     expect(screen.getByText(/Unique among the unplaced systems/)).toBeTruthy();
   });
@@ -513,7 +515,7 @@ describe("Systems create identity", () => {
     // Unclassified is the default, and it is the one the gateway refuses to
     // name (ErrSystemTypeRequiredForName).
     expect(submit.disabled).toBe(true);
-    expect(screen.getByText(/An unclassified system has no stem/)).toBeTruthy();
+    expect(screen.getByText(/This system is unclassified or its type chain sets no stem/)).toBeTruthy();
     fireEvent.input(key, { target: { value: "one-off" } });
     await waitFor(() => expect(submit.disabled).toBe(false));
 

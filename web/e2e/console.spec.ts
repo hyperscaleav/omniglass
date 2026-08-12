@@ -76,17 +76,31 @@ test.describe("operator console", () => {
 
     // Both identity fields are LOCKED on what the platform will use, and a
     // locked field posts nothing (#699). The name's ordinal is written as a
-    // token because it does not exist yet.
+    // token because it does not exist yet. Locked is READONLY and not disabled
+    // (#657), which a real browser is the only tier that can check properly: the
+    // field is not editable, and it is still focusable, so the value the row is
+    // about to carry has a keyboard path.
     const nameField = page.getByLabel("Name", { exact: true });
-    await expect(nameField).toBeDisabled();
+    await expect(nameField).not.toBeEditable();
+    await expect(nameField).toBeEnabled();
+    await nameField.focus();
+    await expect(nameField).toBeFocused();
     const shape = (await nameField.inputValue()).trim();
     expect(shape).toMatch(/^[a-z0-9-]+-n$/);
     const stem = shape.slice(0, -2);
 
     const labelField = page.getByLabel("Display name", { exact: true });
-    await expect(labelField).toBeDisabled();
+    await expect(labelField).not.toBeEditable();
+    await expect(labelField).toBeEnabled();
     await expect(labelField).not.toHaveValue("");
     const drafted = (await labelField.inputValue()).trim();
+
+    // The override action is an icon button in each field, always present and
+    // never hover-only, and focusing a locked field does not claim its pen: both
+    // fields are still locked on the platform's answer after the focus above.
+    await expect(page.getByRole("button", { name: "Override the name" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Override the display name" })).toBeVisible();
+    await expect(nameField).toHaveValue(shape);
 
     await page.getByRole("button", { name: /create component/i }).click();
     await page.waitForURL(/\/web\/components\/[0-9a-f-]{36}/);

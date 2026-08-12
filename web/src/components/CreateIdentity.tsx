@@ -1,8 +1,8 @@
 import { Show, type JSX } from "solid-js";
 import FieldRow from "./FieldRow";
 import Button from "./Button";
-import { Lock, LockOpen } from "./icons";
-import { type EstateKind, type NameMint, type Pen, mintNote, mintShape, penState } from "../lib/namegen";
+import { LockOpen, RotateCcw } from "./icons";
+import { type EstateKind, type NameMint, type Pen, type PenState, mintNote, mintShape, penState } from "../lib/namegen";
 import { type DraftLabel } from "../lib/labeldraft";
 
 // The Identity section of the create form for the three estate entities whose
@@ -32,6 +32,20 @@ import { type DraftLabel } from "../lib/labeldraft";
 // backwards. A locked field posts NOTHING (lib/namegen's Pen clears the value
 // when the lock closes), so what an operator sees and who ends up holding the
 // pen cannot disagree.
+//
+// # The lock is an inline action, and the field is readonly, not disabled (#657)
+//
+// The affordance lives INSIDE the field, a square icon button in the field's
+// daisyUI join, which is where the console already puts an in-field action and
+// reads as one control rather than two. That forced a real change and not a
+// restyle: a DISABLED input fires no click, so click-to-override is impossible
+// on one, and `disabled` also drops the field out of the tab order, so the value
+// the platform is about to use would have no keyboard path at all. `readonly`
+// is not editable, is still focusable, and still fires events, so it is the
+// attribute this affordance needs. The locked LOOK therefore has to be drawn:
+// daisyUI 5 ships no `.input-disabled` class at all (only `:disabled` and
+// `[disabled]` selectors), so app.css's `.input-locked` carries it, and hover
+// only warms the border. Hover is never the way in.
 //
 // # Three states per field, not two
 //
@@ -76,32 +90,61 @@ export interface CreateIdentityProps {
   displayPlaceholder: string;
 }
 
-// What is missing when nothing will mint a name, per kind. Each names the fact
-// rather than saying "cannot": the operator's next move is different in each
-// case, and for a system there are two different next moves behind what used to
-// be one sentence.
+// What is missing when nothing will mint a name, per kind. Each names the FACT
+// rather than saying "cannot", because the missing fact is different in each
+// case and so is the fix. These three keep their "so name it yourself" tail
+// where the other hints lost theirs: this is the one state with no action
+// button in the field, so the words are the only thing carrying the next move.
 const NO_MINT: Record<EstateKind, string> = {
-  component: "This product's type carries no stem, so the platform has nothing to name this from. Type a name, or give the component_type a stem.",
-  system: "Choose a type above and the platform names this for you. An unclassified system has no stem to be named from, and neither does a type whose chain sets none.",
-  location: "This type has no name rule, so an operator names every location of it.",
+  component: "This product's type carries no stem, so name it yourself.",
+  system: "This system is unclassified or its type chain sets no stem, so name it yourself.",
+  location: "This type carries no name rule, so name it yourself.",
 };
 
-// PenToggle is the lock. It sits on the field's label row rather than beside the
-// input, and OUTSIDE the <label> element (FieldRow's action slot), because a
-// labelable button inside a label steals the control's accessible name and eats
-// the click that should have focused it.
+// PenToggle is the lock, as an INLINE ACTION inside the field: a square icon
+// button in the field's daisyUI join, which is where the console already puts an
+// in-field action (KVRow's set / revert / copy, PasswordField's reveal). It has
+// no text at all, so the tooltip carries the word.
+//
+// Both icons depict the ACTION rather than the state, matching the Settings row
+// this is deliberately a copy of (Settings.tsx's square RotateCcw, "Restore to
+// default"): handing a field back to the platform IS restoring it to its
+// default, and one idea should not have two visual languages. So a locked field
+// offers the OPENING lock, and an overridden one the same restore arrow Settings
+// uses, with the same words.
+//
+// The accessible name names the field where the tooltip does not. Two buttons
+// called "Override" in one section are two buttons a screen reader user cannot
+// tell apart, and the tooltip has to stay short because it is the only visible
+// copy the button has.
 function PenToggle(props: { pen: Pen; what: string }): JSX.Element {
   const held = () => props.pen.overridden() || props.pen.value().trim() !== "";
   return (
     <Button
-      size="xs"
-      icon={held() ? LockOpen : Lock}
-      title={held() ? `Hand the ${props.what} back to the platform` : `Take over the ${props.what}`}
+      square
+      size="md"
+      class="join-item"
+      icon={held() ? RotateCcw : LockOpen}
+      title={held() ? "Restore to default" : "Override"}
+      label={held() ? `Restore the ${props.what} to default` : `Override the ${props.what}`}
       onClick={() => props.pen.setOverridden(!held())}
-    >
-      {held() ? "Use the generated one" : "Override"}
-    </Button>
+    />
   );
+}
+
+// Clicking a LOCKED field takes it over, an accelerator on top of the button
+// rather than the way in: the button is always visible and always a tab stop,
+// so nothing here is reachable only by pointer.
+//
+// Two deliberate limits. It does NOT fire on focus, although a locked field is
+// focusable and a locked field that claimed the pen on focus would be claimed by
+// anyone tabbing from the pickers to the Create button, blanking both fields on
+// the way past, which is the state #699 exists to prevent. And it is ONE-WAY:
+// clicking an already-overridden field does nothing, because the way back
+// discards what the operator typed and belongs on the button, where it reads as
+// the deliberate act it is.
+function takeOver(state: PenState, pen: Pen): void {
+  if (state === "generated") pen.setOverridden(true);
 }
 
 export default function CreateIdentity(props: CreateIdentityProps): JSX.Element {
@@ -125,49 +168,51 @@ export default function CreateIdentity(props: CreateIdentityProps): JSX.Element 
       <div class="flex flex-col gap-3">
         <FieldRow
           bind="name"
-          action={<Show when={nameState() !== "unavailable"}><PenToggle pen={props.namePen} what="name" /></Show>}
+          actions={<Show when={nameState() !== "unavailable"}><PenToggle pen={props.namePen} what="name" /></Show>}
           hint={
             nameState() === "unavailable"
               ? NO_MINT[props.kind]
               : nameState() === "generated"
                 ? `${mintNote(props.mint()!)} Unique ${props.bucket()}.`
-                : `You are naming this yourself. Unique ${props.bucket()}.`
+                : `Named by you. Unique ${props.bucket()}.`
           }
         >
           <input
-            class="input input-bordered w-full font-data"
-            classList={{ "input-disabled": nameState() === "generated" }}
+            class="input input-bordered join-item w-full min-w-0 font-data"
+            classList={{ "input-locked": nameState() === "generated" }}
             value={nameState() === "generated" ? nameText() : props.namePen.value()}
-            disabled={nameState() === "generated"}
+            readOnly={nameState() === "generated"}
             placeholder={props.namePlaceholder}
+            onClick={() => takeOver(nameState(), props.namePen)}
             onInput={(e) => props.namePen.setValue(e.currentTarget.value)}
           />
         </FieldRow>
 
         <FieldRow
           bind="display_name"
-          action={<PenToggle pen={props.displayPen} what="label" />}
+          actions={<PenToggle pen={props.displayPen} what="display name" />}
           hint={
             displayState() === "overridden"
-              ? "You are labelling this yourself."
+              ? "Labelled by you."
               : props.labelPending()
                 ? "Working out what the rule renders…"
                 : labelAvailable()
                   ? `Rendered from ${props.label()!.rule}`
                   : nameText().trim() === ""
-                    ? "No label rule applies to this classification, so whatever you name this above is what an operator will read. Override it to write a label yourself."
-                    : "No label rule applies to this classification, so the name is what an operator reads. Override it to write one yourself."
+                    ? "No label rule applies; the name you type above is what an operator reads."
+                    : "No label rule applies, so the name is what an operator reads."
           }
         >
           <input
-            class="input input-bordered w-full"
+            class="input input-bordered join-item w-full min-w-0"
             classList={{
-              "input-disabled": displayState() === "generated",
+              "input-locked": displayState() === "generated",
               "italic text-base-content/60": displayState() === "generated" && !labelAvailable(),
             }}
             value={displayState() === "generated" ? labelText() || nameText() : props.displayPen.value()}
-            disabled={displayState() === "generated"}
+            readOnly={displayState() === "generated"}
             placeholder={props.displayPlaceholder}
+            onClick={() => takeOver(displayState(), props.displayPen)}
             onInput={(e) => props.displayPen.setValue(e.currentTarget.value)}
           />
         </FieldRow>

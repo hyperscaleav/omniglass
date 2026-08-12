@@ -64,12 +64,12 @@ export function mintShape(m: NameMint): string {
 // turned out different.
 export function mintNote(m: NameMint): string {
   if (m.stem === "") {
-    return `The name is a number: the lowest one free here, picked when you create this.`;
+    return `The name is the lowest number free here, picked at create.`;
   }
   if (m.bareFirst) {
-    return `The first one here carries no number; the next take ${m.stem}-2, ${m.stem}-3 and so on. Which you get is picked when you create this.`;
+    return `The first here carries no number, then ${m.stem}-2, ${m.stem}-3; picked at create.`;
   }
-  return `${ORDINAL_TOKEN} is the lowest number free here, picked when you create this.`;
+  return `${ORDINAL_TOKEN} is the lowest number free here, picked at create.`;
 }
 
 // componentMint resolves the mint a component would be named from: the stem of
