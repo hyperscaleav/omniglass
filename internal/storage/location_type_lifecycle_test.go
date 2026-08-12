@@ -170,28 +170,27 @@ func TestOperatorLocationTypeIsUntouchedByTheFork(t *testing.T) {
 // filed for, and the only place the withdrawal is observable: a rule a release
 // SHIPPED and a later release removed is gone after one boot.
 //
-// It is staged by seeding a rule the way a release that shipped one would (the
-// authoritative upsert the boot phase runs), then running the current seed,
-// which ships no rule on any type since ADR-0103. Before the fork adoption the
-// second write was `on conflict do nothing` and the rule survived forever, with
-// no supported call able to clear it.
+// The estate it describes is staged with a RAW write, deliberately not through
+// the gateway's own upsert: the seed write is the thing under test, and a setup
+// that goes through it would report a broken seed as a broken setup instead of
+// as the missed withdrawal. What the raw statement leaves behind is exactly what
+// an estate that booted the release carrying floor's rule holds today.
 func TestWithdrawnShippedValueLeavesTheEstate(t *testing.T) {
-	gw := storagetest.NewDB(t)
+	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
-	shipped := locationTypeNamed(t, gw, "floor")
-	if err := gw.UpsertLocationType(ctx, storage.LocationType{
-		Name: shipped.Name, Official: true, DisplayName: shipped.DisplayName, Icon: shipped.Icon,
-		AllowedParentTypes: shipped.AllowedParentTypes,
-		NameRule:           &storage.NameRule{},
-	}); err != nil {
-		t.Fatalf("seed the release that shipped a rule: %v", err)
-	}
+	conn := connectDSN(t, dsn)
+	mustExec(t, conn, `update location_type set name_rule = '{"stem":"","bare_first":false}' where name = 'floor'`)
 	if got := locationTypeNamed(t, gw, "floor"); got.NameRule == nil {
-		t.Fatalf("the staged release did not ship a rule; the withdrawal has nothing to withdraw")
+		t.Fatalf("the staged estate carries no rule; the withdrawal has nothing to withdraw")
 	}
 
 	if err := seed.Run(ctx, gw); err != nil {
