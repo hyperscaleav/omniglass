@@ -557,7 +557,7 @@ export default function Locations() {
 
     // A location_type's name rule IS the mint (ADR-0102), so there is no chain
     // to walk here and no reshaping between the stored declaration and the shape
-    // shown. Null is the opt-out, which is every shipped type but floor.
+    // shown. Null is the opt-out, which is every shipped type (ADR-0103).
     const chosenType = createMemo(() => (locationTypes.data ?? []).find((t) => t.name === type()));
     const mint = createMemo(() => locationMint(chosenType()));
 
@@ -661,7 +661,7 @@ export default function Locations() {
           <Button icon={X} onClick={() => navigate("/locations")}>Cancel</Button>
           <span class="flex-1" />
           {/* A name is required only when the chosen type carries no name
-              rule, which is every shipped type but floor. The type itself
+              rule, which is every shipped type (ADR-0103). The type itself
               stays required: for a location it is the only shape-definer. */}
           <Button type="submit" intent="action" icon={Plus} disabled={busy() || !type().trim() || penIncomplete(mint() !== null, namePen)}>Create location</Button>
         </div>

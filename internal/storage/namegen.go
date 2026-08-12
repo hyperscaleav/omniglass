@@ -22,7 +22,7 @@ import (
 // The refusal survives #681 even though mintName can now produce a legal
 // stem-less name ("1" rather than the "-1" that used to make this
 // mechanically impossible). A stem-less name is right for a positional type
-// whose ordinal genuinely is its name, a floor or a rack unit; it is not
+// whose ordinal genuinely is its name, a parking deck or a rack unit; it is not
 // right for a device, where a bare "1" says nothing about what the thing is
 // and a component_type carrying no stem at all is a data defect rather than a
 // declaration. So this stays a refusal by policy, naming the offending
@@ -75,8 +75,8 @@ var ErrSystemTypeRequiredForName = errors.New("storage: a system with no system_
 // never disagree about what a given ordinal is called.
 //
 // The stem-less form is not a degenerate case, it is the point (#681): a
-// positional type whose ordinal genuinely IS its name (a floor called "1")
-// needs a mint that produces "1", not the "-1" a bare format string would
+// positional type whose ordinal genuinely IS its name (a parking deck called
+// "1") needs a mint that produces "1", not the "-1" a bare format string would
 // give, which validateEntityName refuses and which the old prefix-scan
 // allocator could never have counted anyway. A stem-less mint therefore ignores
 // bareFirst: suppressing the ordinal there would leave no name at all.
@@ -127,9 +127,11 @@ var ErrInvalidNameRule = errors.New("storage: name rule cannot mint a legal name
 // makes "a rule that would mint an illegal name is refused when the rule is
 // edited" a guarantee rather than a sample.
 //
-// Stem empty is a POSITIONAL type, whose ordinal genuinely IS its name: a floor
-// called "1", then "2". That falls out of the mint rather than being a mode
-// beside it, which is why there is no third field saying so.
+// Stem empty is a POSITIONAL type, whose ordinal genuinely IS its name: a
+// parking deck called "1", then "2". Not a floor, which reads its designation
+// off the signage (B2, LG, 12A) and is nominal for that reason (ADR-0103). That
+// falls out of the mint rather than being a mode beside it, which is why there
+// is no third field saying so.
 type NameRule struct {
 	Stem      string `json:"stem"`
 	BareFirst bool   `json:"bare_first"`
@@ -508,7 +510,8 @@ func generateNameForSystemType(ctx context.Context, tx pgx.Tx, systemTypeID *str
 
 // locationNameRule reads a location_type's name rule inside the caller's
 // transaction, returning nil when the type carries none (the opt-out, and the
-// state every seeded type except floor is in).
+// state EVERY seeded type is in since ADR-0103: a rule on this tier arrives only
+// when an operator declares a positional type of their own).
 //
 // The querier is the caller's for the reason resolveTypeFacts takes one: a rule
 // written earlier in the same transaction has to be the rule this read sees, or

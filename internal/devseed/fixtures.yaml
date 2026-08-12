@@ -19,22 +19,20 @@
 # `name` is optional, and its absence is the whole point of this fixture (#657):
 # a row with no name asks the platform to name it, so what comes up demonstrates
 # the generator rather than a list of names somebody typed. A row that DOES carry
-# a name is one the platform cannot name: a campus, a building and a room have
-# real-world names an operator already knows and no rule can produce.
+# a name is one the platform cannot name: every LOCATION here is such a row,
+# because no shipped location_type carries a name rule (ADR-0103), and a campus,
+# a building, a floor and a room each have a real-world name an operator already
+# knows. The components and the systems are what demonstrate the generator.
 #
 # `display_name` is the LABEL, and setting one takes the pen from the platform
 # (#682), so it is set only where an operator override is the point:
 #
-#   - locations, all of them: the shipped location label rule is deliberately
-#     empty (internal/seed/label_rules.yaml says why), so the label an operator
-#     types is the only label a location has;
-#   - the two floors, which is the sharpest case in the estate: the platform
-#     allocates the NAME (a floor's ordinal within its building), and the
-#     real-world designation ("Level 2") is a fact only the operator has;
 #   - the power conditioner, which carries no product, so the component rule can
 #     only render "Generic Device 1" and says nothing about what the thing is;
 #   - the two boardroom halves, because which half is A and which is B is a fact
-#     about the air wall, not about the system.
+#     about the air wall, not about the system;
+#   - the locations listed under LABELS below, each of which says something its
+#     name cannot.
 #
 # Everything else lets the rule render: a component reads "Display 1", "Video Bar
 # 2" and so on, from the shipped component rule over its resolved type and the
@@ -71,26 +69,24 @@ locations:
     display_name: West Building
     type: building
     parent: hq
-  # The one seeded location type the platform can name: `floor` ships positional
-  # (internal/seed/location_types.yaml), so this row's name is the ordinal the
-  # generator allocates among this building's own floors, and it is `1` because
-  # it is the first floor seeded here. The building's real-world designation for
-  # it is Level 2, which is a fact about the signage and not about allocation, so
-  # it lives in the label. The two deliberately disagree, and the floor under
-  # Innovation Hall below is the same shape with the two agreeing: one estate,
-  # both cases, which is the clearest thing this fixture teaches (ADR-0103).
+  # A floor is named by the operator, like every other place here. It carried
+  # the estate's one generated location name for two slices, `1`, under a
+  # positional `floor` rule; ADR-0103 reversed that, because a floor's
+  # designation is B2, LG, G, M, 12A, and an ordinal cannot spell any of them.
+  # This one's designation is Level 2, so its NAME is level-2 and the shipped
+  # location rule renders "Level 2" from it: the two agree because they are the
+  # same fact, which is the point the divergence used to make the hard way.
   #
-  # Pinned, and this is the load-bearing pin: the rule would render "1" from the
-  # allocated name, which is an address and not a designation. Releasing it is
-  # how ADR-0103's worked example disappears.
+  # No display_name: the rule renders it. Pinning "Level 2" here would be a
+  # hand-typed copy of the rule's own output.
   - key: west-l2
-    display_name: Level 2
+    name: level-2
     type: floor
     parent: west
   # A room's name is ground truth an operator knows, so the fixture types it. It
   # needs no ancestry in it: names are unique within their parent (not across the
   # estate), so `boardroom` under this floor is a complete name and
-  # `hq.west.1.boardroom` is the address that disambiguates it.
+  # `hq.west.level-2.boardroom` is the address that disambiguates it.
   #
   # No display_name: the shipped rule renders "Boardroom" from this name, and a
   # pin restating it would only hide which of the two produced it.
@@ -120,13 +116,10 @@ locations:
     display_name: Innovation Hall
     type: building
     parent: east
-  # The other floor: platform-named `1` in its own building's bucket (two
-  # locations named `1`, which is the placement-scoped name index working), and
-  # here the allocation order and the real-world designation agree. Pinned for
-  # the reason its twin is: the pair is the worked example, and half of it says
-  # nothing on its own.
+  # The other floor, in another building, named for its own designation. No
+  # display_name: the rule renders "Level 1".
   - key: hall-l1
-    display_name: Level 1
+    name: level-1
     type: floor
     parent: hall
   # No display_name: the rule renders "Auditorium".

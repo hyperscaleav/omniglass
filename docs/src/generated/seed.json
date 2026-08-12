@@ -427,10 +427,7 @@
    "allowed_parent_types": [
     "building",
     "campus"
-   ],
-   "name_rule": {
-    "stem": ""
-   }
+   ]
   },
   {
    "id": "room",

@@ -244,8 +244,10 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			continue
 		}
 		// An empty Name asks the platform to name the row, which only a
-		// positional location_type can answer (#687): the floors here, and
-		// nothing else in this estate.
+		// positional location_type can answer (#687), and no shipped one is
+		// (ADR-0103). So every location in this estate carries a name and the
+		// spec below always supplies one; the components and the systems are
+		// what demonstrate the generator.
 		spec := storage.LocationSpec{Name: l.Name, DisplayName: l.DisplayName, LocationType: l.Type}
 		if parentID != "" {
 			p := parentID

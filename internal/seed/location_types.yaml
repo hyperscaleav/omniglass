@@ -9,6 +9,23 @@
 # icon is a glyph key the console resolves to an SVG and renders as the leading
 # glyph on every location of this type; an unknown key falls back to map-pin.
 # Operator-defined types via the namespace shadow are a later slice.
+#
+# NONE of the four carries a name_rule, so an operator names every location in a
+# shipped estate. A campus, a building and a room were never in question: "17c"
+# is ground truth an operator holds, not a default a platform can invent. `floor`
+# shipped POSITIONAL for two slices (an empty stem, so a nameless floor create
+# gave 1, then 2 within its building), and ADR-0103 reversed it. The reason is
+# not that allocation was imprecise, it is that a floor's designation is not an
+# integer at all: real buildings sign B2, LG, G, M, 1, 12A, P3, and an ordinal
+# can spell none of them. That also dissolves the objection people reach for
+# first, a basement: nobody signs a floor "-1", they sign it B1, which is already
+# a legal name.
+#
+# The cost is stated rather than hidden: location name generation now ships
+# DORMANT, correct and tested but demonstrated by nothing in a shipped estate.
+# Inventing a fifth type to keep the demo alive was refused. An operator who
+# wants a positional place declares one (a parking deck, a rack row, a berth) and
+# the generator is there.
 location_types:
   - id: campus
     display_name: Campus
@@ -22,14 +39,6 @@ location_types:
     display_name: Floor
     icon: layers
     allowed_parent_types: [building, campus]
-    # The one shipped type the platform can name (#687). A floor's name IS its
-    # position in the building, so an empty stem makes it POSITIONAL: creating a
-    # floor with no name gives 1, then 2, allocated among that building's own
-    # floors. The other three are deliberately left without a rule, because a
-    # campus, a building and a room each have a real-world name an operator
-    # knows and the platform does not: "17c" is ground truth, not a default.
-    name_rule:
-      stem: ""
   - id: room
     display_name: Room
     icon: door-open

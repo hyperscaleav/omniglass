@@ -24,7 +24,8 @@ export const ROOT_PLACEMENT = "root";
 // opt-out, and means an operator names every location of this type.
 export type NameRule = {
   // The generated name's prefix. Empty is a POSITIONAL type, whose ordinal
-  // genuinely is its name (a floor called "1").
+  // genuinely is its name (a parking deck called "1"); no SHIPPED type is one
+  // (ADR-0103, which made `floor` nominal).
   stem: string;
   // Suppress the ordinal on the first of this stem under one parent, so the
   // only wing there is "wing" and the second is "wing-2". Ignored when stem is

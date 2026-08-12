@@ -31,26 +31,28 @@ var (
 
 	// ErrLocationTypeNoNameRule is asking the platform to name a location whose
 	// location_type carries no name rule (#687): a nameless create, or
-	// :resetName. It is a refusal by POLICY, not a gap. Of the shipped place
-	// vocabulary only a floor is genuinely auto-nameable; a building's or a
+	// :resetName. It is a refusal by POLICY, not a gap, and it is what EVERY
+	// shipped place type answers: a campus's, a building's, a floor's or a
 	// room's name is ground truth an operator holds ("17c" is a fact, not a
-	// default), so generating one would be the platform guessing. Naming the
-	// missing fact beats a silent no-op, which would report a reset that never
-	// happened.
+	// default), so generating one would be the platform guessing. `floor` was
+	// the one exception for two slices and ADR-0103 reversed it, because a
+	// floor's designation (B2, LG, G, M, 12A) is not an integer and an ordinal
+	// cannot spell it. Naming the missing fact beats a silent no-op, which would
+	// report a reset that never happened.
 	//
 	// It refused unconditionally on this tier for one slice (#686 shipped the
 	// pen and the verbs ahead of the generator, so a location an operator named
-	// then is already frozen now). What changed here is only which types it
-	// applies to.
+	// then is already frozen now), and in a SHIPPED estate it refuses
+	// unconditionally again. A rule reaches it only when an operator declares a
+	// positional type of their own.
 	//
 	// The message names the WAY OUT, not only the missing fact, because the
-	// path an operator meets it on most is neither of the two above: `floor` is
-	// the one shipped type carrying a rule, so RECLASSIFYING a platform-named
-	// floor as a room, a building or a campus (the routine misclassification
-	// fix) lands here, and there "name it yourself" is advice with nowhere to
-	// take it, since the patch that reclassifies carries no name field. The
-	// system tier's twin (ErrSystemTypeRequiredForName) names its escape for the
-	// same reason.
+	// path an operator meets it on most is neither of the two above:
+	// RECLASSIFYING a platform-named location to a type with no rule (which is
+	// every shipped one) lands here, and there "name it yourself" is advice with
+	// nowhere to take it, since the patch that reclassifies carries no name
+	// field. The system tier's twin (ErrSystemTypeRequiredForName) names its
+	// escape for the same reason.
 	ErrLocationTypeNoNameRule = errors.New("storage: this location_type has no name rule, so the platform cannot generate a name for it; supply a name on create, or :rename the location to claim its name before reclassifying it to this type")
 
 	// ErrLocationExistsUnderParent / ErrLocationExistsAtRoot name which
@@ -238,7 +240,7 @@ type LocationType struct {
 	LabelRule *string
 	// NameRule is this type's opt-in to GENERATING the names of the locations
 	// it classifies (#687), nullable: null means an operator names every one of
-	// them, which is where three of the four shipped types stay. Unlike
+	// them, which is where all four shipped types stay (ADR-0103). Unlike
 	// LabelRule it is a declaration rather than a template, and unlike
 	// LabelRule it has no tier above it to defer to: a name either comes from
 	// this rule or from the operator (ADR-0102).
@@ -704,7 +706,7 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 		typeRefCol = registryRefCol(*patch.LocationType)
 	}
 	// A reclassify that leaves the location still platform-named (#687) may no
-	// longer fit its old type's rule: a floor reclassified as a wing needs the
+	// longer fit its old type's rule: a deck reclassified as a wing needs the
 	// wing rule, not the one it was minted from. before.NameGenerated is the
 	// read of record, so an operator-typed name (RenameLocation clears the flag
 	// forever) is never touched by a reclassify.
