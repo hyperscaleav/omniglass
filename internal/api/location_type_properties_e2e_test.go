@@ -108,4 +108,13 @@ func TestLocationTypePropertiesAPI(t *testing.T) {
 		map[string]any{"required": true}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPut, "/location-types/no-such-type/properties/model-number",
 		map[string]any{"required": true}, http.StatusNotFound)
+
+	// A SHIPPED type's contract is writable over the wire too, which is what the
+	// route now publishes since every shipped type became official (#703,
+	// ADR-0106). Held here and not only at the gateway, because the description
+	// that used to promise a 422 here is what the CLI, the typed client and the
+	// reference all repeat: a status is the claim, so a status is the assertion.
+	c.do(ownerTok, http.MethodPut, "/location-types/room/properties/model-number",
+		map[string]any{"required": true}, http.StatusOK)
+	c.do(ownerTok, http.MethodDelete, "/location-types/room/properties/model-number", nil, http.StatusNoContent)
 }
