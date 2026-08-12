@@ -80,7 +80,8 @@ each role carrying an **impact**. See [implementation status](/architecture/stat
   located at a location and **conforms to a `standard`**, the blueprint it is built against; the
   pointer is optional, mirroring `component.product_id`.
 - A **location** ties systems and components to a physical place, classified by `location_type`, its
-  only shape-definer (no template). A starter type set ships seeded, operator-owned
+  only shape-definer (no template). A starter type set ships seeded and platform-owned, an
+  operator's change to one held as a fork over it
   ([the seed model](#the-seed-model-forked-templates-versus-canonical-catalogs)), read at
   `GET /location-types` to feed the location form's type picker. Each type carries an `icon` (a glyph
   key like `building`; unknown keys fall back to `map-pin`) rendered in the tree, and
@@ -399,7 +400,7 @@ assigned is under-staffed today); health adds whether the assigned components ca
 
 Shipped content is two kinds, never conflated:
 
-- **Example content** (a `standard`, a `location_type`) is created by **forking an in-code template**
+- **Example content** (a `standard`) is created by **forking an in-code template**
   ([#317](https://github.com/hyperscaleav/omniglass/issues/317); shipped boot seeds stand in today).
   The fork is **one-time, no inheritance**: nothing points back at the template, so it can improve
   per release without touching a tenant. What lands is an **operator-owned** row (`official: false`),
@@ -410,7 +411,11 @@ Shipped content is two kinds, never conflated:
   and `command_type` registries) is the shared namespace a driver maps onto, identical install to
   install: seeded `official: true` through an **authoritative upsert** (`ON CONFLICT DO UPDATE`),
   never written by an operator. The classification catalogs (`vendor`, `driver`, `component_type`,
-  `product`) ride that path today.
+  `product`) ride that path today, and `location_type` joined them in
+  [ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask):
+  an estate still shapes its own place vocabulary, through the
+  [registry fork](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)
+  rather than by owning the row, which is what lets a release WITHDRAW a shipped value.
 
 **Forking applies to template -> row, never to classifier -> instance**: a system conforms, never
 forks.

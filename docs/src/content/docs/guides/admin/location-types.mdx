@@ -17,12 +17,12 @@ bare label registry was never what they were: a **component**'s shape comes from
 
 The page is that registry's directory: a table of its rows, sorted alphabetically by display
 name, each showing the **name** (for example `wing`), **display name**, an **icon** glyph key,
-and its **origin** (**official** or **custom**). A type also carries an `id`, a
+and its **origin** (**official**, **custom**, or **overridden**). A type also carries an `id`, a
 uuid minted by the database, the internal address the handle resolves to
 ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
 
-- **name** matches a name or display name, and **official** narrows the list to official or
-  custom rows.
+- **name** matches a name or display name, and **official** narrows the list to **shipped**,
+  **yours**, or **overridden** rows.
 - **New location type** (with `location_type:create`, an admin permission) opens a create
   **drawer**: give it a **name** (unique within the registry, e.g. `wing`), a **display name**,
   an **icon** glyph key (defaults to `map-pin`), and its **allowed parents**: a checkbox list of
@@ -37,12 +37,12 @@ uuid minted by the database, the internal address the handle resolves to
   the row, behind a confirm. A verb you lack greys just that button, its hover reason naming
   the permission (`Requires location_type:update`, `Requires location_type:delete`); the pair
   never disappears.
-- **The shipped location types are yours to change.** They arrive as ordinary
-  **operator-owned** rows (origin **custom**, not official), so relabel them, re-parent them, or
-  delete the ones your estate does not use. They are forked from a template in the code, once,
-  with no inheritance, and the boot seed installs them **only if absent**, so a restart never
-  reverts your edits. This is the opposite ownership story from
-  [Secret Types](/guides/admin/secret-types/), whose registry the seed owns authoritatively. See
+- **The shipped location types are yours to change, and the platform still owns the rows.**
+  Relabel them, give them a different icon, or re-parent them: your version is stored **over** the
+  shipped row rather than replacing it, the row's origin reads **overridden**, and **Restore
+  shipped** in the blade puts it back. A restart never reverts your edits, and because the platform
+  owns the row underneath, a release can also correct a shipped type or **withdraw** something it
+  used to ship. Deleting one is refused; restoring is the removal a shipped row admits. See
   [the seed model](/architecture/core-entities/#the-seed-model-forked-templates-versus-canonical-catalogs).
   The shipped set, rendered from the seed itself:
 
@@ -104,32 +104,30 @@ uuid minted by the database, the internal address the handle resolves to
   between two types that both carry a rule is fine too: the name is simply re-minted from the new
   one.
 
-  Two limits to know before you set one. **A rule cannot be removed once set**, only replaced: an
-  omitted field and an explicit `null` are the same thing in a PATCH body, so there is no request
-  that spells "back to operator-named". Set a rule only on a type whose names you want the platform
-  to own, since **regenerate name** on, say, a building would then mint `building-1` over the `17c`
-  you typed.
+  One thing to weigh before you set one: **regenerate name** on, say, a building would then mint
+  `building-1` over the `17c` you typed, so set a rule only on a type whose names you want the
+  platform to own.
 
-  And **the shipped types are yours, so the boot seed never reasserts over them**: it installs each
-  one only when absent. That cuts both ways. A rule added to the shipped set reaches new installs
-  only, and a rule REMOVED from it, as `floor`'s was, is removed from new installs only. If your
-  estate was created while `floor` shipped positional, your `floor` still carries that rule and your
-  floors are still named `1`; no upgrade takes it away, and with the limit above there is no call
-  that clears it either. Nothing breaks, so this is a choice rather than a repair: keep it, or
-  replace it with a stem you would rather have.
+  **Turning it back off is one gesture.** The blade's **Turn naming off** button clears the rule and
+  hands naming back to you; names already minted are left exactly as they are. On the wire it is the
+  field named in `update_mask` with no rule in the body, which is how every nullable object field
+  clears (an omitted key and an explicit `null` are the same value once a request is decoded, so the
+  mask is what carries the intent):
 
   ```sh
-  omniglass location-type list      # read floor's name_rule to see which estate you have
+  omniglass location-type update floor --update-mask name_rule
   ```
 
-  To bring such an estate onto the new default, name each floor for its designation first
-  (`omniglass location rename ... --name b1`), which claims the name and takes the platform off it
-  row by row. The type's own rule stays, but with no platform-named floor left it decides nothing.
-- An **official** row, where one exists, is read-only: the blade keeps the Edit and Delete pair
-  in place, greyed, with the reason on hover: "Official: ships with Omniglass and updates with
-  it." That treatment is reserved for the **canonical
-  vocabulary** a release must be able to correct, above all the
-  [property catalog](/guides/admin/properties/), not for example content like a place type.
+  A release can withdraw a shipped rule too, and it reaches your estate on the next boot: the boot
+  seed writes the shipped types authoritatively, so a value dropped from the shipped set leaves
+  every install rather than only the new ones. If you had **overridden** the type, your version
+  stands until you restore it.
+- An **official** row is editable and undeletable: Edit is live (the edit stores your version over
+  the shipped one), and **Delete** stays greyed with the reason on hover, "Official: ships with
+  Omniglass and updates with it." Once you have changed one, that slot becomes **Restore shipped**,
+  which discards your version and takes whatever the current release ships. The same treatment the
+  [component type](/guides/admin/products/) registry uses, and the reason both registries have it is
+  that a release must be able to correct the vocabulary it ships.
 - **Delete** is refused (409) while a location still uses that type: reclassify or remove the
   referencing rows first.
 - A non-empty **allowed parents** set is enforced when a location is created or moved: an

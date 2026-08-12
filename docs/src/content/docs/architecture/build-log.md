@@ -3919,3 +3919,42 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   defect from the other side: the two no-op acts, the parented relocate a pointer comparison gets
   wrong, the same-stem reclassify a product-id comparison gets wrong, and the two real acts that must
   still re-mint with the label following. No existing expectation moved.
+
+- **A shipped location type is platform-owned, and a name rule can be cleared**
+  ([#703](https://github.com/hyperscaleav/omniglass/issues/703),
+  [#692](https://github.com/hyperscaleav/omniglass/issues/692), ADR-0106). The two halves of one
+  question: how does a shipped rule stop applying? A release withdraws it, and an operator clears
+  their own.
+
+  The seed's contract said authoritative upsert and `SeedLocationType` said
+  `on conflict (name) do nothing`, which made a shipped default a one-way ratchet: adding one
+  reached every estate, removing one reached only new installs. That was not an oversight. Shipped
+  location types seeded `official: false`, so the row belonged to the operator and an authoritative
+  re-seed would have stomped their edits. So the ownership model is the fix rather than the seed
+  statement: `location_type` becomes the second adopter of the registry fork (ADR-0095), shipped rows
+  seed official, an operator's edit stores their whole version of the mutable columns in
+  `registry_shadow` under the row's own uuid, and `POST /location-types/{id}:restore` discards it.
+  Every read resolves the shadow over the row, the placement check and the label and name generators
+  included, so a fork reaches the surfaces it exists to change.
+
+  The wire half is the mask (ADR-0091): `{"update_mask": ["name_rule"], "name_rule": null}` clears a
+  rule, because an object has no empty value to overload the way a string has `""` and an explicit
+  null is indistinguishable from an omitted key after decoding. It composes with the fork rather than
+  arguing with it: clearing on a shipped type forks the row with an image carrying no rule, clearing
+  on an operator's own type writes null, and an operator sees one behavior.
+
+  The part most likely to go wrong is the migration, and its interesting half is not the SQL. Estates
+  carry operator edits ON the shipped rows, so those move into shadows before the flip, and telling
+  an edit from a shipped value is NOT done by comparing the row against what this release ships: a
+  row holding a value a previous release shipped and this one withdrew looks exactly like an edit,
+  and preserving it would defeat the withdrawal the slice exists for. The **audit trail** decides,
+  because every operator write records itself in the same transaction. Proven against the old shape,
+  standing the database one migration back, writing the rows an upgraded estate holds, and migrating
+  forward with the real file.
+
+  One capability had to be defended rather than shipped: flipping the rows to official would have
+  activated a guard dormant on this registry and silently taken away the contract editor for the four
+  types an estate actually uses. A contract line is a row in its own table, nothing seeds one, so
+  those writes no longer consult the official flag. Two expectations inverted deliberately, the seed
+  test's "official location_types = 0" and the wire test's twin; the console's origin column now
+  reads three ways and its blade offers **Restore shipped**.

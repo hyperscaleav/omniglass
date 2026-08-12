@@ -143,6 +143,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it) | 2026-08-11 | Accepted | A create form shows the **stem** a generated name will carry, resolved in the browser from the classification the operator just chose, and writes the ordinal as the token `n`, because the ordinal is allocated against live siblings inside the create's own transaction and does not exist until the row does. A **draft-preview verb that mints and rolls back** is refused: its answer is provisional (another create can take the ordinal between the preview and the commit), and the rolled-back mint takes the same advisory lock real creates need, so a form that previewed on every keystroke would serialise the estate's creates behind a UI affordance. **Re-rendering the label rule in TypeScript** is refused outright, as the second implementation of an engine slice 3 swept 42 copies of. The label is therefore not previewed at all: its data map carries `Name` and `Ordinal`, so it is unknowable for the same reason. The placement bucket is shown beside the field as a PATH and never as a prefix inside it, since names became scoped to placement and a name no longer contains its ancestry. **Amended (#699):** a RENDER is not a mint, and both refusals were about allocating, so `:renderLabel` resolves the rule through the same tiers with the same one engine, writes the token where the ordinal goes, and takes no lock; the form now shows both values in LOCKED fields, gated by the entity's `:create` with the placement resolved in the caller's read scope. **Amended again (#657):** the lock is an inline square icon action in the field's join, matching Settings' own Restore to default, and a locked field is `readonly` rather than `disabled`, because a disabled input fires no click and leaves the value out of the tab order; focus does not claim the pen, since a locked field is a tab stop and tabbing past would otherwise blank both fields |
 | [ADR-0105](#adr-0105-a-rule-reads-a-name-as-words-and-the-location-tier-ships-the-restatement-it-once-refused) | 2026-08-11 | Accepted | `words` joins the closed FuncMap (a run of `-` or `_` becomes one space, an edge run is dropped, everything else untouched), which is what finally lets a rule turn a kebab NAME into words: `title` alone leaves the separator standing, so the acronym dictionary of ADR-0099 could not be reached from a name by any spelling. Adding a function is a THREE-place act (FuncMap, AST allowlist, `FuncNames`) and the published set is now walked by a test rather than described. The global LOCATION rule ships as `{{title (words .Name)}}`, reversing the seed's own argument on its restatement half only: a restatement that RE-CASES and runs the operator's dictionary produces a string the read ladder's fallback cannot, where an echo could not, and the constant half ("Room" for every room) is still refused. The ladder's last rung stays verbatim, since this renders and STORES a label rather than prettifying on read; the estate keeps only the pins that say something a name cannot, nine at the time and **seven** after ADR-0103's reversal named the two floors for their designations |
 
+| [ADR-0106](#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask) | 2026-08-12 | Accepted | `location_type` adopts the **registry fork** (ADR-0095) rather than growing a third ownership model: the shipped rows seed `official: true`, the boot seed writes them authoritatively, and an operator's edit forks into `registry_shadow` with `:restore` discarding it. That is what makes a shipped value **withdrawable**, which insert-if-absent could never be, since it can add a default to every estate and remove one from none. The one-time backfill moves the edits estates already hold ON those rows into shadows first, telling an edit from a shipped value by the **audit trail** rather than by comparing columns against what this release ships, because a row holding a WITHDRAWN shipped value is indistinguishable from an edit by inspection and preserving it would defeat the withdrawal. A location type's property and metric **contracts stay writable** on a shipped row: a contract line is a row in its own table, nothing seeds one, and the official guard was dormant on this registry until the flip would have activated it. On the wire, a nullable OBJECT field clears by being **named in `update_mask`** with no value, since an object has no empty value to overload and an explicit null is indistinguishable from an omitted key after decoding; `name_rule` is the first and the convention is now the API's, not that field's |
+
 ## Entries
 
 ### ADR-0001: AI acts as a user; the `agent` principal is deferred
@@ -4547,3 +4549,81 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   slice stays what it says it is.
 - **Tracked under** epic [#657](https://github.com/hyperscaleav/omniglass/issues/657), folded into
   [#698](https://github.com/hyperscaleav/omniglass/pull/698) after the rollup review.
+
+### ADR-0106: A location type is platform-owned, and a nullable object clears under the mask
+
+- **Date:** 2026-08-12 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/),
+  [core entities](/architecture/core-entities/), [API](/architecture/api/),
+  [location types](/guides/admin/location-types/)
+- **Context:** the boot seed's contract is documented as an authoritative upsert, and
+  `SeedLocationType` was `on conflict (name) do nothing`. A shipped default was therefore a one-way
+  ratchet: adding one reached every estate, removing one reached only new installs.
+  [#657](https://github.com/hyperscaleav/omniglass/issues/657) hit it live, shipping a `name_rule` on
+  `floor` and then reversing that in
+  [ADR-0103](#adr-0103-a-positional-name-is-allocation-order-and-the-real-world-designation-is-a-label),
+  at which point the withdrawn rule could not be taken back out of an estate that had booted in
+  between, and no `PATCH` could clear one either. The do-nothing seed was not an oversight: shipped
+  location types seeded `official: false`, so the rows belonged to the operator and an authoritative
+  re-seed would have stomped their edits. The ratchet was the symptom; the ownership model was the
+  cause.
+- **Decision (ownership):** `location_type` adopts the registry-fork primitive
+  ([ADR-0095](#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)),
+  the second registry to do so after `component_type`, rather than growing a third mechanism beside
+  it. Shipped rows seed `official: true` and the platform owns them, so the seed writes them with
+  `ON CONFLICT DO UPDATE` and a withdrawal is just another write. An operator still shapes their own
+  place vocabulary: an edit of a shipped type stores their whole version of its mutable columns as a
+  shadow keyed on the row's own uuid, every read resolves the shadow over the row, and
+  `POST /location-types/{id}:restore` discards it. One uuid and one name per logical row either way,
+  so no foreign key, no URL and no audit row learns about the fork. The rejected alternative was the
+  `default_template` / `template` column pair the global label rules use, which is right for a table
+  of three rows with no operator-created siblings and wrong here: it doubles every future column on a
+  registry that already has five mutable ones, and it answers only the columns somebody thought to
+  split.
+- **Decision (what the image carries):** the fork's whole-row rule is per registry, not per column
+  name. `allowed_parent_types` is IN the image although it names other types, because a
+  `location_type` is flat: it has no parent link, and the placement constraint is a fact the row
+  states about itself, one an operator legitimately reshapes. Holding it official would leave a fork
+  unable to say the thing the registry exists to say.
+- **Decision (the migration's discriminator):** estates already carry operator edits on the shipped
+  rows themselves, so a one-time backfill moves them into shadows before the flip. Telling an edit
+  from a shipped value is the whole difficulty, and it is NOT done by comparing the row against what
+  this release ships. That comparison cannot see the case this ADR exists for: a row holding a value a
+  previous release shipped and this one withdrew differs from today's YAML and reads exactly like an
+  edit, so preserving it would defeat the withdrawal, and a row edited to a value a later release
+  happens to ship has the mirror problem. The **audit trail** decides instead, because it is a record
+  rather than an inference: every operator write of a registry row writes its audit row in the same
+  transaction, so a shipped row with no `create` and no `update` of its own has never been touched and
+  whatever it holds is what some release shipped. `create` counts as well as `update` for a case that
+  is reachable today, an operator deleting a shipped type and creating their own under the same name.
+  The known imprecision is biased toward preserving: a contract write audits against `location_type`
+  too, so one addressed by uuid looks like an edit here and leaves the row holding a shadow of the
+  values it already had, which reads identically and costs a `:restore`. The reverse mistake,
+  reverting an edit, is not recoverable from the console at all.
+- **Decision (the wire):** a nullable OBJECT field clears by being named in `update_mask` with no
+  value, reusing the primitive from
+  [ADR-0091](#adr-0091-an-update_mask-says-which-fields-a-patch-writes) rather than inventing a
+  per-type spelling. The house three-state string sentinel does not generalize: `""` clears a string
+  because a string has an empty value to overload, and an object has none (`{}` is a rule with default
+  fields, not the absence of one). An explicit `null` cannot carry the intent either, since it decodes
+  to the same nil as an omitted key. **This is the convention for every nullable object field that
+  follows**, so it is recorded on the API page and not only in the handler.
+- **Consequence (a capability that had to be defended):** flipping the shipped rows to `official`
+  activates a guard that had been dormant on this registry, since no `location_type` row was official
+  before. `SetLocationTypeProperty` and its three siblings would have started refusing the four types
+  an estate actually uses, silently withdrawing the contract editor for them. They no longer consult
+  the official flag: a contract line is a row in its own table rather than a column of the registry
+  row the fork covers, and **nothing seeds one**, so every line in those tables is an operator's
+  already. An ownership change may not take a working capability away as a side effect.
+- **Consequence (an expectation inverts):** `internal/seed/seed_test.go` asserted "official
+  location_types = 0, a shipped location type is operator-owned". It now asserts 4 and guards the
+  opposite claim. The same inversion lands on the wire test and on the console, where origin reads
+  three ways (shipped, yours, overridden) exactly as it does on component types, and the blade's
+  destructive slot offers **Restore shipped** on a forked row.
+- **What this does NOT change:** the `label_rule` table's `default_template` / `template` pair stays
+  as it is ([ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)). It is one
+  row per labelled entity kind with no operator-created rows, where a per-column split is the natural
+  fit and an overlay table would be more machinery than three rows are worth. A shipped row still
+  cannot be DELETED, forked or not, and an operator-created location type is untouched by any of
+  this: it is written in place, it never carries a shadow, and `:restore` has nothing to give it back.
+- **Tracked under** [#703](https://github.com/hyperscaleav/omniglass/issues/703) and
+  [#692](https://github.com/hyperscaleav/omniglass/issues/692).

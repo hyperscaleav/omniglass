@@ -144,9 +144,25 @@ sets: `moveComponentInput`, a system's `standard`) is untouched and stays the id
 string. The mask is what generalizes clearing to everything that is not a string; retiring the
 sentinel in its favor is a separate ripple, not folded in here.
 
+**Clearing a nullable OBJECT field is the mask, always** (`name_rule` is the first,
+[ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask)).
+An object has no empty value to overload the way a string has `""`: `{}` is a rule with default
+fields, not the absence of one, and an explicit `null` is indistinguishable from an omitted key
+once the body is decoded into a typed struct. So the field goes in `update_mask` and the body
+carries no value for it:
+
+```http
+PATCH /location-types/{id}
+{ "update_mask": ["name_rule"], "name_rule": null }
+```
+
+Sending the `null` is optional and reads well; the mask is what carries the intent. This is the
+convention for every nullable object field that follows, not a `name_rule` special case.
+
 Built on the role declarations (`PATCH /standards/{id}/roles/{role}`, `PATCH
-/systems/{name}/roles/{role}`). The other `PATCH` routes accept no mask yet, and they do not need
-one to stay correct: an absent mask is the implied mask, which is exactly what they already do.
+/systems/{name}/roles/{role}`) and adopted by `PATCH /location-types/{id}`. The other `PATCH` routes
+accept no mask yet, and they do not need one to stay correct: an absent mask is the implied mask,
+which is exactly what they already do.
 
 :::caution[Open question]
 Field-mask depth: top-level fields only (what the write mask ships), or nested paths (`a.b.c`), and
