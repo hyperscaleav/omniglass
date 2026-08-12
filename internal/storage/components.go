@@ -542,6 +542,20 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 	// ordinalPatch travels with namePatch and is non-nil exactly when it is:
 	// a recomputed name and the number it was minted from are one fact, so
 	// they land in one UPDATE and one audit image (#681).
+	//
+	// The guard is the STEM the mint reads actually moving, not the product
+	// field being present in the patch (#691), and not the product id changing
+	// either. A presence test re-mints on a save that re-states the product a
+	// component already has, and an id test re-mints on a swap between two
+	// products of one component_type; neither changes an input to the mint, so
+	// neither should touch the name, and re-minting anyway MOVES it whenever a
+	// lower ordinal was freed in the meantime ("display-2" becomes "display-1")
+	// under component:update, with no rename requested and possibly no
+	// component:rename grant held. That is ADR-0101's derivation, and the
+	// second clause is where this tier's guard parts company with the system
+	// tier's: a component reaches its stem THROUGH a product, one hop further
+	// than a system_type, so the classification an operator picks is not the
+	// fact the name is minted from.
 	var (
 		namePatch    *string
 		ordinalPatch *int
@@ -559,11 +573,17 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 			}
 			finalProductID = &id
 		}
-		newName, newOrdinal, err := generateNameForProduct(ctx, tx, *finalProductID, before.ParentID, before.LocationID, &before.ID)
+		moved, err := productStemMoved(ctx, tx, before.ProductID, *finalProductID)
 		if err != nil {
 			return nil, err
 		}
-		namePatch, ordinalPatch = &newName, &newOrdinal
+		if moved {
+			newName, newOrdinal, err := generateNameForProduct(ctx, tx, *finalProductID, before.ParentID, before.LocationID, &before.ID)
+			if err != nil {
+				return nil, err
+			}
+			namePatch, ordinalPatch = &newName, &newOrdinal
+		}
 	}
 	after, err := scanComponent(tx.QueryRow(ctx, `
 		update component set
@@ -703,20 +723,31 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 		}
 	}
 	// A still-platform-owned name (#627 Task 14) is scoped to the OLD
-	// placement's siblings; a move changes that scope, so the ordinal (and,
-	// crossing into a differently-typed subtree, the stem) may no longer be
-	// what a fresh generate would pick. The product does not change on a
-	// move, so only the ordinal actually shifts in the common case, but the
-	// stem is re-resolved from before.ProductID's component_type anyway
-	// (one rule, no special case for "same stem, different ordinal" versus
-	// "different stem too"). An operator-typed name (RenameComponent clears
-	// the flag forever) is left exactly where the operator put it.
+	// placement's siblings; a move changes that bucket, so the ordinal (and
+	// with it the whole name) may no longer be what a fresh generate would
+	// pick. The stem does not move: it is resolved from before.ProductID's
+	// component_type chain, which a placement change does not touch, so the
+	// re-mint below re-resolves the same stem and only the number shifts. An
+	// operator-typed name (RenameComponent clears the flag forever) is left
+	// exactly where the operator put it.
 	//
 	// effLocationID/effParentID decode the same three-state patches the
 	// UPDATE's own CASE expressions apply (nil unchanged, "" clear, else
 	// set), computed here in Go because the generator needs the DESTINATION
 	// scope to scan siblings in, not the component's placement as it reads
 	// right now.
+	//
+	// The guard is the BUCKET actually moving, not merely the row being
+	// platform-named (#696), the same shape MoveSystem carries and the same
+	// defect ADR-0101 refused on the reclassify path: a :move that re-states
+	// the placement the component already has (a pre-filled move form's shape,
+	// and this verb requires at least one field, so re-stating the current one
+	// is the ordinary path) changes no input to the mint, and re-minting
+	// anyway MOVES the name whenever a lower ordinal was freed in the meantime,
+	// under component:move with no rename requested. The comparison is on the
+	// bucket rather than on the two pointers because a parent WINS over a
+	// location: relocating a parented component leaves it in the same parent
+	// bucket, so its name must not move either.
 	var (
 		namePatch    *string
 		ordinalPatch *int
@@ -740,15 +771,19 @@ func (p *PG) MoveComponent(ctx context.Context, actorID, name string, move Compo
 				effParentID = &v
 			}
 		}
-		productID := ""
-		if before.ProductID != nil {
-			productID = *before.ProductID
+		from := componentNameScope(before.ParentID, before.LocationID)
+		to := componentNameScope(effParentID, effLocationID)
+		if from.bucket != to.bucket {
+			productID := ""
+			if before.ProductID != nil {
+				productID = *before.ProductID
+			}
+			newName, newOrdinal, err := generateNameForProduct(ctx, tx, productID, effParentID, effLocationID, &before.ID)
+			if err != nil {
+				return nil, err
+			}
+			namePatch, ordinalPatch = &newName, &newOrdinal
 		}
-		newName, newOrdinal, err := generateNameForProduct(ctx, tx, productID, effParentID, effLocationID, &before.ID)
-		if err != nil {
-			return nil, err
-		}
-		namePatch, ordinalPatch = &newName, &newOrdinal
 	}
 	after, err := scanComponent(tx.QueryRow(ctx, `
 		update component set
