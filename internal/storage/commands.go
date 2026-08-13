@@ -227,10 +227,21 @@ func (p *PG) CommandSettlement(ctx context.Context, ownerKind, ownerID, commandT
 		return "", err
 	}
 	// One clock for both ends of the comparison, and the database's, since that
-	// is where a sample's ts comes from (dbNow, #667). This transaction started
-	// after the one that wrote the intended value committed, so its now() is
-	// strictly later than that row's ts: the verdict is a fact about elapsed
-	// time rather than about skew between two hosts.
+	// is where a sample's ts comes from (dbNow, #667). That is what the change
+	// bought: the verdict is a fact about elapsed time on one server rather than
+	// about skew between two hosts.
+	//
+	// What it does NOT buy is an ordering (#718). now() is transaction_timestamp,
+	// and this runs at READ COMMITTED, so an IssueCommand that BEGAN after this
+	// transaction did can still commit before a statement here takes its
+	// snapshot: the intended row this then reads carries a ts later than this
+	// now(), and now.Sub(intended.TS) is negative. Nothing downstream is wrong,
+	// and deliberately so rather than by luck: a negative delta is less than any
+	// positive window, which is `pending`, the right answer for a command issued
+	// a moment ago, and a zero window never consults a timestamp at all
+	// (ADR-0108). The claim this comment used to make, that the transaction's
+	// now() is strictly later than the intended row's ts, is one the isolation
+	// level does not give, and a future change that leaned on it would be wrong.
 	now, err := dbNow(ctx, tx)
 	if err != nil {
 		return "", err

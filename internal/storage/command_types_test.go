@@ -171,3 +171,106 @@ func TestCommandTypeTargetSpecPatch(t *testing.T) {
 		}
 	})
 }
+
+// TestCommandTypeRefusesANegativeSettleWindow: the window is a DURATION, and a
+// negative one is not a shorter duration, it is a value with no meaning that the
+// column, the API body, the console and the seed loader all accepted (#718).
+//
+// It is invisible rather than merely untidy. `Settle` tests `windowSeconds > 0`,
+// so -5 behaves exactly as 0 does: terminal by construction, no waiting
+// (ADR-0108). An operator who typed a negative into the console's window field
+// would be shown it back on the row and get behaviour that has nothing to do
+// with the number, forever, with no refusal anywhere to say so.
+//
+// Zero is deliberately NOT refused here: it is the documented way to say "settle
+// immediately", a statement of intent that ADR-0108 made terminal by
+// construction, and the shipped `reboot` type carries it. The floor is the
+// smallest one that admits every meaning the field has.
+func TestCommandTypeRefusesANegativeSettleWindow(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	t.Run("create refuses it, naming the field", func(t *testing.T) {
+		_, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{
+			Name: "neg-window", TargetPropertyType: "video-input", SettleWindowSeconds: -5,
+		})
+		if !errors.Is(err, storage.ErrCommandTypeInvalid) {
+			t.Fatalf("create with a negative window = %v, want ErrCommandTypeInvalid", err)
+		}
+		if !strings.Contains(err.Error(), "settle_window_seconds") {
+			t.Errorf("error %q does not name the field an operator has to change", err)
+		}
+		// Nothing was written: the refusal is not a half-create.
+		if _, err := gw.GetCommandType(ctx, "neg-window"); !errors.Is(err, storage.ErrCommandTypeNotFound) {
+			t.Errorf("get after the refusal = %v, want ErrCommandTypeNotFound", err)
+		}
+	})
+
+	t.Run("update refuses it, and the row keeps its window", func(t *testing.T) {
+		if _, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{
+			Name: "patch-window", TargetPropertyType: "video-input", SettleWindowSeconds: 15,
+		}); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+		neg := -1
+		if _, err := gw.UpdateCommandType(ctx, "", "patch-window", storage.CommandTypePatch{SettleWindowSeconds: &neg}); !errors.Is(err, storage.ErrCommandTypeInvalid) {
+			t.Fatalf("patch to a negative window = %v, want ErrCommandTypeInvalid", err)
+		}
+		ct, err := gw.GetCommandType(ctx, "patch-window")
+		if err != nil {
+			t.Fatalf("get: %v", err)
+		}
+		if ct.SettleWindowSeconds != 15 {
+			t.Errorf("window after the refused patch = %d, want the 15 it had", ct.SettleWindowSeconds)
+		}
+	})
+
+	t.Run("the seed upsert refuses it too, naming the row", func(t *testing.T) {
+		err := gw.UpsertCommandType(ctx, storage.CommandType{
+			Name: "neg-official", SettleWindowSeconds: -30, Official: true,
+		})
+		if err == nil {
+			t.Fatal("upsert with a negative window succeeded, want a refusal naming the row")
+		}
+		if !strings.Contains(err.Error(), "neg-official") {
+			t.Errorf("error %q does not name the row, which is how a seed defect is found", err)
+		}
+	})
+
+	t.Run("zero and a positive window are both still accepted", func(t *testing.T) {
+		// Zero with no target: the shipped fire-and-forget shape (reboot).
+		if _, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{Name: "ff-zero"}); err != nil {
+			t.Errorf("create of a fire-and-forget type: %v", err)
+		}
+		// Zero WITH a target: "settle immediately", terminal by construction
+		// (ADR-0108), which this floor deliberately leaves reachable.
+		if _, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{
+			Name: "settle-now", TargetPropertyType: "video-input", SettleWindowSeconds: 0,
+		}); err != nil {
+			t.Errorf("create of a zero-window settleable type: %v", err)
+		}
+		if _, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{
+			Name: "settle-later", TargetPropertyType: "video-input", SettleWindowSeconds: 30,
+		}); err != nil {
+			t.Errorf("create of a windowed settleable type: %v", err)
+		}
+		// And the seeded rows, which a boot re-runs on every start, are untouched.
+		for name, want := range map[string]int{"set-input": 15, "reboot": 0} {
+			ct, err := gw.GetCommandType(ctx, name)
+			if err != nil {
+				t.Fatalf("get %s: %v", name, err)
+			}
+			if ct.SettleWindowSeconds != want {
+				t.Errorf("seeded %s window = %d, want %d", name, ct.SettleWindowSeconds, want)
+			}
+		}
+	})
+}

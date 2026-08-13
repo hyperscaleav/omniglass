@@ -366,7 +366,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fName, "name", "", "The command type name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment for the params")
-				cmd.Flags().StringVar(&fSettleWindowSeconds, "settle-window-seconds", "", "The actuation window in seconds (0 = fire-and-forget)")
+				cmd.Flags().StringVar(&fSettleWindowSeconds, "settle-window-seconds", "", "The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so.")
 				cmd.Flags().StringVar(&fTargetMetricType, "target-metric-type", "", "The metric this command sets, for settlement (at most one target arm)")
 				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets, for settlement (at most one target arm)")
 				return cmd
@@ -465,7 +465,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the command does")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
 				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment (replaces wholesale)")
-				cmd.Flags().StringVar(&fSettleWindowSeconds, "settle-window-seconds", "", "The actuation window in seconds")
+				cmd.Flags().StringVar(&fSettleWindowSeconds, "settle-window-seconds", "", "The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)")
 				cmd.Flags().StringVar(&fTargetMetricType, "target-metric-type", "", "The metric this command sets (empty clears it; a non-empty arm clears the other)")
 				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets (empty clears it; a non-empty arm clears the other)")
 				return cmd

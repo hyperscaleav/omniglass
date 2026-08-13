@@ -4142,7 +4142,7 @@ export interface components {
             params_schema?: unknown;
             /**
              * Format: int64
-             * @description The actuation window in seconds (0 = fire-and-forget)
+             * @description The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so.
              */
             settle_window_seconds?: number;
             /** @description The metric this command sets, for settlement (at most one target arm) */
@@ -7056,7 +7056,7 @@ export interface components {
             params_schema?: unknown;
             /**
              * Format: int64
-             * @description The actuation window in seconds
+             * @description The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)
              */
             settle_window_seconds?: number;
             /** @description The metric this command sets (empty clears it; a non-empty arm clears the other) */
