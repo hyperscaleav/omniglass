@@ -61,23 +61,27 @@ describe("component_types data layer", () => {
 // children that leave every fact blank (inherit). parent_id links by uuid
 // (the canonical handle); parent carries the name for display and is what
 // resolveComponentTypeIcon's ancestor walk actually follows.
-const mic: ComponentType = { id: uuidFor("ct-mic"), name: "mic", display_name: "Microphone", official: true, forked: false, stem: "mic", abbrev: "mic", icon: "mic", default_tags: [] };
-const wirelessMic: ComponentType = { id: uuidFor("ct-wireless-mic"), name: "wireless-mic", display_name: "Wireless Microphone", official: true, forked: false, parent: "mic", parent_id: uuidFor("ct-mic"), default_tags: [] };
-const ceilingMic: ComponentType = { id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", display_name: "Ceiling Microphone", official: true, forked: false, parent: "mic", parent_id: uuidFor("ct-mic"), default_tags: [] };
-const display: ComponentType = { id: uuidFor("ct-display"), name: "display", display_name: "Display", official: true, forked: false, stem: "display", abbrev: "fp", icon: "monitor", default_tags: [] };
-const interactiveDisplay: ComponentType = { id: uuidFor("ct-interactive-display"), name: "interactive-display", display_name: "Interactive Display", official: true, forked: false, parent: "display", parent_id: uuidFor("ct-display"), default_tags: [] };
-const genericDevice: ComponentType = { id: uuidFor("ct-generic-device"), name: "generic-device", display_name: "Generic Device", official: true, forked: false, stem: "device", abbrev: "dev", icon: "box", default_tags: [] };
+// resolved_icon is what the SERVER sends per row (#695): the row's own icon
+// where it has one, its nearest ancestor's where it does not. It is written out
+// per row rather than computed, because computing it in the fixture would
+// reintroduce the very walk this stopped being the console's job.
+const mic: ComponentType = { id: uuidFor("ct-mic"), name: "mic", display_name: "Microphone", official: true, forked: false, stem: "mic", abbrev: "mic", icon: "mic", resolved_icon: "mic", default_tags: [] };
+const wirelessMic: ComponentType = { id: uuidFor("ct-wireless-mic"), name: "wireless-mic", display_name: "Wireless Microphone", official: true, forked: false, parent: "mic", parent_id: uuidFor("ct-mic"), resolved_icon: "mic", default_tags: [] };
+const ceilingMic: ComponentType = { id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", display_name: "Ceiling Microphone", official: true, forked: false, parent: "mic", parent_id: uuidFor("ct-mic"), resolved_icon: "mic", default_tags: [] };
+const display: ComponentType = { id: uuidFor("ct-display"), name: "display", display_name: "Display", official: true, forked: false, stem: "display", abbrev: "fp", icon: "monitor", resolved_icon: "monitor", default_tags: [] };
+const interactiveDisplay: ComponentType = { id: uuidFor("ct-interactive-display"), name: "interactive-display", display_name: "Interactive Display", official: true, forked: false, parent: "display", parent_id: uuidFor("ct-display"), resolved_icon: "monitor", default_tags: [] };
+const genericDevice: ComponentType = { id: uuidFor("ct-generic-device"), name: "generic-device", display_name: "Generic Device", official: true, forked: false, stem: "device", abbrev: "dev", icon: "box", resolved_icon: "box", default_tags: [] };
 
 const seededTree: ComponentType[] = [mic, wirelessMic, ceilingMic, display, interactiveDisplay, genericDevice];
 
 describe("resolveComponentTypeIcon", () => {
-  it("returns a root's own icon directly", () => {
+  it("returns the icon the server resolved for a root that sets one", () => {
     const byName = componentTypeByName(seededTree);
     expect(resolveComponentTypeIcon("display", byName)).toBe("monitor");
     expect(resolveComponentTypeIcon("mic", byName)).toBe("mic");
   });
 
-  it("walks up to the nearest ancestor's icon when a child leaves it blank", () => {
+  it("shows the inherited icon the server sent for a child that leaves it blank", () => {
     const byName = componentTypeByName(seededTree);
     expect(resolveComponentTypeIcon("interactive-display", byName)).toBe("monitor");
     expect(resolveComponentTypeIcon("ceiling-mic", byName)).toBe("mic");
@@ -87,6 +91,22 @@ describe("resolveComponentTypeIcon", () => {
     const byName = componentTypeByName(seededTree);
     expect(resolveComponentTypeIcon("no-such-type", byName)).toBe("box");
     expect(resolveComponentTypeIcon(undefined, byName)).toBe("box");
+  });
+
+  // The point of #695: the console reads the ANSWER, it does not recompute it.
+  // This row's served icon disagrees with everything its chain says, and a
+  // client-side walk fails here, which is the only way to tell the two
+  // implementations apart from out here.
+  it("shows what the server sent even where a chain walk would answer otherwise", () => {
+    const odd: ComponentType = { ...ceilingMic, name: "odd", resolved_icon: "sparkles" };
+    const byName = componentTypeByName([...seededTree, odd]);
+    expect(resolveComponentTypeIcon("odd", byName)).toBe("sparkles");
+  });
+
+  it("falls back to box when the server resolved no icon at all", () => {
+    const bare: ComponentType = { ...ceilingMic, name: "bare", resolved_icon: undefined };
+    const byName = componentTypeByName([...seededTree, bare]);
+    expect(resolveComponentTypeIcon("bare", byName)).toBe("box");
   });
 });
 

@@ -16,18 +16,19 @@ import (
 // componentTypeWire is the decoded component_type wire shape for the e2e
 // assertions.
 type componentTypeWire struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	DisplayName string   `json:"display_name"`
-	Stem        string   `json:"stem"`
-	Icon        string   `json:"icon"`
-	Abbrev      string   `json:"abbrev"`
-	LabelRule   string   `json:"label_rule"`
-	DefaultTags []string `json:"default_tags"`
-	Official    bool     `json:"official"`
-	Forked      bool     `json:"forked"`
-	ParentID    string   `json:"parent_id"`
-	Parent      string   `json:"parent"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	DisplayName  string   `json:"display_name"`
+	Stem         string   `json:"stem"`
+	Icon         string   `json:"icon"`
+	ResolvedIcon string   `json:"resolved_icon"`
+	Abbrev       string   `json:"abbrev"`
+	LabelRule    string   `json:"label_rule"`
+	DefaultTags  []string `json:"default_tags"`
+	Official     bool     `json:"official"`
+	Forked       bool     `json:"forked"`
+	ParentID     string   `json:"parent_id"`
+	Parent       string   `json:"parent"`
 }
 
 // TestComponentTypesAPI drives the component_type registry over HTTP: list
@@ -97,6 +98,16 @@ func TestComponentTypesAPI(t *testing.T) {
 	// carries the raw (uninherited) row, resolution is ResolveTypeFacts's job.
 	if wireless.Stem != "" || wireless.Icon != "" {
 		t.Fatalf("wireless-mic stem/icon = %q/%q, want both empty (inherits, not resolved on this read)", wireless.Stem, wireless.Icon)
+	}
+	// The RESOLVED icon is served beside the raw one rather than instead of it
+	// (#695), which is what lets an edit blade post the raw field back while a
+	// list cell draws the inherited glyph. Before this, the console climbed the
+	// chain itself in TypeScript against the gateway's climb in Go.
+	if wireless.ResolvedIcon != mic.Icon {
+		t.Fatalf("wireless-mic resolved_icon = %q, want its ancestor mic's %q", wireless.ResolvedIcon, mic.Icon)
+	}
+	if mic.ResolvedIcon != mic.Icon {
+		t.Fatalf("mic resolved_icon = %q, want its own icon %q", mic.ResolvedIcon, mic.Icon)
 	}
 
 	// The viewer cannot create (403, capability fast-reject).

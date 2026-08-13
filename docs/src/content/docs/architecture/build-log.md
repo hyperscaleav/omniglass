@@ -4448,3 +4448,121 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   migration: it cannot run in dbmate's transaction, and a failed one leaves an invalid index that the
   retry's `if not exists` silently skips, which is the same silently-unusable-index class this slice
   exists to close.
+
+- **The rule language's function set stops being typed four times**
+  ([#701](https://github.com/hyperscaleav/omniglass/issues/701)). Adding `words` in
+  [#657](https://github.com/hyperscaleav/omniglass/issues/657) meant editing the `template.FuncMap`,
+  `FuncNames()`, the AST allowlist and the prose that teaches the language, and forgetting any one of
+  them failed differently: a name in the FuncMap alone parses nowhere, a name in the allowlist alone is
+  just a hole, a name in `FuncNames` alone is published and unreachable, and a name missing from the
+  docs simply does not exist as far as an operator is concerned. That is the generate-first drift class
+  the repo's own rule names, inside the engine that renders the estate's labels.
+
+  The set is now declared ONCE, as an ordered list of name, summary, worked example and the builder
+  that produces the implementation, and the other four are readers of it. The safety property
+  [ADR-0098](/architecture/decisions/) argues for is unchanged in what it guarantees and stronger in
+  how: a function must be in the FuncMap AND the grammar to be usable, and deriving both from one
+  declaration makes the two incapable of disagreeing rather than merely expected to. Adding a function
+  is still a deliberate act with a test to change, because the closed-set test names the members and
+  the committed artifact has to be regenerated.
+
+  Two tests were owed rather than one. The old set was walked in ONE direction (every published name
+  parses in a real rule), so a grammar entry with no implementation behind it was the direction nothing
+  checked; the converse is now asserted too, and the allowlist may differ from the FuncMap only by the
+  named builtins. The docs table is rendered from `docs/src/generated/label.json` (`cmd/labelgen`,
+  drift-gated the way the seed and identity artifacts are), and each row's example is EXECUTED through
+  the engine on the way into the artifact, so what the table teaches a function does is what the
+  function did rather than a claim beside it.
+
+- **The seeded type trees are rendered rather than typed**
+  ([#678](https://github.com/hyperscaleav/omniglass/issues/678)). `seed.json` carried eleven shipped
+  sets and not the two inheriting classification registries, so the only copy of the `system_type` tree
+  in the live docs was a sentence in [core entities](/architecture/core-entities/) naming all eleven
+  rows and their nesting, and the `component_type` section taught its taxonomy through examples that
+  stopped at "...". The issue's own framing was half right and worth correcting: there was no CLOSED
+  hand-written enumeration of `component_type` in the live docs, only an open-ended one, which is a
+  different defect (a set that cannot drift because it never claimed to be complete, and also never
+  told an operator what ships).
+
+  Both registries now render from the seed, and the render keeps a blank fact BLANK. That is the whole
+  point of publishing them: `board` states its own stem and abbrev and leaves its icon to `room`, and a
+  table that resolved the chain on the way out would teach the opposite of
+  [ADR-0095](/architecture/decisions/)'s first-non-null walk while looking tidier. The location types
+  the same bullet list enumerated a second time now point at the guide that already renders them, so
+  the estate's shipped shape is stated in exactly one place per set.
+
+  The drift test grew the assertions the shape needs rather than a row count: a child points at its
+  parent, a root carries the stem it has no ancestor to inherit, an inheriting row's fact stays empty,
+  and no row names a parent declared after it, which would silently drop a subtree out of the rendered
+  tree.
+
+- **The roles table stops being a second copy of the seed**
+  ([#722](https://github.com/hyperscaleav/omniglass/issues/722)). [Identity and access](/architecture/identity-access/)
+  carried a hand-written matrix of the five official roles and what each can do, beside an ASCII
+  inheritance diagram, while `seed.json` already renders the same roles with their declared and
+  effective permissions resolved through the authorizer's own `rbac` path.
+  [#714](https://github.com/hyperscaleav/omniglass/issues/714) had already had to correct one stale
+  claim in two places because of it.
+
+  Two more had accumulated, both found by reading `roles.yaml` rather than the page. The `operator`
+  row claimed "ack/snooze/resolve alarms", a capability the role holds no permission for and the API
+  publishes no route for, while omitting `telemetry:push`, `command:issue`, `file:create,delete` and
+  the four catalog grants it does hold. The diagram drew `admin <- owner`, and `owner` inherits
+  nothing at all: its permission is `>`, so there is nothing an edge could add. Neither was written
+  wrong; both were written once and then left behind by the seed, which is the entire argument for
+  rendering.
+
+  The table and the diagram are now one `SeededSet` render, and what the permission strings cannot say
+  stays hand-written beside it, per role: why the IAM directories are out of `viewer`'s reach, why an
+  admin-sensitive secret is a 404 rather than a 403, why a `deploy` grant reaches exactly one tier, why
+  `admin` is not the superuser. That split is the rule the page now follows, and it is the same one
+  [the access guide](/guides/admin/access/) already followed.
+
+- **The docs site's OpenAPI plugin comes back inside its declared support range**
+  ([#704](https://github.com/hyperscaleav/omniglass/issues/704)). `starlight-openapi@0.26.0` declares
+  `astro >=7.0.2` and `@astrojs/starlight >=0.41.0`; the site runs astro 6.4.6 and starlight 0.38.5.
+  pnpm warns where npm refuses, so it installed and built anyway, and nothing on the 331 pages we
+  publish today was broken by it. Running a plugin outside its support range is still a latent
+  failure with a misleading shape: the first page to hit a starlight API that only exists in 0.41+
+  would read as a content bug.
+
+  What 0.25 gives up is worth stating exactly, because the ruling asked and the answer is checkable
+  rather than assumed: **nothing**. 0.26.0's changelog carries one entry, "Adds support for Astro v7,
+  drops support for Astro v6", and that is the whole release. It is not that 0.26's features are
+  unused here, it is that 0.26 explicitly dropped the Astro major this project runs. `^0.25.0`
+  resolves to 0.25.3, which carries every feature of the 0.25 line (operation snippets, request and
+  response snippets, the overview operation list, on-demand rendering) plus its three fixes, and its
+  peers (`astro >=6.0.0`, `@astrojs/starlight >=0.38.0`, `@astrojs/markdown-remark >=7.0.0`) are
+  satisfied exactly. Moving to astro 7 remains its own slice whenever it is wanted; it is not owed to
+  this plugin.
+
+- **The type chain is walked once, in the gateway**
+  ([#695](https://github.com/hyperscaleav/omniglass/issues/695)). The naming half of this closed in
+  [#702](https://github.com/hyperscaleav/omniglass/issues/702), which made the draft route answer with
+  the name itself; what was left was `lib/typechain.ts`, the console's own first-non-null-wins climb of
+  both type registries, running against `resolveTypeFacts` in Go for the ICON. A drifted stem produced
+  a wrong address; a drifted icon produces a wrong glyph, so this is the same duplication with a much
+  smaller consequence, and it was fixed the same way rather than differently.
+
+  Both registry listings now carry `resolved_icon` beside the raw `icon`, and `lib/typechain.ts` is
+  deleted along with the inline copy of the same climb that had grown in the Component Types page.
+  The cost was weighed rather than assumed: the listing already loads the entire registry in one
+  unfiltered query and the handler already indexes it to fill each row's parent name, so the walk is a
+  pure pass over rows in hand and adds no query. Resolving PER ROW through the existing
+  `ResolveTypeFacts` would have been one query per level per row, turning a one-query list into a
+  hundred, so it was not done that way; the field is on the listing only, and a single-row write
+  response does not carry it, because nothing reads an icon there.
+
+  The two Go walks that remain are not an accident and are not left on trust. One reads a node at a
+  time through a caller's own querier, because the name generator and the label renderer resolve facts
+  INSIDE a transaction and must see the write still in flight; the other is a pure pass over a loaded
+  listing. A test runs both over every seeded row of both registries and compares, which is what makes
+  two walks in one package safe and is the instrument the old cross-language pair never had.
+
+  It also settled a disagreement that was already live rather than hypothetical. The TypeScript walk
+  treated an empty-string icon as ABSENT and kept climbing; the gateway's treats it as a value and
+  stops, because the column is nullable and null is the "inherit" signal. `PATCH {"icon": ""}` stores
+  that empty string today, so the two answered differently for a row an operator could actually
+  create. The console now shows what the gateway resolves. Whether that patch should clear the field
+  instead of storing a blank is a separate question about the write path, and it is left alone here
+  rather than changed under cover of a read-side fix.

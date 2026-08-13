@@ -30,10 +30,12 @@ const seed: Product[] = [
 // The seeded component_type tree this page's Type picker renders (a slice of
 // internal/seed/component_types.yaml): display is a root with its own icon,
 // interactive-display a child that inherits it, touch-panel a sibling root.
+// resolved_icon is the server's answer per row (#695), which is what a product
+// with no override of its own now falls back to.
 const componentTypes: ComponentType[] = [
-  { id: uuidFor("ct-display"), name: "display", display_name: "Display", official: true, forked: false, stem: "display", abbrev: "fp", icon: "monitor", default_tags: [] },
-  { id: uuidFor("ct-interactive-display"), name: "interactive-display", display_name: "Interactive Display", official: true, forked: false, parent: "display", parent_id: uuidFor("ct-display"), default_tags: [] },
-  { id: uuidFor("ct-touch-panel"), name: "touch-panel", display_name: "Touch Panel", official: true, forked: false, stem: "panel", abbrev: "tp", icon: "touchpad", default_tags: [] },
+  { id: uuidFor("ct-display"), name: "display", display_name: "Display", official: true, forked: false, stem: "display", abbrev: "fp", icon: "monitor", resolved_icon: "monitor", default_tags: [] },
+  { id: uuidFor("ct-interactive-display"), name: "interactive-display", display_name: "Interactive Display", official: true, forked: false, parent: "display", parent_id: uuidFor("ct-display"), resolved_icon: "monitor", default_tags: [] },
+  { id: uuidFor("ct-touch-panel"), name: "touch-panel", display_name: "Touch Panel", official: true, forked: false, stem: "panel", abbrev: "tp", icon: "touchpad", resolved_icon: "touchpad", default_tags: [] },
 ];
 
 const vendors: Vendor[] = [

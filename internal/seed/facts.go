@@ -79,6 +79,23 @@ type factsNameRule struct {
 	BareFirst bool   `json:"bare_first,omitempty"`
 }
 
+// factsTypeNode is one row of an INHERITING classification registry
+// (component_type, system_type) as the docs render it (#678).
+//
+// The blank facts are rendered blank, `omitempty` and all: a child that states
+// no icon is inheriting its nearest ancestor's (ADR-0095's first-non-null walk),
+// and a render that resolved the chain here would publish a tree in which every
+// node states everything, which is the opposite of the rule the page teaches.
+type factsTypeNode struct {
+	ID          string   `json:"id"`
+	DisplayName string   `json:"display_name"`
+	ParentID    string   `json:"parent_id,omitempty"`
+	Stem        string   `json:"stem,omitempty"`
+	Abbrev      string   `json:"abbrev,omitempty"`
+	Icon        string   `json:"icon,omitempty"`
+	DefaultTags []string `json:"default_tags,omitempty"`
+}
+
 type factsStandardRole struct {
 	Name           string   `json:"name"`
 	DisplayName    string   `json:"display_name,omitempty"`
@@ -147,6 +164,8 @@ type seedFactsDoc struct {
 	SecretTypes    []factsSecretType    `json:"secret_types"`
 	InterfaceTypes []factsInterfaceType `json:"interface_types"`
 	LocationTypes  []factsLocationType  `json:"location_types"`
+	ComponentTypes []factsTypeNode      `json:"component_types"`
+	SystemTypes    []factsTypeNode      `json:"system_types"`
 	Standards      []factsStandard      `json:"standards"`
 	Vendors        []factsVendor        `json:"vendors"`
 	Drivers        []factsDriver        `json:"drivers"`
@@ -271,6 +290,28 @@ func FactsJSON() ([]byte, error) {
 		doc.LocationTypes = append(doc.LocationTypes, factsLocationType{
 			ID: lt.ID, DisplayName: lt.DisplayName, Icon: lt.Icon, AllowedParentTypes: lt.AllowedParentTypes,
 			NameRule: rule,
+		})
+	}
+
+	var cts componentTypesDoc
+	if err := yaml.Unmarshal(componentTypesYAML, &cts); err != nil {
+		return nil, fmt.Errorf("seed facts: component types: %w", err)
+	}
+	for _, ct := range cts.ComponentTypes {
+		doc.ComponentTypes = append(doc.ComponentTypes, factsTypeNode{
+			ID: ct.ID, DisplayName: ct.DisplayName, ParentID: ct.ParentID,
+			Stem: ct.Stem, Abbrev: ct.Abbrev, Icon: ct.Icon, DefaultTags: ct.DefaultTags,
+		})
+	}
+
+	var sts systemTypesDoc
+	if err := yaml.Unmarshal(systemTypesYAML, &sts); err != nil {
+		return nil, fmt.Errorf("seed facts: system types: %w", err)
+	}
+	for _, st := range sts.SystemTypes {
+		doc.SystemTypes = append(doc.SystemTypes, factsTypeNode{
+			ID: st.ID, DisplayName: st.DisplayName, ParentID: st.ParentID,
+			Stem: st.Stem, Abbrev: st.Abbrev, Icon: st.Icon,
 		})
 	}
 

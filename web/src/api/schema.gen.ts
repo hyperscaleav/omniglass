@@ -4142,6 +4142,8 @@ export interface components {
             parent?: string;
             /** @description The parent component_type's id, the canonical handle; absent for a root type */
             parent_id?: string;
+            /** @description The glyph this type shows: its own icon, else the nearest ancestor's. Served on the registry listing, where the whole chain is already in hand; a single-row write response does not carry it */
+            resolved_icon?: string;
             /** @description The auto-generated component name's prefix; empty inherits the nearest ancestor's */
             stem?: string;
         };
@@ -6986,6 +6988,8 @@ export interface components {
             parent?: string;
             /** @description The parent system_type's id, the canonical handle; absent for a root type */
             parent_id?: string;
+            /** @description The glyph this type shows: its own icon, else the nearest ancestor's. Served on the registry listing, where the whole chain is already in hand; a single-row write response does not carry it */
+            resolved_icon?: string;
             /** @description The prefix a generated system name is built from; empty inherits the nearest ancestor's */
             stem?: string;
         };

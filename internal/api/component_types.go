@@ -18,18 +18,29 @@ import (
 // link, absent for a root type. The registry lists alphabetically by
 // display_name.
 type componentTypeBody struct {
-	ID          string   `json:"id" doc:"The component_type's uuid, the stable handle that survives a rename"`
-	Name        string   `json:"name" doc:"The name an operator reads and types; renameable"`
-	DisplayName string   `json:"display_name"`
-	Stem        string   `json:"stem,omitempty" doc:"The auto-generated component name's prefix; empty inherits the nearest ancestor's"`
-	Icon        string   `json:"icon,omitempty" doc:"A glyph key; empty inherits the nearest ancestor's"`
-	Abbrev      string   `json:"abbrev,omitempty" doc:"A compact form of display_name; empty inherits the nearest ancestor's"`
-	LabelRule   string   `json:"label_rule,omitempty" doc:"The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components"`
-	DefaultTags []string `json:"default_tags" doc:"Tags every instance of this type (or a descendant that does not override) starts with"`
-	Official    bool     `json:"official" doc:"True for a row this release ships. A shipped row is never written by an operator: an edit forks it"`
-	Forked      bool     `json:"forked" doc:"True when this shipped row carries changes of yours overriding it. Restore discards them"`
-	ParentID    *string  `json:"parent_id,omitempty" doc:"The parent component_type's id, the canonical handle; absent for a root type"`
-	Parent      *string  `json:"parent,omitempty" doc:"The parent component_type's name, for display; absent for a root type"`
+	ID          string `json:"id" doc:"The component_type's uuid, the stable handle that survives a rename"`
+	Name        string `json:"name" doc:"The name an operator reads and types; renameable"`
+	DisplayName string `json:"display_name"`
+	Stem        string `json:"stem,omitempty" doc:"The auto-generated component name's prefix; empty inherits the nearest ancestor's"`
+	Icon        string `json:"icon,omitempty" doc:"A glyph key; empty inherits the nearest ancestor's"`
+	// ResolvedIcon is the glyph this type actually SHOWS: icon when the row
+	// states one, else the nearest ancestor's (#695). It is served because the
+	// console drew every registry row by climbing the chain in TypeScript
+	// against this package's climb in Go, which is one rule with two
+	// implementations and a wrong glyph when they disagree.
+	//
+	// It is on the LISTING and not on a single-row write response, and that is
+	// the whole cost question: the listing is the entire registry in one query,
+	// so every ancestor is already in hand and the walk is free, while resolving
+	// one row costs a query per level for a value no caller reads.
+	ResolvedIcon string   `json:"resolved_icon,omitempty" doc:"The glyph this type shows: its own icon, else the nearest ancestor's. Served on the registry listing, where the whole chain is already in hand; a single-row write response does not carry it"`
+	Abbrev       string   `json:"abbrev,omitempty" doc:"A compact form of display_name; empty inherits the nearest ancestor's"`
+	LabelRule    string   `json:"label_rule,omitempty" doc:"The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components"`
+	DefaultTags  []string `json:"default_tags" doc:"Tags every instance of this type (or a descendant that does not override) starts with"`
+	Official     bool     `json:"official" doc:"True for a row this release ships. A shipped row is never written by an operator: an edit forks it"`
+	Forked       bool     `json:"forked" doc:"True when this shipped row carries changes of yours overriding it. Restore discards them"`
+	ParentID     *string  `json:"parent_id,omitempty" doc:"The parent component_type's id, the canonical handle; absent for a root type"`
+	Parent       *string  `json:"parent,omitempty" doc:"The parent component_type's name, for display; absent for a root type"`
 }
 
 func toComponentTypeBody(ct *storage.ComponentType, parentName *string) componentTypeBody {
@@ -141,6 +152,7 @@ func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gate
 		for i := range types {
 			byID[types[i].ID] = types[i].Name
 		}
+		icons := storage.ResolvedComponentTypeIcons(types)
 		out := &listComponentTypesOutput{}
 		out.Body.ComponentTypes = make([]componentTypeBody, 0, len(types))
 		for i := range types {
@@ -150,7 +162,9 @@ func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gate
 					parentName = &name
 				}
 			}
-			out.Body.ComponentTypes = append(out.Body.ComponentTypes, toComponentTypeBody(&types[i], parentName))
+			body := toComponentTypeBody(&types[i], parentName)
+			body.ResolvedIcon = icons[types[i].ID]
+			out.Body.ComponentTypes = append(out.Body.ComponentTypes, body)
 		}
 		return out, nil
 	})

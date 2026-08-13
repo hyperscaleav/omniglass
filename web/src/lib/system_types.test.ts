@@ -58,26 +58,31 @@ describe("system_types data layer", () => {
 // `av` is the root, `room` overrides its icon MID-CHAIN, and `board` sets its
 // own stem and abbrev while leaving icon to inherit. `sign` is the second
 // branch, with a leaf (interactive-sign) that overrides icon at the bottom.
-const av: SystemType = { id: uuidFor("st-av"), name: "av", display_name: "AV", official: true, stem: "av", abbrev: "av", icon: "layers" };
-const room: SystemType = { id: uuidFor("st-room"), name: "room", display_name: "Room", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "room", abbrev: "rm", icon: "door-open" };
-const board: SystemType = { id: uuidFor("st-board"), name: "board", display_name: "Boardroom", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "boardroom", abbrev: "br" };
-const huddle: SystemType = { id: uuidFor("st-huddle"), name: "huddle", display_name: "Huddle Room", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "huddle", abbrev: "hud" };
-const sign: SystemType = { id: uuidFor("st-sign"), name: "sign", display_name: "Signage", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "signage", abbrev: "sgn", icon: "tv" };
-const videoWall: SystemType = { id: uuidFor("st-video-wall"), name: "video-wall", display_name: "Video Wall", official: true, parent: "sign", parent_id: uuidFor("st-sign"), stem: "video-wall", abbrev: "vw" };
-const interactiveSign: SystemType = { id: uuidFor("st-interactive-sign"), name: "interactive-sign", display_name: "Interactive Sign", official: true, parent: "sign", parent_id: uuidFor("st-sign"), stem: "interactive-sign", abbrev: "isgn", icon: "touchpad" };
+// resolved_icon is what the SERVER sends per row (#695): the row's own icon
+// where it has one, its nearest ancestor's where it does not. It is written out
+// per row here rather than computed, because computing it in the fixture would
+// reintroduce the very walk this stopped being the console's job.
+const av: SystemType = { id: uuidFor("st-av"), name: "av", display_name: "AV", official: true, stem: "av", abbrev: "av", icon: "layers", resolved_icon: "layers" };
+const room: SystemType = { id: uuidFor("st-room"), name: "room", display_name: "Room", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "room", abbrev: "rm", icon: "door-open", resolved_icon: "door-open" };
+const board: SystemType = { id: uuidFor("st-board"), name: "board", display_name: "Boardroom", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "boardroom", abbrev: "br", resolved_icon: "door-open" };
+const huddle: SystemType = { id: uuidFor("st-huddle"), name: "huddle", display_name: "Huddle Room", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "huddle", abbrev: "hud", resolved_icon: "door-open" };
+const sign: SystemType = { id: uuidFor("st-sign"), name: "sign", display_name: "Signage", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "signage", abbrev: "sgn", icon: "tv", resolved_icon: "tv" };
+const videoWall: SystemType = { id: uuidFor("st-video-wall"), name: "video-wall", display_name: "Video Wall", official: true, parent: "sign", parent_id: uuidFor("st-sign"), stem: "video-wall", abbrev: "vw", resolved_icon: "tv" };
+const interactiveSign: SystemType = { id: uuidFor("st-interactive-sign"), name: "interactive-sign", display_name: "Interactive Sign", official: true, parent: "sign", parent_id: uuidFor("st-sign"), stem: "interactive-sign", abbrev: "isgn", icon: "touchpad", resolved_icon: "touchpad" };
 
 const shipped: SystemType[] = [av, room, board, huddle, sign, videoWall, interactiveSign];
 
 describe("resolveSystemTypeIcon", () => {
-  it("returns a node's own icon directly", () => {
+  it("returns the icon the server resolved for a node that sets one", () => {
     const byName = systemTypeByName(shipped);
     expect(resolveSystemTypeIcon("av", byName)).toBe("layers");
     expect(resolveSystemTypeIcon("interactive-sign", byName)).toBe("touchpad");
   });
 
-  it("stops at the NEAREST ancestor that sets one, not the root", () => {
+  it("shows the inherited icon the server sent for a node that sets none", () => {
     const byName = systemTypeByName(shipped);
-    // board leaves icon blank; room overrides av mid-chain, so room wins.
+    // board leaves icon blank; room overrides av mid-chain, so room wins, and
+    // the server is the one that decided that.
     expect(resolveSystemTypeIcon("board", byName)).toBe("door-open");
     expect(resolveSystemTypeIcon("board", byName)).not.toBe("layers");
     expect(resolveSystemTypeIcon("video-wall", byName)).toBe("tv");
@@ -88,6 +93,24 @@ describe("resolveSystemTypeIcon", () => {
     const byName = systemTypeByName(shipped);
     expect(resolveSystemTypeIcon("no-such-type", byName)).toBe("map-pin");
     expect(resolveSystemTypeIcon(undefined, byName)).toBe("map-pin");
+  });
+
+  // The point of #695: the console reads the ANSWER, it does not recompute it.
+  // This row's served icon disagrees with everything its chain says, and the
+  // console shows what it was sent. A client-side walk fails this test, which
+  // is the only way to tell the two implementations apart from out here.
+  it("shows what the server sent even where a chain walk would answer otherwise", () => {
+    const odd: SystemType = { ...board, name: "odd", resolved_icon: "sparkles" };
+    const byName = systemTypeByName([...shipped, odd]);
+    expect(resolveSystemTypeIcon("odd", byName)).toBe("sparkles");
+  });
+
+  // A chain with no icon anywhere resolves to nothing on the wire, and the
+  // fallback glyph is the console's to supply.
+  it("falls back to map-pin when the server resolved no icon at all", () => {
+    const bare: SystemType = { ...board, name: "bare", resolved_icon: undefined };
+    const byName = systemTypeByName([...shipped, bare]);
+    expect(resolveSystemTypeIcon("bare", byName)).toBe("map-pin");
   });
 });
 

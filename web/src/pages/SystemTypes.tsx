@@ -14,8 +14,6 @@ import {
   SYSTEM_TYPES_KEY,
   systemTypeTree,
   flattenSystemTypeTree,
-  systemTypeByName,
-  resolveSystemTypeIcon,
   listSystemTypes,
   createSystemType,
   updateSystemType,
@@ -75,7 +73,6 @@ export default function SystemTypes() {
   // alphabetical), not a flat alphabetical list: the registry's nesting is the
   // point of this page, so the row order teaches it.
   const treeRows = createMemo(() => flattenSystemTypeTree(systemTypeTree(types.data ?? [])));
-  const byName = createMemo(() => systemTypeByName(types.data ?? []));
 
   const columns: FlatColumn<SystemType & { depth: number }>[] = [
     // No sortVal: the row order IS the taxonomy (tree order, parent then
@@ -85,7 +82,7 @@ export default function SystemTypes() {
     { key: "parent", label: "Parent", width: "140px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.parent ?? "—"}</span> },
     { key: "stem", label: "Stem", width: "120px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.stem ?? "—"}</span> },
     { key: "abbrev", label: "Abbrev", width: "90px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.abbrev ?? "—"}</span> },
-    { key: "icon", label: "Icon", width: "150px", cell: (r) => <IconCell row={r} resolvedIcon={resolveSystemTypeIcon(r.name, byName())} /> },
+    { key: "icon", label: "Icon", width: "150px", cell: (r) => <IconCell row={r} resolvedIcon={r.resolved_icon || "map-pin"} /> },
     { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => officialBadge(r.official) },
   ];
 

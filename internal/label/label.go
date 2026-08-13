@@ -121,6 +121,78 @@ type Engine struct {
 // dictionary and hands it to [New].
 var Basic = New(nil)
 
+// ruleFunc is one entry in the closed function set: the name a rule spells, the
+// summary and worked example the docs render, and the builder that produces the
+// implementation for one acronym dictionary.
+//
+// The example is two halves rather than one string because a test EXECUTES it
+// (see TestEveryDocumentedExampleIsWhatTheFunctionDoes), so the row an operator
+// reads is a fact the engine produced and not a claim somebody typed beside it.
+type ruleFunc struct {
+	Name       string
+	Summary    string
+	ExampleIn  string
+	ExampleOut string
+	build      func(acronyms map[string]string) any
+}
+
+// ruleFuncs is the ONE declaration of the closed function set (#701). The
+// FuncMap [New] builds, the names [FuncNames] publishes, the grammar's
+// [allowedFuncs], and the docs table that teaches the language all derive from
+// it, where each of the four used to be transcribed by hand.
+//
+// The safety property is unchanged and is now structural rather than clerical: a
+// name is usable only if the FuncMap defines it AND the grammar admits it, and
+// deriving both from here makes the two sets incapable of disagreeing instead of
+// merely expected to agree. Adding a function is still a deliberate, test-
+// visible act, because the closed-set test names the members and the generated
+// artifact has to be regenerated and committed.
+//
+// The order is the documented one and is load-bearing for the rendered table
+// only; nothing about the language depends on it.
+var ruleFuncs = []ruleFunc{
+	{
+		Name: "title",
+		Summary: "Upper-cases the first letter of each word and leaves the rest of the word alone, " +
+			"so casing a vendor chose survives. A word in the acronym list is replaced by that list's own form.",
+		ExampleIn:  "ceiling mic",
+		ExampleOut: "Ceiling Mic",
+		build: func(acronyms map[string]string) any {
+			return func(s string) string { return titleWords(s, acronyms) }
+		},
+	},
+	{
+		Name:       "upper",
+		Summary:    "Upper-cases every letter.",
+		ExampleIn:  "dsp",
+		ExampleOut: "DSP",
+		build:      func(map[string]string) any { return strings.ToUpper },
+	},
+	{
+		Name:       "lower",
+		Summary:    "Lower-cases every letter.",
+		ExampleIn:  "DSP",
+		ExampleOut: "dsp",
+		build:      func(map[string]string) any { return strings.ToLower },
+	},
+	{
+		Name: "slug",
+		Summary: "Reduces a string to one kebab token of lowercase letters, digits and single hyphens, " +
+			"which is exactly the shape a name has to have.",
+		ExampleIn:  "HQ Boardroom (North)",
+		ExampleOut: "hq-boardroom-north",
+		build:      func(map[string]string) any { return slug },
+	},
+	{
+		Name: "words",
+		Summary: "Turns the separators a name is built from into spaces, which is what lets a rule read a " +
+			"kebab name as something a person would say. It is slug's opposite number.",
+		ExampleIn:  "north-wing",
+		ExampleOut: "north wing",
+		build:      func(map[string]string) any { return words },
+	},
+}
+
 // New returns an engine whose `title` knows the given acronyms. Each entry is
 // the form to emit ("AV", "DSP"); matching is case-insensitive on the whole
 // word, so "av" and "Av" both title as "AV".
@@ -129,25 +201,24 @@ func New(acronyms []string) *Engine {
 	for _, a := range acronyms {
 		dict[strings.ToLower(a)] = a
 	}
-	return &Engine{funcs: template.FuncMap{
-		"title": func(s string) string { return titleWords(s, dict) },
-		"upper": strings.ToUpper,
-		"lower": strings.ToLower,
-		"slug":  slug,
-		"words": words,
-	}}
+	funcs := make(template.FuncMap, len(ruleFuncs))
+	for _, f := range ruleFuncs {
+		funcs[f.Name] = f.build(dict)
+	}
+	return &Engine{funcs: funcs}
 }
 
 // FuncNames returns the closed FuncMap's names, in the order they are
-// documented. Exported so the set can be pinned by a test rather than only
-// described by a comment: adding a function is then a deliberate act with a
-// test to change.
-//
-// It is also what holds the three places a function has to appear to exist
-// honest: a test walks this set and parses each name in a real rule, so a name
-// published here that is missing from the FuncMap or from [allowedFuncs] fails
-// rather than being quietly unreachable.
-func FuncNames() []string { return []string{"title", "upper", "lower", "slug", "words"} }
+// documented, read off [ruleFuncs] rather than restated. Exported so the set can
+// be pinned by a test rather than only described by a comment: adding a function
+// is then a deliberate act with a test to change.
+func FuncNames() []string {
+	names := make([]string, len(ruleFuncs))
+	for i, f := range ruleFuncs {
+		names[i] = f.Name
+	}
+	return names
+}
 
 // Rule is a compiled label rule.
 type Rule struct {
@@ -176,13 +247,13 @@ func (e *Engine) Parse(src string) (*Rule, error) {
 // come from a {{define}}, which checkTree refuses.
 const rootName = "label"
 
-// allowedFuncs is the closed set of function names a rule may name: the
-// FuncMap's own ([FuncNames]), plus the comparison and logic builtins.
+// allowedBuiltins are the text/template builtins a rule may name beside the
+// FuncMap's own functions.
 //
-// The builtins are here because the parser accepts them whether or not the
-// FuncMap does, so a set that listed only our own functions would be describing
-// a smaller language than the one being run. Each admitted one returns a bool
-// from values it does not copy, so none can be made to do work proportional to
+// They are listed because the parser accepts them whether or not the FuncMap
+// does, so a grammar that admitted only our own functions would be describing a
+// smaller language than the one being run. Each admitted one returns a bool from
+// values it does not copy, so none can be made to do work proportional to
 // anything but the rule's own length.
 //
 // Everything else is refused BY NAME rather than by what it appears to do:
@@ -191,10 +262,28 @@ const rootName = "label"
 // refused for having no use a label rule's {{if .X}} does not already cover; it
 // is harmless, and admitting a harmless function is still widening the language
 // for nothing.
-var allowedFuncs = map[string]bool{
-	"title": true, "upper": true, "lower": true, "slug": true, "words": true,
-	"and": true, "or": true, "not": true,
-	"eq": true, "ne": true, "lt": true, "le": true, "gt": true, "ge": true,
+var allowedBuiltins = []string{
+	"and", "or", "not",
+	"eq", "ne", "lt", "le", "gt", "ge",
+}
+
+// allowedFuncs is the closed set of function names a rule may name, DERIVED from
+// [ruleFuncs] plus [allowedBuiltins] rather than transcribed beside them (#701).
+//
+// Deriving it is what makes ADR-0098's property structural: a function in the
+// FuncMap that the grammar refuses, or a grammar entry with no implementation
+// behind it, are both now unwritable rather than merely tested for.
+var allowedFuncs = buildAllowedFuncs()
+
+func buildAllowedFuncs() map[string]bool {
+	m := make(map[string]bool, len(ruleFuncs)+len(allowedBuiltins))
+	for _, f := range ruleFuncs {
+		m[f.Name] = true
+	}
+	for _, b := range allowedBuiltins {
+		m[b] = true
+	}
+	return m
 }
 
 // checkTree walks a parsed rule and refuses any node type or function name

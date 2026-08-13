@@ -9,6 +9,8 @@ sidebar:
 
 import SchemaTable from '../../../components/SchemaTable.astro';
 import IdentityShapes from '../../../components/IdentityShapes.astro';
+import RuleLanguage from '../../../components/RuleLanguage.astro';
+import SeededSet from '../../../components/SeededSet.astro';
 
 Core entities are the things an operator manages, component, system, location, and node, each with
 its own identity so that every sample, event, alarm, and config names exactly one owner. The shapes
@@ -86,8 +88,9 @@ each role carrying an **impact**. See [implementation status](/architecture/stat
   `GET /location-types` to feed the location form's type picker. Each type carries an `icon` (a glyph
   key like `building`; unknown keys fall back to `map-pin`) rendered in the tree, and
   `allowed_parent_types` (a set of `location_type` ids and/or the reserved `root` sentinel): empty is
-  unconstrained, a non-empty set is enforced on create and move, seeded as `campus={root}`,
-  `building={root,campus}`, `floor={building,campus}`, `room={floor,building,campus}`.
+  unconstrained, a non-empty set is enforced on create and move. The shipped set and its parents are
+  rendered from the seed on the [location types guide](/guides/admin/location-types/) rather than
+  listed in two places.
 - A **node** is the edge process (`omniglass node run`) that pulls work, reaches components over
   interfaces, and ships results ([nodes](/architecture/nodes/)). It is structural because it is a
   first-class **owner** of its own self-health telemetry and node-owned alarms.
@@ -192,6 +195,20 @@ shape-definer: contracts, declared properties, and drivers stay on the product. 
 subtype exists only where a standard's slot would name it (`wireless-mic` versus `ceiling-mic`, real
 subtypes; panel technology like `lcd` versus `led` stays a product fact, never a type).
 
+The registry **listing serves the resolved icon** beside the raw one (`resolved_icon` next to `icon`,
+on both this registry and `system_type`), because a console that climbed the chain itself would be a
+second implementation of this walk in another language, and the failure that produces is a wrong
+glyph on a type the two disagree about
+([#695](https://github.com/hyperscaleav/omniglass/issues/695)). Both fields ship because they answer
+different questions: an edit blade posts the raw one back, where blank still means inherit, and a
+list cell draws the resolved one. It costs no extra read: the listing is the whole registry in one
+query, so every ancestor is already in hand.
+
+The shipped taxonomy, rendered from the seed, with a blank cell meaning the row inherits that fact
+from its nearest ancestor:
+
+<SeededSet kind="component_types" />
+
 This **partially reverses [ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)**,
 which retired the component-level `component_type` in the fields fold: the reintroduced shape is
 deliberately different, **above the product** rather than beside the component.
@@ -224,8 +241,10 @@ A **`system_type`** (`board`, `class`, `meeting`, `video-wall`, ...) is the **co
 what kind of space a system **is**. It is the system-side counterpart of `component_type` and it
 nests the same way, by `parent_id`, on the same official/custom pattern, operator-graftable at any
 node ([ADR-0096](/architecture/decisions/#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy)).
-The shipped tree is universal: `av` over `room` over `board` / `class` / `meeting` / `training` /
-`conference` / `huddle`, and `av` over `sign` over `video-wall` / `interactive-sign`.
+The shipped tree is universal, and it is rendered from the seed rather than restated here, so a blank
+cell is a fact the row genuinely inherits rather than one somebody forgot to copy:
+
+<SeededSet kind="system_types" />
 
 The row carries the identity facts that span every space of that kind, **inheriting down the tree
 with override at any node**: the naming **`stem`** (the prefix a generated system name is built from,
@@ -854,15 +873,23 @@ The rule language is Go `text/template` over a **closed map of strings** and a *
 The map is the sandbox for what a rule can READ: a component's rule can read `Name`, `Ordinal`,
 `TypeName`, `TypeAbbrev`, `Stem`, `ProductName`, `VendorName`, `LocationLabel` and `SystemTypeLabel`,
 and there is no mechanism by which any other name resolves to anything, so a secret is unreachable
-because it was never put in rather than because a filter refused it. The grammar is the sandbox for what a rule can DO: an allowlist
-over the parsed tree admits a closed set of node types and the functions `title`, `upper`, `lower`,
-`slug`, `words` plus `and`/`or`/`not` and the six comparisons, and refuses everything else text/template
-offers, `printf` and variable declarations and `{{range}}` among them. That second half is not
+because it was never put in rather than because a filter refused it. The grammar is the sandbox for
+what a rule can DO: an allowlist over the parsed tree admits a closed set of node types and a closed
+set of function names, and refuses everything else text/template offers, `printf` and variable
+declarations and `{{range}}` among them. That second half is not
 tidiness: a value built inside a pipeline is never written, so a cap on rendered length cannot see
 it, and a few hundred bytes of rule can otherwise allocate gigabytes on every write to every entity
 of its type. A rule that does not parse, or that names something outside the grammar, is refused at
 rule-edit time (422) and never stored; a rule that fails while rendering one entity degrades to no
 label rather than failing the write it was riding.
+
+The functions are the engine's own, rendered here from its one declaration rather than restated, so
+a function this table names is a function the FuncMap defines and the grammar admits
+([#701](https://github.com/hyperscaleav/omniglass/issues/701)):
+
+<RuleLanguage />
+
+<RuleLanguage builtins />
 
 **A rule reads placement, and that is what the recompute verb is for**
 ([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
