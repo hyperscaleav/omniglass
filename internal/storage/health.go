@@ -638,6 +638,78 @@ func (p *PG) locationVerdict(ctx context.Context, q txQuerier, locationID string
 	return health.RollUp(children), nil
 }
 
+// SystemVerdict is one system's recorded health verdict, the single fact a list
+// row's badge renders. Deliberately not a HealthReport: the report resolves every
+// role, its occupants, their alarms and thirty days of transitions, which is the
+// right read for one system's panel and the wrong one to pay N times to colour a
+// column (#653).
+type SystemVerdict struct {
+	SystemID string
+	Verdict  string
+}
+
+// SystemVerdicts is the BULK health read: every system in the caller's read
+// scope with its current verdict, in one statement whatever the estate size.
+//
+// It exists because the console had no bulk read and paid a full health
+// resolution per row to paint one column (#653). Its scope behaviour is
+// ListSystems' behaviour, deliberately and by construction: the in-scope id set
+// is scopedListSQL over the same table with the same binds scopedList passes, so
+// a caller sees a verdict for exactly the systems it sees rows for, and an empty
+// scope is an empty answer rather than a refusal.
+//
+// The shape is locationVerdict's, one `distinct on` pass over the series rather
+// than a correlated latest-row subquery per system, so an estate of fifteen
+// thousand systems reads the property series once and not once per row.
+//
+// A system with nothing recorded is reported HEALTHY rather than omitted, and
+// that default is not a guess: recordHealth only writes on a TRANSITION, so a
+// system that has never been recomputed has no row, and SystemVerdictWith over no
+// impaired active role is Healthy. TestSystemVerdictsAgreeWithTheReport holds
+// this read to SystemHealth's own verdict, defaulted rows included, so the two
+// cannot drift.
+func (p *PG) SystemVerdicts(ctx context.Context, read scope.Set) ([]SystemVerdict, error) {
+	if read.Empty() {
+		return nil, nil
+	}
+	args := []any{}
+	key := "$1"
+	if !read.All {
+		roots := uuidRoots(read.IDs)
+		selfIDs := uuidRoots(read.SelfIDs)
+		if len(roots) == 0 && len(selfIDs) == 0 {
+			return nil, nil // every scope root is malformed: nothing is in scope
+		}
+		args = append(args, roots, selfIDs)
+		key = "$3"
+	}
+	args = append(args, healthKey)
+	rows, err := p.pool.Query(ctx, `
+		with sys as (`+scopedListSQL(systemConfig.table, "id", read.All)+`),
+		latest as (
+			select distinct on (v.system_id) v.system_id, v.value #>> '{}' as verdict
+			from property v
+			where v.property_type_id = (select id from property_type where name = `+key+`)
+			  and v.system_id in (select id from sys)
+			order by v.system_id, v.id desc
+		)
+		select s.id, coalesce(l.verdict, '`+health.Healthy.String()+`')
+		from sys s left join latest l on l.system_id = s.id`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: system verdicts: %w", err)
+	}
+	defer rows.Close()
+	out := []SystemVerdict{}
+	for rows.Next() {
+		var v SystemVerdict
+		if err := rows.Scan(&v.SystemID, &v.Verdict); err != nil {
+			return nil, fmt.Errorf("storage: scan system verdict: %w", err)
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
 // resolveHealthRoles resolves a system's roles from both arcs (inherited from its
 // standard, declared on the system) with each assigned component's own current
 // verdict. It is the resolution EffectiveRoles does, carried far enough for the

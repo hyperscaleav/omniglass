@@ -5708,6 +5708,39 @@ components:
         - display_name
         - official
       type: object
+    SystemVerdictBody:
+      additionalProperties: false
+      properties:
+        system:
+          description: The system's uuid
+          type: string
+        verdict:
+          description: healthy, degraded, or outage
+          type: string
+      required:
+        - system
+        - verdict
+      type: object
+    SystemVerdictsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SystemVerdictsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        verdicts:
+          description: One entry per system in the caller's read scope, in no particular order.
+          items:
+            $ref: "#/components/schemas/SystemVerdictBody"
+          type:
+            - array
+            - "null"
+      required:
+        - verdicts
+      type: object
     TagBindingBody:
       additionalProperties: false
       properties:
@@ -12679,6 +12712,25 @@ paths:
           description: Error
       summary: Check a system name
       x-omniglass-permission: system:update
+  /systems:health:
+    get:
+      description: "The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every role, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403."
+      operationId: list-system-verdicts
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemVerdictsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read every system's health verdict
+      x-omniglass-permission: system:read
   /systems:previewLabels:
     post:
       description: "Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by system:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it."

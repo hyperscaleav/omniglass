@@ -18,9 +18,16 @@ import {
 // word is the primary carrier; the colour and the shape only reinforce it.
 //
 // It reads its verdict either from a value the caller already has (a location's
-// system row, a health panel header) or by fetching one itself, which is what the
-// systems list uses per row: there is no bulk health read, so the badge owns the
-// query and the cache key it shares with the panels.
+// system row, a health panel header, the systems list's bulk verdict map) or by
+// fetching one itself, sharing the cache key with the panels.
+//
+// A LIST must always take the first path. The systems list took the second, one
+// query per row, on the argument that there was no bulk health read; there is now
+// (GET /systems:health, #653), and the fetching path is for a single badge with no
+// caller who already knows. Note what makes the fetch happen: `system` or
+// `location` present AND `verdict` absent. A list cell that passed an id while its
+// bulk read was still in flight would put the per-row request back exactly where it
+// was removed from, so the cell passes only the verdict.
 
 const LOOK: Record<Verdict, { badge: string; icon: Component<{ size?: number }>; hint: string }> = {
   healthy: { badge: "badge-success", icon: CircleCheck, hint: "Every role this system needs is filled." },

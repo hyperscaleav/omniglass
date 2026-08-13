@@ -39,7 +39,7 @@ import RolesPanel from "../components/RolesPanel";
 import MembersPanel from "../components/MembersPanel";
 import HealthBadge from "../components/HealthBadge";
 import SystemHealthPanel from "../components/HealthPanel";
-import { systemHealthKey, verdictOf, verdictRank, type EstateHealth } from "../lib/health";
+import { SYSTEM_VERDICTS_KEY, systemVerdicts, verdictOf, verdictRank } from "../lib/health";
 import { hueFor } from "../lib/system_color";
 
 // Systems: the system inventory on the generic TreeList, the same shell as
@@ -77,6 +77,12 @@ export default function Systems() {
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
   const systemTypes = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes }));
+  // The health column's data, read in ONE request for the whole page rather than
+  // one per row (#653). Before this, every row's badge owned its own query, so a
+  // page of N systems fired N requests on first paint and each one resolved every
+  // role, its occupants, their alarms and thirty days of transitions to render one
+  // word and a colour.
+  const verdicts = useQuery(() => ({ queryKey: SYSTEM_VERDICTS_KEY, queryFn: systemVerdicts, staleTime: 30_000 }));
 
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
   // The standard picker's options, and the id -> display-name lookup the tree and
@@ -631,17 +637,20 @@ export default function Systems() {
     // here, on a component's system column, and in the location health rollup.
     leadIcon: (n) => <span class="og-system-dot" style={{ "--sys-h": String(hueFor(n.raw.id)) }} title={n.display} />,
     cellFor: (key, n) => {
-      // There is no bulk health read, so the badge owns its own query per row and
-      // shares the cache key with the detail panel: opening a row costs nothing
-      // extra. Quiet until a verdict lands, so a page of rows never flashes a
-      // column of "unknown".
+      // The verdict comes from the page's ONE bulk read, handed to the badge
+      // through the prop it has always accepted for a caller that already holds
+      // one (#653). The `system` prop is deliberately NOT passed: it is what
+      // makes the badge fetch, and a row that fetched while the bulk read was
+      // still in flight would put the per-row request back on first paint, which
+      // is the only load an operator actually waits on. Quiet until the map
+      // arrives, so the column fills rather than flashing "unknown".
       // Keyed by uuid, matching where RolesPanel and MembersPanel invalidate
       // after a role or member write (#627 review finding 1: those panels
       // address the system by its uuid, since the name is scoped to
-      // placement and not reliably unique estate-wide). A name-keyed read
-      // here missed those invalidations and the badge went stale silently
-      // (review round 3, regression 3).
-      if (key === "health") return <HealthBadge system={n.raw.id} quiet />;
+      // placement and not reliably unique estate-wide). Those sites now
+      // invalidate SYSTEM_VERDICTS_KEY alongside, or this column would go
+      // stale silently exactly as it did in review round 3, regression 3.
+      if (key === "health") return <HealthBadge verdict={verdicts.data?.get(n.raw.id)} quiet />;
       if (key === "standard") return n.standard ? <span class="badge badge-ghost badge-sm">{n.standard}</span> : <span class="text-base-content/40">—</span>;
       if (key === "location") return <span class="text-base-content/70">{n.locationName || "—"}</span>;
       if (key === "components") return <span class="tnum text-base-content/60">{n.raw.member_count}</span>;
@@ -660,9 +669,10 @@ export default function Systems() {
       // filled, so the sort orders exactly what is on screen; a row whose health
       // has not arrived sorts last rather than pretending to be healthy.
       if (key === "health") {
-        // Same uuid key as the cell above: sorting must order exactly what
-        // the badges on screen show, not a stale name-keyed entry.
-        const v = verdictOf(qc.getQueryData<EstateHealth>([...systemHealthKey(n.raw.id)])?.verdict);
+        // The same map the cell above reads: sorting must order exactly what
+        // the badges on screen show, and now they share one source rather than
+        // the sort reaching into the cache the badges happened to fill.
+        const v = verdictOf(verdicts.data?.get(n.raw.id));
         return v ? -verdictRank(v) : 9;
       }
       if (key === "standard") return n.standard.toLowerCase();

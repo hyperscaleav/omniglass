@@ -13,7 +13,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
 import { hueFor } from "../lib/system_color";
-import { systemHealthKey, type EstateHealth } from "../lib/health";
+import { SYSTEM_VERDICTS_KEY } from "../lib/health";
 import { NAME_MIN_W } from "../components/TreeList";
 
 // The Systems page on the shared TreeList in the create-as-route model: New routes
@@ -352,18 +352,20 @@ describe("Systems list survives duplicate names across placements (#627)", () =>
   });
 });
 
-describe("Systems list health badge (#627 review round 3, regression 3)", () => {
-  afterEach(() => window.history.pushState({}, "", "/"));
+describe("Systems list health column (#627 review round 3, regression 3; #653)", () => {
+  afterEach(() => {
+    window.history.pushState({}, "", "/");
+    vi.restoreAllMocks();
+  });
 
-  // The list cell and its sort both read systemHealthKey(n.raw.name), while
-  // RolesPanel and MembersPanel invalidate systemHealthKey(<uuid>) after a
-  // role or member write (#627 review finding 1: the detail panels address by
-  // uuid, since a name is scoped to placement, not the whole estate). The
-  // list badge silently stopped refreshing after those writes. Health is
-  // seeded only at the uuid key here, so the badge must read that one, not
-  // the name, to show anything at all.
-  it("reads the health badge from the system's uuid, matching where RolesPanel and MembersPanel invalidate", async () => {
-    const health: EstateHealth = { owner: sys.id, owner_kind: "system", roles: [], systems: [], transitions: [], verdict: "healthy" };
+  // Keying, unchanged in substance and moved to its new source. The column and
+  // its sort read the page's ONE bulk verdict map (#653) instead of a per-row
+  // query, and that map is keyed by UUID, matching where RolesPanel and
+  // MembersPanel invalidate after a role or member write (#627 review finding 1:
+  // the detail panels address by uuid, since a name is scoped to placement, not
+  // the whole estate). A name-keyed map would render nothing here, which is what
+  // this asserts: the verdict is seeded ONLY at the uuid.
+  it("reads the health column from the system's uuid, matching where RolesPanel and MembersPanel invalidate", async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...SYSTEMS_KEY], [sys]);
     qc.setQueryData([...LOCATIONS_KEY], []);
@@ -372,7 +374,7 @@ describe("Systems list health badge (#627 review round 3, regression 3)", () => 
     qc.setQueryData([...SYSTEM_TYPES_KEY], systemTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
-    qc.setQueryData([...systemHealthKey(sys.id)], health);
+    qc.setQueryData([...SYSTEM_VERDICTS_KEY], new Map([[sys.id, "healthy"]]));
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
@@ -386,6 +388,78 @@ describe("Systems list health badge (#627 review round 3, regression 3)", () => 
       </QueryClientProvider>
     ));
     await waitFor(() => expect(screen.getByText("healthy")).toBeTruthy());
+  });
+
+  // The measurement #653 is actually about, and the reason it is a REQUEST COUNT
+  // rather than a screenshot: the rendered column looks identical either way, so
+  // the only thing that can fail is the number of requests it took to paint it.
+  //
+  // Nothing is seeded. The page loads cold, exactly as an operator's first paint
+  // does, and every request it makes is counted. Before this change the health
+  // column fired one GET /systems/{id}/health per row, each resolving every role,
+  // its occupants, their alarms and thirty days of transitions; a twelve-system
+  // page cost twelve of them. It now costs ONE GET /systems:health for the page.
+  it("paints a page of systems with one health request, not one per row", async () => {
+    const many: System[] = Array.from({ length: 12 }, (_, i) => ({
+      id: uuidFor(`bulk-${i}`),
+      name: `room-${i}`,
+      display_name: `Room ${i}`,
+      member_count: 0,
+      effective_tags: {},
+    }));
+    const verdicts = many.map((s, i) => ({ system: s.id, verdict: i % 3 === 0 ? "degraded" : "healthy" }));
+
+    const urls: string[] = [];
+    const body = (url: string): unknown => {
+      if (url.includes("/systems:health")) return { verdicts };
+      // The per-row read is served too, and deliberately: if it were not, the
+      // old implementation would fail this test by rendering nothing rather than
+      // by making twelve requests, and the number is the whole point. With both
+      // answers available, the only thing that can distinguish the two is the
+      // count.
+      const perRowMatch = /\/systems\/([^/]+)\/health/.exec(url);
+      if (perRowMatch) {
+        const id = decodeURIComponent(perRowMatch[1]);
+        return {
+          owner: id, owner_kind: "system", roles: [], systems: [], transitions: [],
+          verdict: verdicts.find((v) => v.system === id)?.verdict ?? "healthy",
+        };
+      }
+      if (url.includes("/systems")) return { systems: many };
+      if (url.includes("/locations")) return { locations: [] };
+      if (url.includes("/components")) return { components: [] };
+      if (url.includes("/standards")) return { standards };
+      if (url.includes("/system-types")) return { system_types: systemTypes };
+      if (url.includes("/tags")) return { tags: [] };
+      if (url.includes("/auth/me")) return me;
+      return {};
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = (input as Request).url;
+      urls.push(url);
+      return new Response(JSON.stringify(body(url)), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    window.history.pushState({}, "", "/systems");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/systems" component={Systems} />
+        </Router>
+      </QueryClientProvider>
+    ));
+
+    // Wait for the column to have actually painted, so the count is taken after
+    // the work is done rather than before it started: a request count read too
+    // early is zero for every implementation, which is the shape of a test that
+    // cannot fail.
+    await waitFor(() => expect(screen.getAllByText("degraded").length).toBeGreaterThan(0));
+
+    const perRow = urls.filter((u) => /\/systems\/[^/]+\/health/.test(u));
+    expect(perRow).toEqual([]);
+    const bulk = urls.filter((u) => u.includes("/systems:health"));
+    expect(bulk).toHaveLength(1);
   });
 });
 

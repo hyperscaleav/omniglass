@@ -3480,6 +3480,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/systems:health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read every system's health verdict
+         * @description The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every role, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.
+         */
+        get: operations["list-system-verdicts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems:previewLabels": {
         parameters: {
             query?: never;
@@ -6968,6 +6988,22 @@ export interface components {
             parent_id?: string;
             /** @description The prefix a generated system name is built from; empty inherits the nearest ancestor's */
             stem?: string;
+        };
+        SystemVerdictBody: {
+            /** @description The system's uuid */
+            system: string;
+            /** @description healthy, degraded, or outage */
+            verdict: string;
+        };
+        SystemVerdictsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemVerdictsOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description One entry per system in the caller's read scope, in no particular order. */
+            verdicts: components["schemas"]["SystemVerdictBody"][] | null;
         };
         TagBindingBody: {
             /**
@@ -15021,6 +15057,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckNameOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-verdicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemVerdictsOutputBody"];
                 };
             };
             /** @description Error */

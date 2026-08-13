@@ -659,6 +659,10 @@ type Gateway interface {
 	// The health reads: the current verdict, why it is what it is, and the
 	// recorded transitions at or after since (a zero since is the whole history).
 	SystemHealth(ctx context.Context, systemName string, since time.Time, read scope.Set) (*HealthReport, error)
+	// SystemVerdicts is the BULK health read: every system in the read scope with
+	// its current verdict, in one statement. The read a LIST paints its health
+	// column from, where SystemHealth is the read one system's panel opens (#653).
+	SystemVerdicts(ctx context.Context, read scope.Set) ([]SystemVerdict, error)
 	LocationHealth(ctx context.Context, locationName string, since time.Time, read scope.Set) (*HealthReport, error)
 
 	// The tag tier: the governed key vocabulary and the per-entity value

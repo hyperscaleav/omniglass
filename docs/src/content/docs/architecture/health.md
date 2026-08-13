@@ -16,11 +16,35 @@ like any other signal.
 :::note[Partial]
 Built today: the **`alarm`** table (component-local, impairing its component wholesale), **`impact`**
 on a `system_role`, the **rollup** from component through system to location, and the **recorded
-transition history**. Two reads serve it (`GET /systems/{name}/health` and
-`GET /locations/{name}/health`) alongside the alarm write surface on a component. The console
+transition history**. Three reads serve it: the two explanations
+(`GET /systems/{name}/health` and `GET /locations/{name}/health`) and the bulk verdict read
+(`GET /systems:health`, #653), alongside the alarm write surface on a component. The console
 shipped **HealthPanel**, **HealthBadge**, **HealthHistory**, and **AlarmsPanel** on the component,
 system, and location details. See [implementation status](/architecture/status/).
 :::
+
+## Two shapes of read: the explanation and the verdict
+
+A health read comes in two shapes, and which one a surface takes is a design rule rather than a
+preference.
+
+`GET /systems/{name}/health` is the **explanation**: the verdict plus every role the system needs,
+whether it is impaired, what an impaired role costs the system, which assigned components are down,
+the alarms that took them down, and thirty days of recorded transitions. It is what a panel opens
+into, and it is expensive by design, because explaining is the job.
+
+`GET /systems:health` is the **verdict**, in bulk: one word per system in the caller's read scope, in
+one statement whatever the estate size. It is what a list paints its health column from.
+
+The rule is that **a list never pays for an explanation it does not render**. Before #653 the systems
+list had no bulk read available and so took the explanation once per row, which cost a page of two
+hundred systems two hundred requests and two hundred full resolutions to colour one column.
+`HealthBadge` accepts a verdict from its caller for exactly this reason and only fetches when nobody
+has one.
+
+The bulk read reports a system with nothing recorded as `healthy` rather than omitting it, and that is
+not a guess: a verdict is written only on a transition, so a system that has never been recomputed has
+no row, and a system with no impaired active role is healthy. The two reads are held to agreeing.
 
 ## The chain: a component's own verdict is the routing key
 
