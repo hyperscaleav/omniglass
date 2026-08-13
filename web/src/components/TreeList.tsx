@@ -208,21 +208,42 @@ export type PageDescriptor = {
 // declares 960 and measured the same 0; Locations declares 650, so it had 173px
 // left over and looked fine. Same markup, three outcomes, decided by the widths
 // each page happens to declare.
-// 260px is MEASURED rather than chosen: an identity cell laid out with no clamp
-// wants 200px for "Boardroom 2" beside its Generated chip, and a real estate's
-// labels are longer than eleven characters, so a floor at 200 truncated the
-// system label to "Boardroo..." on the very page whose siblings #693 had just
-// taught to read differently. 260 carries a label of about nineteen characters
-// with its chip.
+// 191px is MEASURED rather than chosen, and it is a RE-measurement: the floor
+// was 260 while the identity cell still carried the label pen's "Generated"
+// chip, and the chip left in #693.
+//
+// How both numbers were arrived at, so the next one can be too. Each row's name
+// cell is cloned into an absolutely positioned `width: max-content` holder
+// appended inside its own <td>, so the browser answers "how wide does this want
+// to be" with the real font, the tree indent, the chevron slot and the longer of
+// the two stacked lines all accounted for by layout rather than by arithmetic;
+// the cell's own horizontal padding is added, because that is part of the
+// column. Driven against the dev estate at a 1280 viewport, the same run
+// measures each row twice, once with the chip's exact markup injected back into
+// the clone, so the difference is the chip and nothing else.
+//
+// What it said. The chip cost a UNIFORM 69px on all 20 rows of the three pages,
+// which stands to reason: it is one fixed word. The widest cell in the estate
+// (a depth-3 location, "Auditorium") wanted 256px with its chip and wants 187px
+// without it, and the old floor of 260 was the estate's widest row plus four
+// pixels. "Boardroom 2" measured 203px with its chip, reproducing the 200px this
+// comment used to record, which is how the method was checked before the number
+// was moved.
+//
+// So the new floor is the old one minus the chip: 260 - 69 = 191. That is not a
+// rounding of anything, and it deliberately is not the "about 200" this was
+// estimated at. The point of deriving it this way rather than from the estate's
+// widest row is that the LABELS did not change, only the thing beside them, so
+// the floor should carry exactly the labels it carried before and no more.
 //
 // It is a FLOOR and not a width: on a wide screen Name still takes everything
-// the declared columns leave (454px on Locations at a 1680 viewport). The cost
-// is stated rather than hidden: on Components and Systems, whose declared
-// columns already exceed the list card at that viewport, the card now scrolls
-// sideways where it used to fit by squeezing Name to 214px and 144px. Hiding one
-// column (Tags is the widest and the least identifying) removes the scroll, and
-// that lever is already in the columns menu.
-export const NAME_MIN_W = 260;
+// the declared columns leave (523px on Locations at a 1680 viewport). The cost
+// is stated rather than hidden: Systems, whose declared columns exceed the list
+// card even at 1680, still scrolls sideways there, and Locations still scrolls at
+// 1280. Components stops scrolling at 1680, which the chip's 69px was buying
+// nothing but. Hiding one column (Tags is the widest and the least identifying)
+// removes the rest, and that lever is already in the columns menu.
+export const NAME_MIN_W = 191;
 export const ACTION_W = 150;
 
 // minTableWidth is the fix, and it is a floor on the TABLE rather than a width

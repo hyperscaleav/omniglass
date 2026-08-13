@@ -56,6 +56,14 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   browser gives Name that floor and the card scrolls sideways when even that does not fit. Wide
   screens are unchanged, since `width: 100%` beats a smaller min-width. A page declaring a new
   column inherits this; it is one rule in the shell, not a set of numbers per page.
+  `NAME_MIN_W` is 191px and every digit of it is measured: the floor was 260 while the cell still
+  carried the label pen's `Generated` chip, that chip cost a uniform **69px** on all 20 rows of the
+  three pages, and the labels beside it did not change, so the floor is 260 minus 69. The method is
+  written out beside the constant, because a number that was not derived the same way next time is a
+  number nobody can check. What the 69px was buying: Components stops scrolling sideways at a 1680
+  viewport (its table asks 1231px of a 1254px card, where it asked 1300px before). Systems still
+  scrolls there (1301px) and Locations still scrolls at 1280 (991px of a 974px card), so the chip's
+  removal is not what fixes those; the columns menu is.
 - **The faceted filter is a tested engine.** `lib/predicate` is the pure matcher: values within a
   chip are OR, chips across keys are AND, clicking an active facet removes it. `FilterBar` is the
   thin staged combobox over it; the genuinely tricky list derivations (index, ancestor paths,

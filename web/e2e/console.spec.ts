@@ -158,10 +158,12 @@ test.describe("operator console", () => {
         const name = page.locator("main table.og-rows thead th").first();
         await expect(name).toHaveText("Name");
         const box = await name.boundingBox();
-        // 150 rather than the 200px floor itself: the assertion is that the
-        // identifier column is READABLE, not that it equals a constant a later
-        // slice may tune. Zero, which is what two of these three measured before
-        // the floor existed, fails it by a mile.
+        // 150 rather than the floor itself (191px as of #693, 260 before the
+        // label pen's chip left the cell and freed a measured 69px): the
+        // assertion is that the identifier column is READABLE, not that it
+        // equals a constant a later slice may tune, and this test has now
+        // survived one such tune without editing. Zero, which is what two of
+        // these three measured before the floor existed, fails it by a mile.
         expect(box, `${path} at ${width}px has no Name column at all`).not.toBeNull();
         expect(box!.width, `${path} at ${width}px: Name is ${Math.round(box!.width)}px`).toBeGreaterThan(150);
       }
