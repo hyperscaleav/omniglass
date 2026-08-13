@@ -19,16 +19,20 @@ import (
 // Parent are the tree link, absent for a root type. The registry lists
 // alphabetically by display_name.
 type systemTypeBody struct {
-	ID          string  `json:"id" doc:"The system_type's uuid, the stable handle that survives a rename"`
-	Name        string  `json:"name" doc:"The name an operator reads and types; renameable"`
-	DisplayName string  `json:"display_name"`
-	Stem        string  `json:"stem,omitempty" doc:"The prefix a generated system name is built from; empty inherits the nearest ancestor's"`
-	Icon        string  `json:"icon,omitempty" doc:"A glyph key; empty inherits the nearest ancestor's"`
-	Abbrev      string  `json:"abbrev,omitempty" doc:"A compact form of display_name; empty inherits the nearest ancestor's"`
-	LabelRule   string  `json:"label_rule,omitempty" doc:"The label template systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems"`
-	Official    bool    `json:"official"`
-	ParentID    *string `json:"parent_id,omitempty" doc:"The parent system_type's id, the canonical handle; absent for a root type"`
-	Parent      *string `json:"parent,omitempty" doc:"The parent system_type's name, for display; absent for a root type"`
+	ID          string `json:"id" doc:"The system_type's uuid, the stable handle that survives a rename"`
+	Name        string `json:"name" doc:"The name an operator reads and types; renameable"`
+	DisplayName string `json:"display_name"`
+	Stem        string `json:"stem,omitempty" doc:"The prefix a generated system name is built from; empty inherits the nearest ancestor's"`
+	Icon        string `json:"icon,omitempty" doc:"A glyph key; empty inherits the nearest ancestor's"`
+	// ResolvedIcon is the glyph this type actually SHOWS, on the same terms as
+	// componentTypeBody's (#695): served on the listing, where the whole chain
+	// is already loaded, and absent from a single-row write response.
+	ResolvedIcon string  `json:"resolved_icon,omitempty" doc:"The glyph this type shows: its own icon, else the nearest ancestor's. Served on the registry listing, where the whole chain is already in hand; a single-row write response does not carry it"`
+	Abbrev       string  `json:"abbrev,omitempty" doc:"A compact form of display_name; empty inherits the nearest ancestor's"`
+	LabelRule    string  `json:"label_rule,omitempty" doc:"The label template systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems"`
+	Official     bool    `json:"official"`
+	ParentID     *string `json:"parent_id,omitempty" doc:"The parent system_type's id, the canonical handle; absent for a root type"`
+	Parent       *string `json:"parent,omitempty" doc:"The parent system_type's name, for display; absent for a root type"`
 }
 
 func toSystemTypeBody(st *storage.SystemType, parentName *string) systemTypeBody {
@@ -136,6 +140,7 @@ func registerSystemTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		for i := range types {
 			byID[types[i].ID] = types[i].Name
 		}
+		icons := storage.ResolvedSystemTypeIcons(types)
 		out := &listSystemTypesOutput{}
 		out.Body.SystemTypes = make([]systemTypeBody, 0, len(types))
 		for i := range types {
@@ -145,7 +150,9 @@ func registerSystemTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 					parentName = &name
 				}
 			}
-			out.Body.SystemTypes = append(out.Body.SystemTypes, toSystemTypeBody(&types[i], parentName))
+			body := toSystemTypeBody(&types[i], parentName)
+			body.ResolvedIcon = icons[types[i].ID]
+			out.Body.SystemTypes = append(out.Body.SystemTypes, body)
 		}
 		return out, nil
 	})

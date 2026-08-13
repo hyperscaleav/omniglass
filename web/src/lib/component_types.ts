@@ -1,5 +1,4 @@
 import { api } from "../api/client";
-import { resolveInherited } from "./typechain";
 
 // The component_type registry data layer: the device-class genus a product is
 // classified under (ADR-0085 partially reverses ADR-0047: the shape returns
@@ -25,6 +24,12 @@ export type ComponentType = {
   stem?: string;
   // A glyph key resolved by components/icons.tsx; empty inherits.
   icon?: string;
+  // The glyph this type SHOWS, resolved by the server over the whole chain
+  // (#695): this row's icon when it has one, else the nearest ancestor's. The
+  // console no longer climbs the chain itself, so it cannot disagree with the
+  // gateway about which glyph a type draws. Absent on a single-row write
+  // response, which is why every reader of it comes off the listing.
+  resolved_icon?: string;
   // A compact form for the hostname render (fp, cam, dsp); empty inherits.
   abbrev?: string;
   // Tags every instance of this type (or a non-overriding descendant) starts with.
@@ -46,6 +51,7 @@ export async function listComponentTypes(): Promise<ComponentType[]> {
     parent_id: t.parent_id,
     stem: t.stem,
     icon: t.icon,
+    resolved_icon: t.resolved_icon,
     abbrev: t.abbrev,
     default_tags: t.default_tags ?? [],
   }));
@@ -76,6 +82,7 @@ export async function createComponentType(body: CreateComponentType): Promise<Co
     parent_id: t.parent_id,
     stem: t.stem,
     icon: t.icon,
+    resolved_icon: t.resolved_icon,
     abbrev: t.abbrev,
     default_tags: t.default_tags ?? [],
   };
@@ -117,15 +124,18 @@ export function componentTypeByName(types: ComponentType[]): Map<string, Compone
   return new Map(types.map((t) => [t.name, t] as const));
 }
 
-// resolveComponentTypeIcon walks the type's ancestor chain for the first
-// non-empty icon (first-non-null-wins, the same rule the server's fact
-// resolver applies), falling back to "box" (generic-device's icon) only for
-// a name the registry does not contain at all.
+// resolveComponentTypeIcon reads the icon the SERVER resolved for a named type,
+// falling back to "box" (generic-device's icon) for a name the registry does not
+// contain, or a chain that sets no icon anywhere.
 //
-// The walk itself lives in lib/typechain.ts, shared with the system registry's
-// icon and with the generated-name preview's stem: one climb, three facts.
+// It no longer walks (#695). The climb was a second implementation of
+// resolveTypeFacts written in TypeScript, and the failure it could produce was
+// a wrong glyph on a type whose chain the two disagreed about. The fallback
+// stays here because it is a rendering choice (the system registry falls back
+// to a different glyph) rather than a fact about the registry.
 export function resolveComponentTypeIcon(typeName: string | undefined, byName: Map<string, ComponentType>): string {
-  return resolveInherited(typeName, byName, (t) => t.icon) ?? "box";
+  const t = typeName ? byName.get(typeName) : undefined;
+  return t?.resolved_icon || "box";
 }
 
 export type ComponentTypeNode = ComponentType & { children: ComponentTypeNode[]; depth: number };

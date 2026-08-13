@@ -195,6 +195,15 @@ shape-definer: contracts, declared properties, and drivers stay on the product. 
 subtype exists only where a standard's slot would name it (`wireless-mic` versus `ceiling-mic`, real
 subtypes; panel technology like `lcd` versus `led` stays a product fact, never a type).
 
+The registry **listing serves the resolved icon** beside the raw one (`resolved_icon` next to `icon`,
+on both this registry and `system_type`), because a console that climbed the chain itself would be a
+second implementation of this walk in another language, and the failure that produces is a wrong
+glyph on a type the two disagree about
+([#695](https://github.com/hyperscaleav/omniglass/issues/695)). Both fields ship because they answer
+different questions: an edit blade posts the raw one back, where blank still means inherit, and a
+list cell draws the resolved one. It costs no extra read: the listing is the whole registry in one
+query, so every ancestor is already in hand.
+
 The shipped taxonomy, rendered from the seed, with a blank cell meaning the row inherits that fact
 from its nearest ancestor:
 

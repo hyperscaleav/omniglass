@@ -1,5 +1,4 @@
 import { api } from "../api/client";
-import { resolveInherited } from "./typechain";
 
 // The system_type registry data layer: the coarse taxonomy of what kind of
 // space a system is (ADR-0096), a boardroom, a classroom, a video wall. It is
@@ -23,6 +22,9 @@ export type SystemType = {
   stem?: string;
   // A glyph key resolved by components/icons.tsx; empty inherits.
   icon?: string;
+  // The glyph this type SHOWS, resolved by the server over the whole chain
+  // (#695): this row's icon when it has one, else the nearest ancestor's.
+  resolved_icon?: string;
   // The compact form a label render uses (br, cls, vw); empty inherits.
   abbrev?: string;
 };
@@ -31,7 +33,7 @@ export const SYSTEM_TYPES_KEY = ["system_types"] as const;
 
 function toSystemType(t: {
   id: string; name: string; display_name: string; official: boolean;
-  parent?: string; parent_id?: string; stem?: string; icon?: string; abbrev?: string;
+  parent?: string; parent_id?: string; stem?: string; icon?: string; resolved_icon?: string; abbrev?: string;
 }): SystemType {
   return {
     id: t.id,
@@ -42,6 +44,7 @@ function toSystemType(t: {
     parent_id: t.parent_id,
     stem: t.stem,
     icon: t.icon,
+    resolved_icon: t.resolved_icon,
     abbrev: t.abbrev,
   };
 }
@@ -95,16 +98,16 @@ export function systemTypeByName(types: SystemType[]): Map<string, SystemType> {
   return new Map(types.map((t) => [t.name, t] as const));
 }
 
-// resolveSystemTypeIcon walks the ancestor chain for the FIRST non-empty icon
-// (first-non-null-wins, the same rule the server's fact resolver applies), so a
-// mid-chain override beats the root's. Falls back to "map-pin", which is what
-// components/icons.tsx already resolves an unknown key to, only for a name the
-// registry does not contain at all.
+// resolveSystemTypeIcon reads the icon the SERVER resolved for a named type
+// (#695), falling back to "map-pin", which is what components/icons.tsx already
+// resolves an unknown key to, for a name the registry does not contain or a
+// chain that sets no icon anywhere.
 //
-// The walk itself lives in lib/typechain.ts, shared with the component
-// registry's icon and with the generated-name preview's stem.
+// A mid-chain override still beats the root's; that rule now lives in exactly
+// one place, the gateway, rather than once here and once there.
 export function resolveSystemTypeIcon(typeName: string | undefined, byName: Map<string, SystemType>): string {
-  return resolveInherited(typeName, byName, (t) => t.icon) ?? "map-pin";
+  const t = typeName ? byName.get(typeName) : undefined;
+  return t?.resolved_icon || "map-pin";
 }
 
 export type SystemTypeNode = SystemType & { children: SystemTypeNode[]; depth: number };

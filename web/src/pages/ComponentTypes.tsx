@@ -84,17 +84,6 @@ export default function ComponentTypes() {
   // alphabetical), not a flat alphabetical list: the registry's nesting is
   // the point of this page, so the row order teaches it.
   const treeRows = createMemo(() => flattenComponentTypeTree(componentTypeTree(types.data ?? [])));
-  const byName = createMemo(() => new Map((types.data ?? []).map((t) => [t.name, t] as const)));
-
-  function resolvedIconOf(row: ComponentType): string {
-    let cur: ComponentType | undefined = row;
-    for (let depth = 0; cur && depth < 32; depth++) {
-      if (cur.icon) return cur.icon;
-      cur = cur.parent ? byName().get(cur.parent) : undefined;
-    }
-    return "box";
-  }
-
   const columns: FlatColumn<ComponentType & { depth: number }>[] = [
     // No sortVal: the row order IS the taxonomy (tree order, parent then
     // children), so this column deliberately does not offer to re-sort it
@@ -103,7 +92,7 @@ export default function ComponentTypes() {
     { key: "parent", label: "Parent", width: "140px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.parent ?? "—"}</span> },
     { key: "stem", label: "Stem", width: "110px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.stem ?? "—"}</span> },
     { key: "abbrev", label: "Abbrev", width: "90px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.abbrev ?? "—"}</span> },
-    { key: "icon", label: "Icon", width: "150px", cell: (r) => <IconCell row={r} resolvedIcon={resolvedIconOf(r)} /> },
+    { key: "icon", label: "Icon", width: "150px", cell: (r) => <IconCell row={r} resolvedIcon={r.resolved_icon || "box"} /> },
     { key: "official", label: "Origin", width: "110px", sortVal: (r) => registryOrigin(r), cell: (r) => originBadge(r) },
   ];
 

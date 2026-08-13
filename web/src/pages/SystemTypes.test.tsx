@@ -15,10 +15,10 @@ import { uuidFor } from "../lib/testids";
 // overrides it, and there is no reparent leg, so a custom type's placement is
 // fixed at create.
 const seed: SystemType[] = [
-  { id: uuidFor("st-av"), name: "av", display_name: "AV", official: true, stem: "av", abbrev: "av", icon: "layers" },
-  { id: uuidFor("st-room"), name: "room", display_name: "Room", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "room", abbrev: "rm", icon: "door-open" },
-  { id: uuidFor("st-board"), name: "board", display_name: "Boardroom", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "boardroom", abbrev: "br" },
-  { id: uuidFor("st-lab"), name: "lab", display_name: "Lab", official: false, parent: "room", parent_id: uuidFor("st-room"), stem: "lab", abbrev: "lab" },
+  { id: uuidFor("st-av"), name: "av", display_name: "AV", official: true, stem: "av", abbrev: "av", icon: "layers", resolved_icon: "layers" },
+  { id: uuidFor("st-room"), name: "room", display_name: "Room", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "room", abbrev: "rm", icon: "door-open", resolved_icon: "door-open" },
+  { id: uuidFor("st-board"), name: "board", display_name: "Boardroom", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "boardroom", abbrev: "br", resolved_icon: "door-open" },
+  { id: uuidFor("st-lab"), name: "lab", display_name: "Lab", official: false, parent: "room", parent_id: uuidFor("st-room"), stem: "lab", abbrev: "lab", resolved_icon: "door-open" },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -53,11 +53,12 @@ describe("SystemTypes page", () => {
     expect(boardAt).toBe(roomAt + 1);
   });
 
-  it("shows a node's resolved icon, inherited from the nearest ancestor that sets one", () => {
+  it("shows the resolved icon the server sent, not the row's own blank one", () => {
     mount();
     const rows = screen.getAllByRole("row").slice(1);
     const boardRow = rows.find((r) => within(r).getAllByRole("cell")[0].textContent?.includes("Boardroom"))!;
-    // board sets no icon of its own: the Icon cell names room's, not av's.
+    // board sets no icon of its own, so the Icon cell names the one the server
+    // resolved for it (room's, not the root av's).
     expect(boardRow.textContent).toContain("door-open");
     expect(boardRow.textContent).not.toContain("layers");
   });

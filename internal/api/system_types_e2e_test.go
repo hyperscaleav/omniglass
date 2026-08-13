@@ -15,15 +15,16 @@ import (
 
 // systemTypeWire is the decoded system_type wire shape for the e2e assertions.
 type systemTypeWire struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name"`
-	Stem        string `json:"stem"`
-	Icon        string `json:"icon"`
-	Abbrev      string `json:"abbrev"`
-	Official    bool   `json:"official"`
-	ParentID    string `json:"parent_id"`
-	Parent      string `json:"parent"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	DisplayName  string `json:"display_name"`
+	Stem         string `json:"stem"`
+	Icon         string `json:"icon"`
+	ResolvedIcon string `json:"resolved_icon"`
+	Abbrev       string `json:"abbrev"`
+	Official     bool   `json:"official"`
+	ParentID     string `json:"parent_id"`
+	Parent       string `json:"parent"`
 }
 
 // TestSystemTypesAPI drives the system_type registry over HTTP on the same
@@ -96,6 +97,20 @@ func TestSystemTypesAPI(t *testing.T) {
 	}
 	if board.Icon != "" {
 		t.Fatalf("board icon = %q, want empty on the wire (it inherits room's; this read does not resolve)", board.Icon)
+	}
+	// The RESOLVED icon is the one the console draws, and it is served beside
+	// the raw one rather than instead of it (#695): the raw field is what an
+	// edit blade posts back, the resolved field is what a glyph is drawn from.
+	// board must show room's, never the root av's, which is the tier a walk
+	// gets wrong by stopping too late.
+	if board.ResolvedIcon != room.Icon {
+		t.Fatalf("board resolved_icon = %q, want room's %q (the NEAREST ancestor that sets one, not av's %q)", board.ResolvedIcon, room.Icon, av.Icon)
+	}
+	if room.Icon == av.Icon {
+		t.Fatalf("the fixture cannot tell the tiers apart: room and av both show %q", room.Icon)
+	}
+	if av.ResolvedIcon != av.Icon {
+		t.Fatalf("av resolved_icon = %q, want its own icon %q", av.ResolvedIcon, av.Icon)
 	}
 
 	// The viewer cannot create (403, capability fast-reject).
