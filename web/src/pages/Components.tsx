@@ -496,7 +496,11 @@ export default function Components() {
             any role it fills stops counting it toward quorum while it stays
             down. Raising and clearing write immediately (like tags), so the
             controls appear only in edit mode, which keeps view read-only. */}
-        <AlarmsPanel component={n().raw.id} canUpdate={editing() && canUpdate()} />
+        <AlarmsPanel
+          component={n().raw.id}
+          canUpdate={editing() && canUpdate()}
+          canAcknowledge={can(me.data, "alarm", "acknowledge")}
+        />
         <EventsPanel name={n().raw.id} />
         <LogsPanel name={n().raw.id} />
         {/* What we want vs what the device reports: the provenance pivot

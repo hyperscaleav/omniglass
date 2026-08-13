@@ -1,14 +1,16 @@
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
-import { Check, Siren } from "./icons";
+import { Check, Eye, Siren } from "./icons";
 import { describeError, rel } from "../lib/format";
 import {
+  acknowledgeAlarm,
   clearAlarm,
   componentAlarms,
   componentAlarmsKey,
   raiseAlarm,
   splitAlarms,
+  unacknowledgedCount,
   type Severity,
 } from "../lib/alarms";
 
@@ -29,6 +31,15 @@ import {
 // its own; the caller passes canUpdate (the component detail computes it as "in
 // edit mode AND holding component:update"), which keeps view read-only per the
 // console invariant.
+//
+// ACKNOWLEDGING is deliberately outside that gate, on canAcknowledge alone. Edit
+// mode exists to protect the component's own data from an accidental write, and
+// an acknowledgement writes none of it: it records that the reader looked, leaves
+// the alarm exactly as raised, and recomputes no health. The server says the same
+// thing by gating it on its own permission with its own scope rather than on
+// component:update (ADR-0109). Making an operator enter an editing mode, which is
+// also where the raise and clear controls live, in order to say "I have seen this"
+// would put a triage act behind the guard for a different kind of act.
 
 const SEVERITY: Record<string, string> = { critical: "badge-error", warning: "badge-warning", info: "badge-info" };
 const severityBadge = (s: string) => SEVERITY[s] ?? "badge-ghost";
@@ -39,7 +50,7 @@ const SEVERITIES: { value: Severity; label: string }[] = [
   { value: "critical", label: "critical (this component is out)" },
 ];
 
-export default function AlarmsPanel(props: { component: string; canUpdate: boolean }): JSX.Element {
+export default function AlarmsPanel(props: { component: string; canUpdate: boolean; canAcknowledge?: boolean }): JSX.Element {
   const qc = useQueryClient();
   const key = () => componentAlarmsKey(props.component);
   const q = useQuery(() => ({
@@ -51,6 +62,8 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
   const split = createMemo(() => splitAlarms(q.data ?? []));
   const active = () => split().active;
   const cleared = () => split().cleared;
+  // The queue an operator actually works: raised, and nobody has looked at it.
+  const unseen = createMemo(() => unacknowledgedCount(q.data ?? []));
 
   const [err, setErr] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
@@ -86,16 +99,30 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
 
   const clear = (id: string) => run(() => clearAlarm(props.component, id));
 
+  const acknowledge = (id: string) => run(() => acknowledgeAlarm(props.component, id).then(() => undefined));
+
   return (
     <div class="flex flex-col gap-2">
       <div class="flex items-baseline justify-between gap-2">
-        <span class="eyebrow">Alarms</span>
+        <div class="flex items-baseline gap-2">
+          <span class="eyebrow">Alarms</span>
+          <Show when={unseen()}>
+            <span class="badge badge-outline badge-warning badge-sm shrink-0" title="Raised, and nobody has recorded seeing it yet">
+              {unseen()} unacknowledged
+            </span>
+          </Show>
+        </div>
         <span class="shrink-0 text-[10.5px] text-base-content/40">what is wrong here, and what it takes down</span>
       </div>
       <p class="text-[11px] text-base-content/50">
         An alarm records a condition on this component and takes its own verdict down (any active alarm degrades it,
         a critical one is an outage). Any role it fills stops counting it toward quorum while it stays down, which is
         how a fault on a box becomes a verdict on a room.
+      </p>
+      <p class="text-[11px] text-base-content/50">
+        Acknowledging is separate from clearing: it records that a human has seen the alarm and changes nothing else,
+        so the component stays exactly as broken as it was. What is raised is a fact about the condition; who has
+        looked is a fact about a person.
       </p>
 
       <Show when={err()}>
@@ -125,6 +152,33 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                   <span class="shrink-0 text-[11px] text-base-content/45" title={a.raised_at}>
                     raised {rel(a.raised_at)}
                   </span>
+                  {/* Who has looked at this, if anybody. An unacknowledged alarm is
+                      the one still waiting for a human, so it says so rather than
+                      staying silent; an acknowledged one names the person and stays
+                      just as raised, because acknowledging is not fixing. */}
+                  <Show
+                    when={a.acknowledged}
+                    fallback={
+                      <span class="badge badge-outline badge-warning badge-xs shrink-0" title="Nobody has recorded seeing this yet">
+                        unacknowledged
+                      </span>
+                    }
+                  >
+                    <span class="shrink-0 text-[11px] text-base-content/45" title={a.acknowledged_at}>
+                      seen by {a.acknowledged_by || "someone since removed"} {rel(a.acknowledged_at!)}
+                    </span>
+                  </Show>
+                  <Show when={props.canAcknowledge && !a.acknowledged}>
+                    <Button
+                      square
+                      size="xs"
+                      icon={Eye}
+                      label={`Acknowledge alarm ${a.id}`}
+                      title="Record that you have seen this alarm. It stays raised."
+                      disabled={busy()}
+                      onClick={() => void acknowledge(a.id)}
+                    />
+                  </Show>
                   <Show when={props.canUpdate}>
                     <Button
                       square
@@ -190,6 +244,9 @@ export default function AlarmsPanel(props: { component: string; canUpdate: boole
                   <span class="shrink-0 text-[11px] text-base-content/45">
                     raised {rel(a.raised_at)}
                     <Show when={a.cleared_at}> · cleared {rel(a.cleared_at!)}</Show>
+                    {/* An incident that came and went with nobody looking is worth
+                        seeing in the history: it is the one that got no attention. */}
+                    <Show when={!a.acknowledged}> · never acknowledged</Show>
                   </span>
                 </div>
               )}
