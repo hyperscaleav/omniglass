@@ -59,12 +59,23 @@ type Querier interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
+// Call is one counted statement: the SQL that was issued and the arguments it
+// was issued with. A count needs only the first half; REPLAYING a statement
+// needs both, which is what an access-path assertion does (it EXPLAINs the
+// statement the gateway really issued rather than a copy of it maintained
+// alongside, since a copy is exactly what stops failing when the original
+// changes).
+type Call struct {
+	SQL  string
+	Args []any
+}
+
 // Counter counts statements and remembers their SQL. The zero value is ready to
 // use, and every method is safe for concurrent use, so one counter can be shared
 // by a pool that hands connections to several goroutines.
 type Counter struct {
 	mu    sync.Mutex
-	stmts []string
+	calls []Call
 }
 
 // New returns an empty Counter.
@@ -74,15 +85,28 @@ func New() *Counter { return &Counter{} }
 func (c *Counter) N() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return len(c.stmts)
+	return len(c.calls)
 }
 
 // Statements returns the SQL of every counted statement, in the order it was
 // issued. The slice is a copy, so a caller can hold it across further counting.
 func (c *Counter) Statements() []string {
+	calls := c.Calls()
+	out := make([]string, len(calls))
+	for i, call := range calls {
+		out[i] = call.SQL
+	}
+	return out
+}
+
+// Calls returns every counted statement with the arguments it carried, in the
+// order it was issued. The slice is a copy, so a caller can hold it across
+// further counting; the argument values inside are the caller's own, not copies
+// of them, which is why this is a test-only seam.
+func (c *Counter) Calls() []Call {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return append([]string(nil), c.stmts...)
+	return append([]Call(nil), c.calls...)
 }
 
 // Summary is [Counter.Statements] with each statement's whitespace collapsed and
@@ -105,13 +129,13 @@ func (c *Counter) Summary() []string {
 func (c *Counter) Reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.stmts = nil
+	c.calls = nil
 }
 
-func (c *Counter) record(sql string) {
+func (c *Counter) record(sql string, args []any) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.stmts = append(c.stmts, sql)
+	c.calls = append(c.calls, Call{SQL: sql, Args: append([]any(nil), args...)})
 }
 
 // TraceQueryStart counts one statement and returns ctx unchanged. It is pgx's
@@ -119,7 +143,7 @@ func (c *Counter) record(sql string) {
 // config carries this tracer, which is what makes a Counter observe a gateway
 // read end to end (see the package doc's bypass hazard).
 func (c *Counter) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
-	c.record(data.SQL)
+	c.record(data.SQL, data.Args)
 	return ctx
 }
 
@@ -144,12 +168,12 @@ type countingQuerier struct {
 }
 
 func (q *countingQuerier) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
-	q.counter.record(sql)
+	q.counter.record(sql, args)
 	return q.inner.QueryRow(ctx, sql, args...)
 }
 
 func (q *countingQuerier) Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error) {
-	q.counter.record(sql)
+	q.counter.record(sql, args)
 	return q.inner.Query(ctx, sql, args...)
 }
 

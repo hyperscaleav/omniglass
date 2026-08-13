@@ -128,7 +128,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0091](#adr-0091-an-update_mask-says-which-fields-a-patch-writes) | 2026-08-09 | Accepted | A `PATCH` body may carry an optional `update_mask` with AIP-134 semantics exactly (absent is the implied mask of populated fields, present writes exactly what it names so a zero value clears, `["*"]` is full replacement, an unknown field is a 422 naming it); it rides in the body, the three-state string sentinel stays, the other 108 `PATCH` routes are not retrofitted, and the role declarations convert from `PUT` to `PATCH` as its first consumer |
 | [ADR-0092](#adr-0092-a-location-move-recomputes-both-ancestor-chains) | 2026-08-09 | Accepted | `MoveLocation` recomputes health over both ancestor chains (joined and left) inside its own transaction, the second and last member of the exception class ADR-0088 carved out for a system's relocate; one named row per side seeds the recursive ancestry walk the query already performs, and a no-op move recomputes nothing |
 | [ADR-0093](#adr-0093-the-tag-cascade-follows-the-component-it-resolves-for) | 2026-08-09 | Accepted | Effective tags are scoped by the component the cascade resolves FOR, not per band: a caller who can read the component sees every value that cascades onto it, including from systems and locations it could not list directly; the `?system=` seed is a filter over that answer, never a widening of it |
-| [ADR-0094](#adr-0094-benchmarks-are-the-second-performance-instrument-and-they-gate-nothing) | 2026-08-09 | Accepted | Performance has two instruments: round-trip counting gates in `make test`, wall-clock benchmarks (`make bench`, two estate sizes, fixtures outside the timed section) are diagnostic and gate nothing; no CI perf job, no stored baseline, no `EXPLAIN` assertions (deferred), no timing assertion anywhere, and one candidate benchmark was measured as three-quarters transport and dropped rather than shipped |
+| [ADR-0094](#adr-0094-benchmarks-are-the-second-performance-instrument-and-they-gate-nothing) | 2026-08-09 | Accepted | Performance has two instruments: round-trip counting gates in `make test`, wall-clock benchmarks (`make bench`, two estate sizes, fixtures outside the timed section) are diagnostic and gate nothing; no CI perf job, no stored baseline, no `EXPLAIN` assertions (deferred), no timing assertion anywhere, and one candidate benchmark was measured as three-quarters transport and dropped rather than shipped. **Amended (#725):** the `EXPLAIN` deferral holds for the plan a planner PREFERS and is lifted for the access path a query can REACH; planned under `enable_seqscan = off` that answer does not move with the fixture's size, so an access-path assertion on one relation (index name AND index condition, never plan shape, never a duration) becomes a third instrument that gates |
 | [ADR-0095](#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it) | 2026-08-09 | Accepted | An operator's edit of a shipped (`official: true`) registry row does not write that row: it forks it into `registry_shadow`, one registry-agnostic table keyed `(registry, row_id)` on the shipped row's OWN uuid, and reads resolve the shadow over the official row; restore is deleting the shadow. One uuid and one name per logical row either way, so no foreign key, walk, audit row or URL learns about the fork. A fork captures the whole mutable row and never the structure, which makes inheritance on a nested registry resolvable per node. `component_type` is the first adopter |
 
 | [ADR-0096](#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy) | 2026-08-09 | Accepted | A nested, universally seeded **`system_type`** registry lands beside `standard` (not inside it): the coarse taxonomy of what kind of space a system is (`av / room / {board, class, ...}`, `av / sign / {...}`), with `stem`, `abbrev`, and `icon` inherited down `parent_id` and overridable at any node, and `system.system_type_id` nullable for now. The identifier is reused deliberately (it was ADR-0048's retired column name for `standard_id`), so its docs-lint denylist entry is removed on ADR-0085's precedent |
@@ -3498,6 +3498,27 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
     statistics, so a fixture too small plans differently from production and the assertion pins the
     wrong shape. Revisit when a fixture is realistic enough for the planner to agree with production,
     or when a specific plan regression proves the benchmarks insufficient.
+
+    **Amended ([#725](https://github.com/hyperscaleav/omniglass/issues/725)):** the deferral stands for
+    the plan a planner **prefers** and is lifted for an access path a query can **reach**, which is a
+    different question with a different dependence on statistics. Neither revisit condition above is
+    met (no fixture here is production-sized, and nothing regressed a plan) and neither is claimed:
+    what ships is narrower than what was deferred. Planned with `set enable_seqscan = off`, which
+    prices the sequential path out rather than forbidding it, `EXPLAIN` answers "which index is this
+    relation reachable by", and that answer does not move with the fixture's size: measured over the
+    health reads on an empty database, on a 45-row fixture with no statistics at all, and on the same
+    fixture analyzed, the join shapes around the scan differed in all three (hash join to merge join, a
+    sort appearing and disappearing) while the scan of `property` was the same index scan carrying the
+    same index condition in every one. The instrument is
+    `internal/storage/storagetest/accesspath`, it gates in `make test` as counting does, and three
+    rules bound it. Assert the access path of **one relation**, never the plan's shape. Assert the
+    **index condition** as well as the index name, because a coerced predicate or a leading column
+    dropped from the filter leaves the index NAMED in the plan and walked rather than searched, which
+    reads as a pass. And never assert a duration or a preference, which is this entry's standing
+    invariant, untouched. It earns its place on the class no other instrument here can see: a partial
+    index can sit in `pg_indexes` and be unreachable by the read it was built for, because its
+    predicate stopped being provable from the query's own clauses, and the statement count is identical
+    either way.
   - **No timing assertion anywhere,** in a benchmark or a test. This is a standing invariant, not a
     property of this slice.
 - **What the first run measured, because a benchmark set is only as honest as its floor.** One pool

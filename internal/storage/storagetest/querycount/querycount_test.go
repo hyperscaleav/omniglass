@@ -134,6 +134,49 @@ func TestStatementsIsACopy(t *testing.T) {
 	}
 }
 
+// TestCallsCarryTheArgumentsTheStatementWasIssuedWith: a count needs the SQL
+// alone, but REPLAYING a statement (which is what an access-path assertion does
+// with it) needs the values it was bound with, and both seams have to record
+// them or a guard would silently explain the wrong one.
+func TestCallsCarryTheArgumentsTheStatementWasIssuedWith(t *testing.T) {
+	c := querycount.New()
+	ctx := context.Background()
+	c.Wrap(&stubQuerier{row: stubRow{}}).QueryRow(ctx, "select 1 from t where id = $1", "abc")
+	c.TraceQueryStart(ctx, nil, pgx.TraceQueryStartData{
+		SQL: "select * from t where id = $1 and kind = $2", Args: []any{"xyz", 7},
+	})
+
+	calls := c.Calls()
+	if len(calls) != 2 {
+		t.Fatalf("Calls returned %d, want one per counted statement", len(calls))
+	}
+	if calls[0].SQL != "select 1 from t where id = $1" || len(calls[0].Args) != 1 || calls[0].Args[0] != "abc" {
+		t.Errorf("wrapped call = %+v, want the statement and its one argument", calls[0])
+	}
+	if len(calls[1].Args) != 2 || calls[1].Args[0] != "xyz" || calls[1].Args[1] != 7 {
+		t.Errorf("traced call args = %v, want the arguments pgx was given", calls[1].Args)
+	}
+	// A statement with no arguments records none rather than a nil hole that a
+	// caller would have to guard.
+	c.Reset()
+	c.TraceQueryStart(ctx, nil, pgx.TraceQueryStartData{SQL: "begin"})
+	if got := c.Calls(); len(got) != 1 || len(got[0].Args) != 0 {
+		t.Errorf("argument-free call = %+v, want an empty argument list", got)
+	}
+}
+
+// TestCallsIsACopy: same property Statements has, for the same reason. A guard
+// holds the captured call across the next measurement.
+func TestCallsIsACopy(t *testing.T) {
+	c := querycount.New()
+	c.TraceQueryStart(context.Background(), nil, pgx.TraceQueryStartData{SQL: "select 1", Args: []any{"a"}})
+	held := c.Calls()
+	held[0].SQL = "mutated"
+	if got := c.Calls(); got[0].SQL != "select 1" {
+		t.Errorf("the counter's record became %q after a caller mutated its copy", got[0].SQL)
+	}
+}
+
 // TestSummaryCollapsesAndTruncates: the gateway's SQL is multi-line, so a raw
 // statement list in a failure message is unreadable. Summary is what an
 // assertion prints.
