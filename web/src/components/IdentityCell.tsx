@@ -64,8 +64,9 @@ import { entityLabel, hasDisplayName, labelIsName, type Labelled } from "../lib/
 // itself. The estate-wide question the chip half-answered, which rows a rule
 // edit would rewrite, is answered whole by `<entity> previewLabels`.
 //
-// labelGenerated is still what suppresses the second line, so the pen has not
-// left this cell, only its badge.
+// The pen has not left this cell, only its badge: hasDisplayName still reads it
+// to decide whether an identifier goes on the second line, which is the whole
+// reason the three states above are three and not two.
 export function IdentityCell(props: { entity: Labelled; weight?: number }) {
   const label = () => entityLabel(props.entity);
   const showName = () => hasDisplayName(props.entity);
