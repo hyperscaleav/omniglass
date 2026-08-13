@@ -83,6 +83,26 @@ func TestCommandTypeAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "Bad-Name"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "set_thing", "target_property_type": "no.such.property"}, http.StatusUnprocessableEntity)
 
+	// A negative settle window is a 422 on both writes (#718). The window is a
+	// duration, and a negative one is not a shorter wait: Settle tests
+	// `windowSeconds > 0`, so it behaves exactly as 0 does, which made it a value
+	// an operator could set, read back, and never see honoured. The floor is in
+	// the SCHEMA, so the generated client and CLI carry it too, and in the
+	// gateway, so a direct-gateway caller cannot write one either.
+	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "neg-window", "settle_window_seconds": -5}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPatch, "/command-types/set-volume", map[string]any{"settle_window_seconds": -1}, http.StatusUnprocessableEntity)
+	// The refused patch changed nothing: the window is still the 10 set above.
+	var kept struct {
+		SettleWindowSeconds int `json:"settle_window_seconds"`
+	}
+	json.Unmarshal(c.do(ownerTok, http.MethodGet, "/command-types/set-volume", nil, http.StatusOK), &kept)
+	if kept.SettleWindowSeconds != 10 {
+		t.Fatalf("window after the refused patch = %d, want the 10 the accepted patch set", kept.SettleWindowSeconds)
+	}
+	// Zero stays legal on both, which is the shipped meaning of the field:
+	// "settle immediately" (ADR-0108), and what `reboot` carries.
+	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "fire-and-forget-x", "settle_window_seconds": 0}, http.StatusCreated)
+
 	// A duplicate name is a 409.
 	c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{"name": "set-volume"}, http.StatusConflict)
 

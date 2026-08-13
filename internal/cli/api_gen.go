@@ -366,7 +366,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fName, "name", "", "The command type name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment for the params")
-				cmd.Flags().StringVar(&fSettleWindowSeconds, "settle-window-seconds", "", "The actuation window in seconds (0 = fire-and-forget)")
+				cmd.Flags().StringVar(&fSettleWindowSeconds, "settle-window-seconds", "", "The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so.")
 				cmd.Flags().StringVar(&fTargetMetricType, "target-metric-type", "", "The metric this command sets, for settlement (at most one target arm)")
 				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets, for settlement (at most one target arm)")
 				return cmd
@@ -465,7 +465,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the command does")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
 				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment (replaces wholesale)")
-				cmd.Flags().StringVar(&fSettleWindowSeconds, "settle-window-seconds", "", "The actuation window in seconds")
+				cmd.Flags().StringVar(&fSettleWindowSeconds, "settle-window-seconds", "", "The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)")
 				cmd.Flags().StringVar(&fTargetMetricType, "target-metric-type", "", "The metric this command sets (empty clears it; a non-empty arm clears the other)")
 				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets (empty clears it; a non-empty arm clears the other)")
 				return cmd
@@ -1174,7 +1174,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "renderLabel",
 					Short:   "Draft the name and label a component create would store",
-					Long:    "Drafts the name and the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is READ (the lowest free number among the live siblings in the placement bucket) rather than allocated. That answer is provisional, so a form posts the NAME back as expected_name on the create and is refused (409) rather than silently renamed if another create takes the number or the type's stem moves first. Omitting name drafts the name the platform would mint, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the parent resolves within the caller's component:create scope and the location and system refs within location:read and system:read, because the rendered string can carry their labels. Omitting parent is the parentless bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403): a form must not preview a bucket its create declines, and the previewed ordinal reports which names that bucket already holds.",
+					Long:    "Drafts the name and the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is READ (the lowest free number among the live siblings in the placement bucket) rather than allocated. That answer is provisional, so a form posts the NAME back as expected_name on the create and is refused (409) rather than silently renamed if another create takes the number or the type's stem moves first. Omitting name drafts the name the platform would mint, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the parent resolves within the caller's component:create scope and the location ref within location:read, because the rendered string can carry that label. Naming a system additionally requires system:update and resolves within that scope, the same as the create, because the create binds that system's membership: a preview is never served for a bind the create would refuse. Omitting parent is the parentless bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403): a form must not preview a bucket its create declines, and the previewed ordinal reports which names that bucket already holds.",
 					Example: "  omniglass component renderLabel --product product",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1203,7 +1203,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fParent, "parent", "", "The parent component, by name or uuid. Part of the placement bucket a generated name's ordinal is read from, so a draft that omits it previews the wrong bucket. Resolved within the caller's component:create scope, the same set the create resolves it in.")
 				cmd.Flags().StringVar(&fProduct, "product", "", "The product this component is an instance of, by name or uuid; the classification both a label rule and a generated name are resolved from")
 				_ = cmd.MarkFlagRequired("product")
-				cmd.Flags().StringVar(&fSystem, "system", "", "The system this component will belong to, by name or uuid. Resolved within the caller's system:read scope.")
+				cmd.Flags().StringVar(&fSystem, "system", "", "The system this component will belong to, by name or uuid. Naming it requires system:update, exactly as the create does, because the create inserts that system's membership; it resolves within that scope, and system:read decides only whether the refusal may name the system.")
 				return cmd
 			}()
 			return cmd

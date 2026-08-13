@@ -66,6 +66,11 @@ func (p *PG) UpsertCommandType(ctx context.Context, ct CommandType) error {
 	if err := checkSchemaFragment(ct.ParamsSchema, "params_schema"); err != nil {
 		return fmt.Errorf("storage: upsert command type %q: %w: %w", ct.Name, ErrCommandTypeInvalid, err)
 	}
+	// Named like the target refusals beside it: a seed defect has to say which
+	// row it is in, since the seed run is what a boot fails on.
+	if err := checkSettleWindow(ct.SettleWindowSeconds); err != nil {
+		return fmt.Errorf("storage: upsert command type %q: %w", ct.Name, err)
+	}
 	propID, metricID, err := resolveTargets(ctx, p.pool, ct.TargetPropertyType, ct.TargetMetricType)
 	if err != nil {
 		return fmt.Errorf("storage: upsert command type %q: %w", ct.Name, err)
@@ -161,6 +166,30 @@ func guardCommandTypeMutable(ctx context.Context, q querier, name string) error 
 	return nil
 }
 
+// checkSettleWindow refuses a negative settle window (#718).
+//
+// The window is a DURATION the driver states, so the domain has a floor at zero
+// and nothing below it means anything. What makes a negative one worth a
+// refusal rather than a shrug is that it is INVISIBLE: [Settle] tests
+// `windowSeconds > 0`, so -5 behaves exactly as 0 does, terminal by
+// construction with no waiting at all. An operator who typed one would see the
+// number they typed on the row and get behaviour that has nothing to do with
+// it, on every command of that type, with nothing anywhere saying so.
+//
+// Zero is deliberately not refused. It is the documented way to say "settle
+// immediately", a claim about intent that ADR-0108 made terminal before any
+// arithmetic runs, and the shipped `reboot` type carries it. Refusing zero
+// beside a target arm was considered under #718 and is not taken here: see the
+// issue for why that is an architect's call rather than this guard's, since it
+// would reverse ADR-0108's stated consequence for an operator's own zero-window
+// type. This floor is the smallest one that admits every meaning the field has.
+func checkSettleWindow(seconds int) error {
+	if seconds < 0 {
+		return fmt.Errorf("%w: settle_window_seconds is a duration and cannot be negative (got %d); 0 means settle immediately", ErrCommandTypeInvalid, seconds)
+	}
+	return nil
+}
+
 // resolveTarget checks a target name exists in the named classifier catalog and
 // returns its id, or an invalid error naming the target. An empty name is a nil
 // id (no target on that arm). The catalog is a compile-time constant at every
@@ -208,6 +237,9 @@ func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec Command
 	if err := checkSchemaFragment(spec.ParamsSchema, "params_schema"); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCommandTypeInvalid, err)
 	}
+	if err := checkSettleWindow(spec.SettleWindowSeconds); err != nil {
+		return nil, err
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create command type: %w", err)
@@ -244,6 +276,11 @@ func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec Command
 func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch CommandTypePatch) (*CommandType, error) {
 	if err := checkSchemaFragment(patch.ParamsSchema, "params_schema"); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCommandTypeInvalid, err)
+	}
+	if patch.SettleWindowSeconds != nil {
+		if err := checkSettleWindow(*patch.SettleWindowSeconds); err != nil {
+			return nil, err
+		}
 	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

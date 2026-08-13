@@ -52,11 +52,14 @@ import (
 //
 // The draft takes the same scopes its create takes, in the same order, because
 // it resolves the same references: a component's parent within the caller's
-// component:create scope (the set the create resolves it in), and its location
-// and system within the caller's location:read and system:read scopes (the sets
-// that decide whether the rendered string may carry their labels). An
-// out-of-scope reference is the same non-disclosing not-found a direct read
-// would give. Rendering it anyway would make this route a disclosure channel.
+// component:create scope (the set the create resolves it in), its location
+// within location:read (the set that decides whether the rendered string may
+// carry that label), and its system within system:read AND system:update, which
+// is the set the create's bind resolves in because that bind writes the system's
+// membership (#707, #713). An out-of-scope reference is the same non-disclosing
+// not-found a direct read would give. Rendering it anyway would make this route
+// a disclosure channel, and resolving it in a WIDER set than the create's would
+// make it a preview of a create the platform refuses.
 //
 // The parent is new here (#702) and it is not about the label at all: a
 // location's map carries no placement (ADR-0098's exclusion survives on that
@@ -143,13 +146,15 @@ type LocationLabelDraft struct {
 // RenderComponentDraftLabel renders the name and the label a component create
 // would stamp, without creating anything.
 //
-// The scopes are the create's own, in the create's own order: create resolves
-// the PARENT (the set CreateComponent resolves it in, and the bucket the
-// previewed ordinal is read from), locationRead the location whose label the
-// map reads, systemRead the system whose type label it reads. The permission to
-// ASK is the component's own :create and lives at the route (see
-// internal/api/label_draft.go); these three decide what the answer may contain.
-func (p *PG) RenderComponentDraftLabel(ctx context.Context, d ComponentLabelDraft, create, locationRead, systemRead scope.Set) (DraftLabel, error) {
+// The scopes are the create's own, in the create's own order and now in the
+// create's own number (#713): create resolves the PARENT (the set
+// CreateComponent resolves it in, and the bucket the previewed ordinal is read
+// from), locationRead the location whose label the map reads, and systemRead
+// with systemUpdate the system, through the same read-then-action split the
+// create's bind uses. The permission to ASK is the component's own :create and
+// lives at the route (see internal/api/label_draft.go); these four decide what
+// the answer may contain.
+func (p *PG) RenderComponentDraftLabel(ctx context.Context, d ComponentLabelDraft, create, locationRead, systemRead, systemUpdate scope.Set) (DraftLabel, error) {
 	productID, err := registryID(ctx, p.pool, "product", d.ProductName, ErrProductNotFound)
 	if err != nil {
 		return DraftLabel{}, err
@@ -179,7 +184,18 @@ func (p *PG) RenderComponentDraftLabel(ctx context.Context, d ComponentLabelDraf
 		locationID = &loc.ID
 	}
 	if d.SystemName != "" {
-		sys, err := p.GetSystem(ctx, d.SystemName, systemRead)
+		// resolvePlacementWriteRef, the create's own resolver, not a read (#713).
+		// A component create INSERTS this system's membership, so the create
+		// requires system:update over it and resolves it there; a draft that
+		// resolved the same reference in system:read alone would preview a create
+		// the platform then refuses, and the preview would carry that system's
+		// type label back out (the disclosure the read scope exists to close, one
+		// tier further along). The read set still decides what the refusal may
+		// SAY, exactly as it does on the create.
+		sys, err := resolvePlacementWriteRef(ctx, p.pool, systemConfig, d.SystemName, systemRead, systemUpdate)
+		if errors.Is(err, ErrSystemForbidden) {
+			return DraftLabel{}, ErrSystemBindForbidden
+		}
 		if err != nil {
 			return DraftLabel{}, err
 		}

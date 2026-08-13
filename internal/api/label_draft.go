@@ -47,9 +47,17 @@ import (
 // from other rows: a component's label can read the label of its location and
 // the label of its primary system's TYPE, and a system's can read its
 // location's. So the placement refs resolve within the caller's location:read
-// and system:read scopes, and a placement outside them is refused rather than
-// rendered. Without that, this route is a disclosure channel: name a location
-// you cannot read, read its label back out of the preview.
+// scope, and a placement outside it is refused rather than rendered. Without
+// that, this route is a disclosure channel: name a location you cannot read,
+// read its label back out of the preview.
+//
+// A component's SYSTEM ref is the exception, and it resolves in a WRITE set
+// (#713). Naming a system on the create binds that system's membership, which
+// costs system:update (ADR-0107), so resolving the preview's copy of the same
+// reference in system:read alone would serve a preview for a create the
+// platform refuses. The rule is the create's rule: what the bind requires
+// decides whether it resolves, and system:read decides only what the refusal is
+// allowed to say.
 //
 // The two are injected separately and by their own resource, not by the drafted
 // entity's, because scope trees do not cross tiers: a component:read grant says
@@ -109,7 +117,7 @@ type renderComponentLabelInput struct {
 		Name     string `json:"name,omitempty" doc:"The name the row will carry. Omit it to draft the name and label the platform would produce; supply it to draft the label an operator-named row would carry, which has no ordinal at all."`
 		Parent   string `json:"parent,omitempty" doc:"The parent component, by name or uuid. Part of the placement bucket a generated name's ordinal is read from, so a draft that omits it previews the wrong bucket. Resolved within the caller's component:create scope, the same set the create resolves it in."`
 		Location string `json:"location,omitempty" doc:"The location this component will sit at, by name or uuid. Resolved within the caller's location:read scope: a location out of scope is refused, never rendered."`
-		System   string `json:"system,omitempty" doc:"The system this component will belong to, by name or uuid. Resolved within the caller's system:read scope."`
+		System   string `json:"system,omitempty" doc:"The system this component will belong to, by name or uuid. Naming it requires system:update, exactly as the create does, because the create inserts that system's membership; it resolves within that scope, and system:read decides only whether the refusal may name the system."`
 	}
 }
 
@@ -132,21 +140,39 @@ type renderLocationLabelInput struct {
 }
 
 // registerComponentLabelDraft wires POST /components:renderLabel.
+//
+// It carries the create's conditional permission as well as its scopes (#713).
+// The system reference is the one field on this body that the create WRITES
+// THROUGH rather than only reads: naming it makes the create insert that
+// system's membership, which costs system:update (#707, ADR-0107). A draft that
+// asked for less than the create asks is a preview of a refusal, and the two
+// halves of the create's gate are both reachable that way: the permission (held
+// nowhere) and the scope (held, but not over this system). Both are rehearsed
+// here, in the create's own order, so the agreement between a preview and the
+// create it previews is the platform's property rather than the console's good
+// manners.
 func registerComponentLabelDraft(api huma.API, a *authenticator, gw storage.Gateway) {
-	huma.Register(api, a.gated(huma.Operation{
+	huma.Register(api, a.conditionalGated(a.gated(huma.Operation{
 		OperationID: "render-component-label",
 		Method:      http.MethodPost,
 		Path:        "/components:renderLabel",
 		Summary:     "Draft the name and label a component create would store",
-		Description: "Drafts the name and the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is READ (the lowest free number among the live siblings in the placement bucket) rather than allocated. That answer is provisional, so a form posts the NAME back as expected_name on the create and is refused (409) rather than silently renamed if another create takes the number or the type's stem moves first. Omitting name drafts the name the platform would mint, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the parent resolves within the caller's component:create scope and the location and system refs within location:read and system:read, because the rendered string can carry their labels. Omitting parent is the parentless bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403): a form must not preview a bucket its create declines, and the previewed ordinal reports which names that bucket already holds.",
-	}, "component", "create"), func(ctx context.Context, in *renderComponentLabelInput) (*draftLabelOutput, error) {
+		Description: "Drafts the name and the label a component create would stamp, for the classification and placement a create form already holds, without creating anything. It allocates no ordinal, opens no write transaction and takes no advisory lock, which is what separates it from a preview that mints: the ordinal is READ (the lowest free number among the live siblings in the placement bucket) rather than allocated. That answer is provisional, so a form posts the NAME back as expected_name on the create and is refused (409) rather than silently renamed if another create takes the number or the type's stem moves first. Omitting name drafts the name the platform would mint, and refuses (422) exactly where a nameless create would. Gated by component:create, the permission the create it precedes needs; the parent resolves within the caller's component:create scope and the location ref within location:read, because the rendered string can carry that label. Naming a system additionally requires system:update and resolves within that scope, the same as the create, because the create binds that system's membership: a preview is never served for a bind the create would refuse. Omitting parent is the parentless bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403): a form must not preview a bucket its create declines, and the previewed ordinal reports which names that bucket already holds.",
+	}, "component", "create"), "system", "update"), func(ctx context.Context, in *renderComponentLabelInput) (*draftLabelOutput, error) {
+		// The same body-conditional gate the create carries, checked here for the
+		// same reason: middleware cannot see the body, and a draft that names no
+		// system previews no membership and costs component:create alone.
+		if in.Body.System != "" && !a.allows(ctx, "system", "update") {
+			return nil, huma.Error403Forbidden(ErrSystemBindNeedsUpdate)
+		}
 		d, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 			ProductName:  in.Body.Product,
 			Name:         in.Body.Name,
 			ParentName:   in.Body.Parent,
 			LocationName: in.Body.Location,
 			SystemName:   in.Body.System,
-		}, a.scopeFor(ctx, "component", "create"), a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "system", "read"))
+		}, a.scopeFor(ctx, "component", "create"), a.scopeFor(ctx, "location", "read"),
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}

@@ -136,3 +136,103 @@ describe("Command Types page", () => {
     expect(within(picker).getByRole("group", { name: "Metrics" })).toBeTruthy();
   });
 });
+
+// #718: the settle window is a decision a settleable type asks for, so the console
+// must stop answering it. The form used to seed the field with "0" and fold it with
+// `Number(settle()) || 0`, so a type naming a target arm was created with a window
+// judged at the instant of issue that nobody typed. Zero itself stays legal
+// (ADR-0108 makes it a statement of intent, and reboot ships it); what changes is
+// that the operator has to state it.
+describe("Command Types settle window", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  const openCreate = async () => {
+    mount(admin);
+    fireEvent.click(screen.getByText("New command type"));
+    return await waitFor(() => screen.getByLabelText("Settle window (seconds)") as HTMLInputElement);
+  };
+  const submitBtn = () => screen.getByText("Create command type").closest("button") as HTMLButtonElement;
+  const nameField = () => screen.getByLabelText("Name") as HTMLInputElement;
+  const targetPicker = () => screen.getByLabelText("Target") as HTMLSelectElement;
+
+  it("does not volunteer a window on the create form", async () => {
+    const settle = await openCreate();
+    expect(settle.value).toBe("");
+  });
+
+  it("refuses to create a settleable type until the window is stated", async () => {
+    const settle = await openCreate();
+    fireEvent.input(nameField(), { target: { value: "set-power" } });
+    // No target arm yet: fire-and-forget, and nothing is owed.
+    expect(submitBtn().disabled).toBe(false);
+    fireEvent.change(targetPicker(), { target: { value: "property:audio-level" } });
+    expect(submitBtn().disabled).toBe(true);
+    expect(screen.getByText(/needs a settle window/i)).toBeTruthy();
+    fireEvent.input(settle, { target: { value: "15" } });
+    expect(submitBtn().disabled).toBe(false);
+  });
+
+  it("creates a fire-and-forget type with no window on the wire at all", async () => {
+    let post: Request | undefined;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST") {
+        post = req.clone();
+        return new Response(JSON.stringify({ name: "restart", settle_window_seconds: 0, official: false }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ command_types: seed }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    await openCreate();
+    fireEvent.input(nameField(), { target: { value: "restart" } });
+    fireEvent.click(submitBtn());
+    await waitFor(() => expect(post).toBeTruthy());
+    expect(Object.keys((await post!.json()) as object)).not.toContain("settle_window_seconds");
+  });
+
+  it("accepts a stated zero beside a target and says what zero does there", async () => {
+    const settle = await openCreate();
+    fireEvent.input(nameField(), { target: { value: "set-power" } });
+    fireEvent.change(targetPicker(), { target: { value: "property:audio-level" } });
+    fireEvent.input(settle, { target: { value: "0" } });
+    expect(submitBtn().disabled).toBe(false);
+    expect(screen.getByText(/judged at the moment it is issued/i)).toBeTruthy();
+  });
+
+  // The server refuses a negative with a 422 (#718's first half). `min="0"` cannot
+  // refuse it here: the drawer's action bar sits outside the <form>, so native
+  // constraint validation never runs on the path the operator actually uses.
+  it("refuses a negative window before the server does", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const settle = await openCreate();
+    fireEvent.input(nameField(), { target: { value: "set-power" } });
+    fireEvent.input(settle, { target: { value: "-5" } });
+    expect(submitBtn().disabled).toBe(true);
+    expect(screen.getByText(/cannot be negative/i)).toBeTruthy();
+    fireEvent.click(submitBtn());
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("refuses to save a settleable type whose window has been cleared", async () => {
+    mount(admin);
+    fireEvent.click(screen.getByText("Set volume"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    const settle = within(blade).getByLabelText("Settle window (seconds)") as HTMLInputElement;
+    expect(settle.value).toBe("5");
+    const save = () => within(blade).getByText("Save").closest("button") as HTMLButtonElement;
+    expect(save().disabled).toBe(false);
+    fireEvent.input(settle, { target: { value: "" } });
+    expect(save().disabled).toBe(true);
+    expect(within(blade).getByText(/needs a settle window/i)).toBeTruthy();
+  });
+});

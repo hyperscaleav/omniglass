@@ -366,7 +366,7 @@ type Gateway interface {
 	// takes, in the same order, because it resolves the same references: the
 	// parent decides the bucket the ordinal is read from, and the location and
 	// system decide what the rendered string may contain.
-	RenderComponentDraftLabel(ctx context.Context, draft ComponentLabelDraft, create, locationRead, systemRead scope.Set) (DraftLabel, error)
+	RenderComponentDraftLabel(ctx context.Context, draft ComponentLabelDraft, create, locationRead, systemRead, systemUpdate scope.Set) (DraftLabel, error)
 	RenderSystemDraftLabel(ctx context.Context, draft SystemLabelDraft, create, locationRead scope.Set) (DraftLabel, error)
 	RenderLocationDraftLabel(ctx context.Context, draft LocationLabelDraft, create scope.Set) (DraftLabel, error)
 

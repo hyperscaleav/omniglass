@@ -59,7 +59,7 @@ type createCommandTypeInput struct {
 		DisplayName         string `json:"display_name,omitempty" doc:"A human label"`
 		Description         string `json:"description,omitempty" doc:"What the command does"`
 		ParamsSchema        any    `json:"params_schema,omitempty" doc:"A JSON Schema fragment for the params"`
-		SettleWindowSeconds int    `json:"settle_window_seconds,omitempty" doc:"The actuation window in seconds (0 = fire-and-forget)"`
+		SettleWindowSeconds int    `json:"settle_window_seconds,omitempty" minimum:"0" doc:"The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so."`
 		TargetPropertyType  string `json:"target_property_type,omitempty" doc:"The property this command sets, for settlement (at most one target arm)"`
 		TargetMetricType    string `json:"target_metric_type,omitempty" doc:"The metric this command sets, for settlement (at most one target arm)"`
 	}
@@ -71,7 +71,7 @@ type updateCommandTypeInput struct {
 		DisplayName         *string `json:"display_name,omitempty" doc:"A human label"`
 		Description         *string `json:"description,omitempty" doc:"What the command does"`
 		ParamsSchema        any     `json:"params_schema,omitempty" doc:"A JSON Schema fragment (replaces wholesale)"`
-		SettleWindowSeconds *int    `json:"settle_window_seconds,omitempty" doc:"The actuation window in seconds"`
+		SettleWindowSeconds *int    `json:"settle_window_seconds,omitempty" minimum:"0" doc:"The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)"`
 		TargetPropertyType  *string `json:"target_property_type,omitempty" doc:"The property this command sets (empty clears it; a non-empty arm clears the other)"`
 		TargetMetricType    *string `json:"target_metric_type,omitempty" doc:"The metric this command sets (empty clears it; a non-empty arm clears the other)"`
 	}

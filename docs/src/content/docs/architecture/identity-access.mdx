@@ -174,7 +174,7 @@ viewer  <-  operator  <-  admin  <-  owner
 |---|---|
 | `viewer` | Read every operator-facing resource within scope. The IAM directories (`principal`, `role`, `principal_group`) are **not** operator-facing: their reads are admin-tier (`<resource>:read:admin`), so `viewer`'s `*:read` does not reach the Users, Roles, or Groups pages ([ADR-0023](/architecture/decisions/#adr-0023-the-iam-directory-reads-principal-role-principal_group-are-admin-tier)). Secrets are likewise off the floor: `secret` is a **sensitive resource** a bare `*` does not reach, so `viewer` reads no secret directory ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)). |
 | `operator` | viewer + create/update on components, interfaces, rules, config; **read, reveal, create, and update the operational secrets in scope** (`secret:read,reveal,create,update`); ack/snooze/resolve alarms. Secret **delete** stays admin-only, and an **admin-sensitive** secret (a platform credential, `admin_sensitive = true`) is invisible in the directory and a non-disclosing 404 on reveal regardless of scope, so an operator sees device secrets but never a platform key at the same scope ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)). Creating an admin-sensitive secret needs the admin tier, so an operator can mint only operational ones. |
-| `deploy` | viewer + create/update on locations, systems, and components (the integrator / field-tech role, typically granted with the `subtree_excl_root` operator to build out a subtree without editing its root). No delete. Carries the same scoped `secret:read,reveal,create,update` as `operator`, for the device secrets a field tech sets up during a site build. |
+| `deploy` | viewer + create/update on locations, systems, and components (the integrator / field-tech role, typically granted with the `subtree_excl_root` operator to build out a subtree without editing its root). No delete. **A grant of it reaches one tier, the tier it is scoped at:** the permission set names three tiers, but a location-kind grant fills no system-tier or component-tier scope at all (not even to read one), because a scope kind contains only its own tier until the cross-tier expansion lands ([#10](https://github.com/hyperscaleav/omniglass/issues/10)). Building out a building therefore takes a location-scoped, a system-scoped and a component-scoped grant of this role together, which is the shape `internal/api/placement_scope_e2e_test.go` uses; the reach is pinned by test in `internal/seed/role_reach_test.go`, and the role's own description says so. Carries the same scoped `secret:read,reveal,create,update` as `operator`, for the device secrets a field tech sets up during a site build. |
 | `admin` | operator + delete on managed resources + manage IAM (principals, credentials, grants, custom roles) + curate registries (`<registry>:create`) + **`platform:*`**, the install-wide authority a write at the cascade's `platform` tier needs ([below](#install-wide-authority-is-not-estate-scope)); `operator` and `deploy` hold no `platform` capability, so an all-scoped operator runs every site without being able to change the install-wide value under them. Holds `secret:>` (the tail wildcard, not the two-token `secret:*`), so it reaches the **admin-sensitive** secret tier (`secret:reveal:admin`) that a two-token wildcard cannot, and sees and reveals platform credentials. IAM management is meaningful only from an `@ all` grant (a scoped `admin @ subtree` keeps the operator powers within its subtree but gets no IAM); registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. Deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles. |
 | `owner` | The break-glass superuser (`>`, the tail wildcard, covering every capability at every tier, including admin-sensitive ones and future resources). The unkillable role: at least one active `owner@all` grant must exist at all times (enforced by DB trigger), and an owner account cannot be impersonated. The bootstrap creates the first owner. |
 
@@ -302,8 +302,9 @@ than a new scope kind or boolean modifiers, so it composes with the additive-gra
 | `self` | = | **exactly** the root row, no descendants | read / update / delete (**not** create: no children) |
 
 `subtree` is the ordinary case. `subtree_excl_root` is the integrator / deploy grant: `deploy @
-location:room-42 (>)` lets a field tech add and edit children inside room-42 without renaming or deleting
-room-42 itself; it narrows only the **modify** actions, so a `PATCH` on the root is the
+location:room-42 (>)` lets a field tech add and edit the LOCATIONS under room-42 without renaming or
+deleting room-42 itself (the tier is the grant's own kind: the systems and components sitting in
+room-42 need their own grants, see the role table above); it narrows only the **modify** actions, so a `PATCH` on the root is the
 readable-but-out-of-write-scope **403** while a `POST` under it and a `PATCH` on a descendant succeed.
 `self` is a leaf-lock on one node: exactly its own row for read, update, and delete, and **not**
 create-placement, so `operator @ location:room-42 (=)` sees and edits only room-42 and a `POST` under it is
@@ -487,6 +488,13 @@ promise:
   out systems and their membership. The console does not offer the picker to a principal that cannot
   use it, and the API's refusal names the permission, so the narrowing is met before the form is
   filled in rather than as a 403 after it.
+
+  The **`:renderLabel` draft resolves that same reference in that same set**
+  ([#713](https://github.com/hyperscaleav/omniglass/issues/713)). A preview and the create it
+  previews agree on every refusal, and the agreement is the platform's rather than the console's: a
+  draft that resolved the system in `system:read` alone served a rendered label, assembled from that
+  system's own type, for a create the platform then refused. The draft carries the create's
+  conditional permission as well as its scope, so both halves of the gate rehearse.
 
 A guard inside the same primitive panics if the caller's scope was resolved for a resource that does
 not cover the config being checked against, catching a tier mismatch (a component-tier scope compared

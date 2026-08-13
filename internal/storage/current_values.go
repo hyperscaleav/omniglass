@@ -92,6 +92,17 @@ func (p *PG) LatestValue(ctx context.Context, ownerKind, ownerID, key, instance,
 // read many provenances without re-checking each time. ts desc, id desc: the
 // value's own time orders the series and the row id breaks same-instant ties,
 // the same rule LatestProperty applies.
+//
+// The tiebreak is INSERTION ORDER, and deliberately: `property.id` is a bigint
+// identity column, so `id desc` is the sequence descending, not an arbitrary
+// identifier (#712 read this as a random uuid and filed a nondeterminism that
+// does not exist; series_order_test.go asserts the column's shape out of the
+// live catalog so a change to it fails loudly rather than quietly making that
+// reading true). `ts` LEADS because the observed lane accepts a caller-supplied
+// timestamp, so a late-arriving older sample must not become current merely by
+// being written last; the cost of that ordering is that a database clock
+// stepping backwards between two writes to one series resolves to the
+// earlier-written row, which no tiebreak can reach, because there is no tie.
 // ownerID is resolved once here, via ownerArcValueInScope (uuid-or-name,
 // ADR-0062; ambiguity judged within s, ruling 2, #627): both of this
 // function's callers (Reconciliation, LatestValue) already scope-checked the

@@ -198,3 +198,57 @@ func TestTheComponentCreateWasTheOnlySystemWriteALocationGrantCouldReach(t *test
 	// Nothing was written.
 	f.c.do(f.builder, http.MethodGet, "/components/panel", nil, http.StatusNotFound)
 }
+
+// TestALocationGrantWritesNoComponentEither is the third tier of the same
+// claim, and the one no test drove (#714). The description said a location
+// grant adds "rooms, systems, and components"; the system half is refuted
+// above, and this is the component half, driven the same way and refused the
+// same way, so the sentence in internal/seed/roles.yaml is now backed by all
+// three of the things it talks about rather than one of them.
+func TestALocationGrantWritesNoComponentEither(t *testing.T) {
+	f := newLocationGrantFixture(t)
+
+	// The devseed shape, with its single grant: it cannot even SEE a component
+	// in the wing it is scoped to, which is the part an admin granting this role
+	// is least likely to expect.
+	if names := listNames(t, f.c, f.techEast, "/components"); len(names) != 0 {
+		t.Errorf("tech-east lists components %v, want none: a location-kind grant fills no component-tier scope", names)
+	}
+	f.c.do(f.techEast, http.MethodGet, "/components/rack", nil, http.StatusNotFound)
+
+	// With the read floor in place, so the refusals below are about the write
+	// scope alone rather than about visibility.
+	f.c.do(f.floored, http.MethodGet, "/components/rack", nil, http.StatusOK)
+
+	// Create, at its own location and under a component it can read: both
+	// refused, the first because a parentless component needs an all-scoped
+	// create grant, the second because the parent resolves in a component:create
+	// scope that is empty.
+	f.c.do(f.floored, http.MethodPost, "/components", map[string]any{
+		"name": "panel-a", "product": "generic-device", "location": "annex",
+	}, http.StatusForbidden)
+	f.c.do(f.floored, http.MethodPost, "/components", map[string]any{
+		"name": "panel-b", "product": "generic-device", "parent": f.rackID,
+	}, http.StatusForbidden)
+
+	// Edit, rename, move: readable, so the read half resolves and the action
+	// half does not.
+	f.c.do(f.floored, http.MethodPatch, "/components/rack", map[string]any{"display_name": "Renamed"}, http.StatusForbidden)
+	f.c.do(f.floored, http.MethodPost, "/components/rack:rename", map[string]any{"name": "rack-renamed"}, http.StatusForbidden)
+	f.c.do(f.floored, http.MethodPost, "/components/rack:move", map[string]any{"location": "annex"}, http.StatusForbidden)
+
+	// The one thing the role's description promises that is TRUE: the location
+	// tier, minus the scope root, which is what "under only" means.
+	f.c.do(f.floored, http.MethodPost, "/locations", map[string]any{
+		"name": "closet", "location_type": "room", "parent": "annex",
+	}, http.StatusCreated)
+	f.c.do(f.floored, http.MethodPatch, "/locations/east", map[string]any{"display_name": "Renamed root"}, http.StatusForbidden)
+
+	// The owner runs the identical bodies and is served on each, so every
+	// refusal above is a scope boundary rather than a broken route.
+	f.c.do(f.owner, http.MethodPost, "/components", map[string]any{
+		"name": "panel-a", "product": "generic-device", "location": "annex",
+	}, http.StatusCreated)
+	f.c.do(f.owner, http.MethodPatch, "/components/rack", map[string]any{"display_name": "Renamed"}, http.StatusOK)
+	f.c.do(f.owner, http.MethodPost, "/components/rack:move", map[string]any{"location": "annex"}, http.StatusOK)
+}

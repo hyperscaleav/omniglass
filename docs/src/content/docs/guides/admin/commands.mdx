@@ -39,12 +39,23 @@ visible to every reader; the write gates decide who may change it.
   registered property or metric type.
 - The **settle window** is the driver's fact about actuation time: how long the device is given
   to act before a mismatch between what was told and what is observed counts as failure. Within
-  the window, a difference is not yet a verdict.
+  the window, a difference is not yet a verdict. It is a duration, so it has no negative: the
+  field refuses one where you type it, and the API refuses one with a 422.
+- **The window belongs to the target, so the console asks for it only where it decides
+  something.** A **settleable** type must state one: the create form starts the field blank, and
+  both the create and a blade's Save are refused while it is empty beside a target arm. **0** is
+  a legitimate answer there, and the field says what it
+  does before you commit to it (the command is judged at the moment it is issued, settling only
+  if the target already reports what it was told, and failing if it does not); it is an answer
+  you give rather than one the form gives for you
+  ([ADR-0108](/architecture/decisions/#adr-0108-settlement-reads-one-clock-and-a-zero-window-is-a-statement-of-intent)).
+  A **fire-and-forget** type never reaches settlement at all, so leave the field blank: the type
+  records a window of 0 and nothing ever consults it. That is `reboot`'s shape.
 - **New command type** (with `command_type:create`, granted to operators) opens a create
   **drawer**: give it a **name** (a single lowercase kebab segment, for example `set-input` or
   `reboot`), optionally add a **display name** and **description**, pick a **target** (or None),
-  and set the **settle window**. An invalid name (an uppercase letter, an underscore, a leading
-  hyphen, a dot) is refused with a message.
+  and, if you picked one, state the **settle window**. An invalid name (an uppercase letter, an
+  underscore, a leading hyphen, a dot) is refused with a message.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with
   `command_type:update`) edits the display name, description, target, and settle window; the
   name is fixed at creation, since it is what every invocation is typed by. **Delete** (with

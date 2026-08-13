@@ -264,7 +264,7 @@ func TestTheDraftAndTheCreateRefuseTheSamePlacement(t *testing.T) {
 	} {
 		_, draftErr := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 			ProductName: qm55, Name: "panel", LocationName: tc.location, SystemName: tc.system,
-		}, all, narrow, narrow)
+		}, all, narrow, narrow, narrow)
 		spec := storage.ComponentSpec{Name: "panel", ProductName: strptr(qm55)}
 		if tc.location != "" {
 			spec.LocationName = &tc.location
@@ -276,5 +276,72 @@ func TestTheDraftAndTheCreateRefuseTheSamePlacement(t *testing.T) {
 		if !errors.Is(draftErr, tc.want) || !errors.Is(createErr, tc.want) {
 			t.Errorf("%s: draft = %v, create = %v, want both %v", tc.what, draftErr, createErr, tc.want)
 		}
+	}
+}
+
+// TestTheDraftResolvesTheSystemInTheScopeTheBindRequires is #713 at the
+// gateway: the preview resolves the same reference the create binds, in the
+// same set, so the two cannot disagree about a refusal.
+//
+// The pairing this drives is the ordinary one, not an exotic fixture:
+// applicableKinds("system") is {"system"} alone and the cross-tier expansion is
+// unbuilt (#10), so a location-scoped deploy grant beside the all-scoped viewer
+// floor resolves to exactly "reads every system, updates none". Resolving the
+// draft's system in the READ set alone served that caller a preview, assembled
+// from the system's own type label, for a create the platform then refused.
+func TestTheDraftResolvesTheSystemInTheScopeTheBindRequires(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	// A rule that reads the system's type label, so the answer actually carries
+	// the fact the refusal withholds.
+	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.SystemTypeLabel}} {{.TypeName}}"); err != nil {
+		t.Fatalf("set the component rule: %v", err)
+	}
+	room := makeRoomWithLabel(t, gw, ctx, "room-draft-bind", "Draft Bind")
+	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
+		Name: "board-draft-bind", SystemTypeID: strptr("board"), LocationName: &room.Name,
+	}, all, all); err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	none := scope.Set{}
+	draft := storage.ComponentLabelDraft{ProductName: qm55, Name: "panel", SystemName: "board-draft-bind"}
+	spec := func(name string) storage.ComponentSpec {
+		return storage.ComponentSpec{Name: name, ProductName: strptr(qm55), SystemName: strptr("board-draft-bind")}
+	}
+
+	// Readable and not updatable: the draft refuses by AUTHORITY, the same
+	// sentinel the create raises, and must not also satisfy the not-found one.
+	_, draftErr := gw.RenderComponentDraftLabel(ctx, draft, all, all, all, none)
+	_, createErr := gw.CreateComponent(ctx, "", spec("panel-authority"), all, all, all, none)
+	if !errors.Is(draftErr, storage.ErrSystemBindForbidden) || !errors.Is(createErr, storage.ErrSystemBindForbidden) {
+		t.Errorf("readable system outside the update scope: draft = %v, create = %v, want both ErrSystemBindForbidden", draftErr, createErr)
+	}
+	if errors.Is(draftErr, storage.ErrSystemNotFound) {
+		t.Errorf("the draft's refusal also matched ErrSystemNotFound: it still denies the row's existence")
+	}
+
+	// Not readable either: unchanged on both, the non-disclosing not-found,
+	// because that caller must not learn the row is there.
+	_, draftErr = gw.RenderComponentDraftLabel(ctx, draft, all, all, none, none)
+	_, createErr = gw.CreateComponent(ctx, "", spec("panel-hidden"), all, all, none, none)
+	if !errors.Is(draftErr, storage.ErrSystemNotFound) || !errors.Is(createErr, storage.ErrSystemNotFound) {
+		t.Errorf("unreadable system: draft = %v, create = %v, want both the non-disclosing ErrSystemNotFound", draftErr, createErr)
+	}
+
+	// Both sets covering it: the draft renders, and what it renders is the label
+	// the create then stores, so the refusals above are scope boundaries rather
+	// than a draft that never worked.
+	d, err := gw.RenderComponentDraftLabel(ctx, draft, all, all, all, all)
+	if err != nil {
+		t.Fatalf("draft with both scopes: %v", err)
+	}
+	c, err := gw.CreateComponent(ctx, "", spec("panel"), all, all, all, all)
+	if err != nil {
+		t.Fatalf("create with both scopes: %v", err)
+	}
+	if d.Label == "" || d.Label != c.DisplayName {
+		t.Errorf("drafted label %q, stored %q: the form promised a label the create did not write", d.Label, c.DisplayName)
+	}
+	if !strings.Contains(d.Label, "Boardroom") {
+		t.Errorf("drafted label %q does not carry the system type's label, so the refusals above withhold nothing", d.Label)
 	}
 }

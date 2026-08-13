@@ -4205,3 +4205,89 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   a 1680 viewport now asks 1231px of a 1254px card where it asked 1300px. Systems still scrolls there
   (1301px) and Locations still scrolls at 1280 (991px of 974px), and nothing truncates on any page at
   1280, 1366 or 1680.
+
+- **A preview is refused wherever the create it previews is refused.** `POST /components:renderLabel`
+  resolved its `system` reference in `system:read` while the create beside it had moved to
+  `system:update`, so a caller holding the read floor and no membership authority was served a
+  drafted label for a create the platform then refused, and the label it was served carried that
+  system's own type name. Nothing hit it in practice, because the console does not offer the picker
+  to a principal that cannot use it, which is the agreement being kept by the caller's good behaviour
+  rather than by the platform. The draft now resolves that reference through the create's own
+  resolver, in `system:read` and `system:update`, and carries the create's conditional
+  `system:update` permission, so both halves of the gate rehearse and both routes answer the same
+  sentinel: 403 naming the authority for a readable system, the non-disclosing 422 for one the caller
+  cannot see. The LOCATION reference on the same two routes was checked in the same pass and is
+  already aligned at `location:read`, deliberately, because a location is read and rendered into the
+  label rather than written
+  ([ADR-0107](/architecture/decisions/#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs),
+  [ADR-0104](/architecture/decisions/#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)).
+
+- **A settle window is a duration, and the platform now says so.** `settle_window_seconds` had a
+  default of 0 in four places and a floor in none, so a negative one was accepted by the column, the
+  API body, the console and the seed loader alike. It is not a shorter wait: `Settle` tests
+  `windowSeconds > 0`, so -5 behaves exactly as 0 does, which made it a value an operator could set,
+  read back on the row, and never see honoured on any command of that type. The schema now floors the
+  field at 0, so the generated client and CLI carry the floor too, and the gateway refuses one on
+  create, on update and on the boot-seed upsert, the last naming the row the way its target refusals
+  already do. Zero stays legal and unchanged: it is the documented way to say "settle immediately"
+  ([ADR-0108](/architecture/decisions/#adr-0108-settlement-reads-one-clock-and-a-zero-window-is-a-statement-of-intent)),
+  and it is what the shipped `reboot` carries. In the same pass, the settle-check's comment claiming
+  its `now()` is strictly later than the intended row's `ts` was corrected: READ COMMITTED does not
+  provide that ordering, and while no verdict is wrong today (a negative delta is `pending`, and the
+  zero case reads no timestamp at all), an invariant the isolation level does not give is one a later
+  change can lean on.
+
+- **The deploy role stops claiming a reach a location grant has never had.** Its operator-facing
+  description, rendered in the Roles view and in the grant builder's tooltips, said that granted at a
+  location it "builds out and edits everything inside a subtree (add rooms, systems, and
+  components)". It does one of those three. A grant contributes to a resolved scope only when its
+  scope kind can CONTAIN the resource, and each tree tier is contained by its own kind alone, so a
+  location-kind grant fills no system-tier and no component-tier scope whatever actions the role
+  carries: the shipped `tech-east` principal cannot create a system in its own building, and cannot
+  read a component in it either. The gap was silent and expensive in exactly the way a stale sentence
+  is: an admin granted the role expecting one thing, the console offered the surfaces, and the server
+  refused. The description now says what the grant does, and two tests hold it there: a pure one over
+  the embedded `roles.yaml` that computes the whole reach matrix through the same resolver the
+  gateway uses (so a cross-tier rule landing shows up as a failing expectation rather than as
+  prose going stale), and an end-to-end one that drives the component tier the way the system tier
+  was already driven. The capability itself, a scope that spans tiers, is
+  [#10](https://github.com/hyperscaleav/omniglass/issues/10) and unbuilt; this slice is the claim.
+
+- **A series tiebreak is checked against the database rather than against a reading of the code.** A
+  single observed flake was filed as the series resolver breaking a `ts` tie on a random uuid, with
+  the mechanism read off the resolver rather than off the failure. The premise does not hold, and the
+  tiebreak the issue asked for is the one already there: `property.id` is a bigint identity column,
+  so `order by ts desc, id desc` breaks a tie on insertion order, and the test the flake came from
+  cannot tie at all, since every declared write is its own transaction and `ts` defaults to
+  `transaction_timestamp`. No fix shipped for a mechanism that does not exist. What shipped is the
+  proof: a test that reads the column's shape out of the live catalog, so converting it to a random
+  uuid fails loudly with the reasoning named, and that drives a genuine tie the public API cannot
+  produce, resolving it to the later insert twenty times over. The ordering's one real dependency is
+  now stated where it is relied on: `ts` leads because the observed lane accepts a caller-supplied
+  timestamp, so a clock stepping backwards between two writes to one series resolves to the
+  earlier-written row, which no tiebreak can reach. Sixty-five repeats of the original test, forty of
+  them under concurrent package load, did not reproduce the failure.
+
+- **The console stops answering a question only the operator can answer.** A command type naming a
+  target arm is asking to be settled against a reported value, so its settle window decides when a
+  difference becomes a verdict. The create form seeded that field with `0` and folded it with
+  `Number(settle()) || 0`, so an untouched field, a typo and a deliberate zero all reached the
+  server as the same explicit `0`: a settleable type judged at the instant of issue, which nobody
+  chose and no refusal announced. The value was never the defect. Zero beside a target is a
+  statement of intent, the documented way to say "judge it now"
+  ([ADR-0108](/architecture/decisions/#adr-0108-settlement-reads-one-clock-and-a-zero-window-is-a-statement-of-intent)),
+  and refusing the combination at the gateway would have reversed a decision accepted the day
+  before and broken its own clock regression test, whose observable does not exist at a positive
+  window. The default was the defect. The field now starts blank on the create form and the window
+  is read through one rule both write surfaces share: a settleable type must state its window, and
+  the create and the blade's Save are refused until it does; a fire-and-forget type sends no window
+  at all and takes the column's own 0, which is `reboot`'s shape unchanged. Unstated survives as
+  far as the body, where it is a field that is simply not sent, so it can no longer be confused with
+  a chosen zero. What a stated zero does is now legible where it is typed, next to the field rather
+  than only in the API reference, and a typed negative is refused there too: `min="0"` had been on
+  that input since the command pillar landed and refuses nothing, because both submit paths are
+  JavaScript (the drawer's action bar and the blade's Save sit outside any form), so native
+  constraint validation never runs on the path an operator uses. The filed issue's own account of
+  the symptom was wrong and is corrected with it: a zero-window settleable command is `settled` when
+  the observed value already matches, `failed` when it differs, and `timed-out` only when nothing
+  has been observed, not `timed-out` unconditionally.
