@@ -258,8 +258,33 @@ and when survives the fix. Clearing one twice is a plain miss rather than a sile
 Both writes take effect immediately and completely: the room's verdict, the location above it, and the
 recorded history all move in the same transaction as the alarm. There is no wait and no refresh cycle.
 
-From the CLI: `omniglass component alarm list <name> [--include-cleared]`,
-`omniglass component alarm create <name> --severity <level> --message <text>`, and
+### Acknowledging: saying you have seen it
+
+**Acknowledging an alarm records that a human has looked at it, and changes nothing else.** The alarm
+stays exactly as raised as it was, the component stays exactly as broken, and no verdict moves.
+Acknowledging is not fixing; clearing is.
+
+That is why the two are independent, and the panel shows both facts at once:
+
+- an alarm nobody has looked at carries an **unacknowledged** chip, and the panel header counts them,
+  so the queue you actually work (raised, and nobody on it) is visible without opening each one;
+- an acknowledged alarm names **who** looked and **when**, and stays in the active list, because it
+  is still broken;
+- a cleared alarm that was **never acknowledged** says so in the history: it came and went with
+  nobody looking, which is worth spotting later.
+
+The **eye** button beside an active alarm acknowledges it. Unlike raising and clearing, it is
+available **without entering edit mode**: edit mode guards this component's own data, and an
+acknowledgement writes none of it. It needs the `alarm:acknowledge` permission, which the
+**Operator** role carries; a viewer sees the indicator and gets no button.
+
+Acknowledging twice is harmless. The first person and the first time are what the alarm keeps, so a
+second click (or a colleague reaching it a moment after you) changes nothing and is not an error.
+There is no un-acknowledge yet.
+
+From the CLI: `omniglass component alarm list <name> [--include-cleared] [--unacknowledged]`,
+`omniglass component alarm create <name> --severity <level> --message <text>`,
+`omniglass component alarm acknowledge <name> <id>`, and
 `omniglass component alarm delete <name> <id>`.
 
 ## Health on a system or location

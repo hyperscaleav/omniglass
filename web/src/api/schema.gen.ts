@@ -504,6 +504,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/alarms/{id}:acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acknowledge an alarm
+         * @description Records that a human has seen this alarm, and changes nothing else. The alarm stays exactly as raised as it was: acknowledging is not fixing, so health is NOT recomputed and cleared_at is untouched. Acknowledging is orthogonal to clearing in both directions, so a cleared alarm can still be acknowledged by whoever reviews the history, and clearing never acknowledges on an operator's behalf. Acknowledging twice is idempotent: the first person and the first time stay, and the no-op writes no second audit row. Gated by alarm:acknowledge, whose scope is resolved on the component tier from that permission (not from component:update); a component outside it is a non-disclosing 404.
+         */
+        post: operations["acknowledge-component-alarm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/commands:issue": {
         parameters: {
             query?: never;
@@ -3859,6 +3879,15 @@ export interface components {
              * @example /api/v1/schemas/AlarmBody.json
              */
             readonly $schema?: string;
+            /** @description Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised */
+            acknowledged: boolean;
+            /**
+             * Format: date-time
+             * @description When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at
+             */
+            acknowledged_at?: string;
+            /** @description Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name) */
+            acknowledged_by?: string;
             active: boolean;
             /**
              * Format: date-time
@@ -8461,6 +8490,8 @@ export interface operations {
             query?: {
                 /** @description Include cleared alarms, so the list is the history rather than what is wrong now */
                 include_cleared?: boolean;
+                /** @description Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended */
+                unacknowledged?: boolean;
             };
             header?: never;
             path: {
@@ -8547,6 +8578,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "acknowledge-component-alarm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
+                name: string;
+                /** @description The alarm id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlarmBody"];
+                };
             };
             /** @description Error */
             default: {

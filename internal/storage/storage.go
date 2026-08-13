@@ -655,7 +655,11 @@ type Gateway interface {
 	// transaction of the write that triggered it, never as a call of its own.
 	RaiseAlarm(ctx context.Context, actorID, componentName string, spec AlarmSpec) (*Alarm, error)
 	ClearAlarm(ctx context.Context, actorID, componentName, alarmID string) error
-	ListAlarms(ctx context.Context, componentName string, includeCleared bool) ([]Alarm, error)
+	// AcknowledgeAlarm records that a human has seen the incident. It is the one
+	// alarm write that does NOT recompute health: acknowledging is not fixing,
+	// and the raised state belongs to the condition, not to the person looking.
+	AcknowledgeAlarm(ctx context.Context, actorID, componentName, alarmID string) (*Alarm, error)
+	ListAlarms(ctx context.Context, componentName string, filter AlarmFilter) ([]Alarm, error)
 	// The health reads: the current verdict, why it is what it is, and the
 	// recorded transitions at or after since (a zero since is the whole history).
 	SystemHealth(ctx context.Context, systemName string, window time.Duration, read scope.Set) (*HealthReport, error)

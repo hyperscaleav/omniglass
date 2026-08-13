@@ -486,6 +486,23 @@ func generatedCommands() []*cobra.Command {
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "acknowledge <name> <id>",
+						Short:   "Acknowledge an alarm",
+						Long:    "Records that a human has seen this alarm, and changes nothing else. The alarm stays exactly as raised as it was: acknowledging is not fixing, so health is NOT recomputed and cleared_at is untouched. Acknowledging is orthogonal to clearing in both directions, so a cleared alarm can still be acknowledged by whoever reviews the history, and clearing never acknowledges on an operator's behalf. Acknowledging twice is idempotent: the first person and the first time stay, and the no-op writes no second audit row. Gated by alarm:acknowledge, whose scope is resolved on the component tier from that permission (not from component:update); a component outside it is a non-disclosing 404.",
+						Example: "  omniglass component alarm acknowledge <name> <id>",
+						Args:    cobra.ExactArgs(2),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/components/%s/alarms/%s:acknowledge", url.PathEscape(args[0]), url.PathEscape(args[1]))
+							return runAPICommand(cmd, "POST", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
 					var fDedupKey string
 					var fMessage string
 					var fSeverity string
@@ -538,6 +555,7 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var qIncludeCleared bool
+					var qUnacknowledged bool
 					cmd := &cobra.Command{
 						Use:     "list <name>",
 						Short:   "List a component's alarms",
@@ -550,6 +568,9 @@ func generatedCommands() []*cobra.Command {
 							if cmd.Flags().Changed("include-cleared") {
 								q.Set("include_cleared", fmt.Sprintf("%v", qIncludeCleared))
 							}
+							if cmd.Flags().Changed("unacknowledged") {
+								q.Set("unacknowledged", fmt.Sprintf("%v", qUnacknowledged))
+							}
 							if enc := q.Encode(); enc != "" {
 								path += "?" + enc
 							}
@@ -557,6 +578,7 @@ func generatedCommands() []*cobra.Command {
 						},
 					}
 					cmd.Flags().BoolVar(&qIncludeCleared, "include-cleared", false, "Include cleared alarms, so the list is the history rather than what is wrong now")
+					cmd.Flags().BoolVar(&qUnacknowledged, "unacknowledged", false, "Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended")
 					return cmd
 				}()
 				return cmd

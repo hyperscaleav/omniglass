@@ -48,6 +48,16 @@ components:
           format: uri
           readOnly: true
           type: string
+        acknowledged:
+          description: Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised
+          type: boolean
+        acknowledged_at:
+          description: When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at
+          format: date-time
+          type: string
+        acknowledged_by:
+          description: Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name)
+          type: string
         active:
           type: boolean
         cleared_at:
@@ -77,6 +87,7 @@ components:
         - dedup_key
         - raised_at
         - active
+        - acknowledged
       type: object
     AuditEventBody:
       additionalProperties: false
@@ -7219,6 +7230,13 @@ paths:
           schema:
             description: Include cleared alarms, so the list is the history rather than what is wrong now
             type: boolean
+        - description: Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended
+          explode: false
+          in: query
+          name: unacknowledged
+          schema:
+            description: Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended
+            type: boolean
       responses:
         "200":
           content:
@@ -7296,6 +7314,40 @@ paths:
           description: Error
       summary: Clear an alarm
       x-omniglass-permission: component:update
+  /components/{name}/alarms/{id}:acknowledge:
+    post:
+      description: "Records that a human has seen this alarm, and changes nothing else. The alarm stays exactly as raised as it was: acknowledging is not fixing, so health is NOT recomputed and cleared_at is untouched. Acknowledging is orthogonal to clearing in both directions, so a cleared alarm can still be acknowledged by whoever reviews the history, and clearing never acknowledges on an operator's behalf. Acknowledging twice is idempotent: the first person and the first time stay, and the no-op writes no second audit row. Gated by alarm:acknowledge, whose scope is resolved on the component tier from that permission (not from component:update); a component outside it is a non-disclosing 404."
+      operationId: acknowledge-component-alarm
+      parameters:
+        - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
+            type: string
+        - description: The alarm id
+          in: path
+          name: id
+          required: true
+          schema:
+            description: The alarm id
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlarmBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Acknowledge an alarm
+      x-omniglass-permission: alarm:acknowledge
   /components/{name}/commands:issue:
     post:
       description: Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue; an out-of-scope component is a non-disclosing 404.

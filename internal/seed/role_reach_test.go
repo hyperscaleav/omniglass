@@ -52,7 +52,7 @@ func TestALocationGrantOfDeployReachesOneTier(t *testing.T) {
 	// grant on an estate tier could plausibly contain. An action a role does not
 	// carry resolves empty for the same reason an unreachable tier does (the
 	// per-action union), and both are reach, so both are listed.
-	actions := []string{"read", "create", "update", "rename", "move", "delete", "reveal", "issue", "push"}
+	actions := []string{"read", "create", "update", "rename", "move", "delete", "reveal", "issue", "push", "acknowledge"}
 	want := map[string]string{
 		// The tier the grant is at: the whole of what it builds out.
 		"location": "read create update rename move",
@@ -68,6 +68,14 @@ func TestALocationGrantOfDeployReachesOneTier(t *testing.T) {
 		"component": "",
 		"interface": "",
 		"task":      "",
+		// An alarm resolves on the COMPONENT tier, so a location grant contains
+		// none of them either. This is why #728 gave `alarm:acknowledge` to
+		// `operator` and not to `deploy`: in the shape `deploy` is actually
+		// granted (devseed's location-scoped `tech-east`), the capability would
+		// resolve to nothing and acknowledge nothing, while the console's
+		// capability-only hint would still offer the button. Revisit with the
+		// cross-tier expansion (#10), not before.
+		"alarm": "",
 		// Unscoped: no scope kind contains a file, so a scoped grant fills
 		// nothing and the permission alone governs.
 		"file": "",

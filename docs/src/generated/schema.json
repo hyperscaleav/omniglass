@@ -3027,6 +3027,18 @@
       "name": "dedup_key",
       "type": "text",
       "nullable": false
+     },
+     {
+      "name": "acknowledged_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "acknowledged_by",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "principal.id"
      }
     ],
     "checks": [

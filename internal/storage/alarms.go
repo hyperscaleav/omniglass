@@ -34,10 +34,36 @@ type Alarm struct {
 	DedupKey  string
 	RaisedAt  time.Time
 	ClearedAt *time.Time
+	// AcknowledgedAt and AcknowledgedBy record that a HUMAN has seen this
+	// incident, and are ORTHOGONAL to ClearedAt (#728): raised state belongs to
+	// the condition, acknowledgement to a person, so an alarm can be raised and
+	// unacknowledged (the queue an operator works), raised and acknowledged
+	// (somebody is on it), or cleared having never been acknowledged.
+	// AcknowledgedBy is the acknowledger's label, not their uuid: it is what an
+	// operator surface renders (ADR-0062), and it reads empty once that
+	// principal is purged, while audit_log keeps the name it denormalized.
+	AcknowledgedAt *time.Time
+	AcknowledgedBy string
 }
 
 // Active reports whether the alarm is still raised.
 func (a Alarm) Active() bool { return a.ClearedAt == nil }
+
+// Acknowledged reports whether somebody has recorded that they have seen this
+// alarm. It says nothing about whether the alarm is still raised.
+func (a Alarm) Acknowledged() bool { return a.AcknowledgedAt != nil }
+
+// AlarmFilter narrows a component's alarm list. The zero value is what is wrong
+// now: active alarms, acknowledged or not.
+type AlarmFilter struct {
+	// IncludeCleared widens the list from the active set to the whole history.
+	IncludeCleared bool
+	// Unacknowledged keeps only the alarms nobody has looked at. With the zero
+	// IncludeCleared this is exactly "raised and unacknowledged", the queue an
+	// operator actually works; with IncludeCleared it also returns the incidents
+	// that came and went unattended.
+	Unacknowledged bool
+}
 
 // AlarmSpec is the raise input: a severity, an operator's note on what is
 // wrong, and the condition's dedup identity.
@@ -61,12 +87,17 @@ var (
 // violation surfacing as a 500.
 var alarmSeverities = map[string]bool{"info": true, "warning": true, "critical": true}
 
-const alarmCols = `a.id, a.component_id, a.severity, a.message, a.dedup_key, a.raised_at, a.cleared_at`
+// alarmCols is the read shape. acknowledged_by resolves through principal_label
+// rather than surfacing the uuid, so every alarm read hands the API an
+// operator-facing name (ADR-0062); it reads null once that principal is purged,
+// which is honest, and audit_log still names them.
+const alarmCols = `a.id, a.component_id, a.severity, a.message, a.dedup_key, a.raised_at, a.cleared_at,
+	a.acknowledged_at, coalesce(principal_label(a.acknowledged_by), '')`
 
 func scanAlarm(row pgx.Row) (*Alarm, error) {
 	var a Alarm
 	if err := row.Scan(&a.ID, &a.ComponentID, &a.Severity, &a.Message,
-		&a.DedupKey, &a.RaisedAt, &a.ClearedAt); err != nil {
+		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.AcknowledgedAt, &a.AcknowledgedBy); err != nil {
 		return nil, err
 	}
 	return &a, nil
@@ -202,10 +233,85 @@ func (p *PG) ClearAlarm(ctx context.Context, actorID, componentName, alarmID str
 	return nil
 }
 
-// ListAlarms returns a component's alarms, newest first: the active set by
-// default, the whole history when includeCleared. An unknown component is
-// ErrComponentNotFound rather than an empty list, so a typo is visible.
-func (p *PG) ListAlarms(ctx context.Context, componentName string, includeCleared bool) ([]Alarm, error) {
+// AcknowledgeAlarm records that a human has seen this alarm, and changes nothing
+// else. It deliberately does NOT recompute health: an alarm's raised state
+// belongs to its condition, so acknowledging is not fixing, and a recompute here
+// would stamp a transition at a moment when nothing about the estate changed.
+//
+// Acknowledging twice is IDEMPOTENT, not a refusal (#728). The recorded fact is
+// "a human has seen this", which is monotonic, and the FIRST sighting is the
+// operationally meaningful one (time to acknowledge), so a second call keeps the
+// first person and the first time, writes no second audit row, and returns the
+// row. It is the same shape as a re-raise of an open condition returning the
+// existing incident (ADR-0075): the no-op leg changed nothing, so it records
+// nothing.
+//
+// A cleared alarm is acknowledgeable too. The two facts are independent in both
+// directions, and the record of who read an incident outlives the fix exactly as
+// the row itself does.
+func (p *PG) AcknowledgeAlarm(ctx context.Context, actorID, componentName, alarmID string) (*Alarm, error) {
+	// A malformed id is a miss rather than a server error: the address simply does
+	// not name an alarm (see ClearAlarm).
+	if _, err := uuid.Parse(alarmID); err != nil {
+		return nil, ErrAlarmNotFound
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: begin acknowledge alarm: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Resolved once and bound by id below, never re-derived by name: under scoped
+	// name uniqueness (#627) a second lookup could land on a different row. An
+	// unknown component folds into the alarm miss, as it does in ClearAlarm, so a
+	// typo in either half of the address reads the same way.
+	component, err := scopedByName(ctx, tx, componentConfig, componentName)
+	if errors.Is(err, ErrComponentNotFound) {
+		return nil, ErrAlarmNotFound
+	} else if err != nil {
+		return nil, err
+	}
+
+	// The guarded conditional update: `acknowledged_at is null` is what makes the
+	// second acknowledgement a no-op rather than an overwrite, decided by the
+	// database rather than by a read-then-write this transaction could lose.
+	acked, err := scanAlarm(tx.QueryRow(ctx, `
+		update alarm a set acknowledged_at = now(), acknowledged_by = nullif($3, '')::uuid, updated_at = now()
+		where a.id = $1 and a.component_id = $2::uuid and a.acknowledged_at is null
+		returning `+alarmCols, alarmID, component.ID, actorID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Either the alarm is already acknowledged (the idempotent leg) or the id
+		// names no alarm on this component (a miss). One read tells them apart.
+		existing, gerr := scanAlarm(tx.QueryRow(ctx, `
+			select `+alarmCols+` from alarm a
+			where a.id = $1 and a.component_id = $2::uuid`, alarmID, component.ID))
+		if errors.Is(gerr, pgx.ErrNoRows) {
+			return nil, ErrAlarmNotFound
+		}
+		if gerr != nil {
+			return nil, fmt.Errorf("storage: read acknowledged alarm %s: %w", alarmID, gerr)
+		}
+		return existing, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: acknowledge alarm %s: %w", alarmID, err)
+	}
+
+	if err := writeAuditRes(ctx, tx, actorID, "acknowledge", "alarm", alarmID, nil,
+		map[string]any{"component": componentName, "acknowledged_at": acked.AcknowledgedAt}); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("storage: commit acknowledge alarm: %w", err)
+	}
+	return acked, nil
+}
+
+// ListAlarms returns a component's alarms, newest first: what is wrong now by
+// default, the whole history with IncludeCleared, and only what nobody has looked
+// at with Unacknowledged. An unknown component is ErrComponentNotFound rather
+// than an empty list, so a typo is visible.
+func (p *PG) ListAlarms(ctx context.Context, componentName string, filter AlarmFilter) ([]Alarm, error) {
 	component, err := scopedByName(ctx, p.pool, componentConfig, componentName)
 	if err != nil {
 		return nil, err
@@ -214,7 +320,8 @@ func (p *PG) ListAlarms(ctx context.Context, componentName string, includeCleare
 		select `+alarmCols+`
 		from alarm a
 		where a.component_id = $1::uuid and ($2 or a.cleared_at is null)
-		order by a.raised_at desc, a.id desc`, component.ID, includeCleared)
+		  and (not $3 or a.acknowledged_at is null)
+		order by a.raised_at desc, a.id desc`, component.ID, filter.IncludeCleared, filter.Unacknowledged)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list alarms %q: %w", componentName, err)
 	}

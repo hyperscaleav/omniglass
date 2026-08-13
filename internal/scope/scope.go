@@ -177,7 +177,14 @@ func applicableKinds(resource string) map[string]bool {
 		return map[string]bool{"location": true}
 	case "system":
 		return map[string]bool{"system": true}
-	case "component", "interface", "task":
+	case "component", "interface", "task", "alarm":
+		// An alarm hangs off a component (the thin-cut owner), so the component
+		// tier is what can contain it, exactly as for an interface or a task. It
+		// gets its own case rather than borrowing "component" because the ACTION
+		// differs: an acknowledgement resolves from grants carrying
+		// alarm:acknowledge, not from the component-update scope, so a role that
+		// may acknowledge without editing components resolves correctly and a
+		// wide component read never widens what may be acknowledged.
 		return map[string]bool{"component": true}
 	case "secret", "variable", "field", "telemetry":
 		// A secret, variable, or field value is owned on the exclusive arc

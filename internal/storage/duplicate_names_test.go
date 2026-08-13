@@ -376,14 +376,14 @@ func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
 	if alarm.ComponentID != compA.ID {
 		t.Fatalf("alarm landed on %s, want %s", alarm.ComponentID, compA.ID)
 	}
-	aAlarms, err := gw.ListAlarms(ctx, compA.ID, true)
+	aAlarms, err := gw.ListAlarms(ctx, compA.ID, storage.AlarmFilter{IncludeCleared: true})
 	if err != nil {
 		t.Fatalf("list alarms compA by id: %v", err)
 	}
 	if len(aAlarms) != 1 {
 		t.Fatalf("compA alarms = %d, want 1", len(aAlarms))
 	}
-	bAlarms, err := gw.ListAlarms(ctx, compB.ID, true)
+	bAlarms, err := gw.ListAlarms(ctx, compB.ID, storage.AlarmFilter{IncludeCleared: true})
 	if err != nil {
 		t.Fatalf("list alarms compB by id: %v", err)
 	}

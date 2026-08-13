@@ -140,7 +140,7 @@ func measureRaiseClear(t *testing.T, gw storage.Gateway, c *querycount.Counter, 
 
 	// Read the open set BEFORE clearing, and outside the measured window, so the
 	// flatness case can prove the dimension it claims flatness in actually varied.
-	alarms, err := gw.ListAlarms(ctx, "bar-1", false)
+	alarms, err := gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{})
 	if err != nil {
 		t.Fatalf("list alarms: %v", err)
 	}

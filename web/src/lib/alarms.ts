@@ -49,6 +49,24 @@ export async function clearAlarm(name: string, id: string): Promise<void> {
   if (error) throw error;
 }
 
+// acknowledgeAlarm records that a human has seen this alarm. It is ORTHOGONAL to
+// clearing: the alarm stays exactly as raised as it was, no health is recomputed,
+// and the component is exactly as broken afterwards. Acknowledging is not fixing.
+export async function acknowledgeAlarm(name: string, id: string): Promise<Alarm> {
+  const { data, error } = await api.POST("/components/{name}/alarms/{id}:acknowledge", {
+    params: { path: { name, id } },
+  });
+  if (error) throw error;
+  return data as Alarm;
+}
+
+// unacknowledgedCount is the queue an operator actually works: raised, and nobody
+// has looked at it yet. Cleared alarms are excluded because the queue is about
+// what still needs somebody, not about the history.
+export function unacknowledgedCount(list: Alarm[]): number {
+  return list.filter((a) => a.active && !a.acknowledged).length;
+}
+
 // How bad it is, worst first. Used to order a list and to pick the alarm that best
 // explains an impaired role.
 export const SEVERITY_RANK: Record<string, number> = { critical: 0, warning: 1, info: 2 };

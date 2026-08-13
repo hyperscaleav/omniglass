@@ -379,6 +379,22 @@ Commands for the component resource
 
 Commands for the alarm resource
 
+#### `omniglass component alarm acknowledge`
+
+Acknowledge an alarm
+
+```
+omniglass component alarm acknowledge <name> <id>
+```
+
+Records that a human has seen this alarm, and changes nothing else. The alarm stays exactly as raised as it was: acknowledging is not fixing, so health is NOT recomputed and cleared_at is untouched. Acknowledging is orthogonal to clearing in both directions, so a cleared alarm can still be acknowledged by whoever reviews the history, and clearing never acknowledges on an operator's behalf. Acknowledging twice is idempotent: the first person and the first time stay, and the no-op writes no second audit row. Gated by alarm:acknowledge, whose scope is resolved on the component tier from that permission (not from component:update); a component outside it is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass component alarm acknowledge <name> <id>
+```
+
 #### `omniglass component alarm create`
 
 Raise an alarm on a component
@@ -430,6 +446,7 @@ What is currently wrong with this component, newest first. Pass include_cleared 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--include-cleared` | bool | `false` | Include cleared alarms, so the list is the history rather than what is wrong now |
+| `--unacknowledged` | bool | `false` | Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended |
 
 Example:
 

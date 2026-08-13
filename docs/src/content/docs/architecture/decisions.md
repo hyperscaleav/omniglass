@@ -146,6 +146,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0106](#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask) | 2026-08-12 | Accepted | `location_type` adopts the **registry fork** (ADR-0095) rather than growing a third ownership model: the shipped rows seed `official: true`, the boot seed writes them authoritatively, and an operator's edit forks into `registry_shadow` with `:restore` discarding it. That is what makes a shipped value **withdrawable**, which insert-if-absent could never be, since it can add a default to every estate and remove one from none. The one-time backfill moves the edits estates already hold ON those rows into shadows first, telling an edit from a shipped value by the **audit trail** rather than by comparing columns against what this release ships, because a row holding a WITHDRAWN shipped value is indistinguishable from an edit by inspection and preserving it would defeat the withdrawal. A location type's property and metric **contracts stay writable** on a shipped row: a contract line is a row in its own table, nothing seeds one, and the official guard was dormant on this registry until the flip would have activated it. On the wire, a nullable OBJECT field clears by being **named in `update_mask`** with no value, since an object has no empty value to overload and an explicit null is indistinguishable from an omitted key after decoding; `name_rule` is the first and the convention is now the API's, not that field's. **Amended (#703):** the discriminator is REMOVED and the backfill is only the `official` flip, because with no release cut and no operator data there is no edit to preserve; the argument for it stands unchanged for the first release that has estates, which owes them a new migration rather than this one |
 | [ADR-0107](#adr-0107-a-create-that-writes-a-membership-costs-what-the-membership-route-costs) | 2026-08-12 | Accepted | `POST /components` accepts a `system` and INSERTS that system's primary membership from it, the same row `PUT /systems/{name}/members/{component}` writes under `system:update`, while the create asked for no system permission at all: the create was the cheap way around the membership route's gate. The create now requires `system:update` when the reference is present and resolves it in that scope, so **two paths writing one row cost one permission**. The accepted consequence is a live narrowing: `operator` holds `component:create` and no `system:*`, so an operator can no longer create a component INTO a system, which reads as the role line rather than collateral damage (an operator maintains components, a deploy tech builds out systems and their membership). Granting `operator` the permission was refused as a much larger grant than "may bind a membership while creating". A second permission conditional on the REQUEST is published like the platform tier's, as `x-omniglass-conditional-permission`, and enforced in the handler because middleware cannot see the body; the console hides the picker from a principal that cannot use it and the API's refusal names the permission, so the narrowing is met before the form is filled in. **Amended (#707 review):** the console gate read the PERMISSION only, so a principal holding `system:update` over an empty scope (a location-scoped `deploy` grant, since the cross-tier expansion is unbuilt, #10) was offered the picker and refused on submit, and the API answered "system not found" for a system that caller could `GET`; the gate now also requires a system carrying the scope-aware `update` action, and the bind takes `system:read` beside `system:update` so a readable row is refused by AUTHORITY (403) rather than by absence. **Amended (#713):** the residual this entry accepted is closed, the `:renderLabel` draft resolving the same reference through the create's own resolver and carrying its conditional permission, because a preview that resolved it in `system:read` alone both previewed a refusal and handed back the system's type label; the LOCATION reference stays `location:read` on both routes, read and rendered rather than written |
 | [ADR-0108](#adr-0108-settlement-reads-one-clock-and-a-zero-window-is-a-statement-of-intent) | 2026-08-12 | Accepted | Settlement's two timestamps come from **one clock, the database's**: a sample's `ts` is `default now()`, so the `now` a settle-check judges against is read with `select now()` inside the same transaction rather than from `time.Now()` in the server process. Two clocks on one comparison made the verdict a function of skew, and at `settle_window_seconds: 0` there is no margin to absorb it, so a command that genuinely failed could be reported `pending` and never settle on any deployment whose database is on another host. Separately, a **zero window is terminal by construction**, checked before any arithmetic: it is the documented way to say "settle immediately", a claim about intent rather than elapsed time, so no timestamp may make it pending. Stamping samples from Go was refused as the larger ripple (every telemetry `ts` defaults to `now()` and other readers rely on database ordering), and a tolerance was refused outright as the move that stops a test failing without stopping the behavior depending on skew. `Settle` stays pure and still takes `now`; what changed is who supplies it, at the cost of one round trip on each of the two settle paths. **Amended (#718):** "a check in a later transaction reads a strictly later timestamp" over-claims, since READ COMMITTED admits a concurrent issue committing after a settle-check began, so the delta can be negative; the verdict is unaffected (a negative delta is `pending`, and the zero case reads no timestamp), and the claim rather than the behaviour is what was corrected. **Extended (#719):** the same principle reaches the six history reads by a different mechanism and no round trip, since a read needs a BOUND rather than a value: the window travels as a duration and the query filters `ts >= now() - make_interval(...)`, so the instant is never named in Go |
+| [ADR-0109](#adr-0109-an-alarm-carries-an-acknowledgement-and-not-a-snooze-or-a-resolve) | 2026-08-13 | Accepted | An alarm's raised state belongs to its **condition** (ADR-0075) and an acknowledgement is a fact about a **person**, so the acknowledgement is two nullable columns orthogonal to `cleared_at`, never a `status` enum, and `AcknowledgeAlarm` is the one alarm write that does **not** recompute health: acknowledging is not fixing. **Snooze** and **resolve** were refused rather than deferred: snooze suppresses notification and the notification registry is unbuilt (#618), so it would be a column that lies, and resolve is either the existing clear under a second name or an unspecified concept. The permission is **`alarm:acknowledge`**, spelled out like every other seeded verb; the `alarm:ack,snooze,resolve` string that appeared in test fixtures and in the identity-access page was never a design and nothing ever seeded or enforced it. Its scope resolves on the component tier from `alarm:acknowledge` itself rather than from `component:update`, and it is granted to `operator` and **not** to `deploy`, because a location-scoped `deploy` grant reaches no component tier at all (#714) and would hold a capability that acknowledges nothing. A second acknowledgement is **idempotent**, keeping the first person and the first time and writing no second audit row |
 
 ## Entries
 
@@ -5043,3 +5044,83 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   24-hour window, and the instant they used to share was skewed against the data anyway.
 - **Tracked under** [#667](https://github.com/hyperscaleav/omniglass/issues/667) and
   [#719](https://github.com/hyperscaleav/omniglass/issues/719).
+
+### ADR-0109: An alarm carries an acknowledgement, and not a snooze or a resolve
+
+- **Date:** 2026-08-13 | **Status:** Accepted | **Pages:** [alarms and actions](/architecture/alarms-actions/), [identity and access](/architecture/identity-access/), [API](/architecture/api/)
+- **Context:** `alarm:ack,snooze,resolve` had appeared for most of a year in
+  `internal/seed/seed_shrink_test.go`, in `internal/rbac/rbac_test.go`, and in the permission-format
+  fence and the worked example on the identity-access page. Nothing seeded it, no route registered
+  it, and no design document ever specified what snooze or resolve would do. It read as prior art,
+  which is exactly the risk of borrowing a real resource's vocabulary for a fixture: three verbs
+  looked decided, and only one of them had a meaning.
+- **Decision (what is built):** the acknowledgement, alone. Two nullable columns on `alarm`,
+  `acknowledged_at` and `acknowledged_by`, plus
+  `POST /components/{name}/alarms/{id}:acknowledge`, the `alarm:acknowledge` permission, the seeded
+  grant on `operator`, an `unacknowledged` filter on the list read, and the console affordance.
+- **Decision (orthogonal, not a status):** an alarm's raised state belongs to its **condition**: the
+  one-open invariant is per `(component, dedup_key)` and the raiser owns the key
+  ([ADR-0075](#adr-0075-an-alarm-carries-its-condition-identity)). An acknowledgement is a fact about
+  a **person**. Two independent facts, therefore two nullable columns and not a `status` enum, which
+  would force them into one column and make acknowledged and cleared mutually exclusive. All four
+  combinations are real and each one is tested: raised and unacknowledged (the queue), raised and
+  acknowledged (somebody is on it), cleared having never been acknowledged (it came and went), and
+  cleared after being acknowledged. A cleared alarm stays acknowledgeable, because the orthogonality
+  runs in both directions and the record of who read an incident outlives the fix exactly as the row
+  does.
+- **Decision (no health recompute):** raising and clearing both recompute the health chain in their
+  own transaction, and acknowledging deliberately does not. Acknowledging is not fixing: a transition
+  recorded here would stamp a change at a moment when nothing about the estate moved, and the health
+  history is meant to be edges and only edges.
+- **Decision (the permission's name):** **`alarm:acknowledge`**. Every other seeded action spells its
+  verb (`create`, `update`, `rename`, `move`, `reveal`, `issue`, `push`, `purge`,
+  `revoke-session`), and a permission string is operator-facing: it is rendered in the Roles view, in
+  the grant builder's tooltips, and in `/auth/me`. `alarm:ack` would have been the only abbreviation
+  in the set, and its only claim was the fixture this ADR exists to disown.
+- **Decision (idempotent, not refused):** a second acknowledgement of the same alarm keeps the first
+  person and the first time, returns 200, and writes no second audit row. The recorded fact is
+  monotonic, and the first sighting is the one that means something operationally (time to
+  acknowledge). Refusing would turn a double click into an error an operator has to interpret, and
+  would make two people opening the same queue race into a 409 that teaches nothing. It is the same
+  shape the raise path already has: a re-raise of an open condition returns the existing incident
+  and writes no audit row, because the no-op leg changed nothing. The database decides it, through a
+  conditional `where acknowledged_at is null`, rather than a read-then-write that a concurrent
+  acknowledgement could lose.
+- **Decision (the scope, and why `deploy` does not get it):** the acknowledgement resolves
+  `visible_set(P, alarm, acknowledge)` from **its own permission** on the **component** tier, not
+  from `component:update` and not from `component:read`. A responder role may acknowledge without
+  editing components, and a principal commonly holds an estate-wide read beside a narrow write, so
+  binding the scope to either neighbour answers the wrong question in one direction or the other.
+  Given that, `deploy` does **not** get the grant: a `deploy` grant is made at a **location** in
+  practice (devseed's `tech-east` is exactly that shape), and a location-kind grant fills no
+  component-tier scope at all ([#714](https://github.com/hyperscaleav/omniglass/issues/714)). The
+  capability would resolve to nothing while the console's capability-only hint still offered the
+  button: a grant that reads as given and refuses when used. It is revisitable when the cross-tier
+  expansion ([#10](https://github.com/hyperscaleav/omniglass/issues/10)) lands, and
+  `TestALocationGrantOfDeployReachesOneTier` now carries `alarm` in its matrix so the question
+  resurfaces on its own.
+- **What was refused:** **snooze**, because its purpose is to suppress **notification** and the
+  outbound notification registry is unbuilt
+  ([#618](https://github.com/hyperscaleav/omniglass/issues/618)); a snooze with nothing to suppress
+  is a column that lies about what it does, and it belongs with that issue or after it. **Resolve**,
+  because the platform already has `DELETE /components/{name}/alarms/{id}`, so a human "resolving"
+  an alarm whose raised state belongs to its condition is either that clear under a second name or a
+  different concept nobody has specified. **Un-acknowledge**, which is a second verb and a second
+  decision rather than a nullable field somebody flips, and has no evidence behind it yet. **Bulk
+  acknowledge**, until there is evidence the queue needs it. And **a denormalized acknowledger
+  label** on the alarm row: `audit_log` already denormalizes the actor's name at write time for
+  exactly the purge case, so the alarm keeps the foreign key (`ON DELETE SET NULL`) and resolves the
+  current label on read, which reads honestly empty after a purge while the durable record survives
+  where it already lived.
+- **Divergence recorded:** the identity-access page's three-way status split says a target the
+  caller can **read** but not act on is a **403**. Every scoped route in the platform answers
+  **404** there, this one included, because the target is resolved through the gateway with the
+  action's own scope and a miss is a miss. Making it three-way is one shared refusal primitive
+  across every scoped route rather than a per-route special case, and doing it for this route alone
+  would have made it the only route in the system that answers differently from its own siblings.
+  Tracked in [#736](https://github.com/hyperscaleav/omniglass/issues/736); the page now marks the
+  branch as design.
+- **Tracked under** [#728](https://github.com/hyperscaleav/omniglass/issues/728),
+  [#733](https://github.com/hyperscaleav/omniglass/issues/733),
+  [#734](https://github.com/hyperscaleav/omniglass/issues/734) and
+  [#735](https://github.com/hyperscaleav/omniglass/issues/735).

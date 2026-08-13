@@ -246,6 +246,7 @@ telemetry: {
   alarm: {
     shape: sql_table
     id: uuid {constraint: primary_key}
+    acknowledged_by: uuid {constraint: foreign_key}
     component_id: uuid {constraint: foreign_key}
   }
   command: {
@@ -483,6 +484,7 @@ identity.system_role_product.product_id -> catalog.product.id
 identity.system_role_product.role_id -> identity.system_role.id
 identity.system_role_type.component_type_id -> catalog.component_type.id
 identity.system_role_type.role_id -> identity.system_role.id
+telemetry.alarm.acknowledged_by -> identity.principal.id
 telemetry.alarm.component_id -> estate.component.id
 telemetry.command.caused_event_id -> telemetry.event.id
 telemetry.command.command_type_id -> telemetry.command_type.id
