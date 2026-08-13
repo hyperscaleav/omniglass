@@ -213,6 +213,27 @@ observed-sample round trip and lands on the sample row, so the cycle guard walks
 
 `alarm` and `action` are **stateful entities** holding current state in a real table (not event-sourced). Everything else that is "current state" is a **read model**, default a **plain SQL view or a per-series indexed read** (always-correct, never stale, zero maintenance); a worker-maintained table is a **measured optimization**, earned only when a read profile shows the derived read too slow. **The schema holds zero SQL views and zero maintained caches today**: the shipped current-value read is the latest series row, derived on read; the once-built latest-value cache retired with the fold ([ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
 
+### A series read carries an owner index for the arc it reads
+
+"Derived on read" only stays cheap while the read is a per-series **indexed** read rather than a scan
+of the series, so `property` carries one partial owner index per arc a read is built on:
+`property_owner_idx` (`component_id, property_type_id, instance, ts desc`) for the component arc, and
+`property_system_owner_idx` (`property_type_id, system_id, id desc`) for the system arc, which the two
+health reads take, the bulk verdict read behind `GET /systems:health` and the location rollup a
+recompute pays per location ([#725](https://github.com/hyperscaleav/omniglass/issues/725)). Each is
+**partial on its arc column**, so the telemetry lane pays nothing for an index it never uses: a
+component-owned insert does not touch the system index at all (measured: 150,000 of them cost the same
+to the millisecond with it and without it), while the system arc's own writes, a health transition and
+only on a transition, pay about 2.7us a row. Adding it took the bulk read over 1,500 systems from
+51 ms to 10 ms, and the location rollup from 45 ms to 0.7 ms, at 1,521,600 property rows.
+
+An index existing is not an index being reached, and the ways a read stops reaching one leave
+`pg_indexes` reporting it present throughout, so both reads are held to reaching it by an
+**access-path assertion** rather than a catalog test
+([ADR-0094](/architecture/decisions/#adr-0094-benchmarks-are-the-second-performance-instrument-and-they-gate-nothing)
+as amended, and [test-driven](/contributing/test-driven/) for the instrument). The next arc that grows
+a bulk read of the series adds its index the same way: measured first, guarded second.
+
 ::::design[Target design, tracked in #430]
 
 | Read model | Of | Shape | Notes |
