@@ -20,6 +20,60 @@ export type CommandTypeRow = {
 
 export const COMMAND_TYPES_KEY = ["command_types"] as const;
 
+// A settle window as the operator typed it, read once for both write surfaces.
+// `seconds` is what goes on the wire, and its ABSENCE is the point: the field
+// folded through `Number(settle()) || 0` before, so unstated, unparseable and
+// deliberately-zero all arrived at the server as the same 0 (#718). A window is a
+// decision a settleable type asks for, so unstated has to survive as far as the
+// body, where it becomes a field that is simply not sent.
+export type SettleWindowDraft = {
+  // The seconds to send, absent when nothing should be sent.
+  seconds?: number;
+  // A blocking problem: the surface refuses to submit while this is set.
+  error: string | null;
+  // A legitimate choice with a consequence worth reading before making it.
+  note: string | null;
+};
+
+// readSettleWindow judges the typed window against whether the type names a target
+// arm. `targeted` is the whole difference: a type naming a target arm settles
+// against a reported value, so its window decides when a difference becomes a
+// verdict and the operator has to state it; a type with no arm never reaches
+// settlement at all, so leaving it blank is the whole answer and the server's own
+// default (0) supplies it. Zero is never refused: ADR-0108 makes it a statement of
+// intent ("judge it now"), and `reboot` ships that shape.
+export function readSettleWindow(typed: string, targeted: boolean): SettleWindowDraft {
+  const t = typed.trim();
+  if (t === "") {
+    return {
+      error: targeted
+        ? "A settleable command type needs a settle window: the seconds the device is given to actuate, or 0 to judge it at the moment of issue."
+        : null,
+      note: null,
+    };
+  }
+  // A seconds count, not a number: "1.5" and "1e3" are refused rather than
+  // silently truncated, and "abc" is refused rather than read as 0.
+  if (!/^-?\d+$/.test(t)) return { error: "A settle window is a whole number of seconds.", note: null };
+  const seconds = Number(t);
+  if (seconds < 0) return { error: "A settle window is a duration in seconds, so it cannot be negative.", note: null };
+  if (targeted && seconds === 0) {
+    return {
+      seconds,
+      error: null,
+      note: "0 means this command is judged at the moment it is issued: it settles only if the target already reports what it was told, and fails if it does not.",
+    };
+  }
+  if (!targeted && seconds > 0) {
+    return {
+      seconds,
+      error: null,
+      note: "A fire-and-forget command has no value to settle, so this window is never consulted.",
+    };
+  }
+  return { seconds, error: null, note: null };
+}
+
 export async function listCommandTypes(): Promise<CommandTypeRow[]> {
   const { data, error } = await api.GET("/command-types");
   if (error) throw error;

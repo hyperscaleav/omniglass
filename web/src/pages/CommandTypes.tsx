@@ -16,6 +16,8 @@ import {
   createCommandType,
   updateCommandType,
   deleteCommandType,
+  readSettleWindow,
+  type SettleWindowDraft,
 } from "../lib/command_types";
 import { PROPERTIES_KEY, listProperties, type PropertyRow } from "../lib/properties";
 import { METRICS_KEY, listMetricTypes, type MetricRow } from "../lib/metric_types";
@@ -71,6 +73,47 @@ function splitTarget(v: string): { target_property_type: string; target_metric_t
     target_property_type: lane === "property" ? name : "",
     target_metric_type: lane === "metric" ? name : "",
   };
+}
+
+// The settle window is one field on two surfaces (the create drawer and the
+// blade's edit mode), so its label, its teaching and its inline verdicts are
+// written once here. The field used to seed itself with "0" and fold with
+// `Number(settle()) || 0`, which meant a settleable type was created with a window
+// judged at the instant of issue that the operator never chose (#718). It is a
+// decision now: stated for a settleable type, and left alone for a fire-and-forget
+// one, where the window is never consulted and the server's default is the answer.
+const SETTLE_LABEL = "Settle window (seconds)";
+const SETTLE_HINT =
+  "Seconds the device is given to actuate before a mismatch is a failed command. A settleable type states one; a fire-and-forget type has no value to settle.";
+
+// SettleWindowField renders that field with its verdicts: the blocking error
+// nearest the control (the same idiom the IAM forms use), then the non-blocking
+// note. Both sit as SIBLINGS of the input inside FieldRow rather than wrapped,
+// because FieldRow labels the first element it resolves and a wrapper div would
+// take the `for` (see FieldRow's own note).
+function SettleWindowField(p: {
+  value: string;
+  onInput: (v: string) => void;
+  targeted: boolean;
+  draft: SettleWindowDraft;
+  eyebrow?: boolean;
+}): JSX.Element {
+  return (
+    <FieldRow label={SETTLE_LABEL} hint={SETTLE_HINT} eyebrow={p.eyebrow}>
+      <input
+        class="input input-bordered w-full font-data"
+        classList={{ "input-error": !!p.draft.error }}
+        type="number"
+        min="0"
+        required={p.targeted}
+        placeholder={p.targeted ? "15" : "0"}
+        value={p.value}
+        onInput={(e) => p.onInput(e.currentTarget.value)}
+      />
+      <Show when={p.draft.error}>{(msg) => <p class="text-[11px] text-error">{msg()}</p>}</Show>
+      <Show when={p.draft.note}>{(msg) => <p class="text-[11px] text-warning">{msg()}</p>}</Show>
+    </FieldRow>
+  );
 }
 
 // TargetSelect: the target picker over BOTH classifier catalogs in one control,
@@ -169,6 +212,11 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
   const [description, setDescription] = createSignal("");
   const [settle, setSettle] = createSignal("0");
   const [target, setTarget] = createSignal("");
+  // Adding a target arm to a fire-and-forget type is what turns an idle 0 into
+  // "judge this at issue", so the window is read against the target as it stands
+  // in the form, not as it stands on the row.
+  const targeted = createMemo(() => target() !== "");
+  const settleDraft = createMemo(() => readSettleWindow(settle(), targeted()));
 
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
@@ -198,12 +246,20 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
     const r = row();
     if (!r) return;
     setErr(null);
+    // The footer Save is already gated on this (see `valid` below); the check is
+    // repeated here so the rule holds on any path that reaches the saver.
+    const w = settleDraft();
+    if (w.error) {
+      setErr(w.error);
+      throw new Error("settle window unstated"); // keep the blade in edit mode
+    }
     try {
       // Both target arms ride every save: the chosen arm set, the other
       // explicitly cleared, so a PATCH can change or clear the target wholesale.
+      // An unstated window sends no window at all, leaving the row's own.
       await updateCommandType(r.name, {
         display_name: displayName(), description: description(),
-        settle_window_seconds: Number(settle()) || 0,
+        settle_window_seconds: w.seconds,
         ...splitTarget(target()),
       });
       await qc.invalidateQueries({ queryKey: COMMAND_TYPES_KEY });
@@ -215,6 +271,9 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
 
   edit.bind({
     editable: () => !!row() && !row()!.official && can(me.data, "command_type", "update"),
+    // Gate the footer Save on the window rule, so a settleable type cannot leave
+    // edit mode with a window nobody stated.
+    valid: () => !settleDraft().error,
     save,
     destructive: () =>
       row() && !row()!.official && can(me.data, "command_type", "delete")
@@ -253,9 +312,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
             <FieldRow label="Target" eyebrow>
               <TargetSelect value={target()} onChange={setTarget} />
             </FieldRow>
-            <FieldRow label="Settle window (seconds)" eyebrow>
-              <input class="input input-bordered w-full font-data" type="number" min="0" value={settle()} onInput={(e) => setSettle(e.currentTarget.value)} />
-            </FieldRow>
+            <SettleWindowField value={settle()} onInput={setSettle} targeted={targeted()} draft={settleDraft()} eyebrow />
           </Show>
         </div>
       )}
@@ -263,27 +320,36 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
   );
 }
 
-// CreateCommandTypeForm: register a custom command type. Only the name is required;
-// a target (a property or a metric, one arm) and a settle window make it settleable.
+// CreateCommandTypeForm: register a custom command type. Only the name is always
+// required; a target (a property or a metric, one arm) makes it settleable, and a
+// settleable type owes a settle window, which is the one field the form must not
+// answer for the operator (#718). The window starts blank rather than at 0: a
+// fire-and-forget type sends none at all and takes the server's default, and a
+// settleable one cannot be created until its window is stated.
 export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => void }): JSX.Element {
   const qc = useQueryClient();
   const [name, setName] = createSignal("");
   const [displayName, setDisplayName] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [target, setTarget] = createSignal("");
-  const [settle, setSettle] = createSignal("0");
+  const [settle, setSettle] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
+  const targeted = createMemo(() => target() !== "");
+  const settleDraft = createMemo(() => readSettleWindow(settle(), targeted()));
 
   useFormActions().bind({
     submitLabel: "Create command type",
     submitIcon: Plus,
     submit: () => void submit(),
     busy,
-    disabled: () => !name().trim(),
+    disabled: () => !name().trim() || !!settleDraft().error,
   });
 
   async function submit() {
+    // The action bar is already disabled on this; repeated so the rule holds on
+    // the form's own submit event too (Enter in a field).
+    if (settleDraft().error) return;
     setBusy(true);
     setFormErr(null);
     try {
@@ -294,7 +360,7 @@ export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => voi
         description: description().trim() || undefined,
         target_property_type: arms.target_property_type || undefined,
         target_metric_type: arms.target_metric_type || undefined,
-        settle_window_seconds: Number(settle()) || 0,
+        settle_window_seconds: settleDraft().seconds,
       });
       await qc.invalidateQueries({ queryKey: COMMAND_TYPES_KEY });
       p.onCreated(created);
@@ -322,9 +388,7 @@ export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => voi
       <FieldRow label="Target" hint="The value this command sets, for settlement: a property or a metric, never both. None for a fire-and-forget command.">
         <TargetSelect value={target()} onChange={setTarget} />
       </FieldRow>
-      <FieldRow label="Settle window (seconds)" hint="How long the device is given to actuate before a mismatch is a failed command.">
-        <input class="input input-bordered w-full font-data" type="number" min="0" value={settle()} onInput={(e) => setSettle(e.currentTarget.value)} />
-      </FieldRow>
+      <SettleWindowField value={settle()} onInput={setSettle} targeted={targeted()} draft={settleDraft()} />
     </form>
   );
 }
