@@ -22,6 +22,7 @@ import {
 } from "../lib/locations";
 import { LOCATION_TYPES_KEY, ROOT_PLACEMENT, listLocationTypes } from "../lib/location_types";
 import CreateIdentity from "../components/CreateIdentity";
+import LabelPenField, { seedLabelPen } from "../components/LabelPenField";
 import { bucketPhrase, createPen, nameBucket, penIncomplete } from "../lib/namegen";
 import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
 import { pathTo, type TreeNode } from "../lib/treeselect";
@@ -277,7 +278,9 @@ export default function Locations() {
         ? `Restricted to: ${allowedParentTypes().map(parentTypeLabel).join(", ")}. Moving back to root is not supported here.`
         : "Any location may be the parent (unconstrained). Moving back to root is not supported here.";
 
-    const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
+    // The label's pen rather than a plain signal (#693): see Systems.tsx's own
+    // copy of this line and components/LabelPenField.tsx for the rule.
+    const displayPen = createPen();
     const [type, setType] = createSignal(n().raw.location_type ?? "");
     const [name, setName] = createSignal(n().raw.name);
     const [nameCheck, setNameCheck] = createSignal<NameCheck | null>(null);
@@ -299,7 +302,7 @@ export default function Locations() {
     // since Cancel exits edit and the next begin re-seeds).
     createEffect(on(editing, (isEditing) => {
       if (isEditing) {
-        setDisplay(n().raw.display_name ?? "");
+        seedLabelPen(displayPen, n().raw);
         setType(n().raw.location_type ?? "");
         setName(n().raw.name);
         setNameCheck(null);
@@ -321,7 +324,10 @@ export default function Locations() {
         try {
           // Addressed by uuid (#627 review finding 1): see del() above.
           await updateLocation(n().raw.id, {
-            display_name: display() || undefined,
+            // The pen's own value, always keyed (#693): see Systems.tsx's save
+            // for why the empty string is the right thing to post from a locked
+            // field.
+            display_name: displayPen.value(),
             location_type: type() || undefined,
           });
           // The move is a second call, not a PATCH field (#627): placement left the
@@ -387,9 +393,7 @@ export default function Locations() {
             }
           >
             <div class="flex flex-col gap-3">
-              <FieldRow bind="display_name">
-                <input class="input input-bordered w-full" value={display()} placeholder="Conf Room 301" onInput={(e) => setDisplay(e.currentTarget.value)} />
-              </FieldRow>
+              <LabelPenField pen={displayPen} entity={() => n().raw} placeholder="Conf Room 301" />
               <FieldRow label="Location type" info="A location_type name.">
                 <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
                   <option value="" disabled>Select a type…</option>

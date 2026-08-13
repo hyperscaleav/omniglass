@@ -781,7 +781,12 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.SystemTypeLabel}}/{{.LocationLabel}}/{{.TypeName}}/{{.Name}}/{{if .Ordinal}}{{.Ordinal}}{{else}}-{{end}}"); err != nil {
 		t.Fatalf("component rule: %v", err)
 	}
-	if _, err := gw.SetLabelRule(ctx, "", "system", "{{.LocationLabel}}/{{.TypeName}}/{{.Name}}"); err != nil {
+	// The system rule reads the ORDINAL too since #693 made it a load-bearing
+	// input on this tier: an act that moves a system's number without restamping
+	// its label is a mismatch here, where the rule that ignored the number could
+	// not have seen one. The {{else}} arm is the component rule's, so a number
+	// that vanishes is as visible as a number that changes.
+	if _, err := gw.SetLabelRule(ctx, "", "system", "{{.LocationLabel}}/{{.TypeName}}/{{.Name}}/{{if .Ordinal}}{{.Ordinal}}{{else}}-{{end}}"); err != nil {
 		t.Fatalf("system rule: %v", err)
 	}
 	if _, err := gw.SetLabelRule(ctx, "", "location", "{{.TypeName}} {{.Name | upper}}"); err != nil {
@@ -885,6 +890,16 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 		}},
 		{"rename a system", func() error {
 			_, err := gw.RenameSystem(ctx, "", board.ID, "sys-board-renamed", all, all)
+			return err
+		}},
+		// The two acts that move a system's ORDINAL without an operator naming
+		// anything. A rename clears it (the platform allocated nothing for a name
+		// it no longer owns) and a reset re-mints one in the row's current
+		// bucket, so the pair walks the key from a number to absent and back.
+		// Both were already write paths for .Name; #693 made them write paths for
+		// a second key, which the rule above is what proves.
+		{"reset a system name", func() error {
+			_, err := gw.ResetSystemName(ctx, "", board.ID, all, all)
 			return err
 		}},
 		// A delete belongs in this loop for the same reason every other act

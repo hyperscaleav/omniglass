@@ -140,7 +140,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0102](#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing) | 2026-08-10 | Accepted | A **`location_type.name_rule`** (nullable jsonb) is a type's opt-in to naming the locations it classifies, and it is a **declaration** (a stem, possibly empty, plus the first-ordinal suppression flag) rather than the `label_rule` template beside it. A name has to satisfy `validateEntityName`, it lands in a scoped-unique index, and other things reference it, so an unrenderable rule has no safe degradation the way a label's does; a declaration IS a `nameMint`, so a rule is refused at RULE-EDIT time by minting from it (ordinal 1 and a nine-digit ceiling bound the whole output space), which a template's output could only be sampled. Null is the opt-out and there is no boolean beside it. A rule change **renames nothing**: there is no name-side recompute verb, deliberately, because relabelling in bulk is recoverable and renaming is not. A positional type permitted at root allocates `1`, `2` across the estate and that is legal, since the bucket is the placement and two positional types under one parent already share an ordinal space. **Amended (#657):** the entry's "only floor is genuinely auto-nameable" is now false in both halves, since ADR-0103 was reversed for `floor` and no shipped type carries a rule; the composed limit is that a withdrawn shipped rule cannot be un-shipped, because insert-when-absent leaves the row alone and the wire cannot spell "clear" |
 | [ADR-0103](#adr-0103-a-positional-name-is-allocation-order-and-the-real-world-designation-is-a-label) | 2026-08-11 | Accepted | A positional name is **allocation order**, never a claim about the world, and the entry first kept the dev estate's divergence (a floor named `1` labelled Level 2) on the argument that a name is an address and a label is what a human reads. **Amended (#657) and REVERSED for `floor`:** a floor's designation is not an integer at all (B2, LG, G, M, 12A), so an ordinal is the wrong KIND of value for it rather than an imprecise one, and the basement objection dissolves with it, since nobody signs a floor `-1`, they sign it `B1`, already a legal name. `floor` becomes nominal, the dev estate's floors are named `level-2` and `level-1` for their real designations so ADR-0105's rule renders those labels and the two pins are released, and the cost is stated rather than hidden: NO shipped location type carries a rule, so location name generation ships **dormant**, kept covered by a positional type the tests create rather than by a fifth seeded type invented to keep the demo alive. Removing a shipped rule reaches new estates only (insert-when-absent), and no `PATCH` can clear one, so an estate that already seeded it keeps it. What survives: a stem-less positional name is right where the position is an arbitrary disambiguator (a parking deck, a rack row) and wrong where the number is a real-world fact |
 
-| [ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it) | 2026-08-11 | Accepted | A create form shows the **stem** a generated name will carry, resolved in the browser from the classification the operator just chose, and writes the ordinal as the token `n`, because the ordinal is allocated against live siblings inside the create's own transaction and does not exist until the row does. A **draft-preview verb that mints and rolls back** is refused: its answer is provisional (another create can take the ordinal between the preview and the commit), and the rolled-back mint takes the same advisory lock real creates need, so a form that previewed on every keystroke would serialise the estate's creates behind a UI affordance. **Re-rendering the label rule in TypeScript** is refused outright, as the second implementation of an engine slice 3 swept 42 copies of. The label is therefore not previewed at all: its data map carries `Name` and `Ordinal`, so it is unknowable for the same reason. The placement bucket is shown beside the field as a PATH and never as a prefix inside it, since names became scoped to placement and a name no longer contains its ancestry. **Amended (#699):** a RENDER is not a mint, and both refusals were about allocating, so `:renderLabel` resolves the rule through the same tiers with the same one engine, writes the token where the ordinal goes, and takes no lock; the form now shows both values in LOCKED fields, gated by the entity's `:create` with the placement resolved in the caller's read scope. **Amended again (#657):** the lock is an inline square icon action in the field's join, matching Settings' own Restore to default, and a locked field is `readonly` rather than `disabled`, because a disabled input fires no click and leaves the value out of the tab order; focus does not claim the pen, since a locked field is a tab stop and tabbing past would otherwise blank both fields. **Amended again (#702):** READING the lowest free ordinal is not minting one either, so the form shows `display-3` rather than `display-n` and the token retires; the answer is provisional, so the form posts it back as the create's `expected_ordinal` and a create that would land a different number is a 409 naming the one that moved, located on `body.expected_name` so the form can tell it from a name collision. The NAME's shape stops being client-side, which closes the naming half of #695. **Amended again (#702 review):** the precondition binds the drafted NAME rather than the ordinal, because a name carries the stem and the suppression rule as well as the number and an ordinal claim was met by a create that landed `monitor-1` where the form showed `display-1`; and the draft now REFUSES the parentless bucket its create refuses, reversing this entry's own "the draft does not rehearse the all-scope gate", since the previewed ordinal reports which of that bucket's names are taken and the stem asked about is the caller's to choose. **Amended again (#713):** "the placement resolved in the caller's read scope" no longer holds for one reference, the component's `system`, which the create binds as a membership under `system:update` (ADR-0107); the draft resolves it in that same set and carries the same conditional permission, so a preview is never served for a create the platform would refuse |
+| [ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it) | 2026-08-11 | Accepted | A create form shows the **stem** a generated name will carry, resolved in the browser from the classification the operator just chose, and writes the ordinal as the token `n`, because the ordinal is allocated against live siblings inside the create's own transaction and does not exist until the row does. A **draft-preview verb that mints and rolls back** is refused: its answer is provisional (another create can take the ordinal between the preview and the commit), and the rolled-back mint takes the same advisory lock real creates need, so a form that previewed on every keystroke would serialise the estate's creates behind a UI affordance. **Re-rendering the label rule in TypeScript** is refused outright, as the second implementation of an engine slice 3 swept 42 copies of. The label is therefore not previewed at all: its data map carries `Name` and `Ordinal`, so it is unknowable for the same reason. The placement bucket is shown beside the field as a PATH and never as a prefix inside it, since names became scoped to placement and a name no longer contains its ancestry. **Amended (#699):** a RENDER is not a mint, and both refusals were about allocating, so `:renderLabel` resolves the rule through the same tiers with the same one engine, writes the token where the ordinal goes, and takes no lock; the form now shows both values in LOCKED fields, gated by the entity's `:create` with the placement resolved in the caller's read scope. **Amended again (#657):** the lock is an inline square icon action in the field's join, matching Settings' own Restore to default, and a locked field is `readonly` rather than `disabled`, because a disabled input fires no click and leaves the value out of the tab order; focus does not claim the pen, since a locked field is a tab stop and tabbing past would otherwise blank both fields. **Amended again (#702):** READING the lowest free ordinal is not minting one either, so the form shows `display-3` rather than `display-n` and the token retires; the answer is provisional, so the form posts it back as the create's `expected_ordinal` and a create that would land a different number is a 409 naming the one that moved, located on `body.expected_name` so the form can tell it from a name collision. The NAME's shape stops being client-side, which closes the naming half of #695. **Amended again (#702 review):** the precondition binds the drafted NAME rather than the ordinal, because a name carries the stem and the suppression rule as well as the number and an ordinal claim was met by a create that landed `monitor-1` where the form showed `display-1`; and the draft now REFUSES the parentless bucket its create refuses, reversing this entry's own "the draft does not rehearse the all-scope gate", since the previewed ordinal reports which of that bucket's names are taken and the stem asked about is the caller's to choose **Amended again (#693):** the lock is the console's ONE vocabulary for the pen, so it reaches the EDIT BLADE and the list's full-text `Generated` chip retires from both list renderers: an ownership fact belongs beside the field an operator can change it on, not in a cell charging the Name column the width of the word on every platform-labelled row. The NAME's own chip stays, on the blade beside the name, which is the same rule rather than an exception. The blade gains a state the create form has no equivalent for, a locked field showing a value about to change (the hand-back), because `:renderLabel` previews a row that does not exist and would answer an existing row with the NEXT sibling's ordinal; the hint carries it instead. It closes a silent pen theft: every blade posted `display() \|\| undefined` seeded from the stored label, so saving any unrelated field posted the platform's own rendering back as an override and took the pen **Amended again (#713):** "the placement resolved in the caller's read scope" no longer holds for one reference, the component's `system`, which the create binds as a membership under `system:update` (ADR-0107); the draft resolves it in that same set and carries the same conditional permission, so a preview is never served for a create the platform would refuse |
 | [ADR-0105](#adr-0105-a-rule-reads-a-name-as-words-and-the-location-tier-ships-the-restatement-it-once-refused) | 2026-08-11 | Accepted | `words` joins the closed FuncMap (a run of `-` or `_` becomes one space, an edge run is dropped, everything else untouched), which is what finally lets a rule turn a kebab NAME into words: `title` alone leaves the separator standing, so the acronym dictionary of ADR-0099 could not be reached from a name by any spelling. Adding a function is a THREE-place act (FuncMap, AST allowlist, `FuncNames`) and the published set is now walked by a test rather than described. The global LOCATION rule ships as `{{title (words .Name)}}`, reversing the seed's own argument on its restatement half only: a restatement that RE-CASES and runs the operator's dictionary produces a string the read ladder's fallback cannot, where an echo could not, and the constant half ("Room" for every room) is still refused. The ladder's last rung stays verbatim, since this renders and STORES a label rather than prettifying on read; the estate keeps only the pins that say something a name cannot, nine at the time and **seven** after ADR-0103's reversal named the two floors for their designations |
 
 | [ADR-0106](#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask) | 2026-08-12 | Accepted | `location_type` adopts the **registry fork** (ADR-0095) rather than growing a third ownership model: the shipped rows seed `official: true`, the boot seed writes them authoritatively, and an operator's edit forks into `registry_shadow` with `:restore` discarding it. That is what makes a shipped value **withdrawable**, which insert-if-absent could never be, since it can add a default to every estate and remove one from none. The one-time backfill moves the edits estates already hold ON those rows into shadows first, telling an edit from a shipped value by the **audit trail** rather than by comparing columns against what this release ships, because a row holding a WITHDRAWN shipped value is indistinguishable from an edit by inspection and preserving it would defeat the withdrawal. A location type's property and metric **contracts stay writable** on a shipped row: a contract line is a row in its own table, nothing seeds one, and the official guard was dormant on this registry until the flip would have activated it. On the wire, a nullable OBJECT field clears by being **named in `update_mask`** with no value, since an object has no empty value to overload and an explicit null is indistinguishable from an omitted key after decoding; `name_rule` is the first and the convention is now the API's, not that field's. **Amended (#703):** the discriminator is REMOVED and the backfill is only the `official` flip, because with no release cut and no operator data there is no edit to preserve; the argument for it stands unchanged for the first release that has estates, which owes them a new migration rather than this one |
@@ -4122,8 +4122,63 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   key, and the shipped global system rule deliberately does not use it: for a suppressed first name
   the number and the name disagree, so whether a label says "Boardroom" or "Boardroom 1" is an
   authoring choice an operator makes, not a platform default.
+
+  **Amended ([#693](https://github.com/hyperscaleav/omniglass/issues/693)): the shipped system rule
+  reads the ordinal, and the key it reads is the number the NAME carries.** The decline above is
+  reversed, and the case that reverses it is the one AV estates are full of: a divisible boardroom is
+  two `board` systems in one room, so both rendered "Boardroom", and the operator reading the console
+  had less information than the platform holding `boardroom` and `boardroom-2`. The rule is now
+  `{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}`, the component's verbatim.
+
+  The reversal is TWO changes and only one of them was named when the ruling was made, which is worth
+  recording because the other one is where the argument lives. Adding `{{if .Ordinal}}` to the rule
+  alone renders **"Boardroom 1"** for the only boardroom in a room, because `{{if}}` on a string is
+  false for the EMPTY string and a suppressed first name still owns the stored ordinal 1. That is the
+  defect this entry's decline was protecting against, and a rule change on its own walks straight
+  into it. So the map's value changes with it: `Ordinal` is now the ordinal the row's name SHOWS,
+  which is empty for a suppressed first exactly as it is empty for a row an operator named. The two
+  states read alike to a rule because they mean the same thing to a reader: this row's name carries
+  no number.
+
+  The suppression is asked of the MINT (`nameMint.suppresses`, the branch `name` itself takes) rather
+  than read off the name string, which keeps this entry's central decision true on the label side: a
+  name's shape has one implementation, and a second reading of it could disagree at exactly ordinal
+  1. It also survives the seam above, where `bareFirst` becomes per-TYPE: a rule hardcoding
+  `ne .Ordinal "1"` would have been a per-kind default baked into a template, wrong for the first
+  type that chose differently, and unwritable by an operator who should never have to know which
+  mint named a row.
+
+  What the reversal costs is stated rather than buried: a rule can no longer render "Boardroom 1" for
+  a system named `boardroom`, because the number is not reachable from the map any more. That was the
+  authoring choice the decline preserved, and it is the one this entry already calls the defect the
+  epic was filed about, so it is refused as a rule rather than offered and warned about. An operator
+  who wants those exact words still types them, which takes the pen (#682) and is the honest way to
+  say a label is not derived from anything.
+
+  A key was NOT added beside `Ordinal` to keep both readings available. Two spellings of one number
+  in a closed map is a difference for a rule author to misinterpret, and the wrong pick reintroduces
+  the defect silently, which is the same argument `NameRule.normalized` makes about two spellings of
+  one rule.
+
+  The component tier reads its ordinal through the same helper, and the value there is unchanged for
+  every row: `componentMint` does not suppress (a rack's `display-1` beside `display-2` is what an
+  operator writes on the label), so the helper's answer is the stored number. One meaning of the key
+  on both tiers, rather than two tiers that happen to agree today.
+
+  **The write paths were re-derived and grew by none.** Every act that moves a system's ordinal is an
+  act that re-runs the mint or hands the pen back: create, `:rename` (which clears it), `:resetName`,
+  `:move` where the bucket changes, and the `system_type` half of a reclassify, which is the same set
+  this entry derived for the NAME. Each already restamps the label unconditionally in its own
+  transaction, and unconditionally is what matters rather than the set being the same: a reclassify
+  between two stems can leave the name identical while the ordinal moves (`wall-2` at ordinal 2 is
+  the same string as the suppressed first of stem `wall-2`), so a stamp gated on the name having
+  changed would have missed it. A delete frees a lower ordinal and re-mints nothing, by this entry's
+  own allocation rule, so no surviving row's label goes stale behind it. The completeness invariant
+  (`TestNoActLeavesALabelStaleAnywhere`) now runs a system rule that READS the ordinal, where the one
+  it ran before could not have seen a hole in any of this.
 - **Tracked under** [#686](https://github.com/hyperscaleav/omniglass/issues/686), the sixth slice of
-  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
+  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657), and amended by
+  [#693](https://github.com/hyperscaleav/omniglass/issues/693).
 
 ### ADR-0102: A name rule is a declaration a type opts in with, and a rule change renames nothing
 
@@ -4572,11 +4627,43 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
     carries the name the create WOULD have produced as its value, which is what the form shows next.
     The drafted `ordinal` stays on the render's answer as an informational fact, since a surface that
     shows where a value came from teaches the mechanism it operates.
+- **Amendment (#693, 2026-08-12): the lock is the console's ONE vocabulary for the pen, so it reaches
+  the edit blade and the list's chip retires.** This decision described a create form, and the pen's
+  other half was left where it had grown: a full-text `Generated` chip in the identity cell, read by
+  18 flat-list pages and every tree. Two things were wrong with that and only one is cosmetic. It
+  charged the Name column the width of the word on every platform-labelled row, on the very column
+  [#690](https://github.com/hyperscaleav/omniglass/issues/690) had just had to put a floor under. And
+  it stated an ownership fact where the operator could not act on it, while the surface that CAN act
+  on it, the edit blade, said nothing at all. So `PenToggle` moves out of the create form into its own
+  module and the blade's display-name field consumes it, and the chip goes from both list renderers.
+  - **The name's own chip stays, and that is the consistency rather than an exception.** The component
+    blade marks a platform-picked NAME in its read state, beside the name fact. The rule both now
+    follow is that a pen states itself beside the field it owns, on the surface where the operator can
+    change it; a list is neither.
+  - **The blade has a third state the create form does not,** and it is a locked field showing a value
+    that is about to change: "Restore to default" on a row an operator labelled by hand. Nothing can
+    know what the rule will render for it, because `:renderLabel` previews a row that does not exist
+    and reads the lowest FREE ordinal in the bucket, which for an existing row is the NEXT sibling's
+    number. Asking it would answer confidently and wrongly. The field therefore keeps showing the
+    label that is there and the hint says the platform rewrites it on save. A lock over an EMPTY field
+    was refused here for the same reason it was refused on the create form.
+  - **It closes a silent pen theft, which is why this is a fix and not a restyle.** Every blade seeded
+    a plain signal from `display_name` and posted `display() || undefined`, so opening the pencil on a
+    platform-labelled row and saving ANY other field posted the platform's own rendering back as an
+    override. `labelPen` read that as the operator claiming the label, the row stopped following its
+    rule, and nothing on screen had said so. The field now posts the PEN's value, which is the empty
+    string while it is locked, and the API reads that as "still the platform's". One expression covers
+    the no-op and the hand-back, and the hand-back is the console's first way back at all.
+  - **`labelGenerated` retires with the chip.** It asked "is there a rendered label here to mark",
+    which is a marker's question and returns false for a row whose rule rendered nothing; a field asks
+    "who holds the pen", which is true for that same row and must open it locked. One predicate
+    answering two questions differently is how a surface marks one thing and does another.
 - **Tracked under** [#688](https://github.com/hyperscaleav/omniglass/issues/688), the eighth slice of
   epic [#657](https://github.com/hyperscaleav/omniglass/issues/657), amended by
   [#699](https://github.com/hyperscaleav/omniglass/issues/699), its tenth, by the affordance pass
-  folded into [#698](https://github.com/hyperscaleav/omniglass/pull/698), and by
-  [#702](https://github.com/hyperscaleav/omniglass/issues/702).
+  folded into [#698](https://github.com/hyperscaleav/omniglass/pull/698), by
+  [#702](https://github.com/hyperscaleav/omniglass/issues/702), and by
+  [#693](https://github.com/hyperscaleav/omniglass/issues/693).
 
 ### ADR-0105: A rule reads a name as words, and the location tier ships the restatement it once refused
 

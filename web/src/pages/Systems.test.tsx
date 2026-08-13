@@ -14,6 +14,7 @@ import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
 import { hueFor } from "../lib/system_color";
 import { systemHealthKey, type EstateHealth } from "../lib/health";
+import { NAME_MIN_W } from "../components/TreeList";
 
 // The Systems page on the shared TreeList in the create-as-route model: New routes
 // to /systems/create (a draft accordion), Save hands off to /systems/<id> in edit;
@@ -43,19 +44,21 @@ const properties: EffectiveProperty[] = [
   { property_type_name: "room.note", property_type_id: "room.note-id", display_name: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "corner room", value: "corner room", value_id: "v-note" },
 ];
 
-function mount(path: string) {
+function mount(path: string, systems: System[] = [sys]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...SYSTEMS_KEY], [sys]);
+  qc.setQueryData([...SYSTEMS_KEY], systems);
   qc.setQueryData([...LOCATIONS_KEY], []);
   qc.setQueryData([...COMPONENTS_KEY], []);
   qc.setQueryData([...STANDARDS_KEY], standards);
   qc.setQueryData([...SYSTEM_TYPES_KEY], systemTypes);
-  // Keyed by uuid (#627 review finding 1): the detail page's panels now
-  // address by sys.id, not sys.name.
-  qc.setQueryData([...ownerPropertiesKey("system", sys.id)], properties);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...TAGS_KEY], []);
-  qc.setQueryData([...entityTagsKey("system", sys.id)], []);
+  // Keyed by uuid (#627 review finding 1): the detail page's panels now
+  // address by the system's id, not its name.
+  for (const s of systems) {
+    qc.setQueryData([...ownerPropertiesKey("system", s.id)], s.id === sys.id ? properties : []);
+    qc.setQueryData([...entityTagsKey("system", s.id)], []);
+  }
   window.history.pushState({}, "", path);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -595,5 +598,119 @@ describe("Systems create identity", () => {
     // The NAME the locked field was showing goes back as the precondition.
     expect(captured!.expected_name).toBe("classroom");
     expect(captured!.display_name).toBe("Lecture Hall");
+  });
+});
+
+// The Systems half of #690's uniformity clause. Systems declares the widest
+// default set of the three (960px of columns), so it lost the Name column at a
+// wider viewport than Components did: measured 0px at 1280, where the list card
+// offers 973px. Same assertion as Components and Locations, because the whole
+// point of the fix is that one shared rule now produces one behaviour.
+describe("Systems list keeps a floor under the Name column (#690)", () => {
+  it("declares no width on Name and a table floor that leaves it NAME_MIN_W", async () => {
+    localStorage.clear();
+    mount("/systems");
+    await waitFor(() => expect(document.querySelector("table.og-rows")).toBeTruthy());
+
+    const table = document.querySelector("table.og-rows") as HTMLTableElement;
+    const cols = [...table.querySelectorAll("colgroup col")] as HTMLTableColElement[];
+    const declared = cols.slice(1).reduce((sum, c) => sum + parseInt(c.style.width || "0", 10), 0);
+
+    expect(cols[0].style.width).toBe("");
+    expect(parseInt(table.style.minWidth, 10) - declared).toBe(NAME_MIN_W);
+  });
+});
+
+// The label pen on the edit blade (#693). The "Generated" chip left the lists,
+// and the fact landed beside the field an operator can act on, as the same lock
+// the create form carries. This block proves the page is WIRED to the shared
+// field (components/LabelPenField.test.tsx proves the field's own contract) and
+// proves the half no component test can see: what a Save posts.
+describe("Systems edit blade carries the label pen (#693)", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  // The estate's own shape after #693: a rule renders "Boardroom 2" and the
+  // platform holds the pen on it.
+  const gen: System = { ...sys, id: uuidFor("s-gen"), name: "boardroom-2", display_name: "Boardroom 2", display_name_generated: true, member_count: 0 };
+
+  function patchBodies(): Record<string, unknown>[] {
+    const bodies: Record<string, unknown>[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH") {
+        bodies.push(JSON.parse(await req.clone().text()));
+        return new Response(JSON.stringify(gen), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ systems: [gen], properties: [], standards, locations: [], components: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    return bodies;
+  }
+
+  it("opens the label locked on a row the platform labelled", async () => {
+    mount(`/systems/${gen.id}`, [gen]);
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    expect(label.value).toBe("Boardroom 2");
+    expect(label.readOnly).toBe(true);
+    expect(label.disabled).toBe(false);
+    expect(screen.getByText(/Rendered from a label rule/)).toBeTruthy();
+  });
+
+  // The defect the lock exists to fix. The blade seeded a plain signal from
+  // raw.display_name and posted `display() || undefined`, so opening the pencil
+  // on a platform-labelled system and changing its STANDARD posted the
+  // platform's own rendering back as an override, taking the pen silently: the
+  // row stopped following its rule and nothing on screen said so.
+  it("does not claim the pen when another field is saved", async () => {
+    const bodies = patchBodies();
+    mount(`/systems/${gen.id}`, [gen]);
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    await screen.findByLabelText("Display name");
+    fireEvent.change(screen.getByLabelText("Standard") as HTMLSelectElement, { target: { value: "huddle-space" } });
+    fireEvent.click(screen.getByText("Save changes"));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0].standard_id).toBe("huddle-space");
+    // "" is the API's "the platform's" (labelPen, #682), so the row keeps
+    // following its rule across an unrelated edit.
+    expect(bodies[0].display_name).toBe("");
+  });
+
+  it("posts the operator's words once they take the pen, seeded with what was on screen", async () => {
+    const bodies = patchBodies();
+    mount(`/systems/${gen.id}`, [gen]);
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
+    // Seeded rather than blanked: a blade has the label on screen already, so
+    // taking the pen means amending it.
+    expect(label.value).toBe("Boardroom 2");
+    fireEvent.input(label, { target: { value: "Boardroom 2 (East)" } });
+    fireEvent.click(screen.getByText("Save changes"));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0].display_name).toBe("Boardroom 2 (East)");
+  });
+
+  it("opens editable on a row the operator labelled, and hands it back on restore", async () => {
+    const bodies = patchBodies();
+    mount(`/systems/${sys.id}`);
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    expect(label.value).toBe("Boardroom");
+    expect(label.readOnly).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Restore the display name to default" }));
+    expect(label.readOnly).toBe(true);
+    expect(screen.getByText(/Handed back, so the platform renders this/)).toBeTruthy();
+    fireEvent.click(screen.getByText("Save changes"));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    // The only way back from the console. Before this the field posted
+    // `display() || undefined`, so clearing it left the label exactly as it was.
+    expect(bodies[0].display_name).toBe("");
   });
 });

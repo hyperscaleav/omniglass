@@ -4134,6 +4134,78 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   tolerance was refused as the move that quiets a test without changing the behavior
   ([ADR-0108](/architecture/decisions/#adr-0108-settlement-reads-one-clock-and-a-zero-window-is-a-statement-of-intent)).
 
+- **Two boardrooms in one room read differently.** A divisible boardroom is two `board` systems in
+  one room, and the shipped system rule read the type alone, so both rendered "Boardroom": the
+  platform could tell them apart (`boardroom` and `boardroom-2`, ADR-0101's suppression) and the
+  operator reading the console could not. The rule now reads the ordinal under the component's own
+  `{{if .Ordinal}}`, and the estate's two halves are the demonstration rather than two pinned labels
+  spelling A and B over the top of it. What the issue and the ruling both described as one change was
+  two, and the second is where the argument sits: the rule alone renders "Boardroom 1" for the only
+  boardroom in a room, because `{{if}}` is false for an EMPTY string and a suppressed first name
+  still owns the stored ordinal 1. So the data map's `Ordinal` became the number the row's NAME
+  shows, asked of the mint rather than read off the name, which makes a label and a name unable to
+  disagree about how many of a thing there are and costs the ability to author "Boardroom 1" for a
+  system called `boardroom`, a string this arc already calls the defect it was filed about. Every act
+  that moves a system's ordinal was re-derived and the set grew by none, because each of them already
+  restamps unconditionally; the estate-wide invariant now runs a system rule that reads the ordinal,
+  where the one before it could not have seen a hole in any of this. A shipped rule change restamps
+  nothing, so an existing estate keeps both halves reading "Boardroom" until an operator runs
+  `/systems:recomputeLabels`, which the seed, the architecture page and the operator-facing rule text
+  each say where they are met
+  ([ADR-0101](/architecture/decisions/#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests) amended).
+
+- **The Name column stops being the first thing a narrow screen drops.** A list table is
+  `table-layout: fixed` and every column but Name declares a width, so Name takes what is left. That
+  is what lets the identifier grow into a wide screen, and it also made Name the first column to give
+  space up on a narrow one, to the point of vanishing: measured against the dev estate at a 1280
+  viewport, where the list card offers 973px, the Components table's Name column was **0px** wide
+  while Tags kept all 340 of its pixels, and Systems was the same at 0px against 960px of declared
+  columns. Locations, declaring 650px, had 173px left over and looked fine, which is the whole of why
+  one page was reported and three were affected: identical markup, three outcomes, decided by the
+  widths each page happens to declare. The remedy is one floor in the shared shell rather than
+  numbers tuned per page: the table asks for a `min-width` of everything declared plus a Name
+  minimum, so the browser gives Name that much and the card (already `overflow-x-auto`) scrolls
+  sideways when even that does not fit. Wide screens are untouched, since `width: 100%` beats a
+  smaller min-width and Name still absorbs the surplus. Held by a page test on each of the three
+  pages (Name declares no width, and the table's floor leaves it the minimum) and by a browser test
+  that MEASURES the rendered column at 1280 and 1366, which is the tier the defect lives in: a
+  column measuring zero pixels sat on main behind a green suite because nothing below a real browser
+  does layout.
+
+- **The label pen leaves the list and lands on the field it owns.** A display name the platform
+  rendered from a label rule wore a full-text `Generated` chip in the identity cell, read by 18
+  flat-list pages and every tree. It charged the Name column the width of the word on every
+  platform-labelled row, on the column a floor had just had to be put under, and it stated an
+  ownership fact where an operator could do nothing about it. The chip is gone from both list
+  renderers, and the fact is the **lock** on the display-name field of the edit blade: the create
+  form's own affordance, extracted so the two surfaces share one button, one pair of icons and one
+  set of words rather than growing a second vocabulary for one idea. The NAME's chip stays, beside
+  the name on the component blade, which is the rule both now follow: a pen states itself beside the
+  field it owns, where the operator can act on it. The whole-estate question the chip half-answered,
+  which rows a rule edit would rewrite, is answered whole by `<entity> previewLabels`. Doing it
+  closed a defect nobody had filed: every blade seeded its label input from the stored value and
+  posted `display() || undefined`, so opening the pencil on a platform-labelled row and saving a tag
+  or a type posted the platform's own rendering back as an override and took the pen silently. The
+  field posts the pen's own value now, which is the empty string while it is locked and is how the
+  API says "still the platform's", so the same expression covers the no-op and the first way back the
+  console has ever had
+  ([ADR-0104](/architecture/decisions/#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it) amended).
+
+- **The Name column's floor is re-measured now that nothing sits beside the label.** The floor was
+  260px because the identity cell had to fit a label AND the label pen's `Generated` chip; the chip
+  left in the same slice, so the number it was tuned for is stale. Re-driven against the dev estate
+  at a 1280 viewport, measuring each row's name cell twice in one run (once with the chip's exact
+  markup injected back into the clone), the chip cost a **uniform 69px** on all 20 rows of the three
+  pages, and the estate's widest cell fell from 256px to 187px. The floor is therefore the old one
+  minus the chip, **191px**, rather than the "about 200" it was estimated at: the labels did not
+  change, only the thing beside them, so the floor should carry exactly what it carried before. The
+  method is written out beside the constant so the next move can be checked, and it was validated
+  before the number moved by reproducing this comment's own previous measurement ("Boardroom 2" wants
+  203px with its chip, recorded as 200). One page's sideways scroll actually goes away: Components at
+  a 1680 viewport now asks 1231px of a 1254px card where it asked 1300px. Systems still scrolls there
+  (1301px) and Locations still scrolls at 1280 (991px of 974px), and nothing truncates on any page at
+  1280, 1366 or 1680.
+
 - **A preview is refused wherever the create it previews is refused.** `POST /components:renderLabel`
   resolved its `system` reference in `system:read` while the create beside it had moved to
   `system:update`, so a caller holding the read floor and no membership authority was served a

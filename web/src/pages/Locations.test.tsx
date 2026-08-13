@@ -9,6 +9,7 @@ import { ownerPropertiesKey, type EffectiveProperty } from "../lib/owner_propert
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
+import { NAME_MIN_W } from "../components/TreeList";
 
 // The Locations page on the shared TreeList in the create-as-route model: New routes
 // to /locations/create (a draft accordion), Save hands off to /locations/<name> in
@@ -622,7 +623,12 @@ describe("Locations list identity", () => {
     expect(within(row).queryByText("level-1")).toBeNull();
   });
 
-  it("marks a platform-rendered label so it reads apart from one an operator chose", async () => {
+  // The tree list carried the same chip the flat list did, and it goes for the
+  // same reason (#693): a full-text mark on every platform-labelled row cost the
+  // Name column the width of the word, on the surface that renders most of the
+  // estate, to state a fact an operator could not act on from a list. It is now
+  // the lock on the display-name field of the edit blade.
+  it("renders no pen chip in the tree, whoever holds the pen", async () => {
     const generated: Location = {
       id: uuidFor("l-gen"), name: "level-1", display_name: "Level 1",
       display_name_generated: true, location_type: "campus", effective_tags: {},
@@ -630,8 +636,8 @@ describe("Locations list identity", () => {
     mount("/locations", [generated]);
     await waitFor(() => expect(screen.getByText("Level 1")).toBeTruthy());
     const row = screen.getByText("Level 1").closest("tr")!;
-    expect(within(row).getByTitle(/platform/i)).toBeTruthy();
-    // And the operator's own label carries no such mark.
+    expect(within(row).queryByTitle(/platform/i)).toBeNull();
+    expect(within(row).queryByText("Generated")).toBeNull();
     const mine = screen.getByText("HQ").closest("tr")!;
     expect(within(mine).queryByTitle(/platform/i)).toBeNull();
   });
@@ -820,5 +826,109 @@ describe("Locations create identity", () => {
     // ordinal, so posting one would be a claim nothing can check (a 422).
     expect("expected_name" in captured!).toBe(false);
     expect(captured!.display_name).toBe("War Room");
+  });
+});
+
+// The Locations half of #690's uniformity clause, and the page the issue was
+// filed against as the control: it declares 650px of default columns, so at 1280
+// its Name column measured 173px and looked fine while the other two measured 0.
+// It gets the same floor rather than being left alone, because "Locations,
+// Systems and Components behave the same way" is the acceptance, and a page that
+// happens to fit today is a page that stops fitting when a column is added.
+describe("Locations list keeps a floor under the Name column (#690)", () => {
+  it("declares no width on Name and a table floor that leaves it NAME_MIN_W", async () => {
+    localStorage.clear();
+    mount("/locations");
+    await waitFor(() => expect(document.querySelector("table.og-rows")).toBeTruthy());
+
+    const table = document.querySelector("table.og-rows") as HTMLTableElement;
+    const cols = [...table.querySelectorAll("colgroup col")] as HTMLTableColElement[];
+    const declared = cols.slice(1).reduce((sum, c) => sum + parseInt(c.style.width || "0", 10), 0);
+
+    expect(cols[0].style.width).toBe("");
+    expect(parseInt(table.style.minWidth, 10) - declared).toBe(NAME_MIN_W);
+  });
+});
+
+// The label pen on the edit blade (#693). The chip left the list, and the fact
+// landed on the field an operator can act on. This block proves the page is
+// WIRED to the shared field (components/LabelPenField.test.tsx proves the
+// field's own contract) and proves the half no component test can see: what a
+// Save actually posts.
+describe("Locations edit blade carries the label pen (#693)", () => {
+  const gen: Location = {
+    id: uuidFor("l-pen"), name: "level-1", display_name: "Level 1",
+    display_name_generated: true, location_type: "campus", effective_tags: {},
+  };
+
+  function patchBodies(): { bodies: Record<string, unknown>[] } {
+    const bodies: Record<string, unknown>[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH") {
+        bodies.push(JSON.parse(await req.clone().text()));
+        return new Response(JSON.stringify(gen), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ locations: [hq, lab, hqB1, gen] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    return { bodies };
+  }
+
+  it("opens the label locked on a row the platform labelled", async () => {
+    mount(`/locations/${gen.id}`, [gen]);
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    expect(label.value).toBe("Level 1");
+    expect(label.readOnly).toBe(true);
+    expect(screen.getByText(/Rendered from a label rule/)).toBeTruthy();
+  });
+
+  // The defect the lock exists to fix, and the one worth breaking a build over.
+  // Every blade seeded a plain signal from raw.display_name and posted
+  // `display() || undefined`, so opening the pencil on a platform-labelled row
+  // and saving ANYTHING (a type, a tag, a parent) posted the platform's own
+  // rendering straight back as an override and took the pen, silently. A locked
+  // field posts the empty string, which is how the API says "still yours".
+  it("does not claim the pen when an unrelated field is saved", async () => {
+    const { bodies } = patchBodies();
+    mount(`/locations/${gen.id}`, [gen]);
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    await screen.findByLabelText("Display name");
+    fireEvent.click(screen.getByText("Save changes"));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0].display_name).toBe("");
+  });
+
+  it("posts the operator's words once they take the pen", async () => {
+    const { bodies } = patchBodies();
+    mount(`/locations/${gen.id}`, [gen]);
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
+    fireEvent.input(label, { target: { value: "Ground Floor" } });
+    fireEvent.click(screen.getByText("Save changes"));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0].display_name).toBe("Ground Floor");
+  });
+
+  it("opens editable, and hands the label back on restore, for a row the operator labelled", async () => {
+    const { bodies } = patchBodies();
+    mount(`/locations/${hq.id}`);
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    expect(label.value).toBe("HQ");
+    expect(label.readOnly).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Restore the display name to default" }));
+    expect(label.readOnly).toBe(true);
+    fireEvent.click(screen.getByText("Save changes"));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    // "" is the API's hand-back (labelPen, #682), which is the ONLY way back
+    // from the console: before this the field posted `display() || undefined`,
+    // so clearing it left the operator's label exactly where it was.
+    expect(bodies[0].display_name).toBe("");
   });
 });

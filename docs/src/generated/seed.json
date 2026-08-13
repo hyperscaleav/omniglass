@@ -679,7 +679,7 @@
   },
   {
    "entity_kind": "system",
-   "template": "{{.TypeName}}"
+   "template": "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}"
   },
   {
    "entity_kind": "location",

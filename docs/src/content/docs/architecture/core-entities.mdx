@@ -911,6 +911,25 @@ own**. A new estate gets a rendered label when each location is created; an esta
 keeps its raw kebab locations until an operator runs `:previewLabels` and `:recomputeLabels` on
 locations. The upgrade is an operator's act, not a release's.
 
+**`Ordinal` is the number the row's NAME carries, not the number the platform stored.** They are the
+same on nearly every row and differ on exactly one: the first of its stem in a placement bucket,
+whose name is bare while its ordinal is 1
+([ADR-0101](/architecture/decisions/#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests)).
+There the key is empty, the same empty a row an operator named carries, so `{{if .Ordinal}}` is the
+whole of the suppression a rule has to write and a label can never disagree with its own name about
+how many of a thing there are. The cost is that a rule cannot render "Boardroom 1" for a system named
+`boardroom`; the [decision log](/architecture/decisions/#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests)
+records why that is a feature.
+
+That key is what the **shipped global rule for systems** reads,
+`{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}`, which is the component rule's shape on the system
+tier. Reading the type alone was not enough for the case AV
+estates are full of: a divisible boardroom is two `board` systems in one room, and both rendered
+"Boardroom", so the platform could tell them apart (`boardroom` and `boardroom-2`) and an operator
+reading the console could not. They now read "Boardroom" and "Boardroom 2". The same
+restamps-nothing rule applies as for locations: an estate that already exists keeps both halves
+reading "Boardroom" until an operator runs `:previewLabels` and `:recomputeLabels` on systems.
+
 **`title` reads an acronym dictionary an operator owns.** Title-casing a word by upper-casing its
 first letter turns `dsp` into `Dsp`, so the platform ships a list of words that have a fixed form,
 resolved through the [settings](/architecture/settings/) cascade as `label.acronyms` and consulted by

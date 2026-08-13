@@ -46,6 +46,24 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   the primary create), the tree and flattened body rendering, the stacked detail blades, the full-page
   detail, the create/edit `Drawer`, and an optional summary widget board. Adding an entity of
   this class is a data layer + a config + a route (see the `add-inventory-view` skill).
+- **The Name column has a floor, and the card scrolls before it gives it up.** A list table is
+  `table-layout: fixed`, every column but Name declares a width, and Name takes what is left, which
+  is what lets the identifier grow into a wide screen. It also made Name the first column to give up
+  space on a narrow one, and it gave up all of it: at a 1280 viewport, where the list card offers
+  973px, Components declared 890px of columns plus 150px of row actions and its Name column measured
+  **0px**, while Locations, declaring 650px, looked fine ([#690](https://github.com/hyperscaleav/omniglass/issues/690)).
+  `TreeList` now asks the table for a `min-width` of everything declared plus `NAME_MIN_W`, so the
+  browser gives Name that floor and the card scrolls sideways when even that does not fit. Wide
+  screens are unchanged, since `width: 100%` beats a smaller min-width. A page declaring a new
+  column inherits this; it is one rule in the shell, not a set of numbers per page.
+  `NAME_MIN_W` is 191px and every digit of it is measured: the floor was 260 while the cell still
+  carried the label pen's `Generated` chip, that chip cost a uniform **69px** on all 20 rows of the
+  three pages, and the labels beside it did not change, so the floor is 260 minus 69. The method is
+  written out beside the constant, because a number that was not derived the same way next time is a
+  number nobody can check. What the 69px was buying: Components stops scrolling sideways at a 1680
+  viewport (its table asks 1231px of a 1254px card, where it asked 1300px before). Systems still
+  scrolls there (1301px) and Locations still scrolls at 1280 (991px of a 974px card), so the chip's
+  removal is not what fixes those; the columns menu is.
 - **The faceted filter is a tested engine.** `lib/predicate` is the pure matcher: values within a
   chip are OR, chips across keys are AND, clicking an active facet removes it. `FilterBar` is the
   thin staged combobox over it; the genuinely tricky list derivations (index, ancestor paths,
@@ -195,15 +213,26 @@ can be one the platform rendered from a **label rule**
 ([ADR-0098](/architecture/decisions/#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)),
 and the row says which through the pen `display_name_generated`. So the cell reads three states, not
 two: a row with no label shows its name once in the data face; a row an operator labelled shows the
-label with the name beneath it; a row the platform labelled shows the label, marked `Generated`, with
-no second line. The rule the marker states is that typing a label claims it and clearing the field
-hands it back, which is also the set of rows a rule edit would rewrite.
+label with the name beneath it; a row the platform labelled shows the label alone, with no second
+line.
 
-The three predicates live in `lib/entities` and nowhere else: `labelIsName` (which face), `hasDisplayName`
-(did a human choose this) and `labelGenerated` (did the platform). The middle one used to be the
-string comparison `entityLabel(e) !== e.name`, and that was the same question only while a label was
-only ever operator-typed; unchanged, a generated label would have put a second identifier line under
-every row in the estate.
+**A pen states itself beside the field it owns, never in a list.** The platform's label used to wear
+a `Generated` chip in the cell. It charged the Name column the width of the word on every
+platform-labelled row of every list, to say something an operator could not act on where they were
+reading it; and the estate-wide question it half-answered, which rows a rule edit would rewrite, is
+answered whole by `<entity> previewLabels` rather than one row at a time. The fact is now the
+**lock** on the display-name field of the edit blade (`components/LabelPenField.tsx`), the same
+affordance the create form carries (`components/PenToggle.tsx` is the one copy of the button, its
+icons and its words), beside the field and next to the act that changes it. That is where the NAME's
+own pen already stated itself, on the component blade.
+
+The predicates live in `lib/entities` and nowhere else: `labelIsName` (which face) and
+`hasDisplayName` (did a human choose this). The second used to be the string comparison
+`entityLabel(e) !== e.name`, and that was the same question only while a label was only ever
+operator-typed; unchanged, a generated label would have put a second identifier line under every row
+in the estate. A third, `labelGenerated`, retired with the chip that was its only caller: it asked
+"is there a rendered label here to mark", and a field asks "who holds the pen", which answers
+differently for a row whose rule rendered nothing and must still open locked.
 
 **One renderer, pinned by a source guard.** `entityLabel` is the only place `display_name || name` is
 written. `one-label-renderer.test.ts` scans every non-test source file for a hand-rolled fallback and

@@ -29,10 +29,10 @@
 #
 #   - the power conditioner, which carries no product, so the component rule can
 #     only render "Generic Device 1" and says nothing about what the thing is;
-#   - the two boardroom halves, because which half is A and which is B is a fact
-#     about the air wall, not about the system;
 #   - the locations listed under LABELS below, each of which says something its
 #     name cannot.
+#
+# No system carries one any more (#693): see the note above the systems, below.
 #
 # Everything else lets the rule render: a component reads "Display 1", "Video Bar
 # 2" and so on, from the shipped component rule over its resolved type and the
@@ -325,17 +325,28 @@ property_values:
 #
 # Neither names itself either: both are `board` systems in the same room, so the
 # platform mints `boardroom` for the first (the first of its stem in a bucket
-# carries no ordinal, ADR-0101) and `boardroom-2` for the second. Which half is A
-# and which is B is a fact about the air wall rather than about the system, so
-# that one lives in the label.
+# carries no ordinal, ADR-0101) and `boardroom-2` for the second.
+#
+# Neither LABELS itself either, and that is new (#693). Both were pinned
+# "Boardroom A" and "Boardroom B" for two slices, because the shipped system rule
+# read the type alone and rendered "Boardroom" for both halves: a pin was the
+# only thing that told them apart on the surface an operator reads. The rule
+# reads the ordinal now, so it renders "Boardroom" and "Boardroom 2" from the
+# same facts the names came from, and a pin here would be the hand-typed copy of
+# the rule's own output that this file exists to avoid. Released, both of them:
+# they are the estate's only same-type siblings, so they are the only rows that
+# can demonstrate the thing the rule was changed to do.
+#
+# The air wall's own signage would earn a pin back (a room whose halves are
+# signed A and B is ADR-0103's designation case, the same argument that pins
+# "Level 2" onto a floor). This estate has no such signage to state, and
+# inventing one to keep the pin would be pinning a fact the fixture made up.
 systems:
   - key: boardroom-a
-    display_name: Boardroom A
     standard: meeting-room
     system_type: board
     location: boardroom
   - key: boardroom-b
-    display_name: Boardroom B
     standard: meeting-room
     system_type: board
     location: boardroom

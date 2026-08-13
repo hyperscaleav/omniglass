@@ -44,16 +44,29 @@ sections ([getting around](/guides/operator/#getting-around)).
   the first line, and beneath it, in the data face, the **name** the API, the CLI, and the URL address
   it by. An entity with no display name shows its name alone, in the data face, so an absence reads as
   an absence rather than a typo. That second line is what you copy into an `omniglass` command. The
-  column is headed **Name** on every page and sorts on the line you are reading down.
-- A display name the platform rendered from a [label rule](/architecture/core-entities/) wears a
-  **Generated** chip beside it, which is how you tell the rows a rule edit would rewrite from the ones
-  you named yourself. Typing over one claims it; clearing the field hands it back.
+  column is headed **Name** on every page and sorts on the line you are reading down. It keeps a
+  minimum width on a narrow screen: on a 1366x768 laptop the list scrolls sideways rather than
+  squeezing the identifier out, and hiding a column you are not using (the **Tags** column is the
+  widest) is what removes the sideways scroll.
+- **Who wrote a display name is shown where you can change it, not in the list.** A label the platform
+  rendered from a [label rule](/architecture/core-entities/) opens **locked** in the row's edit blade,
+  with the rule stated under the field; the lock beside it hands you the pen, and the restore arrow
+  hands it back. A list shows no mark either way, so the Name column spends its width on the name.
+  To see the whole set of rows a rule edit would rewrite, which is the question a per-row mark could
+  only ever answer one row at a time, run `omniglass <entity> previewLabels`: it lists exactly the rows
+  the platform still labels, and nothing you typed yourself.
 - **Upgrading into a new rule does not relabel anything you already have.** Locations shipped with no
   label rule before, so an estate created then keeps reading its raw names (`north-wing`) after the
   upgrade. Applying the new rule is your act, and there is no console button for it yet: run
   `omniglass location previewLabels` to see exactly which rows would move, then
   `omniglass location recomputeLabels` to apply it, and the same rows read **North Wing**. Nothing you
   typed yourself is touched by either.
+- **The same applies to systems, and the upgrade worth running is this one.** A system's shipped label
+  now carries the number its name carries, so the two halves of a divisible boardroom read **Boardroom**
+  and **Boardroom 2** instead of both reading "Boardroom". An estate created before the upgrade keeps
+  both halves reading alike until you run `omniglass system previewLabels` and then
+  `omniglass system recomputeLabels`. Only the first of a kind in a room is bare: a room with one
+  boardroom in it reads **Boardroom**, exactly as its name is `boardroom` rather than `boardroom-1`.
 - The **columns** menu shows or hides columns and lets you **drag to reorder** them. The
   layout is remembered per browser.
 - On Locations, each row wears its **type's icon** as a leading glyph (a campus, building,

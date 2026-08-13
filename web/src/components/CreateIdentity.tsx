@@ -1,8 +1,7 @@
 import { Show, type JSX } from "solid-js";
 import FieldRow from "./FieldRow";
-import Button from "./Button";
-import { LockOpen, RotateCcw } from "./icons";
-import { type EstateKind, type Pen, type PenState, ordinalNote, penState } from "../lib/namegen";
+import PenToggle, { takeOver } from "./PenToggle";
+import { type EstateKind, type Pen, ordinalNote, penState } from "../lib/namegen";
 import { type DraftLabel } from "../lib/labeldraft";
 
 // The Identity section of the create form for the three estate entities whose
@@ -122,52 +121,14 @@ const AWAITING_MINT: Record<EstateKind, string> = {
   location: "Choose a type and the platform names this, or name it yourself.",
 };
 
-// PenToggle is the lock, as an INLINE ACTION inside the field: a square icon
-// button in the field's daisyUI join, which is where the console already puts an
-// in-field action (KVRow's set / revert / copy, PasswordField's reveal). It has
-// no text at all, so the tooltip carries the word.
-//
-// Both icons depict the ACTION rather than the state, matching the Settings row
-// this is deliberately a copy of (Settings.tsx's square RotateCcw, "Restore to
-// default"): handing a field back to the platform IS restoring it to its
-// default, and one idea should not have two visual languages. So a locked field
-// offers the OPENING lock, and an overridden one the same restore arrow Settings
-// uses, with the same words.
-//
-// The accessible name names the field where the tooltip does not. Two buttons
-// called "Override" in one section are two buttons a screen reader user cannot
-// tell apart, and the tooltip has to stay short because it is the only visible
-// copy the button has.
-function PenToggle(props: { pen: Pen; what: string }): JSX.Element {
-  const held = () => props.pen.overridden() || props.pen.value().trim() !== "";
-  return (
-    <Button
-      square
-      size="md"
-      class="join-item"
-      icon={held() ? RotateCcw : LockOpen}
-      title={held() ? "Restore to default" : "Override"}
-      label={held() ? `Restore the ${props.what} to default` : `Override the ${props.what}`}
-      onClick={() => props.pen.setOverridden(!held())}
-    />
-  );
-}
-
-// Clicking a LOCKED field takes it over, an accelerator on top of the button
-// rather than the way in: the button is always visible and always a tab stop,
-// so nothing here is reachable only by pointer.
-//
-// Two deliberate limits. It does NOT fire on focus, although a locked field is
-// focusable and a locked field that claimed the pen on focus would be claimed by
-// anyone tabbing from the pickers to the Create button, blanking both fields on
-// the way past, which is the state #699 exists to prevent. And it is ONE-WAY:
-// clicking an already-overridden field does nothing, because the way back
-// discards what the operator typed and belongs on the button, where it reads as
-// the deliberate act it is.
-function takeOver(state: PenState, pen: Pen): void {
-  if (state === "generated") pen.setOverridden(true);
-}
-
+// The lock itself (PenToggle) and the click accelerator (takeOver) moved to
+// components/PenToggle.tsx in #693, when the label pen left the lists and needed
+// the same affordance on the edit blade. They are imported rather than copied
+// for the reason this whole component exists: one idea should not grow two
+// visual languages, and a create form and an edit blade are the two halves of
+// one row's life. Nothing about them changed here. A create form passes no
+// `seed`, so taking the pen still starts from an empty box: there is no existing
+// label to inherit before the row exists.
 export default function CreateIdentity(props: CreateIdentityProps): JSX.Element {
   // The platform's answer for the name, empty when it has none yet or will
   // never have one. A locked field over an empty value is the state this

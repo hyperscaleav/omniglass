@@ -1,5 +1,5 @@
 import { Show } from "solid-js";
-import { entityLabel, hasDisplayName, labelGenerated, labelIsName, type Labelled } from "../lib/entities";
+import { entityLabel, hasDisplayName, labelIsName, type Labelled } from "../lib/entities";
 
 // How an entity's identity reads in a list, in one place.
 //
@@ -47,19 +47,34 @@ import { entityLabel, hasDisplayName, labelGenerated, labelIsName, type Labelled
 //
 //   no label            the name, once, in the data face (it IS an identifier)
 //   operator's label    the label in the prose face, the name beneath it
-//   platform's label    the label in the prose face, marked, no second line
+//   platform's label    the label in the prose face, no second line
 //
 // The face follows the LABEL, not the second line: a rendered label is prose, so
 // it must not drop into the data face merely because no identifier follows it.
+//
+// The pen's own state used to be the fourth thing this cell said, as a full-text
+// "Generated" chip beside the label. It left in #693, for two reasons that point
+// the same way. It cost the Name column the width of the word on every
+// platform-labelled row of the 18 pages this cell serves plus every TreeList,
+// which is a permanent charge for a fact most rows in a settled estate share.
+// And it was unactionable where it stood: an operator reading it in a list could
+// do nothing about it there. It is now the lock on the display-name field of the
+// edit blade (components/LabelPenField.tsx), beside the field it owns and next
+// to the act that changes it, which is where the NAME's own pen already stated
+// itself. The estate-wide question the chip half-answered, which rows a rule
+// edit would rewrite, is answered whole by `<entity> previewLabels`.
+//
+// The pen has not left this cell, only its badge: hasDisplayName still reads it
+// to decide whether an identifier goes on the second line, which is the whole
+// reason the three states above are three and not two.
 export function IdentityCell(props: { entity: Labelled; weight?: number }) {
   const label = () => entityLabel(props.entity);
   const showName = () => hasDisplayName(props.entity);
-  const generated = () => labelGenerated(props.entity);
   // The label IS the name, so it reads as an identifier and takes the data face.
   const isIdentifier = () => labelIsName(props.entity);
   return (
     <span class="flex min-w-0 flex-col gap-0.5 py-0.5">
-      <span class="flex min-w-0 items-baseline gap-1.5">
+      <span class="flex min-w-0 items-baseline">
         <span
           class="truncate"
           classList={{ "font-data text-[13px]": isIdentifier() }}
@@ -67,18 +82,6 @@ export function IdentityCell(props: { entity: Labelled; weight?: number }) {
         >
           {label()}
         </span>
-        {/* The label pen's tracking chip, the same vocabulary the name's pen
-            already wears on the component blade. Typing a label claims it and
-            clearing the field hands it back, so this is the mark that says which
-            rows a rule edit would rewrite. */}
-        <Show when={generated()}>
-          <span
-            class="badge badge-ghost badge-xs shrink-0"
-            title="The platform generated this label from a label rule. Typing one of your own claims it; clearing the field hands it back."
-          >
-            Generated
-          </span>
-        </Show>
       </span>
       <Show when={showName()}>
         <span class="truncate font-data text-[11px] text-base-content/40">{props.entity.name}</span>
