@@ -139,4 +139,32 @@ test.describe("operator console", () => {
     await page.locator('button:text-is("Delete")').click();
     await page.waitForURL(/\/web\/components\/?$/);
   });
+
+  // #690, and the only tier that can witness it: the defect is a LAYOUT, so it
+  // needs a browser doing layout. A page test can assert what the table declares
+  // and jsdom will not measure a column, which is exactly how a Name column
+  // measuring zero pixels sat on main behind a green suite.
+  //
+  // The numbers this replaced were measured on the dev estate at a 1280 viewport,
+  // where the list card offers 973px: Components' Name column was 0px wide (890px
+  // of declared columns plus 150px of actions, with nothing left), Systems' was
+  // 0px (960 declared), and Locations' was 173px (650 declared), which is why one
+  // of the three looked fine and the acceptance names all three.
+  for (const width of [1280, 1366]) {
+    test(`the Name column survives a ${width}px viewport on every inventory page`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      for (const path of ["/web/components", "/web/systems", "/web/locations"]) {
+        await page.goto(path);
+        const name = page.locator("main table.og-rows thead th").first();
+        await expect(name).toHaveText("Name");
+        const box = await name.boundingBox();
+        // 150 rather than the 200px floor itself: the assertion is that the
+        // identifier column is READABLE, not that it equals a constant a later
+        // slice may tune. Zero, which is what two of these three measured before
+        // the floor existed, fails it by a mile.
+        expect(box, `${path} at ${width}px has no Name column at all`).not.toBeNull();
+        expect(box!.width, `${path} at ${width}px: Name is ${Math.round(box!.width)}px`).toBeGreaterThan(150);
+      }
+    });
+  }
 });

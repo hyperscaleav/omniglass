@@ -14,6 +14,7 @@ import { uuidFor } from "../lib/testids";
 import { hueFor } from "../lib/system_color";
 import { INTERFACES_KEY, type Interface } from "../lib/interfaces";
 import { REACHABILITY_KEY } from "../lib/reachability";
+import { NAME_MIN_W } from "../components/TreeList";
 
 // The Components page on the shared TreeList in the create-as-route model: New routes
 // to /components/create (a draft accordion), Save hands off to /components/<name> in
@@ -1222,5 +1223,31 @@ describe("Components create offers a system only to a principal who may bind one
     expect(sent).not.toHaveProperty("system");
     expect(drafted.length).toBeGreaterThan(0);
     for (const body of drafted) expect(body).not.toHaveProperty("system");
+  });
+});
+
+// #690: the Name column measured 0px at a 1280 viewport, because under
+// `table-fixed` a widthless column takes what the declared ones leave, and
+// Components declares more than a 1280 screen has to give. The identifier an
+// operator scans was the first thing to vanish, and Tags kept every pixel.
+//
+// The assertion is on the DOM rather than on the descriptor, and it is both
+// halves of the fix at once: Name still declares NO width (so it absorbs a wide
+// screen, which is the behaviour worth keeping), and the table asks for a floor
+// under it, so a narrow screen scrolls the card sideways instead of squeezing
+// the column out. The same test rides on Systems and Locations, which is where
+// "all three behave the same way" is actually asserted: today they do not.
+describe("Components list keeps a floor under the Name column (#690)", () => {
+  it("declares no width on Name and a table floor that leaves it NAME_MIN_W", async () => {
+    localStorage.clear();
+    mount("/components");
+    await waitFor(() => expect(document.querySelector("table.og-rows")).toBeTruthy());
+
+    const table = document.querySelector("table.og-rows") as HTMLTableElement;
+    const cols = [...table.querySelectorAll("colgroup col")] as HTMLTableColElement[];
+    const declared = cols.slice(1).reduce((sum, c) => sum + parseInt(c.style.width || "0", 10), 0);
+
+    expect(cols[0].style.width).toBe("");
+    expect(parseInt(table.style.minWidth, 10) - declared).toBe(NAME_MIN_W);
   });
 });

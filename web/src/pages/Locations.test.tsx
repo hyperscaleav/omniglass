@@ -9,6 +9,7 @@ import { ownerPropertiesKey, type EffectiveProperty } from "../lib/owner_propert
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
+import { NAME_MIN_W } from "../components/TreeList";
 
 // The Locations page on the shared TreeList in the create-as-route model: New routes
 // to /locations/create (a draft accordion), Save hands off to /locations/<name> in
@@ -820,5 +821,26 @@ describe("Locations create identity", () => {
     // ordinal, so posting one would be a claim nothing can check (a 422).
     expect("expected_name" in captured!).toBe(false);
     expect(captured!.display_name).toBe("War Room");
+  });
+});
+
+// The Locations half of #690's uniformity clause, and the page the issue was
+// filed against as the control: it declares 650px of default columns, so at 1280
+// its Name column measured 173px and looked fine while the other two measured 0.
+// It gets the same floor rather than being left alone, because "Locations,
+// Systems and Components behave the same way" is the acceptance, and a page that
+// happens to fit today is a page that stops fitting when a column is added.
+describe("Locations list keeps a floor under the Name column (#690)", () => {
+  it("declares no width on Name and a table floor that leaves it NAME_MIN_W", async () => {
+    localStorage.clear();
+    mount("/locations");
+    await waitFor(() => expect(document.querySelector("table.og-rows")).toBeTruthy());
+
+    const table = document.querySelector("table.og-rows") as HTMLTableElement;
+    const cols = [...table.querySelectorAll("colgroup col")] as HTMLTableColElement[];
+    const declared = cols.slice(1).reduce((sum, c) => sum + parseInt(c.style.width || "0", 10), 0);
+
+    expect(cols[0].style.width).toBe("");
+    expect(parseInt(table.style.minWidth, 10) - declared).toBe(NAME_MIN_W);
   });
 });

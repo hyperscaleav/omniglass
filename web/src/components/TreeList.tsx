@@ -195,6 +195,51 @@ export type PageDescriptor = {
   defaultCols: string[];
 };
 
+// NAME_MIN_W is the floor under the Name column, and ACTION_W the row-action
+// column every list ends with.
+//
+// The Name column declares no width of its own, which is what lets it grow into
+// a wide screen: under `table-fixed` a widthless column takes whatever the
+// declared ones leave. That also makes it the FIRST to give up space on a narrow
+// one, and it gave up all of it (#690). Measured in the console at a 1280
+// viewport, where the list card offers 973px: Components declares 890px of
+// columns plus 150px of actions, so Name measured **0px** and the identifier an
+// operator scans was gone while Tags kept all 340 of its pixels; Systems
+// declares 960 and measured the same 0; Locations declares 650, so it had 173px
+// left over and looked fine. Same markup, three outcomes, decided by the widths
+// each page happens to declare.
+// 260px is MEASURED rather than chosen: an identity cell laid out with no clamp
+// wants 200px for "Boardroom 2" beside its Generated chip, and a real estate's
+// labels are longer than eleven characters, so a floor at 200 truncated the
+// system label to "Boardroo..." on the very page whose siblings #693 had just
+// taught to read differently. 260 carries a label of about nineteen characters
+// with its chip.
+//
+// It is a FLOOR and not a width: on a wide screen Name still takes everything
+// the declared columns leave (454px on Locations at a 1680 viewport). The cost
+// is stated rather than hidden: on Components and Systems, whose declared
+// columns already exceed the list card at that viewport, the card now scrolls
+// sideways where it used to fit by squeezing Name to 214px and 144px. Hiding one
+// column (Tags is the widest and the least identifying) removes the scroll, and
+// that lever is already in the columns menu.
+export const NAME_MIN_W = 260;
+export const ACTION_W = 150;
+
+// minTableWidth is the fix, and it is a floor on the TABLE rather than a width
+// on the column. The table asks for at least the declared columns plus
+// NAME_MIN_W, so the browser gives Name that much and the card (already
+// `overflow-x-auto`) scrolls sideways when even that does not fit, instead of
+// squeezing the identifier out of existence. Wide screens are untouched:
+// `width: 100%` beats a smaller min-width, so Name still absorbs the surplus.
+//
+// It lives here rather than in each page's descriptor because the three pages
+// differ only in the widths they declare, and the defect was that one shared
+// rule produced three different behaviours. The remedy has to be the same shared
+// rule, not three sets of numbers kept in step by hand.
+export function minTableWidth(columns: Record<string, { width: number }>, visible: string[]): number {
+  return visible.reduce((sum, k) => sum + (columns[k]?.width ?? 0), NAME_MIN_W + ACTION_W);
+}
+
 export default function TreeList<N extends ListNode>(props: { config: ListConfig<N> }) {
   const cfg = props.config;
   const me = useMe();
@@ -687,11 +732,11 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
       >
         {() => (
           <div class="overflow-x-auto">
-            <table class="og-rows table table-fixed table-sm">
+            <table class="og-rows table table-fixed table-sm" style={{ "min-width": `${minTableWidth(cfg.columns, visible())}px` }}>
             <colgroup>
               <col />
               <For each={visible()}>{(k) => <col style={{ width: `${cfg.columns[k].width}px` }} />}</For>
-              <col style={{ width: "150px" }} />
+              <col style={{ width: `${ACTION_W}px` }} />
             </colgroup>
             <thead>
               <tr>

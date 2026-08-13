@@ -46,6 +46,16 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   the primary create), the tree and flattened body rendering, the stacked detail blades, the full-page
   detail, the create/edit `Drawer`, and an optional summary widget board. Adding an entity of
   this class is a data layer + a config + a route (see the `add-inventory-view` skill).
+- **The Name column has a floor, and the card scrolls before it gives it up.** A list table is
+  `table-layout: fixed`, every column but Name declares a width, and Name takes what is left, which
+  is what lets the identifier grow into a wide screen. It also made Name the first column to give up
+  space on a narrow one, and it gave up all of it: at a 1280 viewport, where the list card offers
+  973px, Components declared 890px of columns plus 150px of row actions and its Name column measured
+  **0px**, while Locations, declaring 650px, looked fine ([#690](https://github.com/hyperscaleav/omniglass/issues/690)).
+  `TreeList` now asks the table for a `min-width` of everything declared plus `NAME_MIN_W`, so the
+  browser gives Name that floor and the card scrolls sideways when even that does not fit. Wide
+  screens are unchanged, since `width: 100%` beats a smaller min-width. A page declaring a new
+  column inherits this; it is one rule in the shell, not a set of numbers per page.
 - **The faceted filter is a tested engine.** `lib/predicate` is the pure matcher: values within a
   chip are OR, chips across keys are AND, clicking an active facet removes it. `FilterBar` is the
   thin staged combobox over it; the genuinely tricky list derivations (index, ancestor paths,

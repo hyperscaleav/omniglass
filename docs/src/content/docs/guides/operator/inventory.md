@@ -44,7 +44,10 @@ sections ([getting around](/guides/operator/#getting-around)).
   the first line, and beneath it, in the data face, the **name** the API, the CLI, and the URL address
   it by. An entity with no display name shows its name alone, in the data face, so an absence reads as
   an absence rather than a typo. That second line is what you copy into an `omniglass` command. The
-  column is headed **Name** on every page and sorts on the line you are reading down.
+  column is headed **Name** on every page and sorts on the line you are reading down. It keeps a
+  minimum width on a narrow screen: on a 1366x768 laptop the list scrolls sideways rather than
+  squeezing the identifier out, and hiding a column you are not using (the **Tags** column is the
+  widest) is what removes the sideways scroll.
 - A display name the platform rendered from a [label rule](/architecture/core-entities/) wears a
   **Generated** chip beside it, which is how you tell the rows a rule edit would rewrite from the ones
   you named yourself. Typing over one claims it; clearing the field hands it back.

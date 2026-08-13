@@ -14,6 +14,7 @@ import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
 import { hueFor } from "../lib/system_color";
 import { systemHealthKey, type EstateHealth } from "../lib/health";
+import { NAME_MIN_W } from "../components/TreeList";
 
 // The Systems page on the shared TreeList in the create-as-route model: New routes
 // to /systems/create (a draft accordion), Save hands off to /systems/<id> in edit;
@@ -595,5 +596,25 @@ describe("Systems create identity", () => {
     // The NAME the locked field was showing goes back as the precondition.
     expect(captured!.expected_name).toBe("classroom");
     expect(captured!.display_name).toBe("Lecture Hall");
+  });
+});
+
+// The Systems half of #690's uniformity clause. Systems declares the widest
+// default set of the three (960px of columns), so it lost the Name column at a
+// wider viewport than Components did: measured 0px at 1280, where the list card
+// offers 973px. Same assertion as Components and Locations, because the whole
+// point of the fix is that one shared rule now produces one behaviour.
+describe("Systems list keeps a floor under the Name column (#690)", () => {
+  it("declares no width on Name and a table floor that leaves it NAME_MIN_W", async () => {
+    localStorage.clear();
+    mount("/systems");
+    await waitFor(() => expect(document.querySelector("table.og-rows")).toBeTruthy());
+
+    const table = document.querySelector("table.og-rows") as HTMLTableElement;
+    const cols = [...table.querySelectorAll("colgroup col")] as HTMLTableColElement[];
+    const declared = cols.slice(1).reduce((sum, c) => sum + parseInt(c.style.width || "0", 10), 0);
+
+    expect(cols[0].style.width).toBe("");
+    expect(parseInt(table.style.minWidth, 10) - declared).toBe(NAME_MIN_W);
   });
 });
