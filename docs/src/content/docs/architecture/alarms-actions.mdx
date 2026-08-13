@@ -280,11 +280,13 @@ opens an alarm, fires the action again), closed with three rules:
    health rollup's `property` row, `source_rule='health-rollup'`), and the routing layer refuses to
    trigger a rule off its own output
    ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based)).
-2. **ack / snooze transitions do not match `action_rule`s** (only open / resolve do).
+2. **Operator transitions do not match `action_rule`s** (only open / resolve do). Acknowledgement is
+   the built one and behaves this way already: it fires nothing, because it recomputes nothing.
+   Snooze remains unbuilt and refused (ADR-0109).
 3. **The control loop is lineage-guarded at dispatch**: before running an action, the engine walks
    the triggering event's **causation lineage** (carried on **NATS message headers**); if the same
    `(action, owner)` appears upstream it is suppressed, with a depth bound as backstop. Flows are
-   finite by construction (a step list, per-open-alarm, gated on open, cancelled on resolve / ack).
+   finite by construction (a step list, per-open-alarm, gated on open, cancelled on resolve or acknowledgement).
 
 The walk crosses the device round trip because the command **stamps its `correlation_id` onto the
 intended write and onto the adaptive-poll's observed sample**

@@ -119,8 +119,10 @@ Coded pages with rich interaction, all reading through views:
   shadowed bindings it beat.
 - **Sample history**: `line` or `heatmap` over a time range, stale / unknown surfaced
   ([time](/architecture/time/)).
-- **Alarm drill-down**: the alarm, its triggering sample and history, the actions it fired,
-  ack / snooze / resolve controls.
+- **Alarm drill-down**: the alarm, its triggering sample and history, the actions it fired, and the
+  acknowledgement (built today on the component's Alarms panel, not on a drill-down of its own).
+  Snooze and resolve controls are **not** part of this: both were refused, with reasons, in
+  [ADR-0109](/architecture/decisions/#adr-0109-an-alarm-carries-an-acknowledgement-and-not-a-snooze-or-a-resolve).
 - **Inventory and topology**: navigable location / system / component trees,
   [health](/architecture/health/) (`status-grid`) at each level.
 - **Event exploration**: the event log by entity / time / category, with the audit trail.
