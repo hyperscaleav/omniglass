@@ -275,9 +275,13 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 // The lock is an advisory one keyed on a hash of the owner, not a row lock,
 // because the thing being serialized is a computation over many tables rather
 // than one row. Owners are locked in a single global order (components, then
-// systems, then locations, each by name), which is what keeps two recomputes over
-// overlapping chains from deadlocking. A hash collision costs two unrelated
-// owners a wait and nothing else.
+// systems, then locations, each by ID), which is what keeps two recomputes over
+// overlapping chains from deadlocking. Stated identically in recomputeChain and
+// implemented identically in refSet.sorted() and locationsOver's `order by id`:
+// one fact in three places rather than three claims (#670). An id is the only
+// key that can carry it, because it is the only one guaranteed unique, and a
+// tied comparison is not an order. A hash collision costs two unrelated owners a
+// wait and nothing else.
 //
 // It is transaction-scoped, so it releases on commit or rollback with no
 // unlocking to forget. The recompute always runs inside the caller's transaction
@@ -556,6 +560,18 @@ func (p *PG) systemsForRoleOwner(ctx context.Context, q txQuerier, ownerKind, ow
 // which its row no longer points at. Both inputs and the result are ownerRefs,
 // resolved by id (systems.location_id, location.parent_id are both ids
 // already), never by re-joining on a name.
+//
+// Ordered by ID, which is the recompute's lock order (see recomputeChain) and
+// the same key refSet.sorted() gives the component and system tiers. It used to
+// order by name, which was the same order back when a location name was unique
+// estate-wide and is not an order at all now that #627 scoped uniqueness to
+// placement: two rooms under different buildings can both be 415a, and a tied
+// comparison leaves their relative order to the plan. That is not academic. The
+// two arms of the union below feed the sort in different orders, so the two
+// production trigger shapes (recomputeMovedLocation naming both rooms,
+// recomputeMovedSystem reaching one through a system and naming the other)
+// really did visit the same pair in opposite orders, which is the deadlock
+// precondition the per-owner advisory locks depend on being impossible.
 func (p *PG) locationsOver(ctx context.Context, q txQuerier, systems, named []ownerRef) ([]ownerRef, error) {
 	if len(systems) == 0 && len(named) == 0 {
 		return nil, nil
@@ -575,7 +591,7 @@ func (p *PG) locationsOver(ctx context.Context, q txQuerier, systems, named []ow
 			select p.id, p.name, p.parent_id
 			from location p join ancestry a on a.parent_id = p.id
 		)
-		select distinct id, name from ancestry order by name`, refIDs(systems), refIDs(named))
+		select distinct id, name from ancestry order by id`, refIDs(systems), refIDs(named))
 	if err != nil {
 		return nil, fmt.Errorf("storage: locations over systems: %w", err)
 	}

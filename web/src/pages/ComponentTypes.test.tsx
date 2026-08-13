@@ -212,5 +212,45 @@ describe("ComponentTypes page", () => {
     await waitFor(() => expect(sent).toBeTruthy());
     expect(sent).toMatchObject({ stem: "ceiling-mic" });
     expect(sent).not.toHaveProperty("parent_id");
+    // An inherited fact must ride as OMITTED, never as "". The columns are
+    // nullable and the server's walk treats only NULL as inherit while the
+    // patch coalesces, so an empty string would write a real value that stops
+    // the walk for this node and every descendant, silently and permanently.
+    // Ceiling Microphone carries no icon and no abbrev of its own, so those
+    // two are the inherited case.
+    expect(sent).not.toHaveProperty("icon");
+    expect(sent).not.toHaveProperty("abbrev");
+    expect(Object.values(sent as Record<string, unknown>)).not.toContain("");
+  });
+
+  // The second leg of #677: a custom child with no stem of its own is legal
+  // (the server requires a stem only on a root), but the patch body gives stem
+  // a minLength, so an empty string is a 422 before the handler runs. Such a
+  // row must stay editable from the console without inventing a stem it never
+  // wanted.
+  it("edits a custom child that has no stem of its own, sending no stem at all", async () => {
+    let sent: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH" && req.url.includes("/component-types/")) {
+        sent = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({}), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ component_types: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(screen.getByText("Ceiling Microphone"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    fireEvent.input(within(blade).getByLabelText("Display name") as HTMLInputElement, { target: { value: "Ceiling Mic" } });
+    fireEvent.click(within(blade).getByText("Save"));
+    await waitFor(() => expect(sent).toBeTruthy());
+    expect(sent).toMatchObject({ display_name: "Ceiling Mic" });
+    expect(sent).not.toHaveProperty("stem");
+    expect(Object.values(sent as Record<string, unknown>)).not.toContain("");
   });
 });

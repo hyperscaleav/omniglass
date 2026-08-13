@@ -43,11 +43,22 @@ const (
 // now. Within the window the verdict is pending regardless of the observed value;
 // past it, a match is settled and anything else is failed. A nil intended value is
 // none (nothing was told).
+//
+// A window of zero is terminal BY CONSTRUCTION, never by arithmetic (#667). It is
+// the documented way to say "settle immediately", which is a statement about
+// intent rather than about time, and it is exactly the setting the arithmetic
+// served worst: at zero the comparison reduces to `now.Sub(intended.TS) < 0`,
+// true only when the sample is stamped AHEAD of now, so the verdict for the most
+// decisive setting in the catalog was decided by whatever skew separated the two
+// values. Callers now supply a `now` read from the database, the same clock the
+// sample's ts comes from, which closes the skew for every other window; this
+// branch is what makes the zero case independent of the clock rather than merely
+// agreeing with it.
 func Settle(intended, observed *CurrentValue, windowSeconds int, now time.Time) SettlementVerdict {
 	if intended == nil {
 		return SettlementNone
 	}
-	if now.Sub(intended.TS) < time.Duration(windowSeconds)*time.Second {
+	if windowSeconds > 0 && now.Sub(intended.TS) < time.Duration(windowSeconds)*time.Second {
 		return SettlementPending
 	}
 	if observed != nil && bytes.Equal(observed.Value, intended.Value) {
@@ -69,6 +80,34 @@ func terminalStatus(verdict SettlementVerdict, observed *CurrentValue) string {
 		return "timed-out"
 	}
 	return "failed"
+}
+
+// dbNow reads the caller's transaction timestamp: the one clock a settlement
+// comparison is allowed to use (#667).
+//
+// Settle compares `now` against a sample's ts, and every ts on the telemetry
+// tables defaults to Postgres's now(), so a `now` taken with time.Now() in the
+// server process put two clocks on the two ends of one comparison. On a real
+// deployment the database is not on the server's host and the two do not agree;
+// the operator-visible cost was a command that genuinely failed being reported
+// pending, on every zero-window command, decided by which way the skew ran.
+//
+// now() is transaction_timestamp, which is the point: a settle-check running
+// inside the transaction that just opened the intended value reads exactly the
+// ts that row was stamped with, so the two ends of the comparison are one
+// reading of one clock rather than two readings that happen to be close. It also
+// keeps `settled_at` in the same currency as the `now()` the insert path already
+// stamps a fire-and-forget command with.
+//
+// Settle itself stays pure and still takes `now` as an argument. What changed is
+// who supplies it, which is the repo's own rule about the clock being an edge
+// concern pushed out of the core.
+func dbNow(ctx context.Context, q querier) (time.Time, error) {
+	var now time.Time
+	if err := q.QueryRow(ctx, `select now()`).Scan(&now); err != nil {
+		return time.Time{}, fmt.Errorf("storage: read database time: %w", err)
+	}
+	return now.UTC(), nil
 }
 
 // settleCheck is the explicit settle-check write path (#590). Settlement has no

@@ -163,6 +163,22 @@ restrict` throughout), so a deletable location is empty and already healthy.
 A **missing trigger is a hole in the history**: the honest cost of this design, and why the list is
 enumerated, not inferred.
 
+### Owners are locked by id, in one order
+
+A recompute takes a transaction-scoped advisory lock on **every owner it visits** and holds it to
+commit, so a concurrent recompute of the same owner resolves over this one's committed result rather
+than over the state it is replacing. Two recomputes whose chains overlap therefore contend, and the
+only thing that keeps contention from becoming **deadlock** is that both visit their owners in the
+same order: **components, then systems, then locations, each ascending by id**.
+
+The key has to be the **id**, and the reason is a change one tier away. Names were unique estate-wide
+once, so ordering locations by name was the same order; #627 scoped uniqueness to **placement**, and
+two rooms under different buildings may both be `415a`. A comparison that leaves two owners tied is
+not an order at all: it hands their relative order to the query plan, and the plan reads its input,
+so a location move (which names both rooms) and a system move (which reaches one through the system
+placed in it and names the other) resolved the same pair in **opposite** orders. Ordering by id is
+total by construction, since two owners can share a name but never an id.
+
 ### A read never writes
 
 Self-healing on read would stamp the edge at read time, precisely the inaccuracy this model avoids.

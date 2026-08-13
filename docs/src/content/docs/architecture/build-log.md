@@ -4089,3 +4089,47 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   empty, the row is still `name_generated`, and posting it beside a supplied name is the same 422.
   The 409's machine-readable detail moves to `body.expected_name` and carries the name the create
   would have produced, which is what the form shows next.
+
+- **An inherited component-type fact rides as omitted, never as an empty string.** The component-type
+  edit blade posted `stem`, `abbrev` and `icon` as raw signals seeded with `?? ""`, so a node that
+  inherits a fact sent `""`. Those columns are nullable and the server's walk treats only NULL as
+  inherit, while the patch coalesces, so the empty string wrote a real value that stopped the walk for
+  that node and every descendant under it: silent, permanent, and on the facts the generated name and
+  the abbrev-compacted render read. The console hid it in both directions, since the wire omits an
+  empty icon and the client-side resolver treats `""` as falsy and keeps walking, so the page still
+  drew the inherited glyph while the server no longer resolved one. `stem` also carries a minLength on
+  the patch body, so a custom child that legitimately has none could not be edited at all: the save
+  was a 422 before the handler ran. This is the original of the defect the system-type copy fixed
+  alongside it, and it takes the same shape (empty means omitted, plus a guard test asserting no `""`
+  ever rides the body). Clearing a fact back to inherit stays inexpressible from the console; the
+  instrument for it is the three-state string sentinel already live on `label_rule` in the same
+  handler, not the write mask, which stays scoped to nullable object fields.
+
+- **The recompute's lock order is one stated fact, and it is the id.** `locationsOver` ordered its
+  result by `name` while `recomputeChain`'s comment said the order was by id and `lockHealthOwner`'s
+  said it was by name: three statements, two of them wrong, and harmless only while a location name
+  was unique estate-wide. Scoping name uniqueness to placement retired that guarantee, so two rooms
+  under different buildings can both be `415a` and the comparison ties. A tie is not an order: it
+  hands the visit order to the plan, and the plan reads its input, so the two production trigger
+  shapes really did disagree. A location move (both rooms named outright) resolved the pair
+  newest-first and a system move (one room reached through the system placed in it, the other named
+  as the one it left) resolved it oldest-first, which is exactly the precondition the per-owner
+  advisory locks assume away. The query now orders by id, matching what the two comments claim and
+  what `refSet.sorted()` already did for the component and system tiers. The guard is the ordering
+  itself, asserted two ways and deterministic in both; the concurrency test the issue asked for is
+  kept as a liveness check and labelled as one, because driven against the unfixed ordering it
+  survived over four thousand paired rounds without deadlocking and odds are not a guard.
+
+- **Settlement reads one clock, and a zero window stops arguing with it.** `Settle` compared a
+  sample's `ts`, written by Postgres, against a `now` supplied by the Go process, so the verdict was a
+  function of the skew between two hosts. At a zero settle window the comparison reduces to "is this
+  sample stamped in the future", with no margin at all to absorb the difference, which is how the
+  setting whose whole meaning is "do not wait" became the one that could wait forever: a command that
+  genuinely failed reported `pending` and never settled. It showed up first as an intermittent
+  end-to-end failure and was reproduced on a branch containing no Go at all. Both settle paths now read
+  `now` from the database in their own transaction, which at issue is the very timestamp the intended
+  row was stamped with, and a zero window is terminal before any arithmetic runs. `Settle` stays pure
+  and still takes `now`; what changed is who supplies it, at the cost of one round trip on each of the
+  two paths. The alternative, stamping samples from Go, was refused as the larger ripple, and a
+  tolerance was refused as the move that quiets a test without changing the behavior
+  ([ADR-0108](/architecture/decisions/#adr-0108-settlement-reads-one-clock-and-a-zero-window-is-a-statement-of-intent)).

@@ -144,6 +144,17 @@ sets: `moveComponentInput`, a system's `standard`) is untouched and stays the id
 string. The mask is what generalizes clearing to everything that is not a string; retiring the
 sentinel in its favor is a separate ripple, not folded in here.
 
+That cuts both ways, and the **inherited registry facts** are where it currently bites. A
+`component_type` or `system_type` stores `stem`, `abbrev`, `icon` and `label_rule` as nullable
+strings where NULL means "inherit from the nearest ancestor that sets one". Only `label_rule` honors
+the sentinel (its patch clears on `""`); the other three still `coalesce`, so `""` writes a real
+empty value that stops the inheritance walk for that node and every descendant. Until they adopt the
+sentinel too ([#716](https://github.com/hyperscaleav/omniglass/issues/716)), an inherited fact rides
+as **omitted**, never as `""`, and both edit blades send `undefined` for an empty box. The
+instrument for the missing capability is the sentinel these columns already document elsewhere, not
+the mask: a nullable string has an empty value to overload, which is the exact distinction ADR-0106
+draws when it sends objects to the mask instead.
+
 **Clearing a nullable OBJECT field is the mask, always** (`name_rule` is the first,
 [ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask)).
 An object has no empty value to overload the way a string has `""`: `{}` is a rule with default
