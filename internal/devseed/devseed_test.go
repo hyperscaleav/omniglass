@@ -207,12 +207,17 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 		}
 	}
 
-	// Both systems: which half of a divisible boardroom is A and which is B is a
-	// fact about the air wall, and the shipped system rule (which reads the
-	// type) renders the same label for both of them.
+	// No system, which is the reverse of what this loop asserted for two slices.
+	// Both halves of the divisible boardroom were pinned ("Boardroom A" and
+	// "Boardroom B") because the shipped system rule read the type alone and
+	// rendered "Boardroom" for each of them. It reads the ordinal now (#693), so
+	// the rule tells them apart on its own and a pin would be the hand-typed copy
+	// of its output this test exists to catch. The rendered pair is pinned
+	// instead, in TestSeededLabelsRenderFromTheirRules: releasing a pin leaves
+	// nothing behind unless the rendered value is asserted in its place.
 	for _, s := range doc.Systems {
-		if s.DisplayName == "" {
-			t.Errorf("system %q has no display_name; the shipped system rule renders the type, so both halves would read alike", s.Key)
+		if s.DisplayName != "" {
+			t.Errorf("system %q display_name = %q, want none (the shipped system rule renders it, ordinal and all)", s.Key, s.DisplayName)
 		}
 	}
 
@@ -803,10 +808,14 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		// the operator's words win and keep the pen.
 		{table: "component", place: "boardroom", name: "device-1", label: "Power Conditioner", platform: false},
 		{table: "component", place: "boardroom", name: "dsp", label: "Boardroom DSP", platform: false},
-		// The two halves of the divisible room: which one is A and which is B is
-		// a fact about the air wall, and a rule has no way to know it.
-		{table: "system", place: "boardroom", name: "boardroom", label: "Boardroom A", platform: false},
-		{table: "system", place: "boardroom", name: "boardroom-2", label: "Boardroom B", platform: false},
+		// The two halves of the divisible room, and the estate's only same-type
+		// siblings. The shipped rule reads the type AND the ordinal (#693), and
+		// the ordinal is the one the name carries, so the first half reads
+		// "Boardroom" beside its `boardroom` name and the second "Boardroom 2"
+		// beside `boardroom-2`. Both were pinned ("Boardroom A", "Boardroom B")
+		// while the rule could only render one string for the pair.
+		{table: "system", place: "boardroom", name: "boardroom", label: "Boardroom", platform: true},
+		{table: "system", place: "boardroom", name: "boardroom-2", label: "Boardroom 2", platform: true},
 		// The two floors, which used to be here as PINS over a generated name
 		// (`1` labelled Level 2). They are named for their designations now, so
 		// the rule renders those designations and the platform holds the pen.

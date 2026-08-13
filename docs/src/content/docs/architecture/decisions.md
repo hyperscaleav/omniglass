@@ -4122,8 +4122,63 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   key, and the shipped global system rule deliberately does not use it: for a suppressed first name
   the number and the name disagree, so whether a label says "Boardroom" or "Boardroom 1" is an
   authoring choice an operator makes, not a platform default.
+
+  **Amended ([#693](https://github.com/hyperscaleav/omniglass/issues/693)): the shipped system rule
+  reads the ordinal, and the key it reads is the number the NAME carries.** The decline above is
+  reversed, and the case that reverses it is the one AV estates are full of: a divisible boardroom is
+  two `board` systems in one room, so both rendered "Boardroom", and the operator reading the console
+  had less information than the platform holding `boardroom` and `boardroom-2`. The rule is now
+  `{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}`, the component's verbatim.
+
+  The reversal is TWO changes and only one of them was named when the ruling was made, which is worth
+  recording because the other one is where the argument lives. Adding `{{if .Ordinal}}` to the rule
+  alone renders **"Boardroom 1"** for the only boardroom in a room, because `{{if}}` on a string is
+  false for the EMPTY string and a suppressed first name still owns the stored ordinal 1. That is the
+  defect this entry's decline was protecting against, and a rule change on its own walks straight
+  into it. So the map's value changes with it: `Ordinal` is now the ordinal the row's name SHOWS,
+  which is empty for a suppressed first exactly as it is empty for a row an operator named. The two
+  states read alike to a rule because they mean the same thing to a reader: this row's name carries
+  no number.
+
+  The suppression is asked of the MINT (`nameMint.suppresses`, the branch `name` itself takes) rather
+  than read off the name string, which keeps this entry's central decision true on the label side: a
+  name's shape has one implementation, and a second reading of it could disagree at exactly ordinal
+  1. It also survives the seam above, where `bareFirst` becomes per-TYPE: a rule hardcoding
+  `ne .Ordinal "1"` would have been a per-kind default baked into a template, wrong for the first
+  type that chose differently, and unwritable by an operator who should never have to know which
+  mint named a row.
+
+  What the reversal costs is stated rather than buried: a rule can no longer render "Boardroom 1" for
+  a system named `boardroom`, because the number is not reachable from the map any more. That was the
+  authoring choice the decline preserved, and it is the one this entry already calls the defect the
+  epic was filed about, so it is refused as a rule rather than offered and warned about. An operator
+  who wants those exact words still types them, which takes the pen (#682) and is the honest way to
+  say a label is not derived from anything.
+
+  A key was NOT added beside `Ordinal` to keep both readings available. Two spellings of one number
+  in a closed map is a difference for a rule author to misinterpret, and the wrong pick reintroduces
+  the defect silently, which is the same argument `NameRule.normalized` makes about two spellings of
+  one rule.
+
+  The component tier reads its ordinal through the same helper, and the value there is unchanged for
+  every row: `componentMint` does not suppress (a rack's `display-1` beside `display-2` is what an
+  operator writes on the label), so the helper's answer is the stored number. One meaning of the key
+  on both tiers, rather than two tiers that happen to agree today.
+
+  **The write paths were re-derived and grew by none.** Every act that moves a system's ordinal is an
+  act that re-runs the mint or hands the pen back: create, `:rename` (which clears it), `:resetName`,
+  `:move` where the bucket changes, and the `system_type` half of a reclassify, which is the same set
+  this entry derived for the NAME. Each already restamps the label unconditionally in its own
+  transaction, and unconditionally is what matters rather than the set being the same: a reclassify
+  between two stems can leave the name identical while the ordinal moves (`wall-2` at ordinal 2 is
+  the same string as the suppressed first of stem `wall-2`), so a stamp gated on the name having
+  changed would have missed it. A delete frees a lower ordinal and re-mints nothing, by this entry's
+  own allocation rule, so no surviving row's label goes stale behind it. The completeness invariant
+  (`TestNoActLeavesALabelStaleAnywhere`) now runs a system rule that READS the ordinal, where the one
+  it ran before could not have seen a hole in any of this.
 - **Tracked under** [#686](https://github.com/hyperscaleav/omniglass/issues/686), the sixth slice of
-  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
+  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657), and amended by
+  [#693](https://github.com/hyperscaleav/omniglass/issues/693).
 
 ### ADR-0102: A name rule is a declaration a type opts in with, and a rule change renames nothing
 

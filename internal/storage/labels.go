@@ -453,7 +453,7 @@ func componentLabelChain(ctx context.Context, q querier, productID string) (comp
 func componentLabelData(c *Component, in componentLabelInputs, pl componentPlacement) label.Data {
 	return label.Data{
 		"Name":            c.Name,
-		"Ordinal":         ordinalText(c.Ordinal),
+		"Ordinal":         mintedOrdinalText(componentMint(in.stem), c.Ordinal),
 		"TypeName":        in.typeName,
 		"TypeAbbrev":      in.abbrev,
 		"Stem":            in.stem,
@@ -682,16 +682,19 @@ func systemLabelChainWith(ctx context.Context, q querier, standardID, systemType
 }
 
 // systemLabelData is the closed data map for one system. Ordinal joined it with
-// #686, which gave a system a generated name and the number behind it: absent
-// (the empty string) for an operator-named system, and present for a
-// platform-named one, including the SUPPRESSED first of its stem, whose name
-// carries no digits while its ordinal is 1. That is the case the column exists
-// for, and a rule reading .Ordinal reads the number rather than the name's
-// spelling of it.
+// #686, which gave a system a generated name and the number behind it, and #693
+// made the shipped rule READ it, which is where the two halves of a divisible
+// boardroom stop reading alike.
+//
+// The value is the number the system's NAME carries (see mintedOrdinalText), so
+// the first of its stem is empty here exactly as it is bare there. The mint is
+// resolved from the same stem the generator mints from, rather than by looking
+// at the name, because the suppression is a property of the mint (ADR-0101) and
+// reading it off the string would be a second implementation of the rule.
 func systemLabelData(s *System, in systemLabelInputs, pl systemPlacement) label.Data {
 	return label.Data{
 		"Name":          s.Name,
-		"Ordinal":       ordinalText(s.Ordinal),
+		"Ordinal":       mintedOrdinalText(systemMint(in.stem), s.Ordinal),
 		"TypeName":      in.typeName,
 		"TypeAbbrev":    in.abbrev,
 		"Stem":          in.stem,
@@ -783,13 +786,17 @@ func locationLabelChainWith(ctx context.Context, q querier, locationTypeID, glob
 //
 // And deliberately NO Ordinal, although #687 gave a location one (the comment
 // here used to say a location has none, which that slice made false). The key
-// would be redundant where it would help and wrong where it would not. A
-// POSITIONAL location's name IS its ordinal, so "{{.TypeName}} {{.Name}}"
-// already renders "Floor 3" with nothing added; the only case a separate key
-// serves is a STEMMED type with the first ordinal suppressed, where the name is
-// "wing" and the ordinal is 1, and printing "Wing 1" for the only wing in a
-// building is the exact defect this epic was filed about (ADR-0101 declines to
-// use .Ordinal in the shipped SYSTEM rule for the same reason). Adding a key is
+// would be REDUNDANT, which is the whole of the argument now that #693 has
+// settled what the key would carry: the number the name shows. A positional
+// location's name IS that number, so "{{.TypeName}} {{.Name}}" renders "Floor
+// 3" with nothing added, and a stemmed one carries it in the name too, so the
+// shipped rule's "{{title (words .Name)}}" reads "Wing 2" off `wing-2` and
+// "Wing" off the suppressed `wing`.
+//
+// The older half of this argument was that a key here would print "Wing 1" for
+// the only wing in a building, which the epic was filed about. That is no
+// longer what it would do (mintedOrdinalText suppresses it), so it is retired
+// rather than repeated: redundancy is the reason that survives. Adding a key is
 // the only way to widen what a rule can see, so it is not added on a maybe.
 func locationLabelData(l *Location, in locationLabelInputs) label.Data {
 	return label.Data{
@@ -843,12 +850,30 @@ func derefRule(rule *string) string {
 	return *rule
 }
 
-// ordinalText renders a stored ordinal for the data map: absent is the empty
-// string, which is both what a rule prints for it and what {{if}} reads as
-// false, so "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}" is the whole of
-// the suppression rule an operator has to write.
-func ordinalText(n *int) string {
-	if n == nil {
+// mintedOrdinalText renders an ordinal for the data map: the number the row's
+// NAME carries, and the empty string when it carries none.
+//
+// Empty is what a rule prints for it and what {{if}} reads as false, so
+// "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}" is the whole of the
+// suppression rule an operator has to write, on either tier.
+//
+// A row reaches the empty case two ways and they mean the same thing to a
+// reader. An operator named it, so the platform allocated no number at all; or
+// the platform named it and its mint SUPPRESSED the number, which is the first
+// of its stem in a bucket (ADR-0101: a room's only boardroom is `boardroom`,
+// not `boardroom-1`).
+//
+// The second case is #693 and it reverses what this map said before. The key
+// used to be the stored ordinal verbatim, on the argument that a rule should
+// read the number rather than the name's spelling of it; the shipped system
+// rule then declined to read it, because "Boardroom 1" beside a system NAMED
+// `boardroom` is the exact defect the ordinal's suppression exists to prevent.
+// Deriving the value from the mint settles that once, for every rule, instead
+// of leaving each author to write the suppression by hand and get "Boardroom 1"
+// when they forget: the key is the number the name shows, so a label and a name
+// cannot disagree about how many of a thing there are.
+func mintedOrdinalText(m nameMint, n *int) string {
+	if n == nil || m.suppresses(*n) {
 		return ""
 	}
 	return fmt.Sprintf("%d", *n)

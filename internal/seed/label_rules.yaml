@@ -17,10 +17,21 @@ label_rules:
     template: "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}"
 
   - entity_kind: system
-    # What kind of space this system is. A standard is the blueprint it is built
-    # to, which is a different question and rarely what an operator wants read
-    # back at them in a list.
-    template: "{{.TypeName}}"
+    # What kind of space this system is, plus which one it is. A standard is the
+    # blueprint it is built to, which is a different question and rarely what an
+    # operator wants read back at them in a list.
+    #
+    # The ordinal is the component's rule verbatim, and it is here because a
+    # divisible boardroom's two halves are both boardroom systems in one room
+    # (#693): without it they read "Boardroom" and "Boardroom", and only the
+    # platform could tell them apart. The suppression follows the NAME, so the
+    # first of its stem reads "Boardroom" beside its `boardroom` name and the
+    # second reads "Boardroom 2" beside `boardroom-2`.
+    #
+    # A shipped rule change restamps nothing by itself (ADR-0100, ADR-0102). A
+    # new estate gets this at create; an existing one keeps both halves reading
+    # "Boardroom" until an operator runs /systems:recomputeLabels.
+    template: "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}"
 
   - entity_kind: location
     # The location's own name, read as words and title-cased.

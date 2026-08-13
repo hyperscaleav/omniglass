@@ -119,6 +119,12 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   `HQ` is on it). It only re-cases what you typed, so where the room's real name is not in its machine
   name (a `huddle` that everyone calls the Huddle Room), open the lock and type it.
 
+  A system's shipped rule reads its **type and its number**, and the number is the one the name is
+  about to carry: the first boardroom you create in a room shows the name `boardroom` and the label
+  **Boardroom**, and the second shows `boardroom-2` and **Boardroom 2**. The two fields are one answer,
+  so a label with a number in it means a name with the same number in it, and neither is a guess: both
+  are read from the room you have just picked.
+
   A name is **required** only where nothing will generate one, and there the field arrives unlocked
   with no lock to close: a system with no type (or a type whose chain sets no stem), a location whose
   type carries no name rule, a product whose type chain carries no stem. The form names the missing

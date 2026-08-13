@@ -54,6 +54,12 @@ sections ([getting around](/guides/operator/#getting-around)).
   `omniglass location previewLabels` to see exactly which rows would move, then
   `omniglass location recomputeLabels` to apply it, and the same rows read **North Wing**. Nothing you
   typed yourself is touched by either.
+- **The same applies to systems, and the upgrade worth running is this one.** A system's shipped label
+  now carries the number its name carries, so the two halves of a divisible boardroom read **Boardroom**
+  and **Boardroom 2** instead of both reading "Boardroom". An estate created before the upgrade keeps
+  both halves reading alike until you run `omniglass system previewLabels` and then
+  `omniglass system recomputeLabels`. Only the first of a kind in a room is bare: a room with one
+  boardroom in it reads **Boardroom**, exactly as its name is `boardroom` rather than `boardroom-1`.
 - The **columns** menu shows or hides columns and lets you **drag to reorder** them. The
   layout is remembered per browser.
 - On Locations, each row wears its **type's icon** as a leading glyph (a campus, building,
