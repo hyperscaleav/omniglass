@@ -48,9 +48,13 @@ sections ([getting around](/guides/operator/#getting-around)).
   minimum width on a narrow screen: on a 1366x768 laptop the list scrolls sideways rather than
   squeezing the identifier out, and hiding a column you are not using (the **Tags** column is the
   widest) is what removes the sideways scroll.
-- A display name the platform rendered from a [label rule](/architecture/core-entities/) wears a
-  **Generated** chip beside it, which is how you tell the rows a rule edit would rewrite from the ones
-  you named yourself. Typing over one claims it; clearing the field hands it back.
+- **Who wrote a display name is shown where you can change it, not in the list.** A label the platform
+  rendered from a [label rule](/architecture/core-entities/) opens **locked** in the row's edit blade,
+  with the rule stated under the field; the lock beside it hands you the pen, and the restore arrow
+  hands it back. A list shows no mark either way, so the Name column spends its width on the name.
+  To see the whole set of rows a rule edit would rewrite, which is the question a per-row mark could
+  only ever answer one row at a time, run `omniglass <entity> previewLabels`: it lists exactly the rows
+  the platform still labels, and nothing you typed yourself.
 - **Upgrading into a new rule does not relabel anything you already have.** Locations shipped with no
   label rule before, so an estate created then keeps reading its raw names (`north-wing`) after the
   upgrade. Applying the new rule is your act, and there is no console button for it yet: run

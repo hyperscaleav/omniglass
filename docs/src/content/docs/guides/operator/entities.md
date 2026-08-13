@@ -146,6 +146,14 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   proposed name is valid and still free before you save. **Save** commits the changes, **Cancel**
   discards them. In **view** the detail is read-only, so tags and other bindings are shown but not
   editable until you enter edit.
+- **A display name the platform wrote opens locked, and taking it is a deliberate act.** On a
+  component, a system, and a location the **Display name** can be one a
+  [label rule](/architecture/core-entities/) rendered. Where it is, edit mode shows it in a locked
+  field saying so, exactly as the create form does, and it stays the platform's across every other
+  edit you make: changing a type, a standard, or a tag no longer quietly claims the label. The lock
+  in the field hands you the pen (the field opens for editing, seeded with the label that was there),
+  and the **restore** arrow beside an edited one hands it back, so the platform relabels the row from
+  its rule when you save. Clearing the field does the same thing.
 - **Renaming is a separate act from an update, and separately granted.** It is its own call,
   `<resource>:rename` rather than `<resource>:update`, and **Save** patches the other fields first
   and sends the rename last: an operator holding update but not rename keeps the rest of the edit

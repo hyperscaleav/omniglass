@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createIdentity, deriveName, entityLabel, hasDisplayName, labelGenerated, labelIsName } from "./entities";
+import { createIdentity, deriveName, entityLabel, hasDisplayName, labelIsName } from "./entities";
+import { createPen } from "./namegen";
+import { seedLabelPen } from "../components/LabelPenField";
 
 describe("entityLabel", () => {
   it("prefers the display name", () => {
@@ -97,40 +99,40 @@ describe("hasDisplayName", () => {
   });
 });
 
-// labelGenerated is the other half of the pen: not "is there a second string"
-// but "whose words are these". It is what makes a platform-owned label visually
-// distinguishable from one the operator chose, which is the thing a bare
-// hasDisplayName can no longer say on its own.
-describe("labelGenerated", () => {
-  it("is true only when the platform holds the pen AND has something to show for it", () => {
-    expect(labelGenerated({ name: "display-1", display_name: "Display 1", display_name_generated: true })).toBe(true);
-    expect(labelGenerated({ name: "display-1", display_name: "Display 1", display_name_generated: false })).toBe(false);
-    expect(labelGenerated({ name: "display-1" })).toBe(false);
-  });
-
-  // Holding the pen over an empty render is not a generated label: what the row
-  // shows IS its name, and marking it "generated" would claim credit for the
-  // fallback.
-  it("is false when the pen rendered nothing, so the name is what shows", () => {
-    expect(labelGenerated({ name: "codec-1", display_name: "", display_name_generated: true })).toBe(false);
-    expect(labelGenerated({ name: "codec-1", display_name: "   ", display_name_generated: true })).toBe(false);
-    expect(labelGenerated({ name: "codec-1", display_name: "codec-1", display_name_generated: true })).toBe(false);
-  });
-});
-
-// The two predicates partition the labels that differ from their name: exactly
-// one of them is true for any row showing a label, and neither is true for a row
-// showing only its name. A surface can therefore branch on them without a third
-// state to invent.
-describe("hasDisplayName and labelGenerated", () => {
+// labelGenerated RETIRED with the chip (#693), and these are its cases,
+// converted rather than dropped.
+//
+// It answered "is there a platform-rendered label here to MARK", which only a
+// marker needs. The chip was its one caller, and the surface that replaced it
+// asks a different question with a different answer: an edit blade asks "who
+// holds the pen on this field", so that a locked field cannot post the
+// platform's own words back as an override. The two disagree on exactly the rows
+// below where `platform` and `locked` differ, and each is right for its own
+// surface: a rule that rendered nothing has no label to mark, but the pen over
+// it is still the platform's and the field must still open locked.
+//
+// The pen fact itself is unchanged and still on the wire; what went is the
+// predicate that existed only to badge it.
+describe("the pen, on the surfaces that ask about it", () => {
   it.each([
     ["operator label", { name: "n-1", display_name: "Label", display_name_generated: false }, true, false],
     ["platform label", { name: "n-1", display_name: "Label", display_name_generated: true }, false, true],
-    ["no label", { name: "n-1", display_name: "", display_name_generated: true }, false, false],
+    // Held the pen, rendered nothing. The list shows the name and no second
+    // line; the blade still opens LOCKED, which is the case the retired
+    // predicate answered "false" for and the blade answers "true".
+    ["no label", { name: "n-1", display_name: "", display_name_generated: true }, false, true],
+    ["blank label", { name: "n-1", display_name: "   ", display_name_generated: true }, false, true],
+    // A rule that renders exactly the name: one line in the list, and a locked
+    // blade field, for the same reason.
+    ["label equals name", { name: "n-1", display_name: "n-1", display_name_generated: true }, false, true],
     ["no pen, no label", { name: "n-1" }, false, false],
-  ])("never both for %s", (_case, entity, operator, platform) => {
-    expect(hasDisplayName(entity)).toBe(operator);
-    expect(labelGenerated(entity)).toBe(platform);
+  ])("reads %s the same way in the list and on the blade", (_case, entity, secondLine, locked) => {
+    // What the LIST does with it: show the identifier on a second line, or not.
+    expect(hasDisplayName(entity)).toBe(secondLine);
+    // What the BLADE does with it: open the label field locked, or editable.
+    const pen = createPen();
+    seedLabelPen(pen, entity);
+    expect(pen.overridden()).toBe(!locked);
   });
 });
 

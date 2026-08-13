@@ -10,7 +10,7 @@ import {
 } from "../lib/listmodel";
 import ListShell from "./ListShell";
 import Drawer from "./Drawer";
-import { hasDisplayName, labelGenerated, labelIsName, type Labelled } from "../lib/entities";
+import { hasDisplayName, labelIsName, type Labelled } from "../lib/entities";
 import ColumnMenu from "./ColumnMenu";
 import {
   ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash,
@@ -620,7 +620,11 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                   render: a generated label differs from the key exactly as an
                   operator's does, so the hand-written copy would have repeated the
                   key under every platform-labelled row in the estate. */}
-              <span class="flex min-w-0 items-baseline gap-1.5">
+              {/* No pen chip here since #693: see IdentityCell's own comment for
+                  why the label pen's badge left every list and became the lock on
+                  the display-name field of the edit blade. hasDisplayName below
+                  still reads the pen, which is the half that stayed. */}
+              <span class="flex min-w-0 items-baseline">
                 <span
                   class="truncate"
                   classList={{ "font-data text-[13px]": labelIsName(identityOf(n)) }}
@@ -628,14 +632,6 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                 >
                   {n.display}
                 </span>
-                <Show when={labelGenerated(identityOf(n))}>
-                  <span
-                    class="badge badge-ghost badge-xs shrink-0"
-                    title="The platform generated this label from a label rule. Typing one of your own claims it; clearing the field hands it back."
-                  >
-                    Generated
-                  </span>
-                </Show>
               </span>
               <Show when={hasDisplayName(identityOf(n))}>
                 <span class="truncate font-data text-[11px] text-base-content/40">{n.addr ?? n.id}</span>

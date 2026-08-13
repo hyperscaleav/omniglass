@@ -65,9 +65,9 @@ const systems: System[] = [
   { id: uuidFor("s-annex"), name: "annex", display_name: "Annex AV", member_count: 0, actions: [] },
 ];
 
-function mount(path: string, who: Me = me, sys: System[] = systems) {
+function mount(path: string, who: Me = me, sys: System[] = systems, comps: Component[] = [comp]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...COMPONENTS_KEY], [comp]);
+  qc.setQueryData([...COMPONENTS_KEY], comps);
   qc.setQueryData([...SYSTEMS_KEY], sys);
   qc.setQueryData([...LOCATIONS_KEY], [room]);
   qc.setQueryData([...PRODUCTS_KEY], products);
@@ -395,6 +395,13 @@ describe("Components create-as-route", () => {
   // #627 Task 15d: the tracking chip is the only place an operator learns a
   // name is platform-owned (renaming clears the flag for good, with no
   // other visible cue beforehand).
+  //
+  // This is the NAME's pen and it sits on the BLADE, beside the name fact it is
+  // about, which is why it stayed when the LABEL's chip left the lists (#693):
+  // the rule is that a pen's state shows beside the field it owns, on the
+  // surface where the operator can act on it. The two are told apart by their
+  // tooltips, one about the name and one about the label; only the list copy of
+  // the label's went.
   it("shows a Generated tracking chip on a platform-picked name, not on an operator-typed one", async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     const generated: Component = { ...comp, name_generated: true };
@@ -1249,5 +1256,73 @@ describe("Components list keeps a floor under the Name column (#690)", () => {
 
     expect(cols[0].style.width).toBe("");
     expect(parseInt(table.style.minWidth, 10) - declared).toBe(NAME_MIN_W);
+  });
+});
+
+// The label pen on the edit blade (#693). The "Generated" chip left the lists,
+// and the fact landed beside the field an operator can act on. This block proves
+// the page is WIRED to the shared field (components/LabelPenField.test.tsx
+// proves the field's own contract) and proves what a Save posts.
+//
+// Components is also where the two pens sit on one blade, which is the case
+// worth holding: the NAME's chip stays, in the read state beside the name, and
+// the LABEL's is the lock in edit. A change that put the label's word back in a
+// badge would make the two indistinguishable again.
+describe("Components edit blade carries the label pen (#693)", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  const gen: Component = { ...comp, id: uuidFor("c-pen"), name: "mic-3", display_name: "Mic 3", display_name_generated: true, name_generated: true };
+
+  function patchBodies(): Record<string, unknown>[] {
+    const bodies: Record<string, unknown>[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH") {
+        bodies.push(JSON.parse(await req.clone().text()));
+        return new Response(JSON.stringify(gen), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ components: [gen], systems: [], locations: [], products, component_types: componentTypes }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    return bodies;
+  }
+
+  it("opens the label locked on a row the platform labelled, with the name's own chip still beside the name", async () => {
+    mount(`/components/${gen.id}`, me, systems, [gen]);
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    // The NAME's pen, in the read state, is the precedent the label's lock
+    // matches: a pen states itself beside its own field, on the blade.
+    expect(screen.getByTitle(/generated this name/i)).toBeTruthy();
+    fireEvent.click(screen.getByText("Edit"));
+    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    expect(label.value).toBe("Mic 3");
+    expect(label.readOnly).toBe(true);
+    expect(screen.getByText(/Rendered from a label rule/)).toBeTruthy();
+  });
+
+  it("does not claim the pen when the blade is saved untouched", async () => {
+    const bodies = patchBodies();
+    mount(`/components/${gen.id}`, me, systems, [gen]);
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    await screen.findByLabelText("Display name");
+    fireEvent.click(screen.getByText("Save changes"));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0].display_name).toBe("");
+  });
+
+  it("posts the operator's words once they take the pen", async () => {
+    const bodies = patchBodies();
+    mount(`/components/${gen.id}`, me, systems, [gen]);
+    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
+    fireEvent.click(screen.getByText("Edit"));
+    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
+    fireEvent.input(label, { target: { value: "Front Ceiling Mic" } });
+    fireEvent.click(screen.getByText("Save changes"));
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0].display_name).toBe("Front Ceiling Mic");
   });
 });

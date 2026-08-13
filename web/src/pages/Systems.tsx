@@ -25,6 +25,7 @@ import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { SYSTEM_TYPES_KEY, listSystemTypes } from "../lib/system_types";
 import SystemTypeSelect from "../components/SystemTypeSelect";
 import CreateIdentity from "../components/CreateIdentity";
+import LabelPenField, { seedLabelPen } from "../components/LabelPenField";
 import { bucketPhrase, createPen, nameBucket, penIncomplete } from "../lib/namegen";
 import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
 import { pathTo } from "../lib/treeselect";
@@ -183,7 +184,10 @@ export default function Systems() {
     const path = () => ctx.pathOf(n());
     const canUpdate = () => can(me.data, "system", "update");
 
-    const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
+    // The label's pen rather than a plain signal (#693). What it holds IS what
+    // the save posts, so a locked field cannot post the platform's own rendering
+    // back as an override: see components/LabelPenField.tsx for the whole rule.
+    const displayPen = createPen();
     const [standard, setStandard] = createSignal(n().raw.standard ?? "");
     const [systemType, setSystemType] = createSignal(n().raw.system_type ?? "");
     const [name, setName] = createSignal(n().raw.name);
@@ -199,7 +203,7 @@ export default function Systems() {
     // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
     // since Cancel exits edit and the next begin re-seeds).
     createEffect(on(editing, (isEditing) => {
-      if (isEditing) { setDisplay(n().raw.display_name ?? ""); setStandard(n().raw.standard ?? ""); setSystemType(n().raw.system_type ?? ""); setName(n().raw.name); setNameCheck(null); }
+      if (isEditing) { seedLabelPen(displayPen, n().raw); setStandard(n().raw.standard ?? ""); setSystemType(n().raw.system_type ?? ""); setName(n().raw.name); setNameCheck(null); }
     }));
     // Consume a pending "open in edit" handoff (from create or the row pencil) once
     // the node has resolved.
@@ -213,7 +217,12 @@ export default function Systems() {
         try {
           // Addressed by uuid (#627 review finding 1): see del() above.
           await updateSystem(n().raw.id, {
-            display_name: display() || undefined,
+            // Always keyed, and the pen's own value: a locked field holds
+            // nothing, so it posts "" and the API reads that as "still the
+            // platform's" (labelPen, #682). Omitting the key would leave the pen
+            // alone, which is the same outcome here and NOT the same on the
+            // hand-back, so one expression covers both (#693).
+            display_name: displayPen.value(),
             // Send the empty string rather than dropping the key: the API reads ""
             // as "clear", which is how the operator converts this system back to a
             // one-off. Omitting it would silently leave the old standard in place.
@@ -294,9 +303,7 @@ export default function Systems() {
             }
           >
             <div class="flex flex-col gap-3">
-              <FieldRow bind="display_name">
-                <input class="input input-bordered w-full" value={display()} placeholder="Executive Boardroom" onInput={(e) => setDisplay(e.currentTarget.value)} />
-              </FieldRow>
+              <LabelPenField pen={displayPen} entity={() => n().raw} placeholder="Executive Boardroom" />
               <FieldRow
                 label="Type"
                 info="What kind of space this is (a boardroom, a classroom, a video wall). Separate from the standard below: the type is what it IS, the standard is what it is built to."

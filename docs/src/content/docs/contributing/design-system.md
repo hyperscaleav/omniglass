@@ -205,15 +205,26 @@ can be one the platform rendered from a **label rule**
 ([ADR-0098](/architecture/decisions/#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)),
 and the row says which through the pen `display_name_generated`. So the cell reads three states, not
 two: a row with no label shows its name once in the data face; a row an operator labelled shows the
-label with the name beneath it; a row the platform labelled shows the label, marked `Generated`, with
-no second line. The rule the marker states is that typing a label claims it and clearing the field
-hands it back, which is also the set of rows a rule edit would rewrite.
+label with the name beneath it; a row the platform labelled shows the label alone, with no second
+line.
 
-The three predicates live in `lib/entities` and nowhere else: `labelIsName` (which face), `hasDisplayName`
-(did a human choose this) and `labelGenerated` (did the platform). The middle one used to be the
-string comparison `entityLabel(e) !== e.name`, and that was the same question only while a label was
-only ever operator-typed; unchanged, a generated label would have put a second identifier line under
-every row in the estate.
+**A pen states itself beside the field it owns, never in a list.** The platform's label used to wear
+a `Generated` chip in the cell. It charged the Name column the width of the word on every
+platform-labelled row of every list, to say something an operator could not act on where they were
+reading it; and the estate-wide question it half-answered, which rows a rule edit would rewrite, is
+answered whole by `<entity> previewLabels` rather than one row at a time. The fact is now the
+**lock** on the display-name field of the edit blade (`components/LabelPenField.tsx`), the same
+affordance the create form carries (`components/PenToggle.tsx` is the one copy of the button, its
+icons and its words), beside the field and next to the act that changes it. That is where the NAME's
+own pen already stated itself, on the component blade.
+
+The predicates live in `lib/entities` and nowhere else: `labelIsName` (which face) and
+`hasDisplayName` (did a human choose this). The second used to be the string comparison
+`entityLabel(e) !== e.name`, and that was the same question only while a label was only ever
+operator-typed; unchanged, a generated label would have put a second identifier line under every row
+in the estate. A third, `labelGenerated`, retired with the chip that was its only caller: it asked
+"is there a rendered label here to mark", and a field asks "who holds the pen", which answers
+differently for a row whose rule rendered nothing and must still open locked.
 
 **One renderer, pinned by a source guard.** `entityLabel` is the only place `display_name || name` is
 written. `one-label-renderer.test.ts` scans every non-test source file for a hand-rolled fallback and
