@@ -29,6 +29,7 @@
     "event_type:create,update",
     "command_type:create,update",
     "command:issue",
+    "alarm:acknowledge",
     "telemetry:push",
     "file:create,delete"
    ],
@@ -54,6 +55,7 @@
     "command_type:create",
     "command_type:update",
     "command:issue",
+    "alarm:acknowledge",
     "telemetry:push",
     "file:create",
     "file:delete",
@@ -213,6 +215,7 @@
     "command_type:create",
     "command_type:update",
     "command:issue",
+    "alarm:acknowledge",
     "telemetry:push",
     "file:create",
     "file:delete",

@@ -22,6 +22,10 @@ degrades it, a `critical` one is an outage), and a `critical` alarm impairs ever
 [role](/architecture/health/) that component occupies while it stays open, since only an outage
 component stops occupying its slots; a lesser alarm degrades the component but leaves it in place
 (#626: an alarm no longer names what it degrades).
+
+Also built: **acknowledgement** ([below](#acknowledgement-a-fact-about-a-person)), the record that a
+human has seen an incident, orthogonal to whether it is still raised. **Snooze** and **resolve** are
+not built, and the reasons are in that section.
 See [implementation status](/architecture/status/).
 :::
 
@@ -29,9 +33,9 @@ See [implementation status](/architecture/status/).
 
 **Metaphor: a morning alarm, not a pop-up.** A pop-up *alert* appears and is gone (a `notify`
 action); an **alarm** goes off when its condition is met and **stays high until interacted with**.
-The `alarm` row **holds its current state directly** (`status`, `severity`, `opened_at`,
-`resolved_at`, `acked_by` in the target design; built today: `severity`, `message`, `raised_at`,
-`cleared_at`).
+The `alarm` row **holds its current state directly** (`status`, `opened_at`, `resolved_at` in the
+target design; built today: `severity`, `message`, `raised_at`, `cleared_at`, `acknowledged_at`,
+`acknowledged_by`).
 
 :::design[Target design (ADR-0050)]
 **One incident, a new row per open**, keyed by `(event_rule, owner)` (the exclusive-arc owner, so a
@@ -45,8 +49,10 @@ a [CDC publisher](/architecture/messaging/) fans the committed transition onto J
 `action_rule` consumers. No dual-write; Postgres is never a message bus.
 
 **opened / resolved** are rule-driven (`fire_criteria` / `clear_criteria`), each emitting an `event`
-with the `alarm_id`; **acked / snoozed** are operator-driven, recorded in `audit_log` (also carrying
-the `alarm_id`) and applied to the row. The timeline assembles by `alarm_id` across events + audit.
+with the `alarm_id`; the operator-driven transitions are recorded in `audit_log` (also carrying the
+`alarm_id`) and applied to the row. The timeline assembles by `alarm_id` across events + audit. The
+acknowledgement half of that is built and works exactly this way ([below](#acknowledgement-a-fact-about-a-person));
+snooze is not.
 :::
 
 An alarm write is **not sample-silent**: raising or clearing one recomputes
@@ -55,6 +61,59 @@ transition as a **calculated-provenance `property` sample** (`provenance='calcul
 `source_rule='health-rollup'`). Cycle safety therefore rests on **provenance, not topology**
 ([ADR-0069](/architecture/decisions/#adr-0069-cycle-safety-is-provenance-based-not-topology-based),
 see *Cycle safety*).
+
+## Acknowledgement: a fact about a person
+
+An alarm's **raised** state is a fact about its **condition**: the one-open invariant is per
+`(component, dedup_key)` ([ADR-0075](/architecture/decisions/#adr-0075-an-alarm-carries-its-condition-identity)),
+and it is the condition, not a person, that decides whether the alarm is still up. An
+**acknowledgement** is a fact about a **person**: somebody has seen this. The two are therefore
+**orthogonal**, stored as two nullable columns rather than one `status` enum, and an alarm sits in
+any of these states:
+
+| | unacknowledged | acknowledged |
+| --- | --- | --- |
+| **raised** | nobody has looked; the queue an operator works | somebody is on it, and it is still broken |
+| **cleared** | it came and went unattended | it was seen, then fixed |
+
+`POST /components/{name}/alarms/{id}:acknowledge` records it, gated by **`alarm:acknowledge`**
+(held by `operator` and above). Three properties follow from acknowledgement being a fact about a
+person:
+
+- **It does not recompute health.** Acknowledging is not fixing. A recompute here would record a
+  verdict transition at a moment when nothing about the estate changed, and the health history is
+  meant to be edges and only edges.
+- **It carries its own permission and its own scope**, resolved on the component tier from
+  `alarm:acknowledge` itself rather than from `component:update`. Recording that somebody looked is
+  not editing the component, and a responder role may hold one without the other
+  ([identity and access](/architecture/identity-access/)).
+- **It is idempotent.** The first sighting is the one that matters operationally (time to
+  acknowledge), so a second acknowledgement keeps the first person and the first time and writes no
+  second audit row, the same shape as a re-raise of an open condition returning the existing
+  incident.
+
+**Un-acknowledging is not a verb.** If it turns out to matter, it is a second verb and a second
+decision, not a nullable field somebody flips
+([#728](https://github.com/hyperscaleav/omniglass/issues/728)).
+
+:::caution[Snooze and resolve are deliberately absent]
+Both are commonly bundled with acknowledge, and neither is built, for reasons rather than sequencing:
+
+- **Snooze** exists to suppress **notification**. The outbound notification registry is unbuilt
+  (#618), so a snooze today would suppress nothing: a column that lies. It belongs with #618 or
+  after it.
+- **Resolve** is either the existing `DELETE /components/{name}/alarms/{id}` (clear) under a second
+  name, or a different concept nobody has specified. A human "resolving" an alarm whose raised state
+  belongs to its condition is a contradiction until somebody says what it means.
+
+A three-verb permission string bundling acknowledge with both of them appeared for most of a year in
+this repo's test fixtures and in an earlier draft of the
+[identity and access](/architecture/identity-access/) page. It was never a design: nothing seeded it
+and no route ever enforced it
+([ADR-0109](/architecture/decisions/#adr-0109-an-alarm-carries-an-acknowledgement-and-not-a-snooze-or-a-resolve)).
+The permission lint now catches any attempt to write it back, because `alarm` is a resource the
+route surface knows and neither of the other two verbs gates anything.
+:::
 
 :::design[The `event_rule` (ADR-0050)]
 

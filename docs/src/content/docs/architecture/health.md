@@ -235,6 +235,13 @@ An alarm is a row on a component with a **`severity`** (`info`, `warning`, or `c
 **message**, a **`raised_at`**, and a **nullable `cleared_at`**. Clearing sets `cleared_at` and
 **keeps the row**; clearing an already-cleared alarm is an explicit miss, not a silent success.
 
+Health is **acknowledgement-independent**, and that is enforced rather than merely intended:
+acknowledging an alarm annotates it and never closes it, so it recomputes no verdict and a broken
+room cannot be made to look healthy by somebody looking at it
+([alarms and actions](/architecture/alarms-actions/#acknowledgement-a-fact-about-a-person)). The
+verdict answers "is this component out", which is a question about the condition; the
+acknowledgement answers "has anybody seen this", which is a question about a person.
+
 Severity drives the **component's own** verdict (any active alarm makes it `degraded`, a `critical`
 one an `outage`) and **nothing above it**: what reaches a role is only whether its occupant's
 verdict is `outage`, not the severity that produced it or whether it is merely `degraded`. Severity
@@ -247,10 +254,10 @@ own arc, so a component filling no role still carries accurate history.
 
 Today an **operator or API caller** writes the alarm. The full model: an
 [`event_rule`](/architecture/alarms-actions/) watches samples, fires an event, and an alarm **opens**
-and stays open while its condition holds, closing on the paired clear event. Health is
-**ack-independent**: acking annotates, never closes, so a broken room never looks healthy. A
+and stays open while its condition holds, closing on the paired clear event. A
 rule-opened alarm impairs its owner's own verdict exactly as a hand-raised one does (#626: it no
-longer names what it takes away; the component is impaired wholesale).
+longer names what it takes away; the component is impaired wholesale), and the
+acknowledgement-independence above holds for it identically.
 
 ### Alarms owned by a system or a location
 

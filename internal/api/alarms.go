@@ -21,6 +21,13 @@ import (
 // component:update to raise or clear one. Every route resolves the component
 // within the caller's scope first, so an out-of-scope component is a
 // non-disclosing 404.
+//
+// Acknowledging is the exception, and deliberately so: it carries its OWN
+// permission (alarm:acknowledge) and resolves its scope from that permission
+// rather than from component:update, because recording that a human has seen an
+// alarm is not editing the component. A role may hold one without the other, and
+// binding the two would let a wide component read or a narrow component write
+// decide who may acknowledge.
 
 type alarmBody struct {
 	ID        string     `json:"id"`
@@ -31,24 +38,34 @@ type alarmBody struct {
 	RaisedAt  time.Time  `json:"raised_at"`
 	ClearedAt *time.Time `json:"cleared_at,omitempty" doc:"Null while the alarm is active"`
 	Active    bool       `json:"active"`
+	// The acknowledgement is orthogonal to cleared: an alarm can be acknowledged
+	// and still raised, raised and unacknowledged, or cleared having never been
+	// acknowledged.
+	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty" doc:"When a human first recorded seeing this alarm; null while nobody has. Independent of cleared_at"`
+	AcknowledgedBy string     `json:"acknowledged_by,omitempty" doc:"Who acknowledged it, by name; empty while unacknowledged, or once that principal has been purged (the audit log keeps the name)"`
+	Acknowledged   bool       `json:"acknowledged" doc:"Whether anybody has recorded seeing this alarm; says nothing about whether it is still raised"`
 }
 
 func toAlarmBody(a *storage.Alarm) alarmBody {
 	return alarmBody{
-		ID:        a.ID,
-		Component: a.ComponentID,
-		Severity:  a.Severity,
-		Message:   a.Message,
-		DedupKey:  a.DedupKey,
-		RaisedAt:  a.RaisedAt,
-		ClearedAt: a.ClearedAt,
-		Active:    a.Active(),
+		ID:             a.ID,
+		Component:      a.ComponentID,
+		Severity:       a.Severity,
+		Message:        a.Message,
+		DedupKey:       a.DedupKey,
+		RaisedAt:       a.RaisedAt,
+		ClearedAt:      a.ClearedAt,
+		Active:         a.Active(),
+		AcknowledgedAt: a.AcknowledgedAt,
+		AcknowledgedBy: a.AcknowledgedBy,
+		Acknowledged:   a.Acknowledged(),
 	}
 }
 
 type listAlarmsInput struct {
 	Name           string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 	IncludeCleared bool   `query:"include_cleared" doc:"Include cleared alarms, so the list is the history rather than what is wrong now"`
+	Unacknowledged bool   `query:"unacknowledged" doc:"Only the alarms nobody has looked at. On its own this is the queue an operator works (raised and unacknowledged); with include_cleared it also returns the incidents that came and went unattended"`
 }
 
 type listAlarmsOutput struct {
@@ -89,7 +106,10 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		if err != nil {
 			return nil, err
 		}
-		alarms, err := gw.ListAlarms(ctx, compID, storage.AlarmFilter{IncludeCleared: in.IncludeCleared})
+		alarms, err := gw.ListAlarms(ctx, compID, storage.AlarmFilter{
+			IncludeCleared: in.IncludeCleared,
+			Unacknowledged: in.Unacknowledged,
+		})
 		if err != nil {
 			return nil, mapAlarmErr(err)
 		}
@@ -141,6 +161,29 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			return nil, mapAlarmErr(err)
 		}
 		return nil, nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "acknowledge-component-alarm",
+		Method:      http.MethodPost,
+		Path:        "/components/{name}/alarms/{id}:acknowledge",
+		Summary:     "Acknowledge an alarm",
+		Description: "Records that a human has seen this alarm, and changes nothing else. The alarm stays exactly as raised as it was: acknowledging is not fixing, so health is NOT recomputed and cleared_at is untouched. Acknowledging is orthogonal to clearing in both directions, so a cleared alarm can still be acknowledged by whoever reviews the history, and clearing never acknowledges on an operator's behalf. Acknowledging twice is idempotent: the first person and the first time stay, and the no-op writes no second audit row. Gated by alarm:acknowledge, whose scope is resolved on the component tier from that permission (not from component:update); a component outside it is a non-disclosing 404.",
+	}, "alarm", "acknowledge"), func(ctx context.Context, in *clearAlarmInput) (*alarmOutput, error) {
+		// The scope comes from alarm:acknowledge, so only the grants whose role
+		// actually carries the acknowledgement contribute their scope: a wide
+		// component read does not widen what may be acknowledged, and a principal
+		// that may acknowledge in one building cannot acknowledge in another one it
+		// can merely see.
+		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "alarm", "acknowledge"))
+		if err != nil {
+			return nil, mapComponentErr(err)
+		}
+		alarm, err := gw.AcknowledgeAlarm(ctx, actorID(ctx), comp.ID, in.ID)
+		if err != nil {
+			return nil, mapAlarmErr(err)
+		}
+		return &alarmOutput{Body: toAlarmBody(alarm)}, nil
 	})
 }
 

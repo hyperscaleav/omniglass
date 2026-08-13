@@ -322,6 +322,53 @@ func TestResolveInterfaceTaskCascade(t *testing.T) {
 	}
 }
 
+// TestResolveAlarmResolvesOnTheComponentTierFromItsOwnAction pins the scope half
+// of #728. An alarm hangs off a component, so the component tier is what contains
+// it; the load-bearing part is that the acknowledgement resolves from
+// alarm:acknowledge and NOT from the component gate, since a principal commonly
+// holds a wide component read beside a narrow write and either one deciding who
+// may acknowledge is a defect.
+func TestResolveAlarmResolvesOnTheComponentTierFromItsOwnAction(t *testing.T) {
+	idx := rbac.NewRoleIndex([]rbac.Role{
+		// A responder may acknowledge and read, and may not touch the component.
+		{ID: "responder", Permissions: []string{"alarm:acknowledge"}},
+		// An estate-wide reader may see everything and acknowledge nothing.
+		{ID: "viewer", Permissions: []string{"*:read"}},
+	})
+
+	narrow := scope.Grant{Role: "responder", ScopeKind: "component", ScopeID: "comp-a"}
+	wide := scope.Grant{Role: "viewer", ScopeKind: "all"}
+
+	s := scope.Resolve([]scope.Grant{narrow}, idx, "alarm", "acknowledge")
+	if s.All || len(s.IDs) != 1 || s.IDs[0] != "comp-a" {
+		t.Fatalf("acknowledge scope = %+v, want [comp-a]: an alarm resolves on the component tier", s)
+	}
+	// A role that may acknowledge need not be able to edit the component, so the
+	// acknowledgement must not resolve through component:update.
+	if u := scope.Resolve([]scope.Grant{narrow}, idx, "component", "update"); !u.Empty() {
+		t.Fatalf("component update scope = %+v, want empty: the responder role carries no component write", u)
+	}
+
+	// The whole point: the all-scoped viewer grant carries no acknowledgement, so
+	// it widens the READ everywhere and the acknowledgement nowhere.
+	both := []scope.Grant{narrow, wide}
+	if a := scope.Resolve(both, idx, "alarm", "acknowledge"); a.All || len(a.IDs) != 1 || a.IDs[0] != "comp-a" {
+		t.Fatalf("acknowledge scope beside an all-scoped viewer = %+v, want [comp-a]: a wide read must not widen the acknowledgement", a)
+	}
+	if r := scope.Resolve(both, idx, "component", "read"); !r.All {
+		t.Fatalf("component read scope = %+v, want All: the viewer floor is what makes this fixture meaningful", r)
+	}
+
+	// A location- or system-tier grant contains no alarm, exactly as it contains
+	// no component (#714): the cascade is through the component, no wider.
+	for _, kind := range []string{"location", "system"} {
+		w := scope.Resolve([]scope.Grant{{Role: "responder", ScopeKind: kind, ScopeID: "x"}}, idx, "alarm", "acknowledge")
+		if !w.Empty() {
+			t.Fatalf("alarm via a %s grant = %+v, want empty", kind, w)
+		}
+	}
+}
+
 func TestResolveDedupRoots(t *testing.T) {
 	idx := index()
 	// Two grants to the same root via different roles collapse to one id.

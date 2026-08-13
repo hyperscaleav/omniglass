@@ -30,6 +30,15 @@ roles:
       - "event_type:create,update"
       - "command_type:create,update"
       - "command:issue"
+      # alarm:acknowledge records that a human has seen an alarm. The role that
+      # runs the estate is the role that acknowledges. The verb is spelled out
+      # like every other seeded action; `alarm:ack` was only ever fixture and
+      # illustrative vocabulary, and a permission string is operator-facing (the
+      # Roles view, the grant builder, /auth/me). Deliberately NOT on deploy: an
+      # alarm resolves scope on the COMPONENT tier, and a location-scoped deploy
+      # grant reaches no component at all (#714), so granting it there would ship
+      # a capability that acknowledges nothing in the shape the role is granted in.
+      - "alarm:acknowledge"
       # telemetry:push is a WRITE of observations, so it sits with the other
       # operator writes and deliberately outside the viewer read floor. An
       # integration that only reports data can be granted this alone.

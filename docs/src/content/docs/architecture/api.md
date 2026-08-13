@@ -605,7 +605,9 @@ takes that verdict to outage and impairs every role the component occupies while
 An alarm hangs off its component and rides that component's gating:
 
 - `GET /components/{name}/alarms` lists them newest first (`component:read`), the **active** set by
-  default and the whole history with `include_cleared`.
+  default, the whole history with `include_cleared`, and the queue an operator actually works with
+  `unacknowledged` (on its own, raised and unacknowledged; with `include_cleared`, also the
+  incidents that came and went unattended).
 - `POST /components/{name}/alarms` raises one from `{severity, message?, dedup_key?}` (201,
   `component:update`). `severity` is `info` / `warning` / `critical`, driving the component's own
   verdict (any active alarm degrades it, a critical one is an outage); `dedup_key` is the condition
@@ -614,8 +616,27 @@ An alarm hangs off its component and rides that component's gating:
   the record of what was wrong outlives the fix; clearing one already cleared, or another
   component's, is a **404**.
 
-Both writes **recompute health in the same transaction**, so an alarm and the verdict it caused are never
-separately visible, and the recorded edge carries the time the estate changed.
+Raising and clearing both **recompute health in the same transaction**, so an alarm and the verdict it
+caused are never separately visible, and the recorded edge carries the time the estate changed.
+
+**Acknowledgement is the one alarm write that does not**, and it is the one that does not ride
+`component:update` either:
+
+- `POST /components/{name}/alarms/{id}:acknowledge` records that a human has seen it (200,
+  **`alarm:acknowledge`**). It changes nothing else: `cleared_at` is untouched, no health is
+  recomputed, and the component stays exactly as broken as it was. Acknowledging is not fixing.
+
+The permission is its own because recording that somebody looked is not editing the component, and a
+role may hold one without the other. Its scope resolves on the **component tier from
+`alarm:acknowledge` itself**, so an estate-wide read never widens what may be acknowledged and a
+narrow component write never narrows it; a component outside that scope is a non-disclosing **404**.
+Acknowledgement is **orthogonal to cleared** in both directions: an alarm can be acknowledged and
+still raised, raised and unacknowledged, or cleared having never been acknowledged, and a cleared
+alarm can still be acknowledged by whoever reviews the history. Acknowledging twice is **idempotent**:
+the first person and the first time are what the row keeps, and the no-op writes no second audit row.
+Un-acknowledging is deliberately not a verb yet
+([#728](https://github.com/hyperscaleav/omniglass/issues/728)); snooze and resolve are
+[out of scope with reasons](/architecture/alarms-actions/).
 
 The reports are one shape over two owners:
 
