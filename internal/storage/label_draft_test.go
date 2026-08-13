@@ -68,7 +68,7 @@ func TestTheDraftLabelIsTheLabelTheCreateStores(t *testing.T) {
 		Name:         "front-panel",
 		LocationName: room.Name,
 		SystemName:   "board-1",
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestTheDraftIsTheIdentityTheCreateStampsForAGeneratedName(t *testing.T) {
 
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55, LocationName: room.Name,
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestTheDraftedOrdinalIsTheLowestFreeOneInThatBucket(t *testing.T) {
 		t.Helper()
 		d, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 			ProductName: qm55, LocationName: room,
-		}, all, all, all)
+		}, all, all, all, all)
 		if err != nil {
 			t.Fatalf("render draft at %s: %v", room, err)
 		}
@@ -200,7 +200,7 @@ func TestTheDraftedNameIsWhatTheAllocatorWouldMint(t *testing.T) {
 	}
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55, LocationName: room.Name,
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
@@ -319,7 +319,7 @@ func TestTheDraftLabelReportsTheRuleItRendered(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55, Name: "front-panel",
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
@@ -370,7 +370,7 @@ func TestTheDraftLabelRefusesAComponentTypeChainWithNoStem(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("create product: %v", err)
 	}
-	_, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{ProductName: "stemless-thing"}, all, all, all)
+	_, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{ProductName: "stemless-thing"}, all, all, all, all)
 	if !errors.Is(err, storage.ErrComponentTypeNoStem) {
 		t.Errorf("stemless draft = %v, want ErrComponentTypeNoStem", err)
 	}
@@ -394,7 +394,7 @@ func TestTheDraftLabelRendersWithinTheCallersReadScope(t *testing.T) {
 	narrow := scope.Set{IDs: []string{mine.ID}}
 	got, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55, Name: "panel", LocationName: mine.Name,
-	}, all, narrow, narrow)
+	}, all, narrow, narrow, narrow)
 	if err != nil {
 		t.Fatalf("render inside scope: %v", err)
 	}
@@ -403,7 +403,7 @@ func TestTheDraftLabelRendersWithinTheCallersReadScope(t *testing.T) {
 	}
 	if _, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55, Name: "panel", LocationName: theirs.Name,
-	}, all, narrow, narrow); !errors.Is(err, storage.ErrLocationNotFound) {
+	}, all, narrow, narrow, narrow); !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Errorf("out-of-scope draft = %v, want the non-disclosing ErrLocationNotFound", err)
 	}
 }
@@ -447,7 +447,7 @@ func TestTheDraftComponentLabelReadsTheSystemWithinScope(t *testing.T) {
 
 	if _, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55, Name: "panel", SystemName: "board-x",
-	}, all, narrow, narrow); !errors.Is(err, storage.ErrSystemNotFound) {
+	}, all, narrow, narrow, narrow); !errors.Is(err, storage.ErrSystemNotFound) {
 		t.Errorf("out-of-scope system draft = %v, want the non-disclosing ErrSystemNotFound", err)
 	}
 }
@@ -488,7 +488,7 @@ func TestTheDraftLabelAllocatesNothing(t *testing.T) {
 	for range 5 {
 		d, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 			ProductName: qm55, LocationName: "room-1",
-		}, all, all, all)
+		}, all, all, all, all)
 		if err != nil {
 			t.Fatalf("render draft: %v", err)
 		}
@@ -574,7 +574,7 @@ func TestTheDraftRefusesTheParentlessBucketItCannotCreateIn(t *testing.T) {
 	// location-only) one, and their creates gate it identically.
 	if _, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55,
-	}, subtree, all, all); !errors.Is(err, storage.ErrComponentForbidden) {
+	}, subtree, all, all, all); !errors.Is(err, storage.ErrComponentForbidden) {
 		t.Errorf("parentless component draft = %v, want ErrComponentForbidden", err)
 	}
 	if _, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{

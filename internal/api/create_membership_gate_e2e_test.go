@@ -168,3 +168,89 @@ func TestTheCreatesSystemBindResolvesInTheUpdateScope(t *testing.T) {
 		"name": "panel-out", "product": "samsung-qm55", "parent": f.rackID, "system": f.wingBSys,
 	}, http.StatusCreated)
 }
+
+// TestTheDraftRefusesTheSystemBindTheCreateRefuses is the PREVIEW half of the
+// same gate (#713). The draft route resolved its system reference in
+// system:read while the create beside it moved to system:update, so a caller
+// could be served a preview naming a system it may read and may not bind, and
+// the create it previewed then refused. Nothing hit it in practice because the
+// console does not offer the picker to a principal that cannot use it, which
+// restores the agreement by the caller's good behaviour rather than by the
+// platform.
+//
+// Both halves of the create's gate are driven here, against the same principals
+// the create's own tests use, and each refusal is asserted to be the SAME
+// refusal on both routes rather than merely a refusal.
+func TestTheDraftRefusesTheSystemBindTheCreateRefuses(t *testing.T) {
+	f := newPlacementFixture(t)
+
+	// The permission half: component:create and no system:update at all, beside
+	// the all-scoped viewer floor, so system:read is held and only the write
+	// permission is missing.
+	operator := principalWithGrants(t, f.c.ctx, f.dsn, "rack-operator-draft", []grant{
+		{role: "operator", scopeKind: "component", scopeID: f.rackID},
+		{role: "viewer", scopeKind: "all"},
+	})
+	// The scope half: system:update held over av-a and not over av-b, which the
+	// viewer floor still lets it read.
+	floored := principalWithGrants(t, f.c.ctx, f.dsn, "wing-a-deploy-draft", []grant{
+		{role: "deploy", scopeKind: "component", scopeID: f.rackID},
+		{role: "deploy", scopeKind: "system", scopeID: f.sysAID},
+		{role: "viewer", scopeKind: "all"},
+	})
+
+	// The same body drafts and creates, which is the property under test: a form
+	// posts what it drafted with, plus the precondition.
+	body := func(name, system string) map[string]any {
+		return map[string]any{"name": name, "product": "samsung-qm55", "parent": f.rackID, "system": system}
+	}
+
+	// A draft naming no system is served to the operator, so what follows is
+	// about the bind rather than about its right to draft at all.
+	f.c.do(operator, http.MethodPost, "/components:renderLabel",
+		map[string]any{"name": "panel-free", "product": "samsung-qm55", "parent": f.rackID}, http.StatusOK)
+
+	// The permission half, on both routes, with the same status and the same
+	// missing authority named.
+	draftStatus, draftBody := f.c.send(operator, http.MethodPost, "/components:renderLabel", body("panel-p", "av-a"))
+	createStatus, createBody := f.c.send(operator, http.MethodPost, "/components", body("panel-p", "av-a"))
+	if draftStatus != http.StatusForbidden || draftStatus != createStatus {
+		t.Fatalf("draft = %d, create = %d, want both 403: a preview must not be served for a create the platform refuses\ndraft body: %s", draftStatus, createStatus, draftBody)
+	}
+	if !strings.Contains(string(draftBody), "system:update") {
+		t.Errorf("draft refusal = %s, want it to name the permission the create names", draftBody)
+	}
+	if !strings.Contains(string(createBody), "system:update") {
+		t.Errorf("create refusal = %s, want it to name system:update", createBody)
+	}
+
+	// The scope half: the bindable system drafts, so the refusal below is a
+	// scope boundary and not a broken route.
+	f.c.do(floored, http.MethodPost, "/components:renderLabel", body("panel-in", "av-a"), http.StatusOK)
+
+	draftStatus, draftBody = f.c.send(floored, http.MethodPost, "/components:renderLabel", body("panel-out", f.wingBSys))
+	createStatus, createBody = f.c.send(floored, http.MethodPost, "/components", body("panel-out", f.wingBSys))
+	if draftStatus != http.StatusForbidden || draftStatus != createStatus {
+		t.Fatalf("draft = %d, create = %d, want both 403 for a readable system outside the update scope\ndraft body: %s", draftStatus, createStatus, draftBody)
+	}
+	if !strings.Contains(string(draftBody), "system:update") {
+		t.Errorf("draft refusal = %s, want it to name the scope the bind resolves in", draftBody)
+	}
+	if strings.Contains(string(draftBody), "not found") {
+		t.Errorf("draft refusal = %s, want it not to deny the existence of a system the caller just read", draftBody)
+	}
+	_ = createBody
+
+	// A system the caller cannot read at all stays the non-disclosing refusal on
+	// both routes: naming the missing authority is only safe once the caller has
+	// proved it may see the row.
+	narrowDraft, _ := f.c.send(f.narrow, http.MethodPost, "/components:renderLabel", body("panel-hidden", f.wingBSys))
+	narrowCreate, _ := f.c.send(f.narrow, http.MethodPost, "/components", body("panel-hidden", f.wingBSys))
+	if narrowDraft != http.StatusUnprocessableEntity || narrowDraft != narrowCreate {
+		t.Errorf("unreadable system: draft = %d, create = %d, want both 422", narrowDraft, narrowCreate)
+	}
+
+	// The owner runs every refused body and is served, so none of the above is a
+	// broken route.
+	f.c.do(f.owner, http.MethodPost, "/components:renderLabel", body("panel-owner", f.wingBSys), http.StatusOK)
+}

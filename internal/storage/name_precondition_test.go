@@ -44,7 +44,7 @@ func TestACreateHonoursTheNameTheFormWasShown(t *testing.T) {
 
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55, LocationName: room.Name,
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestACreateRefusesANameAnotherCreateTook(t *testing.T) {
 
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55, LocationName: room.Name,
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestACreateRefusesANameTheTypeMovedUnderneath(t *testing.T) {
 
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55, LocationName: room.Name,
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestACreateRefusesANameTheTypeMovedUnderneath(t *testing.T) {
 	// with the platform holding the pen.
 	redrafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
 		ProductName: qm55, LocationName: room.Name,
-	}, all, all, all)
+	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("re-render draft: %v", err)
 	}
