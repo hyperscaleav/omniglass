@@ -414,7 +414,7 @@ The capability check is **necessary not sufficient** (it only rejects), the `can
 
 #### The status split is not yet three-way
 
-:::design[Target design]
+:::design[Target design, tracked in #736]
 The split above is meant to be three-way: (a) the action in **no** grant is a 403 at the fast-reject, (b) a target the caller can **read** but not act on is a **403** (it leaks nothing, since the caller can already see the row, and it tells them the truth about why they were refused), and (c) a target outside the read scope is a non-disclosing **404**. Only (a) and (c) are built. Every scoped route resolves its target through the gateway with the action's own scope and reports a miss the same way, so (b) currently answers **404** as well: correct and safe, but less informative than it could be. Making it three-way is one shared refusal primitive across every scoped route, never a per-route special case ([#736](https://github.com/hyperscaleav/omniglass/issues/736)).
 :::
 
