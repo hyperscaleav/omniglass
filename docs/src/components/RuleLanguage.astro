@@ -1,0 +1,60 @@
+---
+// The label rule language's closed function set, rendered from the generated
+// facts (docs/src/generated/label.json, written by make gen via cmd/labelgen).
+// The engine declares the set once and its FuncMap, its published names and its
+// AST allowlist all derive from that declaration; this makes the docs the fourth
+// reader rather than the fourth transcription, so the taught language cannot
+// drift from the one being run.
+//
+// Each example is rendered THROUGH the engine by the generator, so a row here is
+// an execution rather than a claim about one.
+//
+// Usage: <RuleLanguage /> for the table, <RuleLanguage builtins /> for the
+// sentence naming the admitted builtins.
+import label from '../generated/label.json';
+
+interface Props {
+  builtins?: boolean;
+}
+
+const { builtins = false } = Astro.props;
+---
+
+{
+  builtins ? (
+    <p>
+      Beside those, a rule may name the logic and comparison builtins (
+      {label.builtins.map((b, i) => (
+        <>
+          {i > 0 ? ', ' : ''}
+          <code>{b}</code>
+        </>
+      ))}
+      ), and nothing else text/template offers. A rendered label is capped at {label.max_len}{' '}
+      characters.
+    </p>
+  ) : (
+    <table class="rule-language">
+      <thead>
+        <tr>
+          <th>Function</th>
+          <th>What it does</th>
+          <th>Example</th>
+        </tr>
+      </thead>
+      <tbody>
+        {label.functions.map((f) => (
+          <tr>
+            <td>
+              <code>{f.name}</code>
+            </td>
+            <td>{f.summary}</td>
+            <td>
+              <code>{f.example_in}</code> renders <code>{f.example_out}</code>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}

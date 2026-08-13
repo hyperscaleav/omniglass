@@ -9,6 +9,7 @@ sidebar:
 
 import SchemaTable from '../../../components/SchemaTable.astro';
 import IdentityShapes from '../../../components/IdentityShapes.astro';
+import RuleLanguage from '../../../components/RuleLanguage.astro';
 
 Core entities are the things an operator manages, component, system, location, and node, each with
 its own identity so that every sample, event, alarm, and config names exactly one owner. The shapes
@@ -854,15 +855,23 @@ The rule language is Go `text/template` over a **closed map of strings** and a *
 The map is the sandbox for what a rule can READ: a component's rule can read `Name`, `Ordinal`,
 `TypeName`, `TypeAbbrev`, `Stem`, `ProductName`, `VendorName`, `LocationLabel` and `SystemTypeLabel`,
 and there is no mechanism by which any other name resolves to anything, so a secret is unreachable
-because it was never put in rather than because a filter refused it. The grammar is the sandbox for what a rule can DO: an allowlist
-over the parsed tree admits a closed set of node types and the functions `title`, `upper`, `lower`,
-`slug`, `words` plus `and`/`or`/`not` and the six comparisons, and refuses everything else text/template
-offers, `printf` and variable declarations and `{{range}}` among them. That second half is not
+because it was never put in rather than because a filter refused it. The grammar is the sandbox for
+what a rule can DO: an allowlist over the parsed tree admits a closed set of node types and a closed
+set of function names, and refuses everything else text/template offers, `printf` and variable
+declarations and `{{range}}` among them. That second half is not
 tidiness: a value built inside a pipeline is never written, so a cap on rendered length cannot see
 it, and a few hundred bytes of rule can otherwise allocate gigabytes on every write to every entity
 of its type. A rule that does not parse, or that names something outside the grammar, is refused at
 rule-edit time (422) and never stored; a rule that fails while rendering one entity degrades to no
 label rather than failing the write it was riding.
+
+The functions are the engine's own, rendered here from its one declaration rather than restated, so
+a function this table names is a function the FuncMap defines and the grammar admits
+([#701](https://github.com/hyperscaleav/omniglass/issues/701)):
+
+<RuleLanguage />
+
+<RuleLanguage builtins />
 
 **A rule reads placement, and that is what the recompute verb is for**
 ([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
