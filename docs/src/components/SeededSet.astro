@@ -17,6 +17,30 @@ const rows = seed[kind];
 if (!rows) {
   throw new Error(`SeededSet: unknown kind "${kind}" (not a key of docs/src/generated/seed.json)`);
 }
+
+// The inheriting registries (component_type, system_type) are nested by
+// parent_id, so they are laid out depth-first from the roots in declaration
+// order rather than printed flat. Depth is climbed rather than assumed from
+// adjacency: a subtype declared away from its parent still lands under it.
+const nested = kind === 'component_types' || kind === 'system_types';
+const childrenOf = new Map();
+if (nested) {
+  for (const r of rows) {
+    const key = r.parent_id ?? '';
+    childrenOf.set(key, [...(childrenOf.get(key) ?? []), r]);
+  }
+}
+function walk(parent = '', depth = 0) {
+  return (childrenOf.get(parent) ?? []).flatMap((r) => [{ ...r, depth }, ...walk(r.id, depth + 1)]);
+}
+const tree = nested ? walk() : [];
+// Only component_type carries default_tags, and no shipped row uses one today.
+// The column appears the moment a seeded row does, rather than standing empty
+// on twenty rows or being remembered by whoever adds the first tag.
+const anyTags = tree.some((t) => t.default_tags?.length);
+if (nested && tree.length !== rows.length) {
+  throw new Error(`SeededSet: ${kind} has ${rows.length} rows but ${tree.length} reachable from a root (an orphan parent_id?)`);
+}
 ---
 
 {
@@ -77,6 +101,23 @@ if (!rows) {
                 : lt.name_rule.bare_first
                   ? `${lt.name_rule.stem}, ${lt.name_rule.stem}-2`
                   : `${lt.name_rule.stem}-1, ${lt.name_rule.stem}-2`}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : nested ? (
+    <table class="seeded-set">
+      <thead><tr><th>Type</th><th>Stem</th><th>Abbrev</th><th>Icon</th>{anyTags ? <th>Default tags</th> : null}</tr></thead>
+      <tbody>
+        {tree.map((t) => (
+          <tr>
+            <td style={`padding-left: ${0.5 + t.depth * 1.25}rem`}>
+              <code>{t.id}</code> ({t.display_name})
+            </td>
+            <td>{t.stem ? <code>{t.stem}</code> : <em>inherits</em>}</td>
+            <td>{t.abbrev ? <code>{t.abbrev}</code> : <em>inherits</em>}</td>
+            <td>{t.icon ? <code>{t.icon}</code> : <em>inherits</em>}</td>
+            {anyTags ? <td>{(t.default_tags ?? []).map((g) => <span><code>{g}</code> </span>)}</td> : null}
           </tr>
         ))}
       </tbody>

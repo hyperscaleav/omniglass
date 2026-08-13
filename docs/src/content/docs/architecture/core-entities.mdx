@@ -10,6 +10,7 @@ sidebar:
 import SchemaTable from '../../../components/SchemaTable.astro';
 import IdentityShapes from '../../../components/IdentityShapes.astro';
 import RuleLanguage from '../../../components/RuleLanguage.astro';
+import SeededSet from '../../../components/SeededSet.astro';
 
 Core entities are the things an operator manages, component, system, location, and node, each with
 its own identity so that every sample, event, alarm, and config names exactly one owner. The shapes
@@ -87,8 +88,9 @@ each role carrying an **impact**. See [implementation status](/architecture/stat
   `GET /location-types` to feed the location form's type picker. Each type carries an `icon` (a glyph
   key like `building`; unknown keys fall back to `map-pin`) rendered in the tree, and
   `allowed_parent_types` (a set of `location_type` ids and/or the reserved `root` sentinel): empty is
-  unconstrained, a non-empty set is enforced on create and move, seeded as `campus={root}`,
-  `building={root,campus}`, `floor={building,campus}`, `room={floor,building,campus}`.
+  unconstrained, a non-empty set is enforced on create and move. The shipped set and its parents are
+  rendered from the seed on the [location types guide](/guides/admin/location-types/) rather than
+  listed in two places.
 - A **node** is the edge process (`omniglass node run`) that pulls work, reaches components over
   interfaces, and ships results ([nodes](/architecture/nodes/)). It is structural because it is a
   first-class **owner** of its own self-health telemetry and node-owned alarms.
@@ -193,6 +195,11 @@ shape-definer: contracts, declared properties, and drivers stay on the product. 
 subtype exists only where a standard's slot would name it (`wireless-mic` versus `ceiling-mic`, real
 subtypes; panel technology like `lcd` versus `led` stays a product fact, never a type).
 
+The shipped taxonomy, rendered from the seed, with a blank cell meaning the row inherits that fact
+from its nearest ancestor:
+
+<SeededSet kind="component_types" />
+
 This **partially reverses [ADR-0047](/architecture/decisions/#adr-0047-the-fields-fold-product_property-and-property_value)**,
 which retired the component-level `component_type` in the fields fold: the reintroduced shape is
 deliberately different, **above the product** rather than beside the component.
@@ -225,8 +232,10 @@ A **`system_type`** (`board`, `class`, `meeting`, `video-wall`, ...) is the **co
 what kind of space a system **is**. It is the system-side counterpart of `component_type` and it
 nests the same way, by `parent_id`, on the same official/custom pattern, operator-graftable at any
 node ([ADR-0096](/architecture/decisions/#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy)).
-The shipped tree is universal: `av` over `room` over `board` / `class` / `meeting` / `training` /
-`conference` / `huddle`, and `av` over `sign` over `video-wall` / `interactive-sign`.
+The shipped tree is universal, and it is rendered from the seed rather than restated here, so a blank
+cell is a fact the row genuinely inherits rather than one somebody forgot to copy:
+
+<SeededSet kind="system_types" />
 
 The row carries the identity facts that span every space of that kind, **inheriting down the tree
 with override at any node**: the naming **`stem`** (the prefix a generated system name is built from,
