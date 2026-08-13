@@ -157,24 +157,26 @@ func nullableLogFields(severity, facility, correlationID string, attributes, lab
 	return sev, fac, corr, attrs, labels
 }
 
-// ListComponentLogs returns a component's raw log lines newest-first, from since,
-// capped at limit. Mirrors ListComponentEvents. componentRef is resolved once
+// ListComponentLogs returns a component's raw log lines newest-first, inside
+// window (counted back from the DATABASE's clock, tsSince, #719), capped at
+// limit. Mirrors ListComponentEvents. componentRef is resolved once
 // (name or uuid, ADR-0062); an unknown component folds into the same
 // nil-no-error empty result the old inline subquery's silent no-match gave.
-func (p *PG) ListComponentLogs(ctx context.Context, componentRef string, since time.Time, limit int) ([]LogLine, error) {
+func (p *PG) ListComponentLogs(ctx context.Context, componentRef string, window time.Duration, limit int) ([]LogLine, error) {
 	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
 	if errors.Is(err, ErrComponentNotFound) {
 		return nil, nil
 	} else if err != nil {
 		return nil, err
 	}
-	rows, err := p.pool.Query(ctx, `
+	bound, args := tsSince("ts", window, c.ID, limit)
+	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
 		select id, ts, instance, source,
 			coalesce(severity, ''), coalesce(facility, ''), message, attributes, labels, coalesce(correlation_id, '')
 		from log_line
-		where component_id = $1::uuid and ts >= $2
+		where component_id = $1::uuid and %s
 		order by ts desc
-		limit $3`, c.ID, since, limit)
+		limit $2`, bound), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list logs %s: %w", componentRef, err)
 	}
@@ -194,19 +196,20 @@ func (p *PG) ListComponentLogs(ctx context.Context, componentRef string, since t
 	return out, nil
 }
 
-// ListNodeLogs returns a node's own log lines newest-first, from since, capped
-// at limit: the self-logs a node ships back over the ingest lane (ADR-0066),
+// ListNodeLogs returns a node's own log lines newest-first, inside window
+// (counted back from the DATABASE's clock, tsSince, #719), capped at limit: the self-logs a node ships back over the ingest lane (ADR-0066),
 // read from node_log since the #589 split. Instance stays "" (a node log has
 // none); the row shape is otherwise the component read's, which is what lets
 // the API serve both panels through one body mapper.
-func (p *PG) ListNodeLogs(ctx context.Context, nodeName string, since time.Time, limit int) ([]LogLine, error) {
-	rows, err := p.pool.Query(ctx, `
+func (p *PG) ListNodeLogs(ctx context.Context, nodeName string, window time.Duration, limit int) ([]LogLine, error) {
+	bound, args := tsSince("ts", window, nodeName, limit)
+	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
 		select id, ts, '' as instance, source,
 			coalesce(severity, ''), coalesce(facility, ''), message, attributes, labels, coalesce(correlation_id, '')
 		from node_log
-		where node_id = (select principal_id from node where name = $1) and ts >= $2
+		where node_id = (select principal_id from node where name = $1) and %s
 		order by ts desc
-		limit $3`, nodeName, since, limit)
+		limit $2`, bound), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list node logs %s: %w", nodeName, err)
 	}

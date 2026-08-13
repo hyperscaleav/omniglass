@@ -375,6 +375,14 @@ func (p *PG) UpdateComponentType(ctx context.Context, actorID, ref string, patch
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Locked in its own statement, before the read that resolves the shadow.
+	// The fork leg writes the whole mutable row back, so two concurrent edits
+	// of different fields would otherwise each compute an image from the same
+	// starting point and the second would silently undo the first (#709). The
+	// separate statement is the point rather than a style: see lockRegistryRow.
+	if err := lockRegistryRow(ctx, tx, "component_type", ref); err != nil {
+		return nil, err
+	}
 	current, err := scanComponentTypeResolved(tx.QueryRow(ctx, componentTypeResolved+` where ct.`+registryRefCol(ref)+` = $1`, ref))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -508,6 +516,13 @@ func (p *PG) RestoreComponentType(ctx context.Context, actorID, ref string) (*Co
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Locked before the resolved read, the same rule the patch path follows: a
+	// restore that read a stale shadow would report ErrTypeNotForked for a fork
+	// a concurrent edit had just taken, or audit an image that was already
+	// replaced (#709).
+	if err := lockRegistryRow(ctx, tx, "component_type", ref); err != nil {
+		return nil, err
+	}
 	current, err := scanComponentTypeResolved(tx.QueryRow(ctx, componentTypeResolved+` where ct.`+registryRefCol(ref)+` = $1`, ref))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

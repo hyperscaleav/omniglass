@@ -95,12 +95,11 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 			}
 			return nil, huma.Error500InternalServerError("read reachability")
 		}
-		since := time.Now().UTC().Add(-reachHistoryWindow)
 		out := &reachabilityOutput{}
 		out.Body.Component = comp.Name
 		out.Body.Interfaces = make([]reachInterfaceBody, 0, len(ifaces))
 		for i := range ifaces {
-			row, err := composeInterface(ctx, gw, comp.ID, ifaces[i], since)
+			row, err := composeInterface(ctx, gw, comp.ID, ifaces[i], reachHistoryWindow)
 			if err != nil {
 				// mapRefErr first: comp.ID is always a uuid (GetComponent
 				// above already resolved it), so LatestProperty/
@@ -123,7 +122,7 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 // composeInterface assembles one interface's reachability row from the property and
 // metric sinks. All reads are keyed by the verified component name and the
 // interface name (the sample instance).
-func composeInterface(ctx context.Context, gw storage.Gateway, comp string, it storage.ComponentInterface, since time.Time) (reachInterfaceBody, error) {
+func composeInterface(ctx context.Context, gw storage.Gateway, comp string, it storage.ComponentInterface, window time.Duration) (reachInterfaceBody, error) {
 	row := reachInterfaceBody{
 		Interface: it.Name,
 		Type:      it.Type,
@@ -160,7 +159,7 @@ func composeInterface(ctx context.Context, gw storage.Gateway, comp string, it s
 		row.Layers = append(row.Layers, lb)
 	}
 
-	transitions, err := gw.PropertyTransitions(ctx, comp, verdictKey, it.Name, since)
+	transitions, err := gw.PropertyTransitions(ctx, comp, verdictKey, it.Name, window)
 	if err != nil {
 		return row, err
 	}

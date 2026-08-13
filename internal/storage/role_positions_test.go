@@ -5,7 +5,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -97,7 +96,7 @@ func TestAssignedToIsPositionOrdered(t *testing.T) {
 		t.Errorf("EffectiveRoles assigned_to = %v, want [zeta alpha] (assignment order), not alphabetical", got)
 	}
 
-	rep, err := gw.SystemHealth(ctx, "position-order-sys", time.Time{}, all)
+	rep, err := gw.SystemHealth(ctx, "position-order-sys", 0, all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}

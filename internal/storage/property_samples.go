@@ -127,28 +127,30 @@ func (p *PG) LatestProperty(ctx context.Context, componentRef, key, instance str
 	return &dp, nil
 }
 
-// PropertyTransitions returns a component series' property rows at or after
-// since, ordered oldest-first: the ordered flip sequence the availability strip
-// reads (each row is one transition, since the write path is transition-only).
-// A zero since returns the whole series.
+// PropertyTransitions returns a component series' property rows inside window,
+// ordered oldest-first: the ordered flip sequence the availability strip reads
+// (each row is one transition, since the write path is transition-only). The
+// window is counted back from the DATABASE's clock (tsSince, #719); a zero
+// window returns the whole series.
 // componentRef is resolved once, and an unknown component folds into a
 // nil-no-error empty result (see LatestProperty's comment: this backs the
 // same ingest path in spirit, and the old inline subquery's silent no-match
 // is worth preserving exactly here too).
-func (p *PG) PropertyTransitions(ctx context.Context, componentRef, key, instance string, since time.Time) ([]PropertySample, error) {
+func (p *PG) PropertyTransitions(ctx context.Context, componentRef, key, instance string, window time.Duration) ([]PropertySample, error) {
 	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
 	if errors.Is(err, ErrComponentNotFound) {
 		return nil, nil
 	} else if err != nil {
 		return nil, err
 	}
-	rows, err := p.pool.Query(ctx, `
+	bound, args := tsSince("ts", window, c.ID, key, instance)
+	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
 		select ts, owner_kind,
 			(select p.name from property_type p where p.id = property.property_type_id), instance, value #>> '{}', provenance, source
 		from property
 		where component_id = $1::uuid
-		  and property_type_id = (select id from property_type where name = $2) and instance = $3 and ts >= $4
-		order by ts asc`, c.ID, key, instance, since)
+		  and property_type_id = (select id from property_type where name = $2) and instance = $3 and %s
+		order by ts asc`, bound), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: property transitions %s/%s[%s]: %w", componentRef, key, instance, err)
 	}

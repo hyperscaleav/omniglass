@@ -68,9 +68,16 @@ gen-web:
 # its own ephemeral Postgres, the number of live testcontainers. The Go default
 # (GOMAXPROCS, e.g. 16) lets every container-backed package start a Postgres at
 # once alongside up to that many link jobs, which saturates memory on smaller
-# machines (notably WSL2). 4 keeps a healthy machine near full speed while
-# leaving headroom; override for a beefier box: make test TEST_PARALLEL=8.
-TEST_PARALLEL ?= 4
+# machines (notably WSL2).
+#
+# The default is 1 because 4 took this box down: four concurrent Postgres
+# containers plus four link jobs exhausted the WSL2 VM's memory and killed the
+# whole VM, not just the run. A gate that can take the machine with it is not a
+# gate, and a serial run that finishes is worth more than a parallel one that
+# has to be restarted. It is a floor, not a ceiling: a machine with the memory
+# for it should raise this, and the run gets faster with no other change.
+# Override per invocation: make test TEST_PARALLEL=8.
+TEST_PARALLEL ?= 1
 test: test-web
 	go test -p $(TEST_PARALLEL) ./...
 

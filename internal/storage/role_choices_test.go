@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -212,7 +211,7 @@ func TestDetachedRoleBecomesUnconditional(t *testing.T) {
 
 	// Alternate b is satisfied, role-a is unstaffed but grouped: the choice
 	// is answered through b, so the system reads healthy.
-	rep, err := gw.SystemHealth(ctx, "detach-sys", time.Time{}, all)
+	rep, err := gw.SystemHealth(ctx, "detach-sys", 0, all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -228,7 +227,7 @@ func TestDetachedRoleBecomesUnconditional(t *testing.T) {
 		t.Fatalf("detach role-a: %v", err)
 	}
 
-	rep, err = gw.SystemHealth(ctx, "detach-sys", time.Time{}, all)
+	rep, err = gw.SystemHealth(ctx, "detach-sys", 0, all)
 	if err != nil {
 		t.Fatalf("system health after detach: %v", err)
 	}
@@ -287,7 +286,7 @@ func TestEditingRoleLeavesAlternateAlone(t *testing.T) {
 	if err := gw.AssignRole(ctx, "", "edit-sys", "conf-bar", "edit-comp", all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
-	before, err := gw.SystemHealth(ctx, "edit-sys", time.Time{}, all)
+	before, err := gw.SystemHealth(ctx, "edit-sys", 0, all)
 	if err != nil {
 		t.Fatalf("system health before edit: %v", err)
 	}
@@ -306,7 +305,7 @@ func TestEditingRoleLeavesAlternateAlone(t *testing.T) {
 		t.Fatalf("edit display_name: %v", err)
 	}
 
-	after, err := gw.SystemHealth(ctx, "edit-sys", time.Time{}, all)
+	after, err := gw.SystemHealth(ctx, "edit-sys", 0, all)
 	if err != nil {
 		t.Fatalf("system health after edit: %v", err)
 	}
@@ -392,7 +391,7 @@ func TestHealthRoleReportsChoiceAndActive(t *testing.T) {
 		t.Fatalf("assign: %v", err)
 	}
 
-	rep, err := gw.SystemHealth(ctx, "report-sys", time.Time{}, all)
+	rep, err := gw.SystemHealth(ctx, "report-sys", 0, all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}

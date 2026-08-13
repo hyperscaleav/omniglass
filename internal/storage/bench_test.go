@@ -503,9 +503,9 @@ func BenchmarkEffectiveTags(b *testing.B) {
 func BenchmarkLocationHealth(b *testing.B) {
 	eachSize(b, func(b *testing.B, e *benchEstate) int {
 		ctx := context.Background()
-		since := time.Time{}
+		window := time.Duration(0)
 		rows := warmRows(b, func() (int, error) {
-			rep, err := e.gw.LocationHealth(ctx, e.campus, since, all)
+			rep, err := e.gw.LocationHealth(ctx, e.campus, window, all)
 			if err != nil {
 				return 0, err
 			}
@@ -513,7 +513,7 @@ func BenchmarkLocationHealth(b *testing.B) {
 		})
 		b.ResetTimer()
 		for b.Loop() {
-			if _, err := e.gw.LocationHealth(ctx, e.campus, since, all); err != nil {
+			if _, err := e.gw.LocationHealth(ctx, e.campus, window, all); err != nil {
 				b.Fatalf("location health: %v", err)
 			}
 		}
@@ -534,9 +534,9 @@ func BenchmarkLocationHealth(b *testing.B) {
 func BenchmarkSystemHealth(b *testing.B) {
 	eachSize(b, func(b *testing.B, e *benchEstate) int {
 		ctx := context.Background()
-		since := time.Time{}
+		window := time.Duration(0)
 		rows := warmRows(b, func() (int, error) {
-			rep, err := e.gw.SystemHealth(ctx, e.sysName, since, all)
+			rep, err := e.gw.SystemHealth(ctx, e.sysName, window, all)
 			if err != nil {
 				return 0, err
 			}
@@ -544,7 +544,7 @@ func BenchmarkSystemHealth(b *testing.B) {
 		})
 		b.ResetTimer()
 		for b.Loop() {
-			if _, err := e.gw.SystemHealth(ctx, e.sysName, since, all); err != nil {
+			if _, err := e.gw.SystemHealth(ctx, e.sysName, window, all); err != nil {
 				b.Fatalf("system health: %v", err)
 			}
 		}

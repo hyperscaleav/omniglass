@@ -43,7 +43,7 @@ func TestInsertEvents(t *testing.T) {
 		t.Fatalf("insert events: %v", err)
 	}
 
-	got, err := gw.ListComponentEvents(ctx, "disp-1", now.Add(-time.Hour), 10)
+	got, err := gw.ListComponentEvents(ctx, "disp-1", time.Hour, 10)
 	if err != nil {
 		t.Fatalf("list events: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestInsertEvents(t *testing.T) {
 	}
 
 	// The since window excludes the older occurrence.
-	windowed, err := gw.ListComponentEvents(ctx, "disp-1", now.Add(-time.Minute), 10)
+	windowed, err := gw.ListComponentEvents(ctx, "disp-1", time.Minute, 10)
 	if err != nil {
 		t.Fatalf("list windowed events: %v", err)
 	}

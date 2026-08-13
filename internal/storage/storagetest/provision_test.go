@@ -2,16 +2,56 @@ package storagetest
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/db"
 	"github.com/jackc/pgx/v5"
 )
 
-// wantTemplate is the name the harness must build its template database under.
-// Spelled out here rather than read from the harness so the test states the
-// contract instead of restating the implementation.
-const wantTemplate = "og_template"
+// wantTemplatePrefix is what the harness must build its template database
+// under. Spelled out here rather than read from templateName so the test states
+// the contract instead of restating the implementation.
+//
+// It is a PREFIX rather than the whole name since #662, and the change IS the
+// contract: a fixed `og_template` was safe only because every binary had a
+// Postgres to itself, and on the OMNIGLASS_TEST_ADMIN_DSN hatch (an
+// already-running Postgres, for environments with no Docker daemon) it let one
+// binary drop and rebuild the template another was copying from. The name now
+// carries this process's pid and a random half, so a test can state the prefix
+// and that exactly one database matches it, which is the property, but not the
+// whole literal.
+var wantTemplatePrefix = fmt.Sprintf("og_tmpl_%d_", os.Getpid())
+
+// oneTemplateOfThisProcess is the template this binary built, found by the
+// prefix above, and it fails if the count is anything but one: a second match
+// would mean the harness minted two templates for one process, which is the
+// half of the naming that a prefix assertion alone would not catch.
+func oneTemplateOfThisProcess(t *testing.T, ctx context.Context, admin *pgx.Conn) string {
+	t.Helper()
+	rows, err := admin.Query(ctx,
+		`select datname from pg_database where datname like $1 || '%' order by datname`, wantTemplatePrefix)
+	if err != nil {
+		t.Fatalf("list this process's templates: %v", err)
+	}
+	defer rows.Close()
+	var found []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatalf("scan template name: %v", err)
+		}
+		found = append(found, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate template names: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("databases named %s* = %v, want exactly one: the template is per process", wantTemplatePrefix, found)
+	}
+	return found[0]
+}
 
 // TestProvisionIsolatesWrites is the property the harness exists to provide:
 // one test's rows are invisible to the next test's database. Provisioning from
@@ -85,18 +125,19 @@ func TestTemplateRefusesConnections(t *testing.T) {
 	NewDSN(t) // force the container and the template into existence
 
 	admin := connect(t, ctx, adminDSN)
+	name := oneTemplateOfThisProcess(t, ctx, admin)
 	var isTemplate, allowConn bool
 	err := admin.QueryRow(ctx,
 		`select datistemplate, datallowconn from pg_database where datname = $1`,
-		wantTemplate).Scan(&isTemplate, &allowConn)
+		name).Scan(&isTemplate, &allowConn)
 	if err != nil {
-		t.Fatalf("look up template database %s: %v", wantTemplate, err)
+		t.Fatalf("look up template database %s: %v", name, err)
 	}
 	if !isTemplate {
-		t.Errorf("%s datistemplate = false, want true", wantTemplate)
+		t.Errorf("%s datistemplate = false, want true", name)
 	}
 	if allowConn {
-		t.Errorf("%s datallowconn = true, want false: a connectable template can race a copy", wantTemplate)
+		t.Errorf("%s datallowconn = true, want false: a connectable template can race a copy", name)
 	}
 }
 

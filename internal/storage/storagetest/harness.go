@@ -23,11 +23,18 @@
 // That requirement is enforced rather than documented: [NewDSN] refuses to hand
 // out a database to a test binary that is not running under Main.
 //
+// Every database name this binary mints is scoped to its own process, so the
+// OMNIGLASS_TEST_ADMIN_DSN hatch (an already-running Postgres, for environments
+// with no Docker daemon) is safe with any number of test binaries sharing one
+// server, at any `go test -p` (#662). See procTag.
+//
 // There is no in-memory double. The doctrine is: do not mock the database.
 package storagetest
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
@@ -47,9 +54,43 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+// procTag scopes every database name this test binary mints to this PROCESS
+// (#662). Both names were fixed or per-process-counter before: `og_template`
+// outright, and `og_test_<n>` from a counter that starts at 1 in every binary.
+// That is invisible on the container path, where each binary gets a Postgres of
+// its own, and it makes the OMNIGLASS_TEST_ADMIN_DSN hatch (an already-running
+// Postgres, for environments with no Docker daemon) unusable with more than one
+// binary at a time: two of them collide on every database name, and one drops
+// and rebuilds the template the other is copying from, mid-run.
+//
+// The pid separates binaries on one host, which is the case `go test -p N`
+// produces. The random half separates runs that a pid cannot: a shared Postgres
+// reached from more than one machine, and a pid reused after a crash left a
+// template behind. Cheap enough to take both rather than argue about which
+// failure is likelier on someone else's CI.
+var procTag = newProcTag()
+
+func newProcTag() string {
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		// A harness cannot do anything useful about crypto/rand failing, and a
+		// FIXED fallback would quietly restore the collision this exists to
+		// close. The clock separates two binaries the same `go test` started.
+		return fmt.Sprintf("%d_%d", os.Getpid(), time.Now().UnixNano())
+	}
+	return fmt.Sprintf("%d_%s", os.Getpid(), hex.EncodeToString(b[:]))
+}
+
+// templateNameFor and testDBNameFor are the two names this binary mints, as
+// functions of the tag so the collision they exist to prevent is testable
+// without two processes.
+func templateNameFor(tag string) string { return "og_tmpl_" + tag }
+
+func testDBNameFor(tag string, n int64) string { return fmt.Sprintf("og_test_%s_%d", tag, n) }
+
 // templateName is the database the migration chain is applied to once per test
 // binary. Every test database is a copy of it.
-const templateName = "og_template"
+var templateName = templateNameFor(procTag)
 
 var (
 	ctr       *tcpostgres.PostgresContainer // shared container, terminated by Main
@@ -219,7 +260,7 @@ func buildTemplate(ctx context.Context) error {
 	// attempt over a template the first one left half-built, migrated but
 	// unsealed, or fully sealed. A stale or partial template is a wrong schema
 	// for every test in the binary, so the only safe move is to start over.
-	if err := dropTemplate(ctx, admin); err != nil {
+	if err := dropTemplate(ctx, admin, templateName); err != nil {
 		_ = admin.Close(ctx)
 		return err
 	}
@@ -264,34 +305,62 @@ func sealTemplate(ctx context.Context) error {
 	return nil
 }
 
-// dropTemplate removes a template database left by an earlier run or by a
-// failed build, if there is one. Postgres refuses to drop a database while its
-// template flag is set, and a sealed template cannot be connected to at all, so
-// the seal is undone first. ALTER DATABASE does not require a connection to its
-// target, which is what makes a sealed template droppable.
-func dropTemplate(ctx context.Context, admin *pgx.Conn) error {
+// dropTemplate removes ONE named template database, if it is there. Postgres
+// refuses to drop a database while its template flag is set, and a sealed
+// template cannot be connected to at all, so the seal is undone first. ALTER
+// DATABASE does not require a connection to its target, which is what makes a
+// sealed template droppable.
+//
+// It takes the name rather than reading templateName so that "only the template
+// THIS binary built" is a property of the call rather than of the package state
+// (#662). Nothing here may reach a name another binary minted: that is exactly
+// the drop-out-from-under that made the hatch unusable at -p 4.
+func dropTemplate(ctx context.Context, admin *pgx.Conn, name string) error {
 	var exists bool
 	if err := admin.QueryRow(ctx,
 		"select exists (select 1 from pg_database where datname = $1)",
-		templateName).Scan(&exists); err != nil {
-		return fmt.Errorf("look up template %s: %w", templateName, err)
+		name).Scan(&exists); err != nil {
+		return fmt.Errorf("look up template %s: %w", name, err)
 	}
 	if !exists {
 		return nil
 	}
-	if _, err := admin.Exec(ctx, "alter database "+pgx.Identifier{templateName}.Sanitize()+
+	if _, err := admin.Exec(ctx, "alter database "+pgx.Identifier{name}.Sanitize()+
 		" with is_template = false allow_connections = true"); err != nil {
-		return fmt.Errorf("unseal stale template %s: %w", templateName, err)
+		return fmt.Errorf("unseal stale template %s: %w", name, err)
 	}
 	if _, err := admin.Exec(ctx,
 		`select pg_terminate_backend(pid) from pg_stat_activity
-		  where datname = $1 and pid <> pg_backend_pid()`, templateName); err != nil {
-		return fmt.Errorf("terminate backends on stale %s: %w", templateName, err)
+		  where datname = $1 and pid <> pg_backend_pid()`, name); err != nil {
+		return fmt.Errorf("terminate backends on stale %s: %w", name, err)
 	}
-	if _, err := admin.Exec(ctx, "DROP DATABASE IF EXISTS "+pgx.Identifier{templateName}.Sanitize()); err != nil {
-		return fmt.Errorf("drop stale template %s: %w", templateName, err)
+	if _, err := admin.Exec(ctx, "DROP DATABASE IF EXISTS "+pgx.Identifier{name}.Sanitize()); err != nil {
+		return fmt.Errorf("drop stale template %s: %w", name, err)
 	}
 	return nil
+}
+
+// reclaimTemplate drops the template this binary built, and only on the
+// OMNIGLASS_TEST_ADMIN_DSN hatch. On the container path there is nothing to
+// reclaim: the whole Postgres goes with the container a moment later, and
+// dropping a database inside a container about to be destroyed is work for its
+// own sake.
+//
+// On the hatch the Postgres outlives the run, so a template left behind is a
+// stale schema waiting for the next binary that happens to mint the same name.
+// It cannot happen while the name carries this process's tag, which is the
+// point, and the leftover would still be there forever.
+func reclaimTemplate() error {
+	if ctr != nil || !templateReady {
+		return nil
+	}
+	ctx := context.Background()
+	admin, err := pgx.Connect(ctx, adminDSN)
+	if err != nil {
+		return fmt.Errorf("admin connect: %w", err)
+	}
+	defer func() { _ = admin.Close(ctx) }()
+	return dropTemplate(ctx, admin, templateName)
 }
 
 // NewDSN returns the DSN of a fresh, migrated, isolated Postgres database.
@@ -325,7 +394,7 @@ func NewDSN(t testing.TB) string {
 	}
 	ctx := context.Background()
 
-	dbName := fmt.Sprintf("og_test_%d", dbCounter.Add(1))
+	dbName := testDBNameFor(procTag, dbCounter.Add(1))
 	admin, err := pgx.Connect(ctx, adminDSN)
 	if err != nil {
 		t.Fatalf("admin connect: %v", err)
@@ -399,6 +468,9 @@ func withDBName(dsn, db string) string {
 func Main(m *testing.M) int {
 	mainRan.Store(true)
 	code := m.Run()
+	if err := reclaimTemplate(); err != nil {
+		fmt.Fprintf(os.Stderr, "storagetest: reclaim template: %v\n", err)
+	}
 	if err := testcontainers.TerminateContainer(ctr); err != nil {
 		fmt.Fprintf(os.Stderr, "storagetest: terminate container: %v\n", err)
 	}

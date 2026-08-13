@@ -81,8 +81,7 @@ func registerLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
-		since := time.Now().UTC().Add(-logHistoryWindow)
-		rows, err := gw.ListComponentLogs(ctx, comp.ID, since, logReadLimit)
+		rows, err := gw.ListComponentLogs(ctx, comp.ID, logHistoryWindow, logReadLimit)
 		if err != nil {
 			// mapRefErr first: comp.ID is always a uuid (GetComponent above
 			// already resolved it), so ListComponentLogs's own resolve can
@@ -115,8 +114,7 @@ func registerLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		if err != nil {
 			return nil, mapNodeErr(err)
 		}
-		since := time.Now().UTC().Add(-logHistoryWindow)
-		rows, err := gw.ListNodeLogs(ctx, n.Name, since, logReadLimit)
+		rows, err := gw.ListNodeLogs(ctx, n.Name, logHistoryWindow, logReadLimit)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("read node logs")
 		}

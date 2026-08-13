@@ -25,8 +25,8 @@ var ErrTypeNotForked = errors.New("storage: registry row has no operator fork to
 // deleted by an operator action, so a release can improve a shipped row
 // without stomping anyone.
 //
-// Three facts hold the shape together, and an adopting registry must keep all
-// three:
+// Four facts hold the shape together, and an adopting registry must keep all
+// four:
 //
 //  1. The shadow shares the official row's uuid, so there is exactly one
 //     address per logical row. Foreign keys, the tree walks, the audit trail
@@ -40,6 +40,12 @@ var ErrTypeNotForked = errors.New("storage: registry row has no operator fork to
 //     Resolution overlays the keys the image carries, which is what makes a
 //     column added after a fork resolve to its official value instead of to
 //     nothing.
+//  4. Every path that reads a row in order to write its shadow takes the
+//     registry row's lock FIRST, in a statement of its own, and reads the
+//     shadow only after (lockRegistryRow). Fact 3 is what makes this
+//     necessary: a whole-row image computed from a stale read overwrites
+//     whatever landed in between, and the lost edit leaves no trace, since both
+//     writes succeeded and both are in the audit log (#709).
 //
 // component_type is the first adopter and location_type the second (#703).
 // The other eleven registries carrying `official` adopt later; they need no
@@ -65,6 +71,46 @@ func shadowRowID(id string) (uuid.UUID, error) {
 		return uuid.Nil, fmt.Errorf("storage: %q is not a registry row uuid: %w", id, err)
 	}
 	return rowID, nil
+}
+
+// lockRegistryRow takes the registry row's write lock for the life of the
+// transaction, and must be issued as its OWN statement BEFORE the resolved read
+// the caller then patches. ErrTypeNotFound when the ref names nothing.
+//
+// Both halves of that sentence are load-bearing, and the second is the one that
+// is easy to get wrong (#709). A fork writes the whole mutable row back, so two
+// concurrent edits of different fields must not both compute their image from
+// the same starting point; the lock is what serialises them. But a lock taken
+// INSIDE the resolved read (`... left join registry_shadow ... for update of
+// ct`) does not serialise anything useful, because at READ COMMITTED the
+// statement's snapshot is taken when the statement begins, which is before it
+// blocks. The waiter then unblocks on a row that was locked rather than
+// updated, so there is no EvalPlanQual recheck, and the left join it already
+// evaluated still reports the shadow as the waiter's stale snapshot saw it:
+// absent, or carrying the image from before the winner's fork. The waiter
+// patches that stale image and writes it over the winner's.
+//
+// Locking in a separate statement is what fixes it. The resolved read is then a
+// NEW statement, taking a new snapshot after the lock is held, so it sees the
+// shadow the previous holder committed. The cost is one round trip on the two
+// write paths of an adopting registry, which is the same trade ADR-0108 states
+// for the settle paths.
+//
+// `select 1 ... for update` rather than locking through the resolved read
+// because the shadow cannot be locked at all: it is the nullable side of an
+// outer join (Postgres refuses FOR UPDATE there), and on a first fork the row
+// it would lock does not exist yet. The registry row is the one address both
+// forks share, which makes it the mutex.
+func lockRegistryRow(ctx context.Context, tx pgx.Tx, table, ref string) error {
+	var one int
+	err := tx.QueryRow(ctx, `select 1 from `+table+` where `+registryRefCol(ref)+` = $1 for update`, ref).Scan(&one)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrTypeNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("storage: lock %s %q: %w", table, ref, err)
+	}
+	return nil
 }
 
 // loadShadowImage reads a registry row's shadow image, returning nil when the

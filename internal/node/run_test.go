@@ -106,7 +106,7 @@ func TestNodeRunOnce(t *testing.T) {
 	// producer loop end to end.
 	deadline = time.Now().Add(3 * time.Second)
 	for {
-		logs, err := gw.ListNodeLogs(ctx, "site-a", time.Now().Add(-time.Hour), 50)
+		logs, err := gw.ListNodeLogs(ctx, "site-a", time.Hour, 50)
 		if err != nil {
 			t.Fatalf("list node logs: %v", err)
 		}

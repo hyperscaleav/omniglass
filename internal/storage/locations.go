@@ -713,13 +713,23 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, ref string, patch 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// `for update of lt` locks the registry row for the life of the
-	// transaction. The patch is applied in Go over the row this read returned,
-	// so without the lock two concurrent patches of different fields could each
-	// write a whole row computed from the same starting point and the second
-	// would silently undo the first. The column-by-column coalesce this
-	// replaced was immune by construction; the lock is what buys that back.
-	current, err := scanLocationTypeResolved(tx.QueryRow(ctx, locationTypeResolved+` where lt.`+registryRefCol(ref)+` = $1 for update of lt`, ref))
+	// The registry row is locked in its OWN statement, before the read that
+	// resolves the shadow over it. The patch is applied in Go over the row that
+	// read returned, so without the lock two concurrent patches of different
+	// fields could each write a whole row computed from the same starting point
+	// and the second would silently undo the first. The column-by-column
+	// coalesce this replaced was immune by construction; the lock is what buys
+	// that back.
+	//
+	// It was `for update of lt` on this read until #709: that is one statement,
+	// so its snapshot predates the wait and the shadow it resolved was stale,
+	// which serialised the two transactions without making the second read what
+	// the first wrote. See lockRegistryRow for why the separate statement is
+	// what closes it.
+	if err := lockRegistryRow(ctx, tx, "location_type", ref); err != nil {
+		return nil, err
+	}
+	current, err := scanLocationTypeResolved(tx.QueryRow(ctx, locationTypeResolved+` where lt.`+registryRefCol(ref)+` = $1`, ref))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -828,7 +838,14 @@ func (p *PG) RestoreLocationType(ctx context.Context, actorID, ref string) (*Loc
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	current, err := scanLocationTypeResolved(tx.QueryRow(ctx, locationTypeResolved+` where lt.`+registryRefCol(ref)+` = $1 for update of lt`, ref))
+	// Locked before the resolved read, the same rule the patch path follows: a
+	// restore that read a stale shadow would report ErrTypeNotForked for a fork
+	// a concurrent edit had just taken, or audit an image that was already
+	// replaced (#709).
+	if err := lockRegistryRow(ctx, tx, "location_type", ref); err != nil {
+		return nil, err
+	}
+	current, err := scanLocationTypeResolved(tx.QueryRow(ctx, locationTypeResolved+` where lt.`+registryRefCol(ref)+` = $1`, ref))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound

@@ -4,7 +4,6 @@ import (
 	"context"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -556,7 +555,7 @@ func TestRunIdempotent(t *testing.T) {
 		if verdict == nil || verdict.Value != "up" {
 			t.Fatalf("seeded %s verdict = %+v, want value up", tc.iface, verdict)
 		}
-		transitions, err := gw.PropertyTransitions(ctx, "dsp", "interface-reachable", tc.iface, time.Time{})
+		transitions, err := gw.PropertyTransitions(ctx, "dsp", "interface-reachable", tc.iface, 0)
 		if err != nil {
 			t.Fatalf("property transitions %s: %v", tc.iface, err)
 		}

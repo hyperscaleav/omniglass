@@ -94,24 +94,26 @@ func (p *PG) InsertEvents(ctx context.Context, evs []EventWrite) error {
 }
 
 // ListComponentEvents returns a component's recent occurrences, newest first,
-// bounded by since and limit. Read helper for the component event log panel.
+// bounded by window and limit. The window is counted back from the DATABASE's
+// clock (tsSince, #719); a zero window is every occurrence there is. Read helper for the component event log panel.
 // componentRef is resolved once (name or uuid, ADR-0062); an unknown
 // component folds into the same nil-no-error empty result the old inline
 // subquery's silent no-match gave (see ListComponentLogs).
-func (p *PG) ListComponentEvents(ctx context.Context, componentRef string, since time.Time, limit int) ([]Event, error) {
+func (p *PG) ListComponentEvents(ctx context.Context, componentRef string, window time.Duration, limit int) ([]Event, error) {
 	c, err := scopedByName(ctx, p.pool, componentConfig, componentRef)
 	if errors.Is(err, ErrComponentNotFound) {
 		return nil, nil
 	} else if err != nil {
 		return nil, err
 	}
-	rows, err := p.pool.Query(ctx, `
+	bound, args := tsSince("ts", window, c.ID, limit)
+	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
 		select id, ts, owner_kind,
 			(select et.name from event_type et where et.id = event.event_type_id), event.event_type_id, instance, origin, message, attributes, provenance, source
 		from event
-		where component_id = $1::uuid and ts >= $2
+		where component_id = $1::uuid and %s
 		order by ts desc
-		limit $3`, c.ID, since, limit)
+		limit $2`, bound), args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list events %s: %w", componentRef, err)
 	}
