@@ -433,17 +433,17 @@ func TestAlarmListingAndRefusals(t *testing.T) {
 	if _, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{Severity: "info", Message: "two"}); err != nil {
 		t.Fatalf("raise second: %v", err)
 	}
-	if got, _ := f.gw.ListAlarms(ctx, "bar-1", false); len(got) != 2 {
+	if got, _ := f.gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{}); len(got) != 2 {
 		t.Fatalf("active alarms = %d, want 2", len(got))
 	}
 	if err := f.gw.ClearAlarm(ctx, "", "bar-1", a1.ID); err != nil {
 		t.Fatalf("clear: %v", err)
 	}
-	active, _ := f.gw.ListAlarms(ctx, "bar-1", false)
+	active, _ := f.gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{})
 	if len(active) != 1 || active[0].ClearedAt != nil {
 		t.Fatalf("active after clearing one = %+v, want just the uncleared one", active)
 	}
-	all, _ := f.gw.ListAlarms(ctx, "bar-1", true)
+	all, _ := f.gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{IncludeCleared: true})
 	if len(all) != 2 {
 		t.Fatalf("history = %d, want 2: clearing keeps the row", len(all))
 	}
@@ -459,7 +459,7 @@ func TestAlarmListingAndRefusals(t *testing.T) {
 	if err := f.gw.ClearAlarm(ctx, "", "bar-1", "not-a-uuid"); !errors.Is(err, storage.ErrAlarmNotFound) {
 		t.Errorf("malformed alarm id: err = %v, want ErrAlarmNotFound", err)
 	}
-	if _, err := f.gw.ListAlarms(ctx, "no-such-component", false); !errors.Is(err, storage.ErrComponentNotFound) {
+	if _, err := f.gw.ListAlarms(ctx, "no-such-component", storage.AlarmFilter{}); !errors.Is(err, storage.ErrComponentNotFound) {
 		t.Errorf("list on unknown component: err = %v, want ErrComponentNotFound", err)
 	}
 }
@@ -1122,7 +1122,7 @@ func TestRaiseAlarmWithoutCapabilities(t *testing.T) {
 		t.Fatalf("alarm = %+v, want it to round-trip exactly what was raised", alarm)
 	}
 
-	got, err := f.gw.ListAlarms(ctx, "bar-1", false)
+	got, err := f.gw.ListAlarms(ctx, "bar-1", storage.AlarmFilter{})
 	if err != nil {
 		t.Fatalf("list alarms: %v", err)
 	}

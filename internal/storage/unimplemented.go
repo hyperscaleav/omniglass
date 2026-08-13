@@ -789,7 +789,10 @@ func (UnimplementedGateway) RaiseAlarm(context.Context, string, string, AlarmSpe
 	return nil, nil
 }
 func (UnimplementedGateway) ClearAlarm(context.Context, string, string, string) error { return nil }
-func (UnimplementedGateway) ListAlarms(context.Context, string, bool) ([]Alarm, error) {
+func (UnimplementedGateway) AcknowledgeAlarm(context.Context, string, string, string) (*Alarm, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) ListAlarms(context.Context, string, AlarmFilter) ([]Alarm, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) SystemHealth(context.Context, string, time.Duration, scope.Set) (*HealthReport, error) {

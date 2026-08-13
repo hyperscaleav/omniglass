@@ -89,7 +89,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		if err != nil {
 			return nil, err
 		}
-		alarms, err := gw.ListAlarms(ctx, compID, in.IncludeCleared)
+		alarms, err := gw.ListAlarms(ctx, compID, storage.AlarmFilter{IncludeCleared: in.IncludeCleared})
 		if err != nil {
 			return nil, mapAlarmErr(err)
 		}

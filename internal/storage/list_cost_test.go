@@ -309,7 +309,7 @@ func TestListAlarmsCostIsFlatInAlarmCount(t *testing.T) {
 		}
 	}
 	list := func() (int, error) {
-		as, err := gw.ListAlarms(ctx, "dsp", true)
+		as, err := gw.ListAlarms(ctx, "dsp", storage.AlarmFilter{IncludeCleared: true})
 		return len(as), err
 	}
 

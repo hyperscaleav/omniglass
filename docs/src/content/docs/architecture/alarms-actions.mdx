@@ -277,9 +277,11 @@ component templates.
 event-sourced); the physical layout (the owner arc, partitioning) lives on
 [storage](/architecture/storage/).
 
-The built `alarm` row is component-local: no owner arc, no `event_rule`, no ack columns yet. The
-**target design shape** adds `event_rule`, the owner arc, `status`, `opened_at`, `resolved_at`, and
-`acked_by`.
+The built `alarm` row is component-local: no owner arc and no `event_rule`. It **does** carry its
+acknowledgement (#728), as two nullable columns rather than a `status` enum, because an enum would
+force acknowledged and cleared into one column and make them mutually exclusive, which they are
+not. The **target design shape** adds `event_rule`, the owner arc, `status`, `opened_at`, and
+`resolved_at`.
 
 <SchemaTable
   table="alarm"
@@ -289,6 +291,8 @@ The built `alarm` row is component-local: no owner arc, no `event_rule`, no ack 
     raised_at: 'When the incident opened',
     cleared_at: 'NULL while open; the one-open index keys on it',
     component_id: 'The component the incident is about (the thin-cut owner)',
+    acknowledged_at: 'When a human first recorded seeing it; NULL while nobody has. Orthogonal to cleared_at',
+    acknowledged_by: 'Who recorded it; ON DELETE SET NULL, so purging a principal keeps the time, and audit_log keeps the name',
   }}
 />
 
