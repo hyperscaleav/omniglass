@@ -3067,6 +3067,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   profile, effective grants, group memberships), so the admin directory reads at 1+3N: four statements
   for one principal, sixty-one for twenty. It is pinned at its current shape rather than fixed here,
   under a test whose name says it pins a defect and whose failure message says the fix is to delete it.
+  (Fixed and the pin deleted in [#671](https://github.com/hyperscaleav/omniglass/issues/671), below.)
 
 - **The second performance instrument: benchmarks that measure, and gate nothing**
   ([#651](https://github.com/hyperscaleav/omniglass/issues/651), [ADR-0094](/architecture/decisions/)).
@@ -4291,3 +4292,112 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   the symptom was wrong and is corrected with it: a zero-window settleable command is `settled` when
   the observed value already matches, `failed` when it differs, and `timed-out` only when nothing
   has been observed, not `timed-out` unconditionally.
+
+- **The admin directory stops reading at 1+3N**
+  ([#671](https://github.com/hyperscaleav/omniglass/issues/671)). `ListPrincipals` drained its base
+  query and then called `loadPrincipal` once per row, three statements each (the kind profile, the
+  effective grants, the group memberships). Measured on the counting instrument that found it, the
+  admin directory cost seven statements for two principals and sixty-seven for twenty-two, and it is
+  the one directory that grows with the organisation rather than the estate, with no pagination to
+  hide behind. It now costs **four, whatever the page size**: the base query, then one union over the
+  three profile tables, one over the effective grants, one over the group memberships, assembled in
+  memory by principal id. The shape is [#648](https://github.com/hyperscaleav/omniglass/issues/648)'s,
+  reads keyed by id with the single-row function kept as the oracle, and `loadPrincipal` is unchanged
+  and still the only path `GetPrincipal` takes.
+
+  The projection did not narrow, and the console is why: the directory renders a grant COUNT and a
+  badge per group a principal belongs to, so the list needs the same effective grants and memberships
+  the detail blade does. A lighter row would have been the smaller fix and would have emptied two
+  columns. Nothing about what the directory returns changed, which is what let the whole principal
+  suite stay green with no expectation edited.
+
+  The kind profile is a **union** rather than a query per kind present in the page. A branch per kind
+  would have been flat in page size too, but its cost would have depended on the MIX, a directory of
+  humans, service accounts and nodes costing two statements more than one holding only humans, and a
+  count that varies with the fixture's composition is a count no assertion can state as a number. The
+  cost fixture holds a node beside its humans to keep that honest rather than assumed, and grows the
+  grants and the group memberships with the page as well as the principals, because a page whose rows
+  carry no grants leaves the grant assembly flat by accident.
+
+  Two gates, both of which the batch had to earn. `TestBatchPrincipalLoadMatchesSingle` holds the batch
+  to the single-row loader field for field over a fixture carrying all three kinds, direct grants,
+  inherited grants, both, neither, and a group with no display name; equality, not improvement, since a
+  batch that answers differently from the loader every other read path uses is a second implementation
+  rather than a fix. And the batch refuses what the oracle refuses: a principal of a profiled kind with
+  no profile row is an error on both paths, not a directory row silently missing its username.
+  `TestListPrincipalsCostIsPerRowToday`, which pinned the defect at its measured 1+3N and said in its
+  own failure message that the fix was to delete it, is deleted; `TestListPrincipalsCostIsFlatInPageSize`
+  takes its place beside the other nine.
+
+- **The alarm write path gets the instrument that can see it, and it is not flat**
+  ([#674](https://github.com/hyperscaleav/omniglass/issues/674)). The recompute behind every alarm the
+  platform raises was the one hot path with a two-digit statement count and nothing measuring it. A
+  wall-clock benchmark of it was written during [#651](https://github.com/hyperscaleav/omniglass/issues/651)
+  and deliberately dropped: against the measured 262 us round-trip floor it is about three-quarters
+  transport, so doubling every query plan inside it would move the number by ~25%, barely above its own
+  spread. Counting is the instrument that does not care that transport dominates.
+
+  The issue named two candidate growth dimensions, the number of alarms and the number of roles the
+  component fills, and asked which one the code actually varies over, because a fixture that holds the
+  growing dimension constant is flat by accident and this repo has made that mistake twice. Measured
+  over seven fixtures, two of them held back as out-of-sample predictions, **one closed form fits all
+  seven and predicted the last two before they were run**:
+
+  ```
+  raise = clear = 12 + 5*S + 4*L
+  ```
+
+  S is the number of slots the component fills, L the number of distinct locations above the systems
+  holding them. So the first candidate is **false** and the second is **true**. The count is flat in
+  the number of alarms, because a component's open alarms are folded by one `array_agg`; it grows at
+  five statements per staffed system (an advisory lock, a role resolution, and a recorded verdict that
+  re-takes the lock) and four per ancestor location. The 58 the issue reports is this shape's minimum,
+  one system three locations, counted as the raise and the clear together.
+
+  Both facts ship as assertions, and the shape of each follows what is true rather than what would look
+  tidy. The flatness in alarm count is asserted with an explicit guard that the two measurements were
+  taken over genuinely different open-alarm sets, since a fixture that quietly deduplicated its alarms
+  would report a beautifully flat number while varying nothing. The growth is **pinned as an equation**,
+  the way [#671](https://github.com/hyperscaleav/omniglass/issues/671)'s defect was pinned before it was
+  fixed, so a change is reported as which term moved; a ceiling generous enough to look comfortable
+  would have hidden the slope underneath it. Reducing the count is explicitly out of scope: a reduction
+  with no measurement in front of it cannot be shown to have worked, and this is that measurement.
+
+- **The systems list stops fetching health once per row**
+  ([#653](https://github.com/hyperscaleav/omniglass/issues/653)). Every row of the systems list
+  rendered a health badge that owned its own query, so a page of N systems fired **N HTTP requests on
+  first paint**, and each one resolved every role the system needs, its occupants, their alarms and
+  thirty days of recorded transitions in order to render one word and a colour. `staleTime` softened
+  the refetch and did nothing for the first load, which is the one an operator waits on. Measured on a
+  twelve-system page: **twelve requests before, one after.**
+
+  The badge needed no change. It has always preferred a verdict the caller hands it and only fetches
+  when it has none, and the fix is at the call site: the page reads verdicts once and passes them
+  through that prop. What the call site does NOT do is also load-bearing. It passes the verdict and
+  **not** the system id, because the id is what makes the badge fetch, and a cell that passed one while
+  the bulk read was still in flight would put the per-row request back precisely where it was removed
+  from. The column stays quiet until the map lands, which is the behaviour it already had.
+
+  The read the issue named, `GET /views/estate` from
+  [#632](https://github.com/hyperscaleav/omniglass/issues/632), is not on this branch's ancestry, so the
+  other option the issue offers is the one taken: a narrower bulk read of exactly what the column
+  renders. `GET /systems:health` answers one verdict per system in the caller's read scope, in **one
+  statement whatever the estate size**, built on the `distinct on` pass over the property series that
+  `locationVerdict` already ships rather than a correlated latest-row subquery per system. Its scope is
+  `ListSystems`' scope by construction (the same `scopedListSQL` over the same table with the same
+  binds), so a caller gets a verdict for exactly the rows it gets, and an empty scope is an empty list
+  rather than a refusal.
+
+  Two things are asserted rather than assumed, because both are places this could quietly go wrong. The
+  bulk read computes nothing: it reads the recorded series and reports a system with no recorded row as
+  healthy, so it is held to `SystemHealth`'s own live-computed verdict over a fixture carrying all three
+  verdicts **and** a system nothing has ever recomputed, which is the row that default exists for. And
+  the health column's freshness now depends on a second cache key, so the role and member writes that
+  already invalidated the per-system key invalidate the bulk one alongside it; without that the column
+  would go stale silently, which is exactly the regression #627's review round 3 caught in the same
+  place.
+
+  The visible UI is unchanged, deliberately: the same badges in the same column. The measurement is the
+  request count, asserted in the page test against a twelve-row page loaded cold, with the per-row
+  endpoint still served by the fixture so that the old implementation fails on the NUMBER rather than by
+  rendering nothing.

@@ -383,25 +383,43 @@ func TestListRolesCostIsFlatInPageSize(t *testing.T) {
 	assertFlatCost(t, small, large, 1)
 }
 
-// TestListPrincipalsCostIsPerRowToday pins a DEFECT, not a target, and the name
-// says so on purpose.
+// TestListPrincipalsCostIsFlatInPageSize: the admin directory is four
+// statements however many principals the organisation holds (#671).
 //
-// ListPrincipals drains its base query and then calls loadPrincipal for every
-// row, which costs three more statements each (the kind profile, the effective
-// grants, the group memberships), so the admin directory reads at 1+3N: four
-// statements for one principal, sixty-one for twenty. That is the exact N+1
-// class this instrument exists to catch, found by pointing it at the paths #650
-// did not name (#671).
+// This replaces TestListPrincipalsCostIsPerRowToday, which pinned the defect at
+// its measured 1+3N (four statements for one principal, sixty-four for
+// twenty-one) and said in its own failure message that the fix was to delete it.
+// ListPrincipals now drains its base query and hands every id to loadPrincipals:
+// one union over the three kind-profile tables, one over the effective grants,
+// one over the group memberships. Four, and four is the ceiling here for the
+// same reason it is exact: the profile read is a UNION rather than a branch per
+// kind, so a directory of humans, service accounts and nodes costs what a
+// directory of humans costs, and this fixture holds a node beside its humans to
+// keep that honest rather than assumed.
 //
-// It is pinned rather than fixed because fixing it is a behavior change with its
-// own scope (three batched reads keyed by principal id, and a decision about
-// whether the directory needs grants at all), and pinned rather than left
-// unmeasured because an unmeasured N+1 is how this one survived. Reported out of
-// #650 for its own issue; when that issue is done, this test should FAIL, and
-// the fix is to delete it and add an assertFlatCost case beside the others.
-func TestListPrincipalsCostIsPerRowToday(t *testing.T) {
+// The fixture grows the grants and the group memberships with the page as well
+// as the principals, because both are read through the same union: a page whose
+// rows carry no grants would leave the grant assembly untested and flat by
+// accident.
+func TestListPrincipalsCostIsFlatInPageSize(t *testing.T) {
 	gw, counter := countingEstate(t)
 	ctx := context.Background()
+
+	// One group holding a grant, so every member's effective grants include an
+	// inherited one and the read exercises both halves of the union.
+	grp, err := gw.CreateGroup(ctx, "", storage.GroupSpec{Name: "probes", DisplayName: "Probes"}, all)
+	if err != nil {
+		t.Fatalf("create group: %v", err)
+	}
+	if _, err := gw.CreateGroupGrant(ctx, "", grp.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "all"}, all); err != nil {
+		t.Fatalf("create group grant: %v", err)
+	}
+	// A node principal, so the page is not single-kind. A per-kind branch would
+	// cost one more statement here than in a humans-only directory; the union
+	// costs the same, which is what makes the ceiling below a real number.
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "probe-node"}, all); err != nil {
+		t.Fatalf("create node: %v", err)
+	}
 
 	list := func() (int, error) {
 		ps, err := gw.ListPrincipals(ctx, all, false)
@@ -409,10 +427,17 @@ func TestListPrincipalsCostIsPerRowToday(t *testing.T) {
 	}
 	add := func(i int) {
 		t.Helper()
-		if _, err := gw.CreateHumanPrincipal(ctx, "", storage.HumanSpec{
+		pr, err := gw.CreateHumanPrincipal(ctx, "", storage.HumanSpec{
 			Username: fmt.Sprintf("probe-%d", i), Email: fmt.Sprintf("probe-%d@example.test", i), DisplayName: "Probe",
-		}, all); err != nil {
+		}, all)
+		if err != nil {
 			t.Fatalf("create principal %d: %v", i, err)
+		}
+		if _, err := gw.CreateGrant(ctx, "", pr.ID, storage.GrantSpec{Role: "viewer", ScopeKind: "all"}, all); err != nil {
+			t.Fatalf("grant principal %d: %v", i, err)
+		}
+		if err := gw.AddGroupMember(ctx, "", grp.ID, pr.ID, all); err != nil {
+			t.Fatalf("add principal %d to group: %v", i, err)
 		}
 	}
 
@@ -423,19 +448,8 @@ func TestListPrincipalsCostIsPerRowToday(t *testing.T) {
 	}
 	large := measure(t, counter, list)
 
-	// The per-row constant, stated as an equation so the pin describes the
-	// SHAPE (one base query, three per row) rather than two magic numbers.
-	for _, r := range []reading{small, large} {
-		if want := 1 + 3*r.rows; r.n != want {
-			t.Errorf("ListPrincipals cost %d statements for %d principals, want %d (1 base + 3 per row).\n"+
-				"If this failed because the read was batched, that is the FIX: delete this test and add an assertFlatCost case beside the others.\n  %q",
-				r.n, r.rows, want, r.stmts)
-		}
-	}
-	if small.n == large.n {
-		t.Errorf("the cost did not grow with the page (%d for %d rows, %d for %d): this test pins a per-row read and the read is no longer per-row",
-			small.n, small.rows, large.n, large.rows)
-	}
+	// The base query, the kind-profile union, the grant union, the memberships.
+	assertFlatCost(t, small, large, 4)
 }
 
 // all-scope reads are what these measure: an ABAC-narrowed read takes the same

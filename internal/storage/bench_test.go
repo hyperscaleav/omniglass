@@ -569,8 +569,11 @@ func BenchmarkSystemHealth(b *testing.B) {
 //
 // The honest instrument for a 58-statement path is the FIRST one: count the
 // round trips, deterministically, the way list_cost_test.go does for the reads.
-// That is a different piece of work, and this comment is here so the gap is
-// visible rather than inferred from an absence.
+// That work is now done, in alarm_cost_test.go (#674), and it found what a
+// benchmark could not have: the 58 is not a constant. It is the minimum of
+// 12 + 5*S + 4*L per raise and the same per clear, over the slots the component
+// fills and the locations above them. The count is flat only in the number of
+// alarms.
 
 // warmRows runs the read once before the timer starts and reports how many rows
 // it produced.

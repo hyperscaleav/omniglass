@@ -795,6 +795,9 @@ func (UnimplementedGateway) ListAlarms(context.Context, string, bool) ([]Alarm, 
 func (UnimplementedGateway) SystemHealth(context.Context, string, time.Time, scope.Set) (*HealthReport, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) SystemVerdicts(context.Context, scope.Set) ([]SystemVerdict, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) LocationHealth(context.Context, string, time.Time, scope.Set) (*HealthReport, error) {
 	return nil, nil
 }

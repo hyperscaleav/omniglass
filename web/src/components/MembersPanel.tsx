@@ -13,7 +13,7 @@ import {
   type Member,
 } from "../lib/members";
 import { roleByComponent, systemRoles, systemRolesKey } from "../lib/system_roles";
-import { systemHealthKey } from "../lib/health";
+import { SYSTEM_VERDICTS_KEY, systemHealthKey } from "../lib/health";
 
 // MembersPanel lists the components bound into a system. MEMBERSHIP is the
 // attachment and a ROLE is what it does, so this panel answers "what is in this
@@ -82,6 +82,7 @@ export default function MembersPanel(props: {
       qc.invalidateQueries({ queryKey: key() }),
       qc.invalidateQueries({ queryKey: systemRolesKey(props.system) }),
       qc.invalidateQueries({ queryKey: systemHealthKey(props.system) }),
+      qc.invalidateQueries({ queryKey: SYSTEM_VERDICTS_KEY }),
     ]);
   };
 

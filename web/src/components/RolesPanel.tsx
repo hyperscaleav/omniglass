@@ -23,6 +23,7 @@ import {
   quorumLabel,
   systemHealth,
   systemHealthKey,
+  SYSTEM_VERDICTS_KEY,
   type HealthRole,
 } from "../lib/health";
 
@@ -166,6 +167,7 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
       await Promise.all([
         qc.invalidateQueries({ queryKey: key() }),
         qc.invalidateQueries({ queryKey: systemHealthKey(props.system) }),
+        qc.invalidateQueries({ queryKey: SYSTEM_VERDICTS_KEY }),
       ]);
       setBusy(false);
     }

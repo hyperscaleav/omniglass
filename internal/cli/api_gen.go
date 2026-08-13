@@ -5211,11 +5211,21 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
-			parent := &cobra.Command{
-				Use:   "health",
-				Short: "Commands for the health resource",
-			}
-			parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "health",
+					Short:   "Read every system's health verdict",
+					Long:    "The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every role, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.",
+					Example: "  omniglass system health",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/systems:health")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			cmd.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
@@ -5232,7 +5242,7 @@ func generatedCommands() []*cobra.Command {
 				}()
 				return cmd
 			}())
-			return parent
+			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {

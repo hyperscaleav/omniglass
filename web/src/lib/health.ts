@@ -48,6 +48,23 @@ export async function systemHealth(name: string): Promise<EstateHealth> {
   return data as EstateHealth;
 }
 
+// The BULK verdict read (#653). One request carrying the one fact a list's
+// health column renders, for every system the caller can see.
+//
+// Its own cache namespace, deliberately NOT the per-system one: those entries
+// hold a full EstateHealth report that the panels read roles and transitions out
+// of, and seeding them from this read would put a verdict-only object behind a
+// key whose readers expect the whole report. A write that changes a verdict
+// invalidates both, which is why SYSTEM_VERDICTS_KEY sits beside systemHealthKey
+// at every invalidation site.
+export const SYSTEM_VERDICTS_KEY = ["system-verdicts"] as const;
+
+export async function systemVerdicts(): Promise<Map<string, string>> {
+  const { data, error } = await api.GET("/systems:health");
+  if (error) throw error;
+  return new Map((data?.verdicts ?? []).map((v) => [v.system, v.verdict] as const));
+}
+
 export async function locationHealth(name: string): Promise<EstateHealth> {
   const { data, error } = await api.GET("/locations/{name}/health", { params: { path: { name } } });
   if (error) throw error;

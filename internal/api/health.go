@@ -151,6 +151,24 @@ func nonNil(s []string) []string {
 	return s
 }
 
+// systemVerdictsOutput is the BULK health read's body: one verdict per system the
+// caller can see, keyed by uuid because that is what a list row holds and because
+// a system name is scoped to its placement rather than unique estate-wide.
+//
+// Deliberately not a list of health REPORTS. The report is the read a system's
+// panel opens; this is the read a list paints a column from, and the whole point
+// is that it carries the one fact the column renders and nothing else (#653).
+type systemVerdictsOutput struct {
+	Body struct {
+		Verdicts []systemVerdictBody `json:"verdicts" doc:"One entry per system in the caller's read scope, in no particular order."`
+	}
+}
+
+type systemVerdictBody struct {
+	System  string `json:"system" doc:"The system's uuid"`
+	Verdict string `json:"verdict" doc:"healthy, degraded, or outage"`
+}
+
 // registerHealthRoutes wires the system and location health reads.
 func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
@@ -166,6 +184,25 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			return nil, mapSystemErr(err)
 		}
 		return toHealthOutput(rep), nil
+	})
+
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "list-system-verdicts",
+		Method:      http.MethodGet,
+		Path:        "/systems:health",
+		Summary:     "Read every system's health verdict",
+		Description: "The current verdict for every system in the caller's read scope, in one call: the bulk counterpart of the per-system health read, carrying the one fact a list's health column renders and none of the explanation. A console painting a page of systems reads this once instead of resolving every role, occupant, alarm and transition per row. A system that has never been recomputed reads healthy. Gated by system:read; an empty scope is an empty list, not a 403.",
+	}, "system", "read"), func(ctx context.Context, _ *struct{}) (*systemVerdictsOutput, error) {
+		vs, err := gw.SystemVerdicts(ctx, a.scopeFor(ctx, "system", "read"))
+		if err != nil {
+			return nil, mapSystemErr(err)
+		}
+		out := &systemVerdictsOutput{}
+		out.Body.Verdicts = make([]systemVerdictBody, 0, len(vs))
+		for _, v := range vs {
+			out.Body.Verdicts = append(out.Body.Verdicts, systemVerdictBody{System: v.SystemID, Verdict: v.Verdict})
+		}
+		return out, nil
 	})
 
 	huma.Register(api, a.gated(huma.Operation{

@@ -854,14 +854,17 @@ func (p *PG) ListPrincipals(ctx context.Context, read scope.Set, includeArchived
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("storage: list principals: %w", err)
 	}
-	// loadPrincipal runs its own queries, so the row cursor is drained first.
+	// loadPrincipals runs its own queries, so the row cursor is drained first. It
+	// is the batched counterpart of loadPrincipal (#671): three statements for the
+	// whole page rather than three per row, which is what keeps the admin
+	// directory readable at organisation scale. loadPrincipal stays the single-row
+	// path and the oracle the batch is measured against.
 	out := make([]Principal, 0, len(bases))
 	for _, b := range bases {
-		pr := Principal{ID: b.id, Kind: b.kind, Active: b.active, ArchivedAt: b.archivedAt}
-		if err := p.loadPrincipal(ctx, &pr); err != nil {
-			return nil, err
-		}
-		out = append(out, pr)
+		out = append(out, Principal{ID: b.id, Kind: b.kind, Active: b.active, ArchivedAt: b.archivedAt})
+	}
+	if err := p.loadPrincipals(ctx, out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

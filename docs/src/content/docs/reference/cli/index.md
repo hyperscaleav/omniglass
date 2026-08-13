@@ -4022,7 +4022,7 @@ omniglass system get <name>
 
 ### `omniglass system health`
 
-Commands for the health resource
+Read every system's health verdict
 
 #### `omniglass system health list`
 
