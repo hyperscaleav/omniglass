@@ -39,6 +39,33 @@ const walkedNotSearchedDoc = `[{"Plan": {
 		 "Filter": "((property_type_id)::text = ((InitPlan 2).col1)::text)"}
 	]}}]`
 
+// A bitmap heap scan names the relation and the index sits on the child node,
+// so a walk that read only the parent would report a perfectly reachable index
+// as unreached, and the guard would fail on a plan that is fine.
+const bitmapScanDoc = `[{"Plan": {
+	"Node Type": "Bitmap Heap Scan", "Relation Name": "property", "Alias": "v", "Disabled": false,
+	"Recheck Cond": "(property_type_id = $1)",
+	"Plans": [
+		{"Node Type": "Bitmap Index Scan", "Index Name": "property_system_owner_idx",
+		 "Disabled": false, "Index Cond": "(property_type_id = $1)"}
+	]}}]`
+
+func TestParseReadsABitmapScanThroughToItsIndex(t *testing.T) {
+	plan, err := accesspath.Parse([]byte(bitmapScanDoc))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(plan) != 1 {
+		t.Fatalf("parsed %d scans (%s), want the one relation the plan scans", len(plan), plan)
+	}
+	if plan[0].Index != "property_system_owner_idx" || plan[0].Cond != "(property_type_id = $1)" {
+		t.Errorf("bitmap scan = %+v, want the index and condition off its bitmap index scan", plan[0])
+	}
+	if ok, why := plan.MustReach("property", "property_system_owner_idx"); !ok {
+		t.Errorf("MustReach refused a bitmap scan of the right index: %s", why)
+	}
+}
+
 func TestParseCollectsEveryScanInTreeOrder(t *testing.T) {
 	plan, err := accesspath.Parse([]byte(indexScanDoc))
 	if err != nil {

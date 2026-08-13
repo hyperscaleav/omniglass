@@ -175,14 +175,24 @@ func Parse(doc []byte) (Plan, error) {
 func walk(node map[string]any) Plan {
 	var out Plan
 	if rel, ok := node["Relation Name"].(string); ok {
-		out = append(out, Scan{
+		scan := Scan{
 			Relation: rel,
 			Alias:    str(node["Alias"]),
 			Node:     str(node["Node Type"]),
 			Index:    str(node["Index Name"]),
 			Cond:     str(node["Index Cond"]),
 			Disabled: node["Disabled"] == true,
-		})
+		}
+		// A bitmap heap scan names the relation while the index it was built
+		// from sits on a child node, so reading only this node would report a
+		// reachable index as unreached. The condition lives down there too; the
+		// parent's is a Recheck Cond.
+		if scan.Index == "" {
+			if child, ok := bitmapSource(node); ok {
+				scan.Index, scan.Cond = str(child["Index Name"]), str(child["Index Cond"])
+			}
+		}
+		out = append(out, scan)
 	}
 	children, ok := node["Plans"].([]any)
 	if !ok {
@@ -196,6 +206,23 @@ func walk(node map[string]any) Plan {
 		out = append(out, walk(child)...)
 	}
 	return out
+}
+
+// bitmapSource finds the bitmap index scan a bitmap heap scan reads from. Only
+// the first: a BitmapAnd or BitmapOr of several indexes is not one access path,
+// and reporting one of them as THE path would be a wrong answer rather than a
+// partial one, so it reports none and the assertion fails with the node it
+// found.
+func bitmapSource(node map[string]any) (map[string]any, bool) {
+	children, ok := node["Plans"].([]any)
+	if !ok || len(children) != 1 {
+		return nil, false
+	}
+	child, ok := children[0].(map[string]any)
+	if !ok || str(child["Node Type"]) != "Bitmap Index Scan" {
+		return nil, false
+	}
+	return child, true
 }
 
 func str(v any) string {
