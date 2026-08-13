@@ -216,31 +216,42 @@ func TestTheDraftedNameIsWhatTheAllocatorWouldMint(t *testing.T) {
 	}
 }
 
-// TestTheDraftSystemLabelIsExactWhereTheRuleReadsNoOrdinal is the generated-name
-// case with no unknown left in it: the shipped system rule is "{{.TypeName}}",
-// so a system whose name the platform mints still drafts a label the create
-// stores character for character.
-func TestTheDraftSystemLabelIsExactWhereTheRuleReadsNoOrdinal(t *testing.T) {
+// TestTheDraftSystemLabelCarriesTheOrdinalItWillLandWith is the generated-name
+// case on the system tier, and since #693 there is a number in it: the shipped
+// rule is "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}", so a form drafting
+// the SECOND boardroom in a room has to show "Boardroom 2" and not the
+// "Boardroom" the first one gets.
+//
+// Both halves are asserted against the string as well as against each other,
+// because a draft and a create that were both wrong in the same way would agree
+// with each other perfectly. That is what this test asserted before, and it is
+// why the rule's own change could not have failed it.
+func TestTheDraftSystemLabelCarriesTheOrdinalItWillLandWith(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
-	drafted, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{
-		SystemTypeRef: "board", LocationName: room.Name,
-	}, all, all)
-	if err != nil {
-		t.Fatalf("render draft: %v", err)
-	}
-	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
-		SystemTypeID: strptr("board"), LocationName: &room.Name,
-	}, all, all)
-	if err != nil {
-		t.Fatalf("create system: %v", err)
-	}
-	if drafted.Label != s.DisplayName || drafted.Label == "" {
-		t.Errorf("drafted %q, stored %q", drafted.Label, s.DisplayName)
-	}
-	if !s.NameGenerated {
-		t.Error("the create was expected to mint the name, so this is the generated case")
+	for _, want := range []string{"Boardroom", "Boardroom 2"} {
+		drafted, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{
+			SystemTypeRef: "board", LocationName: room.Name,
+		}, all, all)
+		if err != nil {
+			t.Fatalf("render draft: %v", err)
+		}
+		s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
+			SystemTypeID: strptr("board"), LocationName: &room.Name,
+		}, all, all)
+		if err != nil {
+			t.Fatalf("create system: %v", err)
+		}
+		if drafted.Label != s.DisplayName || drafted.Label == "" {
+			t.Errorf("drafted %q, stored %q", drafted.Label, s.DisplayName)
+		}
+		if drafted.Label != want {
+			t.Errorf("drafted %q, want %q: the form must show the number the row lands with", drafted.Label, want)
+		}
+		if !s.NameGenerated {
+			t.Error("the create was expected to mint the name, so this is the generated case")
+		}
 	}
 }
 

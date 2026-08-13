@@ -2,6 +2,7 @@ package storage
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -169,6 +170,40 @@ func TestMintNameStemlessIgnoresSuppression(t *testing.T) {
 	}
 	if got := m.name(2); got != "2" {
 		t.Errorf("a suppressed stem-less mint at ordinal 2 = %q, want \"2\"", got)
+	}
+}
+
+// TestSuppressesAgreesWithTheNameItWouldMint is the label side of the same
+// guarantee (#693): the label map asks the mint whether a name shows its
+// number, so an answer that disagreed with the name would put "Boardroom 1"
+// beside a system called `boardroom`. Every case is asserted against the minted
+// NAME rather than against a restatement of the rule, so the two are held
+// together by the assertion and not only by both being read from the same
+// fields.
+func TestSuppressesAgreesWithTheNameItWouldMint(t *testing.T) {
+	for _, c := range []struct {
+		what string
+		m    nameMint
+		n    int
+		want bool
+	}{
+		{"a component's first still carries its number", componentMint("display"), 1, false},
+		{"a component's second", componentMint("display"), 2, false},
+		{"the first of a system's stem", systemMint("boardroom"), 1, true},
+		{"the second of a system's stem", systemMint("boardroom"), 2, false},
+		{"the twelfth", systemMint("boardroom"), 12, false},
+		{"a stem-less mint, whose ordinal IS its name", nameMint{bareFirst: true}, 1, false},
+	} {
+		got := c.m.suppresses(c.n)
+		if got != c.want {
+			t.Errorf("%s: suppresses(%d) = %v, want %v", c.what, c.n, got, c.want)
+		}
+		// The name is the arbiter: a suppressed ordinal is one the minted name
+		// does not end in.
+		suffix := "-" + strconv.Itoa(c.n)
+		if bare := !strings.HasSuffix(c.m.name(c.n), suffix); c.m.stem != "" && bare != got {
+			t.Errorf("%s: suppresses(%d) = %v but the name it mints is %q", c.what, c.n, got, c.m.name(c.n))
+		}
 	}
 }
 

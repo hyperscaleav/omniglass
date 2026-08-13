@@ -96,10 +96,22 @@ func (m nameMint) name(n int) string {
 	if m.stem == "" {
 		return strconv.Itoa(n)
 	}
-	if m.bareFirst && n == 1 {
+	if m.suppresses(n) {
 		return m.stem
 	}
 	return m.stem + "-" + strconv.Itoa(n)
+}
+
+// suppresses reports whether the name this mint produces at n omits the number
+// (#693): true only for the bare first of a stem. It is the branch [nameMint.name]
+// itself takes rather than a second reading of the same fields, so the two
+// cannot disagree about a given ordinal, which is the property ADR-0101 made
+// structural for the allocator and this extends to the LABEL side.
+//
+// A stem-less mint suppresses nothing, for the reason it ignores bareFirst: its
+// ordinal IS its name, so there is nothing left to say once the number is gone.
+func (m nameMint) suppresses(n int) bool {
+	return m.stem != "" && m.bareFirst && n == 1
 }
 
 // ErrInvalidNameRule is a name rule that cannot mint a legal name, refused at

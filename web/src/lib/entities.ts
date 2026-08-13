@@ -90,17 +90,20 @@ export function hasDisplayName(e: Labelled): boolean {
   return !e.display_name_generated && !labelIsName(e);
 }
 
-// labelGenerated is the other half of the pen: not "is there a second string to
-// show" but "whose words are these". A surface uses it to mark a label the
-// platform rendered, so an operator can see at a glance which labels are theirs
-// and which follow a rule that a rule edit will rewrite.
+// labelGenerated retired here in #693, with the chip that was its only caller.
 //
-// It is deliberately not the negation of hasDisplayName. Both are false for a
-// row showing only its name, whoever holds the pen, because there is nothing
-// rendered there to attribute.
-export function labelGenerated(e: Labelled): boolean {
-  return Boolean(e.display_name_generated) && !labelIsName(e);
-}
+// It was "is there a platform-rendered label here to MARK", which is a question
+// only a marker asks: it returned false for a row whose rule rendered nothing,
+// because there was nothing on screen to attribute. The pen's state now shows on
+// the edit blade instead (components/LabelPenField.tsx), and a FIELD asks a
+// different question, "who holds the pen", whose answer for that same row is
+// "the platform" and whose field must open locked. Keeping one predicate for two
+// questions with different answers is how a surface ends up marking one thing
+// and doing another, so the predicate went and the raw pen
+// (display_name_generated) is read where it is asked about.
+//
+// hasDisplayName above still reads the pen, so the fact has not left this
+// module, only the badge's spelling of it.
 
 // deriveName turns what an operator typed into the name the API will accept.
 //

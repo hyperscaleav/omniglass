@@ -622,6 +622,53 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 	}
 }
 
+// TestTwoSameTypeSystemsInOneRoomReadDifferently is #693: a divisible boardroom
+// whose two halves are both `board` systems in the same room. The shipped
+// system rule read the type alone, so both rendered "Boardroom": the platform
+// could tell them apart (`boardroom` and `boardroom-2`) and the operator
+// reading the console could not.
+//
+// The rule now reads the ordinal under the same {{if}} the component's has
+// always used, and the suppression follows the NAME rather than the stored
+// number: the first of its stem carries no digits in its name, so it carries
+// none in its label either, and the second reads "Boardroom 2". Both halves are
+// asserted, and so is the fact that they DIFFER, because two labels that agree
+// would satisfy an assertion of either string on its own.
+func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	room := makeRoom(t, gw, ctx, "room-a")
+
+	half := func(what string) storage.System {
+		t.Helper()
+		s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strptr("board"), LocationName: &room}, all, all)
+		if err != nil {
+			t.Fatalf("create %s half: %v", what, err)
+		}
+		return *s
+	}
+	first, second := half("first"), half("second")
+
+	// The names are the fixture: this is the estate ADR-0101's suppression
+	// produces, and the labels are what the operator reads off it.
+	if first.Name != "boardroom" || second.Name != "boardroom-2" {
+		t.Fatalf("names = %q and %q, want %q and %q", first.Name, second.Name, "boardroom", "boardroom-2")
+	}
+	if first.DisplayName != "Boardroom" {
+		t.Errorf("the first half's label = %q, want %q: its name carries no ordinal, so neither does its label", first.DisplayName, "Boardroom")
+	}
+	if second.DisplayName != "Boardroom 2" {
+		t.Errorf("the second half's label = %q, want %q", second.DisplayName, "Boardroom 2")
+	}
+	if first.DisplayName == second.DisplayName {
+		t.Errorf("both halves read %q, so the console cannot tell them apart", first.DisplayName)
+	}
+	// And the platform still holds the pen on both, which is what makes these
+	// the platform's to keep current through a later move or reclassify.
+	if !first.DisplayNameGenerated || !second.DisplayNameGenerated {
+		t.Errorf("generated = %v and %v, want both platform-owned", first.DisplayNameGenerated, second.DisplayNameGenerated)
+	}
+}
+
 // --- the global tier ----------------------------------------------------
 
 // The global rule is a TABLE with two columns rather than one, and this is what

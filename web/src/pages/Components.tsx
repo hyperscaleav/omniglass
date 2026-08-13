@@ -24,6 +24,7 @@ import { bucketPhrase, createPen, nameBucket, penIncomplete } from "../lib/nameg
 import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
 import { pathTo, type TreeNode } from "../lib/treeselect";
 import CreateIdentity from "../components/CreateIdentity";
+import LabelPenField, { seedLabelPen } from "../components/LabelPenField";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
@@ -235,7 +236,9 @@ export default function Components() {
     // use it.
     const canRename = () => can(me.data, "component", "rename");
 
-    const [display, setDisplay] = createSignal(n().raw.display_name ?? "");
+    // The label's pen rather than a plain signal (#693): see Systems.tsx's own
+    // copy of this line and components/LabelPenField.tsx for the rule.
+    const displayPen = createPen();
     const [name, setName] = createSignal(n().raw.name);
     const [nameCheck, setNameCheck] = createSignal<NameCheck | null>(null);
     const [checking, setChecking] = createSignal(false);
@@ -269,7 +272,7 @@ export default function Components() {
     // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
     // since Cancel exits edit and the next begin re-seeds).
     createEffect(on(editing, (isEditing) => {
-      if (isEditing) { setDisplay(n().raw.display_name ?? ""); setName(n().raw.name); setNameCheck(null); }
+      if (isEditing) { seedLabelPen(displayPen, n().raw); setName(n().raw.name); setNameCheck(null); }
     }));
     // Consume a pending "open in edit" handoff (from create or the row pencil) once
     // the node has resolved. Keyed on id (#627 Task 15c), stable across a rename,
@@ -289,7 +292,10 @@ export default function Components() {
           // happen here for the ordinary case of a room's first component
           // (every room's first display is named "display-1").
           await updateComponent(n().raw.id, {
-            display_name: display() || undefined,
+            // The pen's own value, always keyed (#693): see Systems.tsx's save
+            // for why the empty string is the right thing to post from a locked
+            // field.
+            display_name: displayPen.value(),
           });
           // The rename is a second call and it goes LAST, because it is the one that
           // can be refused on its own: it needs <resource>:rename, and a duplicate
@@ -366,9 +372,7 @@ export default function Components() {
             }
           >
             <div class="flex flex-col gap-3">
-              <FieldRow bind="display_name">
-                <input class="input input-bordered w-full" value={display()} placeholder="Ceiling Mic 2" onInput={(e) => setDisplay(e.currentTarget.value)} />
-              </FieldRow>
+              <LabelPenField pen={displayPen} entity={() => n().raw} placeholder="Ceiling Mic 2" />
               <FieldRow
                 bind="name"
                 info="Renaming changes the address; existing links to the old name stop resolving."

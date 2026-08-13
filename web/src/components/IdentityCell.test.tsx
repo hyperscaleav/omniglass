@@ -58,21 +58,32 @@ describe("IdentityCell", () => {
     expect(screen.getByText("display-1")).toBeTruthy();
   });
 
-  // Distinguishable, which is the other half: a row whose label the platform owns
-  // is marked, so an operator can see which labels a rule edit would rewrite.
-  it("marks a platform-rendered label as generated", () => {
+  // The pen's mark is NOT here (#693). It was, as a full-text "Generated" chip,
+  // and it cost the Name column the width of the word on every row of all 18
+  // pages this cell serves while telling an operator something they could not act
+  // on from a list. The fact moved to the field it belongs to, the display name
+  // on the edit blade, where the same lock the create form carries states it and
+  // offers the act (components/LabelPenField.tsx). The whole-estate question the
+  // chip half-answered ("which rows would a rule edit rewrite") is answered whole
+  // by `<entity> previewLabels`, which a chip could only ever answer one row at a
+  // time.
+  it("renders no pen chip for a label the platform rendered", () => {
     render(() => <IdentityCell entity={{ name: "display-1", display_name: "Display 1", display_name_generated: true }} />);
-    expect(screen.getByTitle(/platform/i)).toBeTruthy();
-  });
-
-  it("does not mark a label the operator typed", () => {
-    render(() => <IdentityCell entity={{ name: "display-1", display_name: "Display 1" }} />);
+    expect(screen.getByText("Display 1")).toBeTruthy();
+    expect(screen.queryByText("Generated")).toBeNull();
     expect(screen.queryByTitle(/platform/i)).toBeNull();
   });
 
-  // Holding the pen over a rule that rendered nothing is not a generated label:
-  // what shows IS the name, so marking it would claim credit for the fallback.
-  it("does not mark a row whose rule rendered nothing", () => {
+  it("renders no pen chip for a label the operator typed either", () => {
+    render(() => <IdentityCell entity={{ name: "display-1", display_name: "Display 1" }} />);
+    expect(screen.queryByText("Generated")).toBeNull();
+    expect(screen.queryByTitle(/platform/i)).toBeNull();
+  });
+
+  // Holding the pen over a rule that rendered nothing was never a generated
+  // label: what shows IS the name. The row still reads as one line, which is the
+  // half of this case that outlived the chip.
+  it("shows a row whose rule rendered nothing as its name, once", () => {
     render(() => <IdentityCell entity={{ name: "codec-1", display_name: "", display_name_generated: true }} />);
     expect(screen.queryByTitle(/platform/i)).toBeNull();
     expect(screen.getAllByText("codec-1")).toHaveLength(1);

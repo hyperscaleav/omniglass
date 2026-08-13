@@ -10,7 +10,7 @@ import {
 } from "../lib/listmodel";
 import ListShell from "./ListShell";
 import Drawer from "./Drawer";
-import { hasDisplayName, labelGenerated, labelIsName, type Labelled } from "../lib/entities";
+import { hasDisplayName, labelIsName, type Labelled } from "../lib/entities";
 import ColumnMenu from "./ColumnMenu";
 import {
   ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash,
@@ -194,6 +194,72 @@ export type PageDescriptor = {
   columnKeys: string[];
   defaultCols: string[];
 };
+
+// NAME_MIN_W is the floor under the Name column, and ACTION_W the row-action
+// column every list ends with.
+//
+// The Name column declares no width of its own, which is what lets it grow into
+// a wide screen: under `table-fixed` a widthless column takes whatever the
+// declared ones leave. That also makes it the FIRST to give up space on a narrow
+// one, and it gave up all of it (#690). Measured in the console at a 1280
+// viewport, where the list card offers 973px: Components declares 890px of
+// columns plus 150px of actions, so Name measured **0px** and the identifier an
+// operator scans was gone while Tags kept all 340 of its pixels; Systems
+// declares 960 and measured the same 0; Locations declares 650, so it had 173px
+// left over and looked fine. Same markup, three outcomes, decided by the widths
+// each page happens to declare.
+// 191px is MEASURED rather than chosen, and it is a RE-measurement: the floor
+// was 260 while the identity cell still carried the label pen's "Generated"
+// chip, and the chip left in #693.
+//
+// How both numbers were arrived at, so the next one can be too. Each row's name
+// cell is cloned into an absolutely positioned `width: max-content` holder
+// appended inside its own <td>, so the browser answers "how wide does this want
+// to be" with the real font, the tree indent, the chevron slot and the longer of
+// the two stacked lines all accounted for by layout rather than by arithmetic;
+// the cell's own horizontal padding is added, because that is part of the
+// column. Driven against the dev estate at a 1280 viewport, the same run
+// measures each row twice, once with the chip's exact markup injected back into
+// the clone, so the difference is the chip and nothing else.
+//
+// What it said. The chip cost a UNIFORM 69px on all 20 rows of the three pages,
+// which stands to reason: it is one fixed word. The widest cell in the estate
+// (a depth-3 location, "Auditorium") wanted 256px with its chip and wants 187px
+// without it, and the old floor of 260 was the estate's widest row plus four
+// pixels. "Boardroom 2" measured 203px with its chip, reproducing the 200px this
+// comment used to record, which is how the method was checked before the number
+// was moved.
+//
+// So the new floor is the old one minus the chip: 260 - 69 = 191. That is not a
+// rounding of anything, and it deliberately is not the "about 200" this was
+// estimated at. The point of deriving it this way rather than from the estate's
+// widest row is that the LABELS did not change, only the thing beside them, so
+// the floor should carry exactly the labels it carried before and no more.
+//
+// It is a FLOOR and not a width: on a wide screen Name still takes everything
+// the declared columns leave (523px on Locations at a 1680 viewport). The cost
+// is stated rather than hidden: Systems, whose declared columns exceed the list
+// card even at 1680, still scrolls sideways there, and Locations still scrolls at
+// 1280. Components stops scrolling at 1680, which the chip's 69px was buying
+// nothing but. Hiding one column (Tags is the widest and the least identifying)
+// removes the rest, and that lever is already in the columns menu.
+export const NAME_MIN_W = 191;
+export const ACTION_W = 150;
+
+// minTableWidth is the fix, and it is a floor on the TABLE rather than a width
+// on the column. The table asks for at least the declared columns plus
+// NAME_MIN_W, so the browser gives Name that much and the card (already
+// `overflow-x-auto`) scrolls sideways when even that does not fit, instead of
+// squeezing the identifier out of existence. Wide screens are untouched:
+// `width: 100%` beats a smaller min-width, so Name still absorbs the surplus.
+//
+// It lives here rather than in each page's descriptor because the three pages
+// differ only in the widths they declare, and the defect was that one shared
+// rule produced three different behaviours. The remedy has to be the same shared
+// rule, not three sets of numbers kept in step by hand.
+export function minTableWidth(columns: Record<string, { width: number }>, visible: string[]): number {
+  return visible.reduce((sum, k) => sum + (columns[k]?.width ?? 0), NAME_MIN_W + ACTION_W);
+}
 
 export default function TreeList<N extends ListNode>(props: { config: ListConfig<N> }) {
   const cfg = props.config;
@@ -575,7 +641,11 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                   render: a generated label differs from the key exactly as an
                   operator's does, so the hand-written copy would have repeated the
                   key under every platform-labelled row in the estate. */}
-              <span class="flex min-w-0 items-baseline gap-1.5">
+              {/* No pen chip here since #693: see IdentityCell's own comment for
+                  why the label pen's badge left every list and became the lock on
+                  the display-name field of the edit blade. hasDisplayName below
+                  still reads the pen, which is the half that stayed. */}
+              <span class="flex min-w-0 items-baseline">
                 <span
                   class="truncate"
                   classList={{ "font-data text-[13px]": labelIsName(identityOf(n)) }}
@@ -583,14 +653,6 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                 >
                   {n.display}
                 </span>
-                <Show when={labelGenerated(identityOf(n))}>
-                  <span
-                    class="badge badge-ghost badge-xs shrink-0"
-                    title="The platform generated this label from a label rule. Typing one of your own claims it; clearing the field hands it back."
-                  >
-                    Generated
-                  </span>
-                </Show>
               </span>
               <Show when={hasDisplayName(identityOf(n))}>
                 <span class="truncate font-data text-[11px] text-base-content/40">{n.addr ?? n.id}</span>
@@ -687,11 +749,11 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
       >
         {() => (
           <div class="overflow-x-auto">
-            <table class="og-rows table table-fixed table-sm">
+            <table class="og-rows table table-fixed table-sm" style={{ "min-width": `${minTableWidth(cfg.columns, visible())}px` }}>
             <colgroup>
               <col />
               <For each={visible()}>{(k) => <col style={{ width: `${cfg.columns[k].width}px` }} />}</For>
-              <col style={{ width: "150px" }} />
+              <col style={{ width: `${ACTION_W}px` }} />
             </colgroup>
             <thead>
               <tr>
