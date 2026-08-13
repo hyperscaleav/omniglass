@@ -426,7 +426,7 @@ func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
 
 	// Health recompute: already exercised in-transaction by RaiseAlarm and
 	// AssignRole above (both call it); read the result back explicitly too.
-	rep, err := gw.SystemHealth(ctx, sys.Name, time.Time{}, all)
+	rep, err := gw.SystemHealth(ctx, sys.Name, 0, all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -619,7 +619,7 @@ func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 	// post-declaration read below can assert it is BYTE-FOR-BYTE unchanged,
 	// not merely "still empty of the new role" (which live-computed Roles
 	// already covers and cannot fail on this bug).
-	repBBefore, err := gw.SystemHealth(ctx, sysB.ID, time.Time{}, all)
+	repBBefore, err := gw.SystemHealth(ctx, sysB.ID, 0, all)
 	if err != nil {
 		t.Fatalf("system health sysB before declaration: %v", err)
 	}
@@ -633,7 +633,7 @@ func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 		t.Fatalf("declare standard role: %v", err)
 	}
 
-	repA, err := gw.SystemHealth(ctx, sysA.ID, time.Time{}, all)
+	repA, err := gw.SystemHealth(ctx, sysA.ID, 0, all)
 	if err != nil {
 		t.Fatalf("system health sysA by id: %v", err)
 	}
@@ -653,7 +653,7 @@ func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 		t.Fatalf("sysA latest transition = %+v, want degraded (an unstaffed quorum-1 role)", last)
 	}
 
-	repB, err := gw.SystemHealth(ctx, sysB.ID, time.Time{}, all)
+	repB, err := gw.SystemHealth(ctx, sysB.ID, 0, all)
 	if err != nil {
 		t.Fatalf("system health sysB by id: %v", err)
 	}
@@ -668,7 +668,7 @@ func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 	if err := gw.DeleteSystemRole(ctx, "", "standard", "dup-std", "seat"); err != nil {
 		t.Fatalf("withdraw standard role: %v", err)
 	}
-	repA2, err := gw.SystemHealth(ctx, sysA.ID, time.Time{}, all)
+	repA2, err := gw.SystemHealth(ctx, sysA.ID, 0, all)
 	if err != nil {
 		t.Fatalf("system health sysA after withdraw: %v", err)
 	}
@@ -680,7 +680,7 @@ func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 	} else if last := repA2.Transitions[n-1]; last.Value != "healthy" {
 		t.Fatalf("sysA latest transition after withdraw = %+v, want healthy (the recorded recovery)", last)
 	}
-	repB2, err := gw.SystemHealth(ctx, sysB.ID, time.Time{}, all)
+	repB2, err := gw.SystemHealth(ctx, sysB.ID, 0, all)
 	if err != nil {
 		t.Fatalf("system health sysB after withdraw: %v", err)
 	}

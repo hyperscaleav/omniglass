@@ -408,13 +408,13 @@ func (UnimplementedGateway) InsertPropertySamples(context.Context, []PropertySam
 func (UnimplementedGateway) LatestProperty(context.Context, string, string, string) (*PropertySample, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) PropertyTransitions(context.Context, string, string, string, time.Time) ([]PropertySample, error) {
+func (UnimplementedGateway) PropertyTransitions(context.Context, string, string, string, time.Duration) ([]PropertySample, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) InsertEvents(context.Context, []EventWrite) error {
 	return nil
 }
-func (UnimplementedGateway) ListComponentEvents(context.Context, string, time.Time, int) ([]Event, error) {
+func (UnimplementedGateway) ListComponentEvents(context.Context, string, time.Duration, int) ([]Event, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) InsertLogLines(context.Context, []LogLineWrite) error {
@@ -423,10 +423,10 @@ func (UnimplementedGateway) InsertLogLines(context.Context, []LogLineWrite) erro
 func (UnimplementedGateway) InsertNodeLogs(context.Context, []NodeLogWrite) error {
 	return nil
 }
-func (UnimplementedGateway) ListComponentLogs(context.Context, string, time.Time, int) ([]LogLine, error) {
+func (UnimplementedGateway) ListComponentLogs(context.Context, string, time.Duration, int) ([]LogLine, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ListNodeLogs(context.Context, string, time.Time, int) ([]LogLine, error) {
+func (UnimplementedGateway) ListNodeLogs(context.Context, string, time.Duration, int) ([]LogLine, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) CreateNode(context.Context, string, NodeSpec, scope.Set) (*Node, error) {
@@ -792,12 +792,12 @@ func (UnimplementedGateway) ClearAlarm(context.Context, string, string, string) 
 func (UnimplementedGateway) ListAlarms(context.Context, string, bool) ([]Alarm, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) SystemHealth(context.Context, string, time.Time, scope.Set) (*HealthReport, error) {
+func (UnimplementedGateway) SystemHealth(context.Context, string, time.Duration, scope.Set) (*HealthReport, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) SystemVerdicts(context.Context, scope.Set) ([]SystemVerdict, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) LocationHealth(context.Context, string, time.Time, scope.Set) (*HealthReport, error) {
+func (UnimplementedGateway) LocationHealth(context.Context, string, time.Duration, scope.Set) (*HealthReport, error) {
 	return nil, nil
 }

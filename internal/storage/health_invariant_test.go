@@ -6,7 +6,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
@@ -276,7 +275,7 @@ func TestAlternateTieBreaksByPosition(t *testing.T) {
 	// sort would make this flip depending on Go's map iteration, which
 	// varies from call to call, not just from process to process.
 	for i := 0; i < 8; i++ {
-		rep, err := f.gw.SystemHealth(ctx, "tie-room", time.Time{}, f.all)
+		rep, err := f.gw.SystemHealth(ctx, "tie-room", 0, f.all)
 		if err != nil {
 			t.Fatalf("system health read %d: %v", i, err)
 		}
@@ -677,7 +676,7 @@ func TestHealthRecordsDeleteRipple(t *testing.T) {
 // recorded value stopped tracking the verdict.
 func (f *healthFixture) mustAgreeWithRecord(t *testing.T, ctx context.Context, systemName, want string) {
 	t.Helper()
-	rep, err := f.gw.SystemHealth(ctx, systemName, time.Time{}, f.all)
+	rep, err := f.gw.SystemHealth(ctx, systemName, 0, f.all)
 	if err != nil {
 		t.Fatalf("system health %s: %v", systemName, err)
 	}

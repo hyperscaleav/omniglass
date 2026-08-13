@@ -480,13 +480,13 @@ type Gateway interface {
 	// the availability strip reads.
 	InsertPropertySamples(ctx context.Context, evs []PropertySampleWrite) error
 	LatestProperty(ctx context.Context, componentName, key, instance string) (*PropertySample, error)
-	PropertyTransitions(ctx context.Context, componentName, key, instance string, since time.Time) ([]PropertySample, error)
+	PropertyTransitions(ctx context.Context, componentName, key, instance string, window time.Duration) ([]PropertySample, error)
 
 	// The observed-log sink: the mirror of the metric and property sinks for log-kind
 	// occurrences. reject-not-project and owner-confinement are applied by the caller
 	// before the write. ListComponentEvents backs the component event log panel.
 	InsertEvents(ctx context.Context, evs []EventWrite) error
-	ListComponentEvents(ctx context.Context, componentName string, since time.Time, limit int) ([]Event, error)
+	ListComponentEvents(ctx context.Context, componentName string, window time.Duration, limit int) ([]Event, error)
 
 	// The raw-log lane (ADR-0066): log lines are untyped arrival, not events, so
 	// neither insert has a registry gate. log_line is component-owned (#589);
@@ -494,8 +494,8 @@ type Gateway interface {
 	// backs the component log panel; ListNodeLogs backs the node self-log panel.
 	InsertLogLines(ctx context.Context, lines []LogLineWrite) error
 	InsertNodeLogs(ctx context.Context, lines []NodeLogWrite) error
-	ListComponentLogs(ctx context.Context, componentName string, since time.Time, limit int) ([]LogLine, error)
-	ListNodeLogs(ctx context.Context, nodeName string, since time.Time, limit int) ([]LogLine, error)
+	ListComponentLogs(ctx context.Context, componentName string, window time.Duration, limit int) ([]LogLine, error)
+	ListNodeLogs(ctx context.Context, nodeName string, window time.Duration, limit int) ([]LogLine, error)
 
 	// The node tier: the edge runtime's enrollment lifecycle and worklist. A node
 	// is estate-wide (all-scope create/enroll/read, like a principal). The claim,
@@ -658,12 +658,12 @@ type Gateway interface {
 	ListAlarms(ctx context.Context, componentName string, includeCleared bool) ([]Alarm, error)
 	// The health reads: the current verdict, why it is what it is, and the
 	// recorded transitions at or after since (a zero since is the whole history).
-	SystemHealth(ctx context.Context, systemName string, since time.Time, read scope.Set) (*HealthReport, error)
+	SystemHealth(ctx context.Context, systemName string, window time.Duration, read scope.Set) (*HealthReport, error)
 	// SystemVerdicts is the BULK health read: every system in the read scope with
 	// its current verdict, in one statement. The read a LIST paints its health
 	// column from, where SystemHealth is the read one system's panel opens (#653).
 	SystemVerdicts(ctx context.Context, read scope.Set) ([]SystemVerdict, error)
-	LocationHealth(ctx context.Context, locationName string, since time.Time, read scope.Set) (*HealthReport, error)
+	LocationHealth(ctx context.Context, locationName string, window time.Duration, read scope.Set) (*HealthReport, error)
 
 	// The tag tier: the governed key vocabulary and the per-entity value
 	// bindings. Minting a key (tag:create) is a tenant-wide governance action;

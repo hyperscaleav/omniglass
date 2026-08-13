@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"testing"
-	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
@@ -103,7 +102,7 @@ func TestCalculatedSeriesIsCurrentAtHighestID(t *testing.T) {
 	// SystemHealth is deliberately not used here: it recomputes the verdict live
 	// and would report `healthy` no matter how the rows are ordered, so it cannot
 	// witness this defect.
-	rep, err := gw.LocationHealth(ctx, "site", time.Time{}, all)
+	rep, err := gw.LocationHealth(ctx, "site", 0, all)
 	if err != nil {
 		t.Fatalf("location health: %v", err)
 	}

@@ -178,8 +178,7 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Summary:     "Read a system's health",
 		Description: "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
 	}, "system", "read"), func(ctx context.Context, in *systemPathInput) (*estateHealthOutput, error) {
-		since := time.Now().UTC().Add(-healthHistoryWindow)
-		rep, err := gw.SystemHealth(ctx, in.Name, since, a.scopeFor(ctx, "system", "read"))
+		rep, err := gw.SystemHealth(ctx, in.Name, healthHistoryWindow, a.scopeFor(ctx, "system", "read"))
 		if err != nil {
 			return nil, mapSystemErr(err)
 		}
@@ -212,8 +211,7 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Summary:     "Read a location's health",
 		Description: "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
 	}, "location", "read"), func(ctx context.Context, in *locationPathInput) (*estateHealthOutput, error) {
-		since := time.Now().UTC().Add(-healthHistoryWindow)
-		rep, err := gw.LocationHealth(ctx, in.Name, since, a.scopeFor(ctx, "location", "read"))
+		rep, err := gw.LocationHealth(ctx, in.Name, healthHistoryWindow, a.scopeFor(ctx, "location", "read"))
 		if err != nil {
 			return nil, mapLocationErr(err)
 		}

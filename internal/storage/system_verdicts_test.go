@@ -115,7 +115,7 @@ func TestSystemVerdictsAgreeWithTheReport(t *testing.T) {
 	seen := map[string]int{}
 	for i := range systems {
 		s := systems[i]
-		rep, err := gw.SystemHealth(ctx, s.Name, time.Now().Add(-24*time.Hour), all)
+		rep, err := gw.SystemHealth(ctx, s.Name, 24*time.Hour, all)
 		if err != nil {
 			t.Fatalf("SystemHealth %s: %v", s.Name, err)
 		}

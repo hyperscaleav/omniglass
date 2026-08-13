@@ -607,10 +607,10 @@ var exampleLogs = []struct {
 // seedLogs installs the example log lines on the huddle display idempotently.
 // The log_line table has an auto id and no natural unique key, so a naive
 // re-insert would pile up duplicates on every make dev; guard on the component
-// already carrying lines (ListComponentLogs from the epoch, limit 1) and skip
+// already carrying lines (ListComponentLogs unwindowed, limit 1) and skip
 // when present. componentID is the row the fixture key resolved to.
 func seedLogs(ctx context.Context, gw storage.Gateway, componentID string) error {
-	existing, err := gw.ListComponentLogs(ctx, componentID, time.Time{}, 1)
+	existing, err := gw.ListComponentLogs(ctx, componentID, 0, 1)
 	if err != nil {
 		return fmt.Errorf("devseed: check logs: %w", err)
 	}
@@ -662,7 +662,7 @@ var exampleNodeLogs = []struct {
 // the node already carrying lines (ListNodeLogs from the epoch, limit 1) the same
 // way seedLogs guards, since node_log has an auto id and no natural unique key.
 func seedNodeLogs(ctx context.Context, gw storage.Gateway) error {
-	existing, err := gw.ListNodeLogs(ctx, reachNode, time.Time{}, 1)
+	existing, err := gw.ListNodeLogs(ctx, reachNode, 0, 1)
 	if err != nil {
 		return fmt.Errorf("devseed: check node logs: %w", err)
 	}
@@ -895,7 +895,7 @@ var exampleEvents = []struct {
 // componentID is the row the fixture key resolved to.
 func seedEvents(ctx context.Context, gw storage.Gateway, componentID string) error {
 	// Sentinel: any existing event on the component means this block already ran.
-	existing, err := gw.ListComponentEvents(ctx, componentID, time.Time{}, 1)
+	existing, err := gw.ListComponentEvents(ctx, componentID, 0, 1)
 	if err != nil {
 		return fmt.Errorf("devseed: check events: %w", err)
 	}

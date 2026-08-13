@@ -42,7 +42,7 @@ func TestInsertLogLines(t *testing.T) {
 		t.Fatalf("insert log lines: %v", err)
 	}
 
-	got, err := gw.ListComponentLogs(ctx, "disp-1", now.Add(-time.Hour), 10)
+	got, err := gw.ListComponentLogs(ctx, "disp-1", time.Hour, 10)
 	if err != nil {
 		t.Fatalf("list logs: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestInsertLogLines(t *testing.T) {
 	}
 
 	// The since window excludes the older line.
-	windowed, err := gw.ListComponentLogs(ctx, "disp-1", now.Add(-time.Minute), 10)
+	windowed, err := gw.ListComponentLogs(ctx, "disp-1", time.Minute, 10)
 	if err != nil {
 		t.Fatalf("list windowed logs: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestInsertNodeLogs(t *testing.T) {
 		t.Fatalf("insert node logs: %v", err)
 	}
 
-	got, err := gw.ListNodeLogs(ctx, "edge-1", now.Add(-time.Hour), 10)
+	got, err := gw.ListNodeLogs(ctx, "edge-1", time.Hour, 10)
 	if err != nil {
 		t.Fatalf("list node logs: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestInsertNodeLogs(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "disp-x"}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	compLogs, err := gw.ListComponentLogs(ctx, "disp-x", now.Add(-time.Hour), 10)
+	compLogs, err := gw.ListComponentLogs(ctx, "disp-x", time.Hour, 10)
 	if err != nil {
 		t.Fatalf("list component logs: %v", err)
 	}

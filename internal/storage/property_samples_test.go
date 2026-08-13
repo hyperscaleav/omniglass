@@ -63,7 +63,7 @@ func TestInsertPropertySamples(t *testing.T) {
 		t.Fatalf("if-2 should have no state, got %+v", other)
 	}
 
-	rows, err := gw.PropertyTransitions(ctx, "disp-1", "interface-reachable", "if-1", time.Time{})
+	rows, err := gw.PropertyTransitions(ctx, "disp-1", "interface-reachable", "if-1", 0)
 	if err != nil {
 		t.Fatalf("property transitions: %v", err)
 	}

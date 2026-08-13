@@ -240,7 +240,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 
 	// The series is exactly [up, down]: the duplicate up was guarded out, so the
 	// availability strip has one row per transition, not one per publish.
-	trans, err := gw.PropertyTransitions(ctx, "disp-1", "interface-reachable", "disp-1-tcp", time.Time{})
+	trans, err := gw.PropertyTransitions(ctx, "disp-1", "interface-reachable", "disp-1-tcp", 0)
 	if err != nil {
 		t.Fatalf("property transitions: %v", err)
 	}
@@ -358,7 +358,7 @@ func waitEvent(t *testing.T, ctx context.Context, gw storage.Gateway, comp strin
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		evs, err := gw.ListComponentEvents(ctx, comp, time.Now().Add(-time.Hour), 50)
+		evs, err := gw.ListComponentEvents(ctx, comp, time.Hour, 50)
 		if err != nil {
 			t.Fatalf("list events %s: %v", comp, err)
 		}
@@ -380,7 +380,7 @@ func waitNodeLog(t *testing.T, ctx context.Context, gw storage.Gateway, node str
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		logs, err := gw.ListNodeLogs(ctx, node, time.Now().Add(-time.Hour), 50)
+		logs, err := gw.ListNodeLogs(ctx, node, time.Hour, 50)
 		if err != nil {
 			t.Fatalf("list node logs %s: %v", node, err)
 		}

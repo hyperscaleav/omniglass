@@ -897,8 +897,9 @@ func splitHealthRoles(rs []resolvedRole) (unconditional []health.Role, choices [
 }
 
 // SystemHealth reports a system's current verdict, the roles that produced it,
-// and its recorded transitions at or after since (a zero since returns the whole
-// history). The system must be in the read scope; out of scope is the
+// and its recorded transitions inside window, counted back from the DATABASE's
+// clock rather than the server's (#719, tsSince); a zero window returns the
+// whole history. The system must be in the read scope; out of scope is the
 // non-disclosing ErrSystemNotFound.
 //
 // The verdict is the rollup of the roles served beside it, not the last recorded
@@ -910,7 +911,7 @@ func splitHealthRoles(rs []resolvedRole) (unconditional []health.Role, choices [
 // (each with Active false, HealthRole), so the verdict can be healthy while
 // the list beside it shows impaired rows, and Active is what tells the two
 // apart rather than that being a disagreement.
-func (p *PG) SystemHealth(ctx context.Context, systemName string, since time.Time, read scope.Set) (*HealthReport, error) {
+func (p *PG) SystemHealth(ctx context.Context, systemName string, window time.Duration, read scope.Set) (*HealthReport, error) {
 	// Resolved once, here, rather than through ownerInScope (which does the
 	// same lookup but discards the id): every read below, including
 	// healthTransitions, binds sys.ID, never re-derived from systemName once
@@ -954,7 +955,7 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, since time.Tim
 		}
 		rep.Roles = append(rep.Roles, row)
 	}
-	if rep.Transitions, err = healthTransitions(ctx, p.pool, "system", sys.ID, since); err != nil {
+	if rep.Transitions, err = healthTransitions(ctx, p.pool, "system", sys.ID, window); err != nil {
 		return nil, err
 	}
 	return rep, nil
@@ -968,7 +969,7 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, since time.Tim
 // The verdict is the rollup of exactly those systems, so the headline and the
 // drill-down can never disagree: a location cannot read healthy over a system it
 // itself lists as an outage.
-func (p *PG) LocationHealth(ctx context.Context, locationName string, since time.Time, read scope.Set) (*HealthReport, error) {
+func (p *PG) LocationHealth(ctx context.Context, locationName string, window time.Duration, read scope.Set) (*HealthReport, error) {
 	// Resolved once via scopedByNameInScope, not scopedByName-then-
 	// inScopeTree (see SystemHealth's comment; ruling 2, #627); rep.OwnerID
 	// keeps echoing the caller's own reference, unchanged.
@@ -983,7 +984,7 @@ func (p *PG) LocationHealth(ctx context.Context, locationName string, since time
 	}
 	rep.Systems = systems
 	rep.Verdict = health.RollUp(systemVerdicts(systems)).String()
-	if rep.Transitions, err = healthTransitions(ctx, p.pool, "location", loc.ID, since); err != nil {
+	if rep.Transitions, err = healthTransitions(ctx, p.pool, "location", loc.ID, window); err != nil {
 		return nil, err
 	}
 	return rep, nil
@@ -1092,20 +1093,21 @@ func (p *PG) subtreeSystemHealth(ctx context.Context, q txQuerier, locationID st
 	return out, rows.Err()
 }
 
-// healthTransitions reads an owner's recorded edges at or after since,
-// oldest-first: the same ordered flip sequence the reachability strip reads, on
-// the owner arc rather than the component-and-instance one. ownerID follows
-// recordHealth's contract (see ownerArcExprN): an id for
-// component/system/location, a name for node.
-func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID string, since time.Time) ([]HealthTransition, error) {
+// healthTransitions reads an owner's recorded edges inside window, oldest-first:
+// the same ordered flip sequence the reachability strip reads, on the owner arc
+// rather than the component-and-instance one. ownerID follows recordHealth's
+// contract (see ownerArcExprN): an id for component/system/location, a name for
+// node. The window's boundary is the database's own (tsSince, #719).
+func healthTransitions(ctx context.Context, q txQuerier, ownerKind, ownerID string, window time.Duration) ([]HealthTransition, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
 		return nil, err
 	}
+	bound, args := tsSince("ts", window, ownerID, healthKey)
 	sql := fmt.Sprintf(`select ts, value #>> '{}' from property
-		where %s = %s and property_type_id = (select id from property_type where name = $2) and instance = '' and ts >= $3
-		order by ts asc, id asc`, col, ownerArcExprN(ownerKind, 1))
-	rows, err := q.Query(ctx, sql, ownerID, healthKey, since)
+		where %s = %s and property_type_id = (select id from property_type where name = $2) and instance = '' and %s
+		order by ts asc, id asc`, col, ownerArcExprN(ownerKind, 1), bound)
+	rows, err := q.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("storage: health transitions %s/%s: %w", ownerKind, ownerID, err)
 	}
