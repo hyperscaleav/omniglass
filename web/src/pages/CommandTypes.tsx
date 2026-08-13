@@ -106,7 +106,7 @@ function SettleWindowField(p: {
         type="number"
         min="0"
         required={p.targeted}
-        placeholder={p.targeted ? "15" : "0"}
+        placeholder={p.targeted ? "e.g. 15" : "0"}
         value={p.value}
         onInput={(e) => p.onInput(e.currentTarget.value)}
       />
