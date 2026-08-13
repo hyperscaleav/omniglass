@@ -18,9 +18,10 @@ import (
 // leaves cleared_at and the component's verdict exactly where they were, and
 // clearing neither grants nor erases an acknowledgement.
 
-// ackActor inserts a service principal and returns its id and label, so the
-// acknowledgement can be checked for WHO as well as WHEN. principal_label
-// resolves a service to its label, the same lookup the audit write uses.
+// ackActor inserts a service principal and returns its id, so the
+// acknowledgement can be checked for WHO as well as WHEN. The read resolves a
+// service principal to its own identifying column, the same answer the audit
+// write denormalizes (internal/storage/principal_ident.go).
 func ackActor(t *testing.T, dsn, label string) string {
 	t.Helper()
 	ctx := context.Background()

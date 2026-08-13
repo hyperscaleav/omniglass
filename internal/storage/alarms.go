@@ -87,19 +87,28 @@ var (
 // violation surfacing as a 500.
 var alarmSeverities = map[string]bool{"info": true, "warning": true, "critical": true}
 
-// alarmCols is the read shape. acknowledged_by resolves through principal_label
-// rather than surfacing the uuid, so every alarm read hands the API an
-// operator-facing name (ADR-0062); it reads null once that principal is purged,
-// which is honest, and audit_log still names them.
-const alarmCols = `a.id, a.component_id, a.severity, a.message, a.dedup_key, a.raised_at, a.cleared_at,
-	a.acknowledged_at, coalesce(principal_label(a.acknowledged_by), '')`
+// alarmCols is the read shape. acknowledged_by surfaces the acting principal's
+// IDENTIFIER rather than its uuid, so every alarm read hands the API something
+// an operator recognises (ADR-0062); it reads empty once that principal is
+// purged, which is honest, and audit_log still names them.
+//
+// The two identifier sources are projected as their own columns and folded in
+// Go (principalIdent), which is where that policy lives since #564 dropped the
+// stored function. A projection rather than a join, because one of the four
+// statements reading this shape is an UPDATE ... RETURNING: RETURNING cannot
+// left-join, and giving the UPDATE a FROM clause would change which rows it
+// updates.
+var alarmCols = `a.id, a.component_id, a.severity, a.message, a.dedup_key, a.raised_at, a.cleared_at,
+	a.acknowledged_at, ` + principalIdentCols("a.acknowledged_by")
 
 func scanAlarm(row pgx.Row) (*Alarm, error) {
 	var a Alarm
+	var ackUsername, ackServiceName *string
 	if err := row.Scan(&a.ID, &a.ComponentID, &a.Severity, &a.Message,
-		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.AcknowledgedAt, &a.AcknowledgedBy); err != nil {
+		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.AcknowledgedAt, &ackUsername, &ackServiceName); err != nil {
 		return nil, err
 	}
+	a.AcknowledgedBy = principalIdent(ackUsername, ackServiceName)
 	return &a, nil
 }
 

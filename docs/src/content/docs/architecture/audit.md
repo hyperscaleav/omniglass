@@ -76,10 +76,15 @@ with the verbs `login`, `logout`, `login_failed` (a wrong password on a real acc
 `login_denied` (a correct password on a disabled account), `login_locked` (an attempt inside the
 lockout window), and `revoke_session` (an admin ending another principal's session). An impersonated
 action records **both** actors (`actor_principal_id` the impersonated principal,
-`real_actor_principal_id` the admin behind it); both usernames are **denormalized onto the row**
+`real_actor_principal_id` the admin behind it); both identifiers are **denormalized onto the row**
 (`actor_username`, `real_actor_username`) with the foreign keys going `ON DELETE SET NULL`, so the
 trail stays attributable after its actor is purged
 ([ADR-0016](/architecture/decisions/#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it)).
+What gets written there is the actor's **identifier**, a human's username or a service account's
+name, and the platform's answer to which one belongs to the gateway rather than to the schema: the
+stored function that used to resolve it retired, so the order is stated once in Go and rendered into
+the statements the gateway binds
+([ADR-0110](/architecture/decisions/#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions)).
 
 ## Retention and integrity
 

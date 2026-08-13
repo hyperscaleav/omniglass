@@ -93,6 +93,15 @@ var Banned = []BannedTerm{
 		Origin:      "ADR-0065",
 	},
 	{
+		// The stored function that resolved a principal to its identifier, dropped
+		// by ADR-0110. It is a retired schema OBJECT, so a page naming it is telling
+		// a contributor to call something that is not there; and it is a retired
+		// WORD, since both its branches returned an identifier and never a label.
+		Pattern:     regexp.MustCompile(`\bprincipal_label\b`),
+		Replacement: "the gateway's identifier resolution (internal/storage/principal_ident.go)",
+		Origin:      "ADR-0110",
+	},
+	{
 		Pattern:     regexp.MustCompile(`caused_by_event_id`),
 		Replacement: "source_event_id",
 		Origin:      "ADR-0066",

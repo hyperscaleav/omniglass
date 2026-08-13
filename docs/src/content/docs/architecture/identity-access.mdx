@@ -34,7 +34,7 @@ reading the caller's own principal and the change itself), **role assignment**
 `POST /principals/{id}:disable` / `:enable`; `:archive` / `:restore`, a soft delete hiding the
 account and blocking authentication; `:purge`, an irreversible hard delete gated on prior archival
 and the admin-sensitive `principal:purge:admin`; disabling or archiving the last active owner is
-refused; a purge preserves the audit trail by denormalizing the actor's label into each row, the
+refused; a purge preserves the audit trail by denormalizing the actor's identifier into each row, the
 audit foreign keys going `ON DELETE SET NULL`), the per-action `visible_set` resolver enforced in
 the Storage Gateway across locations, systems, and components, **principal groups** (the
 `/principal-groups` family: CRUD, membership, and group grants, gated `principal_group`), members

@@ -329,6 +329,17 @@ change, since rows reference blobs by `sha256`.
 
 ## Query construction: typed, parameterized, generated
 
+**The schema holds no stored procedures and no triggers, and the gateway composes what it needs.**
+Logic lives in Go, and the last stored function retired with
+[ADR-0110](/architecture/decisions/#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions):
+what names a principal (a human's username, else a service account's name) is now declared once in
+the gateway and rendered into the statements it binds, in three shapes for the three positions a
+statement can need it. A read projects both sources and folds them in Go; a write inside the
+caller's transaction binds the fold as one expression, because resolving it in Go there would cost a
+second round trip on every operator write. Two shapes of one policy drift unless something compares
+them, so an invariant test drives every principal kind through both and fails on the first
+disagreement, the same recompute-and-compare shape a derived column is held to above.
+
 The gateway builds every query with **[jet](https://github.com/go-jet/jet)**, a type-safe SQL builder whose column and table types are **generated from the dbmate-managed schema** (dbmate stays the single schema authority; jet regenerates after `migrate`). The shape is dynamic (the per-action scope predicate, the [filter expression](/architecture/expressions/), order, pagination compose at runtime) but the safety is **structural, not by discipline**: values are always bound parameters, never interpolated; identifiers are typed constants from the generated schema, so a wrong or attacker-supplied column name is a **compile error** (the filter language's field names resolve against those same generated columns); operators are a closed set. All dynamic construction lives in this one module, a single reviewable chokepoint. The one carve-out, the high-volume sample insert (the persistence consumer), may use `pgx` `COPY` for throughput, still inside the gateway: it runs in all-visibility **system mode**, its safety resting on the typed column targets plus the upstream **admission consumer** having already confined owners ([identity and access](/architecture/identity-access/)), not on a per-write scope predicate.
 
 :::

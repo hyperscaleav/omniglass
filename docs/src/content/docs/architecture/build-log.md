@@ -4692,3 +4692,27 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   only route that answers differently from its own siblings, so it is one shared refusal primitive
   in [#736](https://github.com/hyperscaleav/omniglass/issues/736) and the page now marks the branch
   as design.
+
+- **The last stored function retires, and a principal's identifier becomes the gateway's answer
+  (#564).** `principal_label(uuid)` was a stored SQL function, `coalesce(human.username,
+  service.label)`, and it was two defects wearing one name: it put the platform's answer to "what
+  names this principal" in the database, which is the one place this repository says logic never
+  lives, and it called the answer a **label** when both of its branches return an identifier. No
+  test named it, so it could have returned anything and the suite would have agreed.
+
+  The answer now lives in `internal/storage/principal_ident.go`, which names the two sources once
+  and renders them in the three shapes a statement can need. A READ projects both sources and folds
+  them in Go, a projection rather than a join because one of the four statements reading the alarm
+  shape is an `UPDATE ... RETURNING` and `RETURNING` cannot left-join. The audit insert binds the
+  fold as one expression instead: it runs inside the caller's transaction on every operator write,
+  and the alarm write path pins its statement count as the exact equation `12 + 5*slots +
+  4*locations` (#674), which counts that insert. Moving the policy out of the database was the
+  point; paying a round trip on every operator write was not part of it, and the pinned equation is
+  unmoved.
+
+  Only the ORDER is written twice, so `principal_ident_test.go` is the invariant between the two
+  shapes: it drives a human, a service account, a node and an unknown id through both against a real
+  database. A `node` stays out of the resolution exactly as the dropped function had it, so no audit
+  row changes what it says. Recorded as
+  [ADR-0110](/architecture/decisions/#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions),
+  with `principal_label` appended to the vocabulary denylist.

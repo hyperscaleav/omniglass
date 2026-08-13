@@ -89,7 +89,7 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 func (p *PG) WriteAuthEvent(ctx context.Context, actorID, verb string) error {
 	if _, err := p.pool.Exec(ctx, `
 		insert into audit_log (actor_principal_id, real_actor_principal_id, actor_username, real_actor_username, verb, resource)
-		values ($1, $2, principal_label($1), principal_label($2), $3, 'auth')`,
+		values ($1, $2, `+principalIdentSQL("$1")+`, `+principalIdentSQL("$2")+`, $3, 'auth')`,
 		nullize(actorID), nullize(realActorFrom(ctx)), verb); err != nil {
 		return fmt.Errorf("storage: write auth event: %w", err)
 	}
