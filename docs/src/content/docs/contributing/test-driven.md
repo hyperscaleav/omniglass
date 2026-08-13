@@ -110,23 +110,55 @@ either mechanism fires), sweep them with `make clean-testcontainers`. It
 force-removes leftover Postgres test containers, scoped by the testcontainers
 label and the `postgres:18` image so it never touches the compose dev stack.
 
-## Two performance instruments, one of which gates
+## Three performance instruments, two of which gate
 
-Performance has two instruments in this repo, and they are deliberately not the same
+Performance has three instruments in this repo, and they are deliberately not the same
 thing. Knowing which answers a given question is most of the value:
 
-| | **Round-trip counting** | **Wall-clock benchmarks** |
-|---|---|---|
-| Catches | N+1s: cost that grows with row count | Cost inside one statement: a dropped index, a plan flip to a sequential scan, a recursive CTE that stops being bounded, a predicate that stops being sargable |
-| Blind to | Anything a single statement does | Anything smaller than the host's own noise |
-| Determinism | Exact. Same number every run | Noisy. Interpreted by comparison, never by threshold |
-| Gates a merge | **Yes.** Ordinary tests in `make test` | **No.** Inert without `-bench` |
-| How you run it | `make test` | `make bench`, deliberately, before and after |
+| | **Round-trip counting** | **Access-path assertions** | **Wall-clock benchmarks** |
+|---|---|---|---|
+| Catches | N+1s: cost that grows with row count | A read that cannot reach the index it was built for | Cost inside one statement: a recursive CTE that stops being bounded, a plan that degrades on real volume |
+| Blind to | Anything a single statement does | Everything except one relation's access path | Anything smaller than the host's own noise |
+| Determinism | Exact. Same number every run | Exact. Independent of the fixture's size | Noisy. Interpreted by comparison, never by threshold |
+| Gates a merge | **Yes.** Ordinary tests in `make test` | **Yes.** Ordinary tests in `make test` | **No.** Inert without `-bench` |
+| How you run it | `make test` | `make test` | `make bench`, deliberately, before and after |
 
-The two are complements, not alternatives. A dropped index issues exactly as many
-statements as the index scan it replaced, so counting never moves; an N+1 that doubles
-from twenty to forty statements is well inside the wall clock's noise on a laptop, so the
-benchmark never notices. Each is the only instrument that sees its own class.
+They are complements, not alternatives. A dropped index issues exactly as many statements
+as the index scan it replaced, so counting never moves; an N+1 that doubles from twenty to
+forty statements is well inside the wall clock's noise on a laptop, so the benchmark never
+notices; and neither of those can tell an index that is present from an index that is
+reachable. Each is the only instrument that sees its own class.
+
+### Asserting an access path, never a plan
+
+`internal/storage/storagetest/accesspath` is the primitive, and the distinction it rests on
+is the whole design ([ADR-0094](/architecture/decisions/#adr-0094-benchmarks-are-the-second-performance-instrument-and-they-gate-nothing),
+as amended). A plan a fixture PREFERS says nothing about production, because preference is a
+function of table statistics and no fixture here is production-sized. Whether a query can
+REACH an index at all is a different question: planned with `set enable_seqscan = off`,
+which prices the sequential path out rather than forbidding it, the answer is stable across
+an empty table, a fixture with no statistics, and the same fixture analyzed, while the join
+shapes around the scan move freely between those states.
+
+That is the failure this catches and nothing else can: an index sits in `pg_indexes` while
+the read it exists for cannot use it, because a predicate got a function wrapped around it,
+a type coerced, a leading column dropped from the filter, or (for a partial index) its
+predicate stopped being provable from the query's own clauses. The statement count is
+identical throughout, and so is the catalog.
+
+Three rules, and an assertion that breaks one of them is worse than none:
+
+1. **One relation's access path, never the plan's shape.** Everything above the scan is
+   stats-dependent and will flap.
+2. **Assert the index CONDITION, not only the index name.** A scan node can name an index
+   and carry no condition, meaning the planner walks the whole index and filters afterwards.
+   That is the shape a coerced predicate produces, and it reads as a pass to anything that
+   greps for the name. `Plan.MustReach` checks the name, the condition, and that the node is
+   not one the planner was forced into.
+3. **Explain the statement the code really issued.** `querycount.Counter.Calls` hands back
+   each captured statement WITH its arguments, so the guard replays the gateway's own SQL
+   rather than a copy maintained beside it; a copy is exactly what stops failing when the
+   original changes.
 
 ### Benchmarks are diagnostic, never a gate
 
