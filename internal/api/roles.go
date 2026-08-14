@@ -505,6 +505,13 @@ func requireSystemInScope(ctx context.Context, a *authenticator, gw storage.Gate
 // The read-only caller (the alarm LIST) passes "read" for both, which is the
 // same set twice and therefore the plain non-disclosing read it always was: a
 // route with nothing to act on has no third branch to pick.
+//
+// Both helpers also got cheaper on the way through, which is worth stating so it
+// is not mistaken for an accident: GetSystem / GetComponent resolve through
+// scopedGet, which runs attachPaths to fill the row's path and renders, and a
+// component's full render costs a componentTypeIDForProduct lookup plus
+// resolveTypeFacts' ancestor walk. Every caller here wanted an id. The resolve
+// they use now does not build a render nobody reads.
 func requireComponentInScope(ctx context.Context, a *authenticator, gw storage.Gateway, name, action string) (string, error) {
 	id, err := gw.ResolveActionTarget(ctx, "component", name,
 		a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", action))
