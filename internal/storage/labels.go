@@ -186,15 +186,20 @@ func validateLabelRule(rule *string) error {
 	return nil
 }
 
-// nilIfEmptyRule normalizes an empty rule to SQL null, so "no rule at this
-// tier" has exactly one representation. Two spellings of absent would give the
-// resolver a third state to decide about and a reader a difference to
-// misinterpret.
-func nilIfEmptyRule(rule *string) *string {
-	if rule != nil && *rule == "" {
+// nilIfEmpty decodes the house three-state string sentinel for a nullable
+// column: an omitted field is nil already, an explicit "" becomes SQL null, and
+// a value passes through. So "nothing at this tier" has exactly one
+// representation, where two spellings of absent would give the resolver a third
+// state to decide about and a reader a difference to misinterpret.
+//
+// It started life on the label rule and generalized with #716, which put the
+// same sentinel on the three other inherited registry facts (stem, icon,
+// abbrev). The columns differ; the decoding does not, so it is one function.
+func nilIfEmpty(s *string) *string {
+	if s != nil && *s == "" {
 		return nil
 	}
-	return rule
+	return s
 }
 
 // renderLabel is where a rule's SECOND failure mode is absorbed. A rule that
@@ -338,7 +343,7 @@ func (p *PG) SetLabelRule(ctx context.Context, actorID, entityKind, template str
 	after, err := scanLabelRule(tx.QueryRow(ctx, `
 		update label_rule set template = $2, updated_at = now()
 		where entity_kind = $1
-		returning `+labelRuleCols, entityKind, nilIfEmptyRule(&template)))
+		returning `+labelRuleCols, entityKind, nilIfEmpty(&template)))
 	if err != nil {
 		return nil, fmt.Errorf("storage: set label rule %q: %w", entityKind, err)
 	}
@@ -369,7 +374,7 @@ func globalLabelRule(ctx context.Context, q querier, kind string) (string, error
 }
 
 // firstRule returns the most specific tier with an opinion. Empty and null are
-// the same answer at every tier (nilIfEmptyRule keeps writes to one spelling),
+// the same answer at every tier (nilIfEmpty keeps writes to one spelling),
 // so this is the whole of the precedence logic.
 func firstRule(tiers ...string) string {
 	for _, r := range tiers {

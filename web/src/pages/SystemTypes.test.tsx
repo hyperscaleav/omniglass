@@ -142,12 +142,42 @@ describe("SystemTypes page", () => {
     await waitFor(() => expect(sent).toBeTruthy());
     expect(sent).toMatchObject({ abbrev: "lb" });
     expect(sent).not.toHaveProperty("parent_id");
-    // An inherited fact must ride as OMITTED, never as "". The columns are
-    // nullable and the server's walk treats only NULL as inherit while the
-    // patch coalesces, so an empty string would write a real value that stops
-    // the walk for this node and every descendant, silently and permanently.
-    // Lab carries no icon of its own, so this is the inherited case.
-    expect(sent).not.toHaveProperty("icon");
-    expect(Object.values(sent as Record<string, unknown>)).not.toContain("");
+    // An empty box rides as the three-state string sentinel "" (#716), the
+    // wire's spelling of "this node declares no fact of its own": the patch
+    // routes all three through a CASE where "" clears to NULL and the
+    // inheritance walk resumes at the nearest ancestor. This INVERTS what #656
+    // asserted here (an inherited fact rode as OMITTED, because the coalescing
+    // patch would otherwise have written a real empty value). Lab carries no
+    // icon of its own, so that one is the empty-box case.
+    expect(sent).toMatchObject({ icon: "" });
+  });
+
+  // #716's clearing move on this registry: a node that HAS its own fact edited
+  // back to inheriting its parent's. Lab carries a stem and an abbrev, so
+  // emptying both boxes has to reach the server as the sentinel on each.
+  it("sends the sentinel for a fact the operator cleared back to inheriting", async () => {
+    let sent: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH" && req.url.includes("/system-types/")) {
+        sent = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({}), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ system_types: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(screen.getByText("Lab"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    for (const label of ["Stem", "Abbrev"]) {
+      fireEvent.input(within(blade).getByLabelText(label) as HTMLInputElement, { target: { value: "" } });
+    }
+    fireEvent.click(within(blade).getByText("Save"));
+    await waitFor(() => expect(sent).toBeTruthy());
+    expect(sent).toMatchObject({ stem: "", abbrev: "" });
   });
 });

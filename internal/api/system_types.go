@@ -77,10 +77,14 @@ type updateSystemTypeInput struct {
 	ID   string `path:"id"`
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
-		// Same rule as create's Stem: a name prefix follows the name rule.
-		Stem      *string `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new name prefix. Lowercase letters, digits, and hyphens."`
-		Icon      *string `json:"icon,omitempty" doc:"A new glyph key"`
-		Abbrev    *string `json:"abbrev,omitempty" doc:"A new compact form"`
+		// Create's rule with the empty alternation added, the same #716 change
+		// updateComponentTypeInput carries and for the same reason: these three
+		// facts are inherited, so an operator has to be able to hand one back,
+		// and the empty string is the house spelling of clearing a nullable
+		// STRING (ADR-0091). The character rule is untouched inside the group.
+		Stem      *string `json:"stem,omitempty" maxLength:"100" pattern:"^([a-z0-9][a-z0-9-]*)?$" doc:"A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422)."`
+		Icon      *string `json:"icon,omitempty" doc:"A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again"`
+		Abbrev    *string `json:"abbrev,omitempty" doc:"A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again"`
 		LabelRule *string `json:"label_rule,omitempty" doc:"A new label template for systems of this type; omit to leave unchanged, \"\" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels"`
 	}
 }

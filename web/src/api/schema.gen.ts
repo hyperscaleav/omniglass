@@ -7155,17 +7155,17 @@ export interface components {
              * @example /api/v1/schemas/UpdateComponentTypeInputBody.json
              */
             readonly $schema?: string;
-            /** @description A new compact form */
+            /** @description A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again */
             abbrev?: string;
             /** @description Replaces the default-tag set; omit to leave unchanged */
             default_tags?: string[];
             /** @description A new operator-facing label */
             display_name?: string;
-            /** @description A new glyph key */
+            /** @description A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again */
             icon?: string;
             /** @description A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse. */
             label_rule?: string;
-            /** @description A new name prefix. Lowercase letters, digits, and hyphens. */
+            /** @description A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422). */
             stem?: string;
         };
         UpdateDriverInputBody: {
@@ -7393,15 +7393,15 @@ export interface components {
              * @example /api/v1/schemas/UpdateSystemTypeInputBody.json
              */
             readonly $schema?: string;
-            /** @description A new compact form */
+            /** @description A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again */
             abbrev?: string;
             /** @description A new operator-facing label */
             display_name?: string;
-            /** @description A new glyph key */
+            /** @description A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again */
             icon?: string;
             /** @description A new label template for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels */
             label_rule?: string;
-            /** @description A new name prefix. Lowercase letters, digits, and hyphens. */
+            /** @description A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422). */
             stem?: string;
         };
         UpdateTagInputBody: {

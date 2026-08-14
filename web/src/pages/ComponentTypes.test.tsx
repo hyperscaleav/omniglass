@@ -212,23 +212,54 @@ describe("ComponentTypes page", () => {
     await waitFor(() => expect(sent).toBeTruthy());
     expect(sent).toMatchObject({ stem: "ceiling-mic" });
     expect(sent).not.toHaveProperty("parent_id");
-    // An inherited fact must ride as OMITTED, never as "". The columns are
-    // nullable and the server's walk treats only NULL as inherit while the
-    // patch coalesces, so an empty string would write a real value that stops
-    // the walk for this node and every descendant, silently and permanently.
-    // Ceiling Microphone carries no icon and no abbrev of its own, so those
-    // two are the inherited case.
-    expect(sent).not.toHaveProperty("icon");
-    expect(sent).not.toHaveProperty("abbrev");
-    expect(Object.values(sent as Record<string, unknown>)).not.toContain("");
+    // An empty box rides as the three-state string sentinel "" (#716), which
+    // is the wire's spelling of "this node declares no fact of its own": the
+    // patch routes all three through a CASE where "" clears to NULL, so the
+    // inheritance walk resumes at the nearest ancestor. This INVERTS what #677
+    // asserted here (an inherited fact rode as OMITTED, because the coalescing
+    // patch would otherwise have written a real empty value and stopped the
+    // walk). Ceiling Microphone carries no icon and no abbrev of its own, so
+    // those two are the empty-box case.
+    expect(sent).toMatchObject({ icon: "", abbrev: "" });
   });
 
-  // The second leg of #677: a custom child with no stem of its own is legal
-  // (the server requires a stem only on a root), but the patch body gives stem
-  // a minLength, so an empty string is a 422 before the handler runs. Such a
-  // row must stay editable from the console without inventing a stem it never
-  // wanted.
-  it("edits a custom child that has no stem of its own, sending no stem at all", async () => {
+  // The clearing move #716 exists for, and the one the console could not spell
+  // at all: a node that HAS its own fact is edited back to inheriting its
+  // parent's. Display carries a stem, an abbrev and an icon; emptying every box
+  // has to reach the server as the sentinel on each, not as a silent no-op that
+  // leaves the value the operator just deleted in place.
+  it("sends the sentinel for a fact the operator cleared back to inheriting", async () => {
+    let sent: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH" && req.url.includes("/component-types/")) {
+        sent = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({}), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ component_types: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(screen.getByText("Display"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    for (const label of ["Stem", "Abbrev", "Icon"]) {
+      fireEvent.input(within(blade).getByLabelText(label) as HTMLInputElement, { target: { value: "" } });
+    }
+    fireEvent.click(within(blade).getByText("Save"));
+    await waitFor(() => expect(sent).toBeTruthy());
+    expect(sent).toMatchObject({ stem: "", abbrev: "", icon: "" });
+  });
+
+  // The second leg of #677, converted by #716: a custom child with no stem of
+  // its own is legal (the server requires a stem only on a root), and the empty
+  // box now rides as the sentinel rather than being dropped. It is a no-op
+  // against a column already NULL, and it is the same body a clear sends, which
+  // is the point: the console has one spelling for an empty box.
+  it("edits a custom child that has no stem of its own, sending the sentinel", async () => {
     let sent: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -249,8 +280,6 @@ describe("ComponentTypes page", () => {
     fireEvent.input(within(blade).getByLabelText("Display name") as HTMLInputElement, { target: { value: "Ceiling Mic" } });
     fireEvent.click(within(blade).getByText("Save"));
     await waitFor(() => expect(sent).toBeTruthy());
-    expect(sent).toMatchObject({ display_name: "Ceiling Mic" });
-    expect(sent).not.toHaveProperty("stem");
-    expect(Object.values(sent as Record<string, unknown>)).not.toContain("");
+    expect(sent).toMatchObject({ display_name: "Ceiling Mic", stem: "" });
   });
 });

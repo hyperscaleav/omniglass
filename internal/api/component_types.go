@@ -87,10 +87,19 @@ type updateComponentTypeInput struct {
 	ID   string `path:"id"`
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
-		// Same rule as create's Stem: a name prefix follows the name rule.
-		Stem        *string   `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new name prefix. Lowercase letters, digits, and hyphens."`
-		Icon        *string   `json:"icon,omitempty" doc:"A new glyph key"`
-		Abbrev      *string   `json:"abbrev,omitempty" doc:"A new compact form"`
+		// Create's rule with one alternation added, and that alternation is the
+		// whole of #716's wire change: a stem is inherited, so an operator has
+		// to be able to hand it back, and the house spelling of "clear a
+		// nullable string" is the empty string (ADR-0091; ADR-0106 scopes the
+		// mask to nullable OBJECT fields, which have no empty value to
+		// overload). minLength:1 made that a 422 before the handler ran, so it
+		// goes; the character rule stays, wrapped in an optional group, and
+		// every malformed stem it refused before is refused still. CREATE keeps
+		// minLength:1, since there is nothing to clear on a row that does not
+		// exist yet and "" there would be a typo, not an intent.
+		Stem        *string   `json:"stem,omitempty" maxLength:"100" pattern:"^([a-z0-9][a-z0-9-]*)?$" doc:"A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422)."`
+		Icon        *string   `json:"icon,omitempty" doc:"A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again"`
+		Abbrev      *string   `json:"abbrev,omitempty" doc:"A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again"`
 		LabelRule   *string   `json:"label_rule,omitempty" doc:"A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse."`
 		DefaultTags *[]string `json:"default_tags,omitempty" doc:"Replaces the default-tag set; omit to leave unchanged"`
 	}

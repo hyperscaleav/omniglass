@@ -158,7 +158,7 @@ func (r NameRule) mint() nameMint { return nameMint{stem: r.Stem, bareFirst: r.B
 // normalized collapses the one pair of fields that can spell the same rule two
 // ways: a stem-less mint ignores bareFirst (suppressing the ordinal of a name
 // that IS its ordinal leaves nothing), so a positional rule stores it false.
-// The same reasoning nilIfEmptyRule applies to a label rule: two spellings of
+// The same reasoning nilIfEmpty applies to a label rule: two spellings of
 // one state give a reader a difference to misinterpret and an equality test a
 // false negative.
 func (r NameRule) normalized() NameRule {

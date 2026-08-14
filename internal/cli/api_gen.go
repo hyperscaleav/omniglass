@@ -1461,12 +1461,12 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fAbbrev, "abbrev", "", "A new compact form")
+				cmd.Flags().StringVar(&fAbbrev, "abbrev", "", "A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again")
 				cmd.Flags().StringVar(&fDefaultTags, "default-tags", "", "Replaces the default-tag set; omit to leave unchanged")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
-				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again")
 				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse.")
-				cmd.Flags().StringVar(&fStem, "stem", "", "A new name prefix. Lowercase letters, digits, and hyphens.")
+				cmd.Flags().StringVar(&fStem, "stem", "", "A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422).")
 				return cmd
 			}()
 			return cmd
@@ -6002,11 +6002,11 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fAbbrev, "abbrev", "", "A new compact form")
+				cmd.Flags().StringVar(&fAbbrev, "abbrev", "", "A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A new operator-facing label")
-				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key")
+				cmd.Flags().StringVar(&fIcon, "icon", "", "A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again")
 				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A new label template for systems of this type; omit to leave unchanged, \"\" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels")
-				cmd.Flags().StringVar(&fStem, "stem", "", "A new name prefix. Lowercase letters, digits, and hyphens.")
+				cmd.Flags().StringVar(&fStem, "stem", "", "A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422).")
 				return cmd
 			}()
 			return cmd

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -91,6 +92,26 @@ func guardTypeMutable(ctx context.Context, q querier, table, id string) error {
 		return ErrTypeOfficial
 	}
 	return nil
+}
+
+// clearsARootStem is the one rule both nesting registries enforce on the clear
+// path (#716): the three-state sentinel takes a node back to inheriting, and a
+// ROOT has nothing to inherit from, so clearing its stem is refused rather than
+// stored. Create already refuses a stemless root on both registries
+// (ErrRootComponentTypeNeedsStem, ErrRootSystemTypeNeedsStem); the clear is the
+// second way to reach that state and gets the same answer at the same tier.
+//
+// Pure, and stated once, so the two handlers cannot disagree about it. Each
+// supplies the parent from wherever it already holds it rather than paying for a
+// second read: the component leg has the resolved row in hand, the system leg
+// reads the column beside its mutability guard.
+//
+// It is deliberately not "the row has no parent", which would refuse a root's
+// icon and abbrev too. Those two have a meaning with no ancestor behind them (a
+// root that shows no glyph of its own is answered by the console's fallback); a
+// stem with no ancestor behind it is a name the platform cannot mint.
+func clearsARootStem(stem *string, parentID *uuid.UUID) bool {
+	return stem != nil && *stem == "" && parentID == nil
 }
 
 // countTypeRefs counts inventory rows referencing a type id, for the

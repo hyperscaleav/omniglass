@@ -1099,12 +1099,12 @@ Patches a component_type's display_name, stem, icon, abbrev, label_rule, or defa
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--abbrev` | string | (none) | A new compact form |
+| `--abbrev` | string | (none) | A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again |
 | `--default-tags` | string | (none) | Replaces the default-tag set; omit to leave unchanged |
 | `--display-name` | string | (none) | A new operator-facing label |
-| `--icon` | string | (none) | A new glyph key |
+| `--icon` | string | (none) | A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again |
 | `--label-rule` | string | (none) | A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse. |
-| `--stem` | string | (none) | A new name prefix. Lowercase letters, digits, and hyphens. |
+| `--stem` | string | (none) | A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422). |
 
 Example:
 
@@ -4604,11 +4604,11 @@ Patches a custom system_type's display_name, stem, icon, abbrev, or label_rule. 
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--abbrev` | string | (none) | A new compact form |
+| `--abbrev` | string | (none) | A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again |
 | `--display-name` | string | (none) | A new operator-facing label |
-| `--icon` | string | (none) | A new glyph key |
+| `--icon` | string | (none) | A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again |
 | `--label-rule` | string | (none) | A new label template for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels |
-| `--stem` | string | (none) | A new name prefix. Lowercase letters, digits, and hyphens. |
+| `--stem` | string | (none) | A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422). |
 
 Example:
 

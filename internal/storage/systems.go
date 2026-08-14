@@ -233,7 +233,7 @@ func (p *PG) SeedStandard(ctx context.Context, st Standard) error {
 		insert into standard (name, official, display_name, parent_standard_id, label_rule)
 		values ($1, $2, $3, (select id from standard where name = nullif($4, '')), $5)
 		on conflict (name) do nothing`,
-		st.Name, st.Official, st.DisplayName, st.ParentStandardID, nilIfEmptyRule(st.LabelRule))
+		st.Name, st.Official, st.DisplayName, st.ParentStandardID, nilIfEmpty(st.LabelRule))
 	if err != nil {
 		return fmt.Errorf("storage: seed standard %q: %w", st.Name, err)
 	}
@@ -250,7 +250,7 @@ func (p *PG) UpsertStandard(ctx context.Context, st Standard) error {
 			    parent_standard_id = excluded.parent_standard_id,
 			    label_rule         = excluded.label_rule,
 			    updated_at         = now()`,
-		st.Name, st.Official, st.DisplayName, st.ParentStandardID, nilIfEmptyRule(st.LabelRule))
+		st.Name, st.Official, st.DisplayName, st.ParentStandardID, nilIfEmpty(st.LabelRule))
 	if err != nil {
 		return fmt.Errorf("storage: upsert standard %q: %w", st.ID, err)
 	}
@@ -322,7 +322,7 @@ func (p *PG) CreateStandard(ctx context.Context, actorID string, st Standard) (*
 		insert into standard (name, official, display_name, parent_standard_id, label_rule)
 		values ($1, false, $2, (select id from standard where name = $3 or id::text = $3), $4)
 		returning `+standardCols,
-		st.Name, st.DisplayName, st.ParentStandardID, nilIfEmptyRule(st.LabelRule)))
+		st.Name, st.DisplayName, st.ParentStandardID, nilIfEmpty(st.LabelRule)))
 	if err != nil {
 		return nil, mapStandardWriteErr(err)
 	}

@@ -301,7 +301,7 @@ func (p *PG) UpsertLocationType(ctx context.Context, lt LocationType) error {
 			    allowed_parent_types = excluded.allowed_parent_types,
 			    label_rule           = excluded.label_rule,
 			    name_rule            = excluded.name_rule`,
-		lt.Name, lt.Official, lt.DisplayName, lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes), nilIfEmptyRule(lt.LabelRule), rule); err != nil {
+		lt.Name, lt.Official, lt.DisplayName, lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes), nilIfEmpty(lt.LabelRule), rule); err != nil {
 		return fmt.Errorf("storage: upsert location_type %q: %w", lt.Name, err)
 	}
 	return nil
@@ -609,10 +609,10 @@ func applyLocationTypePatch(lt LocationType, patch LocationTypePatch) LocationTy
 		lt.AllowedParentTypes = normalizeAllowedParentTypes(set)
 	}
 	if w.Has(LocationTypeFieldLabelRule) {
-		// nilIfEmptyRule keeps the house's three-state string sentinel working
+		// nilIfEmpty keeps the house's three-state string sentinel working
 		// alongside the mask: "" clears, as it always did, and the mask reaches
 		// the same state without a value. ADR-0091 keeps both spellings.
-		lt.LabelRule = nilIfEmptyRule(patch.LabelRule)
+		lt.LabelRule = nilIfEmpty(patch.LabelRule)
 	}
 	if w.Has(LocationTypeFieldNameRule) {
 		lt.NameRule = patch.NameRule
@@ -644,7 +644,7 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	}
 	lt.Official = false
 	lt.AllowedParentTypes = normalizeAllowedParentTypes(lt.AllowedParentTypes)
-	lt.LabelRule = nilIfEmptyRule(lt.LabelRule)
+	lt.LabelRule = nilIfEmpty(lt.LabelRule)
 	// Refused here, at rule-EDIT time, which is the whole point of a rule that
 	// is a declaration: a rule that cannot mint a legal name never reaches a
 	// column some later create would have executed it from (ADR-0102).
