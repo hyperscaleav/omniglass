@@ -206,13 +206,17 @@ describe("SystemTypes page", () => {
     const iconEyebrow = within(blade).getAllByText("Icon").find((el) => el.classList.contains("eyebrow"));
     const iconFact = iconEyebrow!.parentElement!;
     expect(iconFact.textContent).toContain("icon-from-the-server");
-    expect(iconFact.textContent).toContain("inherited from av");
+    // The ancestor is named by the mark beside the label, not by a sentence
+    // under the value, and the mark is the same one the edit state shows.
+    expect(within(iconFact).getByRole("button", { name: "Icon is inherited from av" })).toBeTruthy();
+    expect(iconFact.textContent).not.toContain("inherited from");
 
     fireEvent.click(within(blade).getByLabelText("Edit"));
     const icon = within(blade).getByLabelText("Icon") as HTMLInputElement;
     expect(icon.value).toBe("");
     expect(icon.placeholder).toBe("icon-from-the-server");
-    expect(within(blade).getByText(/A glyph key\. Empty inherits from av\./)).toBeTruthy();
+    expect(within(blade).getByText(/A glyph key\. Inherited from av\./)).toBeTruthy();
+    expect(within(blade).getByRole("button", { name: "Icon is inherited from av" })).toBeTruthy();
 
     // The stem states its own, so the box holds it and the inherited value sits
     // behind it as the placeholder: what an emptied box would take, not what

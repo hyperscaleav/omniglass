@@ -1,5 +1,6 @@
 import { Show, children, createUniqueId, type JSX } from "solid-js";
 import InfoTip from "./InfoTip";
+import ProvenanceDot from "./ProvenanceDot";
 import { IDENTITY_LABELS, type IdentityBinding } from "../lib/entities";
 
 // FieldRow is the console's one form-field wrapper: a label above its control,
@@ -17,6 +18,14 @@ type FieldRowBase = {
   docHref?: string;
   // A hint rendered under the control (optional; distinct from the tooltip).
   hint?: string;
+  // The name of the row this field's value comes from, when it comes from
+  // somewhere that is not this row; empty (or absent) marks nothing. It is a
+  // STRING rather than an element on purpose: an element in a prop compiles to
+  // a getter, so it is rebuilt whenever anything the getter reads notifies, and
+  // a mark whose data is derived from a query would be replaced under the
+  // pointer on every refetch. A string cannot do that, since `Show` re-renders
+  // on a change of truthiness and the name updates in place.
+  provenance?: string;
   // Inline action buttons rendered INSIDE the field, in a daisyUI join with the
   // control: the lock/override affordance an identity field carries (#657), the
   // same family KVRow gives a value row (set / revert / copy / reveal). A join
@@ -68,6 +77,16 @@ export default function FieldRow(p: FieldRowProps): JSX.Element {
         >
           {label()}
         </label>
+        {/*
+          The provenance mark goes immediately after the label and BEFORE the
+          (i), so a field that carries help text and one that does not put the
+          dot at the same place, which is the position KVStacked's eyebrow can
+          match. Like the (i) it sits outside the <label>: a labelable button in
+          there steals the control's accessible name and kills the hover.
+        */}
+        <Show when={p.provenance}>
+          {(from) => <ProvenanceDot label={label()} from={from()} />}
+        </Show>
         <Show when={p.info}><InfoTip text={p.info!} label={label()} href={p.docHref} hrefText="Docs" /></Show>
       </span>
       <Show when={p.actions !== undefined} fallback={resolved()}>

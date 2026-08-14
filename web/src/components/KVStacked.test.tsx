@@ -40,4 +40,22 @@ describe("KVStacked", () => {
     const { getByText } = render(() => <KVStacked label="Parent" />);
     expect(getByText("Parent")).toBeTruthy();
   });
+
+  // The read half of the provenance mark. It lands in the eyebrow, which is the
+  // same slot FieldRow's label occupies, so one treatment covers both states and
+  // the dot does not move when the pencil is clicked.
+  it("marks a fact whose value comes from elsewhere, in the eyebrow beside the label", () => {
+    const { getByText, getByRole } = render(() => (
+      <KVStacked label="Stem" value="mic" provenance="ceiling-mic" />
+    ));
+    const eyebrow = getByText("Stem");
+    const dot = getByRole("button", { name: /Stem is inherited from ceiling-mic/ });
+    expect(eyebrow.className).toContain("eyebrow");
+    expect(eyebrow.contains(dot)).toBe(true);
+  });
+
+  it("marks nothing when the fact is the row's own", () => {
+    const { queryByRole } = render(() => <KVStacked label="Stem" value="carray" provenance="" />);
+    expect(queryByRole("button")).toBeNull();
+  });
 });

@@ -13,22 +13,29 @@ import type { InheritedFact } from "../lib/catalog";
 // and silent. The list cell had answered this all along (it draws the inherited
 // glyph); the blade, where the editing happens, had not.
 //
-// Two affordances carry it and neither is a new glyph:
+// Three affordances carry it:
 //
 //   - The PLACEHOLDER carries the inherited VALUE, which is what a placeholder
 //     natively means: leave this blank and you get this. An empty box showing
 //     `display` in muted text says "inherited: display" in vocabulary every
 //     operator already has.
-//   - The HINT names the ancestor it came from, so an operator knows where to
-//     change it for everything below. That ancestor is READ from the server's
-//     answer rather than described as "its parent", because a fact can come
-//     from any distance up the chain: a grandchild whose parent states no stem
-//     takes its grandparent's.
+//   - The MARK, a teal dot beside the LABEL, says that this value comes from
+//     somewhere that is not this row. It is the one affordance that reads at a
+//     glance and the one that survives both states, since the label sits in the
+//     same place whether the field is being read or edited. Its hover names the
+//     ancestor, which is the answer to "where do I change it for everything
+//     below", and that ancestor is READ from the server's answer rather than
+//     described as "its parent", because a fact can come from any distance up
+//     the chain: a grandchild whose parent states no stem takes its
+//     grandparent's.
+//   - The HINT states the same relation in words while the box is being edited,
+//     which is where an operator is deciding what to type.
 //
-// The read state answers the same question, because Save leaves edit mode and
-// an operator who has just cleared a box lands there immediately. It renders
-// the inherited value muted with its ancestor named under it, in place of the
-// em dash that used to be the whole answer.
+// A sentence under the read value ("inherited from mic") did the hint's job
+// there for one morning and came out: it was the third telling of one fact on a
+// line that has room for the value and not much else, and it could not appear in
+// the edit state at all, where the value is a grey placeholder in a box that
+// looks exactly like an empty one. The mark says it in both.
 //
 // The LOCK is deliberately not reused. ADR-0104 gives the lock one meaning, the
 // platform owns this value, and inheritance is a different relation: an
@@ -48,35 +55,48 @@ export default function InheritedField(props: {
   onInput: (v: string) => void;
 }): JSX.Element {
   const inherited = () => props.inherited();
-  // Inheriting means the row states nothing AND something above it does. A row
+  // ONE predicate, asked of a given text: this field's value comes from
+  // elsewhere when the row states nothing and something above it does. A row
   // that states nothing with nothing above it (a root's icon) is genuinely
   // empty, and reads as the em dash it always did.
-  const inheriting = () => props.value() === "" && inherited().value !== "";
-  const hint = () =>
-    inherited().value === ""
-      ? `${props.hint} Nothing above this states one.`
+  const inheriting = (text: string) => text === "" && inherited().value !== "";
+
+  // The mark is asked of whichever text the field is showing, which BladeField
+  // supplies: the persisted value in read, the draft in edit.
+  const provenance = (text: string) => (inheriting(text) ? inherited().from : "");
+
+  // The hint is an edit-state affordance, so the text it speaks about is the
+  // DRAFT, which is the same string BladeField hands `provenance` in that state
+  // (`draft` is required here, so the two cannot be different signals). One
+  // predicate over one string is what makes the mark and the hint impossible to
+  // disagree, including mid-keystroke: the moment a box stops being empty, the
+  // dot goes and the sentence turns from a statement about now into the
+  // conditional it has become.
+  const hint = () => {
+    if (inherited().value === "") return `${props.hint} Nothing above this states one.`;
+    return inheriting(props.draft())
+      ? `${props.hint} Inherited from ${inherited().from}.`
       : `${props.hint} Empty inherits from ${inherited().from}.`;
+  };
 
   return (
     <BladeField
       label={props.label}
       mono
+      provenance={provenance}
       placeholder={inherited().value}
       value={props.value}
       draft={props.draft}
       onInput={props.onInput}
       hint={hint()}
       read={
-        inheriting()
+        inheriting(props.value())
           ? (
-            // The value gets an element of its own rather than sitting as a
-            // bare text node beside the attribution: a reader (and a test, and
-            // a screenshot assertion) has to be able to address the inherited
-            // VALUE without the sentence under it coming along.
-            <span class="text-base-content/50">
-              <span class="block">{inherited().value}</span>
-              <span class="block font-sans text-[11px] text-base-content/40">inherited from {inherited().from}</span>
-            </span>
+            // The inherited value keeps the dimming that tells it apart from a
+            // value the row states itself. It is one signal with the mark, not
+            // two: a quieter value, and a dot beside the label saying where it
+            // came from.
+            <span class="text-base-content/50">{inherited().value}</span>
           )
           : undefined
       }

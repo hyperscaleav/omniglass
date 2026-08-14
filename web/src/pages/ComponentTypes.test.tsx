@@ -332,7 +332,12 @@ describe("ComponentTypes page", () => {
     const stem = within(blade).getByLabelText("Stem") as HTMLInputElement;
     expect(stem.value).toBe("");
     expect(stem.placeholder).toBe("from-the-server");
-    expect(within(blade).getByText(/The auto-generated component name's prefix\. Empty inherits from mic\./)).toBeTruthy();
+    // The box is empty, so the field IS taking its value from elsewhere right
+    // now: the mark is there and the hint is in the present tense. The
+    // conditional wording ("Empty inherits from") belongs to the state where the
+    // box holds a value of its own, and the two never overlap.
+    expect(within(blade).getByText(/The auto-generated component name's prefix\. Inherited from mic\./)).toBeTruthy();
+    expect(within(blade).getByRole("button", { name: "Stem is inherited from mic" })).toBeTruthy();
     // The other two carry their own served answers rather than the stem's.
     expect((within(blade).getByLabelText("Abbrev") as HTMLInputElement).placeholder).toBe("abbrev-from-the-server");
     expect((within(blade).getByLabelText("Icon") as HTMLInputElement).placeholder).toBe("icon-from-the-server");
@@ -351,8 +356,14 @@ describe("ComponentTypes page", () => {
       return el as HTMLElement;
     });
     fireEvent.click(within(blade).getByLabelText("Edit"));
+    // The stem states its own value here, so its sentence is the conditional
+    // one; the abbrev is inheriting, so its sentence is the present-tense one
+    // and it is the field that carries the mark. Both name `mic` and
+    // `ceiling-mic` from the data, two different distances up the chain.
     expect(within(blade).getByText(/The auto-generated component name's prefix\. Empty inherits from mic\./)).toBeTruthy();
-    expect(within(blade).getByText(/compact hostname-render form.*Empty inherits from ceiling-mic\./)).toBeTruthy();
+    expect(within(blade).getByText(/compact hostname-render form.*Inherited from ceiling-mic\./)).toBeTruthy();
+    expect(within(blade).getByRole("button", { name: "Abbrev is inherited from ceiling-mic" })).toBeTruthy();
+    expect(within(blade).queryByRole("button", { name: /^Stem is inherited from/ })).toBeNull();
   });
 
   // The placeholder answers "clear this box and you get what?", so it must be
@@ -379,7 +390,12 @@ describe("ComponentTypes page", () => {
   // Read mode is where the operator lands the moment Save leaves edit, so it
   // has to answer the same question: before this it rendered an em dash and
   // told them nothing about what they had just fallen back to.
-  it("reads an inheriting fact as the inherited value, attributed to its ancestor", async () => {
+  //
+  // The ancestor is named by the MARK rather than by a sentence under the value
+  // (the sentence shipped in this wave and came out): the value line carries the
+  // value, the dot beside the label carries the relation, and it is the same dot
+  // in the same place the edit state shows.
+  it("reads an inheriting fact as the inherited value, marked with where it came from", async () => {
     mount();
     fireEvent.click(screen.getByText("Ceiling Microphone"));
     const blade = await waitFor(() => {
@@ -389,7 +405,8 @@ describe("ComponentTypes page", () => {
     });
     const stemFact = factOf(blade, "Stem");
     expect(stemFact.textContent).toContain("from-the-server");
-    expect(stemFact.textContent).toContain("inherited from mic");
+    expect(within(stemFact).getByRole("button", { name: "Stem is inherited from mic" })).toBeTruthy();
+    expect(stemFact.textContent).not.toContain("inherited from");
     // Not the em dash it used to be, which is the whole defect.
     expect(stemFact.textContent).not.toContain("\u2014");
   });
@@ -409,10 +426,12 @@ describe("ComponentTypes page", () => {
     });
     const stemFact = factOf(blade, "Stem");
     expect(stemFact.textContent).toContain("carray");
-    expect(stemFact.textContent).not.toContain("inherited from");
+    expect(within(stemFact).queryByRole("button", { name: /is inherited from/ })).toBeNull();
     // Its abbrev IS inheriting, on the same blade, so the absence above is a
     // per-field answer rather than a blade with the feature switched off.
-    expect(factOf(blade, "Abbrev").textContent).toContain("inherited from ceiling-mic");
+    expect(
+      within(factOf(blade, "Abbrev")).getByRole("button", { name: "Abbrev is inherited from ceiling-mic" }),
+    ).toBeTruthy();
     expect(within(blade).queryByLabelText(/^Override the /)).toBeNull();
     expect(within(blade).queryByLabelText(/^Restore the .* to default$/)).toBeNull();
   });
@@ -431,7 +450,10 @@ describe("ComponentTypes page", () => {
     const stem = within(blade).getByLabelText("Stem") as HTMLInputElement;
     fireEvent.input(stem, { target: { value: "" } });
     expect(stem.placeholder).toBe("");
-    expect(within(blade).queryByText(/Empty inherits from/)).toBeNull();
+    expect(within(blade).queryByText(/inherits from/)).toBeNull();
     expect(within(blade).getByText(/The auto-generated component name's prefix\. Nothing above this states one\./)).toBeTruthy();
+    // An empty box on a root is genuinely empty, not inheriting, so there is
+    // nothing for the mark to point at and it must not invent one.
+    expect(within(blade).queryByRole("button", { name: /is inherited from/ })).toBeNull();
   });
 });
