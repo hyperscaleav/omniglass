@@ -128,7 +128,7 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 		{"main-display", "panel-a", "healthy"},
 	}
 	for _, s := range steps {
-		if err := f.gw.AssignRole(ctx, "", "hq-boardroom", s.role, s.component, f.all); err != nil {
+		if err := f.gw.AssignRole(ctx, "", "hq-boardroom", s.role, s.component, f.all, f.all); err != nil {
 			t.Fatalf("assign %s to %s: %v", s.component, s.role, err)
 		}
 		if _, v := f.recorded(t, ctx, "system", "hq-boardroom"); v != s.want {
@@ -205,7 +205,7 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "choice-bar-1", ProductName: &bar}, f.all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if err := f.gw.AssignRole(ctx, "", "choice-room", "conf-bar", "choice-bar-1", f.all); err != nil {
+	if err := f.gw.AssignRole(ctx, "", "choice-room", "conf-bar", "choice-bar-1", f.all, f.all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 
@@ -316,7 +316,7 @@ func TestHealthRecordsEveryRealChange(t *testing.T) {
 	for _, s := range []struct{ role, component string }{
 		{"room-mic", "bar-a"}, {"room-mic", "bar-b"}, {"main-display", "panel-a"},
 	} {
-		if err := f.gw.AssignRole(ctx, "", "hq-boardroom", s.role, s.component, f.all); err != nil {
+		if err := f.gw.AssignRole(ctx, "", "hq-boardroom", s.role, s.component, f.all, f.all); err != nil {
 			t.Fatalf("assign %s to %s: %v", s.component, s.role, err)
 		}
 	}
@@ -373,7 +373,7 @@ func (f *healthFixture) staffPair(t *testing.T, ctx context.Context, standard, s
 		}, f.all, all, all, all); err != nil {
 			t.Fatalf("create component %s: %v", c, err)
 		}
-		if err := f.gw.AssignRole(ctx, "", system, "pair", c, f.all); err != nil {
+		if err := f.gw.AssignRole(ctx, "", system, "pair", c, f.all, f.all); err != nil {
 			t.Fatalf("assign %s: %v", c, err)
 		}
 	}
@@ -578,8 +578,8 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 			return err
 		}},
 		{"restore it", func() error { return f.gw.ClearAlarm(ctx, "", "sweep-b", spareAlarm.ID) }},
-		{"unstaff the role", func() error { return f.gw.UnassignRole(ctx, "", "sweep-sys", "pair", "sweep-b", f.all) }},
-		{"staff it again", func() error { return f.gw.AssignRole(ctx, "", "sweep-sys", "pair", "sweep-b", f.all) }},
+		{"unstaff the role", func() error { return f.gw.UnassignRole(ctx, "", "sweep-sys", "pair", "sweep-b", f.all, f.all) }},
+		{"staff it again", func() error { return f.gw.AssignRole(ctx, "", "sweep-sys", "pair", "sweep-b", f.all, f.all) }},
 		{"raise the quorum on the standard, moving every conforming system", func() error {
 			_, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
 				Name: "pair", DisplayName: "Pair", Quorum: 3, Impact: "outage"})

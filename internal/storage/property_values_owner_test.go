@@ -49,7 +49,7 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 	}
 
 	// The system's own value overrides the standard's default.
-	if _, err := gw.SetProperty(ctx, "", "system", "hq-huddle", "model-number", "", json.RawMessage(`"HR-2"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "system", "hq-huddle", "model-number", "", json.RawMessage(`"HR-2"`), all, all); err != nil {
 		t.Fatalf("override on system: %v", err)
 	}
 	sys = byName(mustResolveOwner(t, gw, "system", "hq-huddle", all))
@@ -58,7 +58,7 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 	}
 
 	// A property the standard does not declare still resolves, flagged off-contract.
-	if _, err := gw.SetProperty(ctx, "", "system", "hq-huddle", "serial-number", "", json.RawMessage(`"S-1"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "system", "hq-huddle", "serial-number", "", json.RawMessage(`"S-1"`), all, all); err != nil {
 		t.Fatalf("ad-hoc on system: %v", err)
 	}
 	sys = byName(mustResolveOwner(t, gw, "system", "hq-huddle", all))
@@ -71,7 +71,7 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "one-off"}, all, all); err != nil {
 		t.Fatalf("create one-off system: %v", err)
 	}
-	if _, err := gw.SetProperty(ctx, "", "system", "one-off", "serial-number", "", json.RawMessage(`"S-9"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "system", "one-off", "serial-number", "", json.RawMessage(`"S-9"`), all, all); err != nil {
 		t.Fatalf("set on one-off: %v", err)
 	}
 	oneOff := mustResolveOwner(t, gw, "system", "one-off", all)
@@ -101,7 +101,7 @@ func TestEffectivePropertiesByOwnerKind(t *testing.T) {
 
 	// --- the component path is unchanged (the PR5 shape still holds) ----------
 
-	if _, err := gw.SetProperty(ctx, "", "component", "ghost-x", "serial-number", "", json.RawMessage(`"x"`), all); err == nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "ghost-x", "serial-number", "", json.RawMessage(`"x"`), all, all); err == nil {
 		t.Fatal("unknown component owner: want a not-found error, got nil")
 	}
 }

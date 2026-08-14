@@ -47,7 +47,7 @@ func TestPropertiesAndEventsSurviveARename(t *testing.T) {
 	}
 
 	if _, err := gw.SetProperty(ctx, "", "system", "old-sys", "model-number", "",
-		[]byte(`"HR-2"`), all); err != nil {
+		[]byte(`"HR-2"`), all, all); err != nil {
 		t.Fatalf("set property: %v", err)
 	}
 	if err := gw.InsertEvents(ctx, []storage.EventWrite{{

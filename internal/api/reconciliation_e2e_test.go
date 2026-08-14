@@ -62,7 +62,7 @@ func TestReconciliationAPI(t *testing.T) {
 	}
 	// A declared value (want) and an observed value (is) that differ, so the read
 	// reports drift.
-	if _, err := gw.SetProperty(ctx, "", "component", "disp-1", "firmware-version", "", json.RawMessage(`"1.0.0"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "disp-1", "firmware-version", "", json.RawMessage(`"1.0.0"`), all, all); err != nil {
 		t.Fatalf("set declared: %v", err)
 	}
 	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{{

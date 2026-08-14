@@ -88,14 +88,15 @@ func registerSystemPropertyRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Method:      http.MethodPut,
 		Path:        "/systems/{name}/properties/{property}",
 		Summary:     "Set a property on a system",
-		Description: "Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+		Description: "Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *setSystemPropertyInput) (*systemPropertyOutput, error) {
 		raw, err := encodePropertyJSON(in.Body.Value, "value")
 		if err != nil {
 			return nil, err
 		}
 		pv, err := gw.SetProperty(ctx, actorID(ctx), "system", in.Name, in.Property,
-			systemPropertyInstance, raw, a.scopeFor(ctx, "system", "update"))
+			systemPropertyInstance, raw,
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
 		if err != nil {
 			return nil, mapSystemPropertyErr(err)
 		}
@@ -114,10 +115,11 @@ func registerSystemPropertyRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Path:          "/systems/{name}/properties/{property}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Clear a property on a system",
-		Description:   "Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+		Description:   "Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *systemPropertyPathInput) (*struct{}, error) {
 		if err := gw.ClearProperty(ctx, actorID(ctx), "system", in.Name, in.Property,
-			systemPropertyInstance, a.scopeFor(ctx, "system", "update")); err != nil {
+			systemPropertyInstance,
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update")); err != nil {
 			return nil, mapSystemPropertyErr(err)
 		}
 		return nil, nil

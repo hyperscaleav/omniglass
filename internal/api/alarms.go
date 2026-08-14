@@ -19,15 +19,20 @@ import (
 //
 // Alarms hang off the component and ride its gating: component:read to see them,
 // component:update to raise or clear one. Every route resolves the component
-// within the caller's scope first, so an out-of-scope component is a
-// non-disclosing 404.
+// first, and the write routes resolve it with BOTH sets (#736): outside the
+// caller's component:read the component is a non-disclosing 404, and inside it
+// but outside the write's own scope the refusal is a 403 that says so. The list
+// route passes its read set for both halves, which is the same set twice and so
+// the plain non-disclosing 404 it always was.
 //
 // Acknowledging is the exception, and deliberately so: it carries its OWN
-// permission (alarm:acknowledge) and resolves its scope from that permission
-// rather than from component:update, because recording that a human has seen an
-// alarm is not editing the component. A role may hold one without the other, and
-// binding the two would let a wide component read or a narrow component write
-// decide who may acknowledge.
+// permission (alarm:acknowledge) and resolves its ACTION scope from that
+// permission rather than from component:update, because recording that a human
+// has seen an alarm is not editing the component. A role may hold one without
+// the other, and binding the two would let a wide component read or a narrow
+// component write decide who may acknowledge. The read half is still plain
+// component:read and still grants nothing; it only decides which refusal a
+// caller is owed, which is the distinction #728 could not make and filed.
 
 type alarmBody struct {
 	ID        string     `json:"id"`
@@ -128,7 +133,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/components/{name}/alarms",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Raise an alarm on a component",
-		Description:   "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
+		Description:   "Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 	}, "component", "update"), func(ctx context.Context, in *raiseAlarmInput) (*alarmOutput, error) {
 		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "update")
 		if err != nil {
@@ -151,7 +156,7 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/components/{name}/alarms/{id}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Clear an alarm",
-		Description:   "Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
+		Description:   "Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 	}, "component", "update"), func(ctx context.Context, in *clearAlarmInput) (*struct{}, error) {
 		compID, err := requireComponentInScope(ctx, a, gw, in.Name, "update")
 		if err != nil {
@@ -168,18 +173,24 @@ func registerAlarmRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/alarms/{id}:acknowledge",
 		Summary:     "Acknowledge an alarm",
-		Description: "Records that a human has seen this alarm, and changes nothing else. The alarm stays exactly as raised as it was: acknowledging is not fixing, so health is NOT recomputed and cleared_at is untouched. Acknowledging is orthogonal to clearing in both directions, so a cleared alarm can still be acknowledged by whoever reviews the history, and clearing never acknowledges on an operator's behalf. Acknowledging twice is idempotent: the first person and the first time stay, and the no-op writes no second audit row. Gated by alarm:acknowledge, whose scope is resolved on the component tier from that permission (not from component:update); a component outside it is a non-disclosing 404.",
+		Description: "Records that a human has seen this alarm, and changes nothing else. The alarm stays exactly as raised as it was: acknowledging is not fixing, so health is NOT recomputed and cleared_at is untouched. Acknowledging is orthogonal to clearing in both directions, so a cleared alarm can still be acknowledged by whoever reviews the history, and clearing never acknowledges on an operator's behalf. Acknowledging twice is idempotent: the first person and the first time stay, and the no-op writes no second audit row. Gated by alarm:acknowledge, whose scope is resolved on the component tier from that permission (not from component:update); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not acknowledge on is a 403.",
 	}, "alarm", "acknowledge"), func(ctx context.Context, in *clearAlarmInput) (*alarmOutput, error) {
-		// The scope comes from alarm:acknowledge, so only the grants whose role
-		// actually carries the acknowledgement contribute their scope: a wide
+		// The ACTION scope comes from alarm:acknowledge, so only the grants whose
+		// role actually carries the acknowledgement contribute their scope: a wide
 		// component read does not widen what may be acknowledged, and a principal
 		// that may acknowledge in one building cannot acknowledge in another one it
 		// can merely see.
-		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "alarm", "acknowledge"))
+		//
+		// The READ scope is the caller's own component:read, and it decides only
+		// which refusal that principal is owed (#736, #728): a component outside it
+		// is still the non-disclosing 404, and a component inside it that the
+		// acknowledgement does not reach is the truthful 403. It grants nothing.
+		compID, err := gw.ResolveActionTarget(ctx, "component", in.Name,
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "alarm", "acknowledge"))
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
-		alarm, err := gw.AcknowledgeAlarm(ctx, actorID(ctx), comp.ID, in.ID)
+		alarm, err := gw.AcknowledgeAlarm(ctx, actorID(ctx), compID, in.ID)
 		if err != nil {
 			return nil, mapAlarmErr(err)
 		}

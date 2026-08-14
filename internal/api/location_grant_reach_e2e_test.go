@@ -150,7 +150,11 @@ func TestALocationGrantWritesNoSystem(t *testing.T) {
 	f.c.do(f.floored, http.MethodPost, "/systems/av:move", map[string]any{"location": "annex"}, http.StatusForbidden)
 
 	// The membership route, which is the one the component create writes through.
-	f.c.do(f.floored, http.MethodPut, "/systems/av/members/"+f.rackID, nil, http.StatusNotFound)
+	// It answers 403 alongside its siblings now (#736): it used to resolve its
+	// system with the update scope alone and so reported a readable system
+	// absent, which is the one refusal on this list that disagreed with the
+	// three above it for no reason a caller could see.
+	f.c.do(f.floored, http.MethodPut, "/systems/av/members/"+f.rackID, nil, http.StatusForbidden)
 
 	// The owner runs the identical bodies and is served on each, so every refusal
 	// above is a scope boundary rather than a broken route.

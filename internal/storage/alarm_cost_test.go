@@ -106,7 +106,7 @@ func alarmProbe(t *testing.T, staffs, roomsN int) (storage.Gateway, *querycount.
 			storage.SystemSpec{Name: name, StandardID: &std, LocationName: strptr(roomNames[i%len(roomNames)])}, sc, sc); err != nil {
 			t.Fatalf("create system %d: %v", i, err)
 		}
-		if err := gw.AssignRole(ctx, "", name, "table-mic", "bar-1", sc); err != nil {
+		if err := gw.AssignRole(ctx, "", name, "table-mic", "bar-1", sc, sc); err != nil {
 			t.Fatalf("assign role %d: %v", i, err)
 		}
 	}

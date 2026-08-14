@@ -27,7 +27,7 @@ func TestMembershipSeedsTheSystemBand(t *testing.T) {
 	ctx := context.Background()
 	f := newResolveFixture(t, ctx)
 
-	if err := f.gw.AddMember(ctx, "", "room-a", "roamer", f.all); err != nil {
+	if err := f.gw.AddMember(ctx, "", "room-a", "roamer", f.all, f.all); err != nil {
 		t.Fatalf("add member: %v", err)
 	}
 	mustBind(t, f.gw, "environment", "system", strptr("room-a"), "prod")
@@ -46,7 +46,7 @@ func TestResolutionIsPerMembership(t *testing.T) {
 	f := newResolveFixture(t, ctx)
 
 	for _, s := range []string{"room-a", "room-b"} {
-		if err := f.gw.AddMember(ctx, "", s, "roamer", f.all); err != nil {
+		if err := f.gw.AddMember(ctx, "", s, "roamer", f.all, f.all); err != nil {
 			t.Fatalf("add member %s: %v", s, err)
 		}
 	}
@@ -69,7 +69,7 @@ func TestContextFreeResolutionFollowsThePrimary(t *testing.T) {
 	f := newResolveFixture(t, ctx)
 
 	for _, s := range []string{"room-a", "room-b"} {
-		if err := f.gw.AddMember(ctx, "", s, "roamer", f.all); err != nil {
+		if err := f.gw.AddMember(ctx, "", s, "roamer", f.all, f.all); err != nil {
 			t.Fatalf("add member %s: %v", s, err)
 		}
 	}
@@ -80,7 +80,7 @@ func TestContextFreeResolutionFollowsThePrimary(t *testing.T) {
 	if got := f.effective(t, ctx, "roamer", "")["environment"]; got != "prod" {
 		t.Fatalf("context-free = %q, want prod (the primary)", got)
 	}
-	if err := f.gw.SetPrimaryMember(ctx, "", "room-b", "roamer", f.all); err != nil {
+	if err := f.gw.SetPrimaryMember(ctx, "", "room-b", "roamer", f.all, f.all); err != nil {
 		t.Fatalf("set primary: %v", err)
 	}
 	if got := f.effective(t, ctx, "roamer", "")["environment"]; got != "lab" {
@@ -112,7 +112,7 @@ func TestResolvingAgainstAStrangerSystemInheritsNothing(t *testing.T) {
 	ctx := context.Background()
 	f := newResolveFixture(t, ctx)
 
-	if err := f.gw.AddMember(ctx, "", "room-a", "roamer", f.all); err != nil {
+	if err := f.gw.AddMember(ctx, "", "room-a", "roamer", f.all, f.all); err != nil {
 		t.Fatalf("add member: %v", err)
 	}
 	mustBind(t, f.gw, "environment", "system", strptr("room-b"), "lab")
@@ -130,7 +130,7 @@ func TestSecretsDoNotInheritFromASystem(t *testing.T) {
 	ctx := context.Background()
 	f := newResolveFixture(t, ctx)
 
-	if err := f.gw.AddMember(ctx, "", "room-a", "roamer", f.all); err != nil {
+	if err := f.gw.AddMember(ctx, "", "room-a", "roamer", f.all, f.all); err != nil {
 		t.Fatalf("add member: %v", err)
 	}
 	// Since #459 finished ADR-0052 the guarantee is enforced a layer earlier: a

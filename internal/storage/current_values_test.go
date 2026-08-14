@@ -73,7 +73,7 @@ func TestCurrentValueReads(t *testing.T) {
 
 	// A declared value coexists as its own provenance series: observed stays,
 	// declared reads back its own value.
-	if _, err := gw.SetProperty(ctx, "", "component", "disp-1", "interface-reachable", "", json.RawMessage(`"up"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "disp-1", "interface-reachable", "", json.RawMessage(`"up"`), all, all); err != nil {
 		t.Fatalf("set declared: %v", err)
 	}
 	obsAfter, err := gw.LatestValue(ctx, "component", "disp-1", "interface-reachable", "", "observed", all)
@@ -132,7 +132,7 @@ func TestReconciliation(t *testing.T) {
 
 	// want: an ad-hoc declared value on the component (a productless component's
 	// declared values are all ad-hoc).
-	if _, err := gw.SetProperty(ctx, "", "component", "disp-r", "firmware-version", "", json.RawMessage(`"1.0.0"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "disp-r", "firmware-version", "", json.RawMessage(`"1.0.0"`), all, all); err != nil {
 		t.Fatalf("set declared firmware-version: %v", err)
 	}
 	// is: an observed series row that differs from the declared value.

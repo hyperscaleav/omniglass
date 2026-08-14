@@ -134,7 +134,7 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 		PropertyTypeName: "serial-number", Required: true}); err != nil {
 		t.Fatalf("contract: %v", err)
 	}
-	if _, err := gw.SetProperty(ctx, "", "component", "bar-1", "serial-number", "", []byte(`"SN-1"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "bar-1", "serial-number", "", []byte(`"SN-1"`), all, all); err != nil {
 		t.Fatalf("value: %v", err)
 	}
 	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{{

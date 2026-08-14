@@ -63,7 +63,7 @@ func TestMembershipIsManyValued(t *testing.T) {
 	f := newMemberFixture(t, ctx)
 
 	for _, s := range []string{"room-a", "room-b"} {
-		if err := f.gw.AddMember(ctx, "", s, "dsp", f.all); err != nil {
+		if err := f.gw.AddMember(ctx, "", s, "dsp", f.all, f.all); err != nil {
 			t.Fatalf("add dsp to %s: %v", s, err)
 		}
 	}
@@ -95,11 +95,11 @@ func TestMemberCarriesHowManySystemsItServes(t *testing.T) {
 	f := newMemberFixture(t, ctx)
 
 	for _, s := range []string{"room-a", "room-b"} {
-		if err := f.gw.AddMember(ctx, "", s, "dsp", f.all); err != nil {
+		if err := f.gw.AddMember(ctx, "", s, "dsp", f.all, f.all); err != nil {
 			t.Fatalf("add: %v", err)
 		}
 	}
-	if err := f.gw.AddMember(ctx, "", "room-a", "mic-a", f.all); err != nil {
+	if err := f.gw.AddMember(ctx, "", "room-a", "mic-a", f.all, f.all); err != nil {
 		t.Fatalf("add: %v", err)
 	}
 
@@ -129,7 +129,7 @@ func TestAddMemberIsIdempotent(t *testing.T) {
 	f := newMemberFixture(t, ctx)
 
 	for range 2 {
-		if err := f.gw.AddMember(ctx, "", "room-a", "mic-a", f.all); err != nil {
+		if err := f.gw.AddMember(ctx, "", "room-a", "mic-a", f.all, f.all); err != nil {
 			t.Fatalf("add: %v", err)
 		}
 	}
@@ -149,7 +149,7 @@ func TestFirstMembershipIsPrimary(t *testing.T) {
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 
-	if err := f.gw.AddMember(ctx, "", "room-a", "mic-a", f.all); err != nil {
+	if err := f.gw.AddMember(ctx, "", "room-a", "mic-a", f.all, f.all); err != nil {
 		t.Fatalf("add: %v", err)
 	}
 	got, _ := f.gw.ComponentMemberships(ctx, "mic-a", f.all)
@@ -158,7 +158,7 @@ func TestFirstMembershipIsPrimary(t *testing.T) {
 	}
 
 	// A second membership does not steal the default.
-	if err := f.gw.AddMember(ctx, "", "room-b", "mic-a", f.all); err != nil {
+	if err := f.gw.AddMember(ctx, "", "room-b", "mic-a", f.all, f.all); err != nil {
 		t.Fatalf("add second: %v", err)
 	}
 	got, _ = f.gw.ComponentMemberships(ctx, "mic-a", f.all)
@@ -179,11 +179,11 @@ func TestSetPrimaryMemberMovesTheDefault(t *testing.T) {
 	f := newMemberFixture(t, ctx)
 
 	for _, s := range []string{"room-a", "room-b"} {
-		if err := f.gw.AddMember(ctx, "", s, "dsp", f.all); err != nil {
+		if err := f.gw.AddMember(ctx, "", s, "dsp", f.all, f.all); err != nil {
 			t.Fatalf("add: %v", err)
 		}
 	}
-	if err := f.gw.SetPrimaryMember(ctx, "", "room-b", "dsp", f.all); err != nil {
+	if err := f.gw.SetPrimaryMember(ctx, "", "room-b", "dsp", f.all, f.all); err != nil {
 		t.Fatalf("set primary: %v", err)
 	}
 	got, _ := f.gw.ComponentMemberships(ctx, "dsp", f.all)
@@ -208,7 +208,7 @@ func TestAssignRoleCreatesTheMembership(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
-	if err := f.gw.AssignRole(ctx, "", "room-a", "mic", "mic-a", f.all); err != nil {
+	if err := f.gw.AssignRole(ctx, "", "room-a", "mic", "mic-a", f.all, f.all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 	got, err := f.gw.ComponentMemberships(ctx, "mic-a", f.all)
@@ -232,19 +232,19 @@ func TestRemoveMemberRefusedWhileStaffingARole(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
-	if err := f.gw.AssignRole(ctx, "", "room-a", "mic", "mic-a", f.all); err != nil {
+	if err := f.gw.AssignRole(ctx, "", "room-a", "mic", "mic-a", f.all, f.all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
-	err := f.gw.RemoveMember(ctx, "", "room-a", "mic-a", f.all)
+	err := f.gw.RemoveMember(ctx, "", "room-a", "mic-a", f.all, f.all)
 	if !errors.Is(err, storage.ErrMemberOccupied) {
 		t.Fatalf("remove a member still staffing a role = %v, want ErrMemberOccupied", err)
 	}
 
 	// Given up the role, it leaves cleanly.
-	if err := f.gw.UnassignRole(ctx, "", "room-a", "mic", "mic-a", f.all); err != nil {
+	if err := f.gw.UnassignRole(ctx, "", "room-a", "mic", "mic-a", f.all, f.all); err != nil {
 		t.Fatalf("unassign: %v", err)
 	}
-	if err := f.gw.RemoveMember(ctx, "", "room-a", "mic-a", f.all); err != nil {
+	if err := f.gw.RemoveMember(ctx, "", "room-a", "mic-a", f.all, f.all); err != nil {
 		t.Fatalf("remove after unassign: %v", err)
 	}
 }
@@ -259,7 +259,7 @@ func TestMembershipCascadesFromBothEnds(t *testing.T) {
 	f := newMemberFixture(t, ctx)
 
 	// Deleting the system takes its memberships with it.
-	if err := f.gw.AddMember(ctx, "", "room-a", "mic-a", f.all); err != nil {
+	if err := f.gw.AddMember(ctx, "", "room-a", "mic-a", f.all, f.all); err != nil {
 		t.Fatalf("add: %v", err)
 	}
 	if err := f.gw.DeleteSystem(ctx, "", "room-a", f.all, f.all); err != nil {
@@ -274,7 +274,7 @@ func TestMembershipCascadesFromBothEnds(t *testing.T) {
 	}
 
 	// A plain member deletes cleanly: membership alone is an inventory fact.
-	if err := f.gw.AddMember(ctx, "", "room-b", "mic-b", f.all); err != nil {
+	if err := f.gw.AddMember(ctx, "", "room-b", "mic-b", f.all, f.all); err != nil {
 		t.Fatalf("add: %v", err)
 	}
 	if err := f.gw.DeleteComponent(ctx, "", "mic-b", f.all, f.all); err != nil {
@@ -288,7 +288,7 @@ func TestMembershipCascadesFromBothEnds(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
-	if err := f.gw.AssignRole(ctx, "", "room-b", "mic", "dsp", f.all); err != nil {
+	if err := f.gw.AssignRole(ctx, "", "room-b", "mic", "dsp", f.all, f.all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 	if err := f.gw.DeleteComponent(ctx, "", "dsp", f.all, f.all); !errors.Is(err, storage.ErrReferenced) {
@@ -296,14 +296,21 @@ func TestMembershipCascadesFromBothEnds(t *testing.T) {
 	}
 }
 
-// Membership is scoped like every other estate relation: a system out of the
-// caller's scope is a non-disclosing not-found, never a partial answer.
+// Membership is scoped like every other estate relation, and since #736 the
+// refusal it gives depends on which of the two sets the system falls out of:
+// outside the READ scope it is the non-disclosing not-found, and inside the read
+// scope but outside the action scope it is forbidden. This is the gateway seam
+// of the split the conformance matrix drives over the wire.
 func TestMembershipIsScoped(t *testing.T) {
 	ctx := context.Background()
 	f := newMemberFixture(t, ctx)
 
 	none := scope.Set{}
-	if err := f.gw.AddMember(ctx, "", "room-a", "mic-a", none); !errors.Is(err, storage.ErrSystemNotFound) {
-		t.Fatalf("add out of scope = %v, want ErrSystemNotFound", err)
+	all := scope.Set{All: true}
+	if err := f.gw.AddMember(ctx, "", "room-a", "mic-a", none, none); !errors.Is(err, storage.ErrSystemNotFound) {
+		t.Fatalf("add out of read scope = %v, want ErrSystemNotFound", err)
+	}
+	if err := f.gw.AddMember(ctx, "", "room-a", "mic-a", all, none); !errors.Is(err, storage.ErrSystemForbidden) {
+		t.Fatalf("add on a readable system out of the action scope = %v, want ErrSystemForbidden", err)
 	}
 }

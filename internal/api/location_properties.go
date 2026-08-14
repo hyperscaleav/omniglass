@@ -88,14 +88,15 @@ func registerLocationPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 		Method:      http.MethodPut,
 		Path:        "/locations/{name}/properties/{property}",
 		Summary:     "Set a property on a location",
-		Description: "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; an out-of-scope location is a non-disclosing 404.",
+		Description: "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.",
 	}, "location", "update"), func(ctx context.Context, in *setLocationPropertyInput) (*locationPropertyOutput, error) {
 		raw, err := encodePropertyJSON(in.Body.Value, "value")
 		if err != nil {
 			return nil, err
 		}
 		pv, err := gw.SetProperty(ctx, actorID(ctx), "location", in.Name, in.Property,
-			locationPropertyInstance, raw, a.scopeFor(ctx, "location", "update"))
+			locationPropertyInstance, raw,
+			a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "update"))
 		if err != nil {
 			return nil, mapLocationPropertyErr(err)
 		}
@@ -114,10 +115,11 @@ func registerLocationPropertyRoutes(api huma.API, a *authenticator, gw storage.G
 		Path:          "/locations/{name}/properties/{property}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Clear a property on a location",
-		Description:   "Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; an out-of-scope location is a non-disclosing 404.",
+		Description:   "Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; read and update scopes drive the 404 versus 403 split.",
 	}, "location", "update"), func(ctx context.Context, in *locationPropertyPathInput) (*struct{}, error) {
 		if err := gw.ClearProperty(ctx, actorID(ctx), "location", in.Name, in.Property,
-			locationPropertyInstance, a.scopeFor(ctx, "location", "update")); err != nil {
+			locationPropertyInstance,
+			a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "update")); err != nil {
 			return nil, mapLocationPropertyErr(err)
 		}
 		return nil, nil

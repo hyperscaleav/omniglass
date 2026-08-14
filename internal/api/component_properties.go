@@ -117,14 +117,15 @@ func registerComponentPropertyRoutes(api huma.API, a *authenticator, gw storage.
 		Method:      http.MethodPut,
 		Path:        "/components/{name}/properties/{property}",
 		Summary:     "Set a property on a component",
-		Description: "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; an out-of-scope component is a non-disclosing 404.",
+		Description: "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 	}, "component", "update"), func(ctx context.Context, in *setComponentPropertyInput) (*componentPropertyOutput, error) {
 		raw, err := encodePropertyJSON(in.Body.Value, "value")
 		if err != nil {
 			return nil, err
 		}
 		pv, err := gw.SetProperty(ctx, actorID(ctx), "component", in.Name, in.Property,
-			componentPropertyInstance, raw, a.scopeFor(ctx, "component", "update"))
+			componentPropertyInstance, raw,
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update"))
 		if err != nil {
 			return nil, mapComponentPropertyErr(err)
 		}
@@ -143,10 +144,11 @@ func registerComponentPropertyRoutes(api huma.API, a *authenticator, gw storage.
 		Path:          "/components/{name}/properties/{property}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Clear a property on a component",
-		Description:   "Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.",
+		Description:   "Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 	}, "component", "update"), func(ctx context.Context, in *componentPropertyPathInput) (*struct{}, error) {
 		if err := gw.ClearProperty(ctx, actorID(ctx), "component", in.Name, in.Property,
-			componentPropertyInstance, a.scopeFor(ctx, "component", "update")); err != nil {
+			componentPropertyInstance,
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update")); err != nil {
 			return nil, mapComponentPropertyErr(err)
 		}
 		return nil, nil

@@ -104,10 +104,10 @@ func registerMemberRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/systems/{name}/members/{component}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Put a component in a system",
-		Description:   "Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+		Description:   "Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *systemMemberPathInput) (*struct{}, error) {
 		if err := gw.AddMember(ctx, actorID(ctx), in.Name, in.Component,
-			a.scopeFor(ctx, "system", "update")); err != nil {
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update")); err != nil {
 			return nil, mapMemberErr(err)
 		}
 		return nil, nil
@@ -119,10 +119,10 @@ func registerMemberRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/systems/{name}/members/{component}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Take a component out of a system",
-		Description:   "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+		Description:   "Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *systemMemberPathInput) (*struct{}, error) {
 		if err := gw.RemoveMember(ctx, actorID(ctx), in.Name, in.Component,
-			a.scopeFor(ctx, "system", "update")); err != nil {
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update")); err != nil {
 			return nil, mapMemberErr(err)
 		}
 		return nil, nil
@@ -134,10 +134,10 @@ func registerMemberRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/systems/{name}/members/{component}:setPrimary",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Make this the component's default system",
-		Description:   "Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+		Description:   "Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *systemMemberPathInput) (*struct{}, error) {
 		if err := gw.SetPrimaryMember(ctx, actorID(ctx), in.Name, in.Component,
-			a.scopeFor(ctx, "system", "update")); err != nil {
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update")); err != nil {
 			return nil, mapMemberErr(err)
 		}
 		return nil, nil

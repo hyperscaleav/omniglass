@@ -475,7 +475,7 @@ export interface paths {
         put?: never;
         /**
          * Raise an alarm on a component
-         * @description Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         * @description Records a condition on this component, then recomputes health in the same transaction: the component's own verdict moves, and if it is now outage (a critical alarm), any role it occupies loses it as an occupant while the alarm is active, which can move its system and location verdicts with it; a lesser (info or warning) alarm degrades the component but leaves it occupying its roles. Gated by component:update; read and update scopes drive the 404 versus 403 split.
          */
         post: operations["raise-component-alarm"];
         delete?: never;
@@ -496,7 +496,7 @@ export interface paths {
         post?: never;
         /**
          * Clear an alarm
-         * @description Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         * @description Marks the alarm cleared and recomputes health in the same transaction, so the recovery is recorded as a transition at the moment it happened. The row is kept: what was wrong and when outlives the fix. Clearing an alarm that is already cleared or does not exist is a 404. Gated by component:update; read and update scopes drive the 404 versus 403 split.
          */
         delete: operations["clear-component-alarm"];
         options?: never;
@@ -515,7 +515,7 @@ export interface paths {
         put?: never;
         /**
          * Acknowledge an alarm
-         * @description Records that a human has seen this alarm, and changes nothing else. The alarm stays exactly as raised as it was: acknowledging is not fixing, so health is NOT recomputed and cleared_at is untouched. Acknowledging is orthogonal to clearing in both directions, so a cleared alarm can still be acknowledged by whoever reviews the history, and clearing never acknowledges on an operator's behalf. Acknowledging twice is idempotent: the first person and the first time stay, and the no-op writes no second audit row. Gated by alarm:acknowledge, whose scope is resolved on the component tier from that permission (not from component:update); a component outside it is a non-disclosing 404.
+         * @description Records that a human has seen this alarm, and changes nothing else. The alarm stays exactly as raised as it was: acknowledging is not fixing, so health is NOT recomputed and cleared_at is untouched. Acknowledging is orthogonal to clearing in both directions, so a cleared alarm can still be acknowledged by whoever reviews the history, and clearing never acknowledges on an operator's behalf. Acknowledging twice is idempotent: the first person and the first time stay, and the no-op writes no second audit row. Gated by alarm:acknowledge, whose scope is resolved on the component tier from that permission (not from component:update); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not acknowledge on is a 403.
          */
         post: operations["acknowledge-component-alarm"];
         delete?: never;
@@ -714,13 +714,13 @@ export interface paths {
         get?: never;
         /**
          * Set a property on a component
-         * @description Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         * @description Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; read and update scopes drive the 404 versus 403 split.
          */
         put: operations["set-component-property"];
         post?: never;
         /**
          * Clear a property on a component
-         * @description Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; an out-of-scope component is a non-disclosing 404.
+         * @description Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; read and update scopes drive the 404 versus 403 split.
          */
         delete: operations["clear-component-property"];
         options?: never;
@@ -1490,13 +1490,13 @@ export interface paths {
         get?: never;
         /**
          * Set a property on a location
-         * @description Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; an out-of-scope location is a non-disclosing 404.
+         * @description Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; read and update scopes drive the 404 versus 403 split.
          */
         put: operations["set-location-property"];
         post?: never;
         /**
          * Clear a property on a location
-         * @description Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; an out-of-scope location is a non-disclosing 404.
+         * @description Removes the location's declared value, so the property falls back to the location type contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the location never set is a 404. Gated by location:update; read and update scopes drive the 404 versus 403 split.
          */
         delete: operations["clear-location-property"];
         options?: never;
@@ -3174,13 +3174,13 @@ export interface paths {
         get?: never;
         /**
          * Put a component in a system
-         * @description Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         * @description Binds this component into the system. Idempotent. A component's first membership becomes its primary with nobody asking, so a component in exactly one system never has to think about the concept; a later membership does not take that default away. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         put: operations["add-system-member"];
         post?: never;
         /**
          * Take a component out of a system
-         * @description Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         * @description Unbinds this component from the system. Refused with a 409 while it still fills a role here, since removing it would leave the system staffed by a non-member: unassign the role first. A component that was not a member is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         delete: operations["remove-system-member"];
         options?: never;
@@ -3199,7 +3199,7 @@ export interface paths {
         put?: never;
         /**
          * Make this the component's default system
-         * @description Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         * @description Moves the component's default to this membership. The default answers questions asked without a system in hand; it does not decide anything that names a system explicitly. A component that was not a member here is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         post: operations["set-primary-member"];
         delete?: never;
@@ -3258,13 +3258,13 @@ export interface paths {
         get?: never;
         /**
          * Set a property on a system
-         * @description Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         * @description Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         put: operations["set-system-property"];
         post?: never;
         /**
          * Clear a property on a system
-         * @description Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         * @description Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         delete: operations["clear-system-property"];
         options?: never;
@@ -3304,14 +3304,14 @@ export interface paths {
         post?: never;
         /**
          * Withdraw a role from a system
-         * @description Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         * @description Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         delete: operations["delete-system-role"];
         options?: never;
         head?: never;
         /**
          * Declare a role on a system
-         * @description Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         * @description Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and ["*"] replaces the whole declaration. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["set-system-role"];
         trace?: never;
@@ -3326,13 +3326,13 @@ export interface paths {
         get?: never;
         /**
          * Assign a component to a role
-         * @description Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         * @description Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         put: operations["assign-system-role"];
         post?: never;
         /**
          * Unassign a component from a role
-         * @description Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         * @description Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         delete: operations["unassign-system-role"];
         options?: never;
@@ -3351,7 +3351,7 @@ export interface paths {
         put?: never;
         /**
          * Exchange two occupants' positions within a role
-         * @description Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.
+         * @description Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         post: operations["swap-role-positions"];
         delete?: never;
