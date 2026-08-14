@@ -16,13 +16,18 @@ import (
 // the runtime here means regenerating the commands never regenerates the
 // transport or the flag contract.
 
-// jsonOrString coerces a non-scalar body flag's string into the value the API
+// jsonOrString coerces a structured body flag's string into the value the API
 // expects: it parses the input as JSON so `--value 30` sends the number 30,
 // `--value true` the boolean, and `--fields '{"k":"v"}'` the object. A string
 // that is not valid JSON (a bare `HDMI1`) falls back to itself, so the common
 // case needs no quoting; a string that looks like JSON (`30`, `true`) is quoted
-// to force a string (`--value '"30"'`). The generator emits this only for object,
-// array, and untyped `any` body fields; plain scalars pass through unchanged.
+// to force a string (`--value '"30"'`).
+//
+// Its reach narrowed with #711. A scalar the schema names now takes a flag of
+// that type (an integer flag refuses `soon` at the shell), so this is emitted
+// only where there is no flag type to carry the value: an object, an array, an
+// untyped `any`, and a nullable number or boolean, whose `null` a typed flag
+// could not send. See flagShape in cmd/cligen for the whole rule.
 func jsonOrString(s string) any {
 	var v any
 	if json.Unmarshal([]byte(s), &v) == nil {

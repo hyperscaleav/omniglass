@@ -100,7 +100,7 @@ Mints a CLI/API token for the caller and returns it once (store it now; it canno
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the token is for (required) |
-| `--ttl-days` | string | (none) | Days until the token expires (default 90, maximum 365) |
+| `--ttl-days` | int | `0` | Days until the token expires (default 90, maximum 365) |
 
 Example:
 
@@ -288,7 +288,7 @@ Registers a custom command type (official=false). The name must be a single keba
 | `--display-name` | string | (none) | A human label |
 | `--name` | string | (none) | The command type name (lowercase kebab) |
 | `--params-schema` | string | (none) | A JSON Schema fragment for the params |
-| `--settle-window-seconds` | string | (none) | The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so. |
+| `--settle-window-seconds` | int | `0` | The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so. |
 | `--target-metric-type` | string | (none) | The metric this command sets, for settlement (at most one target arm) |
 | `--target-property-type` | string | (none) | The property this command sets, for settlement (at most one target arm) |
 
@@ -361,7 +361,7 @@ Patches a custom command type's label, description, params schema, settle window
 | `--description` | string | (none) | What the command does |
 | `--display-name` | string | (none) | A human label |
 | `--params-schema` | string | (none) | A JSON Schema fragment (replaces wholesale) |
-| `--settle-window-seconds` | string | (none) | The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately) |
+| `--settle-window-seconds` | int | `0` | The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately) |
 | `--target-metric-type` | string | (none) | The metric this command sets (empty clears it; a non-empty arm clears the other) |
 | `--target-property-type` | string | (none) | The property this command sets (empty clears it; a non-empty arm clears the other) |
 
@@ -827,7 +827,7 @@ Declares a value for the property on this component, overriding the product cont
 Example:
 
 ```sh
-omniglass component property update <name> <property> --value value
+omniglass component property update <name> <property> --value <json>
 ```
 
 ### `omniglass component reachability`
@@ -1323,7 +1323,7 @@ Stores the uploaded bytes as a content-addressed blob (identical bytes dedup to 
 | `--content` | string | (none) | The file bytes, base64-encoded |
 | `--content-type` | string | (none) | The MIME type used to serve the file |
 | `--name` | string | (none) | The file's display name (a label, no path separators) |
-| `--sensitive` | string | (none) | Admin-only visibility; defaults false. Setting true requires the admin tier |
+| `--sensitive` | bool | `false` | Admin-only visibility; defaults false. Setting true requires the admin tier |
 
 Example:
 
@@ -1750,7 +1750,7 @@ Declares a value for the property on this location, overriding the location type
 Example:
 
 ```sh
-omniglass location property update <name> <property> --value value
+omniglass location property update <name> <property> --value <json>
 ```
 
 ### `omniglass location recomputeLabels`
@@ -1999,7 +1999,7 @@ Declares a catalog metric on a location type, or revises the declaration in plac
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--default-value` | string | (none) | The contract default, validated against the metric's data_type; omit for no default |
-| `--required` | string | (none) | Whether every location of this type must carry the metric; defaults to false |
+| `--required` | bool | `false` | Whether every location of this type must carry the metric; defaults to false |
 
 Example:
 
@@ -2056,7 +2056,7 @@ Declares a catalog property on a location type, or revises the declaration in pl
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--default-value` | string | (none) | The contract default, validated against the property's data_type; omit for no default |
-| `--required` | string | (none) | Whether every location of this type must set the property; defaults to false |
+| `--required` | bool | `false` | Whether every location of this type must set the property; defaults to false |
 
 Example:
 
@@ -2125,7 +2125,7 @@ Registers a custom metric type (official=false). The name must be a valid metric
 | `--description` | string | (none) | What the series measures |
 | `--display-name` | string | (none) | A human label |
 | `--name` | string | (none) | The metric type name (lowercase kebab) |
-| `--precision` | string | (none) | Decimal places a rendered value keeps |
+| `--precision` | int | `0` | Decimal places a rendered value keeps |
 | `--unit` | string | (none) | The display unit of the series (ms, dB, percent) |
 
 Example:
@@ -2196,7 +2196,7 @@ Patches a custom metric type's label, description, unit, or precision (a nil fie
 |---|---|---|---|
 | `--description` | string | (none) | What the series measures |
 | `--display-name` | string | (none) | A human label |
-| `--precision` | string | (none) | Decimal places a rendered value keeps |
+| `--precision` | int | `0` | Decimal places a rendered value keeps |
 | `--unit` | string | (none) | The display unit of the series |
 
 Example:
@@ -2606,7 +2606,7 @@ Mints a bounded, revocable token to view as (read-only) or act as (full) the tar
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--duration-minutes` | string | (none) | Session lifetime in minutes (default 30, max 1440) |
+| `--duration-minutes` | int | `0` | Session lifetime in minutes (default 30, max 1440) |
 | `--mode` | string | (none) | view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal |
 
 Example:
@@ -3161,7 +3161,7 @@ Declares a catalog metric on a custom product, or revises the declaration in pla
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--default-value` | string | (none) | The contract default, validated against the metric's data_type; omit for no default |
-| `--required` | string | (none) | Whether every instance of this product must carry the metric; defaults to false |
+| `--required` | bool | `false` | Whether every instance of this product must carry the metric; defaults to false |
 
 Example:
 
@@ -3218,7 +3218,7 @@ Declares a catalog property on a custom product, or revises the declaration in p
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--default-value` | string | (none) | The contract default, validated against the property's data_type; omit for no default |
-| `--required` | string | (none) | Whether every instance of this product must set the property; defaults to false |
+| `--required` | bool | `false` | Whether every instance of this product must set the property; defaults to false |
 
 Example:
 
@@ -3403,7 +3403,7 @@ Seals a secret at an owner scope. Fields are validated and encrypted against the
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--admin-sensitive` | string | (none) | Admin-only visibility; omit to use the type default. Setting true requires the admin tier |
+| `--admin-sensitive` | bool | `false` | Admin-only visibility; omit to use the type default. Setting true requires the admin tier |
 | `--fields` | string | (none) | The operator field map, validated against the type shape |
 | `--name` | string | (none) | The cascade name (lowercase letters, digits, and hyphens); unique per owner |
 | `--owner` | string | (none) | The owning entity's name; omit for a platform secret |
@@ -3413,7 +3413,7 @@ Seals a secret at an owner scope. Fields are validated and encrypted against the
 Example:
 
 ```sh
-omniglass secret create --fields fields --name name --owner-kind owner_kind --secret-type secret_type
+omniglass secret create --fields <json> --name name --owner-kind owner_kind --secret-type secret_type
 ```
 
 ### `omniglass secret delete`
@@ -3481,7 +3481,7 @@ Replaces the given field values on a secret, re-sealing secret fields. Only valu
 Example:
 
 ```sh
-omniglass secret update <id> --fields fields
+omniglass secret update <id> --fields <json>
 ```
 
 ## `omniglass secret-type`
@@ -3803,7 +3803,7 @@ Declares a catalog metric on a custom standard, or revises the declaration in pl
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--default-value` | string | (none) | The contract default, validated against the metric's data_type; omit for no default |
-| `--required` | string | (none) | Whether every system conforming to this standard must carry the metric; defaults to false |
+| `--required` | bool | `false` | Whether every system conforming to this standard must carry the metric; defaults to false |
 
 Example:
 
@@ -3860,7 +3860,7 @@ Declares a catalog property on a custom standard, or revises the declaration in 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--default-value` | string | (none) | The contract default, validated against the property's data_type; omit for no default |
-| `--required` | string | (none) | Whether every system conforming to this standard must set the property; defaults to false |
+| `--required` | bool | `false` | Whether every system conforming to this standard must set the property; defaults to false |
 
 Example:
 
@@ -3918,12 +3918,12 @@ Declares a role every conforming system needs filled, or revises it in place (th
 |---|---|---|---|
 | `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask |
 | `--alternate` | string | (none) | The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 |
-| `--capacity` | string | (none) | The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded |
+| `--capacity` | int | `0` | The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded |
 | `--display-name` | string | (none) | The role's human label; defaults to the role name on first declare |
 | `--impact` | string | (none) | What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
 | `--pinned-products` | string | (none) | If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask |
 | `--position-labels` | string | (none) | Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask |
-| `--quorum` | string | (none) | How many components must fill the role; one on first declare |
+| `--quorum` | int | `0` | How many components must fill the role; one on first declare |
 | `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send ["*"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it |
 
 Example:
@@ -4267,7 +4267,7 @@ Declares a value for the property on this system, overriding the standard contra
 Example:
 
 ```sh
-omniglass system property update <name> <property> --value value
+omniglass system property update <name> <property> --value <json>
 ```
 
 ### `omniglass system recomputeLabels`
@@ -4450,13 +4450,13 @@ Exchanges the positions of whichever components currently hold position and with
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--position` | string | (none) | One of the two positions to exchange |
-| `--with` | string | (none) | The other position to exchange with |
+| `--position` | int | `0` | One of the two positions to exchange |
+| `--with` | int | `0` | The other position to exchange with |
 
 Example:
 
 ```sh
-omniglass system role swapPositions <name> <role> --position position --with with
+omniglass system role swapPositions <name> <role> --position <int> --with <int>
 ```
 
 #### `omniglass system role update`
@@ -4473,12 +4473,12 @@ Declares a role directly on this system (how a one-off system gets roles at all,
 |---|---|---|---|
 | `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask |
 | `--alternate` | string | (none) | The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 |
-| `--capacity` | string | (none) | The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded |
+| `--capacity` | int | `0` | The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded |
 | `--display-name` | string | (none) | The role's human label; defaults to the role name on first declare |
 | `--impact` | string | (none) | What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
 | `--pinned-products` | string | (none) | If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask |
 | `--position-labels` | string | (none) | Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask |
-| `--quorum` | string | (none) | How many components must fill the role; one on first declare |
+| `--quorum` | int | `0` | How many components must fill the role; one on first declare |
 | `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send ["*"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it |
 
 Example:
@@ -4651,7 +4651,7 @@ Adds a key to the governed vocabulary. The name is normalized (a lowercase ident
 | `--allowed-values` | string | (none) | The value enum a bound value must belong to; omit for free text |
 | `--applies-to` | string | (none) | Entity kinds this key may bind to (component, system, location); omit for universal |
 | `--name` | string | (none) | The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide |
-| `--propagates` | string | (none) | Whether bindings cascade to descendants; defaults true |
+| `--propagates` | bool | `false` | Whether bindings cascade to descendants; defaults true |
 
 Example:
 
@@ -4725,7 +4725,7 @@ Replaces a key's governance fields (applies_to, propagates); the name is fixed. 
 |---|---|---|---|
 | `--allowed-values` | string | (none) | The value enum a bound value must belong to; omit for free text |
 | `--applies-to` | string | (none) | Entity kinds this key may bind to; omit for universal |
-| `--propagates` | string | (none) | Whether bindings cascade to descendants; defaults true |
+| `--propagates` | bool | `false` | Whether bindings cascade to descendants; defaults true |
 
 Example:
 
@@ -4812,7 +4812,7 @@ Accepts per-lane observations (metrics, properties, events) and raw log lines fo
 Example:
 
 ```sh
-omniglass telemetry push --owner owner
+omniglass telemetry push --owner <json>
 ```
 
 ## `omniglass token`
@@ -4855,7 +4855,7 @@ Sets a variable at an owner scope. The value is validated against value_type. Ga
 Example:
 
 ```sh
-omniglass variable create --name name --owner-kind owner_kind --value value --value-type value_type
+omniglass variable create --name name --owner-kind owner_kind --value <json> --value-type value_type
 ```
 
 ### `omniglass variable delete`
@@ -4907,7 +4907,7 @@ Replaces a variable's value, validated against its fixed value_type. Only the va
 Example:
 
 ```sh
-omniglass variable update <id> --value value
+omniglass variable update <id> --value <json>
 ```
 
 ## `omniglass vendor`

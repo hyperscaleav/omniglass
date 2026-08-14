@@ -112,22 +112,33 @@ type property struct {
 }
 
 // jsonType is an OpenAPI `type` that may be a single string ("string") or, for a
-// nullable schema, an array (`["array", "null"]`). It resolves to the first
-// non-null member, or "" for an absent/untyped `any`.
-type jsonType string
+// nullable schema, an array (`["array", "null"]`). Name is the first non-null
+// member, or "" for an absent/untyped `any` (a bare $ref included, since a $ref
+// carries no type of its own).
+//
+// Nullable is kept rather than discarded because it decides the FLAG: a typed
+// scalar flag has no way to send `null`, and `null` is the value that clears a
+// field named in an update mask (ADR-0106).
+type jsonType struct {
+	Name     string
+	Nullable bool
+}
 
 func (t *jsonType) UnmarshalJSON(b []byte) error {
 	var s string
 	if json.Unmarshal(b, &s) == nil {
-		*t = jsonType(s)
+		t.Name = s
 		return nil
 	}
 	var arr []string
 	if json.Unmarshal(b, &arr) == nil {
 		for _, x := range arr {
-			if x != "null" {
-				*t = jsonType(x)
-				return nil
+			if x == "null" {
+				t.Nullable = true
+				continue
+			}
+			if t.Name == "" {
+				t.Name = x
 			}
 		}
 	}
@@ -156,12 +167,64 @@ type bodyField struct {
 	Var      string // generated Go variable name
 	Desc     string
 	Required bool
-	// JSON marks a field whose value is not a plain scalar (an object, an array,
-	// or an untyped `any`): its flag still takes a string, but the string is
-	// parsed as JSON (with a bare-string fallback) before it enters the request
-	// body, so `--value 30` sends the number 30 and `--fields '{"k":"v"}'` sends
-	// the object, not their quoted-string forms.
+	GoType   string // Go flag variable type: string, int, float64, bool
+	FlagFunc string // cobra flag setter: StringVar, IntVar, Float64Var, BoolVar
+	Zero     string // Go source for the flag default: "", 0, false
+	// JSON marks a field whose value has no scalar flag type of its own (an
+	// object, an array, an untyped `any`, or a nullable scalar): its flag takes a
+	// string, and the string is parsed as JSON (with a bare-string fallback)
+	// before it enters the request body, so `--value 30` sends the number 30 and
+	// `--fields '{"k":"v"}'` sends the object, not their quoted-string forms.
 	JSON bool
+}
+
+// flagShape maps one body property's schema type to the cobra flag that carries
+// it (#711). It is the whole of the decision, so it is one function.
+//
+// A scalar the shell can type takes that flag TYPE, because the type is a fact
+// the schema already states and restating it as a string moves the refusal from
+// the shell to the server's 422. That is the generate-first rule applied to the
+// generator itself.
+//
+// Everything else keeps ONE string flag parsed as JSON, and that is a decision
+// rather than a leftover:
+//
+//   - An object or an array has no shell-native flag type. The alternatives are a
+//     repeated key=value pair (pflag's StringToString), which cannot express
+//     nesting or an array member, or a flag per leaf, which would make the flag
+//     NAMES depend on how deep a $ref happens to nest and rename them whenever it
+//     changes. One JSON string is the shape the wire already has.
+//   - `null` must stay sendable. A nullable object or array is cleared by naming
+//     it in `update_mask` and sending null (ADR-0106), and a typed flag has no
+//     null: `--name-rule null` is the only spelling of that clear. A nullable
+//     NUMBER or BOOLEAN keeps the JSON spelling for that reason, though the spec
+//     carries none today: the rule lives here rather than being rediscovered.
+//   - An untyped `any` (a property with no `type`, which is how a $ref and a
+//     free-shape value both arrive) has nothing to derive a flag type from, and
+//     jsonOrString's bare-string fallback is what lets `--value HDMI1` stay
+//     unquoted while `--value 30` sends the number.
+//
+// A nullable STRING is the one nullable case that stays a plain string flag: a
+// string field on this API is cleared by the empty string rather than by null,
+// and routing it through JSON would hand it the quoting hazard the string
+// passthrough exists to avoid (a name that is literally `30`).
+func flagShape(t jsonType) (goType, flagFunc, zero string, asJSON bool) {
+	switch t.Name {
+	case "string":
+		return "string", "StringVar", `""`, false
+	case "integer", "number", "boolean":
+		if t.Nullable {
+			break
+		}
+		if t.Name == "integer" {
+			return "int", "IntVar", "0", false
+		}
+		if t.Name == "number" {
+			return "float64", "Float64Var", "0", false
+		}
+		return "bool", "BoolVar", "false", false
+	}
+	return "string", "StringVar", `""`, true
 }
 
 // queryField is one OpenAPI query parameter surfaced as a cobra flag. The flag
@@ -380,20 +443,17 @@ func bodyFields(doc spec, op operation) []bodyField {
 
 	var fields []bodyField
 	for _, k := range props {
-		// A string property passes through as its flag string; every other type
-		// (boolean, number, integer, object, array, or an untyped `any` value) is
-		// JSON-parsed so a typed or structured value survives the wire. A string is
-		// the sole passthrough so a value that looks like JSON (a name `30`, a label
-		// `true`) stays a string; a `--propagates false` becomes a JSON boolean, not
-		// the string "false" a boolean body field would reject.
-		raw := string(sc.Properties[k].Type) == "string"
+		goType, flagFunc, zero, asJSON := flagShape(sc.Properties[k].Type)
 		fields = append(fields, bodyField{
 			Name:     k,
 			Flag:     strings.ReplaceAll(k, "_", "-"),
 			Var:      "f" + goIdent(k),
 			Desc:     sc.Properties[k].Description,
 			Required: required[k],
-			JSON:     !raw,
+			GoType:   goType,
+			FlagFunc: flagFunc,
+			Zero:     zero,
+			JSON:     asJSON,
 		})
 	}
 	return fields
@@ -406,10 +466,25 @@ func example(words, args []string, body []bodyField) string {
 	}
 	for _, f := range body {
 		if f.Required {
-			parts = append(parts, "--"+f.Flag+" "+f.Name)
+			parts = append(parts, "--"+f.Flag+" "+placeholder(f))
 		}
 	}
 	return "  " + strings.Join(parts, " ")
+}
+
+// placeholder is what a required flag shows in the rendered example. A string
+// flag keeps the field name, which reads as the value an operator would type
+// there; every other flag names what it TAKES, because `--position position` is a
+// line that looks runnable and is not, and with a typed flag it is now refused by
+// the parser rather than by the server.
+func placeholder(f bodyField) string {
+	if f.JSON {
+		return "<json>"
+	}
+	if f.GoType == "string" {
+		return f.Name
+	}
+	return "<" + f.GoType + ">"
 }
 
 // --- grouping ---------------------------------------------------------------
@@ -614,7 +689,7 @@ func generatedCommands() []*cobra.Command {
 
 {{define "leaf"}}func() *cobra.Command {
 		{{- range $f := .Body}}
-		var {{$f.Var}} string
+		var {{$f.Var}} {{$f.GoType}}
 		{{- end}}
 		{{- range $q := .Query}}
 		var {{$q.Var}} {{$q.GoType}}
@@ -652,7 +727,7 @@ func generatedCommands() []*cobra.Command {
 			},
 		}
 		{{- range $f := .Body}}
-		cmd.Flags().StringVar(&{{$f.Var}}, {{quote $f.Flag}}, "", {{quote $f.Desc}})
+		cmd.Flags().{{$f.FlagFunc}}(&{{$f.Var}}, {{quote $f.Flag}}, {{$f.Zero}}, {{quote $f.Desc}})
 		{{- if $f.Required}}
 		_ = cmd.MarkFlagRequired({{quote $f.Flag}})
 		{{- end}}

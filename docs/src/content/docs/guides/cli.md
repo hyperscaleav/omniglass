@@ -57,6 +57,32 @@ omniglass location rename hq --name hq-west          # needs location:rename, no
 Output is JSON. A non-2xx response prints the server's error body and exits non-zero, so
 the CLI is safe in scripts.
 
+### A flag carries the schema's own type
+
+The commands are generated from the [API](/reference/api/), so a request field's type is a fact the
+spec already states and the flag carries it
+([#711](https://github.com/hyperscaleav/omniglass/issues/711)). An `integer` field is an integer flag
+and `--settle-window-seconds soon` is refused **by the shell**, before a request is issued, rather
+than by the server's 422 after a round trip. A `boolean` field is a bool flag, which is the one shape
+with a spelling to learn: write `--propagates=false`, since a bare `--propagates` means true and
+`--propagates false` reads `false` as a positional argument.
+
+A field with no scalar type of its own (an object, an array, or a free-shape value) takes **one
+string flag parsed as JSON**, which is a deliberate choice rather than a leftover. A nested value has
+no shell-native flag type, and the alternatives (repeated `key=value` pairs, or a flag per leaf) can
+express neither an array member nor `null`, which is the value that clears a field named in an
+`update_mask` ([ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask)):
+
+```sh
+omniglass location-type create --name wing --display-name Wing \
+  --name-rule '{"stem":"wing","bare_first":true}'   # an object, as JSON
+omniglass location-type update wing --update-mask name_rule --name-rule null   # clears it
+omniglass tag create --name rack-position --applies-to '["location"]'          # an array, as JSON
+```
+
+A bare word that is not valid JSON falls back to itself, so the common case needs no quoting
+(`--value HDMI1`); a string that would parse as JSON is quoted to force a string (`--value '"30"'`).
+
 A name is renameable, and a rename is its own command rather than a flag on `update`: `component`,
 `system`, `location`, and `principal-group` each carry one, gated by `<resource>:rename`, which is
 granted separately because moving a name breaks the references stored outside Omniglass (bookmarks,
@@ -408,7 +434,7 @@ are the same three verbs, and the contract commands hang off the classifier that
 omniglass product property list cisco-room-bar                         # a product's contract
 omniglass standard property list huddle-room                           # a standard's contract
 omniglass location-type property list room                             # a location type's contract
-omniglass standard property update huddle-room room-capacity --default-value 6 --required true
+omniglass standard property update huddle-room room-capacity --default-value 6 --required=true
 omniglass standard property delete huddle-room room-capacity        # systems keep any value they set
 
 omniglass component property list dsp-boardroom-3                      # the effective read

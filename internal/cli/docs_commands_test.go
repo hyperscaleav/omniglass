@@ -50,19 +50,31 @@ func checkFlags(idx map[string]*cobra.Command, tail string) error {
 	if cmd == nil {
 		return nil
 	}
-	for _, t := range tokens {
+	for i, t := range tokens {
 		if !strings.HasPrefix(t, "--") {
 			continue
 		}
 		name := strings.TrimPrefix(t, "--")
-		if i := strings.IndexByte(name, '='); i >= 0 {
-			name = name[:i]
+		hasValue := false
+		if j := strings.IndexByte(name, '='); j >= 0 {
+			name, hasValue = name[:j], true
 		}
 		if name == "" || !flagNameShape.MatchString(name) {
 			continue // a literal placeholder like --<flag> is not a claim
 		}
-		if cmd.Flags().Lookup(name) == nil && cmd.InheritedFlags().Lookup(name) == nil {
+		f := cmd.Flags().Lookup(name)
+		if f == nil {
+			f = cmd.InheritedFlags().Lookup(name)
+		}
+		if f == nil {
 			return fmt.Errorf("%q: command %q has no --%s flag", "omniglass "+tail, cmd.CommandPath(), name)
+		}
+		if hasValue || f.Value.Type() != "bool" || i+1 >= len(tokens) {
+			continue
+		}
+		if next := strings.ToLower(tokens[i+1]); next == "true" || next == "false" {
+			return fmt.Errorf("%q: --%s is a bool flag, so %q is read as a positional argument, not its value; write --%s=%s",
+				"omniglass "+tail, name, tokens[i+1], name, next)
 		}
 	}
 	return nil
@@ -217,7 +229,14 @@ func TestDocsOnlyNameRealCommands(t *testing.T) {
 
 // TestCheckFlagsValidatesDocumentedFlags pins the flag check: a real flag and
 // an inherited persistent flag pass, a phantom flag fires, =value forms parse,
-// and an unresolvable command is not this check's finding.
+// an unresolvable command is not this check's finding, and a bool flag handed a
+// space-separated value fires.
+//
+// The last one is #711's guard. Body flags now carry the schema's type, so a
+// boolean is a real bool flag and `--required true` no longer means what it
+// reads as: pflag takes `true` as a positional argument and the command fails on
+// its argument count. That is a documented line which cannot work, which is
+// exactly what this check exists to catch, and it caught one in the CLI guide.
 func TestCheckFlagsValidatesDocumentedFlags(t *testing.T) {
 	idx := commandIndex(Root("test"))
 
@@ -235,5 +254,14 @@ func TestCheckFlagsValidatesDocumentedFlags(t *testing.T) {
 	}
 	if err := checkFlags(idx, "nonexistent-noun list --whatever"); err != nil {
 		t.Errorf("unresolvable command is checkInvocation's finding, not ours: %v", err)
+	}
+	if err := checkFlags(idx, "tag create --name rack-position --propagates false"); err == nil {
+		t.Error("a bool flag given a space-separated value was accepted; want a rejection naming the =value form")
+	}
+	if err := checkFlags(idx, "tag create --name rack-position --propagates=false"); err != nil {
+		t.Errorf("the =value form of a bool flag rejected: %v", err)
+	}
+	if err := checkFlags(idx, "command-type create --name set-input --settle-window-seconds 15"); err != nil {
+		t.Errorf("an int flag with its value rejected: %v", err)
 	}
 }
