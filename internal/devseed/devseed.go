@@ -782,7 +782,7 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string, l
 			DisplayName:  "HQ Edge Node",
 			Description:  "HQ network closet",
 			LocationName: &closetID,
-		}, all); err != nil {
+		}, all, all); err != nil {
 			return fmt.Errorf("devseed: create reachability node: %w", err)
 		}
 		token, hash, _, err := auth.NewBearerToken()

@@ -52,7 +52,7 @@ func TestCollectionReferencesSurviveARename(t *testing.T) {
 		t.Fatalf("component: %v", err)
 	}
 	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{
-		Name: "edge", LocationName: strptr("old-room")}, all); err != nil {
+		Name: "edge", LocationName: strptr("old-room")}, all, all); err != nil {
 		t.Fatalf("node: %v", err)
 	}
 	// One interface carrying both arcs at once: owned by the component, placed on

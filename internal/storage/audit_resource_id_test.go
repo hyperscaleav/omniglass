@@ -83,7 +83,7 @@ func auditedRenames() []auditedRename {
 		{
 			resource: "node",
 			create: func(ctx context.Context, gw *storage.PG, name string) (string, error) {
-				n, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all)
+				n, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all, all)
 				if err != nil {
 					return "", err
 				}

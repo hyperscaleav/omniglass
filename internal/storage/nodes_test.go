@@ -40,17 +40,17 @@ func TestNodeGateway(t *testing.T) {
 	all := scope.Set{All: true}
 
 	// Create requires an all-scope grant (node is estate-wide, not tree-scoped).
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a", Description: "lab a"}, scope.Set{}); !errors.Is(err, storage.ErrNodeForbidden) {
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a", Description: "lab a"}, scope.Set{}, all); !errors.Is(err, storage.ErrNodeForbidden) {
 		t.Fatalf("create without all-scope: want ErrNodeForbidden, got %v", err)
 	}
-	n, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a", Description: "lab a"}, all)
+	n, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a", Description: "lab a"}, all, all)
 	if err != nil {
 		t.Fatalf("create node: %v", err)
 	}
 	if n.Name != "node-a" || n.Enrolled || n.PrincipalID == "" {
 		t.Fatalf("fresh node: want name node-a, not enrolled, with a principal id, got %+v", n)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all); !errors.Is(err, storage.ErrNodeExists) {
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); !errors.Is(err, storage.ErrNodeExists) {
 		t.Fatalf("duplicate node: want ErrNodeExists, got %v", err)
 	}
 
@@ -197,7 +197,7 @@ func TestNodeNameSubjectSafety(t *testing.T) {
 	// gateway refuses cleanly and writes no row; which of the two refusals fires is
 	// an implementation detail, and both map to 422.
 	for _, bad := range []string{"bad.name", "*", ">", "has space", "tab\tname"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: bad, Description: "subject-unsafe"}, all); !errors.Is(err, storage.ErrInvalidNodeName) && !errors.Is(err, storage.ErrInvalidEntityName) {
+		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: bad, Description: "subject-unsafe"}, all, all); !errors.Is(err, storage.ErrInvalidNodeName) && !errors.Is(err, storage.ErrInvalidEntityName) {
 			t.Fatalf("create node %q: want ErrInvalidNodeName or ErrInvalidEntityName, got %v", bad, err)
 		}
 		// "bad.name" is dot-joined, so #627 Task 12's RejectAddressForm now
@@ -220,7 +220,7 @@ func TestNodeNameSubjectSafety(t *testing.T) {
 	}
 
 	// A subject-safe name still succeeds.
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-safe", Description: "ok"}, all); err != nil {
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-safe", Description: "ok"}, all, all); err != nil {
 		t.Fatalf("create valid node: %v", err)
 	}
 }
@@ -288,7 +288,7 @@ func TestNodeIdentityAndEdit(t *testing.T) {
 	// Create carries display_name and location.
 	n, err := gw.CreateNode(ctx, "", storage.NodeSpec{
 		Name: "edge-hq", DisplayName: "HQ Closet Node", Description: "rack 3", LocationName: &closet.Name,
-	}, all)
+	}, all, all)
 	if err != nil {
 		t.Fatalf("create node: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestNodeIdentityAndEdit(t *testing.T) {
 	str := func(s string) *string { return &s }
 
 	// Patch display_name only: description and location are untouched (nil = unchanged).
-	up, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{DisplayName: str("HQ Node")}, all, all)
+	up, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{DisplayName: str("HQ Node")}, all, all, all)
 	if err != nil {
 		t.Fatalf("update display_name: %v", err)
 	}
@@ -311,7 +311,7 @@ func TestNodeIdentityAndEdit(t *testing.T) {
 	}
 
 	// Move the location to another valid one.
-	up, err = gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: &other.Name}, all, all)
+	up, err = gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: &other.Name}, all, all, all)
 	if err != nil {
 		t.Fatalf("relocate: %v", err)
 	}
@@ -320,7 +320,7 @@ func TestNodeIdentityAndEdit(t *testing.T) {
 	}
 
 	// Clear the location (a pointer to "").
-	up, err = gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: str("")}, all, all)
+	up, err = gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: str("")}, all, all, all)
 	if err != nil {
 		t.Fatalf("clear location: %v", err)
 	}
@@ -329,22 +329,22 @@ func TestNodeIdentityAndEdit(t *testing.T) {
 	}
 
 	// An unknown location is rejected (the location FK), not silently applied.
-	if _, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: str("ghost-room")}, all, all); !errors.Is(err, storage.ErrLocationNotFound) {
+	if _, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: str("ghost-room")}, all, all, all); !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Fatalf("unknown location: want ErrLocationNotFound, got %v", err)
 	}
 
 	// Estate-wide: an update without all-scope is forbidden; an unknown node is not found.
-	if _, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{DisplayName: str("x")}, scope.Set{}, scope.Set{}); !errors.Is(err, storage.ErrNodeForbidden) {
+	if _, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{DisplayName: str("x")}, scope.Set{}, scope.Set{}, all); !errors.Is(err, storage.ErrNodeForbidden) {
 		t.Fatalf("update without all-scope: want ErrNodeForbidden, got %v", err)
 	}
-	if _, err := gw.UpdateNode(ctx, "", "ghost", storage.NodePatch{DisplayName: str("x")}, all, all); !errors.Is(err, storage.ErrNodeNotFound) {
+	if _, err := gw.UpdateNode(ctx, "", "ghost", storage.NodePatch{DisplayName: str("x")}, all, all, all); !errors.Is(err, storage.ErrNodeNotFound) {
 		t.Fatalf("update unknown node: want ErrNodeNotFound, got %v", err)
 	}
 
 	// The location FK is ON DELETE SET NULL: place the node, delete its location,
 	// the node survives with a cleared placement (deleted via a probe, since
 	// location-delete guards are not the unit under test).
-	if _, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: &closet.Name}, all, all); err != nil {
+	if _, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{LocationName: &closet.Name}, all, all, all); err != nil {
 		t.Fatalf("re-place before delete: %v", err)
 	}
 	probe, err := pgx.Connect(ctx, dsn)
@@ -387,7 +387,7 @@ func TestDeleteNode(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dsp-1"}, all, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
-	node, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-del"}, all)
+	node, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-del"}, all, all)
 	if err != nil {
 		t.Fatalf("create node: %v", err)
 	}

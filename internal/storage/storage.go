@@ -501,8 +501,12 @@ type Gateway interface {
 	// is estate-wide (all-scope create/enroll/read, like a principal). The claim,
 	// authenticate, heartbeat, and worklist paths are the node's own lane (gated by
 	// the enrollment token or the node's NATS subject grant, not RBAC scope).
-	CreateNode(ctx context.Context, actorID string, spec NodeSpec, create scope.Set) (*Node, error)
-	UpdateNode(ctx context.Context, actorID, name string, patch NodePatch, read, action scope.Set) (*Node, error)
+	//
+	// locationRead is the PLACEMENT's scope on both write paths, the same set a
+	// system and a component create take for the same reference (#700, #705):
+	// create says who may write a node, this says which locations it may name.
+	CreateNode(ctx context.Context, actorID string, spec NodeSpec, create, locationRead scope.Set) (*Node, error)
+	UpdateNode(ctx context.Context, actorID, name string, patch NodePatch, read, action, locationRead scope.Set) (*Node, error)
 	DeleteNode(ctx context.Context, actorID, name string, read, action scope.Set) error
 	SetEnrollmentToken(ctx context.Context, actorID, name, tokenHashHex string, action scope.Set) (*Node, error)
 	ClaimNode(ctx context.Context, name, tokenHashHex string) (*Node, error)

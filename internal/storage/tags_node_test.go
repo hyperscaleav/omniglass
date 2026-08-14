@@ -21,7 +21,7 @@ func TestNodeTags(t *testing.T) {
 	gw := tagGateway(t)
 	ctx := context.Background()
 
-	node, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all)
+	node, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all, all)
 	if err != nil {
 		t.Fatalf("create node: %v", err)
 	}

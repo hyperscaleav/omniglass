@@ -101,7 +101,7 @@ func scanNode(row pgx.Row) (*Node, error) {
 // writing the audit row in the same transaction (mirroring the human/service
 // create). A node is estate-wide, so creation requires an all create scope (like
 // a principal, unlike a tree-scoped location/system/component).
-func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, create scope.Set) (*Node, error) {
+func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, create, locationRead scope.Set) (*Node, error) {
 	if !create.All {
 		return nil, ErrNodeForbidden
 	}
@@ -114,7 +114,7 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	locationID, err := nodeLocationID(ctx, tx, spec.LocationName)
+	locationID, err := nodeLocationID(ctx, tx, spec.LocationName, locationRead)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 // not patched: it is the immutable estate address and enrollment identity. A
 // node is estate-wide, so the update requires an all scope, like create. An
 // unknown name is ErrNodeNotFound; an unknown location is ErrLocationNotFound.
-func (p *PG) UpdateNode(ctx context.Context, actorID, name string, patch NodePatch, read, action scope.Set) (*Node, error) {
+func (p *PG) UpdateNode(ctx context.Context, actorID, name string, patch NodePatch, read, action, locationRead scope.Set) (*Node, error) {
 	if err := RejectAddressForm("node", name); err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func (p *PG) UpdateNode(ctx context.Context, actorID, name string, patch NodePat
 	} else if err != nil {
 		return nil, fmt.Errorf("storage: read node for update %q: %w", name, err)
 	}
-	locationID, err := nodeLocationID(ctx, tx, patch.LocationName)
+	locationID, err := nodeLocationID(ctx, tx, patch.LocationName, locationRead)
 	if err != nil {
 		return nil, err
 	}
@@ -455,18 +455,40 @@ func mapNodeWriteErr(err error) error {
 }
 
 // nodeLocationID resolves an optional placement reference (a location name or a
-// uuid) to the location id the arc stores. A nil reference leaves the placement
-// unchanged and an empty one clears it, so both map to a nil id; an unknown
-// location is ErrLocationNotFound rather than a NULL that would silently unplace
-// the node.
-func nodeLocationID(ctx context.Context, q querier, ref *string) (*string, error) {
+// uuid) to the location id the arc stores, within the caller's location:read
+// scope. A nil reference leaves the placement unchanged and an empty one clears
+// it, so both map to a nil id; an unknown location is ErrLocationNotFound rather
+// than a NULL that would silently unplace the node.
+//
+// resolvePlacementRef is the seam #700 built for exactly this reference on the
+// component and the system tiers, and this is the one caller-supplied reference
+// that arc left resolving scope-blind (#705). Two of its three reasons apply
+// here verbatim. The caller's own node create/update scope is the WRONG SET, not
+// merely a stricter one: it is resolved for "node", and a location's scope tree
+// is its own unrelated ancestor chain, so checking it against the location table
+// could never match. And out of scope answers the same non-disclosing
+// ErrLocationNotFound an absent location gives, because a refusal that separated
+// them would confirm to a caller with no grant on that row that the row exists.
+//
+// What does NOT apply is the disclosure that made #700 urgent: no node label
+// rule exists, so this write stamps nothing built from the location's own label
+// and hands nothing back about it. What is left is the plain invariant, that
+// ABAC scope is injected on every applicable query, and a caller-supplied
+// reference resolved without it is an exception to that rather than a carve-out
+// anybody decided on.
+//
+// The signature reconciles with the seam's by taking the read set the seam needs
+// and nothing else: nodeLocationID already took a querier (the caller's tx, so a
+// location written earlier in the same transaction resolves), which is exactly
+// what resolvePlacementRef takes. The set is what the node path could not
+// supply, so CreateNode and UpdateNode take it from the API layer, which injects
+// location:read exactly as the system and component routes already do.
+func nodeLocationID(ctx context.Context, q querier, ref *string, locationRead scope.Set) (*string, error) {
 	if ref == nil || *ref == "" {
 		return nil, nil
 	}
-	l, err := scopedByName(ctx, q, locationConfig, *ref)
-	if errors.Is(err, ErrLocationNotFound) {
-		return nil, ErrLocationNotFound
-	} else if err != nil {
+	l, err := resolvePlacementRef(ctx, q, locationConfig, *ref, locationRead)
+	if err != nil {
 		return nil, err
 	}
 	return &l.ID, nil

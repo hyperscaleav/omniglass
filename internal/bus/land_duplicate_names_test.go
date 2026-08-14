@@ -58,7 +58,7 @@ func TestLandSurvivesDuplicateComponentNames(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all); err != nil {
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a"}, all, all); err != nil {
 		t.Fatalf("create node: %v", err)
 	}
 	roomA, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "room-a", LocationType: "campus"}, all)

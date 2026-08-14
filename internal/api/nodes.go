@@ -155,7 +155,7 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 		}
 		n, err := gw.CreateNode(ctx, actorID(ctx), storage.NodeSpec{
 			Name: in.Body.Name, DisplayName: in.Body.DisplayName, Description: in.Body.Description, LocationName: in.Body.Location,
-		}, a.scopeFor(ctx, "node", "create"))
+		}, a.scopeFor(ctx, "node", "create"), a.scopeFor(ctx, "location", "read"))
 		if err != nil {
 			return nil, mapNodeErr(err)
 		}
@@ -171,7 +171,7 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 	}, "node", "update"), func(ctx context.Context, in *updateNodeInput) (*nodeOutput, error) {
 		n, err := gw.UpdateNode(ctx, actorID(ctx), in.Name, storage.NodePatch{
 			DisplayName: in.Body.DisplayName, Description: in.Body.Description, LocationName: in.Body.Location,
-		}, a.scopeFor(ctx, "node", "read"), a.scopeFor(ctx, "node", "update"))
+		}, a.scopeFor(ctx, "node", "read"), a.scopeFor(ctx, "node", "update"), a.scopeFor(ctx, "location", "read"))
 		if err != nil {
 			return nil, mapNodeErr(err)
 		}

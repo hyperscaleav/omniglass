@@ -3228,7 +3228,15 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
      REFERENCED tier, matching what `:renderLabel` already did for the identical references
      ([ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it))
      so a preview and the create it previews cannot disagree. `resolveScopedRef` keeps every
-     same-tier parent and owner reference, where this edge still reads as written.
+     same-tier parent and owner reference, where this edge still reads as written. **Amended again
+     ([#705](https://github.com/hyperscaleav/omniglass/issues/705)):** `CreateNode` and `UpdateNode`
+     bind a location the same way and were the one caller-supplied placement reference left
+     resolving existence-only, so they take the same seam. The node tier reaches it by the plain
+     invariant rather than by the label argument above: no node label rule exists, so the write
+     stamps nothing from the location it names and discloses nothing about it, but ABAC scope is
+     injected on every applicable query and a reference resolved without it is an exception to that
+     rather than a carve-out anybody decided on. The refusal is the same non-disclosing
+     `ErrLocationNotFound` an absent location gives.
   2. **A bare-name `forbidden` is a name-existence oracle.** A name matching at least one row, none of
      them in the caller's action scope, is `cfg.forbidden` (403), not the read path's non-disclosing
      404 (`scopedcrud.go:469-475`). A caller can learn a name exists somewhere in the estate from the
