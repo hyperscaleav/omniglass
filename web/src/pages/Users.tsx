@@ -190,7 +190,7 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-username">Username</label>
-        <input id="new-username" autocomplete="off" class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(username()) }} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} disabled={busy()} required />
+        <input id="new-username" autocomplete="off" class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(username()) }} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} disabled={busy()} aria-required="true" />
         <Show when={handleError(username())} fallback={<p class="mt-1 text-[11px] text-base-content/40">{nameDerived() ? "Derived from the display name. Edit to set your own." : "What they sign in with."}</p>}>
           {(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}
         </Show>

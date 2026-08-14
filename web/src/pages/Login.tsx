@@ -79,7 +79,7 @@ export default function Login() {
                     value={token()}
                     onInput={(e) => setTokenInput(e.currentTarget.value)}
                     disabled={busy()}
-                    required
+                    aria-required="true"
                   />
                 </div>
               }
@@ -96,7 +96,7 @@ export default function Login() {
                   onInput={(e) => setUsername(e.currentTarget.value)}
                   disabled={busy()}
                   autofocus
-                  required
+                  aria-required="true"
                 />
               </div>
               <div>
@@ -109,7 +109,7 @@ export default function Login() {
                   value={password()}
                   onInput={(e) => setPassword(e.currentTarget.value)}
                   disabled={busy()}
-                  required
+                  aria-required="true"
                 />
               </div>
             </Show>

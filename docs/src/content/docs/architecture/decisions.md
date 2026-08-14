@@ -148,6 +148,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0108](#adr-0108-settlement-reads-one-clock-and-a-zero-window-is-a-statement-of-intent) | 2026-08-12 | Accepted | Settlement's two timestamps come from **one clock, the database's**: a sample's `ts` is `default now()`, so the `now` a settle-check judges against is read with `select now()` inside the same transaction rather than from `time.Now()` in the server process. Two clocks on one comparison made the verdict a function of skew, and at `settle_window_seconds: 0` there is no margin to absorb it, so a command that genuinely failed could be reported `pending` and never settle on any deployment whose database is on another host. Separately, a **zero window is terminal by construction**, checked before any arithmetic: it is the documented way to say "settle immediately", a claim about intent rather than elapsed time, so no timestamp may make it pending. Stamping samples from Go was refused as the larger ripple (every telemetry `ts` defaults to `now()` and other readers rely on database ordering), and a tolerance was refused outright as the move that stops a test failing without stopping the behavior depending on skew. `Settle` stays pure and still takes `now`; what changed is who supplies it, at the cost of one round trip on each of the two settle paths. **Amended (#718):** "a check in a later transaction reads a strictly later timestamp" over-claims, since READ COMMITTED admits a concurrent issue committing after a settle-check began, so the delta can be negative; the verdict is unaffected (a negative delta is `pending`, and the zero case reads no timestamp), and the claim rather than the behaviour is what was corrected. **Extended (#719):** the same principle reaches the six history reads by a different mechanism and no round trip, since a read needs a BOUND rather than a value: the window travels as a duration and the query filters `ts >= now() - make_interval(...)`, so the instant is never named in Go |
 | [ADR-0109](#adr-0109-an-alarm-carries-an-acknowledgement-and-not-a-snooze-or-a-resolve) | 2026-08-13 | Accepted | An alarm's raised state belongs to its **condition** (ADR-0075) and an acknowledgement is a fact about a **person**, so the acknowledgement is two nullable columns orthogonal to `cleared_at`, never a `status` enum, and `AcknowledgeAlarm` is the one alarm write that does **not** recompute health: acknowledging is not fixing. **Snooze** and **resolve** were refused rather than deferred: snooze suppresses notification and the notification registry is unbuilt (#618), so it would be a column that lies, and resolve is either the existing clear under a second name or an unspecified concept. The permission is **`alarm:acknowledge`**, spelled out like every other seeded verb; the `alarm:ack,snooze,resolve` string that appeared in test fixtures and in the identity-access page was never a design and nothing ever seeded or enforced it. Its scope resolves on the component tier from `alarm:acknowledge` itself rather than from `component:update`, and it is granted to `operator` and **not** to `deploy`, because a location-scoped `deploy` grant reaches no component tier at all (#714) and would hold a capability that acknowledges nothing. A second acknowledgement is **idempotent**, keeping the first person and the first time and writing no second audit row |
 | [ADR-0112](#adr-0112-a-generated-flag-carries-the-schemas-type-and-a-structured-field-carries-json) | 2026-08-13 | Accepted | `cmd/cligen` derives each body flag's TYPE from the OpenAPI property: an `integer` field is an `int` flag, a `boolean` a `bool` flag, a `number` a `float64` flag, so a value the schema refuses is refused at the shell rather than by the server's 422. Every other shape keeps ONE string flag parsed as JSON (an object, an array, an untyped `any`, and a nullable number or boolean), because a nested value has no shell-native flag type and `null` has to stay sendable: it is what clears a field named in `update_mask` (ADR-0106). A nullable STRING is the exception and stays a plain string flag, since this API clears a string with the empty string. `--propagates=false` becomes the spelling for a bool flag, and the docs flag check fails on a bool flag handed a space-separated value |
+| [ADR-0113](#adr-0113-a-validation-rule-is-typescript-and-a-native-constraint-attribute-is-not-one) | 2026-08-13 | Accepted | A console control carries **no** `required`, `min`, `max`, `pattern` or `step`: a rule is a pure function over the typed value, the surface renders its message inline beside the field, and the binding's `disabled` / `valid` refuses the submit. The audit decided it: 21 attributes on 24 rendered controls and **zero could ever fire**, because a Drawer's rail is portaled outside the `<form>` (ADR-0054), a blade has no form at all, and the four on genuine form paths sit in forms whose submit is disabled in exactly the states native validation would refuse. Wiring `form.requestSubmit()` instead would have covered the Drawers only, left every blade needing this decision anyway, and meant undoing the disabled gate so an unstyled browser bubble could refuse in place of an inline message. `aria-required` stays as the honest spelling, `type="email"` and `type="number"` stay as input types, and a guard test scans every `.tsx` |
 
 ## Entries
 
@@ -5192,3 +5193,38 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   surfaced this. That field does not exist: the #702 review replaced it with `expected_name`, and
   `internal/docslint` refuses the word. `settle_window_seconds` is the integer under test instead.
 - **Tracked under** [#711](https://github.com/hyperscaleav/omniglass/issues/711).
+
+### ADR-0113: A validation rule is TypeScript, and a native constraint attribute is not one
+
+- **Date:** 2026-08-13 | **Status:** Accepted | **Pages:** [design system](/contributing/design-system/)
+- **Decision:** a console control carries **no** `required`, `min`, `max`, `minlength`, `maxlength`,
+  `pattern` or `step`. A rule is a **pure function** over the typed value (`lib/validate.ts`,
+  `readSettleWindow` in `lib/command_types.ts`), the surface renders its message **inline beside the
+  field**, and the form binding's `disabled` / `valid` refuses the submit. `aria-required` stays,
+  because it announces a fact to a screen reader without claiming the browser will refuse the value.
+  `validation-guard.test.ts` scans every `.tsx` for a native constraint on an `input`, `select` or
+  `textarea`.
+- **Context:** the browser enforces a constraint attribute on a real form **submission**, and this
+  console performs none on the paths an operator uses. A Drawer's action rail is drawn by the shell
+  and portaled outside the `<form>` ([ADR-0054](#adr-0054-the-shell-owns-a-panels-action-rail-the-body-registers-and-never-draws)),
+  a blade has no `<form>` at all, and the inline editors (RoleEditor, ContractEditor) save from an
+  `onClick`. **The audit is what decided it:** 21 attributes on 24 rendered controls, of which 17
+  sites are on a surface with no form submission at all, and the remaining four (three on Login, one
+  on the forced password change) sit in forms whose submit button is `disabled` in exactly the states
+  native validation would have refused. **Zero of the twenty-four could ever fire.** A reader could
+  not tell a live attribute from a decorative one because there were none of the first kind.
+- **Why not make them live instead (`form.requestSubmit()` from the rail):** it would have covered
+  the Drawers and left every blade needing this decision anyway, since a blade is a field set with a
+  contributor registry rather than a form, so native validation could not be the one vocabulary. It
+  would also mean threading a form ref through the binding into a portaled shell to reproduce an
+  effect `disabled` / `valid` already produce, and then **undoing** the disabled gate so the browser
+  could refuse instead, which is a worse operator experience: a native bubble is unstyled browser
+  chrome that says less than the inline message and vanishes on blur.
+- **What it costs and what it does not:** every removed attribute already had a TypeScript rule
+  behind it except one, the token drawer's `min="1" max="365"`, which is now `tokenTtlError` and
+  refuses a 400-day token at the field rather than at the server's 422. `type="email"` and
+  `type="number"` stay: an input TYPE carries keyboard, autofill and spinner behaviour, and is not a
+  claim that a value will be refused.
+- **Found by** [#718](https://github.com/hyperscaleav/omniglass/issues/718), whose brief asked for a
+  `min="0"` on an input that had carried one since [#411](https://github.com/hyperscaleav/omniglass/issues/411)
+  and had never fired once. **Tracked under** [#724](https://github.com/hyperscaleav/omniglass/issues/724).

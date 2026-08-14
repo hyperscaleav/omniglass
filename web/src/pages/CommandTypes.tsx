@@ -104,8 +104,7 @@ function SettleWindowField(p: {
         class="input input-bordered w-full font-data"
         classList={{ "input-error": !!p.draft.error }}
         type="number"
-        min="0"
-        required={p.targeted}
+        aria-required={p.targeted}
         placeholder={p.targeted ? "e.g. 15" : "0"}
         value={p.value}
         onInput={(e) => p.onInput(e.currentTarget.value)}

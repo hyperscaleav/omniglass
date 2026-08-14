@@ -117,3 +117,51 @@ describe("Profile bulk revoke", () => {
     expect(calls[0].body).toEqual({ purpose: "token" });
   });
 });
+
+// The token drawer's lifetime field, converted by #724. It carried `min="1"
+// max="365"` from the day it was written and neither could ever fire: the
+// drawer's Create button is portaled outside the <form>, so the browser never
+// validates on the path that submits, and a 400-day token was refused by the
+// server's 422 after a round trip.
+//
+// The rule is now `tokenTtlError` and it is asserted THROUGH the surface, driving
+// the same rail button an operator clicks rather than calling the validator.
+describe("Profile token lifetime", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  async function openTokenDrawer() {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () => new Response(JSON.stringify(meWith(false)), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+    mount(false);
+    fireEvent.click(await screen.findByRole("button", { name: /create token/i }));
+    const ttl = (await waitFor(() => {
+      const el = document.querySelector("#tok-ttl");
+      if (!el) throw new Error("no lifetime field yet");
+      return el;
+    })) as HTMLInputElement;
+    return { ttl, fetchSpy };
+  }
+
+  // The rail's Create button, which is the drawer's own and not the page's.
+  const createBtn = () =>
+    screen.getAllByRole("button", { name: /create token/i }).at(-1) as HTMLButtonElement;
+
+  it("refuses a lifetime past the cap on the path that submits", async () => {
+    const { ttl, fetchSpy } = await openTokenDrawer();
+    fireEvent.input(document.querySelector("#tok-desc") as HTMLInputElement, { target: { value: "ci pipeline" } });
+    fireEvent.input(ttl, { target: { value: "400" } });
+    expect(await screen.findByText(/cannot outlive 365 days/i)).toBeTruthy();
+    expect(createBtn().disabled).toBe(true);
+    const before = fetchSpy.mock.calls.length;
+    fireEvent.click(createBtn());
+    expect(fetchSpy.mock.calls.length).toBe(before);
+  });
+
+  it("accepts an empty lifetime, which is the server's default rather than a zero", async () => {
+    const { ttl } = await openTokenDrawer();
+    fireEvent.input(document.querySelector("#tok-desc") as HTMLInputElement, { target: { value: "ci pipeline" } });
+    fireEvent.input(ttl, { target: { value: "" } });
+    expect(createBtn().disabled).toBe(false);
+  });
+});

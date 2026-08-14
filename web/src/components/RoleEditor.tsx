@@ -426,7 +426,6 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                       <input
                         class="input input-bordered input-sm w-20 shrink-0 tnum"
                         type="number"
-                        min="1"
                         aria-label={`Quorum for ${r.name}`}
                         value={draft().quorum}
                         onInput={(e) => setDraft({ ...draft(), quorum: e.currentTarget.value })}
@@ -434,7 +433,6 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                       <input
                         class="input input-bordered input-sm w-20 shrink-0 tnum"
                         type="number"
-                        min="1"
                         placeholder="cap"
                         aria-label={`Capacity for ${r.name}`}
                         value={draft().capacity}
@@ -502,7 +500,6 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
               <input
                 class="input input-bordered input-sm w-20 shrink-0 tnum"
                 type="number"
-                min="1"
                 aria-label="Quorum for the new role"
                 value={addDraft().quorum}
                 onInput={(e) => setAddDraft({ ...addDraft(), quorum: e.currentTarget.value })}
@@ -510,7 +507,6 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
               <input
                 class="input input-bordered input-sm w-20 shrink-0 tnum"
                 type="number"
-                min="1"
                 placeholder="cap"
                 aria-label="Capacity for the new role"
                 value={addDraft().capacity}

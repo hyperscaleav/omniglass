@@ -191,6 +191,29 @@ pages defined a byte-identical local `Field`, four more went through positional 
 helpers, and the read-only box was hand-rolled 24 times, so every blade defect was an N-place
 defect: a description that would not wrap was one bug in 24 fields.
 
+### A validation rule is TypeScript, never an attribute
+
+**A control in this console carries no `required`, `min`, `max`, `pattern` or `step`.** The rule is a
+pure function over the typed value, the surface renders its message inline beside the field, and the
+binding's `disabled` / `valid` refuses the submit
+([ADR-0113](/architecture/decisions/#adr-0113-a-validation-rule-is-typescript-and-a-native-constraint-attribute-is-not-one)).
+`readSettleWindow` in `lib/command_types.ts` is the worked example and `lib/validate.ts` holds the
+shared ones (a handle, an email, a password floor, a token lifetime).
+
+The reason is structural rather than stylistic. The browser enforces a constraint attribute on a real
+form **submission**, and this console performs none on the paths an operator uses: a Drawer's action
+rail is drawn by the shell and portaled outside the `<form>` ([ADR-0054](/architecture/decisions/)), a
+blade has no `<form>` at all, and the inline editors save from an `onClick`. An audit found 21 such
+attributes on 24 rendered controls and **not one could ever fire**, the four on genuine form paths
+included, because those forms disable their submit button in exactly the states native validation
+would have refused. A reader could not tell a live attribute from a decorative one, because there were
+no live ones.
+
+`aria-required` is the honest spelling of a required field and is what the converted forms carry: it
+announces the field to a screen reader without claiming the browser will refuse the value.
+`validation-guard.test.ts` scans every `.tsx` for a native constraint on an `input`, `select` or
+`textarea`, so the next form cannot reintroduce one by habit.
+
 ### How an entity's identity reads
 
 Every entity carries the same identity triad: an **id** (a uuid, immutable), a **name** (the

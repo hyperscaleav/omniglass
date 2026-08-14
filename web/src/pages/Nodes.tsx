@@ -412,7 +412,7 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-node-name">Name</label>
-        <input id="new-node-name" autocomplete="off" class="input input-bordered w-full font-data" value={name()} placeholder="edge-hq-1" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} required />
+        <input id="new-node-name" autocomplete="off" class="input input-bordered w-full font-data" value={name()} placeholder="edge-hq-1" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} aria-required="true" />
         <p class="mt-1 text-xs text-base-content/50">{nameDerived() ? "Derived from the display name. Edit to set your own." : "The node's address, used by the API and CLI."}</p>
       </div>
       <div>

@@ -204,9 +204,11 @@ describe("Command Types settle window", () => {
     expect(screen.getByText(/judged at the moment it is issued/i)).toBeTruthy();
   });
 
-  // The server refuses a negative with a 422 (#718's first half). `min="0"` cannot
-  // refuse it here: the drawer's action bar sits outside the <form>, so native
-  // constraint validation never runs on the path the operator actually uses.
+  // The server refuses a negative with a 422 (#718's first half). The `min="0"`
+  // that used to sit on this input never could: the drawer's action bar is
+  // portaled outside the <form>, so native constraint validation never runs on the
+  // path the operator uses. This test drives that path, and it is what the rule
+  // rests on now that the attribute is gone (#724).
   it("refuses a negative window before the server does", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const settle = await openCreate();
