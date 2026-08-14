@@ -460,6 +460,83 @@ func TestSystemUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 	}
 }
 
+// TestSystemReclassifyWithinOneStemKeepsTheName is #706, the residual the guard
+// above left: it keys on the classification ID changing, and the mint does not
+// read the id. It reads the STEM that type's chain resolves to
+// (resolveSystemTypeFacts, inherited-first-non-null, ADR-0095), so two
+// system_type rows inheriting one stem from a shared ancestor mint identical
+// names and a reclassify between them changes no input to the mint.
+//
+// The estate is the one that makes the difference visible rather than silent: a
+// lower ordinal has been freed by a :rename, so re-minting anyway does not
+// recompute to the same answer, it MOVES the name onto the freed name under
+// system:update with no rename requested. That is the failure ADR-0101 refused
+// for the presence-shaped guard, one step narrower, and it is the shape
+// productStemMoved already spells on the component tier.
+func TestSystemReclassifyWithinOneStemKeepsTheName(t *testing.T) {
+	gw, ctx, room := newSystemNamegenDB(t)
+
+	// One ancestor carries the stem; neither child carries its own, so both
+	// resolve to it and both mint the same name.
+	parent, err := gw.CreateSystemType(ctx, "", storage.SystemType{
+		Name: "twin-parent", DisplayName: "Twin Parent", Stem: strp("twinroom"),
+	})
+	if err != nil {
+		t.Fatalf("create the parent type: %v", err)
+	}
+	for _, name := range []string{"twin-a", "twin-b"} {
+		if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{
+			Name: name, DisplayName: name, ParentID: &parent.ID,
+		}); err != nil {
+			t.Fatalf("create system_type %s: %v", name, err)
+		}
+	}
+
+	first, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("twin-a"), LocationName: &room}, all, all)
+	if err != nil {
+		t.Fatalf("create the first: %v", err)
+	}
+	second, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strp("twin-a"), LocationName: &room}, all, all)
+	if err != nil {
+		t.Fatalf("create the second: %v", err)
+	}
+	if first.Name != "twinroom" || second.Name != "twinroom-2" {
+		t.Fatalf("precondition names = %q, %q, want twinroom, twinroom-2 (both types inherit one stem)", first.Name, second.Name)
+	}
+	// Frees the bare name in this bucket.
+	if _, err := gw.RenameSystem(ctx, "", first.ID, "main-twin", all, all); err != nil {
+		t.Fatalf("rename the first: %v", err)
+	}
+
+	after, err := gw.UpdateSystem(ctx, "", second.ID, storage.SystemPatch{SystemTypeID: strp("twin-b")}, all, all)
+	if err != nil {
+		t.Fatalf("reclassify to the sibling type: %v", err)
+	}
+	if after.SystemTypeName == nil || *after.SystemTypeName != "twin-b" {
+		t.Fatalf("classification after the reclassify = %v, want twin-b (the reclassify itself must still happen)", after.SystemTypeName)
+	}
+	if after.Name != "twinroom-2" {
+		t.Fatalf("name after a reclassify between two types resolving one stem = %q, want unchanged twinroom-2 (same stem, same bucket, nothing the mint reads changed)", after.Name)
+	}
+	if after.Ordinal == nil || *after.Ordinal != 2 {
+		t.Fatalf("ordinal after a same-stem reclassify = %s, want unchanged 2", ordstr(after.Ordinal))
+	}
+
+	// The guard-rail in the other direction: a reclassify onto a DIFFERENT stem
+	// still re-mints, so this narrows the trigger rather than disabling it. A
+	// fix that stopped re-minting entirely passes everything above.
+	moved, err := gw.UpdateSystem(ctx, "", second.ID, storage.SystemPatch{SystemTypeID: strp("class")}, all, all)
+	if err != nil {
+		t.Fatalf("reclassify onto another stem: %v", err)
+	}
+	if moved.Name != "classroom" {
+		t.Fatalf("name after a reclassify onto a different stem = %q, want classroom", moved.Name)
+	}
+	if moved.Ordinal == nil || *moved.Ordinal != 1 {
+		t.Fatalf("ordinal after a real reclassify = %s, want 1", ordstr(moved.Ordinal))
+	}
+}
+
 // TestSystemWithNoTypeCannotGenerate proves the refusal is typed and names the
 // reason, on both the paths that can reach it: a nameless create with no
 // system_type, and un-classifying a system whose name the platform owns (which

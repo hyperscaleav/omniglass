@@ -739,27 +739,37 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	// ownership nobody asked for. :rename claims the name first, and then the
 	// unclassify goes through.
 	//
-	// The guard is the classification CHANGING, not the field being present,
-	// and that distinction is load-bearing rather than tidy. The console sends
+	// The guard is the STEM the mint reads actually moving, not the field being
+	// present in the patch and not the classification id changing either, and
+	// both halves of that are load-bearing rather than tidy. The console sends
 	// system_type_id on every save (web/src/pages/Systems.tsx keys it always, so
 	// an unclassify can clear), so a presence test re-mints on an edit to the
-	// display name alone. With a lower ordinal freed in the meantime by a
-	// rename, that re-mint MOVES THE NAME: "boardroom-2" becomes "boardroom"
-	// under system:update, with no rename asked for and possibly no
-	// system:rename grant held. The mint reads the stem and the bucket, and a
-	// patch that re-states the type changes neither, which is the derivation
-	// ADR-0101 records. sameOptional is the same comparison the member-label
-	// cascade below already makes about the same question.
+	// display name alone; and an id test re-mints on a reclassify between two
+	// types that inherit ONE stem from a shared ancestor, which the mint cannot
+	// tell apart because it never reads the id (#706). With a lower ordinal
+	// freed in the meantime by a rename, either re-mint MOVES THE NAME:
+	// "boardroom-2" becomes "boardroom" under system:update, with no rename
+	// asked for and possibly no system:rename grant held. The mint reads the
+	// stem and the bucket, and neither of those patches changes either, which is
+	// the derivation ADR-0101 records. systemTypeStemMoved is the system-tier
+	// twin of the component tier's productStemMoved, so both tiers now spell one
+	// rule over their own path to a stem.
 	var (
 		namePatch    *string
 		ordinalPatch *int
 	)
-	if patch.SystemTypeID != nil && before.NameGenerated && !sameOptional(before.SystemTypeID, systemTypePatchID) {
-		newName, newOrdinal, err := generateNameForSystemType(ctx, tx, systemTypePatchID, before.ParentID, before.LocationID, &before.ID)
+	if patch.SystemTypeID != nil && before.NameGenerated {
+		moved, err := systemTypeStemMoved(ctx, tx, before.SystemTypeID, systemTypePatchID)
 		if err != nil {
 			return nil, err
 		}
-		namePatch, ordinalPatch = &newName, &newOrdinal
+		if moved {
+			newName, newOrdinal, err := generateNameForSystemType(ctx, tx, systemTypePatchID, before.ParentID, before.LocationID, &before.ID)
+			if err != nil {
+				return nil, err
+			}
+			namePatch, ordinalPatch = &newName, &newOrdinal
+		}
 	}
 	after, err := scanSystem(tx.QueryRow(ctx, `
 		update system set

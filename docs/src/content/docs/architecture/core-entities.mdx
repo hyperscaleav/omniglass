@@ -827,10 +827,11 @@ means a spurious re-mint does not recompute to the same answer, it MOVES the nam
 or `:move` with no rename asked for and possibly no `:rename` grant held. One rule, spelled per tier
 because the tiers reach their two inputs differently. A component's and a system's bucket comparison
 is the three-way one (a parent wins over a location, so relocating a parented row changes no
-bucket); a location's is the parent alone. And a component is the tier whose classification is not
-its stem: it names a **product**, which points at a `component_type` chain, so two products under one
-type mint the same name and its reclassify compares the resolved stem rather than the product it was
-handed.
+bucket); a location's is the parent alone. And on both tiers that mint from a stem, the reclassify
+compares the **resolved stem** rather than the classification it was handed, because neither
+classification IS the stem: a `system_type` inherits one from its ancestors, so two sibling types
+under a stem-carrying parent mint the same name, and a component names a **product**, which points
+at a `component_type` chain, one hop further still, so two products under one type do too.
 
 **A location type opts in, with a rule that is a declaration**
 ([ADR-0102](/architecture/decisions/#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing)).
