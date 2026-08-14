@@ -22,7 +22,7 @@ import {
   deleteSystemType,
 } from "../lib/system_types";
 import { useMe, can } from "../lib/auth";
-import { inheritedFact, registryLock } from "../lib/catalog";
+import { ROOT_STEM_HINT, TYPE_PARENT_HINT, inheritedFact, registryLock } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -342,10 +342,10 @@ export function CreateSystemTypeForm(p: { onCreated: (t: SystemType) => void }):
       <FieldRow bind="name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="huddle" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
-      <FieldRow label="Parent" hint="Where this type grafts in the tree. Root creates a new top-level genus and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.">
+      <FieldRow label="Parent" hint={TYPE_PARENT_HINT}>
         <SystemTypeSelect types={types.data ?? []} value={parentId()} onChange={setParentId} emptyLabel="Root (no parent)" />
       </FieldRow>
-      <FieldRow label="Stem" hint="The prefix a generated system name is built from. Leave blank to inherit the parent's; required on a root.">
+      <FieldRow label="Stem" hint={`The prefix a generated system name is built from. ${ROOT_STEM_HINT}`}>
         <input class="input input-bordered w-full font-data" value={stem()} placeholder="inherit" onInput={(e) => setStem(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Abbrev" hint="The compact label form (br, cls, vw). Leave blank to inherit.">

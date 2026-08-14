@@ -237,13 +237,22 @@ describe("ComponentTypes page", () => {
   // therefore no mark on this form at all. The clause below is the only thing
   // telling an operator that a blank box is a choice rather than an omission, at
   // the one moment they are deciding whether to type a value.
-  it("tells the create form's operator that a blank fact inherits, where there is no mark to say it", async () => {
+  //
+  // It also has to state the one constraint the server enforces at create and
+  // the form cannot recover from: `ErrRootComponentTypeNeedsStem` refuses a root
+  // with no stem, exactly as `ErrRootSystemTypeNeedsStem` does on the tier
+  // beside it. The system form has said so since it shipped and this one never
+  // did, so the same operator was warned on one page and met a 422 on the other
+  // (#744). The strings are asserted verbatim, on both pages, because the two
+  // forms are byte-similar by design and this is the sentence one of them lost.
+  it("tells the create form's operator that a blank fact inherits, and that a root's stem is required", async () => {
     mount();
     fireEvent.click(screen.getByText("New component type"));
     await screen.findByPlaceholderText("Wireless Microphone");
     const form = screen.getByPlaceholderText("wireless-mic").closest("form") as HTMLElement;
     expect(within(form).queryByRole("button", { name: /is inherited from/ })).toBeNull();
-    expect(within(form).getByText("The auto-generated component name's prefix. Leave blank to inherit the parent's.")).toBeTruthy();
+    expect(within(form).getByText("The auto-generated component name's prefix. Leave blank to inherit the parent's; required on a root.")).toBeTruthy();
+    expect(within(form).getByText("Where this type grafts in the tree. Root creates a new top-level genus and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.")).toBeTruthy();
     expect(within(form).getByText("The compact hostname-render form (fp, cam, dsp). Leave blank to inherit.")).toBeTruthy();
     expect(within(form).getByText("A glyph key. Leave blank to inherit.")).toBeTruthy();
   });

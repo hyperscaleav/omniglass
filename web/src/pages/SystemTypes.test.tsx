@@ -193,6 +193,10 @@ describe("SystemTypes page", () => {
     const form = screen.getByPlaceholderText("huddle").closest("form") as HTMLElement;
     expect(within(form).queryByRole("button", { name: /is inherited from/ })).toBeNull();
     expect(within(form).getByText("The prefix a generated system name is built from. Leave blank to inherit the parent's; required on a root.")).toBeTruthy();
+    // Pinned verbatim on both pages (#744): the two create forms are
+    // byte-similar by design, and the root-stem rule is one rule the server
+    // enforces on both tiers, so a change to either wording has to fail here.
+    expect(within(form).getByText("Where this type grafts in the tree. Root creates a new top-level genus and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.")).toBeTruthy();
     expect(within(form).getByText("The compact label form (br, cls, vw). Leave blank to inherit.")).toBeTruthy();
     expect(within(form).getByText("A glyph key. Leave blank to inherit.")).toBeTruthy();
   });

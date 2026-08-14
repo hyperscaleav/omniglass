@@ -23,7 +23,7 @@ import {
   restoreComponentType,
 } from "../lib/component_types";
 import { useMe, can } from "../lib/auth";
-import { inheritedFact, registryLock, registryOrigin } from "../lib/catalog";
+import { ROOT_STEM_HINT, TYPE_PARENT_HINT, inheritedFact, registryLock, registryOrigin } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -37,7 +37,10 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // pattern as Location Types, and every identity fact (stem, icon, abbrev,
 // default_tags) inherits down the tree unless a node overrides it. There is
 // no reparent leg: a custom type's placement is fixed at create, so the edit
-// blade revises a node's own facts only.
+// blade revises a node's own facts only. A ROOT type must state a stem of its
+// own, since there is no ancestor to inherit one from, and the create form says
+// so in the same words the system registry's does (#744): one rule refused by
+// the gateway on both tiers, one sentence.
 
 // Origin is three-state on this registry, the first to adopt the fork (#655,
 // ADR-0095): a row this release ships, a row the operator made, or a shipped
@@ -393,10 +396,10 @@ export function CreateComponentTypeForm(p: { onCreated: (t: ComponentType) => vo
       <FieldRow bind="name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="wireless-mic" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
-      <FieldRow label="Parent" hint="Where this type grafts in the tree. Root creates a new top-level genus; the gateway has no reparent leg, so choose carefully.">
+      <FieldRow label="Parent" hint={TYPE_PARENT_HINT}>
         <ComponentTypeSelect types={types.data ?? []} value={parentId()} onChange={setParentId} emptyLabel="Root (no parent)" />
       </FieldRow>
-      <FieldRow label="Stem" hint="The auto-generated component name's prefix. Leave blank to inherit the parent's.">
+      <FieldRow label="Stem" hint={`The auto-generated component name's prefix. ${ROOT_STEM_HINT}`}>
         <input class="input input-bordered w-full font-data" value={stem()} placeholder="inherit" onInput={(e) => setStem(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Abbrev" hint="The compact hostname-render form (fp, cam, dsp). Leave blank to inherit.">
