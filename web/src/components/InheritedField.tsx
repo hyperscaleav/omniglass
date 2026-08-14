@@ -69,8 +69,12 @@ export default function InheritedField(props: {
       read={
         inheriting()
           ? (
+            // The value gets an element of its own rather than sitting as a
+            // bare text node beside the attribution: a reader (and a test, and
+            // a screenshot assertion) has to be able to address the inherited
+            // VALUE without the sentence under it coming along.
             <span class="text-base-content/50">
-              {inherited().value}
+              <span class="block">{inherited().value}</span>
               <span class="block font-sans text-[11px] text-base-content/40">inherited from {inherited().from}</span>
             </span>
           )
