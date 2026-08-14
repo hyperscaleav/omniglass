@@ -6,11 +6,17 @@ import (
 	"testing"
 )
 
-// TestBodyFieldsJSON asserts that a body property that is not a plain scalar (an
-// untyped `any` value, an object) is marked JSON so its flag string is parsed as
-// JSON before it enters the request body, while a scalar (string) passes through.
-// This is the fix that lets `variable create --value 30` send the number 30 and
-// `secret create --fields '{...}'` send the object, not their quoted-string forms.
+// TestBodyFieldsJSON asserts that a body property with no scalar flag type of its
+// own (an untyped `any` value, an object) is marked JSON so its flag string is
+// parsed as JSON before it enters the request body, while a string passes
+// through. This is the fix that lets `variable create --value 30` send the number
+// 30 and `secret create --fields '{...}'` send the object, not their
+// quoted-string forms.
+//
+// The boolean's expectation MOVED with #711: it used to be a JSON-parsed string
+// flag (`propagates.JSON == true`, rendering `jsonOrString(fPropagates)`) and is
+// now a real bool flag, because a type the schema states is a type the flag can
+// carry. The JSON spelling stays for exactly the shapes a shell flag cannot type.
 func TestBodyFieldsJSON(t *testing.T) {
 	const docRaw = `{"components":{"schemas":{"CreateBody":{
 	  "required":["name","value"],
@@ -43,11 +49,11 @@ func TestBodyFieldsJSON(t *testing.T) {
 	if !byName["fields"].JSON {
 		t.Errorf("object field should be JSON: %+v", byName["fields"])
 	}
-	if !byName["propagates"].JSON {
-		t.Errorf("boolean field should be JSON so it serializes as a bool, not a string: %+v", byName["propagates"])
+	if byName["propagates"].JSON {
+		t.Errorf("boolean field should be a bool flag, not a JSON-parsed string: %+v", byName["propagates"])
 	}
 
-	// The rendered source parses the JSON fields and passes the scalar through.
+	// The rendered source parses the JSON fields and passes the typed ones through.
 	cmd := buildCommand(doc, "/api/v1", "/things", "post", op)
 	out, err := render(tree([]command{cmd}))
 	if err != nil {
@@ -57,11 +63,135 @@ func TestBodyFieldsJSON(t *testing.T) {
 	for _, want := range []string{
 		`body["value"] = jsonOrString(fValue)`,
 		`body["fields"] = jsonOrString(fFields)`,
-		`body["propagates"] = jsonOrString(fPropagates)`,
+		`body["propagates"] = fPropagates`,
 		`body["name"] = fName`,
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("generated source missing %q", want)
+		}
+	}
+}
+
+// TestBodyFieldFlagsCarryTheSchemaType is #711: the flag's type is a fact the
+// OpenAPI already states, so a body field whose schema says integer generates an
+// integer flag and is refused by the flag parser rather than by the server's 422.
+//
+// The three-way split is the decision. A scalar the shell can type (string,
+// integer, number, boolean) takes that flag type. Everything else (an object, an
+// array, an untyped `any`, a $ref) keeps ONE string flag parsed as JSON, because
+// there is no shell-native spelling of a nested value and the alternatives
+// (repeated key=value pairs, a flag per leaf) can express neither nesting nor
+// `null`. A NULLABLE scalar keeps the JSON spelling for the same reason: `null`
+// is the value that clears a field under an update mask (ADR-0106), and a typed
+// flag has no null to send.
+func TestBodyFieldFlagsCarryTheSchemaType(t *testing.T) {
+	const docRaw = `{"components":{"schemas":{"CreateBody":{
+	  "properties":{
+	    "name":{"type":"string"},
+	    "settle_window_seconds":{"type":"integer","format":"int64"},
+	    "ratio":{"type":"number"},
+	    "propagates":{"type":"boolean"},
+	    "fields":{"type":"object"},
+	    "default_tags":{"type":["array","null"]},
+	    "value":{"description":"any shape at all"},
+	    "name_rule":{"$ref":"#/components/schemas/NameRuleBody"},
+	    "retries":{"type":["integer","null"]},
+	    "icon":{"type":["string","null"]}
+	  }}}}}`
+	const opRaw = `{"operationId":"create-thing","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CreateBody"}}}}}`
+	var doc spec
+	if err := json.Unmarshal([]byte(docRaw), &doc); err != nil {
+		t.Fatalf("doc: %v", err)
+	}
+	var op operation
+	if err := json.Unmarshal([]byte(opRaw), &op); err != nil {
+		t.Fatalf("op: %v", err)
+	}
+
+	byName := map[string]bodyField{}
+	for _, f := range bodyFields(doc, op) {
+		byName[f.Name] = f
+	}
+	cases := []struct {
+		field, goType, flagFunc, zero string
+		json                          bool
+	}{
+		{"name", "string", "StringVar", `""`, false},
+		{"settle_window_seconds", "int", "IntVar", "0", false},
+		{"ratio", "float64", "Float64Var", "0", false},
+		{"propagates", "bool", "BoolVar", "false", false},
+		{"fields", "string", "StringVar", `""`, true},
+		{"default_tags", "string", "StringVar", `""`, true},
+		{"value", "string", "StringVar", `""`, true},
+		{"name_rule", "string", "StringVar", `""`, true},
+		{"retries", "string", "StringVar", `""`, true},
+		// A nullable string is the one nullable case that stays a plain string
+		// flag: this API clears a string with the empty string, and JSON-parsing
+		// it would make a name that is literally `30` need quoting.
+		{"icon", "string", "StringVar", `""`, false},
+	}
+	for _, tc := range cases {
+		got, ok := byName[tc.field]
+		if !ok {
+			t.Fatalf("no body field %q, got %v", tc.field, byName)
+		}
+		if got.GoType != tc.goType || got.FlagFunc != tc.flagFunc || got.Zero != tc.zero || got.JSON != tc.json {
+			t.Errorf("%s = {GoType:%s FlagFunc:%s Zero:%s JSON:%v}, want {GoType:%s FlagFunc:%s Zero:%s JSON:%v}",
+				tc.field, got.GoType, got.FlagFunc, got.Zero, got.JSON,
+				tc.goType, tc.flagFunc, tc.zero, tc.json)
+		}
+	}
+
+	cmd := buildCommand(doc, "/api/v1", "/things", "post", op)
+	out, err := render(tree([]command{cmd}))
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	src := string(out)
+	for _, want := range []string{
+		`var fSettleWindowSeconds int`,
+		`var fPropagates bool`,
+		`var fRatio float64`,
+		`var fNameRule string`,
+		`cmd.Flags().IntVar(&fSettleWindowSeconds, "settle-window-seconds", 0,`,
+		`cmd.Flags().BoolVar(&fPropagates, "propagates", false,`,
+		`cmd.Flags().Float64Var(&fRatio, "ratio", 0,`,
+		`cmd.Flags().StringVar(&fNameRule, "name-rule", "",`,
+		`body["settle_window_seconds"] = fSettleWindowSeconds`,
+		`body["name_rule"] = jsonOrString(fNameRule)`,
+		`body["retries"] = jsonOrString(fRetries)`,
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("generated source missing %q\n---\n%s", want, src)
+		}
+	}
+}
+
+// TestExamplePlaceholderNamesTheType keeps the rendered example honest once the
+// flags are typed: `--position position` reads as a runnable line and is not one,
+// and with an int flag it is now refused by the parser rather than by the server.
+// A required flag's placeholder therefore names what the flag takes.
+func TestExamplePlaceholderNamesTheType(t *testing.T) {
+	const docRaw = `{"components":{"schemas":{"SwapBody":{
+	  "required":["position","fields","label"],
+	  "properties":{
+	    "position":{"type":"integer"},
+	    "fields":{"type":"object"},
+	    "label":{"type":"string"}
+	  }}}}}`
+	const opRaw = `{"operationId":"swap-thing","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/SwapBody"}}}}}`
+	var doc spec
+	if err := json.Unmarshal([]byte(docRaw), &doc); err != nil {
+		t.Fatalf("doc: %v", err)
+	}
+	var op operation
+	if err := json.Unmarshal([]byte(opRaw), &op); err != nil {
+		t.Fatalf("op: %v", err)
+	}
+	cmd := buildCommand(doc, "/api/v1", "/things:swap", "post", op)
+	for _, want := range []string{"--position <int>", "--fields <json>", "--label label"} {
+		if !strings.Contains(cmd.Example, want) {
+			t.Errorf("example %q missing %q", cmd.Example, want)
 		}
 	}
 }

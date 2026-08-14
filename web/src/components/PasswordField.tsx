@@ -58,7 +58,7 @@ export default function PasswordField(props: {
           placeholder={props.placeholder}
           onInput={(e) => props.onInput(e.currentTarget.value)}
           disabled={props.disabled}
-          required={props.required}
+          aria-required={props.required}
         />
         <RevealButton revealed={reveal()} onToggle={() => setReveal((r) => !r)} label="password" disabled={props.disabled} />
         <Show when={props.generate}>

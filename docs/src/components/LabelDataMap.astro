@@ -1,0 +1,49 @@
+---
+// The closed data map a label rule executes over, rendered from the generated
+// facts (docs/src/generated/labeldata.json, written by make gen via cmd/labelgen).
+// Each entity kind declares its keys once, in internal/storage beside the
+// accessors that build the map, so the set taught here and the set a rule can
+// reach are readers of one declaration rather than two lists that agree today.
+//
+// The keys differ per kind and the differences are the design (a location has no
+// product and no placement fact), so the render is one table per kind rather than
+// a union with footnotes.
+//
+// Usage: <LabelDataMap /> for every kind, <LabelDataMap kind="component" /> for one.
+import labeldata from '../generated/labeldata.json';
+
+interface Props {
+  kind?: string;
+}
+
+const { kind } = Astro.props;
+const kinds = kind ? labeldata.kinds.filter((k) => k.kind === kind) : labeldata.kinds;
+---
+
+{
+  kinds.map((k) => (
+    <>
+      <p>
+        A <strong>{k.kind}</strong> rule reads {k.keys.length} keys:
+      </p>
+      <table class="label-data-map">
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>What it holds</th>
+          </tr>
+        </thead>
+        <tbody>
+          {k.keys.map((key) => (
+            <tr>
+              <td>
+                <code>{'{{.' + key.name + '}}'}</code>
+              </td>
+              <td>{key.summary}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  ))
+}

@@ -54,3 +54,21 @@ export function passwordError(value: string, username?: string): string | null {
 export function isPasswordPolicyMessage(message: string | null | undefined): boolean {
   return /^password\b/i.test((message ?? "").trim());
 }
+
+// The self-service token's lifetime, mirroring `minimum:"1" maximum:"365"` on
+// CreateMeTokenInputBody.ttl_days. It is the #724 conversion of a `min="1"
+// max="365"` pair that had sat on the field since the drawer was written and had
+// never refused anything: a Drawer's Create button is portaled outside the form,
+// so the browser never validated on the path that submits.
+//
+// Empty is not an error, it is UNSTATED: the field is optional and the server
+// applies its own default (90 days), so an empty box must reach the wire as an
+// absent field rather than as a zero.
+export const MAX_TOKEN_TTL_DAYS = 365;
+
+export function tokenTtlError(value: number | ""): string | null {
+  if (value === "") return null;
+  if (!Number.isInteger(value) || value < 1) return "A lifetime is a whole number of days, at least 1.";
+  if (value > MAX_TOKEN_TTL_DAYS) return `A token cannot outlive ${MAX_TOKEN_TTL_DAYS} days.`;
+  return null;
+}

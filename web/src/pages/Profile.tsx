@@ -4,7 +4,7 @@ import Button from "../components/Button";
 import Drawer from "../components/Drawer";
 import { useFormActions } from "../lib/formactions";
 import SessionsList from "../components/SessionsList";
-import { passwordError, isPasswordPolicyMessage } from "../lib/validate";
+import { passwordError, isPasswordPolicyMessage, tokenTtlError } from "../lib/validate";
 import { useMe, useUpdateProfile, useChangePassword, setMyAvatar, removeMyAvatar, fetchMyAvatar } from "../lib/auth";
 import { useSessions, useRevokeSession, useRevokeAllSelfSessions, createSelfToken, type Session } from "../lib/sessions";
 import { Check, Copy, Key, LogOut, Plus, Save, Trash } from "../components/icons";
@@ -208,7 +208,7 @@ export default function Profile() {
             value={current()}
             onInput={(e) => setCurrent(e.currentTarget.value)}
             disabled={pwBusy()}
-            required
+            aria-required="true"
           />
         </div>
         <div>
@@ -226,7 +226,7 @@ export default function Profile() {
             value={confirm()}
             onInput={(e) => setConfirm(e.currentTarget.value)}
             disabled={pwBusy()}
-            required
+            aria-required="true"
           />
           <Show when={confirm() && next() !== confirm()}>
             <p class="mt-1 text-[11px] text-error">Passwords do not match.</p>
@@ -243,7 +243,7 @@ export default function Profile() {
       submitIcon: Plus,
       submit: () => void createToken(),
       busy: tokenBusy,
-      disabled: () => !tokenDesc().trim(),
+      disabled: () => !tokenDesc().trim() || !!tokenTtlError(tokenTtl()),
       cancel: () => setTokenOpen(false),
     });
     return (
@@ -257,7 +257,7 @@ export default function Profile() {
             value={tokenDesc()}
             onInput={(e) => setTokenDesc(e.currentTarget.value)}
             disabled={tokenBusy()}
-            required
+            aria-required="true"
           />
           <p class="mt-1 text-[11px] text-base-content/40">Required, so you can tell your tokens apart later.</p>
         </div>
@@ -266,13 +266,13 @@ export default function Profile() {
           <input
             id="tok-ttl"
             type="number"
-            min="1"
-            max="365"
             class="input input-bordered w-full font-data"
+            classList={{ "input-error": !!tokenTtlError(tokenTtl()) }}
             value={tokenTtl()}
             onInput={(e) => setTokenTtl(e.currentTarget.value === "" ? "" : Number(e.currentTarget.value))}
             disabled={tokenBusy()}
           />
+          <Show when={tokenTtlError(tokenTtl())}>{(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}</Show>
           <p class="mt-1 text-[11px] text-base-content/40">Default 90, maximum 365. Every token is time-bounded.</p>
         </div>
         <Show when={tokenErr()}>

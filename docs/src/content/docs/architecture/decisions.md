@@ -90,7 +90,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0053](#adr-0053-a-name-is-the-address-a-uuid-is-identity) | 2026-07-21 | Superseded in part by [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key) | A name is the address, a uuid is identity |
 | [ADR-0054](#adr-0054-the-shell-owns-a-panels-action-rail-the-body-registers-and-never-draws) | 2026-07-21 | Accepted | A panel's action bar is **declared, not laid out**: a blade body binds through `lib/blades`, a Drawer form body through `lib/formactions`, and `BladeStack` / `Drawer` draw the result through the one `PanelFooter` rail. The opt-in `DrawerFooter` helper is deleted. A convention a body must remember can be forgotten, and was, by two forms for months while it was copied into six new pages around them |
 | [ADR-0055](#adr-0055-the-tag-variable-and-secret-owner-arcs-key-by-name) | 2026-07-21 | Superseded by [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key) | The tag, variable, and secret owner arcs key by name |
-| [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key) | 2026-07-22 | Accepted; the slug-keyed carve-out is retired by [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle) | Every foreign key stores a primary key |
+| [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key) | 2026-07-22 | Accepted; the slug-keyed carve-out is retired by [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle), the health carve-out amended (#717) | Every foreign key stores a primary key. **Amended (#717):** the health carve-out is gone: the advisory lock hashes `health/<kind>/<id>` and has since the identity epic (#627) landed its addressing slice, because a name-keyed lock partitions the estate only while names do and that epic scoped a location's name uniqueness to its placement |
 | [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier) | 2026-07-21 | Accepted | The cascade's least-specific **binding** tier is renamed `global` to **`platform`** on both axes (same rung, no precedence change); a **`default`** is off the axis entirely, a column on a type declaration rather than a tier; there is **no root location**; a write at the tier needs its own **`platform:<action>`** permission. **Breaking:** a secret sealed at the old tier can no longer be decrypted (the AEAD binds the owner kind) |
 | [ADR-0058](#adr-0058-a-run-mode-is-a-verb-under-its-noun-and-no-command-may-be-shadowed) | 2026-07-22 | Accepted | A run mode is a verb under its noun, and no command may be shadowed |
 | [ADR-0059](#adr-0059-every-collection-segment-is-a-command-level) | 2026-07-22 | Accepted | Every collection segment is a command level |
@@ -133,7 +133,7 @@ below from the project's history. From here it grows one slice at a time.
 
 | [ADR-0096](#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy) | 2026-08-09 | Accepted | A nested, universally seeded **`system_type`** registry lands beside `standard` (not inside it): the coarse taxonomy of what kind of space a system is (`av / room / {board, class, ...}`, `av / sign / {...}`), with `stem`, `abbrev`, and `icon` inherited down `parent_id` and overridable at any node, and `system.system_type_id` nullable for now. The identifier is reused deliberately (it was ADR-0048's retired column name for `standard_id`), so its docs-lint denylist entry is removed on ADR-0085's precedent |
 | [ADR-0097](#adr-0097-allocation-tests-the-name-it-would-mint-rather-than-reading-the-ordinal-it-stored) | 2026-08-10 | Accepted | The generated ordinal becomes a stored nullable `component.ordinal`, but sibling allocation does **not** read it: it reads sibling NAMES and returns the lowest ordinal whose MINTED name is free. An operator can hold a generated-shaped name with no ordinal, and the unique index is on the name, so an ordinal-only allocator would remint a taken name as a `23505`. Minting candidates instead of parsing siblings is what makes a stem-less name (a floor called `1`) possible, not the column; the column is what every reader DOWNSTREAM of allocation consumes. No scoped-unique index on the ordinal |
-| [ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits) | 2026-08-10 | Accepted | A label rule is Go `text/template` over a **closed `map[string]string`** AND a **closed grammar**: the sandbox is the data map (a secret is absent rather than filtered) plus an allowlist over the parsed tree (a closed set of node types and function names, so `printf` and friends are refused at rule-edit time; a length cap bounds output, which is not the same as bounding work). The map carries the entity's own columns and its resolved classification facts, and deliberately **no placement**: every input then changes on exactly five of the entity's own acts (create, rename, move, reclassify, reset), which is what makes the stored label's recompute-and-compare invariant provable. Exposing a location's name would put a location rename in that set and stale every label under it. The global tier is one row per entity kind with TWO columns, `default_template` (boot-seed space, authoritative) and `template` (operator space, nullable) |
+| [ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits) | 2026-08-10 | Accepted; the placement exclusion reversed by [ADR-0100](#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate), amended (#729) | A label rule is Go `text/template` over a **closed `map[string]string`** AND a **closed grammar**: the sandbox is the data map (a secret is absent rather than filtered) plus an allowlist over the parsed tree (a closed set of node types and function names, so `printf` and friends are refused at rule-edit time; a length cap bounds output, which is not the same as bounding work). The map carries the entity's own columns and its resolved classification facts, and deliberately **no placement**: every input then changes on exactly five of the entity's own acts (create, rename, move, reclassify, reset), which is what makes the stored label's recompute-and-compare invariant provable. Exposing a location's name would put a location rename in that set and stale every label under it. The global tier is one row per entity kind with TWO columns, `default_template` (boot-seed space, authoritative) and `template` (operator space, nullable). **Amended (#729):** the key table in the entry is the map as of this decision; each kind's keys are now declared once in `internal/storage/label_keys.go` beside the accessor that produces each value, the map is built by ranging that declaration, and the docs render it from `docs/src/generated/labeldata.json`, so the taught set and the reachable set cannot disagree |
 | [ADR-0099](#adr-0099-the-acronym-list-is-one-replaceable-setting-not-a-shipped-list-plus-operator-additions) | 2026-08-10 | Accepted | The acronym dictionary `title` consults is ONE key, `label.acronyms`, in a new `platform,client` settings namespace; an operator's list REPLACES the shipped one and provenance tells them apart, rather than a union of shipped plus additions (which would give one key a merge rule no other setting has, make the wire value a fragment rather than the effective dictionary, and make a shipped entry unremovable). The engine resolves the dictionary at render time and caches the compiled engine against the dictionary ITSELF, so a change builds a replacement rather than mutating one and no writer has a generation counter to forget; validation uses a dictionary-less engine, since whether a rule parses is a fact about the rule alone |
 | [ADR-0100](#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate) | 2026-08-10 | Accepted | A label rule reads its entity's PLACEMENT (a component's location label and its primary system's type label, a system's location label), reversing ADR-0098's exclusion, and the write paths that keep those honest are derived from the map rather than enumerated, a derivation the epic's review pass then caught missing the one the DATABASE performs (an `ON DELETE CASCADE` is a write path with no Go on it, so a system's delete now releases its memberships explicitly). The line is BLAST RADIUS, not ownership: bounded by a placement (the rows at one location, one system's members, one component's membership) it cascades inside the act's own transaction; bounded only by the estate (a rule at any tier, a classification row's display_name, the acronym list) it waits for the preview-then-apply verb. A preview is an apply that rolls back, so it lists exactly what the apply changes including the second hop. One audit row per operation, keyed on the rule, never one per changed entity |
 | [ADR-0101](#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests) | 2026-08-10 | Accepted | A generated **system** name suppresses the ordinal on the first of its stem in a placement bucket (`boardroom`, then `boardroom-2`), and the order dependence is accepted: deleting the bare one while the second survives frees the bare name again, and `boardroom-1` never exists. Suppression is a field on the MINT rather than a change to the shape (a component still reads `display-1`), and the ALLOCATOR takes that same mint, so a suppressing mint and a non-suppressing allocator cannot disagree on ordinal 1 and turn the second create into a `23505`. A placement bucket becomes a value per entity kind, so a location's two buckets cannot be written as a system's three, and the allocation lock loses the stem from its key, since two stems can now mint one name. The pen and both verbs spread to system and location; only a system generates, and a location's `:resetName` refuses with the missing fact named. No backfill: the default false is the right value for a row an operator already named. **Amended (#696, #691):** the component tier's two guards close too, its `:move` with the identical bucket comparison and its reclassify on the RESOLVED STEM rather than the classification id, because a component reaches its stem through a product and two products of one `component_type` mint the same name; the system tier's matching residual is #706 |
@@ -149,6 +149,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0109](#adr-0109-an-alarm-carries-an-acknowledgement-and-not-a-snooze-or-a-resolve) | 2026-08-13 | Accepted | An alarm's raised state belongs to its **condition** (ADR-0075) and an acknowledgement is a fact about a **person**, so the acknowledgement is two nullable columns orthogonal to `cleared_at`, never a `status` enum, and `AcknowledgeAlarm` is the one alarm write that does **not** recompute health: acknowledging is not fixing. **Snooze** and **resolve** were refused rather than deferred: snooze suppresses notification and the notification registry is unbuilt (#618), so it would be a column that lies, and resolve is either the existing clear under a second name or an unspecified concept. The permission is **`alarm:acknowledge`**, spelled out like every other seeded verb; the `alarm:ack,snooze,resolve` string that appeared in test fixtures and in the identity-access page was never a design and nothing ever seeded or enforced it. Its scope resolves on the component tier from `alarm:acknowledge` itself rather than from `component:update`, and it is granted to `operator` and **not** to `deploy`, because a location-scoped `deploy` grant reaches no component tier at all (#714) and would hold a capability that acknowledges nothing. A second acknowledgement is **idempotent**, keeping the first person and the first time and writing no second audit row |
 | [ADR-0110](#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions) | 2026-08-13 | Accepted | `principal_label(uuid)` is dropped. What names a principal (a human's username, else a service account's own identifying column) is declared once in the gateway (`internal/storage/principal_ident.go`) and rendered into the statements it binds. A READ projects both sources and folds them in Go; the audit insert binds the fold as one expression, because it runs inside the CALLER's transaction on every operator write and a Go resolution there would cost a second round trip the alarm write path pins as an exact equation. Two shapes of one policy are held together by an invariant test over every principal kind, not by care. A `node` stays out of the resolution, exactly as the dropped function had it |
 | [ADR-0111](#adr-0111-a-service-accounts-identifier-is-a-name-and-it-is-unique) | 2026-08-13 | Accepted | `service.label` becomes **`service.name`**: it is the username analogue for `kind=service`, the only handle the row has, so under the identity triad it is a name and it was the one place in the schema where `label` meant an identifier. The uniqueness question is answered rather than inherited: **unique**, matching `human_username_key` and `node_name_key`, because the string is denormalized as bare text into `audit_log.actor_username` and into an alarm's acknowledgement, where a duplicate is unresolvable after the fact. The table's declared identity shape moves from `ShapeIDOnly` to `ShapeHumanNotAKey`, and a new guard refuses any `ShapeIDOnly` table that carries a `name`. **Breaking wire change:** `svcBody.label` becomes `name`, and the group roster's mixed `coalesce(h.display_name, s.label, '')` splits into `name` and `display_name`, two fields each meaning one thing |
+| [ADR-0112](#adr-0112-a-generated-flag-carries-the-schemas-type-and-a-structured-field-carries-json) | 2026-08-13 | Accepted | `cmd/cligen` derives each body flag's TYPE from the OpenAPI property: an `integer` field is an `int` flag, a `boolean` a `bool` flag, a `number` a `float64` flag, so a value the schema refuses is refused at the shell rather than by the server's 422. Every other shape keeps ONE string flag parsed as JSON (an object, an array, an untyped `any`, and a nullable number or boolean), because a nested value has no shell-native flag type and `null` has to stay sendable: it is what clears a field named in `update_mask` (ADR-0106). A nullable STRING is the exception and stays a plain string flag, since this API clears a string with the empty string. `--propagates=false` becomes the spelling for a bool flag, and the docs flag check fails on a bool flag handed a space-separated value |
+| [ADR-0113](#adr-0113-a-validation-rule-is-typescript-and-a-native-constraint-attribute-is-not-one) | 2026-08-13 | Accepted | A console control carries **no** `required`, `min`, `max`, `pattern` or `step`: a rule is a pure function over the typed value, the surface renders its message inline beside the field, and the binding's `disabled` / `valid` refuses the submit. The audit decided it: 21 attributes on 24 rendered controls and **zero could ever fire**, because a Drawer's rail is portaled outside the `<form>` (ADR-0054), a blade has no form at all, and the four on genuine form paths sit in forms whose submit is disabled in exactly the states native validation would refuse. Wiring `form.requestSubmit()` instead would have covered the Drawers only, left every blade needing this decision anyway, and meant undoing the disabled gate so an unstyled browser bubble could refuse in place of an inline message. `aria-required` stays as the honest spelling, `type="email"` and `type="number"` stay as input types, and a guard test scans every `.tsx` |
 
 ## Entries
 
@@ -1982,9 +1984,26 @@ below from the project's history. From here it grows one slice at a time.
   collection tier (`metric_datapoint`, `interface`, `node`) and every node reference.
 - **What stays a name.** The columns whose target is slug-keyed are already conformant and were not
   touched. Health passes names internally on purpose: its advisory lock hashes `health/<kind>/<name>`,
-  and a mixed currency would hash two keys for one owner and silently stop serializing. (The
+  and a mixed currency would hash two keys for one owner and silently stop serializing. (**That
+  sentence stopped being true at #627; see the amendment below.** It is left standing because the log
+  is append-only and because its argument is the one that reversed it.) (The
   slug-keyed targets themselves later took uuid keys too, so those columns moved to the uuid; see
   [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle).)
+- **Amended (#717): the health carve-out above is no longer true, and what unmade it is the reason it
+  was a carve-out at all.** The lock hashes **`health/<kind>/<id>`**, and has since the identity epic
+  ([#627](https://github.com/hyperscaleav/omniglass/issues/627)) landed its addressing slice
+  ([#647](https://github.com/hyperscaleav/omniglass/issues/647)); health resolves a reference to the
+  row's id once, before any lock is taken. A name-keyed lock partitions an estate only while names
+  partition it, and that epic scoped a location's name uniqueness to its **placement**, so two rooms
+  under different buildings may both be `415a`. One key for two unrelated owners is a silent loss of
+  concurrency; the mixed currency this bullet warned about is a silent loss of the serialization the
+  compare-then-act recompute needs for correctness. Both halves of the argument survive, and only the
+  conclusion moved. The same fact moved the lock ORDER a slice later, because a comparison that leaves
+  two owners tied is not an order at all
+  ([#670](https://github.com/hyperscaleav/omniglass/issues/670)); the [health](/architecture/health/)
+  page has said `id` since. This entry was the last page in the corpus describing a keying scheme that
+  would be a live defect if implemented from it, so the key now lives in one named function
+  (`healthLockKey`) with a unit test asserting that two same-named rooms do not share a lock.
 - **Guarded both ways.** `TestResponsesAddressEntitiesByName` fails on a response that names an entity
   by uuid alone; the per-tier rename tests fail if an arc stops following a rename. Each conversion was
   **mutation-checked** rather than trusted: breaking the projection had to turn the suite red.
@@ -3860,8 +3879,20 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   **shipped** row of the other four is not operator-editable until each adopts ADR-0095's primitive.
   That is the pre-existing state of those registries rather than a new restriction, and the tier that
   matters most for components (`component_type`) is forkable now.
+- **Amended (#729):** the key table above is the map **as of this decision**, and it is a historical
+  snapshot rather than the live set: [ADR-0100](#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)
+  added the placement keys and #686 gave a system its `Ordinal`. The map is no longer typed out
+  anywhere. Each kind's keys are declared once in `internal/storage/label_keys.go`, beside the
+  accessor that produces each value, `labelData` builds the map by ranging that declaration, and
+  `docs/src/generated/labeldata.json` (`make gen`, via `cmd/labelgen`) renders the per-kind tables
+  [core entities](/architecture/core-entities/) publishes. So "the key set is pinned by a test" above
+  is now pinned by CONSTRUCTION, and what the tests hold is the artifact against the declaration and
+  the two `label_rule` API descriptions against it too. That last one was already wrong: both
+  enumerated the map as it stood before ADR-0100, so the console's field help and the CLI reference
+  taught seven keys where a rule could read nine.
 - **Tracked under** [#682](https://github.com/hyperscaleav/omniglass/issues/682), the second slice of
-  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
+  epic [#657](https://github.com/hyperscaleav/omniglass/issues/657), amended by
+  [#729](https://github.com/hyperscaleav/omniglass/issues/729).
 
 ### ADR-0099: The acronym list is one replaceable setting, not a shipped list plus operator additions
 
@@ -5216,3 +5247,75 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   field is a request field.
 - **Tracked under** [#563](https://github.com/hyperscaleav/omniglass/issues/563), under
   [#613](https://github.com/hyperscaleav/omniglass/issues/613).
+### ADR-0112: A generated flag carries the schema's type, and a structured field carries JSON
+
+- **Date:** 2026-08-13 | **Status:** Accepted | **Pages:** [the CLI](/guides/cli/), [API first](/contributing/api-first/)
+- **Decision:** `cmd/cligen` derives each body flag's **type** from the OpenAPI property it comes
+  from. A scalar the shell can type takes that flag type (`integer` is an `int` flag, `boolean` a
+  `bool` flag, `number` a `float64` flag, `string` a string flag), so a value the schema refuses is
+  refused **at the shell** rather than by the server's 422 after an authenticated round trip. Every
+  other shape keeps **one string flag parsed as JSON**: an object, an array, an untyped `any`, and a
+  nullable number or boolean.
+- **Context:** every body flag was a string, and every non-string field was coerced at run time by
+  `jsonOrString`. The schema said integer, the CLI said string, and the generated CLI reference
+  published `string` for all of them, which is the generate-first drift class moved inside the
+  generator: a fact the spec states, restated by hand as something else. The same wave surfaced it
+  twice, on `name_rule` (an object) and on `settle_window_seconds` (an integer with a floor of 0 the
+  flag could not carry).
+- **Why a structured field stays one JSON string, decided rather than left:** a nested value has no
+  shell-native flag type. The alternatives are repeated `key=value` pairs (pflag's `StringToString`),
+  which can express neither nesting nor an array member, or a flag per leaf, which would make the flag
+  NAMES depend on how a `$ref` happens to nest and rename them when it changes. Above both,
+  **`null` has to stay sendable**: a nullable object is cleared by naming it in `update_mask` and
+  sending null ([ADR-0106](#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask)),
+  and a typed flag has no null, so `--name-rule null` is the only spelling of that clear. That is why
+  a nullable number or boolean keeps the JSON spelling too, though the spec carries none today.
+- **The one nullable exception:** a nullable **string** stays a plain string flag. This API clears a
+  string with the empty string rather than with null, and routing it through JSON would hand it the
+  quoting hazard the string passthrough exists to avoid (a name that is literally `30`).
+- **What moved for an operator:** a boolean is now a real bool flag, so `--propagates=false` is the
+  spelling and `--propagates false` reads `false` as a positional argument. One documented line in the
+  CLI guide was exactly that mistake, so the docs flag check now fails on a bool flag handed a
+  space-separated `true` or `false`, which is a claim a page can no longer make by accident. A
+  required flag's rendered example names what the flag takes (`--position <int>`, `--fields <json>`)
+  instead of repeating the field name, since `--position position` read as a runnable line and is now
+  refused by the parser rather than by the server.
+- **Corrected on the way in:** the issue names `expected_ordinal` as one of the two fields that
+  surfaced this. That field does not exist: the #702 review replaced it with `expected_name`, and
+  `internal/docslint` refuses the word. `settle_window_seconds` is the integer under test instead.
+- **Tracked under** [#711](https://github.com/hyperscaleav/omniglass/issues/711).
+
+### ADR-0113: A validation rule is TypeScript, and a native constraint attribute is not one
+
+- **Date:** 2026-08-13 | **Status:** Accepted | **Pages:** [design system](/contributing/design-system/)
+- **Decision:** a console control carries **no** `required`, `min`, `max`, `minlength`, `maxlength`,
+  `pattern` or `step`. A rule is a **pure function** over the typed value (`lib/validate.ts`,
+  `readSettleWindow` in `lib/command_types.ts`), the surface renders its message **inline beside the
+  field**, and the form binding's `disabled` / `valid` refuses the submit. `aria-required` stays,
+  because it announces a fact to a screen reader without claiming the browser will refuse the value.
+  `validation-guard.test.ts` scans every `.tsx` for a native constraint on an `input`, `select` or
+  `textarea`.
+- **Context:** the browser enforces a constraint attribute on a real form **submission**, and this
+  console performs none on the paths an operator uses. A Drawer's action rail is drawn by the shell
+  and portaled outside the `<form>` ([ADR-0054](#adr-0054-the-shell-owns-a-panels-action-rail-the-body-registers-and-never-draws)),
+  a blade has no `<form>` at all, and the inline editors (RoleEditor, ContractEditor) save from an
+  `onClick`. **The audit is what decided it:** 21 attributes on 24 rendered controls, of which 17
+  sites are on a surface with no form submission at all, and the remaining four (three on Login, one
+  on the forced password change) sit in forms whose submit button is `disabled` in exactly the states
+  native validation would have refused. **Zero of the twenty-four could ever fire.** A reader could
+  not tell a live attribute from a decorative one because there were none of the first kind.
+- **Why not make them live instead (`form.requestSubmit()` from the rail):** it would have covered
+  the Drawers and left every blade needing this decision anyway, since a blade is a field set with a
+  contributor registry rather than a form, so native validation could not be the one vocabulary. It
+  would also mean threading a form ref through the binding into a portaled shell to reproduce an
+  effect `disabled` / `valid` already produce, and then **undoing** the disabled gate so the browser
+  could refuse instead, which is a worse operator experience: a native bubble is unstyled browser
+  chrome that says less than the inline message and vanishes on blur.
+- **What it costs and what it does not:** every removed attribute already had a TypeScript rule
+  behind it except one, the token drawer's `min="1" max="365"`, which is now `tokenTtlError` and
+  refuses a 400-day token at the field rather than at the server's 422. `type="email"` and
+  `type="number"` stay: an input TYPE carries keyboard, autofill and spinner behaviour, and is not a
+  claim that a value will be refused.
+- **Found by** [#718](https://github.com/hyperscaleav/omniglass/issues/718), whose brief asked for a
+  `min="0"` on an input that had carried one since [#411](https://github.com/hyperscaleav/omniglass/issues/411)
+  and had never fired once. **Tracked under** [#724](https://github.com/hyperscaleav/omniglass/issues/724).

@@ -4756,3 +4756,126 @@ capabilities ship, so an early slice can prove a seam without moving any page of
 
   **Breaking wire change** on two read shapes (`svcBody.label` to `name`, and the roster's
   `username` to `name`). No CLI flag moves: neither is a request field.
+- **A generated flag carries the schema's own type**
+  ([#711](https://github.com/hyperscaleav/omniglass/issues/711)). Every body flag the CLI generator
+  emitted was a string, and every non-string field was coerced at run time by `jsonOrString`. So the
+  spec said `integer`, the flag said `string`, the generated CLI reference published `string`, and an
+  operator who typed a word learned about it from the server's 422 after a round trip that had already
+  authenticated. That is the generate-first drift class the repo's own rule names, sitting inside the
+  generator: a fact the spec states, restated by hand as something else.
+
+  `cmd/cligen` now maps the property's type to the flag that carries it, so `--settle-window-seconds
+  soon` is refused by the shell before a request is issued, `--ttl-days` is an `int` and
+  `--sensitive` a `bool` in `--help` and in the reference. A structured field keeps ONE string flag
+  parsed as JSON, and that is a ruling rather than a leftover
+  ([ADR-0112](/architecture/decisions/#adr-0112-a-generated-flag-carries-the-schemas-type-and-a-structured-field-carries-json)):
+  a nested value has no shell-native flag type, and `null` has to stay sendable because it is what
+  clears a field named in `update_mask`. A nullable STRING is the single exception, since this API
+  clears a string with the empty string.
+
+  The tests drive the REAL generated tree against a canned server rather than the generator's model:
+  a word for an integer flag is refused with the server as a tripwire that fails the test if a request
+  was issued at all, `--settle-window-seconds 15` arrives on the wire as the JSON number 15, and both
+  spellings of the object case are pinned (`--name-rule '{...}'` and the `--name-rule null` that
+  clears it under the mask), so a later move to per-leaf flags cannot quietly take the second away.
+
+  One documented line broke, and the guard that found it is the point. A bool flag reads
+  `--propagates false` as a positional argument, so `--required true` in the CLI guide could no longer
+  work; the docs flag check now fails on a bool flag handed a space-separated `true` or `false`. Two
+  expectations moved in `cmd/cligen/main_test.go`, both on the boolean: `propagates.JSON` was `true`
+  and is `false`, and the rendered body line was `body["propagates"] = jsonOrString(fPropagates)` and
+  is `body["propagates"] = fPropagates`.
+
+  **The issue's own example was wrong and is corrected here.** It names `expected_ordinal` as one of
+  the two fields that surfaced this; the #702 review replaced that field with `expected_name` and
+  `internal/docslint` refuses the word, so there is no integer field by that name to cover.
+  `settle_window_seconds` is the integer under test in its place.
+
+- **The label data map is declared once, and the docs render it**
+  ([#729](https://github.com/hyperscaleav/omniglass/issues/729)). One paragraph away from the function
+  table [#701](https://github.com/hyperscaleav/omniglass/issues/701) had just made generated, the keys
+  a rule may READ were still typed out: in `core-entities`, in two `label_rule` API field
+  descriptions, and a third time in the map literals that build them. This arc changed that map three
+  times (#682 built it, #685 added the placement facts, #693 changed what `Ordinal` reports) and each
+  time the prose had to be found and hand-edited.
+
+  Each kind now declares its map ONCE, as an ordered list of key, summary and the accessor that
+  produces the value, and `labelData` builds the map by ranging that declaration. The docs render
+  `docs/src/generated/labeldata.json` (`cmd/labelgen` writes it beside the rule language's own
+  artifact, drift-gated the same way), one table per entity kind rather than a union, because the
+  differences between the three are the design: a location has no product, no vendor and no placement
+  fact, and the reasons live in the declaration's own comment now instead of in three places.
+
+  **The render is per kind and it carries a description per key**, because one key needed one. Since
+  #693 `Ordinal` is not the stored ordinal: it is the number the row's NAME shows, empty when an
+  operator named the row or when the mint suppressed the first of its stem, and a bare list of key
+  names taught the opposite of that.
+
+  **A live drift fell out of doing it.** The two `label_rule` descriptions, which are the console's
+  field help and a row in the generated CLI reference, enumerated the map as it stood before #685: an
+  operator was taught seven keys where a rule could read nine, and `LocationLabel` and
+  `SystemTypeLabel`, the two the epic's worked example is built from, were missing from the surface an
+  operator meets them on. A Huma description is a struct tag and cannot be built from the declaration
+  at run time, so a test reads the generated OpenAPI and holds every such description to the declared
+  key set and to the engine's own function names.
+
+- **The decision log stops documenting a lock key the code left behind**
+  ([#717](https://github.com/hyperscaleav/omniglass/issues/717)).
+  [ADR-0056](/architecture/decisions/#adr-0056-every-foreign-key-stores-a-primary-key) carved health
+  out of the uuid conversion and stated why: its advisory lock hashed `health/<kind>/<name>`, so a
+  mixed currency would hash two keys for one owner and silently stop serializing. The lock has hashed
+  the row's **id** since the identity epic ([#627](https://github.com/hyperscaleav/omniglass/issues/627))
+  landed its addressing slice ([#647](https://github.com/hyperscaleav/omniglass/issues/647)).
+
+  This is more than a stale sentence, and the connection is the point: a name-keyed lock partitions
+  an estate only while names partition it, and that same epic scoped a location's name uniqueness to
+  its **placement**, so two rooms under different buildings may both be `415a`. The keying scheme
+  stopped being safe at exactly the moment the epic made names non-unique. The code moved and the log
+  did not, so the log was documenting a scheme that would be a live defect if anyone implemented it
+  from the page.
+
+  The entry is amended in place rather than renumbered, the original bullet left standing with a
+  forward pointer, since the log is append-only and its argument (one currency per lock key) is the
+  one that reversed its conclusion. The [health](/architecture/health/) page needed no change: it has
+  said "owners are locked by id, in one order" since
+  [#670](https://github.com/hyperscaleav/omniglass/issues/670) moved the lock ORDER for the same
+  reason. The build log's own copy of the old claim is left exactly as it shipped, which is what this
+  page is for.
+
+  The fact now has a test rather than only a paragraph. The key moved into one named function
+  (`healthLockKey`) and a unit test asserts what the amendment claims: two same-named rooms do not
+  share a lock, one owner keys consistently, and the owner kind is part of the key.
+
+- **The console's validation attributes were decorative, so the rule moved to TypeScript**
+  ([#724](https://github.com/hyperscaleav/omniglass/issues/724)). Found while closing
+  [#718](https://github.com/hyperscaleav/omniglass/issues/718), whose brief asked for a `min="0"` on
+  an input that had carried one since [#411](https://github.com/hyperscaleav/omniglass/issues/411)
+  and had never fired once. The browser enforces `required`, `min`, `max` and `pattern` on a real form
+  **submission**, and this console performs none on the paths an operator uses: a Drawer's action rail
+  is drawn by the shell and portaled outside the `<form>`
+  ([ADR-0054](/architecture/decisions/#adr-0054-the-shell-owns-a-panels-action-rail-the-body-registers-and-never-draws)),
+  a blade has no `<form>` at all, and the inline editors save from an `onClick`.
+
+  **The audit decided the ruling rather than following it**: 21 attributes on 24 rendered controls,
+  17 sites on a surface with no form submission, and the remaining four (three on Login, one on the
+  forced password change) sitting in forms whose submit button is `disabled` in exactly the states
+  native validation would have refused. **Zero of the twenty-four could ever fire**, so a reader could
+  not tell a live attribute from a decorative one because there were none of the first kind.
+
+  So the rule is one vocabulary
+  ([ADR-0113](/architecture/decisions/#adr-0113-a-validation-rule-is-typescript-and-a-native-constraint-attribute-is-not-one)):
+  a pure function judges the typed value, the surface renders its message inline beside the field, and
+  the binding's `disabled` / `valid` refuses the submit, which reads the same on a form and on a blade.
+  Making the attributes live instead (`form.requestSubmit()` from the rail) would have covered the
+  Drawers only, left every blade needing this decision anyway, and meant undoing the disabled gate so
+  an unstyled browser bubble could refuse in place of the inline message.
+
+  One rule was genuinely missing rather than duplicated. The token drawer's `min="1" max="365"` had no
+  TypeScript behind it, so a 400-day token was refused by the server's 422 after a round trip; it is
+  `tokenTtlError` now, asserted through the drawer's own rail button rather than by calling the
+  validator. `aria-required` replaces `required` on the eleven fields that carried it, since a screen
+  reader should still hear the fact; `type="email"` and `type="number"` stay, because an input type
+  carries keyboard, autofill and spinner behaviour and is not a claim about refusal.
+  `web/src/validation-guard.test.ts` scans every `.tsx` and fails on a native constraint, with a
+  self-check that the scanner can still find one (its first version could not: a JSX attribute written
+  after an arrow-function handler defeats any regex that stops at the first `>`).

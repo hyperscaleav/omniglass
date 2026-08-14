@@ -117,7 +117,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDescription string
-				var fTtlDays string
+				var fTtlDays int
 				cmd := &cobra.Command{
 					Use:     "create-token",
 					Short:   "Create one of your own API tokens",
@@ -131,14 +131,14 @@ func generatedCommands() []*cobra.Command {
 							body["description"] = fDescription
 						}
 						if cmd.Flags().Changed("ttl-days") {
-							body["ttl_days"] = jsonOrString(fTtlDays)
+							body["ttl_days"] = fTtlDays
 						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the token is for (required)")
 				_ = cmd.MarkFlagRequired("description")
-				cmd.Flags().StringVar(&fTtlDays, "ttl-days", "", "Days until the token expires (default 90, maximum 365)")
+				cmd.Flags().IntVar(&fTtlDays, "ttl-days", 0, "Days until the token expires (default 90, maximum 365)")
 				return cmd
 			}()
 			return cmd
@@ -325,7 +325,7 @@ func generatedCommands() []*cobra.Command {
 				var fDisplayName string
 				var fName string
 				var fParamsSchema string
-				var fSettleWindowSeconds string
+				var fSettleWindowSeconds int
 				var fTargetMetricType string
 				var fTargetPropertyType string
 				cmd := &cobra.Command{
@@ -350,7 +350,7 @@ func generatedCommands() []*cobra.Command {
 							body["params_schema"] = jsonOrString(fParamsSchema)
 						}
 						if cmd.Flags().Changed("settle-window-seconds") {
-							body["settle_window_seconds"] = jsonOrString(fSettleWindowSeconds)
+							body["settle_window_seconds"] = fSettleWindowSeconds
 						}
 						if cmd.Flags().Changed("target-metric-type") {
 							body["target_metric_type"] = fTargetMetricType
@@ -366,7 +366,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fName, "name", "", "The command type name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment for the params")
-				cmd.Flags().StringVar(&fSettleWindowSeconds, "settle-window-seconds", "", "The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so.")
+				cmd.Flags().IntVar(&fSettleWindowSeconds, "settle-window-seconds", 0, "The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so.")
 				cmd.Flags().StringVar(&fTargetMetricType, "target-metric-type", "", "The metric this command sets, for settlement (at most one target arm)")
 				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets, for settlement (at most one target arm)")
 				return cmd
@@ -429,7 +429,7 @@ func generatedCommands() []*cobra.Command {
 				var fDescription string
 				var fDisplayName string
 				var fParamsSchema string
-				var fSettleWindowSeconds string
+				var fSettleWindowSeconds int
 				var fTargetMetricType string
 				var fTargetPropertyType string
 				cmd := &cobra.Command{
@@ -451,7 +451,7 @@ func generatedCommands() []*cobra.Command {
 							body["params_schema"] = jsonOrString(fParamsSchema)
 						}
 						if cmd.Flags().Changed("settle-window-seconds") {
-							body["settle_window_seconds"] = jsonOrString(fSettleWindowSeconds)
+							body["settle_window_seconds"] = fSettleWindowSeconds
 						}
 						if cmd.Flags().Changed("target-metric-type") {
 							body["target_metric_type"] = fTargetMetricType
@@ -465,7 +465,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the command does")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
 				cmd.Flags().StringVar(&fParamsSchema, "params-schema", "", "A JSON Schema fragment (replaces wholesale)")
-				cmd.Flags().StringVar(&fSettleWindowSeconds, "settle-window-seconds", "", "The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)")
+				cmd.Flags().IntVar(&fSettleWindowSeconds, "settle-window-seconds", 0, "The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)")
 				cmd.Flags().StringVar(&fTargetMetricType, "target-metric-type", "", "The metric this command sets (empty clears it; a non-empty arm clears the other)")
 				cmd.Flags().StringVar(&fTargetPropertyType, "target-property-type", "", "The property this command sets (empty clears it; a non-empty arm clears the other)")
 				return cmd
@@ -1054,7 +1054,7 @@ func generatedCommands() []*cobra.Command {
 						Use:     "update <name> <property>",
 						Short:   "Set a property on a component",
 						Long:    "Declares a value for the property on this component, overriding the product contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by component:update; an out-of-scope component is a non-disclosing 404.",
-						Example: "  omniglass component property update <name> <property> --value value",
+						Example: "  omniglass component property update <name> <property> --value <json>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/components/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
@@ -1363,7 +1363,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "What an operator reads in pickers and lists")
 				_ = cmd.MarkFlagRequired("display-name")
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A glyph key; omit to inherit the parent's")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422.")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422.")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentId, "parent-id", "", "The parent component_type, by name or uuid; omit for a root type")
@@ -1734,7 +1734,7 @@ func generatedCommands() []*cobra.Command {
 				var fContent string
 				var fContentType string
 				var fName string
-				var fSensitive string
+				var fSensitive bool
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a file from an upload",
@@ -1754,7 +1754,7 @@ func generatedCommands() []*cobra.Command {
 							body["name"] = fName
 						}
 						if cmd.Flags().Changed("sensitive") {
-							body["sensitive"] = jsonOrString(fSensitive)
+							body["sensitive"] = fSensitive
 						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
@@ -1765,7 +1765,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("content-type")
 				cmd.Flags().StringVar(&fName, "name", "", "The file's display name (a label, no path separators)")
 				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().StringVar(&fSensitive, "sensitive", "", "Admin-only visibility; defaults false. Setting true requires the admin tier")
+				cmd.Flags().BoolVar(&fSensitive, "sensitive", false, "Admin-only visibility; defaults false. Setting true requires the admin tier")
 				return cmd
 			}()
 			return cmd
@@ -2267,7 +2267,7 @@ func generatedCommands() []*cobra.Command {
 						Use:     "update <name> <property>",
 						Short:   "Set a property on a location",
 						Long:    "Declares a value for the property on this location, overriding the location type contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by location:update; an out-of-scope location is a non-disclosing 404.",
-						Example: "  omniglass location property update <name> <property> --value value",
+						Example: "  omniglass location property update <name> <property> --value <json>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/locations/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
@@ -2593,7 +2593,7 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var fDefaultValue string
-					var fRequired string
+					var fRequired bool
 					cmd := &cobra.Command{
 						Use:     "update <id> <metric>",
 						Short:   "Declare a metric on a location type",
@@ -2607,13 +2607,13 @@ func generatedCommands() []*cobra.Command {
 								body["default_value"] = jsonOrString(fDefaultValue)
 							}
 							if cmd.Flags().Changed("required") {
-								body["required"] = jsonOrString(fRequired)
+								body["required"] = fRequired
 							}
 							return runAPICommand(cmd, "PUT", path, body)
 						},
 					}
 					cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "The contract default, validated against the metric's data_type; omit for no default")
-					cmd.Flags().StringVar(&fRequired, "required", "", "Whether every location of this type must carry the metric; defaults to false")
+					cmd.Flags().BoolVar(&fRequired, "required", false, "Whether every location of this type must carry the metric; defaults to false")
 					return cmd
 				}()
 				return cmd
@@ -2662,7 +2662,7 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var fDefaultValue string
-					var fRequired string
+					var fRequired bool
 					cmd := &cobra.Command{
 						Use:     "update <id> <property>",
 						Short:   "Declare a property on a location type",
@@ -2676,13 +2676,13 @@ func generatedCommands() []*cobra.Command {
 								body["default_value"] = jsonOrString(fDefaultValue)
 							}
 							if cmd.Flags().Changed("required") {
-								body["required"] = jsonOrString(fRequired)
+								body["required"] = fRequired
 							}
 							return runAPICommand(cmd, "PUT", path, body)
 						},
 					}
 					cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "The contract default, validated against the property's data_type; omit for no default")
-					cmd.Flags().StringVar(&fRequired, "required", "", "Whether every location of this type must set the property; defaults to false")
+					cmd.Flags().BoolVar(&fRequired, "required", false, "Whether every location of this type must set the property; defaults to false")
 					return cmd
 				}()
 				return cmd
@@ -2767,7 +2767,7 @@ func generatedCommands() []*cobra.Command {
 				var fDescription string
 				var fDisplayName string
 				var fName string
-				var fPrecision string
+				var fPrecision int
 				var fUnit string
 				cmd := &cobra.Command{
 					Use:     "create",
@@ -2791,7 +2791,7 @@ func generatedCommands() []*cobra.Command {
 							body["name"] = fName
 						}
 						if cmd.Flags().Changed("precision") {
-							body["precision"] = jsonOrString(fPrecision)
+							body["precision"] = fPrecision
 						}
 						if cmd.Flags().Changed("unit") {
 							body["unit"] = fUnit
@@ -2805,7 +2805,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
 				cmd.Flags().StringVar(&fName, "name", "", "The metric type name (lowercase kebab)")
 				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().StringVar(&fPrecision, "precision", "", "Decimal places a rendered value keeps")
+				cmd.Flags().IntVar(&fPrecision, "precision", 0, "Decimal places a rendered value keeps")
 				cmd.Flags().StringVar(&fUnit, "unit", "", "The display unit of the series (ms, dB, percent)")
 				return cmd
 			}()
@@ -2866,7 +2866,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fDescription string
 				var fDisplayName string
-				var fPrecision string
+				var fPrecision int
 				var fUnit string
 				cmd := &cobra.Command{
 					Use:     "update <name>",
@@ -2884,7 +2884,7 @@ func generatedCommands() []*cobra.Command {
 							body["display_name"] = fDisplayName
 						}
 						if cmd.Flags().Changed("precision") {
-							body["precision"] = jsonOrString(fPrecision)
+							body["precision"] = fPrecision
 						}
 						if cmd.Flags().Changed("unit") {
 							body["unit"] = fUnit
@@ -2894,7 +2894,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fDescription, "description", "", "What the series measures")
 				cmd.Flags().StringVar(&fDisplayName, "display-name", "", "A human label")
-				cmd.Flags().StringVar(&fPrecision, "precision", "", "Decimal places a rendered value keeps")
+				cmd.Flags().IntVar(&fPrecision, "precision", 0, "Decimal places a rendered value keeps")
 				cmd.Flags().StringVar(&fUnit, "unit", "", "The display unit of the series")
 				return cmd
 			}()
@@ -3376,7 +3376,7 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
-				var fDurationMinutes string
+				var fDurationMinutes int
 				var fMode string
 				cmd := &cobra.Command{
 					Use:     "impersonate <id>",
@@ -3388,7 +3388,7 @@ func generatedCommands() []*cobra.Command {
 						path := fmt.Sprintf("/api/v1/principals/%s:impersonate", url.PathEscape(args[0]))
 						body := map[string]any{}
 						if cmd.Flags().Changed("duration-minutes") {
-							body["duration_minutes"] = jsonOrString(fDurationMinutes)
+							body["duration_minutes"] = fDurationMinutes
 						}
 						if cmd.Flags().Changed("mode") {
 							body["mode"] = fMode
@@ -3396,7 +3396,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fDurationMinutes, "duration-minutes", "", "Session lifetime in minutes (default 30, max 1440)")
+				cmd.Flags().IntVar(&fDurationMinutes, "duration-minutes", 0, "Session lifetime in minutes (default 30, max 1440)")
 				cmd.Flags().StringVar(&fMode, "mode", "", "view_as is read-only; act_as is full, with mutations attributed to both the real actor and the impersonated principal")
 				_ = cmd.MarkFlagRequired("mode")
 				return cmd
@@ -3986,7 +3986,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fIcon, "icon", "", "A product-level icon override; unset inherits the component_type's icon")
 				cmd.Flags().StringVar(&fKind, "kind", "", "What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly.")
 				_ = cmd.MarkFlagRequired("kind")
-				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422.")
+				cmd.Flags().StringVar(&fLabelRule, "label-rule", "", "A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422.")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fParentProductId, "parent-product-id", "", "The parent product, by handle or uuid")
@@ -4088,7 +4088,7 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var fDefaultValue string
-					var fRequired string
+					var fRequired bool
 					cmd := &cobra.Command{
 						Use:     "update <id> <metric>",
 						Short:   "Declare a metric on a product",
@@ -4102,13 +4102,13 @@ func generatedCommands() []*cobra.Command {
 								body["default_value"] = jsonOrString(fDefaultValue)
 							}
 							if cmd.Flags().Changed("required") {
-								body["required"] = jsonOrString(fRequired)
+								body["required"] = fRequired
 							}
 							return runAPICommand(cmd, "PUT", path, body)
 						},
 					}
 					cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "The contract default, validated against the metric's data_type; omit for no default")
-					cmd.Flags().StringVar(&fRequired, "required", "", "Whether every instance of this product must carry the metric; defaults to false")
+					cmd.Flags().BoolVar(&fRequired, "required", false, "Whether every instance of this product must carry the metric; defaults to false")
 					return cmd
 				}()
 				return cmd
@@ -4157,7 +4157,7 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var fDefaultValue string
-					var fRequired string
+					var fRequired bool
 					cmd := &cobra.Command{
 						Use:     "update <id> <property>",
 						Short:   "Declare a property on a product",
@@ -4171,13 +4171,13 @@ func generatedCommands() []*cobra.Command {
 								body["default_value"] = jsonOrString(fDefaultValue)
 							}
 							if cmd.Flags().Changed("required") {
-								body["required"] = jsonOrString(fRequired)
+								body["required"] = fRequired
 							}
 							return runAPICommand(cmd, "PUT", path, body)
 						},
 					}
 					cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "The contract default, validated against the property's data_type; omit for no default")
-					cmd.Flags().StringVar(&fRequired, "required", "", "Whether every instance of this product must set the property; defaults to false")
+					cmd.Flags().BoolVar(&fRequired, "required", false, "Whether every instance of this product must set the property; defaults to false")
 					return cmd
 				}()
 				return cmd
@@ -4428,7 +4428,7 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
-				var fAdminSensitive string
+				var fAdminSensitive bool
 				var fFields string
 				var fName string
 				var fOwner string
@@ -4438,13 +4438,13 @@ func generatedCommands() []*cobra.Command {
 					Use:     "create",
 					Short:   "Create a secret",
 					Long:    "Seals a secret at an owner scope. Fields are validated and encrypted against the type shape. Gated by secret:create, plus platform:create when owner_kind is platform (the install-wide tier).",
-					Example: "  omniglass secret create --fields fields --name name --owner-kind owner_kind --secret-type secret_type",
+					Example: "  omniglass secret create --fields <json> --name name --owner-kind owner_kind --secret-type secret_type",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/secrets")
 						body := map[string]any{}
 						if cmd.Flags().Changed("admin-sensitive") {
-							body["admin_sensitive"] = jsonOrString(fAdminSensitive)
+							body["admin_sensitive"] = fAdminSensitive
 						}
 						if cmd.Flags().Changed("fields") {
 							body["fields"] = jsonOrString(fFields)
@@ -4464,7 +4464,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fAdminSensitive, "admin-sensitive", "", "Admin-only visibility; omit to use the type default. Setting true requires the admin tier")
+				cmd.Flags().BoolVar(&fAdminSensitive, "admin-sensitive", false, "Admin-only visibility; omit to use the type default. Setting true requires the admin tier")
 				cmd.Flags().StringVar(&fFields, "fields", "", "The operator field map, validated against the type shape")
 				_ = cmd.MarkFlagRequired("fields")
 				cmd.Flags().StringVar(&fName, "name", "", "The cascade name (lowercase letters, digits, and hyphens); unique per owner")
@@ -4536,7 +4536,7 @@ func generatedCommands() []*cobra.Command {
 					Use:     "update <id>",
 					Short:   "Update a secret's field values",
 					Long:    "Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.",
-					Example: "  omniglass secret update <id> --fields fields",
+					Example: "  omniglass secret update <id> --fields <json>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/secrets/%s", url.PathEscape(args[0]))
@@ -4876,7 +4876,7 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var fDefaultValue string
-					var fRequired string
+					var fRequired bool
 					cmd := &cobra.Command{
 						Use:     "update <id> <metric>",
 						Short:   "Declare a metric on a standard",
@@ -4890,13 +4890,13 @@ func generatedCommands() []*cobra.Command {
 								body["default_value"] = jsonOrString(fDefaultValue)
 							}
 							if cmd.Flags().Changed("required") {
-								body["required"] = jsonOrString(fRequired)
+								body["required"] = fRequired
 							}
 							return runAPICommand(cmd, "PUT", path, body)
 						},
 					}
 					cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "The contract default, validated against the metric's data_type; omit for no default")
-					cmd.Flags().StringVar(&fRequired, "required", "", "Whether every system conforming to this standard must carry the metric; defaults to false")
+					cmd.Flags().BoolVar(&fRequired, "required", false, "Whether every system conforming to this standard must carry the metric; defaults to false")
 					return cmd
 				}()
 				return cmd
@@ -4945,7 +4945,7 @@ func generatedCommands() []*cobra.Command {
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					var fDefaultValue string
-					var fRequired string
+					var fRequired bool
 					cmd := &cobra.Command{
 						Use:     "update <id> <property>",
 						Short:   "Declare a property on a standard",
@@ -4959,13 +4959,13 @@ func generatedCommands() []*cobra.Command {
 								body["default_value"] = jsonOrString(fDefaultValue)
 							}
 							if cmd.Flags().Changed("required") {
-								body["required"] = jsonOrString(fRequired)
+								body["required"] = fRequired
 							}
 							return runAPICommand(cmd, "PUT", path, body)
 						},
 					}
 					cmd.Flags().StringVar(&fDefaultValue, "default-value", "", "The contract default, validated against the property's data_type; omit for no default")
-					cmd.Flags().StringVar(&fRequired, "required", "", "Whether every system conforming to this standard must set the property; defaults to false")
+					cmd.Flags().BoolVar(&fRequired, "required", false, "Whether every system conforming to this standard must set the property; defaults to false")
 					return cmd
 				}()
 				return cmd
@@ -5015,12 +5015,12 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					var fAcceptedTypes string
 					var fAlternate string
-					var fCapacity string
+					var fCapacity int
 					var fDisplayName string
 					var fImpact string
 					var fPinnedProducts string
 					var fPositionLabels string
-					var fQuorum string
+					var fQuorum int
 					var fUpdateMask string
 					cmd := &cobra.Command{
 						Use:     "update <id> <role>",
@@ -5038,7 +5038,7 @@ func generatedCommands() []*cobra.Command {
 								body["alternate"] = fAlternate
 							}
 							if cmd.Flags().Changed("capacity") {
-								body["capacity"] = jsonOrString(fCapacity)
+								body["capacity"] = fCapacity
 							}
 							if cmd.Flags().Changed("display-name") {
 								body["display_name"] = fDisplayName
@@ -5053,7 +5053,7 @@ func generatedCommands() []*cobra.Command {
 								body["position_labels"] = jsonOrString(fPositionLabels)
 							}
 							if cmd.Flags().Changed("quorum") {
-								body["quorum"] = jsonOrString(fQuorum)
+								body["quorum"] = fQuorum
 							}
 							if cmd.Flags().Changed("update-mask") {
 								body["update_mask"] = jsonOrString(fUpdateMask)
@@ -5063,12 +5063,12 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().StringVar(&fAcceptedTypes, "accepted-types", "", "The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask")
 					cmd.Flags().StringVar(&fAlternate, "alternate", "", "The choice/alternate this role joins, addressed as \"choice-name/alternate-name\" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422")
-					cmd.Flags().StringVar(&fCapacity, "capacity", "", "The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded")
+					cmd.Flags().IntVar(&fCapacity, "capacity", 0, "The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded")
 					cmd.Flags().StringVar(&fDisplayName, "display-name", "", "The role's human label; defaults to the role name on first declare")
 					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
 					cmd.Flags().StringVar(&fPinnedProducts, "pinned-products", "", "If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask")
 					cmd.Flags().StringVar(&fPositionLabels, "position-labels", "", "Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask")
-					cmd.Flags().StringVar(&fQuorum, "quorum", "", "How many components must fill the role; one on first declare")
+					cmd.Flags().IntVar(&fQuorum, "quorum", 0, "How many components must fill the role; one on first declare")
 					cmd.Flags().StringVar(&fUpdateMask, "update-mask", "", "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send [\"*\"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it")
 					return cmd
 				}()
@@ -5490,7 +5490,7 @@ func generatedCommands() []*cobra.Command {
 						Use:     "update <name> <property>",
 						Short:   "Set a property on a system",
 						Long:    "Declares a value for the property on this system, overriding the standard contract's default. Idempotent: the first set stores the value, a later set replaces it. The property need not be on the contract, but it must exist in the catalog (422 otherwise). Gated by system:update; an out-of-scope system is a non-disclosing 404.",
-						Example: "  omniglass system property update <name> <property> --value value",
+						Example: "  omniglass system property update <name> <property> --value <json>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/systems/%s/properties/%s", url.PathEscape(args[0]), url.PathEscape(args[1]))
@@ -5716,29 +5716,29 @@ func generatedCommands() []*cobra.Command {
 			}())
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
-					var fPosition string
-					var fWith string
+					var fPosition int
+					var fWith int
 					cmd := &cobra.Command{
 						Use:     "swapPositions <name> <role>",
 						Short:   "Exchange two occupants' positions within a role",
 						Long:    "Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
-						Example: "  omniglass system role swapPositions <name> <role> --position position --with with",
+						Example: "  omniglass system role swapPositions <name> <role> --position <int> --with <int>",
 						Args:    cobra.ExactArgs(2),
 						RunE: func(cmd *cobra.Command, args []string) error {
 							path := fmt.Sprintf("/api/v1/systems/%s/roles/%s:swapPositions", url.PathEscape(args[0]), url.PathEscape(args[1]))
 							body := map[string]any{}
 							if cmd.Flags().Changed("position") {
-								body["position"] = jsonOrString(fPosition)
+								body["position"] = fPosition
 							}
 							if cmd.Flags().Changed("with") {
-								body["with"] = jsonOrString(fWith)
+								body["with"] = fWith
 							}
 							return runAPICommand(cmd, "POST", path, body)
 						},
 					}
-					cmd.Flags().StringVar(&fPosition, "position", "", "One of the two positions to exchange")
+					cmd.Flags().IntVar(&fPosition, "position", 0, "One of the two positions to exchange")
 					_ = cmd.MarkFlagRequired("position")
-					cmd.Flags().StringVar(&fWith, "with", "", "The other position to exchange with")
+					cmd.Flags().IntVar(&fWith, "with", 0, "The other position to exchange with")
 					_ = cmd.MarkFlagRequired("with")
 					return cmd
 				}()
@@ -5748,12 +5748,12 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					var fAcceptedTypes string
 					var fAlternate string
-					var fCapacity string
+					var fCapacity int
 					var fDisplayName string
 					var fImpact string
 					var fPinnedProducts string
 					var fPositionLabels string
-					var fQuorum string
+					var fQuorum int
 					var fUpdateMask string
 					cmd := &cobra.Command{
 						Use:     "update <name> <role>",
@@ -5771,7 +5771,7 @@ func generatedCommands() []*cobra.Command {
 								body["alternate"] = fAlternate
 							}
 							if cmd.Flags().Changed("capacity") {
-								body["capacity"] = jsonOrString(fCapacity)
+								body["capacity"] = fCapacity
 							}
 							if cmd.Flags().Changed("display-name") {
 								body["display_name"] = fDisplayName
@@ -5786,7 +5786,7 @@ func generatedCommands() []*cobra.Command {
 								body["position_labels"] = jsonOrString(fPositionLabels)
 							}
 							if cmd.Flags().Changed("quorum") {
-								body["quorum"] = jsonOrString(fQuorum)
+								body["quorum"] = fQuorum
 							}
 							if cmd.Flags().Changed("update-mask") {
 								body["update_mask"] = jsonOrString(fUpdateMask)
@@ -5796,12 +5796,12 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().StringVar(&fAcceptedTypes, "accepted-types", "", "The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask")
 					cmd.Flags().StringVar(&fAlternate, "alternate", "", "The choice/alternate this role joins, addressed as \"choice-name/alternate-name\" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422")
-					cmd.Flags().StringVar(&fCapacity, "capacity", "", "The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded")
+					cmd.Flags().IntVar(&fCapacity, "capacity", 0, "The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded")
 					cmd.Flags().StringVar(&fDisplayName, "display-name", "", "The role's human label; defaults to the role name on first declare")
 					cmd.Flags().StringVar(&fImpact, "impact", "", "What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display")
 					cmd.Flags().StringVar(&fPinnedProducts, "pinned-products", "", "If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask")
 					cmd.Flags().StringVar(&fPositionLabels, "position-labels", "", "Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask")
-					cmd.Flags().StringVar(&fQuorum, "quorum", "", "How many components must fill the role; one on first declare")
+					cmd.Flags().IntVar(&fQuorum, "quorum", 0, "How many components must fill the role; one on first declare")
 					cmd.Flags().StringVar(&fUpdateMask, "update-mask", "", "Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send [\"*\"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it")
 					return cmd
 				}()
@@ -6040,7 +6040,7 @@ func generatedCommands() []*cobra.Command {
 				var fAllowedValues string
 				var fAppliesTo string
 				var fName string
-				var fPropagates string
+				var fPropagates bool
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Mint a tag key",
@@ -6060,7 +6060,7 @@ func generatedCommands() []*cobra.Command {
 							body["name"] = fName
 						}
 						if cmd.Flags().Changed("propagates") {
-							body["propagates"] = jsonOrString(fPropagates)
+							body["propagates"] = fPropagates
 						}
 						return runAPICommand(cmd, "POST", path, body)
 					},
@@ -6069,7 +6069,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fAppliesTo, "applies-to", "", "Entity kinds this key may bind to (component, system, location); omit for universal")
 				cmd.Flags().StringVar(&fName, "name", "", "The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide")
 				_ = cmd.MarkFlagRequired("name")
-				cmd.Flags().StringVar(&fPropagates, "propagates", "", "Whether bindings cascade to descendants; defaults true")
+				cmd.Flags().BoolVar(&fPropagates, "propagates", false, "Whether bindings cascade to descendants; defaults true")
 				return cmd
 			}()
 			return cmd
@@ -6136,7 +6136,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fAllowedValues string
 				var fAppliesTo string
-				var fPropagates string
+				var fPropagates bool
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a tag key",
@@ -6153,14 +6153,14 @@ func generatedCommands() []*cobra.Command {
 							body["applies_to"] = jsonOrString(fAppliesTo)
 						}
 						if cmd.Flags().Changed("propagates") {
-							body["propagates"] = jsonOrString(fPropagates)
+							body["propagates"] = fPropagates
 						}
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
 				cmd.Flags().StringVar(&fAllowedValues, "allowed-values", "", "The value enum a bound value must belong to; omit for free text")
 				cmd.Flags().StringVar(&fAppliesTo, "applies-to", "", "Entity kinds this key may bind to; omit for universal")
-				cmd.Flags().StringVar(&fPropagates, "propagates", "", "Whether bindings cascade to descendants; defaults true")
+				cmd.Flags().BoolVar(&fPropagates, "propagates", false, "Whether bindings cascade to descendants; defaults true")
 				return cmd
 			}()
 			return cmd
@@ -6243,7 +6243,7 @@ func generatedCommands() []*cobra.Command {
 					Use:     "push",
 					Short:   "Push telemetry for an owner",
 					Long:    "Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.",
-					Example: "  omniglass telemetry push --owner owner",
+					Example: "  omniglass telemetry push --owner <json>",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/telemetry:push")
@@ -6302,7 +6302,7 @@ func generatedCommands() []*cobra.Command {
 					Use:     "create",
 					Short:   "Create a variable",
 					Long:    "Sets a variable at an owner scope. The value is validated against value_type. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).",
-					Example: "  omniglass variable create --name name --owner-kind owner_kind --value value --value-type value_type",
+					Example: "  omniglass variable create --name name --owner-kind owner_kind --value <json> --value-type value_type",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/variables")
@@ -6379,7 +6379,7 @@ func generatedCommands() []*cobra.Command {
 					Use:     "update <id>",
 					Short:   "Update a variable's value",
 					Long:    "Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.",
-					Example: "  omniglass variable update <id> --value value",
+					Example: "  omniglass variable update <id> --value <json>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/variables/%s", url.PathEscape(args[0]))

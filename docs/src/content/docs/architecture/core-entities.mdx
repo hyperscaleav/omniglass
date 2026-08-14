@@ -10,6 +10,7 @@ sidebar:
 import SchemaTable from '../../../components/SchemaTable.astro';
 import IdentityShapes from '../../../components/IdentityShapes.astro';
 import RuleLanguage from '../../../components/RuleLanguage.astro';
+import LabelDataMap from '../../../components/LabelDataMap.astro';
 import SeededSet from '../../../components/SeededSet.astro';
 
 Core entities are the things an operator manages, component, system, location, and node, each with
@@ -870,10 +871,12 @@ first-non-null walk `stem` and `abbrev` follow, per node across the fork boundar
 so setting a rule on a shipped type forks that row and leaves the official one byte-identical.
 
 The rule language is Go `text/template` over a **closed map of strings** and a **closed grammar**.
-The map is the sandbox for what a rule can READ: a component's rule can read `Name`, `Ordinal`,
-`TypeName`, `TypeAbbrev`, `Stem`, `ProductName`, `VendorName`, `LocationLabel` and `SystemTypeLabel`,
-and there is no mechanism by which any other name resolves to anything, so a secret is unreachable
-because it was never put in rather than because a filter refused it. The grammar is the sandbox for
+The map is the sandbox for what a rule can READ, and there is no mechanism by which a name outside
+it resolves to anything, so a secret is unreachable because it was never put in rather than because
+a filter refused it. The keys differ per entity kind, are rendered below from the one declaration the
+engine builds them from ([#729](https://github.com/hyperscaleav/omniglass/issues/729)), and every one
+of them is always present: an absent fact is the empty string, which is falsy, so `{{if .Ordinal}}`
+is how a rule adapts. The grammar is the sandbox for
 what a rule can DO: an allowlist over the parsed tree admits a closed set of node types and a closed
 set of function names, and refuses everything else text/template offers, `printf` and variable
 declarations and `{{range}}` among them. That second half is not
@@ -891,14 +894,22 @@ a function this table names is a function the FuncMap defines and the grammar ad
 
 <RuleLanguage builtins />
 
+The map itself, per entity kind:
+
+<LabelDataMap />
+
+The keys are flat, never dotted: the map's values are strings, so there is nothing to traverse
+through, and `{{.Location.Label}}` would be a handle on another row rather than a fact copied out of
+one. The differences between the three are the design rather than gaps. A location has no product and
+no vendor because it is not an instance of a catalog row, and no placement fact because a rule that
+read its parent would stale every descendant on a campus rename.
+
 **A rule reads placement, and that is what the recompute verb is for**
 ([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
-A component's rule can read `LocationLabel` (the label of the location it sits at, falling through to
-that location's name when it has none) and `SystemTypeLabel` (the label of its primary system's
-type); a system's rule can read `LocationLabel`. Those are the keys behind
-`{{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}` rendering `Boardroom 204B Display`. The keys
-are flat, never dotted: the map's values are strings, so there is nothing to traverse through, and
-`{{.Location.Label}}` would be a handle on another row rather than a fact copied out of one.
+`LocationLabel` and `SystemTypeLabel` above are the keys behind
+`{{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}` rendering `Boardroom 204B Display`, and they
+are the reason this epic has a recompute verb at all: they are facts on rows the labelled entity does
+not own.
 
 Because a label is **stored**, every fact a rule reads is a fact some write has to re-render on, and
 those facts now live on other rows. The line is blast radius rather than ownership. Bounded by a

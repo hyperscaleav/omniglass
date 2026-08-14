@@ -33,9 +33,11 @@ describe("readSettleWindow", () => {
   });
 
   // A duration has no negative, and the console must say so where the operator is
-  // typing rather than leaving it to the server's 422. `min="0"` cannot do this:
-  // both submit paths are JS (the drawer's action bar and the blade's Save button
-  // are outside any form), so native constraint validation never runs.
+  // typing rather than leaving it to the server's 422. This is the ONLY rule now:
+  // the `min="0"` that sat beside it could never run (both submit paths are JS,
+  // the drawer's action bar and the blade's Save being outside any form) and is
+  // gone, with the console's whole validation vocabulary following it into
+  // TypeScript (#724, ADR-0113).
   it("refuses a negative window on either kind", () => {
     expect(readSettleWindow("-5", true).error).toMatch(/cannot be negative/i);
     expect(readSettleWindow("-5", false).error).toMatch(/cannot be negative/i);
