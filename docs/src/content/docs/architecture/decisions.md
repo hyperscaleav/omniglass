@@ -90,7 +90,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0053](#adr-0053-a-name-is-the-address-a-uuid-is-identity) | 2026-07-21 | Superseded in part by [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key) | A name is the address, a uuid is identity |
 | [ADR-0054](#adr-0054-the-shell-owns-a-panels-action-rail-the-body-registers-and-never-draws) | 2026-07-21 | Accepted | A panel's action bar is **declared, not laid out**: a blade body binds through `lib/blades`, a Drawer form body through `lib/formactions`, and `BladeStack` / `Drawer` draw the result through the one `PanelFooter` rail. The opt-in `DrawerFooter` helper is deleted. A convention a body must remember can be forgotten, and was, by two forms for months while it was copied into six new pages around them |
 | [ADR-0055](#adr-0055-the-tag-variable-and-secret-owner-arcs-key-by-name) | 2026-07-21 | Superseded by [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key) | The tag, variable, and secret owner arcs key by name |
-| [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key) | 2026-07-22 | Accepted; the slug-keyed carve-out is retired by [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle) | Every foreign key stores a primary key |
+| [ADR-0056](#adr-0056-every-foreign-key-stores-a-primary-key) | 2026-07-22 | Accepted; the slug-keyed carve-out is retired by [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle), the health carve-out amended (#717) | Every foreign key stores a primary key. **Amended (#717):** the health carve-out is gone: the advisory lock hashes `health/<kind>/<id>` and has since the identity epic (#627) landed its addressing slice, because a name-keyed lock partitions the estate only while names do and that epic scoped a location's name uniqueness to its placement |
 | [ADR-0057](#adr-0057-the-cascades-least-specific-tier-is-platform-and-a-default-is-not-a-tier) | 2026-07-21 | Accepted | The cascade's least-specific **binding** tier is renamed `global` to **`platform`** on both axes (same rung, no precedence change); a **`default`** is off the axis entirely, a column on a type declaration rather than a tier; there is **no root location**; a write at the tier needs its own **`platform:<action>`** permission. **Breaking:** a secret sealed at the old tier can no longer be decrypted (the AEAD binds the owner kind) |
 | [ADR-0058](#adr-0058-a-run-mode-is-a-verb-under-its-noun-and-no-command-may-be-shadowed) | 2026-07-22 | Accepted | A run mode is a verb under its noun, and no command may be shadowed |
 | [ADR-0059](#adr-0059-every-collection-segment-is-a-command-level) | 2026-07-22 | Accepted | Every collection segment is a command level |
@@ -1981,9 +1981,26 @@ below from the project's history. From here it grows one slice at a time.
   collection tier (`metric_datapoint`, `interface`, `node`) and every node reference.
 - **What stays a name.** The columns whose target is slug-keyed are already conformant and were not
   touched. Health passes names internally on purpose: its advisory lock hashes `health/<kind>/<name>`,
-  and a mixed currency would hash two keys for one owner and silently stop serializing. (The
+  and a mixed currency would hash two keys for one owner and silently stop serializing. (**That
+  sentence stopped being true at #627; see the amendment below.** It is left standing because the log
+  is append-only and because its argument is the one that reversed it.) (The
   slug-keyed targets themselves later took uuid keys too, so those columns moved to the uuid; see
   [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle).)
+- **Amended (#717): the health carve-out above is no longer true, and what unmade it is the reason it
+  was a carve-out at all.** The lock hashes **`health/<kind>/<id>`**, and has since the identity epic
+  ([#627](https://github.com/hyperscaleav/omniglass/issues/627)) landed its addressing slice
+  ([#647](https://github.com/hyperscaleav/omniglass/issues/647)); health resolves a reference to the
+  row's id once, before any lock is taken. A name-keyed lock partitions an estate only while names
+  partition it, and that epic scoped a location's name uniqueness to its **placement**, so two rooms
+  under different buildings may both be `415a`. One key for two unrelated owners is a silent loss of
+  concurrency; the mixed currency this bullet warned about is a silent loss of the serialization the
+  compare-then-act recompute needs for correctness. Both halves of the argument survive, and only the
+  conclusion moved. The same fact moved the lock ORDER a slice later, because a comparison that leaves
+  two owners tied is not an order at all
+  ([#670](https://github.com/hyperscaleav/omniglass/issues/670)); the [health](/architecture/health/)
+  page has said `id` since. This entry was the last page in the corpus describing a keying scheme that
+  would be a live defect if implemented from it, so the key now lives in one named function
+  (`healthLockKey`) with a unit test asserting that two same-named rooms do not share a lock.
 - **Guarded both ways.** `TestResponsesAddressEntitiesByName` fails on a response that names an entity
   by uuid alone; the per-tier rename tests fail if an arc stops following a rename. Each conversion was
   **mutation-checked** rather than trusted: breaking the projection had to turn the suite red.

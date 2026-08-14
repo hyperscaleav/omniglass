@@ -288,10 +288,24 @@ func (p *PG) recomputeChain(ctx context.Context, q txQuerier, components, system
 // (that is the point of taking txQuerier), so there is always a transaction to
 // scope it to.
 func lockHealthOwner(ctx context.Context, q txQuerier, ownerKind, ownerID string) error {
-	if err := lockAdvisory(ctx, q, healthKey+"/"+ownerKind+"/"+ownerID); err != nil {
+	if err := lockAdvisory(ctx, q, healthLockKey(ownerKind, ownerID)); err != nil {
 		return fmt.Errorf("storage: lock health %s/%s: %w", ownerKind, ownerID, err)
 	}
 	return nil
+}
+
+// healthLockKey is the string one owner's health lock hashes: `health/<kind>/<id>`.
+//
+// It is a function rather than an expression inline above because the CURRENCY
+// is the invariant, and it is one a test can hold (#717). The key was keyed on
+// the NAME until the identity epic (#627) moved it, and a name-keyed lock stopped
+// being safe at exactly the moment that epic scoped a location's name uniqueness
+// to its placement: two rooms under different buildings may both be `415a`, so
+// one key would serialize two unrelated owners, and a mixed currency (a name on
+// one path, an id on another) would hash two keys for one owner and silently stop
+// serializing the compare-then-act sequence that needs it.
+func healthLockKey(ownerKind, ownerID string) string {
+	return healthKey + "/" + ownerKind + "/" + ownerID
 }
 
 // lockAdvisory serializes a named critical section for the rest of the caller's
