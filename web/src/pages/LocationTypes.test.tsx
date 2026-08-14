@@ -525,6 +525,49 @@ describe("LocationTypes page", () => {
     expect(within(forkedBlade).queryByLabelText("Delete")).toBeNull();
   });
 
+  // Restore replaces the row under an OPEN editor, so the drafts have to be
+  // re-seeded from it. Found by driving the real console: after Restore the
+  // naming editor still showed the ticked box and the stem the operator had just
+  // discarded, and the next Save would have re-forked the row with the rule
+  // Restore had taken away.
+  it("re-seeds the editor from the restored row rather than holding the discarded rule", async () => {
+    const restored: LocationType = {
+      id: uuidFor("lt-floor"), name: "floor", display_name: "Floor", official: true, forked: false,
+      icon: "layers", allowed_parent_types: [],
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":restore")) {
+        return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ location_types: [restored] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...LOCATION_TYPES_KEY], [{
+      ...restored, forked: true, name_rule: { stem: "level", bare_first: true, examples: ["level", "level-2"] },
+    }]);
+    qc.setQueryData([...ME_KEY], admin);
+    qc.setQueryData([...PROPERTIES_KEY], catalog);
+    qc.setQueryData([...METRICS_KEY], []);
+    qc.setQueryData([...classifierPropertiesKey("location-type", "floor")], []);
+    qc.setQueryData([...classifierMetricsKey("location-type", "floor")], []);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <LocationTypes />
+      </QueryClientProvider>
+    ));
+    fireEvent.click(screen.getByText("floor"));
+    const blade = await openBlade();
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    expect((within(blade).getByLabelText("Name stem") as HTMLInputElement).value).toBe("level");
+    fireEvent.click(within(blade).getByText("Restore shipped"));
+    await waitFor(() =>
+      expect((within(blade).getByLabelText("The platform names locations of this type") as HTMLInputElement).checked).toBe(false),
+    );
+    expect(within(blade).queryByLabelText("Name stem")).toBeNull();
+  });
+
   // The blade model (#621): a blade opens read-only, and EVERY mutating control,
   // the contract panels' declare picker and per-line edit/withdraw included,
   // appears only after the pencil flips the blade into edit mode. Read mode

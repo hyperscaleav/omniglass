@@ -169,8 +169,14 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
   const [bareFirst, setBareFirst] = createSignal(false);
   const stemErr = () => (naming() ? nameStemError(ruleStem().trim()) : null);
 
-  createEffect(on(edit.editing, (editing) => {
-    if (!editing) return;
+  // Every draft this blade edits, seeded from the row. Entering edit is one
+  // caller; RESTORE is the other, because it replaces the row underneath an open
+  // editor and the drafts would otherwise still hold the values the operator
+  // just discarded. That was invisible while the blade's fields were a display
+  // name and an icon, which restore rarely changes; it is not invisible with the
+  // naming rule in the same form, where a stale draft means the next Save
+  // re-forks the row with the rule Restore had just taken away.
+  function seedDrafts() {
     const r = row();
     setDisplayName(r?.display_name ?? "");
     setIcon(r?.icon ?? "");
@@ -178,6 +184,11 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
     setNaming(!!r?.name_rule);
     setRuleStem(r?.name_rule?.stem ?? "");
     setBareFirst(!!r?.name_rule?.bare_first);
+  }
+
+  createEffect(on(edit.editing, (editing) => {
+    if (!editing) return;
+    seedDrafts();
     setErr(null);
   }));
 
@@ -205,6 +216,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
     try {
       await restoreLocationType(r.name);
       await qc.invalidateQueries({ queryKey: LOCATION_TYPES_KEY });
+      seedDrafts();
     } catch (e) {
       setErr(describeError(e));
     }
