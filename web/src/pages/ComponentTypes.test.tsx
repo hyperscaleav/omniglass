@@ -330,6 +330,60 @@ describe("ComponentTypes page", () => {
     expect(restored).toContain(`${uuidFor("ct-projector")}:restore`);
   });
 
+  // #741: Restore replaces the row UNDERNEATH an open editor, so the drafts have
+  // to be re-seeded from what came back. A blade seeds them once, on entering
+  // edit, and nothing else moved them, so the fields went on showing the fork
+  // the operator had just discarded and the next Save would have written that
+  // fork straight back over the shipped values.
+  //
+  // It asserts the FIELDS rather than that the request went out: the request has
+  // always been sent correctly, and sending it is not the behaviour that was
+  // broken.
+  it("re-seeds the editor from the restored row rather than holding the discarded fork", async () => {
+    const shipped: ComponentType = {
+      id: uuidFor("ct-projector"), name: "projector", display_name: "House Projector",
+      official: true, forked: false, stem: "projector", abbrev: "proj", icon: "projector", default_tags: [],
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":restore")) {
+        return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ component_types: [shipped] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    // The operator's fork: every fact on the blade overridden over the shipped
+    // row, so a draft that survives the restore is visible in any of them.
+    qc.setQueryData([...COMPONENT_TYPES_KEY], [
+      { ...shipped, forked: true, display_name: "Big Projector", stem: "bigproj", abbrev: "bp", icon: "tv" },
+    ]);
+    qc.setQueryData([...ME_KEY], admin);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <ComponentTypes />
+      </QueryClientProvider>
+    ));
+    fireEvent.click(screen.getByText("Big Projector"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    const stem = within(blade).getByLabelText("Stem") as HTMLInputElement;
+    expect(stem.value).toBe("bigproj");
+    // A dirty draft on top of the fork: the operator was mid-edit when they
+    // discarded it, which is the state the stale draft is loudest in.
+    fireEvent.input(stem, { target: { value: "midedit" } });
+
+    fireEvent.click(within(blade).getByText("Restore default"));
+    await waitFor(() => expect((within(blade).getByLabelText("Stem") as HTMLInputElement).value).toBe("projector"));
+    expect((within(blade).getByLabelText("Abbrev") as HTMLInputElement).value).toBe("proj");
+    expect((within(blade).getByLabelText("Icon") as HTMLInputElement).value).toBe("projector");
+    expect((within(blade).getByLabelText("Display name") as HTMLInputElement).value).toBe("House Projector");
+  });
+
   it("edit mode exposes stem/abbrev/icon fields and saves them, never the parent", async () => {
     let sent: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

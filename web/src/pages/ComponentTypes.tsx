@@ -1,4 +1,4 @@
-import { Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
+import { Show, createMemo, createSignal, type JSX } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -178,15 +178,19 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
   const [abbrev, setAbbrev] = createSignal("");
   const [icon, setIcon] = createSignal("");
 
-  createEffect(on(edit.editing, (editing) => {
-    if (!editing) return;
+  // Every draft this blade edits, filled from the row. It is bound to the edit
+  // slot rather than driven by an effect on `editing`, so the slot runs it on
+  // the way into edit AND `restoreType` can ask for it again by name: restore
+  // replaces the row underneath an open editor, and drafts seeded once would go
+  // on holding the fork the operator just discarded (#741).
+  function seedDrafts() {
     const r = row();
     setDisplayName(r?.display_name ?? "");
     setStem(r?.stem ?? "");
     setAbbrev(r?.abbrev ?? "");
     setIcon(r?.icon ?? "");
     setErr(null);
-  }));
+  }
 
   async function removeType() {
     const r = row();
@@ -213,6 +217,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
     try {
       await restoreComponentType(r.id);
       await qc.invalidateQueries({ queryKey: COMPONENT_TYPES_KEY });
+      edit.reseed();
     } catch (e) {
       setErr(describeError(e));
     }
@@ -253,6 +258,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
   edit.bind({
     editable: () => !!row() && can(me.data, "component_type", "update"),
     save,
+    seed: seedDrafts,
     // One destructive slot, two meanings, chosen by what the row IS: a custom
     // row is deleted, a forked shipped row has the fork discarded, and a
     // pristine shipped row offers nothing (there is neither a row to delete

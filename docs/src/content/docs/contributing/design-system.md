@@ -171,6 +171,14 @@ below three plain facts, so the same read-only state had two appearances on one 
 like a control. Both states label with the eyebrow, so the label does not change style when the
 pencil is clicked.
 
+**A blade's drafts are seeded by the edit SLOT, and never outlive the row they came from.** A body
+declares its seeder once (`edit.bind({ seed })`) instead of wiring an effect on `editing`, because
+seeding has two triggers and only one of them is entering edit. The other is a body that replaces the
+ROW underneath an open editor: `:restore` discards an operator's fork, so the row goes back to the
+shipped values while the drafts still hold the fork, the fields show values the row no longer has,
+and the next Save writes the discarded fork back over them. That body calls `edit.reseed()` and gets
+the same seeder. Binding is opt-in and a blade that seeds with its own effect is unaffected (#741).
+
 **`BladeTitle` is the heading.** The display name of the row the operator clicked, falling back to
 the identifier in the data face. It reads its row accessor inside the JSX, which is the whole of the
 rule: eight pages wrote this heading by hand and all eight read the accessor once in the component
