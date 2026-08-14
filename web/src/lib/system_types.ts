@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import { pickInheritedFacts, type InheritedFacts } from "./catalog";
 
 // The system_type registry data layer: the coarse taxonomy of what kind of
 // space a system is (ADR-0096), a boardroom, a classroom, a video wall. It is
@@ -27,14 +28,14 @@ export type SystemType = {
   resolved_icon?: string;
   // The compact form a label render uses (br, cls, vw); empty inherits.
   abbrev?: string;
-};
+} & InheritedFacts;
 
 export const SYSTEM_TYPES_KEY = ["system_types"] as const;
 
 function toSystemType(t: {
   id: string; name: string; display_name: string; official: boolean;
   parent?: string; parent_id?: string; stem?: string; icon?: string; resolved_icon?: string; abbrev?: string;
-}): SystemType {
+} & InheritedFacts): SystemType {
   return {
     id: t.id,
     name: t.name,
@@ -46,6 +47,10 @@ function toSystemType(t: {
     icon: t.icon,
     resolved_icon: t.resolved_icon,
     abbrev: t.abbrev,
+    // Served on the LISTING only, which is also the blade's read
+    // (useSystemTypeRow finds its row in this query rather than fetching one),
+    // so the blade pays nothing for them (#716).
+    ...pickInheritedFacts(t),
   };
 }
 

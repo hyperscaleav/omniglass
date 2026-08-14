@@ -5,6 +5,7 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
+import InheritedField from "../components/InheritedField";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import SystemTypeSelect from "../components/SystemTypeSelect";
@@ -20,7 +21,7 @@ import {
   deleteSystemType,
 } from "../lib/system_types";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { inheritedFact, registryLock } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -233,32 +234,35 @@ function SystemTypeBladeBody(p: { id: string }): JSX.Element {
             draft={displayName}
             onInput={setDisplayName}
           />
-          <BladeField
+          {/*
+            The same three inherited facts the component registry's blade shows,
+            through the same field (#716): the placeholder carries the value this
+            type would take with the box empty, the hint names the ancestor it
+            comes from, and both are the server's answers off the listing.
+          */}
+          <InheritedField
             label="Stem"
-            mono
-            placeholder="inherits from its parent"
             value={() => r().stem ?? ""}
             draft={stem}
             onInput={setStem}
-            hint="The prefix a generated system name is built from. Empty inherits the nearest ancestor's."
+            inherited={() => inheritedFact(r(), "stem")}
+            hint="The prefix a generated system name is built from."
           />
-          <BladeField
+          <InheritedField
             label="Abbrev"
-            mono
-            placeholder="inherits from its parent"
             value={() => r().abbrev ?? ""}
             draft={abbrev}
             onInput={setAbbrev}
-            hint="The compact label form (br, cls, vw). Empty inherits."
+            inherited={() => inheritedFact(r(), "abbrev")}
+            hint="The compact label form (br, cls, vw)."
           />
-          <BladeField
+          <InheritedField
             label="Icon"
-            mono
-            placeholder="inherits from its parent"
             value={() => r().icon ?? ""}
             draft={icon}
             onInput={setIcon}
-            hint="A glyph key. Empty inherits the nearest ancestor's."
+            inherited={() => inheritedFact(r(), "icon")}
+            hint="A glyph key."
           />
         </div>
       )}

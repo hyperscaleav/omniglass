@@ -18,7 +18,16 @@ const seed: SystemType[] = [
   { id: uuidFor("st-av"), name: "av", display_name: "AV", official: true, stem: "av", abbrev: "av", icon: "layers", resolved_icon: "layers" },
   { id: uuidFor("st-room"), name: "room", display_name: "Room", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "room", abbrev: "rm", icon: "door-open", resolved_icon: "door-open" },
   { id: uuidFor("st-board"), name: "board", display_name: "Boardroom", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "boardroom", abbrev: "br", resolved_icon: "door-open" },
-  { id: uuidFor("st-lab"), name: "lab", display_name: "Lab", official: false, parent: "room", parent_id: uuidFor("st-room"), stem: "lab", abbrev: "lab", resolved_icon: "door-open" },
+  {
+    id: uuidFor("st-lab"), name: "lab", display_name: "Lab", official: false,
+    parent: "room", parent_id: uuidFor("st-room"), stem: "lab", abbrev: "lab", resolved_icon: "door-open",
+    // The SERVER's answer to "clear this box and you get what?" (#716), seeded
+    // with strings no client-side climb could produce: `av`, two levels up,
+    // states an icon of "layers", so a console that walked the chain in
+    // TypeScript would print that and fail here.
+    inherited_icon: "icon-from-the-server", inherited_icon_source: "av",
+    inherited_stem: "stem-from-the-server", inherited_stem_source: "room",
+  },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -179,5 +188,37 @@ describe("SystemTypes page", () => {
     fireEvent.click(within(blade).getByText("Save"));
     await waitFor(() => expect(sent).toBeTruthy());
     expect(sent).toMatchObject({ stem: "", abbrev: "" });
+  });
+
+  // #716's console half on the system registry: the same field, the same
+  // vocabulary, the same served answers. Lab states a stem and an abbrev and no
+  // icon, so one field is inheriting and two are not, on one blade.
+  it("shows what an inherited fact inherits, and names the ancestor it came from", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Lab"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    // Read mode first: the icon is inheriting, so it reads as the value it
+    // takes rather than as an em dash, attributed two levels up.
+    const iconEyebrow = within(blade).getAllByText("Icon").find((el) => el.classList.contains("eyebrow"));
+    const iconFact = iconEyebrow!.parentElement!;
+    expect(iconFact.textContent).toContain("icon-from-the-server");
+    expect(iconFact.textContent).toContain("inherited from av");
+
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    const icon = within(blade).getByLabelText("Icon") as HTMLInputElement;
+    expect(icon.value).toBe("");
+    expect(icon.placeholder).toBe("icon-from-the-server");
+    expect(within(blade).getByText(/A glyph key\. Empty inherits from av\./)).toBeTruthy();
+
+    // The stem states its own, so the box holds it and the inherited value sits
+    // behind it as the placeholder: what an emptied box would take, not what
+    // the row shows.
+    const stem = within(blade).getByLabelText("Stem") as HTMLInputElement;
+    expect(stem.value).toBe("lab");
+    expect(stem.placeholder).toBe("stem-from-the-server");
   });
 });
