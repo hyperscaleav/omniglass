@@ -5096,3 +5096,29 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   read, the alarm read and the group roster, since a fold reading one column fewer than its query
   returned is a defect only a surface can show. Still not reachable in a shipped estate (nothing
   seeds a node principal with a grant), which is why it was worth fixing before something did.
+- **The registry list tells the truth about an inherited value**
+  ([#743](https://github.com/hyperscaleav/omniglass/issues/743)). #716 and #742 taught the type
+  registries' BLADE to show the value a row inherits and name the ancestor it came from. The LIST
+  went on rendering an em dash in the Stem and Abbrev cells for exactly those rows, so the console
+  asserted a value was absent on one surface and showed it on another, two clicks apart. Both cells
+  now render the inherited value, marked with the same teal dot.
+
+  No new query: `inherited_stem`, `inherited_abbrev` and their `_source` fields already ride the
+  listing (ADR-0115), which is also the blade's read, so this is a rendering change over rows already
+  in hand.
+
+  The mark **trails the value** here, which scopes ADR-0115's beside-the-label placement rather than
+  reversing it: a table's label is in the header, one per column instead of one per row, so there is
+  no per-row label to share and the read-versus-edit argument has nothing to bite on. The dot carries
+  the distinction ALONE, because dimming is already spent: every value in these columns is muted
+  (`text-base-content/60`), so telling an inherited one apart by dimming would mean either brightening
+  every stated value, a change to rows that are not the subject, or borrowing the `/40` this console
+  gives an ABSENT value, which would make "comes from elsewhere" read as "nothing here".
+
+  The **Icon** cell is brought along rather than kept as precedent. It has rendered `resolved_icon`
+  since #695 with no distinction at all, so it presented an inherited glyph exactly as a stated one;
+  once the two columns beside it tell the two apart, it is the only one left conflating them. It keeps
+  `resolved_icon` as its text (what the row SHOWS) and takes its ancestor from `inherited_icon_source`,
+  which are the same answer on any row stating no icon of its own. One `InheritedCell` primitive holds
+  all six cells across the two registries, and the em dash keeps its one meaning for a row that states
+  nothing with nothing above it.

@@ -4,8 +4,9 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
-import BladeField from "../components/BladeField";
+import BladeField, { EMPTY_VALUE } from "../components/BladeField";
 import InheritedField from "../components/InheritedField";
+import InheritedCell from "../components/InheritedCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
@@ -68,12 +69,23 @@ function NameCell(p: { row: ComponentType & { depth: number } }): JSX.Element {
   );
 }
 
+// The Icon cell resolves through the same InheritedCell the other two inherited
+// facts use. It has shown the server's resolved glyph since #695 and said
+// nothing about where the glyph came from, so it rendered an inherited value
+// exactly as it rendered a stated one; once Stem and Abbrev tell the two apart
+// (#743) it would be the only column left conflating them. The GLYPH still comes
+// from `resolved_icon` (what the row shows) and the mark from `inherited_icon`
+// (what an emptied box would take), which are the same string on a row stating
+// no icon of its own.
 function IconCell(p: { row: ComponentType; resolvedIcon: string }): JSX.Element {
   return (
-    <span class="flex items-center gap-1.5">
-      <Dynamic component={resolveIcon(p.resolvedIcon)} size={14} />
-      <span class="font-data text-xs text-base-content/60">{p.row.icon ?? p.resolvedIcon}</span>
-    </span>
+    <InheritedCell
+      label="Icon"
+      own={p.row.icon}
+      inherited={inheritedFact(p.row, "icon")}
+      shown={p.resolvedIcon}
+      leading={<Dynamic component={resolveIcon(p.resolvedIcon)} size={14} />}
+    />
   );
 }
 
@@ -90,9 +102,14 @@ export default function ComponentTypes() {
     // children), so this column deliberately does not offer to re-sort it
     // away into a flat alphabetical list.
     { key: "name", label: "Name", cell: (r) => <NameCell row={r} /> },
-    { key: "parent", label: "Parent", width: "140px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.parent ?? "—"}</span> },
-    { key: "stem", label: "Stem", width: "110px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.stem ?? "—"}</span> },
-    { key: "abbrev", label: "Abbrev", width: "90px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.abbrev ?? "—"}</span> },
+    // Parent is the row's own fact and never inherits: it IS the edge the other
+    // three facts inherit along.
+    { key: "parent", label: "Parent", width: "140px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.parent ?? EMPTY_VALUE}</span> },
+    // Stem and Abbrev show what the row TAKES when it states nothing, marked
+    // with where it came from (#743). Before this they showed an em dash on
+    // exactly the rows whose blade, two clicks away, showed the value.
+    { key: "stem", label: "Stem", width: "110px", cell: (r) => <InheritedCell label="Stem" own={r.stem} inherited={inheritedFact(r, "stem")} /> },
+    { key: "abbrev", label: "Abbrev", width: "90px", cell: (r) => <InheritedCell label="Abbrev" own={r.abbrev} inherited={inheritedFact(r, "abbrev")} /> },
     { key: "icon", label: "Icon", width: "150px", cell: (r) => <IconCell row={r} resolvedIcon={r.resolved_icon || "box"} /> },
     { key: "official", label: "Origin", width: "110px", sortVal: (r) => registryOrigin(r), cell: (r) => originBadge(r) },
   ];

@@ -27,6 +27,10 @@ const seed: ComponentType[] = [
   {
     id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", display_name: "Ceiling Microphone", official: false, forked: false,
     parent: "mic", parent_id: uuidFor("ct-mic"), default_tags: [],
+    // resolved_icon is what the row SHOWS and inherited_icon is what it would
+    // take with its own box cleared: the same string on a row that states no
+    // icon, which this one is, and two different questions everywhere else.
+    resolved_icon: "icon-from-the-server",
     inherited_stem: "from-the-server", inherited_stem_source: "mic",
     inherited_abbrev: "abbrev-from-the-server", inherited_abbrev_source: "mic",
     inherited_icon: "icon-from-the-server", inherited_icon_source: "mic",
@@ -62,6 +66,26 @@ function factOf(blade: HTMLElement, label: string): HTMLElement {
   return eyebrow.parentElement;
 }
 
+// rowFor and cellOf scope one LIST cell by its row's identity and its column's
+// header, so an assertion about the Stem column can never pass on the Abbrev
+// column's answer: three columns on this page can inherit from the same
+// ancestor, and a row-wide text query would not tell them apart.
+function rowFor(label: string): HTMLElement {
+  const row = screen
+    .getAllByRole("row")
+    .slice(1)
+    .find((r) => within(r).getAllByRole("cell")[0].textContent?.includes(label));
+  if (!row) throw new Error(`no row for ${label}`);
+  return row;
+}
+
+function cellOf(row: HTMLElement, column: string): HTMLElement {
+  const headers = within(screen.getAllByRole("row")[0]).getAllByRole("columnheader");
+  const i = headers.findIndex((h) => h.textContent?.trim() === column);
+  if (i < 0) throw new Error(`no ${column} column`);
+  return within(row).getAllByRole("cell")[i];
+}
+
 function mount(me: Me = admin) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...COMPONENT_TYPES_KEY], seed);
@@ -87,6 +111,75 @@ describe("ComponentTypes page", () => {
     expect(displayAt).toBeGreaterThanOrEqual(0);
     expect(interactiveAt).toBe(displayAt + 1);
     expect(ceilingAt).toBe(micAt + 1);
+  });
+
+  // #743: the list and the blade have to answer the same question the same way.
+  // #742 made the blade show what a row inherits; the Stem and Abbrev cells went
+  // on printing an em dash on exactly those rows, so the console said a value
+  // was absent while its own detail view, two clicks away, showed the value.
+  //
+  // The strings asserted are the SERVER's (`inherited_stem` etc.), seeded with
+  // values no client-side climb could produce: `mic` states a stem of "mic", so
+  // a list that walked the chain in TypeScript would print that and fail here.
+  it("shows the value an inheriting row takes, in the list, rather than an em dash", () => {
+    mount();
+    const row = rowFor("Ceiling Microphone");
+    const stem = cellOf(row, "Stem");
+    expect(stem.textContent).toContain("from-the-server");
+    expect(stem.textContent).not.toContain("\u2014");
+    const abbrev = cellOf(row, "Abbrev");
+    expect(abbrev.textContent).toContain("abbrev-from-the-server");
+    expect(abbrev.textContent).not.toContain("\u2014");
+  });
+
+  // Both values in these columns are muted already, so the DOT is the whole
+  // distinction (#742's vocabulary: present or absent, one teal, nothing in
+  // between). One table, one column, both states: Ceiling Microphone takes its
+  // stem from elsewhere and Display states its own.
+  it("marks an inherited value and leaves a stated one unmarked, in the same column", () => {
+    mount();
+    const inherited = cellOf(rowFor("Ceiling Microphone"), "Stem");
+    expect(within(inherited).getByRole("button", { name: "Stem is inherited from mic" })).toBeTruthy();
+    const stated = cellOf(rowFor("Display"), "Stem");
+    expect(stated.textContent).toContain("display");
+    expect(within(stated).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+  });
+
+  // Per FACT, not per row: Ceiling Array states a stem of its own and takes its
+  // abbrev from one level up, so one row carries a marked cell beside an
+  // unmarked one. A per-row treatment would mark both or neither.
+  it("marks the facts that inherit and not the ones the same row states", () => {
+    mount();
+    const row = rowFor("Ceiling Array");
+    const stem = cellOf(row, "Stem");
+    expect(stem.textContent).toContain("carray");
+    expect(within(stem).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+    const abbrev = cellOf(row, "Abbrev");
+    expect(abbrev.textContent).toContain("abbrev-from-the-server");
+    expect(within(abbrev).getByRole("button", { name: "Abbrev is inherited from ceiling-mic" })).toBeTruthy();
+  });
+
+  // The em dash keeps its one meaning: nothing here and nothing above. Deleting
+  // it outright would be the same defect pointed the other way, a cell claiming
+  // a value that does not exist.
+  it("still reads an em dash where the row states nothing and nothing above it does", () => {
+    mount();
+    const stem = cellOf(rowFor("Interactive Display"), "Stem");
+    expect(stem.textContent).toContain("\u2014");
+    expect(within(stem).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+  });
+
+  // The Icon cell has shown the resolved glyph since #695 and has never said
+  // where it came from, so it passed an inherited value off as a stated one.
+  // Once Stem and Abbrev tell the two apart, that is the odd column out (#743).
+  it("marks an inherited icon too, so the Icon cell stops passing one off as stated", () => {
+    mount();
+    const inherited = cellOf(rowFor("Ceiling Microphone"), "Icon");
+    expect(inherited.textContent).toContain("icon-from-the-server");
+    expect(within(inherited).getByRole("button", { name: "Icon is inherited from mic" })).toBeTruthy();
+    const stated = cellOf(rowFor("Microphone"), "Icon");
+    expect(stated.textContent).toContain("mic");
+    expect(within(stated).queryByRole("button", { name: /is inherited from/ })).toBeNull();
   });
 
   it("shows New component type for a caller holding component_type:create", () => {

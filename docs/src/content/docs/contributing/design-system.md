@@ -264,7 +264,7 @@ All of it comes off the listing the server already sends
 ([ADR-0115](/architecture/decisions/#adr-0115-an-inherited-fact-is-served-with-the-value-it-inherits-and-the-ancestor-it-came-from));
 no type chain is walked in TypeScript, which is what #695 deleted.
 
-**A mark about a value goes beside the LABEL, not beside the value.** The dot is present or absent
+**In a FIELD, a mark about a value goes beside the LABEL, not beside the value.** The dot is present or absent
 and nothing else, and it sits in `FieldRow`'s label row and `KVStacked`'s eyebrow, which are the same
 slot: a field's label is in the same position whether the field is being read or edited, and its
 value is not. Measured on the real console, a mark beside the value has no right answer: trailing
@@ -274,6 +274,18 @@ suits the edit state and reads as a bullet list in the read one. The same argume
 attempt to encode DEPTH in the mark: a segment-per-rung version measured 8px on a two-rung chain and
 28px on a six-rung one, so the least important variable controlled the most expensive one, and three
 marks encoding one chain never lined up with each other. Depth belongs in the hover.
+
+**In a LIST, the same mark trails the value, and carries the distinction alone.** A table's label is
+in the header, one per column instead of one per row, so there is no per-row label to share and the
+read-versus-edit argument above has nothing to bite on; leading the mark steps every marked value out
+of a column the unmarked ones hold, which is the same frame that ruled leading out of a blade's read
+state. `components/InheritedCell.tsx` is the one copy of it, consumed by both type registries' Stem,
+Abbrev and Icon columns (#743). Dimming does NOT join it there: every value in these columns is
+already muted (`text-base-content/60`, the secondary-column treatment), so telling an inherited one
+apart by dimming would mean either brightening every stated value, a change to the rows that are not
+the subject, or borrowing the `/40` this console gives an ABSENT value, which would make "comes from
+elsewhere" read as "nothing here". The em dash stays for a row that states nothing with nothing above
+it, since a cell that asserts a value it does not have is the same defect pointed the other way.
 
 **A mark that only a hover reveals is not reachable.** The dot's trigger is a button, so it is a tab
 stop that opens on focus, and the fact is written into its accessible name (`Stem is inherited from
