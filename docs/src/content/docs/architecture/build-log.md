@@ -5096,3 +5096,73 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   read, the alarm read and the group roster, since a fold reading one column fewer than its query
   returned is a defect only a surface can show. Still not reachable in a shipped estate (nothing
   seeds a node principal with a grant), which is why it was worth fixing before something did.
+- **The registry list tells the truth about an inherited value**
+  ([#743](https://github.com/hyperscaleav/omniglass/issues/743)). #716 and #742 taught the type
+  registries' BLADE to show the value a row inherits and name the ancestor it came from. The LIST
+  went on rendering an em dash in the Stem and Abbrev cells for exactly those rows, so the console
+  asserted a value was absent on one surface and showed it on another, two clicks apart. Both cells
+  now render the value the row takes.
+
+  No new query: `inherited_stem`, `inherited_abbrev` and their `_source` fields already ride the
+  listing (ADR-0115), which is also the blade's read, so this is a rendering change over rows already
+  in hand.
+
+  **The value only: the provenance mark stays a blade and detail affordance.** A table is for
+  scanning values, and the blade is where a value's origin is explained; a reader running down the
+  Stem column is answering "what is this type's stem", and a per-row attribution would charge them
+  for a question they did not ask. So a stated value and an inherited one render **identically** in a
+  table, which is the treatment rather than an omission and is asserted as such. It settles the
+  dimming question with it: every value in these columns is `text-base-content/60` already, and
+  nothing separates them further.
+
+  The **Icon** cell is the precedent the other two MATCH. It has rendered `resolved_icon` since #695
+  with no attribution at all, which is the house treatment for a table; Stem and Abbrev join it, and
+  the Icon column changes only in that its fallback chain now lives in the shared cell. One
+  `InheritedCell` holds all six cells across the two registries, with one chain (the row's own value,
+  else what the server resolved for it, else the em dash), and the em dash keeps its one meaning for
+  a row that states nothing with nothing above it.
+
+  The first cut of this slice put the mark in the cells, trailing the value, and was reversed on
+  review before merge; the entry above records what shipped, and ADR-0115's third amendment records
+  the reasoning.
+- **A restore clears the drafts it just discarded**
+  ([#741](https://github.com/hyperscaleav/omniglass/issues/741)). A registry blade seeded its edit
+  drafts once, on entering edit. `:restore` discards an operator's fork, so the row changes
+  underneath an open editor: the fields went on showing the values the operator had just thrown
+  away, and the next Save would have written that fork straight back over the shipped ones. Fixed by
+  hand on the location type blade in #710, where restore finally sat beside a field whose value
+  restore changes; the same shape was live on the component type blade, unseen because nothing there
+  had made it visible yet.
+
+  It went into the SHARED blade primitive rather than being applied a second time by hand. Seeding a
+  blade's drafts from its row is one concept with two triggers, and the edit slot (`lib/blades`) is
+  the only shared thing that knows an editor is open, so a body now binds its seeder
+  (`edit.bind({ seed })`) and the slot runs it on the way into edit, while a body that replaces the
+  row asks for it again by name (`edit.reseed()`). Both registries with a restore leg are converted;
+  binding is opt-in, so the thirteen blades that seed with a local effect on `editing` are byte-for-
+  byte unaffected.
+
+  **The system type registry needed no fix, contrary to the issue.** It has no restore leg at all:
+  `system_type` has not adopted the fork (#655, ADR-0095), carries no `forked` field, and there is no
+  `/system-types/{id}:restore` route, so the blade has no path that replaces its row. It inherits the
+  primitive the day it adopts one.
+
+  The test drives restore with a DIRTY draft on top of a fork and asserts the four fields, not that
+  the request was sent: sending the request was never the broken half.
+- **The component create form states its root-stem rule**
+  ([#744](https://github.com/hyperscaleav/omniglass/issues/744)). One rule, refused on both tiers
+  (`ErrRootComponentTypeNeedsStem` and `ErrRootSystemTypeNeedsStem`): a root type has no ancestor to
+  take a stem from, so it must state one. The SYSTEM create form had said so since it shipped; the
+  COMPONENT one never had, so the same operator was warned on one page and met the constraint as a
+  422 after submitting on the other. Pre-existing, found by #742's copy sweep.
+
+  The wording is matched rather than invented, and then written ONCE: the shared tail
+  (`Leave blank to inherit the parent's; required on a root.`) and the shared Parent sentence live in
+  `lib/catalog` beside `OFFICIAL_LOCK`, so the two forms cannot state the same rule differently
+  again. Each form still leads with its own fact, since a component's stem and a system's are
+  different facts. Both pages assert the full strings verbatim, so a change to either has to fail
+  two tests.
+
+  The paired-form sweep the issue asked for found nothing else: only these two registries are
+  tree-shaped with a stem, `location_type` is flat and carries no stem column at all, and the abbrev
+  and icon hints already agreed about inheritance on both pages.

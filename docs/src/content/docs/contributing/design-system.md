@@ -171,6 +171,14 @@ below three plain facts, so the same read-only state had two appearances on one 
 like a control. Both states label with the eyebrow, so the label does not change style when the
 pencil is clicked.
 
+**A blade's drafts are seeded by the edit SLOT, and never outlive the row they came from.** A body
+declares its seeder once (`edit.bind({ seed })`) instead of wiring an effect on `editing`, because
+seeding has two triggers and only one of them is entering edit. The other is a body that replaces the
+ROW underneath an open editor: `:restore` discards an operator's fork, so the row goes back to the
+shipped values while the drafts still hold the fork, the fields show values the row no longer has,
+and the next Save writes the discarded fork back over them. That body calls `edit.reseed()` and gets
+the same seeder. Binding is opt-in and a blade that seeds with its own effect is unaffected (#741).
+
 **`BladeTitle` is the heading.** The display name of the row the operator clicked, falling back to
 the identifier in the data face. It reads its row accessor inside the JSX, which is the whole of the
 rule: eight pages wrote this heading by hand and all eight read the accessor once in the component
@@ -264,7 +272,7 @@ All of it comes off the listing the server already sends
 ([ADR-0115](/architecture/decisions/#adr-0115-an-inherited-fact-is-served-with-the-value-it-inherits-and-the-ancestor-it-came-from));
 no type chain is walked in TypeScript, which is what #695 deleted.
 
-**A mark about a value goes beside the LABEL, not beside the value.** The dot is present or absent
+**In a FIELD, a mark about a value goes beside the LABEL, not beside the value.** The dot is present or absent
 and nothing else, and it sits in `FieldRow`'s label row and `KVStacked`'s eyebrow, which are the same
 slot: a field's label is in the same position whether the field is being read or edited, and its
 value is not. Measured on the real console, a mark beside the value has no right answer: trailing
@@ -274,6 +282,20 @@ suits the edit state and reads as a bullet list in the read one. The same argume
 attempt to encode DEPTH in the mark: a segment-per-rung version measured 8px on a two-rung chain and
 28px on a six-rung one, so the least important variable controlled the most expensive one, and three
 marks encoding one chain never lined up with each other. Depth belongs in the hover.
+
+**The mark is a BLADE and detail affordance. A list shows the value and says nothing about where it
+came from.** A table is for scanning values; the blade is where a value's origin is explained. A
+reader running down the Stem column is answering "what is this type's stem", and a per-row
+attribution charges them for a question they did not ask, so a cell states the value and stops: a
+stated value and an inherited one render **identically** in a table, which is the treatment rather
+than an omission. `components/InheritedCell.tsx` is the one copy of the list render, consumed by both
+type registries' Stem, Abbrev and Icon columns (#743); it holds one fallback chain, the row's own
+value, else what the server resolved for it, else the em dash. The Icon column, which has shown
+`resolved_icon` undifferentiated since #695, is the precedent the other two match. The em dash stays
+for a row that states nothing with nothing above it, since a cell that asserts a value it does not
+have is the same defect pointed the other way. The two surfaces still agree about the FACT, which is
+the whole of #743: what changed is that the list stopped claiming an inherited value was absent, not
+that it started explaining inheritance.
 
 **A mark that only a hover reveals is not reachable.** The dot's trigger is a button, so it is a tab
 stop that opens on focus, and the fact is written into its accessible name (`Stem is inherited from

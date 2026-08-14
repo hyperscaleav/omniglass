@@ -28,12 +28,44 @@ const seed: SystemType[] = [
     inherited_icon: "icon-from-the-server", inherited_icon_source: "av",
     inherited_stem: "stem-from-the-server", inherited_stem_source: "room",
   },
+  // A custom row that states NONE of the three, so the list has an inheriting
+  // row to put beside a stating one in the same columns (#743). Its three facts
+  // come from two different distances up the chain, and resolved_icon is what
+  // the server says it SHOWS, which on a row stating no icon is the value it
+  // takes.
+  {
+    id: uuidFor("st-studio"), name: "studio", display_name: "Studio", official: false,
+    parent: "room", parent_id: uuidFor("st-room"), resolved_icon: "icon-from-the-server",
+    inherited_stem: "stem-from-the-server", inherited_stem_source: "room",
+    inherited_abbrev: "abbrev-from-the-server", inherited_abbrev_source: "av",
+    inherited_icon: "icon-from-the-server", inherited_icon_source: "av",
+  },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
+
+// rowFor and cellOf scope one LIST cell by its row's identity and its column's
+// header, so an assertion about the Stem column can never pass on the Abbrev
+// column's answer: three columns on this page can inherit from the same
+// ancestor, and a row-wide text query would not tell them apart.
+function rowFor(label: string): HTMLElement {
+  const row = screen
+    .getAllByRole("row")
+    .slice(1)
+    .find((r) => within(r).getAllByRole("cell")[0].textContent?.includes(label));
+  if (!row) throw new Error(`no row for ${label}`);
+  return row;
+}
+
+function cellOf(row: HTMLElement, column: string): HTMLElement {
+  const headers = within(screen.getAllByRole("row")[0]).getAllByRole("columnheader");
+  const i = headers.findIndex((h) => h.textContent?.trim() === column);
+  if (i < 0) throw new Error(`no ${column} column`);
+  return within(row).getAllByRole("cell")[i];
+}
 
 function mount(me: Me = admin) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
@@ -70,6 +102,58 @@ describe("SystemTypes page", () => {
     // resolved for it (room's, not the root av's).
     expect(boardRow.textContent).toContain("door-open");
     expect(boardRow.textContent).not.toContain("layers");
+  });
+
+  // #743, the system registry's half: the same defect, the same fix, the same
+  // vocabulary. The strings are the SERVER's, seeded so that a list climbing the
+  // chain in TypeScript would print `room`'s real stem and fail here.
+  it("shows the value an inheriting row takes, in the list, rather than an em dash", () => {
+    mount();
+    const row = rowFor("Studio");
+    const stem = cellOf(row, "Stem");
+    expect(stem.textContent).toContain("stem-from-the-server");
+    expect(stem.textContent).not.toContain("\u2014");
+    const abbrev = cellOf(row, "Abbrev");
+    expect(abbrev.textContent).toContain("abbrev-from-the-server");
+    expect(abbrev.textContent).not.toContain("\u2014");
+  });
+
+  // A stated value and an inherited one render IDENTICALLY in a table: the mark
+  // is a blade and detail affordance, because a table is for scanning values and
+  // the blade is where a value's origin is explained. One table, one column,
+  // both states, nothing telling them apart.
+  it("renders an inherited value exactly as a stated one, in the same column", () => {
+    mount();
+    const stated = cellOf(rowFor("Lab"), "Stem");
+    expect(stated.textContent).toContain("lab");
+    expect(within(stated).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+    const inherited = cellOf(rowFor("Studio"), "Stem");
+    expect(inherited.textContent).toContain("stem-from-the-server");
+    expect(within(inherited).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+  });
+
+  // The Icon cell has shown the resolved glyph since #695 without saying where
+  // it came from, which is the treatment the other two now match. Boardroom is
+  // the control: it states no icon and the server served it no inherited answer,
+  // so the cell names what it shows and, like every other cell, attributes
+  // nothing.
+  it("shows an inherited icon as plainly as a resolved one with no ancestor named", () => {
+    mount();
+    const inherited = cellOf(rowFor("Studio"), "Icon");
+    expect(inherited.textContent).toContain("icon-from-the-server");
+    expect(within(inherited).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+    const unattributed = cellOf(rowFor("Boardroom"), "Icon");
+    expect(unattributed.textContent).toContain("door-open");
+    expect(within(unattributed).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+  });
+
+  // The guard for the ruling, asked of the WHOLE table rather than of the two
+  // columns that changed. The blade's own marks are asserted below and are
+  // untouched, so this is a statement about the surface, not about the feature.
+  it("puts no provenance mark anywhere in the table, which is a blade affordance", () => {
+    mount();
+    const table = screen.getAllByRole("table")[0];
+    expect(within(table).queryAllByRole("button", { name: /is inherited from/ })).toHaveLength(0);
   });
 
   it("shows New system type only for a caller holding system_type:create", () => {
@@ -121,6 +205,10 @@ describe("SystemTypes page", () => {
     const form = screen.getByPlaceholderText("huddle").closest("form") as HTMLElement;
     expect(within(form).queryByRole("button", { name: /is inherited from/ })).toBeNull();
     expect(within(form).getByText("The prefix a generated system name is built from. Leave blank to inherit the parent's; required on a root.")).toBeTruthy();
+    // Pinned verbatim on both pages (#744): the two create forms are
+    // byte-similar by design, and the root-stem rule is one rule the server
+    // enforces on both tiers, so a change to either wording has to fail here.
+    expect(within(form).getByText("Where this type grafts in the tree. Root creates a new top-level genus and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.")).toBeTruthy();
     expect(within(form).getByText("The compact label form (br, cls, vw). Leave blank to inherit.")).toBeTruthy();
     expect(within(form).getByText("A glyph key. Leave blank to inherit.")).toBeTruthy();
   });

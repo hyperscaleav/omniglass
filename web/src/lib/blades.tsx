@@ -108,6 +108,20 @@ export type BladeEdit = {
   begin: () => void;
   cancel: () => void;
   save: () => Promise<void>;
+  // Re-run the bound `seed`, for a body that replaces the ROW underneath an open
+  // editor. The slot seeds on the way into edit, which covers every blade whose
+  // row only changes when the operator saves it; `:restore` is the other case,
+  // discarding an operator's fork so the row goes back to the shipped values
+  // while the drafts still hold the fork. Left unseeded the fields show values
+  // the row no longer has, and the next Save writes the discarded fork back over
+  // them (#741, first seen on the location type blade in #710, where restore
+  // finally sat beside a field whose value restore changes).
+  //
+  // It lives here rather than as a call each page remembers to make because the
+  // slot is the only shared thing that knows an editor is open: "seed the drafts
+  // from the row" is one concept with two triggers, and a page that binds the
+  // seeder gets both.
+  reseed: () => void;
   // Register an extra saver a panel contributes to the blade's Save (e.g. the
   // Fields panel flushing its staged field values). Contributors run before the
   // bound primary save, so they target the entity's current name before a rename;
@@ -130,6 +144,11 @@ export type BladeEdit = {
     valid?: () => boolean;
     save?: () => Promise<void>;
     cancel?: () => void;
+    // Fill this body's draft signals from the row as it stands. Bound, the slot
+    // runs it on entering edit (so the body needs no effect of its own) and
+    // again whenever the body calls `reseed`. Unbound, nothing changes: a blade
+    // that seeds with its own effect on `editing` behaves exactly as before.
+    seed?: () => void;
     destructive?: () => BladeDestructive | undefined;
     secondary?: () => BladeSecondary[];
     primary?: () => BladePrimary | undefined;
@@ -148,6 +167,7 @@ export function createEditSlot(): BladeEdit {
   let secondaryPred: () => BladeSecondary[] = () => [];
   let primaryPred: () => BladePrimary | undefined = () => undefined;
   let lockedPred: () => BladeLock = () => null;
+  let seedFn: () => void = () => {};
   // Extra savers panels contribute (the fields panel, etc.), flushed before the
   // primary save.
   const contributors = new Set<() => Promise<void>>();
@@ -156,7 +176,13 @@ export function createEditSlot(): BladeEdit {
     editing,
     saving,
     valid: () => validPred(),
-    begin: () => setEditing(true),
+    // Seed BEFORE the edit controls render, so they mount holding the row's
+    // values rather than being filled a tick later.
+    begin: () => {
+      seedFn();
+      setEditing(true);
+    },
+    reseed: () => seedFn(),
     cancel: () => {
       handler.cancel();
       setEditing(false);
@@ -189,6 +215,7 @@ export function createEditSlot(): BladeEdit {
       secondaryPred = h.secondary ?? (() => []);
       primaryPred = h.primary ?? (() => undefined);
       lockedPred = h.locked ?? (() => null);
+      seedFn = h.seed ?? (() => {});
       setBound(true);
     },
   };

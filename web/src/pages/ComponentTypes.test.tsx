@@ -27,6 +27,10 @@ const seed: ComponentType[] = [
   {
     id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", display_name: "Ceiling Microphone", official: false, forked: false,
     parent: "mic", parent_id: uuidFor("ct-mic"), default_tags: [],
+    // resolved_icon is what the row SHOWS and inherited_icon is what it would
+    // take with its own box cleared: the same string on a row that states no
+    // icon, which this one is, and two different questions everywhere else.
+    resolved_icon: "icon-from-the-server",
     inherited_stem: "from-the-server", inherited_stem_source: "mic",
     inherited_abbrev: "abbrev-from-the-server", inherited_abbrev_source: "mic",
     inherited_icon: "icon-from-the-server", inherited_icon_source: "mic",
@@ -62,6 +66,26 @@ function factOf(blade: HTMLElement, label: string): HTMLElement {
   return eyebrow.parentElement;
 }
 
+// rowFor and cellOf scope one LIST cell by its row's identity and its column's
+// header, so an assertion about the Stem column can never pass on the Abbrev
+// column's answer: three columns on this page can inherit from the same
+// ancestor, and a row-wide text query would not tell them apart.
+function rowFor(label: string): HTMLElement {
+  const row = screen
+    .getAllByRole("row")
+    .slice(1)
+    .find((r) => within(r).getAllByRole("cell")[0].textContent?.includes(label));
+  if (!row) throw new Error(`no row for ${label}`);
+  return row;
+}
+
+function cellOf(row: HTMLElement, column: string): HTMLElement {
+  const headers = within(screen.getAllByRole("row")[0]).getAllByRole("columnheader");
+  const i = headers.findIndex((h) => h.textContent?.trim() === column);
+  if (i < 0) throw new Error(`no ${column} column`);
+  return within(row).getAllByRole("cell")[i];
+}
+
 function mount(me: Me = admin) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...COMPONENT_TYPES_KEY], seed);
@@ -87,6 +111,88 @@ describe("ComponentTypes page", () => {
     expect(displayAt).toBeGreaterThanOrEqual(0);
     expect(interactiveAt).toBe(displayAt + 1);
     expect(ceilingAt).toBe(micAt + 1);
+  });
+
+  // #743: the list and the blade have to answer the same question the same way.
+  // #742 made the blade show what a row inherits; the Stem and Abbrev cells went
+  // on printing an em dash on exactly those rows, so the console said a value
+  // was absent while its own detail view, two clicks away, showed the value.
+  //
+  // The strings asserted are the SERVER's (`inherited_stem` etc.), seeded with
+  // values no client-side climb could produce: `mic` states a stem of "mic", so
+  // a list that walked the chain in TypeScript would print that and fail here.
+  it("shows the value an inheriting row takes, in the list, rather than an em dash", () => {
+    mount();
+    const row = rowFor("Ceiling Microphone");
+    const stem = cellOf(row, "Stem");
+    expect(stem.textContent).toContain("from-the-server");
+    expect(stem.textContent).not.toContain("\u2014");
+    const abbrev = cellOf(row, "Abbrev");
+    expect(abbrev.textContent).toContain("abbrev-from-the-server");
+    expect(abbrev.textContent).not.toContain("\u2014");
+  });
+
+  // A stated value and an inherited one render IDENTICALLY in a table. That is
+  // the ruling, not an omission: a table is for scanning values, and the blade
+  // is where a value's origin is explained, so the provenance mark is a blade
+  // and detail affordance only. One table, one column, both states: Ceiling
+  // Microphone takes its stem from elsewhere and Display states its own, and
+  // nothing in the row says which is which.
+  it("renders an inherited value exactly as a stated one, in the same column", () => {
+    mount();
+    const inherited = cellOf(rowFor("Ceiling Microphone"), "Stem");
+    expect(inherited.textContent).toContain("from-the-server");
+    expect(within(inherited).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+    const stated = cellOf(rowFor("Display"), "Stem");
+    expect(stated.textContent).toContain("display");
+    expect(within(stated).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+  });
+
+  // Per FACT, not per row: Ceiling Array states a stem of its own and takes its
+  // abbrev from one level up, so one row shows a value it chose beside a value
+  // it was given, both plainly.
+  it("shows a stated fact and an inherited one on the same row, both plainly", () => {
+    mount();
+    const row = rowFor("Ceiling Array");
+    const stem = cellOf(row, "Stem");
+    expect(stem.textContent).toContain("carray");
+    const abbrev = cellOf(row, "Abbrev");
+    expect(abbrev.textContent).toContain("abbrev-from-the-server");
+    expect(within(stem).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+    expect(within(abbrev).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+  });
+
+  // The guard for the ruling, asked of the WHOLE table rather than of the two
+  // columns that changed: no provenance mark under any cell, on any row, in any
+  // column. The blade's own marks are asserted elsewhere in this file and are
+  // untouched, so this is a statement about the surface, not about the feature.
+  it("puts no provenance mark anywhere in the table, which is a blade affordance", () => {
+    mount();
+    const table = screen.getAllByRole("table")[0];
+    expect(within(table).queryAllByRole("button", { name: /is inherited from/ })).toHaveLength(0);
+  });
+
+  // The em dash keeps its one meaning: nothing here and nothing above. Deleting
+  // it outright would be the same defect pointed the other way, a cell claiming
+  // a value that does not exist.
+  it("still reads an em dash where the row states nothing and nothing above it does", () => {
+    mount();
+    const stem = cellOf(rowFor("Interactive Display"), "Stem");
+    expect(stem.textContent).toContain("\u2014");
+    expect(within(stem).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+  });
+
+  // The Icon cell has shown the resolved glyph since #695 without saying where
+  // it came from, and that is the treatment Stem and Abbrev now MATCH rather
+  // than depart from (#743). It is the precedent, not the odd column out.
+  it("shows an inherited icon as plainly as a stated one, the precedent the other two match", () => {
+    mount();
+    const inherited = cellOf(rowFor("Ceiling Microphone"), "Icon");
+    expect(inherited.textContent).toContain("icon-from-the-server");
+    expect(within(inherited).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+    const stated = cellOf(rowFor("Microphone"), "Icon");
+    expect(stated.textContent).toContain("mic");
+    expect(within(stated).queryByRole("button", { name: /is inherited from/ })).toBeNull();
   });
 
   it("shows New component type for a caller holding component_type:create", () => {
@@ -144,13 +250,22 @@ describe("ComponentTypes page", () => {
   // therefore no mark on this form at all. The clause below is the only thing
   // telling an operator that a blank box is a choice rather than an omission, at
   // the one moment they are deciding whether to type a value.
-  it("tells the create form's operator that a blank fact inherits, where there is no mark to say it", async () => {
+  //
+  // It also has to state the one constraint the server enforces at create and
+  // the form cannot recover from: `ErrRootComponentTypeNeedsStem` refuses a root
+  // with no stem, exactly as `ErrRootSystemTypeNeedsStem` does on the tier
+  // beside it. The system form has said so since it shipped and this one never
+  // did, so the same operator was warned on one page and met a 422 on the other
+  // (#744). The strings are asserted verbatim, on both pages, because the two
+  // forms are byte-similar by design and this is the sentence one of them lost.
+  it("tells the create form's operator that a blank fact inherits, and that a root's stem is required", async () => {
     mount();
     fireEvent.click(screen.getByText("New component type"));
     await screen.findByPlaceholderText("Wireless Microphone");
     const form = screen.getByPlaceholderText("wireless-mic").closest("form") as HTMLElement;
     expect(within(form).queryByRole("button", { name: /is inherited from/ })).toBeNull();
-    expect(within(form).getByText("The auto-generated component name's prefix. Leave blank to inherit the parent's.")).toBeTruthy();
+    expect(within(form).getByText("The auto-generated component name's prefix. Leave blank to inherit the parent's; required on a root.")).toBeTruthy();
+    expect(within(form).getByText("Where this type grafts in the tree. Root creates a new top-level genus and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.")).toBeTruthy();
     expect(within(form).getByText("The compact hostname-render form (fp, cam, dsp). Leave blank to inherit.")).toBeTruthy();
     expect(within(form).getByText("A glyph key. Leave blank to inherit.")).toBeTruthy();
   });
@@ -235,6 +350,60 @@ describe("ComponentTypes page", () => {
     fireEvent.click(within(forked).getByText("Restore default"));
     await waitFor(() => expect(restored).toBeTruthy());
     expect(restored).toContain(`${uuidFor("ct-projector")}:restore`);
+  });
+
+  // #741: Restore replaces the row UNDERNEATH an open editor, so the drafts have
+  // to be re-seeded from what came back. A blade seeds them once, on entering
+  // edit, and nothing else moved them, so the fields went on showing the fork
+  // the operator had just discarded and the next Save would have written that
+  // fork straight back over the shipped values.
+  //
+  // It asserts the FIELDS rather than that the request went out: the request has
+  // always been sent correctly, and sending it is not the behaviour that was
+  // broken.
+  it("re-seeds the editor from the restored row rather than holding the discarded fork", async () => {
+    const shipped: ComponentType = {
+      id: uuidFor("ct-projector"), name: "projector", display_name: "House Projector",
+      official: true, forked: false, stem: "projector", abbrev: "proj", icon: "projector", default_tags: [],
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "POST" && req.url.includes(":restore")) {
+        return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ component_types: [shipped] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    // The operator's fork: every fact on the blade overridden over the shipped
+    // row, so a draft that survives the restore is visible in any of them.
+    qc.setQueryData([...COMPONENT_TYPES_KEY], [
+      { ...shipped, forked: true, display_name: "Big Projector", stem: "bigproj", abbrev: "bp", icon: "tv" },
+    ]);
+    qc.setQueryData([...ME_KEY], admin);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <ComponentTypes />
+      </QueryClientProvider>
+    ));
+    fireEvent.click(screen.getByText("Big Projector"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    const stem = within(blade).getByLabelText("Stem") as HTMLInputElement;
+    expect(stem.value).toBe("bigproj");
+    // A dirty draft on top of the fork: the operator was mid-edit when they
+    // discarded it, which is the state the stale draft is loudest in.
+    fireEvent.input(stem, { target: { value: "midedit" } });
+
+    fireEvent.click(within(blade).getByText("Restore default"));
+    await waitFor(() => expect((within(blade).getByLabelText("Stem") as HTMLInputElement).value).toBe("projector"));
+    expect((within(blade).getByLabelText("Abbrev") as HTMLInputElement).value).toBe("proj");
+    expect((within(blade).getByLabelText("Icon") as HTMLInputElement).value).toBe("projector");
+    expect((within(blade).getByLabelText("Display name") as HTMLInputElement).value).toBe("House Projector");
   });
 
   it("edit mode exposes stem/abbrev/icon fields and saves them, never the parent", async () => {

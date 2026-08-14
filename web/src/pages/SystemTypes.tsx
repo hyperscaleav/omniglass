@@ -4,8 +4,9 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
-import BladeField from "../components/BladeField";
+import BladeField, { EMPTY_VALUE } from "../components/BladeField";
 import InheritedField from "../components/InheritedField";
+import InheritedCell from "../components/InheritedCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import SystemTypeSelect from "../components/SystemTypeSelect";
@@ -21,7 +22,7 @@ import {
   deleteSystemType,
 } from "../lib/system_types";
 import { useMe, can } from "../lib/auth";
-import { inheritedFact, registryLock } from "../lib/catalog";
+import { ROOT_STEM_HINT, TYPE_PARENT_HINT, inheritedFact, registryLock } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -57,12 +58,17 @@ function NameCell(p: { row: SystemType & { depth: number } }): JSX.Element {
   );
 }
 
+// The Icon cell resolves through the same InheritedCell the other two inherited
+// facts use, for the reason the component registry's copy of it records: it has
+// shown the server's resolved glyph since #695 without saying where the glyph
+// came from, and that is the treatment the other two now match.
 function IconCell(p: { row: SystemType; resolvedIcon: string }): JSX.Element {
   return (
-    <span class="flex items-center gap-1.5">
-      <Dynamic component={resolveIcon(p.resolvedIcon)} size={14} />
-      <span class="font-data text-xs text-base-content/60">{p.row.icon ?? p.resolvedIcon}</span>
-    </span>
+    <InheritedCell
+      own={p.row.icon}
+      resolved={p.resolvedIcon}
+      leading={<Dynamic component={resolveIcon(p.resolvedIcon)} size={14} />}
+    />
   );
 }
 
@@ -80,9 +86,14 @@ export default function SystemTypes() {
     // children), so this column deliberately does not offer to re-sort it away
     // into a flat alphabetical list.
     { key: "name", label: "Name", cell: (r) => <NameCell row={r} /> },
-    { key: "parent", label: "Parent", width: "140px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.parent ?? "—"}</span> },
-    { key: "stem", label: "Stem", width: "120px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.stem ?? "—"}</span> },
-    { key: "abbrev", label: "Abbrev", width: "90px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.abbrev ?? "—"}</span> },
+    // Parent is the row's own fact and never inherits: it IS the edge the other
+    // three facts inherit along.
+    { key: "parent", label: "Parent", width: "140px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.parent ?? EMPTY_VALUE}</span> },
+    // Stem and Abbrev show what the row TAKES when it states nothing, and show
+    // it undifferentiated (#743), the same treatment the component registry
+    // gives the same three facts. Provenance is the blade's answer.
+    { key: "stem", label: "Stem", width: "120px", cell: (r) => <InheritedCell own={r.stem} resolved={inheritedFact(r, "stem").value} /> },
+    { key: "abbrev", label: "Abbrev", width: "90px", cell: (r) => <InheritedCell own={r.abbrev} resolved={inheritedFact(r, "abbrev").value} /> },
     { key: "icon", label: "Icon", width: "150px", cell: (r) => <IconCell row={r} resolvedIcon={r.resolved_icon || "map-pin"} /> },
     { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => officialBadge(r.official) },
   ];
@@ -329,10 +340,10 @@ export function CreateSystemTypeForm(p: { onCreated: (t: SystemType) => void }):
       <FieldRow bind="name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="huddle" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
-      <FieldRow label="Parent" hint="Where this type grafts in the tree. Root creates a new top-level genus and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.">
+      <FieldRow label="Parent" hint={TYPE_PARENT_HINT}>
         <SystemTypeSelect types={types.data ?? []} value={parentId()} onChange={setParentId} emptyLabel="Root (no parent)" />
       </FieldRow>
-      <FieldRow label="Stem" hint="The prefix a generated system name is built from. Leave blank to inherit the parent's; required on a root.">
+      <FieldRow label="Stem" hint={`The prefix a generated system name is built from. ${ROOT_STEM_HINT}`}>
         <input class="input input-bordered w-full font-data" value={stem()} placeholder="inherit" onInput={(e) => setStem(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Abbrev" hint="The compact label form (br, cls, vw). Leave blank to inherit.">

@@ -126,6 +126,25 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
 // says official, never seed: the seeding mechanics are not operator vocabulary.
 export const OFFICIAL_LOCK = "Official: ships with Omniglass and updates with it.";
 
+// The ROOT-STEM rule, in the words the two tree registries' create forms say it
+// with. It is one rule (`ErrRootComponentTypeNeedsStem` and
+// `ErrRootSystemTypeNeedsStem` refuse the same thing on their own tier: a root
+// has no ancestor to take a stem from), and it was written twice, so one copy
+// could go missing without the other noticing. It did: the component form never
+// carried it, and an operator creating a root component type met the constraint
+// as a 422 after submitting while the same operator creating a root system type
+// had been told (#744). One sentence in one place is what stops that recurring;
+// the FACT each hint leads with still differs, because a component's stem and a
+// system's are different facts.
+export const ROOT_STEM_HINT = "Leave blank to inherit the parent's; required on a root.";
+
+// The PARENT picker's sentence on both tree registries, for the same reason:
+// placement is chosen once (neither gateway has a reparent leg) and choosing
+// root is what makes the stem above mandatory, so the two statements have to
+// agree and are therefore written once.
+export const TYPE_PARENT_HINT =
+  "Where this type grafts in the tree. Root creates a new top-level genus and then needs a stem of its own; the gateway has no reparent leg, so choose carefully.";
+
 // registryLock is the catalog blades' one read-only verdict: the value the
 // edit slot's `locked` binding carries, one voice on every registry page. An
 // official row wears the OFFICIAL_LOCK string for everyone, owner included:

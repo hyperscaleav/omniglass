@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
+import { For, Show, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
@@ -176,6 +176,11 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
   // name and an icon, which restore rarely changes; it is not invisible with the
   // naming rule in the same form, where a stale draft means the next Save
   // re-forks the row with the rule Restore had just taken away.
+  //
+  // Both callers now come through the edit slot (#741): it runs this on the way
+  // into edit, and `restoreType` asks for it again with `reseed`, so the two
+  // triggers of one concept are named in one place instead of being a local
+  // effect here and a remembered call there.
   function seedDrafts() {
     const r = row();
     setDisplayName(r?.display_name ?? "");
@@ -184,13 +189,8 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
     setNaming(!!r?.name_rule);
     setRuleStem(r?.name_rule?.stem ?? "");
     setBareFirst(!!r?.name_rule?.bare_first);
-  }
-
-  createEffect(on(edit.editing, (editing) => {
-    if (!editing) return;
-    seedDrafts();
     setErr(null);
-  }));
+  }
 
   async function removeType() {
     const r = row();
@@ -216,7 +216,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
     try {
       await restoreLocationType(r.name);
       await qc.invalidateQueries({ queryKey: LOCATION_TYPES_KEY });
-      seedDrafts();
+      edit.reseed();
     } catch (e) {
       setErr(describeError(e));
     }
@@ -259,6 +259,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
     // A shipped row is editable now: the edit forks it rather than writing it.
     editable: () => !!row() && can(me.data, "location_type", "update"),
     save,
+    seed: seedDrafts,
     // ADR-0113: the rule is a TypeScript pure function and the footer Save is
     // what refuses, since a blade has no <form> for a native constraint to fire
     // on.

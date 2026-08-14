@@ -1,11 +1,12 @@
-import { Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
+import { Show, createMemo, createSignal, type JSX } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
-import BladeField from "../components/BladeField";
+import BladeField, { EMPTY_VALUE } from "../components/BladeField";
 import InheritedField from "../components/InheritedField";
+import InheritedCell from "../components/InheritedCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
@@ -22,7 +23,7 @@ import {
   restoreComponentType,
 } from "../lib/component_types";
 import { useMe, can } from "../lib/auth";
-import { inheritedFact, registryLock, registryOrigin } from "../lib/catalog";
+import { ROOT_STEM_HINT, TYPE_PARENT_HINT, inheritedFact, registryLock, registryOrigin } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -36,7 +37,10 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // pattern as Location Types, and every identity fact (stem, icon, abbrev,
 // default_tags) inherits down the tree unless a node overrides it. There is
 // no reparent leg: a custom type's placement is fixed at create, so the edit
-// blade revises a node's own facts only.
+// blade revises a node's own facts only. A ROOT type must state a stem of its
+// own, since there is no ancestor to inherit one from, and the create form says
+// so in the same words the system registry's does (#744): one rule refused by
+// the gateway on both tiers, one sentence.
 
 // Origin is three-state on this registry, the first to adopt the fork (#655,
 // ADR-0095): a row this release ships, a row the operator made, or a shipped
@@ -68,12 +72,18 @@ function NameCell(p: { row: ComponentType & { depth: number } }): JSX.Element {
   );
 }
 
+// The Icon cell resolves through the same InheritedCell the other two inherited
+// facts use. It has shown the server's resolved glyph since #695, saying nothing
+// about where the glyph came from, and that is the treatment Stem and Abbrev now
+// MATCH (#743): a table shows the value, and the blade is where its origin is
+// explained.
 function IconCell(p: { row: ComponentType; resolvedIcon: string }): JSX.Element {
   return (
-    <span class="flex items-center gap-1.5">
-      <Dynamic component={resolveIcon(p.resolvedIcon)} size={14} />
-      <span class="font-data text-xs text-base-content/60">{p.row.icon ?? p.resolvedIcon}</span>
-    </span>
+    <InheritedCell
+      own={p.row.icon}
+      resolved={p.resolvedIcon}
+      leading={<Dynamic component={resolveIcon(p.resolvedIcon)} size={14} />}
+    />
   );
 }
 
@@ -90,9 +100,16 @@ export default function ComponentTypes() {
     // children), so this column deliberately does not offer to re-sort it
     // away into a flat alphabetical list.
     { key: "name", label: "Name", cell: (r) => <NameCell row={r} /> },
-    { key: "parent", label: "Parent", width: "140px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.parent ?? "—"}</span> },
-    { key: "stem", label: "Stem", width: "110px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.stem ?? "—"}</span> },
-    { key: "abbrev", label: "Abbrev", width: "90px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.abbrev ?? "—"}</span> },
+    // Parent is the row's own fact and never inherits: it IS the edge the other
+    // three facts inherit along.
+    { key: "parent", label: "Parent", width: "140px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.parent ?? EMPTY_VALUE}</span> },
+    // Stem and Abbrev show what the row TAKES when it states nothing, and show
+    // it undifferentiated (#743). Before this they showed an em dash on exactly
+    // the rows whose blade, two clicks away, showed the value. Where it came
+    // from is the blade's answer, not a table's: no provenance mark belongs in
+    // a row.
+    { key: "stem", label: "Stem", width: "110px", cell: (r) => <InheritedCell own={r.stem} resolved={inheritedFact(r, "stem").value} /> },
+    { key: "abbrev", label: "Abbrev", width: "90px", cell: (r) => <InheritedCell own={r.abbrev} resolved={inheritedFact(r, "abbrev").value} /> },
     { key: "icon", label: "Icon", width: "150px", cell: (r) => <IconCell row={r} resolvedIcon={r.resolved_icon || "box"} /> },
     { key: "official", label: "Origin", width: "110px", sortVal: (r) => registryOrigin(r), cell: (r) => originBadge(r) },
   ];
@@ -161,15 +178,19 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
   const [abbrev, setAbbrev] = createSignal("");
   const [icon, setIcon] = createSignal("");
 
-  createEffect(on(edit.editing, (editing) => {
-    if (!editing) return;
+  // Every draft this blade edits, filled from the row. It is bound to the edit
+  // slot rather than driven by an effect on `editing`, so the slot runs it on
+  // the way into edit AND `restoreType` can ask for it again by name: restore
+  // replaces the row underneath an open editor, and drafts seeded once would go
+  // on holding the fork the operator just discarded (#741).
+  function seedDrafts() {
     const r = row();
     setDisplayName(r?.display_name ?? "");
     setStem(r?.stem ?? "");
     setAbbrev(r?.abbrev ?? "");
     setIcon(r?.icon ?? "");
     setErr(null);
-  }));
+  }
 
   async function removeType() {
     const r = row();
@@ -196,6 +217,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
     try {
       await restoreComponentType(r.id);
       await qc.invalidateQueries({ queryKey: COMPONENT_TYPES_KEY });
+      edit.reseed();
     } catch (e) {
       setErr(describeError(e));
     }
@@ -236,6 +258,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
   edit.bind({
     editable: () => !!row() && can(me.data, "component_type", "update"),
     save,
+    seed: seedDrafts,
     // One destructive slot, two meanings, chosen by what the row IS: a custom
     // row is deleted, a forked shipped row has the fork discarded, and a
     // pristine shipped row offers nothing (there is neither a row to delete
@@ -370,10 +393,10 @@ export function CreateComponentTypeForm(p: { onCreated: (t: ComponentType) => vo
       <FieldRow bind="name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="wireless-mic" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
-      <FieldRow label="Parent" hint="Where this type grafts in the tree. Root creates a new top-level genus; the gateway has no reparent leg, so choose carefully.">
+      <FieldRow label="Parent" hint={TYPE_PARENT_HINT}>
         <ComponentTypeSelect types={types.data ?? []} value={parentId()} onChange={setParentId} emptyLabel="Root (no parent)" />
       </FieldRow>
-      <FieldRow label="Stem" hint="The auto-generated component name's prefix. Leave blank to inherit the parent's.">
+      <FieldRow label="Stem" hint={`The auto-generated component name's prefix. ${ROOT_STEM_HINT}`}>
         <input class="input input-bordered w-full font-data" value={stem()} placeholder="inherit" onInput={(e) => setStem(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Abbrev" hint="The compact hostname-render form (fp, cam, dsp). Leave blank to inherit.">

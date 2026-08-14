@@ -62,6 +62,49 @@ describe("edit slot", () => {
     disposeFn();
   });
 
+  // A blade's drafts must never outlive the row they were seeded from (#741).
+  // The slot is the only shared thing that knows an editor is open, so it owns
+  // both triggers: entering edit, and a body that replaced the row underneath
+  // one (`:restore` discards an operator's fork).
+  it("seeds the bound drafts on entering edit, before the controls render", () =>
+    createRoot((dispose) => {
+      const slot = createEditSlot();
+      const seenEditing: boolean[] = [];
+      slot.bind({ save: async () => {}, seed: () => seenEditing.push(slot.editing()) });
+      expect(seenEditing).toHaveLength(0); // binding alone seeds nothing
+      slot.begin();
+      // Seeded once, and while still out of edit, so the controls mount holding
+      // the row's values rather than being filled a tick after they appear.
+      expect(seenEditing).toEqual([false]);
+      dispose();
+    }));
+
+  it("re-seeds on demand, for a row replaced underneath an open editor", () =>
+    createRoot((dispose) => {
+      const slot = createEditSlot();
+      let seeded = 0;
+      slot.bind({ save: async () => {}, seed: () => { seeded++; } });
+      slot.begin();
+      expect(seeded).toBe(1);
+      slot.reseed();
+      expect(seeded).toBe(2);
+      expect(slot.editing()).toBe(true); // restore keeps the blade in edit
+      dispose();
+    }));
+
+  // A blade that seeds with its own effect on `editing` binds no seeder, and
+  // nothing about it changes: both calls are no-ops rather than a crash.
+  it("leaves a blade that binds no seeder exactly as it was", () =>
+    createRoot((dispose) => {
+      const slot = createEditSlot();
+      slot.bind({ save: async () => {} });
+      slot.begin();
+      expect(slot.editing()).toBe(true);
+      slot.reseed();
+      expect(slot.editing()).toBe(true);
+      dispose();
+    }));
+
   it("respects the bound editable predicate (permission gate)", () =>
     createRoot((dispose) => {
       const slot = createEditSlot();
