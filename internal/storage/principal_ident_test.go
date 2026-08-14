@@ -30,7 +30,11 @@ func TestPrincipalIdentPrefersTheUsername(t *testing.T) {
 		{"a service account", nil, strp("ingest-bot"), "ingest-bot"},
 		{"neither, which is a node or a purged principal", nil, nil, ""},
 		{"a human that somehow also has a service row", strp("jordan"), strp("ingest-bot"), "jordan"},
-		{"an empty username does not win over a name", strp(""), strp("ingest-bot"), "ingest-bot"},
+		// Absence is NULL and nothing else, which is what the bound coalesce
+		// means by it. Both columns are NOT NULL, so this state cannot exist;
+		// it is pinned because treating "" as absent here and not there is a
+		// disagreement between two shapes this file says agree.
+		{"an empty username is present, not absent, exactly as coalesce reads it", strp(""), strp("ingest-bot"), ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := storage.ExportPrincipalIdent(tc.username, tc.service); got != tc.want {
@@ -76,24 +80,54 @@ func TestPrincipalIdentAgreesWithTheExpressionItBinds(t *testing.T) {
 		{"unknown", "00000000-0000-0000-0000-000000000000", ""},
 	} {
 		t.Run(tc.kind, func(t *testing.T) {
-			var username, serviceName *string
+			// The sub-select shape: projected, then folded in Go.
+			var subUser, subSvc *string
 			if err := conn.QueryRow(ctx,
-				`select `+storage.ExportPrincipalIdentCols("$1::uuid"), tc.id).Scan(&username, &serviceName); err != nil {
-				t.Fatalf("project the sources: %v", err)
+				`select `+storage.ExportPrincipalIdentCols("$1::uuid"), tc.id).Scan(&subUser, &subSvc); err != nil {
+				t.Fatalf("project the sub-select sources: %v", err)
 			}
+			// The same shape folded into one bound expression, which is what a
+			// write binds where Go cannot reach.
 			var bound *string
 			if err := conn.QueryRow(ctx,
 				`select `+storage.ExportPrincipalIdentSQL("$1::uuid"), tc.id).Scan(&bound); err != nil {
 				t.Fatalf("bind the expression: %v", err)
 			}
-			inGo := storage.ExportPrincipalIdent(username, serviceName)
-			if inGo != orEmpty(bound) {
-				t.Errorf("the gateway resolves a %s principal to %q in Go and %q in the expression it binds: "+
-					"the two shapes of one policy have drifted", tc.kind, inGo, orEmpty(bound))
+			// The JOIN shape, which is a different PLAN of the same policy and
+			// drifts from it exactly as readily: projected, and folded in SQL for
+			// the ORDER BY position.
+			var joinUser, joinSvc, joinFold *string
+			if err := conn.QueryRow(ctx,
+				`select `+storage.ExportPrincipalIdentJoinedCols("pi")+`, `+storage.ExportPrincipalIdentJoinedSQL("pi")+
+					` from principal p`+storage.ExportPrincipalIdentJoins("pi", "p.id")+` where p.id = $1::uuid`,
+				tc.id).Scan(&joinUser, &joinSvc, &joinFold); err != nil && tc.kind != "unknown" {
+				t.Fatalf("project the joined sources: %v", err)
+			}
+
+			inGo := storage.ExportPrincipalIdent(subUser, subSvc)
+			for _, other := range []struct {
+				shape string
+				got   string
+			}{
+				{"the expression it binds", orEmpty(bound)},
+				{"the join it projects", storage.ExportPrincipalIdent(joinUser, joinSvc)},
+				{"the join it sorts on", orEmpty(joinFold)},
+			} {
+				// The unknown id matches no principal row at all, so the join
+				// shape returns no ROW rather than a null one; the sub-select
+				// shape is what resolves an id with nothing behind it, and it is
+				// the shape the audit write uses for exactly that reason.
+				if tc.kind == "unknown" && other.shape != "the expression it binds" {
+					continue
+				}
+				if inGo != other.got {
+					t.Errorf("the gateway resolves a %s principal to %q in Go and %q in %s: "+
+						"the shapes of one policy have drifted", tc.kind, inGo, other.got, other.shape)
+				}
 			}
 			if inGo != tc.want {
 				t.Errorf("a %s principal resolves to %q, want %q: the sources name the wrong column, "+
-					"and they name it in both shapes so the agreement above cannot see it", tc.kind, inGo, tc.want)
+					"and they name it in every shape so the agreements above cannot see it", tc.kind, inGo, tc.want)
 			}
 		})
 	}

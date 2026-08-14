@@ -5139,23 +5139,34 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   the friendly string on eighteen tables ([#613](https://github.com/hyperscaleav/omniglass/issues/613)),
   and a word cannot be renamed onto a column while it still means two other things somewhere else.
 - **Decision:** the function is dropped and the answer moves to
-  `internal/storage/principal_ident.go`, which names the sources once and renders them in the three
-  shapes a statement can need: a two-column projection, a Go fold over that projection
-  (`principalIdent`), and the same order folded into one bound expression.
-- **Where the fold happens, and why it is not always Go.** A read projects both sources and folds
-  them in Go. A projection rather than a join, because one of the four statements reading the alarm
-  shape is an `UPDATE ... RETURNING`: `RETURNING` cannot left-join, and giving the `UPDATE` a `FROM`
-  clause would change which rows it updates. The audit insert binds the fold as one expression
-  instead, because it runs inside the CALLER's transaction on every operator write and resolving it
-  in Go there means a second round trip: the alarm write path pins its statement count as the exact
-  equation `12 + 5*slots + 4*locations` (`alarm_cost_test.go`, ADR-0094), and that equation counts
-  this insert. Moving the policy out of the database was the point; paying a round trip on every
-  write was not part of it.
-- **What holds the two shapes together.** The columns are named once, so only the ORDER is written
-  twice, and `principal_ident_test.go` drives a human, a service account, a node and an unknown id
-  through both shapes against a real database and fails on the first disagreement. That is the
-  recompute-and-compare shape the gateway already uses wherever one fact has two readers, applied to
-  a policy rather than to a derived column.
+  `internal/storage/principal_ident.go`, which names the tables and columns ONCE
+  (`principalIdentSources`) and renders every shape a statement can need from that one list, so a
+  caller picks a shape and never a column.
+- **Which shape, measured rather than assumed.** A read over many rows LEFT JOINs the sources and
+  folds them in Go. Two positions cannot join, and both are bounded reads: `alarmCols` is read by an
+  `UPDATE ... RETURNING` (`RETURNING` cannot left-join, and giving the `UPDATE` a `FROM` clause
+  would change which rows it updates), and the audit insert runs inside the CALLER's transaction on
+  every operator write, where a Go fold means a second round trip and the alarm write path pins its
+  statement count as the exact equation `12 + 5*slots + 4*locations` (`alarm_cost_test.go`,
+  ADR-0094) that counts that insert. Both render the sources as correlated sub-selects instead. The
+  first draft of this decision used sub-selects everywhere, and a review measured it: on a
+  500-member group roster, projecting them AND sorting on them costs **3011 shared buffer hits and
+  2000 index searches** where the join costs **18**, because Postgres does not common up two
+  identical scalar sub-selects. Moving the policy out of the database was the point; paying a round
+  trip on every operator write, or two thousand index probes on an unbounded roster, was not.
+- **What holds the shapes together.** The columns are named once, so only the ORDER is written
+  twice (as Go control flow and as a coalesce), and `principal_ident_test.go` drives a human, a
+  service account, a node and an unknown id through EVERY shape against a real database, asserts
+  they agree and asserts what they agree ON, and fails on the first disagreement. Asserting only
+  the agreement would pass when all shapes are wrong the same way, which is exactly what naming the
+  wrong column in the one source list would do. That is the recompute-and-compare shape the gateway
+  already uses wherever one fact has two readers, applied to a policy rather than to a derived
+  column.
+- **The audit READ moved with them.** `ListAuditLog` kept its own hand-written
+  `coalesce(ah.username, a.actor_username, '')`, which resolved a HUMAN actor live and a SERVICE
+  actor only from the row's snapshot: a fourth statement of the policy, asymmetric between two kinds
+  for no recorded reason. It now resolves both live through the same sources and falls back to the
+  snapshot, which is what makes the trail survive a purge (ADR-0016).
 - **A node is still not a source.** `principal_label` never read `node.name`, so a node principal
   resolved to null, and this change preserves that rather than quietly widening what an audit row
   says. Nothing seeds a node grant today, so no path reaches it; widening the resolution is its own

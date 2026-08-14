@@ -34,8 +34,13 @@ drawer. See [implementation status](/architecture/status/).
   able to prove that a given uuid is the right table's. The remaining gap is narrow and known: a
   `credential` row is keyed on its principal's uuid rather than its own.
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
-  human, service, or node. The read side resolves a **human** actor to a username; a service or
-  node actor surfaces as its principal id.
+  human, service, or node. The read resolves it to the actor's **identifier**, a human's username
+  or a service account's name, through the gateway's one resolution
+  ([ADR-0110](/architecture/decisions/#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions)),
+  falling back to the snapshot on the row once that principal is purged. A **node** actor is the
+  gap the resolution does not cover and reads empty, which is inherited behaviour and not a design;
+  the principal id is on the row either way. Nothing here surfaces a raw uuid where a name was
+  expected.
 - **An AI-accepted suggestion is one row.** An AI tool acts via OAuth as a `human` or `service`
   principal, so the actor is that principal; the AI-sourced marking rides alongside the row
   ([AI](/architecture/ai/)).

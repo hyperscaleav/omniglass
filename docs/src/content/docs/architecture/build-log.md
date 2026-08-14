@@ -4701,14 +4701,17 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   test named it, so it could have returned anything and the suite would have agreed.
 
   The answer now lives in `internal/storage/principal_ident.go`, which names the two sources once
-  and renders them in the three shapes a statement can need. A READ projects both sources and folds
-  them in Go, a projection rather than a join because one of the four statements reading the alarm
-  shape is an `UPDATE ... RETURNING` and `RETURNING` cannot left-join. The audit insert binds the
-  fold as one expression instead: it runs inside the caller's transaction on every operator write,
-  and the alarm write path pins its statement count as the exact equation `12 + 5*slots +
-  4*locations` (#674), which counts that insert. Moving the policy out of the database was the
-  point; paying a round trip on every operator write was not part of it, and the pinned equation is
-  unmoved.
+  and renders every shape a statement can need from it, so a caller picks a shape and never a
+  column. A read over many rows LEFT JOINs the sources and folds them in Go. Two positions cannot
+  join: `alarmCols` is read by an `UPDATE ... RETURNING` and `RETURNING` cannot left-join, and the
+  audit insert runs inside the caller's transaction on every operator write, where a Go fold would
+  cost a second round trip and the alarm write path pins its statement count as the exact equation
+  `12 + 5*slots + 4*locations` (#674) that counts that insert. Both of those render the sources as
+  correlated sub-selects, and both are bounded reads. Which shape is measured rather than assumed:
+  on a 500-member group roster the sub-select shape projected AND sorted on costs 3011 shared buffer
+  hits and 2000 index searches where the join costs 18. Moving the policy out of the database was
+  the point; paying a round trip on every operator write, or two thousand index probes on a roster,
+  was not part of it, and the pinned equation is unmoved.
 
   Only the ORDER is written twice, so `principal_ident_test.go` is the invariant between the two
   shapes: it drives a human, a service account, a node and an unknown id through both against a real

@@ -9,12 +9,20 @@ package storage
 // asserted by driving all three, so it needs a door.
 
 // ExportPrincipalIdent resolves the identifier in Go.
-func ExportPrincipalIdent(username, serviceName *string) string {
-	return principalIdent(username, serviceName)
-}
+func ExportPrincipalIdent(vals ...*string) string { return principalIdent(vals...) }
 
-// ExportPrincipalIdentCols is the two-column select list a Go resolution reads.
+// ExportPrincipalIdentCols is the sub-select projection a Go resolution reads.
 func ExportPrincipalIdentCols(param string) string { return principalIdentCols(param) }
 
 // ExportPrincipalIdentSQL is the same order folded into one bound expression.
 func ExportPrincipalIdentSQL(param string) string { return principalIdentSQL(param) }
+
+// ExportPrincipalIdentJoins, ExportPrincipalIdentJoinedCols and
+// ExportPrincipalIdentJoinedSQL are the join shape, which the invariant drives
+// alongside the sub-select shape: two plan shapes of one policy drift exactly as
+// readily as two spellings of it.
+func ExportPrincipalIdentJoins(alias, idExpr string) string {
+	return principalIdentJoins(alias, idExpr)
+}
+func ExportPrincipalIdentJoinedCols(alias string) string { return principalIdentJoinedCols(alias) }
+func ExportPrincipalIdentJoinedSQL(alias string) string  { return principalIdentJoinedSQL(alias) }

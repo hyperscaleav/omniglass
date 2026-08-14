@@ -330,13 +330,17 @@ func (p *PG) ListGroupMembers(ctx context.Context, groupID string, read scope.Se
 	// column: written out after the rename it reads `coalesce(h.display_name,
 	// s.name, '')`, and the mistake is on the page. The fix is not a better chain,
 	// it is two columns, each meaning one thing, with the renderer choosing.
+	//
+	// The join shape, not the sub-select one: a roster has no LIMIT, and the
+	// sub-selects cost 3011 buffer hits over 500 members where these joins cost
+	// 15 (principal_ident.go carries the measurement).
 	rows, err := p.pool.Query(ctx,
-		`select p.id, p.kind, `+principalIdentCols("p.id")+`, coalesce(h.display_name, '')
+		`select p.id, p.kind, `+principalIdentJoinedCols("pi")+`, coalesce(h.display_name, '')
 		   from principal_group_member m
 		   join principal p on p.id = m.principal_id
-		   left join human h on h.principal_id = p.id
+		   left join human h on h.principal_id = p.id`+principalIdentJoins("pi", "p.id")+`
 		  where m.group_id = $1
-		  order by coalesce(`+principalIdentSQL("p.id")+`, p.id::text)`, groupID)
+		  order by coalesce(`+principalIdentJoinedSQL("pi")+`, p.id::text)`, groupID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list members: %w", err)
 	}

@@ -3,11 +3,13 @@ package storage_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/hyperscaleav/omniglass/db"
 	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -120,19 +122,34 @@ func insertServicePrincipal(t *testing.T, dsn, name string) string {
 	return pid
 }
 
-// dedupeSQL is copied verbatim from the UPDATE in
-// db/migrations/20260813171000_service_name_dedupe.sql, extracted so the two
-// cannot drift silently: if the migration's SQL changes, this constant must
-// change with it or the test below stops proving what actually runs during an
-// upgrade.
-const dedupeSQL = `
-UPDATE service s
-   SET name = s.name || '-' || s.principal_id::text
- WHERE EXISTS (
-         SELECT 1 FROM service other
-          WHERE other.name = s.name
-            AND other.principal_id < s.principal_id
-       )`
+// dedupeSQL is the migration's own up-SQL, READ OUT OF THE EMBEDDED SET rather
+// than transcribed into a constant beside it.
+//
+// A copy is what the position backfill did, and a copy is only as good as the
+// comment asking the next editor to keep it in sync: flip the migration's
+// `other.principal_id < s.principal_id` to `>` and the shipped backfill renames
+// the OLDEST account instead of keeping it, while a test running its own copy
+// stays green. db.FS is the same source `omniglass migrate` applies, so this
+// runs the statement that actually ships or it does not run at all.
+func dedupeSQL(t *testing.T) string {
+	t.Helper()
+	raw, err := db.FS.ReadFile("migrations/20260813171000_service_name_dedupe.sql")
+	if err != nil {
+		t.Fatalf("read the dedupe migration out of the embedded set: %v", err)
+	}
+	up, _, ok := strings.Cut(string(raw), "-- migrate:down")
+	if !ok {
+		t.Fatal("the dedupe migration has no -- migrate:down marker, so its up half cannot be isolated")
+	}
+	_, body, ok := strings.Cut(up, "-- migrate:up")
+	if !ok {
+		t.Fatal("the dedupe migration has no -- migrate:up marker")
+	}
+	if !strings.Contains(body, "UPDATE service") {
+		t.Fatalf("the dedupe migration's up half contains no UPDATE, so this test would run nothing:\n%s", body)
+	}
+	return body
+}
 
 // TestServiceNameDedupeKeepsTheOldestAndIsIdempotent proves the backfill that
 // stands between the rename and the uniqueness floor.
@@ -180,7 +197,7 @@ func TestServiceNameDedupeKeepsTheOldestAndIsIdempotent(t *testing.T) {
 		return n
 	}
 
-	mustExec(t, conn, dedupeSQL)
+	mustExec(t, conn, dedupeSQL(t))
 	if got := nameOf(dupes[0]); got != "ingest" {
 		t.Errorf("the oldest duplicate is now called %q, want %q: the account an operator has been calling by that name for longest is the one that keeps it", got, "ingest")
 	}
@@ -203,7 +220,7 @@ func TestServiceNameDedupeKeepsTheOldestAndIsIdempotent(t *testing.T) {
 	for _, pid := range append(append([]string{}, dupes...), lone) {
 		before[pid] = nameOf(pid)
 	}
-	mustExec(t, conn, dedupeSQL)
+	mustExec(t, conn, dedupeSQL(t))
 	for pid, was := range before {
 		if now := nameOf(pid); now != was {
 			t.Errorf("a second run renamed %s from %q to %q; the backfill is not idempotent", pid, was, now)

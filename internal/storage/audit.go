@@ -6,13 +6,13 @@ import (
 )
 
 // AuditEntry is one row of the audit trail, with the actor (and, for an
-// impersonated action, the real actor behind it) resolved to a human username
-// where possible so the read surface is legible without an N+1 lookup.
+// impersonated action, the real actor behind it) resolved to its identifier so
+// the read surface is legible without an N+1 lookup.
 type AuditEntry struct {
 	ID            string
 	TS            string // RFC3339
 	ActorID       string // empty for a system/bootstrap write
-	ActorName     string // human username if the actor is a human, else empty
+	ActorName     string // the actor's identifier: a human's username, a service account's name
 	RealActorID   string // set when the action was taken while impersonating
 	RealActorName string
 	Verb          string
@@ -40,10 +40,18 @@ type AuditFilter struct {
 const auditDefaultLimit = 100
 const auditMaxLimit = 500
 
-// ListAuditLog returns recent audit rows, newest first, resolving the actor and
-// real-actor human usernames. It is the read side of the audit trail; writes go
-// through writeAuditRes (estate mutations, in the caller's tx) and WriteAuthEvent
-// (auth events, no tx).
+// ListAuditLog returns recent audit rows, newest first, resolving each actor to
+// its identifier. It is the read side of the audit trail; writes go through
+// writeAuditRes (estate mutations, in the caller's tx) and WriteAuthEvent (auth
+// events, no tx).
+//
+// Live first, then the snapshot the write denormalized. The live resolution is
+// the same one every other surface uses (principalIdent), so a principal that
+// still exists reads as whatever it is called NOW, and a purged one reads as
+// whatever it was called at the time. This used to name `human.username` by
+// hand, which resolved a human actor live and a service actor only from the
+// snapshot: a fourth statement of a policy stated three times too often, and
+// asymmetric between two kinds for no reason anybody wrote down.
 func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, error) {
 	limit := f.Limit
 	if limit <= 0 {
@@ -54,12 +62,14 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 	}
 	rows, err := p.pool.Query(ctx, `
 		select a.id, to_char(a.ts, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
-		       coalesce(a.actor_principal_id::text, ''), coalesce(ah.username, a.actor_username, ''),
-		       coalesce(a.real_actor_principal_id::text, ''), coalesce(rh.username, a.real_actor_username, ''),
+		       coalesce(a.actor_principal_id::text, ''),
+		       `+principalIdentJoinedCols("ac")+`, coalesce(a.actor_username, ''),
+		       coalesce(a.real_actor_principal_id::text, ''),
+		       `+principalIdentJoinedCols("ra")+`, coalesce(a.real_actor_username, ''),
 		       a.verb, a.resource, coalesce(a.resource_id, ''), a.old, a.new
-		from audit_log a
-		left join human ah on ah.principal_id = a.actor_principal_id
-		left join human rh on rh.principal_id = a.real_actor_principal_id
+		from audit_log a`+
+		principalIdentJoins("ac", "a.actor_principal_id")+
+		principalIdentJoins("ra", "a.real_actor_principal_id")+`
 		where ($2 = '' or a.resource = $2)
 		  and ($3 = '' or a.verb = $3)
 		  and ($4 = '' or a.ts < $4::timestamptz)
@@ -73,12 +83,33 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 	var out []AuditEntry
 	for rows.Next() {
 		var e AuditEntry
-		if err := rows.Scan(&e.ID, &e.TS, &e.ActorID, &e.ActorName, &e.RealActorID, &e.RealActorName, &e.Verb, &e.Resource, &e.ResourceID, &e.Old, &e.New); err != nil {
+		var actorUser, actorSvc, actorSnap *string
+		var realUser, realSvc, realSnap *string
+		if err := rows.Scan(&e.ID, &e.TS,
+			&e.ActorID, &actorUser, &actorSvc, &actorSnap,
+			&e.RealActorID, &realUser, &realSvc, &realSnap,
+			&e.Verb, &e.Resource, &e.ResourceID, &e.Old, &e.New); err != nil {
 			return nil, fmt.Errorf("storage: scan audit row: %w", err)
 		}
+		e.ActorName = liveOrSnapshot(principalIdent(actorUser, actorSvc), actorSnap)
+		e.RealActorName = liveOrSnapshot(principalIdent(realUser, realSvc), realSnap)
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// liveOrSnapshot prefers the identifier the principal has NOW and falls back to
+// the one the write denormalized onto the row. The snapshot is what makes the
+// trail survive a purge (ADR-0016), and it is the only thing left to read once
+// the foreign key has gone null.
+func liveOrSnapshot(live string, snapshot *string) string {
+	if live != "" {
+		return live
+	}
+	if snapshot != nil {
+		return *snapshot
+	}
+	return ""
 }
 
 // WriteAuthEvent records an authentication event (login, logout) in the audit
