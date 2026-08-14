@@ -57,43 +57,45 @@ func TestPrincipalIdentAgreesWithTheExpressionItBinds(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	ids := map[string]string{
-		"human":   insertPrincipalOfKind(t, conn, "human"),
-		"service": insertPrincipalOfKind(t, conn, "service"),
-		"node":    insertPrincipalOfKind(t, conn, "node"),
-		"unknown": "00000000-0000-0000-0000-000000000000",
-	}
-
-	for kind, id := range ids {
-		t.Run(kind, func(t *testing.T) {
+	// Each case carries the answer it expects as well as the agreement it
+	// asserts. An agreement test alone cannot fail when BOTH shapes are wrong the
+	// same way, which is exactly what naming the wrong column in
+	// principalIdentSources would do, so the expected value is stated here rather
+	// than left to the callers' tests to imply.
+	//
+	// A node's answer is the empty string on purpose: it is the kind the
+	// resolution does not read, exactly as principal_label never read it.
+	for _, tc := range []struct {
+		kind string
+		id   string
+		want string
+	}{
+		{"human", insertPrincipalOfKind(t, conn, "human"), "jordan-ops"},
+		{"service", insertPrincipalOfKind(t, conn, "service"), "ingest-bot"},
+		{"node", insertPrincipalOfKind(t, conn, "node"), ""},
+		{"unknown", "00000000-0000-0000-0000-000000000000", ""},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
 			var username, serviceName *string
 			if err := conn.QueryRow(ctx,
-				`select `+storage.ExportPrincipalIdentCols("$1::uuid"), id).Scan(&username, &serviceName); err != nil {
+				`select `+storage.ExportPrincipalIdentCols("$1::uuid"), tc.id).Scan(&username, &serviceName); err != nil {
 				t.Fatalf("project the sources: %v", err)
 			}
 			var bound *string
 			if err := conn.QueryRow(ctx,
-				`select `+storage.ExportPrincipalIdentSQL("$1::uuid"), id).Scan(&bound); err != nil {
+				`select `+storage.ExportPrincipalIdentSQL("$1::uuid"), tc.id).Scan(&bound); err != nil {
 				t.Fatalf("bind the expression: %v", err)
 			}
 			inGo := storage.ExportPrincipalIdent(username, serviceName)
 			if inGo != orEmpty(bound) {
 				t.Errorf("the gateway resolves a %s principal to %q in Go and %q in the expression it binds: "+
-					"the two shapes of one policy have drifted", kind, inGo, orEmpty(bound))
+					"the two shapes of one policy have drifted", tc.kind, inGo, orEmpty(bound))
+			}
+			if inGo != tc.want {
+				t.Errorf("a %s principal resolves to %q, want %q: the sources name the wrong column, "+
+					"and they name it in both shapes so the agreement above cannot see it", tc.kind, inGo, tc.want)
 			}
 		})
-	}
-
-	// A node is the kind the resolution deliberately does not read, and saying so
-	// here keeps the case above from passing vacuously if the fixture ever stopped
-	// creating one.
-	var username, serviceName *string
-	if err := conn.QueryRow(ctx,
-		`select `+storage.ExportPrincipalIdentCols("$1::uuid"), ids["node"]).Scan(&username, &serviceName); err != nil {
-		t.Fatalf("project the sources for a node: %v", err)
-	}
-	if got := storage.ExportPrincipalIdent(username, serviceName); got != "" {
-		t.Errorf("a node principal resolves to %q, want empty: node is not a source, exactly as principal_label never read it", got)
 	}
 }
 

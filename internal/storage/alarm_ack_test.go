@@ -379,3 +379,56 @@ func auditRows(t *testing.T, dsn, verb, resourceID string) int {
 	}
 	return n
 }
+
+// TestTheHealthReportNamesWhoAcknowledged closes the fourth statement that reads
+// the alarm shape.
+//
+// #737 put the acknowledger's resolution on the health path: activeAlarms is
+// called once per down assignee inside the health report, and every other test
+// here drives ListAlarms or the acknowledge write. That statement is the one
+// with a different shape (an ordinary select inside the report's transaction,
+// where the acknowledge leg is an UPDATE ... RETURNING), so a projection that
+// worked in the other three could still be wrong here and nothing would notice.
+func TestTheHealthReportNamesWhoAcknowledged(t *testing.T) {
+	f := newHealthFixture(t)
+	ctx := context.Background()
+
+	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-1", storage.AlarmSpec{
+		Severity: "critical", Message: "mic array not responding",
+	})
+	if err != nil {
+		t.Fatalf("raise alarm: %v", err)
+	}
+
+	var actor string
+	if err := f.conn.QueryRow(ctx,
+		`insert into principal (kind) values ('service') returning id`).Scan(&actor); err != nil {
+		t.Fatalf("insert principal: %v", err)
+	}
+	if _, err := f.conn.Exec(ctx,
+		`insert into service (principal_id, name) values ($1, 'jordan-ops')`, actor); err != nil {
+		t.Fatalf("insert service: %v", err)
+	}
+	if _, err := f.gw.AcknowledgeAlarm(ctx, actor, "bar-1", alarm.ID); err != nil {
+		t.Fatalf("acknowledge: %v", err)
+	}
+
+	rep, err := f.gw.SystemHealth(ctx, "hq-huddle", 0, f.all)
+	if err != nil {
+		t.Fatalf("system health: %v", err)
+	}
+	if len(rep.Roles) != 1 || len(rep.Roles[0].Alarms) != 1 {
+		t.Fatalf("health report = %+v, want one role naming the one alarm", rep.Roles)
+	}
+	got := rep.Roles[0].Alarms[0]
+	if got.ID != alarm.ID {
+		t.Fatalf("the report names alarm %s, want %s", got.ID, alarm.ID)
+	}
+	if got.AcknowledgedBy != "jordan-ops" {
+		t.Errorf("the health report says %q acknowledged the alarm, want the acting principal's name %q",
+			got.AcknowledgedBy, "jordan-ops")
+	}
+	if got.AcknowledgedAt == nil {
+		t.Error("the health report dropped the acknowledgement time")
+	}
+}
