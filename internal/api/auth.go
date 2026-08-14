@@ -569,8 +569,12 @@ type humanBody struct {
 	HasAvatar          bool   `json:"has_avatar,omitempty" doc:"True when the principal has a profile picture; fetch it from the avatar endpoint."`
 }
 
+// svcBody is a service principal's profile on the wire. `name` is its
+// identifier, the username analogue for kind=service and unique like one
+// (#563); it was called `label` for as long as the column was, three lines from
+// the human body's display_name, which made two different concepts read as one.
 type svcBody struct {
-	Label string `json:"label"`
+	Name string `json:"name" doc:"The service account's identifier, unique across service principals"`
 }
 
 type grantBody struct {
@@ -603,7 +607,7 @@ func meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
 		}
 	}
 	if pr.Service != nil {
-		out.Body.Service = &svcBody{Label: pr.Service.Label}
+		out.Body.Service = &svcBody{Name: pr.Service.Name}
 	}
 	out.Body.Permissions = perms.Strings()
 	out.Body.Grants = make([]grantBody, 0, len(pr.Grants))

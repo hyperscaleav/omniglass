@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { listPrincipals, createPrincipal, updatePrincipal, createGrant, revokeGrant, setPrincipalActive, principalName, roleFilterKeys, type Principal, type Role } from "./principals";
 import { buildPredicate, type Chip } from "./predicate";
+import { uuidFor } from "./testids";
 
 // The data layer is the unit under test; fetch is the seam we fake, so these
 // assert the request shape and the response handling without a server.
@@ -91,11 +92,11 @@ describe("principals data layer", () => {
     expect(calls[1]).toContain("/api/v1/principals/p1:enable");
   });
 
-  it("principalName prefers display name, then username, then service label", () => {
+  it("principalName prefers display name, then username, then the service name", () => {
     const human = (h: Partial<Principal["human"]>): Principal => ({ id: "x", kind: "human", active: true, human: h as never, grants: [] });
     expect(principalName(human({ username: "u", display_name: "Dee" }))).toBe("Dee");
     expect(principalName(human({ username: "u" }))).toBe("u");
-    expect(principalName({ id: "s", kind: "service", active: true, service: { label: "svc" }, grants: [] })).toBe("svc");
+    expect(principalName({ id: uuidFor("p-svc"), kind: "service", active: true, service: { name: "svc" }, grants: [] })).toBe("svc");
   });
 });
 

@@ -73,14 +73,25 @@ func TestGroupGrantInheritanceAPI(t *testing.T) {
 	}
 
 	// The group's members list shows bob; his membership drives the inheritance.
+	//
+	// bob is a SERVICE principal (principalWithGrants inserts one), so "bob" is
+	// his NAME and not a display name. The roster used to hand it back in
+	// display_name, through a coalesce that fell from a human's friendly string to
+	// a service account's identifier, and this assertion is what that looked like
+	// from the wire: an identifier read out of a field named for a label (#563).
 	var members struct {
 		Members []struct {
 			PrincipalID string `json:"principal_id"`
+			Name        string `json:"name"`
 			DisplayName string `json:"display_name"`
 		} `json:"members"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/principal-groups/"+grp.ID+"/members", nil, http.StatusOK), &members); err != nil || len(members.Members) != 1 || members.Members[0].PrincipalID != bobID || members.Members[0].DisplayName != "bob" {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/principal-groups/"+grp.ID+"/members", nil, http.StatusOK), &members); err != nil || len(members.Members) != 1 || members.Members[0].PrincipalID != bobID || members.Members[0].Name != "bob" {
 		t.Fatalf("members = %+v err %v, want [bob]", members, err)
+	}
+	if members.Members[0].DisplayName != "" {
+		t.Errorf("the roster gave a service account the display name %q; it has no column for one, and the field that used to carry its identifier is now `name`",
+			members.Members[0].DisplayName)
 	}
 
 	// Removing bob from the group drops the inherited read.

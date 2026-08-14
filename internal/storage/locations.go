@@ -1539,12 +1539,21 @@ func writeAuditRes(ctx context.Context, tx pgx.Tx, actorID, verb, resource, reso
 	if err != nil {
 		return err
 	}
-	// actor_username / real_actor_username denormalize the actor's label at write
-	// time, so the row still names its actor after that principal is purged (the
-	// foreign keys go null, the text remains). principal_label(null) is null.
+	// actor_username / real_actor_username denormalize the actor's IDENTIFIER at
+	// write time, so the row still names its actor after that principal is purged
+	// (the foreign keys go null, the text remains). The identifier of a null id is
+	// null.
+	//
+	// The order is bound as an expression rather than resolved in Go, which is the
+	// one place principalIdent's policy is not applied by principalIdent itself:
+	// this insert runs inside the CALLER's transaction on every operator write, so
+	// a Go resolution would cost a second round trip there, and the alarm write
+	// path pins its statement count as an exact equation (alarm_cost_test.go) that
+	// counts this insert. principal_ident_test.go holds the two shapes to the same
+	// answer.
 	if _, err := tx.Exec(ctx, `
 		insert into audit_log (actor_principal_id, real_actor_principal_id, actor_username, real_actor_username, verb, resource, resource_id, old, new)
-		values ($1, $2, principal_label($1), principal_label($2), $3, $4, $5, $6, $7)`,
+		values ($1, $2, `+principalIdentSQL("$1")+`, `+principalIdentSQL("$2")+`, $3, $4, $5, $6, $7)`,
 		nullize(actorID), nullize(realActorFrom(ctx)), verb, resource, resourceID, oldJSON, newJSON); err != nil {
 		return fmt.Errorf("storage: write audit: %w", err)
 	}

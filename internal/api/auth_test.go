@@ -154,7 +154,7 @@ func setupLimitedPrincipal(t *testing.T, ctx context.Context, dsn string) string
 		t.Fatalf("insert principal: %v", err)
 	}
 	if _, err := conn.Exec(ctx,
-		`insert into service (principal_id, label) values ($1, 'limited-svc')`, pid); err != nil {
+		`insert into service (principal_id, name) values ($1, 'limited-svc')`, pid); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	tok, hash, prefix, err := auth.NewBearerToken()

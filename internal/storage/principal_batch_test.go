@@ -150,7 +150,7 @@ func principalBatchFixture(t *testing.T, pool *pgxpool.Pool) []Principal {
 	quiet := human("quinn", "", "Quinn", false, false)
 
 	svc := mint("service")
-	if _, err := pool.Exec(ctx, `insert into service (principal_id, label) values ($1, 'ingest')`, svc); err != nil {
+	if _, err := pool.Exec(ctx, `insert into service (principal_id, name) values ($1, 'ingest')`, svc); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	grantTo("principal_id", svc, viewerID, "all", nil, "subtree")

@@ -96,6 +96,66 @@ func TestADeclaredShapeAgreesWithThePrimaryKey(t *testing.T) {
 	}
 }
 
+// TestADeclaredIDOnlyTableCarriesNoName is the other half of the same idea, on
+// the other column.
+//
+// ShapeIDOnly says "nobody names it", and identitygen publishes that sentence.
+// A table carrying a `name` column is named by somebody, so the two cannot both
+// be true, and the declaration is the half that is wrong. `service` is why this
+// guard exists (#563): its identifier was called `label`, so the table read as
+// unnamed to every reader and to every guard here, and renaming the column to
+// what it is would have left the declaration saying the opposite with a green
+// suite.
+//
+// This is a claim about the SCHEMA, so it reads the generated schema facts
+// rather than the declaration's own prose, exactly as the primary-key guard
+// above does.
+func TestADeclaredIDOnlyTableCarriesNoName(t *testing.T) {
+	cols := columnsByTable(t)
+	for table, id := range storage.IdentityShapes {
+		if id.Shape != storage.ShapeIDOnly {
+			continue
+		}
+		for _, c := range cols[table] {
+			if c.Name == "name" {
+				t.Errorf("%q is declared ShapeIDOnly, which says nobody names it, but it carries a %s column.\n"+
+					"Something names it, so pick the shape that says what the name is: ShapeKeyBearing if it is on "+
+					"the entity name rule, ShapeKeyspace if it is on the other one, ShapeHumanNotAKey (with the "+
+					"reason) if it is an identifier a human authors on its own rule, like a username.", table, c.Name)
+			}
+		}
+	}
+}
+
+// columnsByTable reads every table's columns out of the generated schema facts,
+// the same artifact liveTables and primaryKeys read, so this guard needs no
+// database of its own.
+func columnsByTable(t *testing.T) map[string][]schemaColumn {
+	t.Helper()
+	raw, err := os.ReadFile("../../docs/src/generated/schema.json")
+	if err != nil {
+		t.Fatalf("read generated schema: %v", err)
+	}
+	var doc struct {
+		Subsystems map[string]map[string]struct {
+			Columns []schemaColumn `json:"columns"`
+		} `json:"subsystems"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("parse generated schema: %v", err)
+	}
+	out := map[string][]schemaColumn{}
+	for _, tables := range doc.Subsystems {
+		for table, def := range tables {
+			out[table] = def.Columns
+		}
+	}
+	if len(out) == 0 {
+		t.Fatal("found no columns, which means this guard is not reading the schema it thinks it is")
+	}
+	return out
+}
+
 // schemaColumn is one column of the generated schema facts, projected for the
 // primary-key guard.
 type schemaColumn struct {

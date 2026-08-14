@@ -23,7 +23,7 @@ export type Principal = {
   // has_avatar is a boolean flag (never the bytes): the image is fetched lazily via
   // principalAvatarUrl only when it is set, so the directory stays cheap to load.
   human?: { username: string; email?: string; display_name?: string; has_avatar?: boolean };
-  service?: { label: string };
+  service?: { name: string };
   grants: Grant[];
   // The principal groups this principal belongs to; the grants they confer ride
   // grants (tagged group_id), this names them for the directory and clickthrough.
@@ -219,11 +219,12 @@ export const roleFilterKeys: FilterKey<Role>[] = [
 ];
 
 // The display name for a principal: a human's display name or username, a service
-// account's label, else the bare kind.
+// account's name, else the bare kind.
 //
-// NOT entityLabel, and deliberately: a principal has no `name` column, and the
-// precedence here runs the other way round (a username is the identifier, and it
-// outranks a service account's label). Widening entityLabel to express it would
+// NOT entityLabel, and deliberately: a principal is addressed by uuid and each
+// kind carries its identifier under its own column, and the precedence here runs
+// the other way round from an entity's (a username is the identifier, and it
+// outranks a service account's name). Widening entityLabel to express it would
 // make the entity rule answer a question it does not have the columns for.
 //
 // It takes the structural shape rather than a Principal so the sidebar's `me`
@@ -232,12 +233,12 @@ export const roleFilterKeys: FilterKey<Role>[] = [
 // with a different subject.
 export type PrincipalIdentity = {
   human?: { username: string; display_name?: string };
-  service?: { label: string };
+  service?: { name: string };
   kind: string;
 };
 
 export function principalName(p: Principal | PrincipalIdentity): string {
-  return p.human?.display_name || p.human?.username || p.service?.label || p.kind;
+  return p.human?.display_name || p.human?.username || p.service?.name || p.kind;
 }
 
 // Presentational helpers shared by the directory columns and the detail body, so a

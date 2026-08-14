@@ -5847,10 +5847,12 @@ export interface components {
             service?: components["schemas"]["SvcBody"];
         };
         MemberBody: {
+            /** @description The friendly string, where the member is a human who has one */
             display_name?: string;
             kind: string;
+            /** @description The member's identifier: a human's username, or a service account's name */
+            name?: string;
             principal_id: string;
-            username?: string;
         };
         MetricTypeBody: {
             /**
@@ -6845,7 +6847,8 @@ export interface components {
             required: boolean;
         };
         SvcBody: {
-            label: string;
+            /** @description The service account's identifier, unique across service principals */
+            name: string;
         };
         SwapRolePositionsInputBody: {
             /**

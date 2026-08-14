@@ -34,7 +34,7 @@ reading the caller's own principal and the change itself), **role assignment**
 `POST /principals/{id}:disable` / `:enable`; `:archive` / `:restore`, a soft delete hiding the
 account and blocking authentication; `:purge`, an irreversible hard delete gated on prior archival
 and the admin-sensitive `principal:purge:admin`; disabling or archiving the last active owner is
-refused; a purge preserves the audit trail by denormalizing the actor's label into each row, the
+refused; a purge preserves the audit trail by denormalizing the actor's identifier into each row, the
 audit foreign keys going `ON DELETE SET NULL`), the per-action `visible_set` resolver enforced in
 the Storage Gateway across locations, systems, and components, **principal groups** (the
 `/principal-groups` family: CRUD, membership, and group grants, gated `principal_group`), members
@@ -110,7 +110,7 @@ A principal carries a `kind`: authN methods and per-kind domain attributes diffe
 
 **AI acts as a user** (a first-class `agent` principal is deferred): an AI tool authenticates via **OAuth as a `human` or `service` principal** and acts with exactly that principal's grants, a scoped, audited user ([AI](/architecture/ai/)).
 
-Each kind gets a **1:1 per-kind table** linked by `principal_id` (`human`, `service`, `node`); the base `principal` table holds identity + kind only, the per-kind tables the rest, including the kind's human-facing label.
+Each kind gets a **1:1 per-kind table** linked by `principal_id` (`human`, `service`, `node`); the base `principal` table holds identity + kind only, the per-kind tables the rest, including the kind's own identifier: a human's `username`, a service account's `name`, a node's `name`. Each of the three is unique, because each is the only handle its principal has and each is denormalized as bare text into the audit trail ([ADR-0111](/architecture/decisions/#adr-0111-a-service-accounts-identifier-is-a-name-and-it-is-unique)).
 
 ## Credentials
 
@@ -629,9 +629,11 @@ The SCIM mapping detail: which IdP attributes drive `principal_group` membership
 
 ## Storage
 
-The IAM subjects and their grants; the physical layout lives on [storage](/architecture/storage/). The
-per-kind labels: `human.display_name` plus username and email, the `service` label, and the `node` name
-(whose full table renders on [core entities](/architecture/core-entities/)).
+The IAM subjects and their grants; the physical layout lives on [storage](/architecture/storage/). Each
+kind carries its own identifier and, where it has one, a label: `human.username` plus email and the
+optional `display_name`, `service.name`, and `node.name` with its own `display_name` (whose full
+table renders on [core entities](/architecture/core-entities/)). A service account has an identifier
+and no label at all: the console shows its name, and there is nowhere else to put words.
 
 <SchemaTable table="principal" notes={{ kind: 'human, service, or node; the per-kind table holds the rest' }} />
 

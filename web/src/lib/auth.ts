@@ -9,7 +9,7 @@ import { api, setToken, clearToken } from "../api/client";
 export type Me = {
   principal: { id: string; kind: string };
   human?: { username: string; email?: string; display_name?: string; must_change_password?: boolean; has_avatar?: boolean };
-  service?: { label: string };
+  service?: { name: string };
   permissions: string[];
   grants: { role: string; scope_kind: string; scope_id?: string }[];
 };

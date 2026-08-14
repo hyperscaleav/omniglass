@@ -361,7 +361,7 @@ export function UserDetail(props: { id: string }) {
                   <KVStacked label="Email" value={pr().human!.email || <span class="text-base-content/40">not set</span>} />
                 </Show>
                 <Show when={pr().service}>
-                  <KVStacked label="Label" value={<span class="font-data">{pr().service!.label}</span>} />
+                  <KVStacked bind="name" value={<span class="font-data">{pr().service!.name}</span>} />
                 </Show>
               </div>
             }
