@@ -209,6 +209,14 @@ type Gateway interface {
 	RestoreLocationType(ctx context.Context, actorID, ref string) (*LocationType, error)
 	DeleteLocationType(ctx context.Context, actorID, ref string) error
 
+	// ResolveActionTarget resolves a mutation's target on a tree tier
+	// ("component", "system", "location") with the read-then-action split, and
+	// returns the row's id. It is the seam for the routes that resolve their own
+	// target at the API layer because the write behind them takes no scope: the
+	// alarm verbs and the system-role declarations. read must be the caller's own
+	// <kind>:read, which is what makes the 403 safe to give.
+	ResolveActionTarget(ctx context.Context, ownerKind, ref string, read, action scope.Set) (string, error)
+
 	// InScopeIDs reports which of the candidate row ids of a tree resource
 	// (location/system/component) are inside a resolved scope, applying the same
 	// subtree/exclude-root logic the enforcement uses. It backs per-row UI action
@@ -571,8 +579,12 @@ type Gateway interface {
 	UpsertProductProperty(ctx context.Context, productID string, spec ProductPropertySpec) error
 	SetProductProperty(ctx context.Context, actorID, productID string, spec ProductPropertySpec) (*ProductProperty, error)
 	DeleteProductProperty(ctx context.Context, actorID, productID, propertyName string) error
-	SetProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, write scope.Set) (*Property, error)
-	ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error
+	// The value writes take the read/action pair (#736), resolving the owner once
+	// through the same split: out of the read scope is the owner kind's
+	// non-disclosing not-found, readable but out of the action scope is its
+	// forbidden.
+	SetProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, read, action scope.Set) (*Property, error)
+	ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, read, action scope.Set) error
 	EffectiveProperties(ctx context.Context, ownerKind, ownerID string, read scope.Set) ([]EffectiveProperty, error)
 
 	// The declared-metric contracts (#600): the metric siblings of the three
@@ -615,20 +627,28 @@ type Gateway interface {
 	// two can never disagree.
 	ListMembers(ctx context.Context, systemName string, read scope.Set) ([]Member, error)
 	ComponentMemberships(ctx context.Context, componentName string, read scope.Set) ([]Member, error)
-	AddMember(ctx context.Context, actorID, systemName, componentName string, write scope.Set) error
-	RemoveMember(ctx context.Context, actorID, systemName, componentName string, write scope.Set) error
-	SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, write scope.Set) error
+	// The three writes take the read/action pair, not one write set (#736): the
+	// system is resolved in the read scope and then required in the action scope,
+	// so a system the caller can see but not write is refused as forbidden rather
+	// than reported absent. The component END stays scope-blind, as it always was:
+	// the only set in hand is resolved for "system", and a component's ancestor
+	// chain is unrelated to it.
+	AddMember(ctx context.Context, actorID, systemName, componentName string, read, action scope.Set) error
+	RemoveMember(ctx context.Context, actorID, systemName, componentName string, read, action scope.Set) error
+	SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, read, action scope.Set) error
 
 	// The role tier: a system's roles resolve from its standard (inherited) and its
 	// own ad-hoc declarations; assignment refuses a component whose product's
 	// component_type is not one the role's typed-slot guard accepts (#626).
 	EffectiveRoles(ctx context.Context, systemName string, read scope.Set) ([]EffectiveRole, error)
-	AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, write scope.Set) error
-	UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, write scope.Set) error
+	// Staffing takes the read/action pair for the same reason membership does
+	// (#736).
+	AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action scope.Set) error
+	UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action scope.Set) error
 	// SwapPositions exchanges two occupants' positions within a role: an
 	// ordering change only, so it takes no read counterpart of its own
 	// (EffectiveRoles already reports the ordered result).
-	SwapPositions(ctx context.Context, actorID, systemName, roleName string, a, b int, write scope.Set) error
+	SwapPositions(ctx context.Context, actorID, systemName, roleName string, a, b int, read, action scope.Set) error
 	// The declaration side of the same tier: what a standard or a system declares
 	// it needs filled. ownerKind is "standard" or "system"; SeedSystemRole is the
 	// boot-seed lane.

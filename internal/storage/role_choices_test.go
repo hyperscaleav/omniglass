@@ -205,7 +205,7 @@ func TestDetachedRoleBecomesUnconditional(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "detach-comp", ProductName: &bar}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "detach-sys", "role-b", "detach-comp", all); err != nil {
+	if err := gw.AssignRole(ctx, "", "detach-sys", "role-b", "detach-comp", all, all); err != nil {
 		t.Fatalf("assign role-b: %v", err)
 	}
 
@@ -283,7 +283,7 @@ func TestEditingRoleLeavesAlternateAlone(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "edit-comp", ProductName: &bar}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "edit-sys", "conf-bar", "edit-comp", all); err != nil {
+	if err := gw.AssignRole(ctx, "", "edit-sys", "conf-bar", "edit-comp", all, all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 	before, err := gw.SystemHealth(ctx, "edit-sys", 0, all)
@@ -387,7 +387,7 @@ func TestHealthRoleReportsChoiceAndActive(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "report-bar", ProductName: &bar}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "report-sys", "conf-bar", "report-bar", all); err != nil {
+	if err := gw.AssignRole(ctx, "", "report-sys", "conf-bar", "report-bar", all, all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 

@@ -74,7 +74,7 @@ func newHealthFixture(t *testing.T) *healthFixture {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, f.all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all); err != nil {
+	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 	return f
@@ -383,14 +383,14 @@ func TestHealthMovesOnUnassign(t *testing.T) {
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {
 		t.Fatalf("baseline system = %q, want healthy", v)
 	}
-	if err := f.gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all); err != nil {
+	if err := f.gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all); err != nil {
 		t.Fatalf("unassign: %v", err)
 	}
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "degraded" {
 		t.Fatalf("system after unassigning the only component = %q, want degraded", v)
 	}
 	// Staffing it again recovers, which is the same trigger in the other direction.
-	if err := f.gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all); err != nil {
+	if err := f.gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all); err != nil {
 		t.Fatalf("re-assign: %v", err)
 	}
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {
@@ -991,7 +991,7 @@ func TestAlarmOnSpareDoesNotShort(t *testing.T) {
 	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &panel}, f.all, all, all, all); err != nil {
 		t.Fatalf("create second component: %v", err)
 	}
-	if err := f.gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", f.all); err != nil {
+	if err := f.gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", f.all, f.all); err != nil {
 		t.Fatalf("assign spare: %v", err)
 	}
 	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" {

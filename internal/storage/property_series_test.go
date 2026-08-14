@@ -53,10 +53,10 @@ func TestDeclaredValuesAppendToSeries(t *testing.T) {
 
 	// Two sets are two series rows and one current value: the append IS the edit
 	// history.
-	if _, err := gw.SetProperty(ctx, "", "component", "series-1", "firmware-version", "", json.RawMessage(`"1.0.0"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "series-1", "firmware-version", "", json.RawMessage(`"1.0.0"`), all, all); err != nil {
 		t.Fatalf("set 1.0.0: %v", err)
 	}
-	if _, err := gw.SetProperty(ctx, "", "component", "series-1", "firmware-version", "", json.RawMessage(`"2.0.0"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "series-1", "firmware-version", "", json.RawMessage(`"2.0.0"`), all, all); err != nil {
 		t.Fatalf("set 2.0.0: %v", err)
 	}
 	if n := declaredRows(); n != 2 {
@@ -69,7 +69,7 @@ func TestDeclaredValuesAppendToSeries(t *testing.T) {
 
 	// Re-declaring the current value appends nothing: the history records edits,
 	// not saves.
-	if _, err := gw.SetProperty(ctx, "", "component", "series-1", "firmware-version", "", json.RawMessage(`"2.0.0"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "series-1", "firmware-version", "", json.RawMessage(`"2.0.0"`), all, all); err != nil {
 		t.Fatalf("re-set 2.0.0: %v", err)
 	}
 	if n := declaredRows(); n != 2 {
@@ -79,7 +79,7 @@ func TestDeclaredValuesAppendToSeries(t *testing.T) {
 	// Unset appends a tombstone (a third row) rather than deleting: the property
 	// leaves the effective read, the current declared value is gone, the history
 	// is intact.
-	if err := gw.ClearProperty(ctx, "", "component", "series-1", "firmware-version", "", all); err != nil {
+	if err := gw.ClearProperty(ctx, "", "component", "series-1", "firmware-version", "", all, all); err != nil {
 		t.Fatalf("clear: %v", err)
 	}
 	if n := declaredRows(); n != 3 {
@@ -93,12 +93,12 @@ func TestDeclaredValuesAppendToSeries(t *testing.T) {
 	}
 
 	// Clearing what is already unset stays the explicit miss it always was.
-	if err := gw.ClearProperty(ctx, "", "component", "series-1", "firmware-version", "", all); !errors.Is(err, storage.ErrPropertyNotFound) {
+	if err := gw.ClearProperty(ctx, "", "component", "series-1", "firmware-version", "", all, all); !errors.Is(err, storage.ErrPropertyNotFound) {
 		t.Fatalf("clear an unset property: want ErrPropertyNotFound, got %v", err)
 	}
 
 	// Setting again after a clear is a fresh edit: a fourth row, current again.
-	if _, err := gw.SetProperty(ctx, "", "component", "series-1", "firmware-version", "", json.RawMessage(`"3.0.0"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "series-1", "firmware-version", "", json.RawMessage(`"3.0.0"`), all, all); err != nil {
 		t.Fatalf("set after clear: %v", err)
 	}
 	if n := declaredRows(); n != 4 {

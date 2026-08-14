@@ -331,7 +331,7 @@ func TestMembershipChangesRestampTheComponent(t *testing.T) {
 	}
 
 	// bind: the first membership becomes the primary with nobody asking
-	if err := gw.AddMember(ctx, "", board.Name, c.ID, all); err != nil {
+	if err := gw.AddMember(ctx, "", board.Name, c.ID, all, all); err != nil {
 		t.Fatalf("add member: %v", err)
 	}
 	if got := labelOf(t, gw, ctx, c.ID); got != "[Boardroom]" {
@@ -339,7 +339,7 @@ func TestMembershipChangesRestampTheComponent(t *testing.T) {
 	}
 
 	// a second membership does not steal the default, so nothing moves
-	if err := gw.AddMember(ctx, "", huddle.Name, c.ID, all); err != nil {
+	if err := gw.AddMember(ctx, "", huddle.Name, c.ID, all, all); err != nil {
 		t.Fatalf("add second member: %v", err)
 	}
 	if got := labelOf(t, gw, ctx, c.ID); got != "[Boardroom]" {
@@ -347,7 +347,7 @@ func TestMembershipChangesRestampTheComponent(t *testing.T) {
 	}
 
 	// re-defaulting moves it
-	if err := gw.SetPrimaryMember(ctx, "", huddle.Name, c.ID, all); err != nil {
+	if err := gw.SetPrimaryMember(ctx, "", huddle.Name, c.ID, all, all); err != nil {
 		t.Fatalf("set primary: %v", err)
 	}
 	if got := labelOf(t, gw, ctx, c.ID); got != "[Huddle Room]" {
@@ -355,7 +355,7 @@ func TestMembershipChangesRestampTheComponent(t *testing.T) {
 	}
 
 	// unbinding the default promotes the sole survivor, which moves it again
-	if err := gw.RemoveMember(ctx, "", huddle.Name, c.ID, all); err != nil {
+	if err := gw.RemoveMember(ctx, "", huddle.Name, c.ID, all, all); err != nil {
 		t.Fatalf("remove member: %v", err)
 	}
 	if got := labelOf(t, gw, ctx, c.ID); got != "[Boardroom]" {
@@ -363,7 +363,7 @@ func TestMembershipChangesRestampTheComponent(t *testing.T) {
 	}
 
 	// and unbinding the last one leaves no system at all
-	if err := gw.RemoveMember(ctx, "", board.Name, c.ID, all); err != nil {
+	if err := gw.RemoveMember(ctx, "", board.Name, c.ID, all, all); err != nil {
 		t.Fatalf("remove last member: %v", err)
 	}
 	if got := labelOf(t, gw, ctx, c.ID); got != "[]" {
@@ -869,16 +869,16 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 			return err
 		}},
 		{"bind a component to a system", func() error {
-			return gw.AddMember(ctx, "", huddle.Name, comps[3], all)
+			return gw.AddMember(ctx, "", huddle.Name, comps[3], all, all)
 		}},
 		{"bind a second system and re-default to it", func() error {
-			if err := gw.AddMember(ctx, "", board.Name, comps[2], all); err != nil {
+			if err := gw.AddMember(ctx, "", board.Name, comps[2], all, all); err != nil {
 				return err
 			}
-			return gw.SetPrimaryMember(ctx, "", board.Name, comps[2], all)
+			return gw.SetPrimaryMember(ctx, "", board.Name, comps[2], all, all)
 		}},
 		{"unbind the default", func() error {
-			return gw.RemoveMember(ctx, "", board.Name, comps[2], all)
+			return gw.RemoveMember(ctx, "", board.Name, comps[2], all, all)
 		}},
 		{"reclassify a system", func() error {
 			_, err := gw.UpdateSystem(ctx, "", huddle.ID, storage.SystemPatch{SystemTypeID: strptr("training")}, all, all)
@@ -973,7 +973,7 @@ func TestStaffingARoleRestampsTheComponentItBinds(t *testing.T) {
 	if bar.DisplayName != "[]" {
 		t.Fatalf("an unbound component reads %q, want %q", bar.DisplayName, "[]")
 	}
-	if err := gw.AssignRole(ctx, "", s.Name, "conf-bar", bar.ID, all); err != nil {
+	if err := gw.AssignRole(ctx, "", s.Name, "conf-bar", bar.ID, all, all); err != nil {
 		t.Fatalf("assign role: %v", err)
 	}
 	if got := labelOf(t, gw, ctx, bar.ID); got != "[Boardroom]" {
@@ -1052,7 +1052,7 @@ func TestDeletingASystemPromotesTheSoleSurvivingMembership(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if err := gw.AddMember(ctx, "", huddle.Name, c.ID, all); err != nil {
+	if err := gw.AddMember(ctx, "", huddle.Name, c.ID, all, all); err != nil {
 		t.Fatalf("add the second membership: %v", err)
 	}
 	if err := gw.DeleteSystem(ctx, "", board.ID, all, all); err != nil {

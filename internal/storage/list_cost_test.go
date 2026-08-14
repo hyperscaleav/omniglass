@@ -238,7 +238,7 @@ func TestListMembersCostIsFlatInMemberCount(t *testing.T) {
 		t.Helper()
 		name := fmt.Sprintf("dsp-%d", i)
 		mustCreateComponent(t, gw, storage.ComponentSpec{Name: name, LocationName: strptr(roomNames[i%rooms])}, all)
-		if err := gw.AddMember(ctx, "", "av", name, all); err != nil {
+		if err := gw.AddMember(ctx, "", "av", name, all, all); err != nil {
 			t.Fatalf("add member %s: %v", name, err)
 		}
 	}

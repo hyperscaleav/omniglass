@@ -310,7 +310,8 @@ func registerStandardRoleRoutes(api huma.API, a *authenticator, gw storage.Gatew
 
 // registerSystemRoleRoutes wires the per-system resolved read, the ad-hoc
 // declarations, and staffing. Every one resolves the system within the caller's
-// scope, so an out-of-scope system is a non-disclosing 404.
+// read scope and then requires its update scope, so a system outside the read
+// scope is a non-disclosing 404 and one the caller can read but not write is a 403.
 func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-system-roles",
@@ -337,7 +338,7 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodPatch,
 		Path:        "/systems/{name}/roles/{role}",
 		Summary:     "Declare a role on a system",
-		Description: "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+		Description: "Declares a role directly on this system (how a one-off system gets roles at all, and how a conforming one adds what its standard does not cover), or revises it in place. Partial by default: the fields present in the body change and the rest of the declaration is left alone. update_mask overrides that, writing exactly the fields it names, which is how a field is cleared, and [\"*\"] replaces the whole declaration. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *setSystemRoleInput) (*systemRoleOutput, error) {
 		sysID, err := requireSystemInScope(ctx, a, gw, in.Name)
 		if err != nil {
@@ -364,7 +365,7 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Path:          "/systems/{name}/roles/{role}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Withdraw a role from a system",
-		Description:   "Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+		Description:   "Removes a role declared on this system, and with it every assignment to it. A role the system does not declare itself is a 404 (a role inherited from its standard is withdrawn on the standard, not here). Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *systemRolePathInput) (*struct{}, error) {
 		sysID, err := requireSystemInScope(ctx, a, gw, in.Name)
 		if err != nil {
@@ -382,10 +383,10 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Path:          "/systems/{name}/roles/{role}/assignments/{component}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Assign a component to a role",
-		Description:   "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+		Description:   "Puts this component in the role for this system. Refused with a 422 naming both parties when the component is not a typed match: its product's component_type outside every type the role accepts, or (if the role pins products) its product not one of them. A role with no accepted types takes any type. Idempotent. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *roleAssignmentPathInput) (*struct{}, error) {
 		if err := gw.AssignRole(ctx, actorID(ctx), in.Name, in.Role, in.Component,
-			a.scopeFor(ctx, "system", "update")); err != nil {
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update")); err != nil {
 			return nil, mapRoleErr(err)
 		}
 		return nil, nil
@@ -397,10 +398,10 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Path:          "/systems/{name}/roles/{role}/assignments/{component}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Unassign a component from a role",
-		Description:   "Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+		Description:   "Takes this component out of the role, leaving the role understaffed until another fills it. A component that was not filling the role is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *roleAssignmentPathInput) (*struct{}, error) {
 		if err := gw.UnassignRole(ctx, actorID(ctx), in.Name, in.Role, in.Component,
-			a.scopeFor(ctx, "system", "update")); err != nil {
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update")); err != nil {
 			return nil, mapRoleErr(err)
 		}
 		return nil, nil
@@ -412,14 +413,14 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Path:          "/systems/{name}/roles/{role}:swapPositions",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Exchange two occupants' positions within a role",
-		Description:   "Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; an out-of-scope system is a non-disclosing 404.",
+		Description:   "Exchanges the positions of whichever components currently hold position and with within this role: an ordering change only, it does not affect who is assigned or the system's health. Either position missing an occupant is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *swapRolePositionsInput) (*struct{}, error) {
 		// No requireSystemInScope here: unlike set/delete-system-role,
 		// SwapPositions takes a scope argument and resolves it itself
 		// (ownerInScope, the same as AssignRole and UnassignRole), so a
 		// second check ahead of it would only duplicate the gate.
 		if err := gw.SwapPositions(ctx, actorID(ctx), in.Name, in.Role, in.Body.Position, in.Body.With,
-			a.scopeFor(ctx, "system", "update")); err != nil {
+			a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update")); err != nil {
 			return nil, mapRoleErr(err)
 		}
 		return nil, nil
@@ -468,33 +469,49 @@ func resolveAlternateBody(ctx context.Context, gw storage.Gateway, ownerKind, ow
 	return &id, nil
 }
 
-// requireSystemInScope resolves the system within the caller's write scope
-// before a declaration lands on it, and returns its id. The declaration
-// methods address their owner by name and take no scope (a standard is not
-// scope-scoped at all), so the system arc gets its ABAC check here, at the
-// only route that can reach it. The id is returned rather than discarded so
-// the caller can pass it straight on to the gateway calls that follow,
-// instead of handing back the caller's raw reference for a second,
-// redundant resolve: once names are no longer unique (#627), a second
-// name-based resolve is not just wasted work, it is a second surface that
-// can raise storage.ErrAmbiguousName with no mapping, on a reference the
+// requireSystemInScope resolves the system a declaration is about to land on
+// and returns its id. The declaration methods address their owner by kind and
+// id and take no scope (a standard is not scope-scoped at all), so the system
+// arc gets its ABAC check here, at the only route that can reach it. The id is
+// returned rather than discarded so the caller can pass it straight on to the
+// gateway calls that follow, instead of handing back the caller's raw reference
+// for a second, redundant resolve: once names are no longer unique (#627), a
+// second name-based resolve is not just wasted work, it is a second surface
+// that can raise storage.ErrAmbiguousName with no mapping, on a reference the
 // first resolve already proved unambiguous.
+//
+// It resolves through ResolveActionTarget with BOTH sets rather than through
+// GetSystem with the update set alone (#736). Passing an action scope into a
+// parameter that means read is what made a system the caller reads every day
+// but may not write come back as "system not found": a lie about existence that
+// an operator looking straight at the row reads as a broken platform rather than
+// as the missing grant it is. The read set is the caller's own system:read, not
+// a convenient wider one, which is the condition that keeps the 403 from
+// disclosing a row the caller could not otherwise see.
 func requireSystemInScope(ctx context.Context, a *authenticator, gw storage.Gateway, name string) (string, error) {
-	sys, err := gw.GetSystem(ctx, name, a.scopeFor(ctx, "system", "update"))
+	id, err := gw.ResolveActionTarget(ctx, "system", name,
+		a.scopeFor(ctx, "system", "read"), a.scopeFor(ctx, "system", "update"))
 	if err != nil {
 		return "", mapSystemErr(err)
 	}
-	return sys.ID, nil
+	return id, nil
 }
 
-// requireComponentInScope is its component-arc twin, used by the alarm
-// routes, and returns the component's id for the same reason.
+// requireComponentInScope is its component-arc twin, used by the alarm routes,
+// and returns the component's id for the same reason. action names the
+// permission whose scope decides the write (component:update for raising and
+// clearing); the read half is always the caller's own component:read.
+//
+// The read-only caller (the alarm LIST) passes "read" for both, which is the
+// same set twice and therefore the plain non-disclosing read it always was: a
+// route with nothing to act on has no third branch to pick.
 func requireComponentInScope(ctx context.Context, a *authenticator, gw storage.Gateway, name, action string) (string, error) {
-	comp, err := gw.GetComponent(ctx, name, a.scopeFor(ctx, "component", action))
+	id, err := gw.ResolveActionTarget(ctx, "component", name,
+		a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", action))
 	if err != nil {
 		return "", mapComponentErr(err)
 	}
-	return comp.ID, nil
+	return id, nil
 }
 
 // mapRoleErr translates the role sentinels into HTTP status. The one that
@@ -573,6 +590,13 @@ func mapRoleErr(err error) error {
 		return huma.Error409Conflict("that position is already taken")
 	case errors.Is(err, storage.ErrCapacityBelowQuorum):
 		return huma.Error422UnprocessableEntity("capacity must be at least the role's quorum")
+	// Before the not-found cases, and a 403 rather than a 404: the staffing
+	// routes resolve their system with the read-then-action split (#736), so
+	// this sentinel means the caller can READ that system and simply may not
+	// staff it. Reporting it absent would be false to a caller looking straight
+	// at the row.
+	case errors.Is(err, storage.ErrSystemForbidden):
+		return huma.Error403Forbidden("forbidden")
 	case errors.Is(err, storage.ErrSystemNotFound):
 		return huma.Error404NotFound("system not found")
 	case errors.Is(err, storage.ErrComponentNotFound):

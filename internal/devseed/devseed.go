@@ -509,7 +509,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		if err != nil {
 			return err
 		}
-		if err := gw.AddMember(ctx, actorID, sysID, compID, all); err != nil {
+		if err := gw.AddMember(ctx, actorID, sysID, compID, all, all); err != nil {
 			return fmt.Errorf("devseed: add member %s/%s: %w", m.System, m.Component, err)
 		}
 	}
@@ -521,7 +521,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		if err != nil {
 			return err
 		}
-		if err := gw.AssignRole(ctx, actorID, sysID, ra.Role, compID, all); err != nil {
+		if err := gw.AssignRole(ctx, actorID, sysID, ra.Role, compID, all, all); err != nil {
 			return fmt.Errorf("devseed: assign %s to %s/%s: %w", ra.Component, ra.System, ra.Role, err)
 		}
 	}
@@ -539,7 +539,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		if !ok {
 			return fmt.Errorf("devseed: property value references unknown component key %q", pv.Component)
 		}
-		if _, err := gw.SetProperty(ctx, actorID, "component", compID, pv.Property, "", raw, all); err != nil {
+		if _, err := gw.SetProperty(ctx, actorID, "component", compID, pv.Property, "", raw, all, all); err != nil {
 			return fmt.Errorf("devseed: set property value %s/%s: %w", pv.Component, pv.Property, err)
 		}
 	}

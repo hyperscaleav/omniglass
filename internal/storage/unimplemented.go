@@ -193,6 +193,9 @@ func (UnimplementedGateway) DeleteLocationType(context.Context, string, string) 
 func (UnimplementedGateway) InScopeIDs(context.Context, string, []string, scope.Set) (map[string]bool, error) {
 	return nil, nil
 }
+func (UnimplementedGateway) ResolveActionTarget(context.Context, string, string, scope.Set, scope.Set) (string, error) {
+	return "", nil
+}
 func (UnimplementedGateway) ListLocations(context.Context, scope.Set) ([]Location, error) {
 	return nil, nil
 }
@@ -594,10 +597,10 @@ func (UnimplementedGateway) SetProductProperty(context.Context, string, string, 
 func (UnimplementedGateway) DeleteProductProperty(context.Context, string, string, string) error {
 	return nil
 }
-func (UnimplementedGateway) SetProperty(context.Context, string, string, string, string, string, json.RawMessage, scope.Set) (*Property, error) {
+func (UnimplementedGateway) SetProperty(context.Context, string, string, string, string, string, json.RawMessage, scope.Set, scope.Set) (*Property, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ClearProperty(context.Context, string, string, string, string, string, scope.Set) error {
+func (UnimplementedGateway) ClearProperty(context.Context, string, string, string, string, string, scope.Set, scope.Set) error {
 	return nil
 }
 func (UnimplementedGateway) EffectiveProperties(context.Context, string, string, scope.Set) ([]EffectiveProperty, error) {
@@ -743,22 +746,22 @@ func (UnimplementedGateway) ListMembers(context.Context, string, scope.Set) ([]M
 func (UnimplementedGateway) ComponentMemberships(context.Context, string, scope.Set) ([]Member, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) AddMember(context.Context, string, string, string, scope.Set) error {
+func (UnimplementedGateway) AddMember(context.Context, string, string, string, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) RemoveMember(context.Context, string, string, string, scope.Set) error {
+func (UnimplementedGateway) RemoveMember(context.Context, string, string, string, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) SetPrimaryMember(context.Context, string, string, string, scope.Set) error {
+func (UnimplementedGateway) SetPrimaryMember(context.Context, string, string, string, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) AssignRole(context.Context, string, string, string, string, scope.Set) error {
+func (UnimplementedGateway) AssignRole(context.Context, string, string, string, string, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) UnassignRole(context.Context, string, string, string, string, scope.Set) error {
+func (UnimplementedGateway) UnassignRole(context.Context, string, string, string, string, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) SwapPositions(context.Context, string, string, string, int, int, scope.Set) error {
+func (UnimplementedGateway) SwapPositions(context.Context, string, string, string, int, int, scope.Set, scope.Set) error {
 	return nil
 }
 func (UnimplementedGateway) ListSystemRoles(context.Context, string, string) ([]SystemRole, error) {

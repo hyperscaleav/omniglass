@@ -88,10 +88,15 @@ func scanProperty(row pgx.Row) (*Property, error) {
 // SetProperty declares a value for (owner, property, instance) by APPENDING a
 // series row, so every edit is history (#591). The save stays idempotent the
 // way the observed lane's transition guard is: re-declaring the value already
-// current appends nothing and returns the current row. The owner is resolved
-// within the write scope, so a caller cannot set a value on an instance it
-// cannot reach; the write and its audit are one transaction.
-func (p *PG) SetProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, write scope.Set) (*Property, error) {
+// current appends nothing and returns the current row. The write and its audit
+// are one transaction.
+//
+// The owner is resolved with the read-then-action split (#736): out of the read
+// scope is that kind's non-disclosing not-found, and readable but out of the
+// action scope is its forbidden. One resolve, not the two this used to make
+// (guardOwnerScope for the check and ownerArcValueInScope for the arc), because
+// resolveTargetID returns the id the arc stores.
+func (p *PG) SetProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, read, action scope.Set) (*Property, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
 		return nil, err
@@ -107,15 +112,10 @@ func (p *PG) SetProperty(ctx context.Context, actorID, ownerKind, ownerID, prope
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := p.guardOwnerScope(ctx, tx, ownerKind, ownerID, write); err != nil {
-		return nil, err
-	}
-	// ownerArcValueInScope, not ownerArcValue: guardOwnerScope already
-	// confirmed the owner within write, but a bare-name re-resolve here is
-	// STILL scope-blind unless it also goes through the scoped variant
-	// (ruling 2, #627) -- the first check passing does not defuse a second,
-	// unscoped resolve of the same reference.
-	arc, err := p.ownerArcValueInScope(ctx, tx, ownerKind, ownerID, write)
+	// One scoped resolve, and its result IS the arc value: no second, scope-blind
+	// re-resolve of the same reference can follow it (ruling 2, #627), because
+	// there is no second resolve at all.
+	arc, err := p.resolveTargetID(ctx, tx, ownerKind, ownerID, read, action)
 	if err != nil {
 		return nil, err
 	}
@@ -186,8 +186,8 @@ func (p *PG) currentDeclared(ctx context.Context, q querier, col, ownerKind, arc
 // declared row whose value is JSON null), so the unset is itself an edit
 // in the series' history and nothing is deleted. Clearing a property with no
 // current value (never set, or already tombstoned) stays the explicit
-// ErrPropertyNotFound miss. Scope-guarded and audited like the set.
-func (p *PG) ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, write scope.Set) error {
+// ErrPropertyNotFound miss. Scope-split and audited like the set (#736).
+func (p *PG) ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, read, action scope.Set) error {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
 		return err
@@ -198,12 +198,8 @@ func (p *PG) ClearProperty(ctx context.Context, actorID, ownerKind, ownerID, pro
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := p.guardOwnerScope(ctx, tx, ownerKind, ownerID, write); err != nil {
-		return err
-	}
-	// ownerArcValueInScope, not ownerArcValue: see SetProperty's comment on
-	// the same shape.
-	arc, err := p.ownerArcValueInScope(ctx, tx, ownerKind, ownerID, write)
+	// One scoped resolve, and its result IS the arc value: see SetProperty.
+	arc, err := p.resolveTargetID(ctx, tx, ownerKind, ownerID, read, action)
 	if err != nil {
 		return err
 	}

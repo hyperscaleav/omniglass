@@ -175,7 +175,7 @@ func TestDuplicateNamesDoNotBreakIngestPath(t *testing.T) {
 	// (current_values.go's public entry over latestValue) and
 	// EffectiveProperties (property_values.go): both must not 21000, and
 	// compB's read of the same series must come back empty, not compA's value.
-	if _, err := gw.SetProperty(ctx, "", "component", compA.ID, "video-input-x", "", []byte(`"hdmi1"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", compA.ID, "video-input-x", "", []byte(`"hdmi1"`), all, all); err != nil {
 		t.Fatalf("declare property on compA by id: %v", err)
 	}
 	cur, err := gw.LatestValue(ctx, "component", compA.ID, "video-input-x", "", "declared", all)
@@ -392,7 +392,7 @@ func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
 	}
 
 	// Member write, by uuid.
-	if err := gw.AddMember(ctx, "", sys.Name, compA.ID, all); err != nil {
+	if err := gw.AddMember(ctx, "", sys.Name, compA.ID, all, all); err != nil {
 		t.Fatalf("add member by id: %v", err)
 	}
 	memsA, err := gw.ComponentMemberships(ctx, compA.ID, all)
@@ -411,7 +411,7 @@ func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
 	}
 
 	// Role assignment, by uuid.
-	if err := gw.AssignRole(ctx, "", sys.Name, "seat", compA.ID, all); err != nil {
+	if err := gw.AssignRole(ctx, "", sys.Name, "seat", compA.ID, all, all); err != nil {
 		t.Fatalf("assign role by id: %v", err)
 	}
 	var assignedComponent string
@@ -518,10 +518,10 @@ func TestResolveTagsSurvivesDuplicateSystemNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if err := gw.AddMember(ctx, "", sysA.ID, comp.ID, all); err != nil {
+	if err := gw.AddMember(ctx, "", sysA.ID, comp.ID, all, all); err != nil {
 		t.Fatalf("add member sysA by id: %v", err)
 	}
-	if err := gw.AddMember(ctx, "", sysB.ID, comp.ID, all); err != nil {
+	if err := gw.AddMember(ctx, "", sysB.ID, comp.ID, all, all); err != nil {
 		t.Fatalf("add member sysB by id: %v", err)
 	}
 

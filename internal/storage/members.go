@@ -56,14 +56,14 @@ func scanMember(row pgx.Row) (*Member, error) {
 // component gets becomes its primary with nobody asking: a component in exactly
 // one system, which is nearly all of them, must never surface the concept. A
 // later membership does not steal that default.
-func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName string, write scope.Set) error {
+func (p *PG) AddMember(ctx context.Context, actorID, systemName, componentName string, read, action scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin add member: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	systemID, componentID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write)
+	systemID, componentID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, read, action)
 	if err != nil {
 		return err
 	}
@@ -119,14 +119,14 @@ func addMemberTx(ctx context.Context, q txQuerier, systemID, componentID string)
 // RemoveMember unbinds a component from a system. Refused while the component
 // still fills a role there: removing it would leave the system staffed by a
 // non-member, which is the contradiction this table exists to make impossible.
-func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentName string, write scope.Set) error {
+func (p *PG) RemoveMember(ctx context.Context, actorID, systemName, componentName string, read, action scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin remove member: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	systemID, componentID, err := p.resolveMembershipEndsForRemoval(ctx, tx, systemName, componentName, write)
+	systemID, componentID, err := p.resolveMembershipEndsForRemoval(ctx, tx, systemName, componentName, read, action)
 	if err != nil {
 		return err
 	}
@@ -275,14 +275,14 @@ func memberComponentIDs(ctx context.Context, q querier, systemID string) ([]stri
 // SetPrimaryMember moves the default to this membership. The move is one
 // statement per side inside one transaction, so there is never a moment with two
 // defaults (which the partial unique index would refuse) or none.
-func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, write scope.Set) error {
+func (p *PG) SetPrimaryMember(ctx context.Context, actorID, systemName, componentName string, read, action scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin set primary member: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	systemID, componentID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, write)
+	systemID, componentID, err := p.resolveMembershipEnds(ctx, tx, systemName, componentName, read, action)
 	if err != nil {
 		return err
 	}
@@ -380,12 +380,15 @@ func (p *PG) membersWhere(ctx context.Context, where string, arg string) ([]Memb
 // cannot fire. SetPrimaryMember carries the same estate-wide-ambiguity shape
 // RemoveMember had; left alone here, out of this round's scope (#645 named
 // only unassign and remove).
-func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName, componentName string, write scope.Set) (systemID, componentID string, err error) {
-	// scopedByNameInScope, not scopedByName-then-inScopeTree: ruling 2
-	// (#627) requires ambiguity judged inside write, not estate-wide.
-	sys, err := scopedByNameInScope(ctx, q, systemConfig, systemName, "system", write)
+func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName, componentName string, read, action scope.Set) (systemID, componentID string, err error) {
+	// resolveScoped, not scopedByNameInScope(write): the read-then-action split
+	// (#736), so a system this caller can see but not write is refused as
+	// forbidden rather than reported absent. Ambiguity is still judged inside a
+	// scope, the READ one now (ruling 2, #627), which is the wider of the two and
+	// therefore the honest set to judge a name in.
+	sys, err := resolveScoped(ctx, q, systemConfig, systemName, read, action)
 	if err != nil {
-		return "", "", err // ErrSystemNotFound when absent or out of scope
+		return "", "", err // ErrSystemNotFound out of read scope, ErrSystemForbidden out of action scope
 	}
 	// scopedByName, not scopedByNameInScope: write is resolved for "system"
 	// here (the system check above), and a component's ancestor chain is
@@ -411,8 +414,8 @@ func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName,
 // that just is not a member here is ErrMemberNotFound, the same sentinel
 // RemoveMember's own delete already falls back to when its statement affects
 // zero rows, reused rather than duplicated.
-func (p *PG) resolveMembershipEndsForRemoval(ctx context.Context, q txQuerier, systemName, componentName string, write scope.Set) (systemID, componentID string, err error) {
-	sys, err := scopedByNameInScope(ctx, q, systemConfig, systemName, "system", write)
+func (p *PG) resolveMembershipEndsForRemoval(ctx context.Context, q txQuerier, systemName, componentName string, read, action scope.Set) (systemID, componentID string, err error) {
+	sys, err := resolveScoped(ctx, q, systemConfig, systemName, read, action)
 	if err != nil {
 		return "", "", err
 	}

@@ -381,7 +381,7 @@ func TestComponentProductSwapKeepsSetValues(t *testing.T) {
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "dev", ProductName: &pa}, all)
 
 	// Pin firmware-version on the component, overriding prod-a's default.
-	if _, err := gw.SetProperty(ctx, "", "component", "dev", "firmware-version", "", json.RawMessage(`"pinned-1.2.3"`), all); err != nil {
+	if _, err := gw.SetProperty(ctx, "", "component", "dev", "firmware-version", "", json.RawMessage(`"pinned-1.2.3"`), all, all); err != nil {
 		t.Fatalf("set firmware: %v", err)
 	}
 

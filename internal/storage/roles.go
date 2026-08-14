@@ -389,7 +389,7 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 // so the operator can act on the refusal rather than guess.
 //
 // Idempotent: assigning the same component to the same role twice is a no-op.
-func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, write scope.Set) error {
+func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin assign role: %w", err)
@@ -402,11 +402,13 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	// different row sharing the same name, or fail outright with SQLSTATE
 	// 21000 ("more than one row returned by a subquery used as an
 	// expression").
-	// scopedByNameInScope, not scopedByName-then-inScopeTree: ruling 2
-	// (#627), ambiguity judged inside write rather than estate-wide.
-	sys, err := scopedByNameInScope(ctx, tx, systemConfig, systemName, "system", write)
+	// resolveScoped, not scopedByNameInScope(write): the read-then-action split
+	// (#736), so a system this caller can see but not staff is refused as
+	// forbidden rather than reported absent. Ambiguity is judged inside the READ
+	// scope rather than estate-wide (ruling 2, #627).
+	sys, err := resolveScoped(ctx, tx, systemConfig, systemName, read, action)
 	if err != nil {
-		return err // ErrSystemNotFound when absent or out of scope
+		return err // ErrSystemNotFound out of read scope, ErrSystemForbidden out of action scope
 	}
 
 	roleID, roleDisplay, acceptedTypes, pinnedProducts, err := p.resolveRole(ctx, tx, sys.ID, roleName)
@@ -600,7 +602,7 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 
 // UnassignRole removes a component from a role, returning ErrAssignmentMissing
 // when it was not filling it.
-func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, write scope.Set) error {
+func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, componentName string, read, action scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin unassign role: %w", err)
@@ -608,10 +610,10 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Resolved once (see AssignRole's comment): every statement below binds an
-	// id rather than re-deriving one from a name. scopedByNameInScope, not
-	// scopedByName-then-inScopeTree: ruling 2 (#627), ambiguity judged
-	// inside write rather than estate-wide.
-	sys, err := scopedByNameInScope(ctx, tx, systemConfig, systemName, "system", write)
+	// id rather than re-deriving one from a name, and the resolve makes the
+	// read-then-action split (#736) with ambiguity judged inside the read scope
+	// rather than estate-wide (ruling 2, #627).
+	sys, err := resolveScoped(ctx, tx, systemConfig, systemName, read, action)
 	if err != nil {
 		return err
 	}
@@ -702,17 +704,16 @@ func rolePositionLockKey(systemID, roleID string) string {
 // position not currently held by an occupant is ErrAssignmentMissing, the
 // same not-found the rest of the staffing surface uses for "there is
 // nothing here to act on". Swapping a position with itself is a no-op.
-func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, roleName string, a, b int, write scope.Set) error {
+func (p *PG) SwapPositions(ctx context.Context, actorID, systemName, roleName string, a, b int, read, action scope.Set) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: begin swap positions: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	// Resolved once (see AssignRole's comment). scopedByNameInScope, not
-	// scopedByName-then-inScopeTree: ruling 2 (#627), ambiguity judged
-	// inside write rather than estate-wide.
-	sys, err := scopedByNameInScope(ctx, tx, systemConfig, systemName, "system", write)
+	// Resolved once (see AssignRole's comment), with the same read-then-action
+	// split (#736) and ambiguity judged inside the read scope (ruling 2, #627).
+	sys, err := resolveScoped(ctx, tx, systemConfig, systemName, read, action)
 	if err != nil {
 		return err
 	}

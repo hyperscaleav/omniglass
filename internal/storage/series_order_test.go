@@ -128,7 +128,7 @@ func TestTheSeriesTiebreakIsInsertionOrderNotARandomIdentifier(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 	for _, v := range []string{`"1.0.0"`, `"2.0.0"`} {
-		if _, err := gw.SetProperty(ctx, "", "component", "tie-2", "firmware-version", "", json.RawMessage(v), all); err != nil {
+		if _, err := gw.SetProperty(ctx, "", "component", "tie-2", "firmware-version", "", json.RawMessage(v), all, all); err != nil {
 			t.Fatalf("set %s: %v", v, err)
 		}
 	}

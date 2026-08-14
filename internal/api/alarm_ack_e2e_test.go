@@ -180,14 +180,24 @@ func TestAcknowledgeRefusesWithoutTheCapability(t *testing.T) {
 // driven by an owner cannot see. The responder HOLDS alarm:acknowledge (so the
 // middleware admits it) and can read every component in the estate through its
 // viewer floor, and its acknowledgement reaches exactly one component.
+//
+// The far component is therefore READABLE and not actionable, and #736 changed
+// what that is owed: the refusal was a 404 (this route resolved its component
+// with the acknowledgement scope alone, so a component outside it came back
+// absent) and is now the truthful 403. Nothing about the reach changed, only
+// what the platform says about it. Telling this caller "not found" about a row
+// it is looking straight at was a lie it could catch, and #728 filed it rather
+// than fixing one route out of step with its siblings.
 func TestAcknowledgeRefusesOutsideTheScope(t *testing.T) {
 	f := newAckFixture(t)
 
-	// It really can read the far component and its alarm.
+	// It really can read the far component and its alarm. This is the condition
+	// that makes the 403 below safe: the refusal names a row this caller could
+	// have read anyway, so it discloses nothing a GET would not.
 	if got := readAlarm(t, f.c, f.responder, f.theirs, f.theirsAlarm); got.ID != f.theirsAlarm {
 		t.Fatalf("the responder cannot read the far alarm, so this test is not about scope: %+v", got)
 	}
-	f.c.do(f.responder, http.MethodPost, ackPath(f.theirs, f.theirsAlarm), nil, http.StatusNotFound)
+	f.c.do(f.responder, http.MethodPost, ackPath(f.theirs, f.theirsAlarm), nil, http.StatusForbidden)
 
 	// The near one, same principal, same verb: allowed. So the refusal above is
 	// the scope boundary and not the route.
