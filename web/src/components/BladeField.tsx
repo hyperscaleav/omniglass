@@ -73,8 +73,9 @@ type BladeFieldBase = {
   // that knows which is on screen. A caller that decided for itself would have
   // to re-derive the read-or-edit switch this component exists to hold, and the
   // moment it got that wrong is the moment the mark and the field's own hint
-  // disagree: a dot that vanishes on the first keystroke while the hint under
-  // the box still promises the inheritance in the present tense.
+  // contradict each other: a dot beside the label saying the value comes from
+  // elsewhere while the hint under the box offers to fall back to it, which are
+  // statements about two different fields.
   provenance?: (text: string) => string;
   // The edit slot, for a body rendered OUTSIDE a BladeEditContext. Systems,
   // Components, and Locations share one renderDetail between a blade (inside a

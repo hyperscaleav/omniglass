@@ -237,8 +237,9 @@ function SystemTypeBladeBody(p: { id: string }): JSX.Element {
           {/*
             The same three inherited facts the component registry's blade shows,
             through the same field (#716): the placeholder carries the value this
-            type would take with the box empty, the hint names the ancestor it
-            comes from, and both are the server's answers off the listing.
+            type would take with the box empty, the mark beside the label names
+            the ancestor it comes from, and both are the server's answers off the
+            listing.
           */}
           <InheritedField
             label="Stem"

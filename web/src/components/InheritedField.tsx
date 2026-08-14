@@ -28,14 +28,21 @@ import type { InheritedFact } from "../lib/catalog";
 //     described as "its parent", because a fact can come from any distance up
 //     the chain: a grandchild whose parent states no stem takes its
 //     grandparent's.
-//   - The HINT states the same relation in words while the box is being edited,
-//     which is where an operator is deciding what to type.
+//   - The HINT carries the one thing the other two cannot: while the box holds
+//     a value of its own, it says that emptying it returns the field to
+//     inheriting, and names what it would inherit. There is no mark in that
+//     state (the row states the value) and no visible placeholder (the box is
+//     not empty), so this is the only route back to inheriting the UI offers.
 //
-// A sentence under the read value ("inherited from mic") did the hint's job
-// there for one morning and came out: it was the third telling of one fact on a
-// line that has room for the value and not much else, and it could not appear in
-// the edit state at all, where the value is a grey placeholder in a box that
-// looks exactly like an empty one. The mark says it in both.
+// Two sentences that restated a visible state came out rather than being kept
+// for symmetry. One sat under the READ value ("inherited from mic"): the third
+// telling of one fact on a line with room for the value and not much else, and
+// it could not appear in the edit state at all, where the value is a grey
+// placeholder in a box that looks exactly like an empty one. The other was the
+// hint's `Inherited from <ancestor>.` on an empty box (#742), which said what
+// the mark beside the label was saying at that same moment, about that same
+// field. The mark says it in both states, and says it in its accessible name,
+// which is the part a sentence under a box never reached.
 //
 // The LOCK is deliberately not reused. ADR-0104 gives the lock one meaning, the
 // platform owns this value, and inheritance is a different relation: an
@@ -68,14 +75,33 @@ export default function InheritedField(props: {
   // The hint is an edit-state affordance, so the text it speaks about is the
   // DRAFT, which is the same string BladeField hands `provenance` in that state
   // (`draft` is required here, so the two cannot be different signals). One
-  // predicate over one string is what makes the mark and the hint impossible to
-  // disagree, including mid-keystroke: the moment a box stops being empty, the
-  // dot goes and the sentence turns from a statement about now into the
-  // conditional it has become.
+  // predicate over one string is what keeps the mark and the hint from ever
+  // disagreeing, including mid-keystroke.
+  //
+  // They do not say the same thing twice. The mark states the RELATION and the
+  // hint states the FACT, and only one of them adds a sentence about
+  // inheritance, in only one state:
+  //
+  //   - Box empty, something above states the fact: the field IS inheriting, the
+  //     mark says so beside the label, and the hint says nothing further. It
+  //     used to append `Inherited from <ancestor>.` here, which was the mark's
+  //     own sentence written out a second time in the same field at the same
+  //     instant, and the ancestor is in the mark's accessible name and its hover
+  //     already (#742).
+  //   - Box holds a value: there is no mark (the row states this value) and the
+  //     placeholder is hidden behind the text, so nothing else on screen says
+  //     that emptying the box returns the field to inheriting, or what it would
+  //     inherit. That is an ACTION the operator has no other route to, not a
+  //     restatement of a visible state, so the sentence stays.
+  //   - Nothing above states the fact: an empty box here is genuinely empty
+  //     rather than inheriting, and the field says so outright.
+  //
+  // So the mark and the sentence take turns, and the keystroke that swaps them
+  // swaps both at once, off the one predicate.
   const hint = () => {
     if (inherited().value === "") return `${props.hint} Nothing above this states one.`;
     return inheriting(props.draft())
-      ? `${props.hint} Inherited from ${inherited().from}.`
+      ? props.hint
       : `${props.hint} Empty inherits from ${inherited().from}.`;
   };
 

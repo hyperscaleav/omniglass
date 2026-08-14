@@ -137,6 +137,24 @@ describe("ComponentTypes page", () => {
     expect(sent).toMatchObject({ name: "boundary-mic", display_name: "Boundary Mic", parent_id: "mic" });
   });
 
+  // #742 removed the blade hint's present-tense sentence because the provenance
+  // mark says it. The CREATE form is a different surface and keeps its own: the
+  // row does not exist yet, so the server has served no `inherited_*` answer,
+  // no `InheritedField` renders here (these are plain `FieldRow`s) and there is
+  // therefore no mark on this form at all. The clause below is the only thing
+  // telling an operator that a blank box is a choice rather than an omission, at
+  // the one moment they are deciding whether to type a value.
+  it("tells the create form's operator that a blank fact inherits, where there is no mark to say it", async () => {
+    mount();
+    fireEvent.click(screen.getByText("New component type"));
+    await screen.findByPlaceholderText("Wireless Microphone");
+    const form = screen.getByPlaceholderText("wireless-mic").closest("form") as HTMLElement;
+    expect(within(form).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+    expect(within(form).getByText("The auto-generated component name's prefix. Leave blank to inherit the parent's.")).toBeTruthy();
+    expect(within(form).getByText("The compact hostname-render form (fp, cam, dsp). Leave blank to inherit.")).toBeTruthy();
+    expect(within(form).getByText("A glyph key. Leave blank to inherit.")).toBeTruthy();
+  });
+
   it("a shipped row offers Edit (the edit forks it) to a caller holding update, and none to a viewer", async () => {
     mount(admin);
     fireEvent.click(screen.getByText("Display"));
@@ -333,10 +351,13 @@ describe("ComponentTypes page", () => {
     expect(stem.value).toBe("");
     expect(stem.placeholder).toBe("from-the-server");
     // The box is empty, so the field IS taking its value from elsewhere right
-    // now: the mark is there and the hint is in the present tense. The
-    // conditional wording ("Empty inherits from") belongs to the state where the
-    // box holds a value of its own, and the two never overlap.
-    expect(within(blade).getByText(/The auto-generated component name's prefix\. Inherited from mic\./)).toBeTruthy();
+    // now, and the MARK is what says so. The hint says only what the fact is
+    // (#742): the sentence it used to append here restated the mark in the same
+    // field at the same instant. The conditional wording ("Empty inherits from")
+    // belongs to the state where the box holds a value of its own, and the two
+    // never overlap.
+    expect(within(blade).getByText("The auto-generated component name's prefix.")).toBeTruthy();
+    expect(within(blade).queryByText(/[Ii]nherit(ed|s) from/)).toBeNull();
     expect(within(blade).getByRole("button", { name: "Stem is inherited from mic" })).toBeTruthy();
     // The other two carry their own served answers rather than the stem's.
     expect((within(blade).getByLabelText("Abbrev") as HTMLInputElement).placeholder).toBe("abbrev-from-the-server");
@@ -356,12 +377,14 @@ describe("ComponentTypes page", () => {
       return el as HTMLElement;
     });
     fireEvent.click(within(blade).getByLabelText("Edit"));
-    // The stem states its own value here, so its sentence is the conditional
-    // one; the abbrev is inheriting, so its sentence is the present-tense one
-    // and it is the field that carries the mark. Both name `mic` and
-    // `ceiling-mic` from the data, two different distances up the chain.
+    // The stem states its own value here, so it gets the conditional sentence
+    // and no mark; the abbrev is inheriting, so it gets the mark and its hint
+    // says only what the fact is. One blade, both states, and the two ancestors
+    // are named from the data at two different distances up the chain: the stem
+    // by the sentence (`mic`, two levels up) and the abbrev by the mark
+    // (`ceiling-mic`, one).
     expect(within(blade).getByText(/The auto-generated component name's prefix\. Empty inherits from mic\./)).toBeTruthy();
-    expect(within(blade).getByText(/compact hostname-render form.*Inherited from ceiling-mic\./)).toBeTruthy();
+    expect(within(blade).getByText("The compact hostname-render form (fp, cam, dsp).")).toBeTruthy();
     expect(within(blade).getByRole("button", { name: "Abbrev is inherited from ceiling-mic" })).toBeTruthy();
     expect(within(blade).queryByRole("button", { name: /^Stem is inherited from/ })).toBeNull();
   });

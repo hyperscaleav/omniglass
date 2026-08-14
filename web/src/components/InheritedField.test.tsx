@@ -39,6 +39,10 @@ function setup(opts: { value?: string; inherited?: InheritedFact } = {}): {
 }
 
 const markName = /Stem is inherited from mic/;
+// Either wording of the relation, so a query for "the sentence is gone" cannot
+// pass by catching only the tense it was written in.
+const anyRelation = /[Ii]nherit(ed|s) from/;
+const baseHint = "The auto-generated component name's prefix.";
 
 describe("InheritedField", () => {
   describe("the mark", () => {
@@ -73,6 +77,20 @@ describe("InheritedField", () => {
       // scan over changed files stays a plain grep.
       expect(ui.container.textContent).not.toContain("\u2014");
     });
+
+    // The edit-state twin of the assertion above, and the whole of #742's first
+    // half. The hint used to append `Inherited from mic.` here, which is the
+    // mark's sentence written out a second time in the same field at the same
+    // moment: same fact, same instant, two tellings. The mark keeps it and the
+    // hint drops back to describing the FACT, which is the only thing the mark
+    // does not say.
+    it("states the relation with the mark alone, not with a sentence beside it", () => {
+      const { slot, ui } = setup();
+      slot.begin();
+      expect(ui.getByRole("button", { name: markName })).toBeTruthy();
+      expect(ui.getByText(baseHint)).toBeTruthy();
+      expect(ui.queryByText(anyRelation)).toBeNull();
+    });
   });
 
   describe("the mark and the hint", () => {
@@ -80,25 +98,38 @@ describe("InheritedField", () => {
     // the hint under the box still promised the inheritance in the present
     // tense. Both answers come from one predicate asked of one string (the
     // draft), so there is no moment at which they can disagree.
+    // After #742 the two are not two tellings of one fact but a pair that takes
+    // turns: exactly one of them is on screen in each state, and the predicate
+    // that decides is the same one. The mark speaks while the box is empty; the
+    // sentence speaks while the box is full, because that is the state with no
+    // mark and no placeholder and therefore no other route back to inheriting.
     it("agree on the first keystroke, and again when the box is cleared", () => {
       const { slot, setDraft, ui } = setup();
       slot.begin();
       expect(ui.getByRole("button", { name: markName })).toBeTruthy();
-      expect(ui.getByText(/prefix\. Inherited from mic\./)).toBeTruthy();
+      expect(ui.getByText(baseHint)).toBeTruthy();
+      expect(ui.queryByText(anyRelation)).toBeNull();
 
       setDraft("c");
       expect(ui.queryByRole("button", { name: /is inherited from/ })).toBeNull();
-      expect(ui.queryByText(/Inherited from mic\./)).toBeNull();
       expect(ui.getByText(/prefix\. Empty inherits from mic\./)).toBeTruthy();
 
       setDraft("");
       expect(ui.getByRole("button", { name: markName })).toBeTruthy();
-      expect(ui.getByText(/prefix\. Inherited from mic\./)).toBeTruthy();
+      expect(ui.getByText(baseHint)).toBeTruthy();
+      expect(ui.queryByText(anyRelation)).toBeNull();
     });
 
+    // KEPT deliberately by #742 while its present-tense twin was removed. This
+    // sentence is not a second telling of the mark: there is no mark here (the
+    // row states the value) and no placeholder either (the box is not empty), so
+    // it is the ONLY thing on screen that says clearing the box returns the
+    // field to inheriting, and the only thing that names what it would inherit.
+    // Delete it and the UI offers no route back.
     it("says what a box with a value of its own would fall back to", () => {
       const { slot, ui } = setup({ value: "carray" });
       slot.begin();
+      expect(ui.queryByRole("button", { name: /is inherited from/ })).toBeNull();
       expect(ui.getByText(/prefix\. Empty inherits from mic\./)).toBeTruthy();
     });
 

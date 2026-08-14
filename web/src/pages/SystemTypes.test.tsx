@@ -108,6 +108,23 @@ describe("SystemTypes page", () => {
     expect(sent).toMatchObject({ name: "lecture-hall", display_name: "Lecture Hall", parent_id: "room" });
   });
 
+  // The create form's twin of the component registry's, and it carries one
+  // thing more: a ROOT type must state a stem, because there is no ancestor to
+  // take one from (`ErrRootSystemTypeNeedsStem` at the gateway). #742 removed
+  // the blade hint's present-tense sentence, which the mark replaced; neither
+  // the mark nor `InheritedField` reaches this form, and nothing at all conveys
+  // the root constraint, so both halves of this hint stay.
+  it("tells the create form's operator that a blank fact inherits, and that a root's stem is required", async () => {
+    mount();
+    fireEvent.click(screen.getByText("New system type"));
+    await screen.findByPlaceholderText("Huddle Room");
+    const form = screen.getByPlaceholderText("huddle").closest("form") as HTMLElement;
+    expect(within(form).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+    expect(within(form).getByText("The prefix a generated system name is built from. Leave blank to inherit the parent's; required on a root.")).toBeTruthy();
+    expect(within(form).getByText("The compact label form (br, cls, vw). Leave blank to inherit.")).toBeTruthy();
+    expect(within(form).getByText("A glyph key. Leave blank to inherit.")).toBeTruthy();
+  });
+
   it("an official row greys Edit; a custom row carries it live", async () => {
     mount();
     fireEvent.click(screen.getByText("Boardroom"));
@@ -215,7 +232,11 @@ describe("SystemTypes page", () => {
     const icon = within(blade).getByLabelText("Icon") as HTMLInputElement;
     expect(icon.value).toBe("");
     expect(icon.placeholder).toBe("icon-from-the-server");
-    expect(within(blade).getByText(/A glyph key\. Inherited from av\./)).toBeTruthy();
+    // The mark says where the value came from; the hint says only what the fact
+    // is (#742). The relation is stated once, by the affordance that survives
+    // both of the field's states.
+    expect(within(blade).getByText("A glyph key.")).toBeTruthy();
+    expect(within(blade).queryByText(/Inherited from av/)).toBeNull();
     expect(within(blade).getByRole("button", { name: "Icon is inherited from av" })).toBeTruthy();
 
     // The stem states its own, so the box holds it and the inherited value sits

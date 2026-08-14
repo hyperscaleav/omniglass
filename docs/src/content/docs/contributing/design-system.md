@@ -255,9 +255,11 @@ same picture as the pen (a value this row did not choose) and is the opposite re
 value is one the platform owns and the operator may not set, an inherited one is a value the operator
 may set at any moment by typing in the box. `components/InheritedField.tsx` therefore leaves the lock
 alone and carries three affordances of its own. The **placeholder** carries the value the field would
-inherit, which is what a placeholder natively means. The **hint** names the ancestor it came from
-while the box is being edited. And the **provenance dot** (`components/ProvenanceDot.tsx`) says the
-one thing both states have to say at a glance: this value comes from somewhere that is not this row.
+inherit, which is what a placeholder natively means. The **provenance dot**
+(`components/ProvenanceDot.tsx`) says the one thing both states have to say at a glance: this value
+comes from somewhere that is not this row. And the **hint** says the one thing neither of those can,
+in the one state where neither of them is on screen: while the box holds a value of its own, it says
+that emptying it returns the field to inheriting, and names what it would inherit.
 All of it comes off the listing the server already sends
 ([ADR-0115](/architecture/decisions/#adr-0115-an-inherited-fact-is-served-with-the-value-it-inherits-and-the-ancestor-it-came-from));
 no type chain is walked in TypeScript, which is what #695 deleted.
@@ -286,6 +288,16 @@ half-open, a click landing on a node that is no longer mounted). Wrapping the el
 `createMemo` looks like the fix and is not, because the memo tracks the derived array a refetch hands
 back equal-but-new. A string cannot have this problem: `<Show>` re-renders on a change of truthiness,
 and the name updates in place.
+
+**Cut copy that restates a STATE; keep copy that offers an ACTION.** When a new affordance lands,
+the sentences written before it are not uniformly redundant, and the test is not whether they use the
+same words. A sentence that describes what the operator can already see (`Inherited from mic.` under
+a box wearing the provenance dot) is a second telling and comes out. A sentence that describes what
+would happen if they did something (`Empty inherits from mic.` on a box holding its own value, where
+there is no dot and no visible placeholder) is the only route to that action and stays, even when it
+is the same fact in a different tense. Check the state each sentence actually renders in before
+deleting it: `InheritedField`'s two differed only by which side of one predicate they sat on, and
+removing both would have left the console with no way back to inheriting.
 
 The predicates live in `lib/entities` and nowhere else: `labelIsName` (which face) and
 `hasDisplayName` (did a human choose this). The second used to be the string comparison

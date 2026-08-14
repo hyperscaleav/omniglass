@@ -4970,11 +4970,12 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   The console renders it in three places, and the lock is deliberately not borrowed for any of them:
   ADR-0104 gives the lock one meaning, the platform owns this value, and an inherited fact is one an
   operator MAY set. The placeholder carries the value (a placeholder natively means "leave this blank
-  and you get this"). The hint names the ancestor while the box is being edited. And a **teal
-  provenance dot beside the field's label** says the value comes from somewhere that is not this row,
-  in read and in edit alike, because Save leaves edit mode and that is where an operator lands the
-  instant they clear a box. Nothing climbs the type chain in TypeScript, and the web fixtures seed
-  values no client-side climb could produce so a console that derived them would fail.
+  and you get this"). A **teal provenance dot beside the field's label** says the value comes from
+  somewhere that is not this row, in read and in edit alike, because Save leaves edit mode and that is
+  where an operator lands the instant they clear a box. And the hint carries the one thing neither of
+  those can: while the box HOLDS a value, it says that emptying it returns the field to inheriting,
+  and names what it would inherit. Nothing climbs the type chain in TypeScript, and the web fixtures
+  seed values no client-side climb could produce so a console that derived them would fail.
 
   The dot replaced an `inherited from <ancestor>` sentence under the read value, which this wave
   shipped in the morning and two spikes against the real console falsified by lunchtime. The sentence
@@ -4988,8 +4989,20 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   six-rung one and three marks encoding one chain never lined up. It is a focusable tab stop carrying
   the whole fact in its accessible name, since a hover has no keyboard and no touch equivalent. And
   it agrees with the hint by construction: one predicate over the text the field is currently
-  showing, so the keystroke that empties the box brings the dot back and turns
-  `Empty inherits from mic.` into `Inherited from mic.` at the same instant.
+  showing, so the keystroke that empties the box brings the dot back and retires the hint's
+  `Empty inherits from mic.` at the same instant.
+
+  Once the dot was there, the hint was saying the dot's own sentence a second time. On an empty box
+  it appended `Inherited from mic.` while the mark beside that same label said exactly that, so the
+  clause came out and the hint dropped back to describing the fact. Its conditional twin,
+  `Empty inherits from mic.`, stayed, and the asymmetry is the whole finding: that one shows only
+  while the box HOLDS a value, where there is no mark (the row states this value) and no visible
+  placeholder (the box is not empty), which makes it the only thing on screen that tells an operator
+  clearing the box returns the field to inheriting, and the only thing that names what it would
+  inherit. One sentence described a state the mark already showed; the other describes an action
+  nothing else offers. The CREATE forms are a different surface and keep their own
+  `Leave blank to inherit` hints: the row does not exist yet, so there is no served ancestor, no
+  `InheritedField` and no mark on those forms at all.
 
   One rule came out of the spikes and is now the design system's: thread DATA through a field
   primitive, never an element. `FieldRow` and `KVStacked` take the ancestor's NAME and build the mark
