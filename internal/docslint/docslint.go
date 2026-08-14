@@ -51,6 +51,17 @@ var Banned = []BannedTerm{
 		Origin:      "ADR-0104",
 	},
 	{
+		// The registry blade's destructive slot, renamed by ADR-0115: it named
+		// the thing being restored FROM rather than the thing being restored TO,
+		// and the console's other restore (Settings, the pen) already said
+		// default. Not a symbol, so nothing else catches it, and it is live
+		// operator copy on two registries. The decision log and the build log
+		// keep it, as vocabularyAllowed historical records.
+		Pattern:     regexp.MustCompile(`(?i)\bRestore shipped\b`),
+		Replacement: "Restore default, the one restore vocabulary the console uses",
+		Origin:      "ADR-0115",
+	},
+	{
 		// Two synonyms the corpus invented for the identifier. Neither is a symbol,
 		// so nothing else catches them, and both survived the first vocabulary sweep
 		// on ten pages: "technical name" appeared 21 times in the generated CLI

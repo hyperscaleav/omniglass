@@ -191,7 +191,11 @@ a component inherits its type through the product it is. The row carries the ide
 genuinely span products, **inheriting down the tree with override at any node**: the naming **`stem`**
 (the auto-generated component name's prefix, e.g. `display-1`), **`display_name`**, **`icon`** (the
 console glyph), **`abbrev`** (the two-to-three character hostname stem: `fp`, `cam`, `dsp`, `cp`), and
-**`default_tags`**. A blank fact on a child means "inherit the nearest ancestor's". It is **not** a
+**`default_tags`**. A blank fact on a child means "inherit the nearest ancestor's", and a node that
+states one of its own can be put back to inheriting: the patch reads an explicit `""` on `stem`,
+`abbrev`, `icon` or `label_rule` as "this node declares nothing", clearing the column to NULL
+([#716](https://github.com/hyperscaleav/omniglass/issues/716)). A **root**'s `stem` is the one
+exception, since there is no ancestor behind it. It is **not** a
 shape-definer: contracts, declared properties, and drivers stay on the product. The seed discipline: a
 subtype exists only where a standard's slot would name it (`wireless-mic` versus `ceiling-mic`, real
 subtypes; panel technology like `lcd` versus `led` stays a product fact, never a type).
@@ -204,6 +208,18 @@ glyph on a type the two disagree about
 different questions: an edit blade posts the raw one back, where blank still means inherit, and a
 list cell draws the resolved one. It costs no extra read: the listing is the whole registry in one
 query, so every ancestor is already in hand.
+
+The listing also serves **what a row would inherit**, which is a third question and not the second
+one ([#716](https://github.com/hyperscaleav/omniglass/issues/716)). `resolved_icon` says what a row
+SHOWS, so on every row that states its own it is that row's own value; `inherited_stem`,
+`inherited_icon` and `inherited_abbrev` say what the row would show if it stated nothing, each with
+the name of the ancestor it comes from (`inherited_stem_source` and its two siblings). That is the
+question an edit blade's placeholder asks, and answering it with the shown value would print the
+string an operator had just deleted back at them as the thing they were about to inherit. The source
+is per fact rather than per row, because one type can take its stem from a grandparent and its abbrev
+from its parent, and it is measured rather than assumed to be free:
+`TestListComponentTypesCostIsFlatInRegistryDepth` grows the registry twenty levels deeper and pins
+the read at the same one statement.
 
 The shipped taxonomy, rendered from the seed, with a blank cell meaning the row inherits that fact
 from its nearest ancestor:
@@ -252,8 +268,11 @@ with override at any node**: the naming **`stem`** (the prefix a generated syste
 e.g. `boardroom-2`), **`display_name`**, **`icon`** (the console glyph), and **`abbrev`** (the compact
 label form: `br`, `cls`, `vw`). A blank fact on a child means "inherit the nearest ancestor's", so
 `board` states its own stem and abbrev while taking its icon from `room`, which overrides `av`'s. A
-**root** must carry a stem of its own: it has no ancestor to inherit one from, so a blank there is not
-"inherit", it is "nothing".
+node that states a fact of its own goes back to inheriting by patching that field to `""`, the same
+three-state sentinel `component_type` uses ([#716](https://github.com/hyperscaleav/omniglass/issues/716)).
+A **root** must carry a stem of its own: it has no ancestor to inherit one from, so a blank there is not
+"inherit", it is "nothing", and clearing a root's stem is refused (422) exactly as creating one
+without a stem is.
 
 A **`system`** is classified through **`system.system_type_id`**, **nullable for now** (a floor waits
 until the shipped tree has proven out). It is **`on delete restrict`**, as `parent_id` is: a type that

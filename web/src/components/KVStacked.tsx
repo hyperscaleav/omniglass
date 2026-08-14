@@ -1,4 +1,5 @@
-import { type JSX } from "solid-js";
+import { Show, type JSX } from "solid-js";
+import ProvenanceDot from "./ProvenanceDot";
 import { IDENTITY_LABELS, type IdentityBinding } from "../lib/entities";
 
 // KVStacked is the console's one key:value STACKED primitive: an eyebrow label
@@ -15,6 +16,13 @@ type KVStackedBase = {
   // Render the value font-data (mono). Off by default; most callers style their
   // own value span, so leaving it unset preserves the plain `text-sm` value box.
   mono?: boolean;
+  // The name of the row this fact's value comes from, when it comes from
+  // somewhere that is not this row; empty (or absent) marks nothing. It rides in
+  // the EYEBROW, which is the same slot FieldRow gives its label, so a field
+  // carries the mark in the same position whether it is being read or edited.
+  // A string rather than an element, for the reason FieldRow's copy of this prop
+  // records.
+  provenance?: string;
 };
 
 // A fact either names one of the identity facts, taking its label from
@@ -30,7 +38,12 @@ export default function KVStacked(props: KVStackedProps): JSX.Element {
   const label = () => (props.bind ? IDENTITY_LABELS[props.bind] : props.label!);
   return (
     <div>
-      <div class="eyebrow mb-1.5">{label()}</div>
+      <div class="eyebrow mb-1.5 flex items-center gap-1.5">
+        {label()}
+        <Show when={props.provenance}>
+          {(from) => <ProvenanceDot label={label()} from={from()} />}
+        </Show>
+      </div>
       <div class="text-sm" classList={{ "font-data": props.mono }}>
         {props.value}
       </div>

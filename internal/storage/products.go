@@ -263,7 +263,7 @@ func (p *PG) UpsertProduct(ctx context.Context, m Product) error {
 			    label_rule        = excluded.label_rule,
 			    official          = excluded.official,
 			    updated_at        = now()`,
-		m.Name, m.DisplayName, m.VendorID, m.DriverID, m.Kind, m.ParentProductID, componentTypeID, m.Icon, nilIfEmptyRule(m.LabelRule), m.Official); err != nil {
+		m.Name, m.DisplayName, m.VendorID, m.DriverID, m.Kind, m.ParentProductID, componentTypeID, m.Icon, nilIfEmpty(m.LabelRule), m.Official); err != nil {
 		return fmt.Errorf("storage: upsert product %q: %w", m.Name, err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -326,7 +326,7 @@ func (p *PG) CreateProduct(ctx context.Context, actorID string, m Product) (*Pro
 	if err := validateLabelRule(m.LabelRule); err != nil {
 		return nil, err
 	}
-	m.LabelRule = nilIfEmptyRule(m.LabelRule)
+	m.LabelRule = nilIfEmpty(m.LabelRule)
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin create product: %w", err)

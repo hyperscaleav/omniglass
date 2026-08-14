@@ -158,7 +158,7 @@ func (r NameRule) mint() nameMint { return nameMint{stem: r.Stem, bareFirst: r.B
 // normalized collapses the one pair of fields that can spell the same rule two
 // ways: a stem-less mint ignores bareFirst (suppressing the ordinal of a name
 // that IS its ordinal leaves nothing), so a positional rule stores it false.
-// The same reasoning nilIfEmptyRule applies to a label rule: two spellings of
+// The same reasoning nilIfEmpty applies to a label rule: two spellings of
 // one state give a reader a difference to misinterpret and an equality test a
 // false negative.
 func (r NameRule) normalized() NameRule {
@@ -166,6 +166,28 @@ func (r NameRule) normalized() NameRule {
 		r.BareFirst = false
 	}
 	return r
+}
+
+// Examples are the first two names this rule mints in one bucket, produced by
+// asking the mint rather than by describing it. A surface that has to tell an
+// operator what a rule PRODUCES reads these (#710): the first entry says whether
+// the first of a stem carries an ordinal at all, and the second says the shape
+// every later one takes, which is the whole of a declaration's meaning.
+//
+// It is served rather than re-derived in the browser for the reason #702 served
+// the drafted NAME and #695 served the resolved ICON: a second implementation of
+// a shape in another language is a wrong answer waiting for the two to diverge,
+// and here the wrong answer would be a name an operator was promised and no
+// create produces. Two is the whole output space worth showing, because a
+// declaration branches exactly once, at ordinal 1.
+//
+// Pure, and free: no I/O, no allocation ordinal, nothing about the estate. It
+// answers "what does this rule look like", never "what will the next row be
+// called", which is the question ADR-0104 refuses to answer without reading the
+// bucket.
+func (r NameRule) Examples() []string {
+	m := r.normalized().mint()
+	return []string{m.name(1), m.name(2)}
 }
 
 // maxProvableOrdinal is the largest ordinal a rule is proven legal for when it

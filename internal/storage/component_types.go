@@ -15,8 +15,10 @@ import (
 // not exist: the component_type counterpart of ErrParentStandardNotFound.
 var ErrParentTypeNotFound = errors.New("storage: parent component_type not found")
 
-// ErrRootComponentTypeNeedsStem is CreateComponentType's refusal for a root
-// type (ParentID nil) with no stem. A root has no ancestor to inherit one
+// ErrRootComponentTypeNeedsStem is the refusal for a root type (ParentID nil)
+// with no stem, on both the paths that can produce one: CreateComponentType,
+// and (since #716) an update clearing the stem back to inherited. A root has no
+// ancestor to inherit one
 // from, so ResolveTypeFacts's walk stops immediately with nothing: every
 // descendant that does not set its own stem would resolve to "", and #627
 // Task 14's name generator refuses to mint a name from that (see
@@ -229,7 +231,7 @@ func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) error {
 			    official     = excluded.official,
 			    parent_id    = excluded.parent_id,
 			    updated_at   = now()`,
-		ct.Name, ct.DisplayName, ct.Stem, ct.Icon, ct.Abbrev, nilIfEmptyRule(ct.LabelRule), normalizeComponentTypeTags(ct.DefaultTags), ct.Official, ct.ParentID)
+		ct.Name, ct.DisplayName, ct.Stem, ct.Icon, ct.Abbrev, nilIfEmpty(ct.LabelRule), normalizeComponentTypeTags(ct.DefaultTags), ct.Official, ct.ParentID)
 	if err != nil {
 		return fmt.Errorf("storage: upsert component_type %q: %w", ct.Name, mapComponentTypeWriteErr(err))
 	}
@@ -329,7 +331,7 @@ func (p *PG) CreateComponentType(ctx context.Context, actorID string, ct Compone
 		insert into component_type (name, display_name, stem, icon, abbrev, label_rule, default_tags, official, parent_id)
 		values ($1, $2, $3, $4, $5, $6, $7, false, $8)
 		returning `+componentTypeCols,
-		ct.Name, ct.DisplayName, ct.Stem, ct.Icon, ct.Abbrev, nilIfEmptyRule(ct.LabelRule), normalizeComponentTypeTags(ct.DefaultTags), ct.ParentID))
+		ct.Name, ct.DisplayName, ct.Stem, ct.Icon, ct.Abbrev, nilIfEmpty(ct.LabelRule), normalizeComponentTypeTags(ct.DefaultTags), ct.ParentID))
 	if err != nil {
 		return nil, mapComponentTypeWriteErr(err)
 	}
@@ -357,8 +359,18 @@ func (p *PG) CreateComponentType(ctx context.Context, actorID string, ct Compone
 // Stem is validated exactly as CreateComponentType validates it (see that
 // doc comment): a bad stem here is reachable from an existing, previously
 // valid row, not just a fresh create.
+//
+// Stem, icon and abbrev honour the three-state string sentinel (#716), the same
+// one label_rule beside them has always honoured: an omitted field is
+// unchanged, an explicit "" CLEARS the column back to NULL so the inheritance
+// walk resumes at the nearest ancestor, and a value sets. Clearing a ROOT's stem
+// is ErrRootComponentTypeNeedsStem, because there is no ancestor behind it.
 func (p *PG) UpdateComponentType(ctx context.Context, actorID, ref string, patch ComponentTypePatch) (*ComponentType, error) {
-	if patch.Stem != nil {
+	// The empty string is the CLEAR, not a stem, so it skips the name rule
+	// rather than being refused by it (#716). Everything else is validated
+	// exactly as it always was: relaxing the rule is what would weaken it,
+	// and clearing is a different verb from setting.
+	if patch.Stem != nil && *patch.Stem != "" {
 		if err := validateEntityName(*patch.Stem); err != nil {
 			return nil, err
 		}
@@ -390,6 +402,14 @@ func (p *PG) UpdateComponentType(ctx context.Context, actorID, ref string, patch
 		}
 		return nil, fmt.Errorf("storage: load component_type %q: %w", ref, err)
 	}
+	// A root has no ancestor to inherit a stem from, so the clear is refused
+	// there for the same reason CreateComponentType refuses a stemless root: a
+	// row in that state mints nothing and is only discovered at the create it
+	// breaks. Ahead of the fork branch, because a shipped root reaches the same
+	// broken state through a fork.
+	if clearsARootStem(patch.Stem, current.ParentID) {
+		return nil, ErrRootComponentTypeNeedsStem
+	}
 	if current.Official {
 		return p.forkComponentType(ctx, tx, actorID, *current, patch)
 	}
@@ -408,18 +428,19 @@ func (p *PG) UpdateComponentType(ctx context.Context, actorID, ref string, patch
 	ct, err := scanComponentType(tx.QueryRow(ctx, `
 		update component_type set
 			display_name = coalesce($2, display_name),
-			stem         = coalesce($3, stem),
-			icon         = coalesce($4, icon),
-			abbrev       = coalesce($5, abbrev),
-			-- A rule is the one patch field with a CLEAR state: an explicit
-			-- empty string means "this tier no longer has an opinion", which
-			-- coalesce alone cannot express, so it is a CASE like the estate
-			-- tables' three-state placement fields rather than a coalesce.
-			label_rule   = case
-				when $6::text is null then label_rule
-				when $6 = '' then null
-				else $6::text
-			end,
+			-- These four are the columns whose NULL MEANS something: "this node
+			-- declares no fact of its own, walk to the nearest ancestor that
+			-- does". So each has a CLEAR state, which coalesce cannot express,
+			-- and all four spell it the same house way: an omitted field is
+			-- unchanged, an explicit '' clears to NULL, a value sets. The rule
+			-- has honoured that since #672; the other three joined it in #716,
+			-- which is what lets an operator empty a box and mean it. The mask
+			-- is deliberately NOT the instrument here (ADR-0106 scopes it to
+			-- nullable OBJECT fields, which have no empty value to overload).
+			stem         = case when $3::text is null then stem       else nullif($3::text, '') end,
+			icon         = case when $4::text is null then icon       else nullif($4::text, '') end,
+			abbrev       = case when $5::text is null then abbrev     else nullif($5::text, '') end,
+			label_rule   = case when $6::text is null then label_rule else nullif($6::text, '') end,
 			default_tags = coalesce($7, default_tags),
 			updated_at   = now()
 		where `+registryRefCol(ref)+` = $1
@@ -465,17 +486,24 @@ func (p *PG) forkComponentType(ctx context.Context, tx pgx.Tx, actorID string, c
 	if patch.DisplayName != nil {
 		forked.DisplayName = *patch.DisplayName
 	}
+	// nilIfEmpty on all four, because the shadow image is READ BACK as the row
+	// (applyComponentTypeImage), so a shadow holding "" would stop the
+	// inheritance walk exactly as a written "" would. The fork leg is the
+	// second place the sentinel has to be decoded, and it is the one the wire
+	// cannot see: the body is `omitempty`, so a fork holding "" and a fork
+	// holding nothing read back identically and only the name generator can
+	// tell them apart.
 	if patch.Stem != nil {
-		forked.Stem = patch.Stem
+		forked.Stem = nilIfEmpty(patch.Stem)
 	}
 	if patch.Icon != nil {
-		forked.Icon = patch.Icon
+		forked.Icon = nilIfEmpty(patch.Icon)
 	}
 	if patch.Abbrev != nil {
-		forked.Abbrev = patch.Abbrev
+		forked.Abbrev = nilIfEmpty(patch.Abbrev)
 	}
 	if patch.LabelRule != nil {
-		forked.LabelRule = nilIfEmptyRule(patch.LabelRule)
+		forked.LabelRule = nilIfEmpty(patch.LabelRule)
 	}
 	if patch.DefaultTags != nil {
 		forked.DefaultTags = normalizeComponentTypeTags(*patch.DefaultTags)

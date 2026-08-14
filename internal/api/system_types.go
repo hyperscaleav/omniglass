@@ -33,6 +33,15 @@ type systemTypeBody struct {
 	Official     bool    `json:"official"`
 	ParentID     *string `json:"parent_id,omitempty" doc:"The parent system_type's id, the canonical handle; absent for a root type"`
 	Parent       *string `json:"parent,omitempty" doc:"The parent system_type's name, for display; absent for a root type"`
+	// The inherited facts, on the same terms as componentTypeBody's (#716):
+	// what this row would show if it stated nothing, which is what an edit
+	// blade's placeholder has to say, with the ancestor each one came from.
+	InheritedStem         string `json:"inherited_stem,omitempty" doc:"The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"`
+	InheritedStemSource   string `json:"inherited_stem_source,omitempty" doc:"The name of the ancestor system_type inherited_stem comes from, which may be further up the chain than the parent"`
+	InheritedIcon         string `json:"inherited_icon,omitempty" doc:"The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"`
+	InheritedIconSource   string `json:"inherited_icon_source,omitempty" doc:"The name of the ancestor system_type inherited_icon comes from, which may be further up the chain than the parent"`
+	InheritedAbbrev       string `json:"inherited_abbrev,omitempty" doc:"The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"`
+	InheritedAbbrevSource string `json:"inherited_abbrev_source,omitempty" doc:"The name of the ancestor system_type inherited_abbrev comes from, which may be further up the chain than the parent"`
 }
 
 func toSystemTypeBody(st *storage.SystemType, parentName *string) systemTypeBody {
@@ -77,10 +86,14 @@ type updateSystemTypeInput struct {
 	ID   string `path:"id"`
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
-		// Same rule as create's Stem: a name prefix follows the name rule.
-		Stem      *string `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new name prefix. Lowercase letters, digits, and hyphens."`
-		Icon      *string `json:"icon,omitempty" doc:"A new glyph key"`
-		Abbrev    *string `json:"abbrev,omitempty" doc:"A new compact form"`
+		// Create's rule with the empty alternation added, the same #716 change
+		// updateComponentTypeInput carries and for the same reason: these three
+		// facts are inherited, so an operator has to be able to hand one back,
+		// and the empty string is the house spelling of clearing a nullable
+		// STRING (ADR-0091). The character rule is untouched inside the group.
+		Stem      *string `json:"stem,omitempty" maxLength:"100" pattern:"^([a-z0-9][a-z0-9-]*)?$" doc:"A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422)."`
+		Icon      *string `json:"icon,omitempty" doc:"A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again"`
+		Abbrev    *string `json:"abbrev,omitempty" doc:"A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again"`
 		LabelRule *string `json:"label_rule,omitempty" doc:"A new label template for systems of this type; omit to leave unchanged, \"\" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels"`
 	}
 }
@@ -140,7 +153,7 @@ func registerSystemTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		for i := range types {
 			byID[types[i].ID] = types[i].Name
 		}
-		icons := storage.ResolvedSystemTypeIcons(types)
+		facts := storage.SystemTypeChainFacts(types)
 		out := &listSystemTypesOutput{}
 		out.Body.SystemTypes = make([]systemTypeBody, 0, len(types))
 		for i := range types {
@@ -151,7 +164,11 @@ func registerSystemTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 				}
 			}
 			body := toSystemTypeBody(&types[i], parentName)
-			body.ResolvedIcon = icons[types[i].ID]
+			f := facts[types[i].ID]
+			body.ResolvedIcon = f.Icon.Shown
+			body.InheritedStem, body.InheritedStemSource = f.Stem.Inherited, f.Stem.InheritedFrom
+			body.InheritedIcon, body.InheritedIconSource = f.Icon.Inherited, f.Icon.InheritedFrom
+			body.InheritedAbbrev, body.InheritedAbbrevSource = f.Abbrev.Inherited, f.Abbrev.InheritedFrom
 			out.Body.SystemTypes = append(out.Body.SystemTypes, body)
 		}
 		return out, nil

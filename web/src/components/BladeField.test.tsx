@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render } from "@solidjs/testing-library";
+import { createSignal } from "solid-js";
 import BladeField from "./BladeField";
 import { BladeEditContext, createEditSlot, type BladeEdit } from "../lib/blades";
 
@@ -154,6 +155,44 @@ describe("BladeField", () => {
       // @ts-expect-error a bound field takes its label from the binding
       const bad = () => <BladeField bind="name" label="Key" value={() => "x"} onInput={() => {}} />;
       expect(bad).toBeTruthy();
+    });
+  });
+
+  describe("the provenance mark", () => {
+    // The mark is asked of the text the field is CURRENTLY showing, and the
+    // read state and the edit state show different strings (the persisted value
+    // and the draft). BladeField is the one place that knows which, so it is
+    // the one place that answers, and a caller cannot get the two out of step.
+    it("asks the persisted value in read and the draft in edit", () => {
+      const slot = createEditSlot();
+      const [draft, setDraft] = createSignal("");
+      const { queryByRole, getByRole } = render(() => (
+        <BladeEditContext.Provider value={slot}>
+          <BladeField
+            label="Stem"
+            value={() => ""}
+            draft={draft}
+            onInput={setDraft}
+            provenance={(text) => (text === "" ? "ceiling-mic" : "")}
+          />
+        </BladeEditContext.Provider>
+      ));
+      expect(getByRole("button", { name: /Stem is inherited from ceiling-mic/ })).toBeTruthy();
+      slot.begin();
+      expect(getByRole("button", { name: /Stem is inherited from ceiling-mic/ })).toBeTruthy();
+      // The draft, not the persisted value: the box now holds a value of its
+      // own, so this field no longer takes one from anywhere.
+      setDraft("carray");
+      expect(queryByRole("button", { name: /is inherited from/ })).toBeNull();
+      setDraft("");
+      expect(getByRole("button", { name: /Stem is inherited from ceiling-mic/ })).toBeTruthy();
+    });
+
+    it("marks nothing when no provenance is given", () => {
+      const { queryByRole } = render(() => (
+        <BladeField label="Stem" value={() => "carray"} onInput={() => {}} />
+      ));
+      expect(queryByRole("button", { name: /is inherited from/ })).toBeNull();
     });
   });
 

@@ -4161,6 +4161,18 @@ export interface components {
             icon?: string;
             /** @description The component_type's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+            inherited_abbrev?: string;
+            /** @description The name of the ancestor component_type inherited_abbrev comes from, which may be further up the chain than the parent */
+            inherited_abbrev_source?: string;
+            /** @description The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+            inherited_icon?: string;
+            /** @description The name of the ancestor component_type inherited_icon comes from, which may be further up the chain than the parent */
+            inherited_icon_source?: string;
+            /** @description The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+            inherited_stem?: string;
+            /** @description The name of the ancestor component_type inherited_stem comes from, which may be further up the chain than the parent */
+            inherited_stem_source?: string;
             /** @description The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components */
             label_rule?: string;
             /** @description The name an operator reads and types; renameable */
@@ -5752,7 +5764,7 @@ export interface components {
             /** @description The name an operator reads and types; renameable */
             name: string;
             /** @description How the platform NAMES locations of this type; absent means an operator names every one of them */
-            name_rule?: components["schemas"]["NameRuleBody"];
+            name_rule?: components["schemas"]["NameRuleReadBody"];
             /** @description True for a row this release ships. A shipped row is never written by an operator: an edit forks it */
             official: boolean;
         };
@@ -5913,7 +5925,15 @@ export interface components {
         NameRuleBody: {
             /** @description Suppress the ordinal on the first of this stem in a parent, so the only wing there is wing and the second is wing-2. Ignored when stem is empty. */
             bare_first?: boolean;
-            /** @description The generated name's prefix (wing gives wing, wing-2); empty makes the type positional, so the name is the ordinal alone (1, 2, 3) */
+            /** @description The generated name's prefix (wing gives wing, wing-2); empty makes the type positional, so the name is the ordinal alone (1, 2, 3). The 90-character ceiling is the mint's: 90 plus the widest ordinal is exactly the 100-character name cap, so every stem this admits mints legally at both ends of its output space */
+            stem: string;
+        };
+        NameRuleReadBody: {
+            /** @description True when the first of this stem in a parent carries no ordinal */
+            bare_first?: boolean;
+            /** @description The first two names this rule mints in one parent, produced by the same mint a create allocates from: the first shows whether the first of a stem carries a number, the second shows the shape every later one takes. Read these rather than rebuilding the shape, which is what keeps one definition of a generated name */
+            examples: string[] | null;
+            /** @description The generated name's prefix; empty makes the type positional */
             stem: string;
         };
         NodeBody: {
@@ -7011,6 +7031,18 @@ export interface components {
             icon?: string;
             /** @description The system_type's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+            inherited_abbrev?: string;
+            /** @description The name of the ancestor system_type inherited_abbrev comes from, which may be further up the chain than the parent */
+            inherited_abbrev_source?: string;
+            /** @description The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+            inherited_icon?: string;
+            /** @description The name of the ancestor system_type inherited_icon comes from, which may be further up the chain than the parent */
+            inherited_icon_source?: string;
+            /** @description The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+            inherited_stem?: string;
+            /** @description The name of the ancestor system_type inherited_stem comes from, which may be further up the chain than the parent */
+            inherited_stem_source?: string;
             /** @description The label template systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems */
             label_rule?: string;
             /** @description The name an operator reads and types; renameable */
@@ -7155,17 +7187,17 @@ export interface components {
              * @example /api/v1/schemas/UpdateComponentTypeInputBody.json
              */
             readonly $schema?: string;
-            /** @description A new compact form */
+            /** @description A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again */
             abbrev?: string;
             /** @description Replaces the default-tag set; omit to leave unchanged */
             default_tags?: string[];
             /** @description A new operator-facing label */
             display_name?: string;
-            /** @description A new glyph key */
+            /** @description A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again */
             icon?: string;
             /** @description A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse. */
             label_rule?: string;
-            /** @description A new name prefix. Lowercase letters, digits, and hyphens. */
+            /** @description A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422). */
             stem?: string;
         };
         UpdateDriverInputBody: {
@@ -7393,15 +7425,15 @@ export interface components {
              * @example /api/v1/schemas/UpdateSystemTypeInputBody.json
              */
             readonly $schema?: string;
-            /** @description A new compact form */
+            /** @description A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again */
             abbrev?: string;
             /** @description A new operator-facing label */
             display_name?: string;
-            /** @description A new glyph key */
+            /** @description A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again */
             icon?: string;
             /** @description A new label template for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels */
             label_rule?: string;
-            /** @description A new name prefix. Lowercase letters, digits, and hyphens. */
+            /** @description A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422). */
             stem?: string;
         };
         UpdateTagInputBody: {

@@ -95,4 +95,41 @@ describe("FieldRow", () => {
     expect(label.tagName).toBe("LABEL");
     expect(label.querySelector("button")).toBeNull();
   });
+
+  // The provenance mark goes beside the LABEL rather than beside the value,
+  // because the label occupies the same position whether the field is being
+  // read or edited and a full-width input's value does not.
+  it("marks a field whose value comes from elsewhere, beside the label and outside it", () => {
+    const { getByText, getByRole } = render(() => (
+      <FieldRow label="Stem" provenance="ceiling-mic"><input type="text" /></FieldRow>
+    ));
+    const label = getByText("Stem") as HTMLLabelElement;
+    const dot = getByRole("button", { name: /Stem is inherited from ceiling-mic/ });
+    // Inside the label's row, never inside the <label>: a labelable button in
+    // there steals the control's accessible name and kills the hover.
+    expect(label.querySelector("button")).toBeNull();
+    expect(label.parentElement!.contains(dot)).toBe(true);
+    expect(label.getAttribute("for")).toBe(getByRole("textbox").id);
+  });
+
+  it("marks nothing when the field states its own value", () => {
+    const { queryByRole } = render(() => (
+      <FieldRow label="Stem" provenance=""><input type="text" /></FieldRow>
+    ));
+    expect(queryByRole("button")).toBeNull();
+  });
+
+  // The dot sits between the label and the (i), so its position is the same on
+  // a field that carries help text and on one that does not, which is what the
+  // read state can match.
+  it("puts the mark immediately after the label, ahead of the (i)", () => {
+    const { getByText, getByRole } = render(() => (
+      <FieldRow label="Stem" info="The prefix." provenance="mic"><input type="text" /></FieldRow>
+    ));
+    const row = (getByText("Stem") as HTMLLabelElement).parentElement!;
+    const dot = getByRole("button", { name: /Stem is inherited from mic/ });
+    const info = getByRole("button", { name: /More about Stem/ });
+    expect(Array.from(row.children).indexOf(dot)).toBe(1);
+    expect(Array.from(row.children).indexOf(info)).toBe(2);
+  });
 });

@@ -72,3 +72,23 @@ export function tokenTtlError(value: number | ""): string | null {
   if (value > MAX_TOKEN_TTL_DAYS) return `A token cannot outlive ${MAX_TOKEN_TTL_DAYS} days.`;
   return null;
 }
+
+// A NAME STEM: the prefix a location type's name rule mints from, and the same
+// character set every entity name uses. Mirrors `^([a-z0-9][a-z0-9-]*)?$` on
+// `name_rule.stem`, where empty is not a mistake but the POSITIONAL type, whose
+// ordinal genuinely is its whole name.
+//
+// The LENGTH bound the server also carries (90) is deliberately NOT restated
+// here. It is arithmetic over the mint's output space, a stem plus the widest
+// ordinal having to fit the 100-character name cap, and that shape belongs to
+// the one implementation of it in Go (#695, #710). Restating the character set
+// is a name rule this console already knows; restating the ceiling would be
+// restating the mint.
+export const NAME_STEM_RE = /^([a-z0-9][a-z0-9-]*)?$/;
+
+export function nameStemError(value: string): string | null {
+  if (NAME_STEM_RE.test(value)) return null;
+  if (/\s/.test(value)) return "No spaces. Use lowercase letters, digits, and hyphens.";
+  if (/[A-Z]/.test(value)) return "No capital letters. Use lowercase only.";
+  return "Use lowercase letters, digits, and hyphens (start with a letter or digit).";
+}

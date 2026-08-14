@@ -265,3 +265,28 @@ func TestCLIReferenceDescriptions(t *testing.T) {
 	}
 	report(t, "cli-reference-descriptions", findings, true)
 }
+
+// TestADR0115RestoreShippedFires proves the renamed destructive slot's denylist
+// entry matches the prose it was written to retire, in the sentence shape the
+// operator guide actually used, and that it does NOT catch the word "restore"
+// on its own (the other restores, an archived user's and the pen's, keep their
+// wording).
+func TestADR0115RestoreShippedFires(t *testing.T) {
+	fires := func(line string) bool {
+		for _, b := range Banned {
+			if b.Origin == "ADR-0115" && b.Pattern.MatchString(line) {
+				return true
+			}
+		}
+		return false
+	}
+	if !fires("Once you have changed one, that slot becomes **Restore shipped**, which discards your version.") {
+		t.Error("the guide's own sentence does not fire, so the entry guards nothing")
+	}
+	if fires("An archived user shows **Restore** in the left slot.") {
+		t.Error("the bare word restore fired: the entry is too broad")
+	}
+	if fires("that slot becomes **Restore default**, which discards your version") {
+		t.Error("the REPLACEMENT wording fired, so the entry would refuse the fix it asks for")
+	}
+}

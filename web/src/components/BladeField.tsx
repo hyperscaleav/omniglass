@@ -62,6 +62,21 @@ type BladeFieldBase = {
   // control. Both are edit-state affordances, as they are on FieldRow.
   info?: string;
   hint?: string;
+  // Where this field's value comes from, when it comes from somewhere that is
+  // not this row: a function of the text the field is CURRENTLY showing (the
+  // persisted value while reading, the draft while editing), returning the name
+  // of the row it came from, or "" for none. It marks the label in both states,
+  // in the same position.
+  //
+  // It takes the text rather than being handed an answer because read and edit
+  // ask the question of different strings, and this component is the one place
+  // that knows which is on screen. A caller that decided for itself would have
+  // to re-derive the read-or-edit switch this component exists to hold, and the
+  // moment it got that wrong is the moment the mark and the field's own hint
+  // contradict each other: a dot beside the label saying the value comes from
+  // elsewhere while the hint under the box offers to fall back to it, which are
+  // statements about two different fields.
+  provenance?: (text: string) => string;
   // The edit slot, for a body rendered OUTSIDE a BladeEditContext. Systems,
   // Components, and Locations share one renderDetail between a blade (inside a
   // provider) and a full page (outside one), so it cannot call useBladeEdit.
@@ -98,6 +113,7 @@ export default function BladeField(props: BladeFieldProps): JSX.Element {
         <KVStacked
           label={label()}
           mono={props.mono}
+          provenance={props.provenance?.(text())}
           value={
             // The wrap treatment sits on the OUTER node, so it reaches a custom
             // `read` render too. Putting it only on the plain-text branch would
@@ -116,7 +132,13 @@ export default function BladeField(props: BladeFieldProps): JSX.Element {
         />
       }
     >
-      <FieldRow label={label()} eyebrow info={props.info} hint={props.hint}>
+      <FieldRow
+        label={label()}
+        eyebrow
+        info={props.info}
+        hint={props.hint}
+        provenance={props.provenance?.(editText())}
+      >
         <Show when={props.children !== undefined} fallback={
           <Show
             when={props.multiline}

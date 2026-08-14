@@ -14,8 +14,9 @@ import (
 // does not exist: the system_type counterpart of ErrParentTypeNotFound.
 var ErrParentSystemTypeNotFound = errors.New("storage: parent system_type not found")
 
-// ErrRootSystemTypeNeedsStem is CreateSystemType's refusal for a root type
-// (ParentID nil) with no stem, the same structural guard
+// ErrRootSystemTypeNeedsStem is the refusal for a root type (ParentID nil) with
+// no stem, on both the paths that can produce one: CreateSystemType, and (since
+// #716) an update clearing the stem back to inherited. The same structural guard
 // ErrRootComponentTypeNeedsStem is for components. A root has no ancestor to
 // inherit from, so resolveSystemTypeFacts's walk stops immediately with
 // nothing and every stemless descendant resolves to "". Enforced at write
@@ -118,7 +119,7 @@ func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 			    official     = excluded.official,
 			    parent_id    = excluded.parent_id,
 			    updated_at   = now()`,
-		st.Name, st.DisplayName, st.Stem, st.Icon, st.Abbrev, nilIfEmptyRule(st.LabelRule), st.Official, st.ParentID)
+		st.Name, st.DisplayName, st.Stem, st.Icon, st.Abbrev, nilIfEmpty(st.LabelRule), st.Official, st.ParentID)
 	if err != nil {
 		return fmt.Errorf("storage: upsert system_type %q: %w", st.Name, mapSystemTypeWriteErr(err))
 	}
@@ -194,7 +195,7 @@ func (p *PG) CreateSystemType(ctx context.Context, actorID string, st SystemType
 		insert into system_type (name, display_name, stem, icon, abbrev, label_rule, official, parent_id)
 		values ($1, $2, $3, $4, $5, $6, false, $7)
 		returning `+systemTypeCols,
-		st.Name, st.DisplayName, st.Stem, st.Icon, st.Abbrev, nilIfEmptyRule(st.LabelRule), st.ParentID))
+		st.Name, st.DisplayName, st.Stem, st.Icon, st.Abbrev, nilIfEmpty(st.LabelRule), st.ParentID))
 	if err != nil {
 		return nil, mapSystemTypeWriteErr(err)
 	}
@@ -213,8 +214,17 @@ func (p *PG) CreateSystemType(ctx context.Context, actorID string, st SystemType
 // (ErrTypeOfficial); an unknown ref is ErrTypeNotFound. Stem is validated
 // exactly as CreateSystemType validates it: a bad stem is reachable from an
 // existing, previously valid row, not just a fresh create.
+//
+// Stem, icon and abbrev honour the three-state string sentinel (#716), exactly
+// as UpdateComponentType's do: an omitted field is unchanged, an explicit ""
+// clears the column back to NULL so the inheritance walk resumes at the nearest
+// ancestor, and a value sets. Clearing a ROOT's stem is
+// ErrRootSystemTypeNeedsStem.
 func (p *PG) UpdateSystemType(ctx context.Context, actorID, ref string, patch SystemTypePatch) (*SystemType, error) {
-	if patch.Stem != nil {
+	// The empty string is the CLEAR, not a stem, so it skips the name rule
+	// rather than being refused by it (#716); every other value is validated
+	// exactly as before.
+	if patch.Stem != nil && *patch.Stem != "" {
 		if err := validateEntityName(*patch.Stem); err != nil {
 			return nil, err
 		}
@@ -231,6 +241,18 @@ func (p *PG) UpdateSystemType(ctx context.Context, actorID, ref string, patch Sy
 	if err := guardTypeMutable(ctx, tx, "system_type", ref); err != nil {
 		return nil, err
 	}
+	// A root has nothing to inherit a stem from, so the clear is refused there
+	// exactly as CreateSystemType refuses a stemless root. The parent is read
+	// only when the patch actually clears, so an ordinary edit pays nothing.
+	if patch.Stem != nil && *patch.Stem == "" {
+		var parentID *uuid.UUID
+		if err := tx.QueryRow(ctx, `select parent_id from system_type where `+registryRefCol(ref)+` = $1`, ref).Scan(&parentID); err != nil {
+			return nil, fmt.Errorf("storage: load system_type %q parent: %w", ref, err)
+		}
+		if clearsARootStem(patch.Stem, parentID) {
+			return nil, ErrRootSystemTypeNeedsStem
+		}
+	}
 	before, err := registryAuditImage(ctx, tx, "system_type", ref)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -241,17 +263,16 @@ func (p *PG) UpdateSystemType(ctx context.Context, actorID, ref string, patch Sy
 	st, err := scanSystemType(tx.QueryRow(ctx, `
 		update system_type set
 			display_name = coalesce($2, display_name),
-			stem         = coalesce($3, stem),
-			icon         = coalesce($4, icon),
-			abbrev       = coalesce($5, abbrev),
-			-- An explicit empty string CLEARS the rule ("this tier no longer has
-			-- an opinion"), which coalesce cannot express; see
-			-- UpdateComponentType's own label_rule CASE.
-			label_rule   = case
-				when $6::text is null then label_rule
-				when $6 = '' then null
-				else $6::text
-			end,
+			-- The four columns whose NULL MEANS "this node declares no fact of
+			-- its own, walk to the nearest ancestor that does", so each has a
+			-- CLEAR state coalesce cannot express: an omitted field is
+			-- unchanged, an explicit '' clears to NULL, a value sets. See
+			-- UpdateComponentType, which spells the identical rule on the
+			-- identical four columns (#716).
+			stem         = case when $3::text is null then stem       else nullif($3::text, '') end,
+			icon         = case when $4::text is null then icon       else nullif($4::text, '') end,
+			abbrev       = case when $5::text is null then abbrev     else nullif($5::text, '') end,
+			label_rule   = case when $6::text is null then label_rule else nullif($6::text, '') end,
 			updated_at   = now()
 		where `+registryRefCol(ref)+` = $1
 		returning `+systemTypeCols,

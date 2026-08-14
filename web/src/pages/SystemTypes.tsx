@@ -5,6 +5,7 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
+import InheritedField from "../components/InheritedField";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import SystemTypeSelect from "../components/SystemTypeSelect";
@@ -20,7 +21,7 @@ import {
   deleteSystemType,
 } from "../lib/system_types";
 import { useMe, can } from "../lib/auth";
-import { registryLock } from "../lib/catalog";
+import { inheritedFact, registryLock } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -177,23 +178,23 @@ function SystemTypeBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      // An empty box means "this node inherits", which on the wire is the field
-      // OMITTED, never an empty string. The three inherited facts are nullable
-      // and the walk treats only NULL as inherit
-      // (resolveSystemTypeFacts), while the patch coalesces, so sending "" would
-      // write a real empty value that STOPS the walk for this node and every
-      // descendant under it. That is silent and permanent, and it lands on the
-      // facts #657's name and label rules read. `stem` would also 422 outright
-      // on a child that legitimately has none, since it carries a minLength.
+      // An empty box means "this node declares no fact of its own, inherit the
+      // nearest ancestor's", and the wire spells that with the empty string
+      // (#716): the patch routes all three through a CASE where "" clears the
+      // column to NULL, which is the state resolveSystemTypeFacts's walk reads
+      // as inherit. Sending `undefined` instead is what this used to do, and it
+      // made the clear inexpressible: the coalescing patch kept the old value
+      // and the console silently retained a fact the operator had just deleted.
       //
-      // Clearing a fact back to inherit is therefore not expressible here yet;
-      // that needs the explicit update_mask (ADR-0091) this route has not
-      // adopted. Tracked separately rather than papered over with a sentinel.
+      // The sentinel, not the update_mask: ADR-0106 scopes mask-with-no-value to
+      // nullable OBJECT fields, and ADR-0091 keeps the sentinel for strings.
+      // Emptying a ROOT type's stem is refused (422), since a root has no
+      // ancestor to inherit one from.
       await updateSystemType(r.id, {
         display_name: displayName(),
-        stem: stem().trim() || undefined,
-        abbrev: abbrev().trim() || undefined,
-        icon: icon().trim() || undefined,
+        stem: stem().trim(),
+        abbrev: abbrev().trim(),
+        icon: icon().trim(),
       });
       await qc.invalidateQueries({ queryKey: SYSTEM_TYPES_KEY });
     } catch (e) {
@@ -233,32 +234,36 @@ function SystemTypeBladeBody(p: { id: string }): JSX.Element {
             draft={displayName}
             onInput={setDisplayName}
           />
-          <BladeField
+          {/*
+            The same three inherited facts the component registry's blade shows,
+            through the same field (#716): the placeholder carries the value this
+            type would take with the box empty, the mark beside the label names
+            the ancestor it comes from, and both are the server's answers off the
+            listing.
+          */}
+          <InheritedField
             label="Stem"
-            mono
-            placeholder="inherits from its parent"
             value={() => r().stem ?? ""}
             draft={stem}
             onInput={setStem}
-            hint="The prefix a generated system name is built from. Empty inherits the nearest ancestor's."
+            inherited={() => inheritedFact(r(), "stem")}
+            hint="The prefix a generated system name is built from."
           />
-          <BladeField
+          <InheritedField
             label="Abbrev"
-            mono
-            placeholder="inherits from its parent"
             value={() => r().abbrev ?? ""}
             draft={abbrev}
             onInput={setAbbrev}
-            hint="The compact label form (br, cls, vw). Empty inherits."
+            inherited={() => inheritedFact(r(), "abbrev")}
+            hint="The compact label form (br, cls, vw)."
           />
-          <BladeField
+          <InheritedField
             label="Icon"
-            mono
-            placeholder="inherits from its parent"
             value={() => r().icon ?? ""}
             draft={icon}
             onInput={setIcon}
-            hint="A glyph key. Empty inherits the nearest ancestor's."
+            inherited={() => inheritedFact(r(), "icon")}
+            hint="A glyph key."
           />
         </div>
       )}

@@ -35,7 +35,7 @@ const types: LocationType[] = [
   // The one type here that NAMES its own rows (#687): its rule is what the
   // create form previews, and its absence on the three above is what makes them
   // the operator-named case in the same fixture.
-  { id: uuidFor("lt-room"), name: "room", display_name: "Room", icon: "door-open", official: false, forked: false, allowed_parent_types: [], name_rule: { stem: "room", bare_first: true } },
+  { id: uuidFor("lt-room"), name: "room", display_name: "Room", icon: "door-open", official: false, forked: false, allowed_parent_types: [], name_rule: { stem: "room", bare_first: true, examples: ["room", "room-2"] } },
 ];
 // The campus type's contract, resolved against hq: one inherited default, plus one
 // value hq sets that no contract declares.

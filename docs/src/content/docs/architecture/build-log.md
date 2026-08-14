@@ -4879,3 +4879,148 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `web/src/validation-guard.test.ts` scans every `.tsx` and fails on a native constraint, with a
   self-check that the scanner can still find one (its first version could not: a JSX attribute written
   after an arrow-function handler defeats any regex that stops at the first `>`).
+- **An inherited type fact goes back to inheriting.** `stem`, `abbrev` and `icon` on
+  [`component_type` and `system_type`](/architecture/core-entities/) are nullable and inherited, NULL
+  meaning "walk to the nearest ancestor that sets one", and until now the console could destroy that
+  state but never restore it. Two earlier slices stopped both edit blades writing `""` over a NULL,
+  which was ending the walk for a node and every descendant under it; what neither could then spell
+  is the opposite move, a node with a fact of its own edited back to inheriting its parent's.
+  Emptying the box sent nothing, the coalescing patch kept the old value, and the console silently
+  retained a value the operator had just deleted.
+
+  The instrument was already in both handlers, one column over. `label_rule` has honoured the house
+  **three-state string sentinel** since it landed (omitted is unchanged, `""` clears to NULL, a value
+  sets), so all four columns are now the same line in both `UPDATE`s, and the **fork leg decodes it
+  too**, since a shadow image is read back as the row. The mask was the wrong tool and
+  [ADR-0114](/architecture/decisions/#adr-0114-an-inherited-registry-fact-clears-with-the-empty-string-and-the-pattern-is-what-admits-it)
+  records why: it clears a nullable **object**, which has no empty value to overload, where a string
+  has one already.
+
+  **The hard part was validation, and it was on the wire rather than in the handler.** `stem` carried
+  `minLength: 1` and the name pattern on the PATCH body, so an empty box was a 422 in the validator
+  before any handler ran and no client could reach the capability at all. The `minLength` goes and
+  the character rule is wrapped in an optional group, `^([a-z0-9][a-z0-9-]*)?$`, the spelling a name
+  rule's own stem already ships: exactly one new string is admitted, and `Bad Stem`,
+  `-leading-hyphen`, `UPPER` and a trailing space are still refused on both registries, with an e2e
+  that says so. Create keeps its `minLength`, because a row that does not exist yet has nothing to
+  clear. A **root** still cannot clear its stem: there is no ancestor behind it, so create's refusal
+  now guards the second path that reaches the same broken row.
+
+  Proven by testcontainer integration on both registries (the clear, the walk resuming at the
+  ancestor's value, one fact clearing without disturbing the two beside it, the root refusal) and at
+  the wire, where the fork leg is tested through a **consequence** rather than a column: `abbrev` is
+  `omitempty`, so a shadow holding `""` and a shadow holding nothing read back identically, and only
+  the name generator can tell them apart. Forking a stem onto shipped `ceiling-mic`, clearing it, and
+  watching the drafted component name go back to the parent's `mic-1` is what the assertion is.
+- **The console can set a name rule, not only clear one.** A [location type](/guides/admin/location-types/)
+  carries an optional **name rule**, and having one is the type's opt-in to the platform naming the
+  locations it classifies. An earlier slice gave the console the exit and no entrance, which made the
+  affordance half a control: it could undo a state it could not create. It mattered more than an
+  ordinary gap, because after ADR-0103's reversal **no shipped location type carries a rule**, so
+  generated location names were reachable only through the API or the CLI and the capability shipped
+  effectively unreachable for the operators it was built for.
+
+  A rule is a **declaration** rather than a template
+  ([ADR-0102](/architecture/decisions/#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing)),
+  so the editor is small: a tick box, a stem, and the flag that suppresses the number on the first of
+  that stem under one parent. The rule's PRESENCE is the opt-in, so the tick box is its existence
+  rather than a fourth field, and the clear moves inside the editor: unticking it is what turns
+  naming off. That write still spells the clear the one way the wire has for a nullable object, the
+  field named in `update_mask` with no rule in the body, and because a mask governs the whole write
+  it names every field the blade writes rather than `name_rule` alone.
+
+  **What the editor says a rule will produce comes from the server.** A `name_rule` now reads back
+  with `examples`, the first two names it mints, produced by the same `nameMint` a create allocates
+  from, and the blade composes its sentence around those two strings: "Named wing, then wing-2,
+  within their parent." Nothing under `web/` knows that a counted name is `<stem>-<n>` any more,
+  which is the answer #702 took for the drafted name applied to a rule rather than to a row. An
+  UNSAVED rule is told nothing about its output on purpose, since the only honest source is the mint.
+  The stem's character rule is restated in TypeScript and refuses the save inline (ADR-0113); the
+  90-character ceiling is not, because that number is arithmetic over the mint's output space rather
+  than a name rule.
+
+  **Two things this found.** The mint's own refusal, a rule that mints legally at ordinal 1 and
+  illegally at the ceiling, is unreachable through this body: `stem` carries `maxLength: 90` and 90
+  plus the widest provable ordinal is exactly the 100-character name cap, so every stem the schema
+  admits is legal at both ends. The refusals a surface renders are therefore the schema's, and the
+  console had been rendering none of them: Huma's `detail` for a schema 422 is always the literal
+  "validation failed", with the field and the reason in `errors[]`, which `describeError` dropped on
+  every console surface. It appends them now.
+
+  Proven at the wire by comparing the served examples with the names two nameless creates actually
+  get, on all three rule shapes, and by opting the shipped `floor` type in: the edit forks the
+  platform's row, a nameless create then stamps the forked rule's first example, and `:restore`
+  takes both the fork and the rule away.
+
+- **An inherited fact shows what it inherits, and Restore reads default.** #716's clear made the
+  empty box reachable on purpose, and an empty box said nothing: the blade's placeholder read
+  "inherits from its parent", which announced that inheritance was happening and never what would be
+  inherited. The list cell had answered this all along; the blade, where the editing happens, had
+  not.
+
+  The registry listing now serves `inherited_stem`, `inherited_icon` and `inherited_abbrev` beside
+  the raw fields, each with the NAME of the ancestor the value comes from
+  ([ADR-0115](/architecture/decisions/#adr-0115-an-inherited-fact-is-served-with-the-value-it-inherits-and-the-ancestor-it-came-from)).
+  It is a different question from `resolved_icon`, which answers what a row SHOWS and is therefore
+  the row's own value on every row that states one: a placeholder asks what the row would show if it
+  stated nothing, so answering it with the shown value would print the string an operator had just
+  deleted back at them. One walk in `typechain.go` answers both, which is why the agreement test
+  against the query walk widened from the icon to all three facts rather than leaving two unchecked.
+
+  The console renders it in three places, and the lock is deliberately not borrowed for any of them:
+  ADR-0104 gives the lock one meaning, the platform owns this value, and an inherited fact is one an
+  operator MAY set. The placeholder carries the value (a placeholder natively means "leave this blank
+  and you get this"). A **teal provenance dot beside the field's label** says the value comes from
+  somewhere that is not this row, in read and in edit alike, because Save leaves edit mode and that is
+  where an operator lands the instant they clear a box. And the hint carries the one thing neither of
+  those can: while the box HOLDS a value, it says that emptying it returns the field to inheriting,
+  and names what it would inherit. Nothing climbs the type chain in TypeScript, and the web fixtures
+  seed values no client-side climb could produce so a console that derived them would fail.
+
+  The dot replaced an `inherited from <ancestor>` sentence under the read value, which this wave
+  shipped in the morning and two spikes against the real console falsified by lunchtime. The sentence
+  was the third telling of one fact on the line least able to carry it, and it could not appear in
+  the edit state at all, which is the state that needed it: there the inherited value is a grey
+  placeholder in a box that looks exactly like an empty one. Four things about the replacement were
+  measured rather than drawn. It goes beside the LABEL because that is the one slot that is in the
+  same position in both states (beside the value, trailing is right in read and lands 380px from a
+  407px input's placeholder, leading is right in edit and reads as a bullet list in read). It encodes
+  no DEPTH, because a segment-per-rung version measured 8px on a two-rung chain and 28px on a
+  six-rung one and three marks encoding one chain never lined up. It is a focusable tab stop carrying
+  the whole fact in its accessible name, since a hover has no keyboard and no touch equivalent. And
+  it agrees with the hint by construction: one predicate over the text the field is currently
+  showing, so the keystroke that empties the box brings the dot back and retires the hint's
+  `Empty inherits from mic.` at the same instant.
+
+  Once the dot was there, the hint was saying the dot's own sentence a second time. On an empty box
+  it appended `Inherited from mic.` while the mark beside that same label said exactly that, so the
+  clause came out and the hint dropped back to describing the fact. Its conditional twin,
+  `Empty inherits from mic.`, stayed, and the asymmetry is the whole finding: that one shows only
+  while the box HOLDS a value, where there is no mark (the row states this value) and no visible
+  placeholder (the box is not empty), which makes it the only thing on screen that tells an operator
+  clearing the box returns the field to inheriting, and the only thing that names what it would
+  inherit. One sentence described a state the mark already showed; the other describes an action
+  nothing else offers. The CREATE forms are a different surface and keep their own
+  `Leave blank to inherit` hints: the row does not exist yet, so there is no served ancestor, no
+  `InheritedField` and no mark on those forms at all.
+
+  One rule came out of the spikes and is now the design system's: thread DATA through a field
+  primitive, never an element. `FieldRow` and `KVStacked` take the ancestor's NAME and build the mark
+  themselves (the shape `info` already had for the (i) affordance), because a `JSX.Element` in a prop
+  compiles to a getter, so the element is rebuilt whenever anything that getter reads notifies, and a
+  mark derived from a query is then replaced under the pointer on every refetch. Wrapping it in a
+  `createMemo` looks like the fix and is not: the memo tracks the derived array a refetch hands back
+  equal-but-new. Playwright caught it as an intermittent "element was detached from the DOM"; the
+  suite now pins it as an element-identity test over a refetch that changes nothing.
+
+  The cost was measured rather than carried over from #695: the registry read is one statement for a
+  registry twenty levels DEEPER, the dimension a per-level query would charge for, and the blade pays
+  nothing on top because its read IS that listing (`useComponentTypeRow` finds its row in the same
+  query). `location_type` is flat, with no parent link and no stem or abbrev column, so it takes none
+  of this.
+
+  The blade's destructive slot on a forked shipped row also stops reading **Restore shipped** and
+  reads **Restore default**: it named the thing being restored FROM rather than the thing being
+  restored TO, and the console's other restores (Settings, the pen) already said default. The retired
+  wording joins the `internal/docslint` denylist, with this log and the decision log keeping the
+  words that were true on the day they were written.

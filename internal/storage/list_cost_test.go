@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -485,4 +487,94 @@ func TestListCostDoesNotDependOnScopeShape(t *testing.T) {
 	if subtree.rows == 0 {
 		t.Errorf("the subtree-scoped read returned no rows, so it measured an empty page")
 	}
+}
+
+// TestListComponentTypesCostIsFlatInRegistryDepth is the measurement #716's
+// console half had to take before it was allowed to serve anything.
+//
+// #695 established that the icon resolution was free on this read because the
+// listing is the whole registry in one query, so every ancestor is already in
+// hand. Widening the walk to the stem and the abbrev, and to the ancestor each
+// one came from, is a claim that the same holds for three facts rather than one.
+// This is the claim, measured: a registry twenty levels deeper costs exactly what
+// the seeded one costs, because the chain walk is a pass over rows in memory and
+// never a query.
+//
+// The dimension grown is DEPTH rather than breadth, deliberately. Breadth would
+// grow the number of rows the walk runs over; depth grows the number of LEVELS
+// each walk climbs, which is what a per-level query would charge for and what a
+// flat count therefore has to hold against.
+func TestListComponentTypesCostIsFlatInRegistryDepth(t *testing.T) {
+	gw, counter := countingEstate(t)
+	ctx := context.Background()
+
+	list := func() (int, error) {
+		ts, err := gw.ListComponentTypes(ctx)
+		return len(ts), err
+	}
+	small := measure(t, counter, list)
+
+	// A chain, not a fan: each new type parents the one before it, so the last
+	// row's walk climbs twenty levels to reach the stem it inherits.
+	parent := "mic"
+	for i := range widePage {
+		name := fmt.Sprintf("probe-type-%d", i)
+		if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
+			Name: name, DisplayName: name, ParentID: mustComponentTypeID(t, gw, parent),
+		}); err != nil {
+			t.Fatalf("create component_type %d: %v", i, err)
+		}
+		parent = name
+	}
+	large := measure(t, counter, list)
+
+	assertFlatCost(t, small, large, 1)
+}
+
+// TestListSystemTypesCostIsFlatInRegistryDepth: the system registry's listing
+// resolves the same three facts over the same walk, so it owes the same number.
+func TestListSystemTypesCostIsFlatInRegistryDepth(t *testing.T) {
+	gw, counter := countingEstate(t)
+	ctx := context.Background()
+
+	list := func() (int, error) {
+		ts, err := gw.ListSystemTypes(ctx)
+		return len(ts), err
+	}
+	small := measure(t, counter, list)
+
+	parent := "room"
+	for i := range widePage {
+		name := fmt.Sprintf("probe-sys-type-%d", i)
+		if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{
+			Name: name, DisplayName: name, ParentID: mustSystemTypeID(t, gw, parent),
+		}); err != nil {
+			t.Fatalf("create system_type %d: %v", i, err)
+		}
+		parent = name
+	}
+	large := measure(t, counter, list)
+
+	assertFlatCost(t, small, large, 1)
+}
+
+// mustComponentTypeID / mustSystemTypeID resolve a type by name to the uuid the
+// create spec wants. They run OUTSIDE the measured window (the counter is reset
+// by measure), so their own reads are not charged to the listing.
+func mustComponentTypeID(t *testing.T, gw storage.Gateway, name string) *uuid.UUID {
+	t.Helper()
+	ct, err := gw.GetComponentType(context.Background(), name)
+	if err != nil {
+		t.Fatalf("GetComponentType(%q): %v", name, err)
+	}
+	return &ct.ID
+}
+
+func mustSystemTypeID(t *testing.T, gw storage.Gateway, name string) *uuid.UUID {
+	t.Helper()
+	st, err := gw.GetSystemType(context.Background(), name)
+	if err != nil {
+		t.Fatalf("GetSystemType(%q): %v", name, err)
+	}
+	return &st.ID
 }

@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import { pickInheritedFacts, type InheritedFacts } from "./catalog";
 
 // The component_type registry data layer: the device-class genus a product is
 // classified under (ADR-0085 partially reverses ADR-0047: the shape returns
@@ -34,7 +35,7 @@ export type ComponentType = {
   abbrev?: string;
   // Tags every instance of this type (or a non-overriding descendant) starts with.
   default_tags: string[];
-};
+} & InheritedFacts;
 
 export const COMPONENT_TYPES_KEY = ["component_types"] as const;
 
@@ -54,6 +55,10 @@ export async function listComponentTypes(): Promise<ComponentType[]> {
     resolved_icon: t.resolved_icon,
     abbrev: t.abbrev,
     default_tags: t.default_tags ?? [],
+    // The inherited pairs ride only on the LISTING, which is also the blade's
+    // read: useComponentTypeRow finds its row in this same query rather than
+    // fetching one, so the blade pays nothing for them (#716).
+    ...pickInheritedFacts(t),
   }));
 }
 

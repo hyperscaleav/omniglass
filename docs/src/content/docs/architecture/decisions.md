@@ -137,7 +137,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0099](#adr-0099-the-acronym-list-is-one-replaceable-setting-not-a-shipped-list-plus-operator-additions) | 2026-08-10 | Accepted | The acronym dictionary `title` consults is ONE key, `label.acronyms`, in a new `platform,client` settings namespace; an operator's list REPLACES the shipped one and provenance tells them apart, rather than a union of shipped plus additions (which would give one key a merge rule no other setting has, make the wire value a fragment rather than the effective dictionary, and make a shipped entry unremovable). The engine resolves the dictionary at render time and caches the compiled engine against the dictionary ITSELF, so a change builds a replacement rather than mutating one and no writer has a generation counter to forget; validation uses a dictionary-less engine, since whether a rule parses is a fact about the rule alone |
 | [ADR-0100](#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate) | 2026-08-10 | Accepted | A label rule reads its entity's PLACEMENT (a component's location label and its primary system's type label, a system's location label), reversing ADR-0098's exclusion, and the write paths that keep those honest are derived from the map rather than enumerated, a derivation the epic's review pass then caught missing the one the DATABASE performs (an `ON DELETE CASCADE` is a write path with no Go on it, so a system's delete now releases its memberships explicitly). The line is BLAST RADIUS, not ownership: bounded by a placement (the rows at one location, one system's members, one component's membership) it cascades inside the act's own transaction; bounded only by the estate (a rule at any tier, a classification row's display_name, the acronym list) it waits for the preview-then-apply verb. A preview is an apply that rolls back, so it lists exactly what the apply changes including the second hop. One audit row per operation, keyed on the rule, never one per changed entity |
 | [ADR-0101](#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests) | 2026-08-10 | Accepted | A generated **system** name suppresses the ordinal on the first of its stem in a placement bucket (`boardroom`, then `boardroom-2`), and the order dependence is accepted: deleting the bare one while the second survives frees the bare name again, and `boardroom-1` never exists. Suppression is a field on the MINT rather than a change to the shape (a component still reads `display-1`), and the ALLOCATOR takes that same mint, so a suppressing mint and a non-suppressing allocator cannot disagree on ordinal 1 and turn the second create into a `23505`. A placement bucket becomes a value per entity kind, so a location's two buckets cannot be written as a system's three, and the allocation lock loses the stem from its key, since two stems can now mint one name. The pen and both verbs spread to system and location; only a system generates, and a location's `:resetName` refuses with the missing fact named. No backfill: the default false is the right value for a row an operator already named. **Amended (#696, #691):** the component tier's two guards close too, its `:move` with the identical bucket comparison and its reclassify on the RESOLVED STEM rather than the classification id, because a component reaches its stem through a product and two products of one `component_type` mint the same name; the system tier's matching residual is #706 |
-| [ADR-0102](#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing) | 2026-08-10 | Accepted | A **`location_type.name_rule`** (nullable jsonb) is a type's opt-in to naming the locations it classifies, and it is a **declaration** (a stem, possibly empty, plus the first-ordinal suppression flag) rather than the `label_rule` template beside it. A name has to satisfy `validateEntityName`, it lands in a scoped-unique index, and other things reference it, so an unrenderable rule has no safe degradation the way a label's does; a declaration IS a `nameMint`, so a rule is refused at RULE-EDIT time by minting from it (ordinal 1 and a nine-digit ceiling bound the whole output space), which a template's output could only be sampled. Null is the opt-out and there is no boolean beside it. A rule change **renames nothing**: there is no name-side recompute verb, deliberately, because relabelling in bulk is recoverable and renaming is not. A positional type permitted at root allocates `1`, `2` across the estate and that is legal, since the bucket is the placement and two positional types under one parent already share an ordinal space. **Amended (#657):** the entry's "only floor is genuinely auto-nameable" is now false in both halves, since ADR-0103 was reversed for `floor` and no shipped type carries a rule; the composed limit is that a withdrawn shipped rule cannot be un-shipped, because insert-when-absent leaves the row alone and the wire cannot spell "clear" |
+| [ADR-0102](#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing) | 2026-08-10 | Accepted | A **`location_type.name_rule`** (nullable jsonb) is a type's opt-in to naming the locations it classifies, and it is a **declaration** (a stem, possibly empty, plus the first-ordinal suppression flag) rather than the `label_rule` template beside it. A name has to satisfy `validateEntityName`, it lands in a scoped-unique index, and other things reference it, so an unrenderable rule has no safe degradation the way a label's does; a declaration IS a `nameMint`, so a rule is refused at RULE-EDIT time by minting from it (ordinal 1 and a nine-digit ceiling bound the whole output space), which a template's output could only be sampled. Null is the opt-out and there is no boolean beside it. A rule change **renames nothing**: there is no name-side recompute verb, deliberately, because relabelling in bulk is recoverable and renaming is not. A positional type permitted at root allocates `1`, `2` across the estate and that is legal, since the bucket is the placement and two positional types under one parent already share an ordinal space. **Amended (#657):** the entry's "only floor is genuinely auto-nameable" is now false in both halves, since ADR-0103 was reversed for `floor` and no shipped type carries a rule; the composed limit is that a withdrawn shipped rule cannot be un-shipped, because insert-when-absent leaves the row alone and the wire cannot spell "clear" | **Amended again (#710):** the console gets the editor a declaration makes small (a tick box, a stem, the suppression flag), with #692's clear moved INSIDE it so the affordance can no longer undo a state it cannot create, and the mask naming every field the blade writes since a mask governs the whole write. What the editor shows about what a rule PRODUCES comes from the server: `name_rule` reads back with `examples`, the first two names the same `nameMint` a create allocates from would stamp, so nothing in `web/` knows that a counted name is `<stem>-<n>`. An unsaved rule is shown nothing about its output, deliberately. The mint's own refusal is unreachable through this body (`stem` carries `maxLength: 90`, and 90 plus the widest provable ordinal is exactly the name cap), so the 422s a surface renders are the schema's, which is why `describeError` now appends Huma's `errors[]`
 | [ADR-0103](#adr-0103-a-positional-name-is-allocation-order-and-the-real-world-designation-is-a-label) | 2026-08-11 | Accepted | A positional name is **allocation order**, never a claim about the world, and the entry first kept the dev estate's divergence (a floor named `1` labelled Level 2) on the argument that a name is an address and a label is what a human reads. **Amended (#657) and REVERSED for `floor`:** a floor's designation is not an integer at all (B2, LG, G, M, 12A), so an ordinal is the wrong KIND of value for it rather than an imprecise one, and the basement objection dissolves with it, since nobody signs a floor `-1`, they sign it `B1`, already a legal name. `floor` becomes nominal, the dev estate's floors are named `level-2` and `level-1` for their real designations so ADR-0105's rule renders those labels and the two pins are released, and the cost is stated rather than hidden: NO shipped location type carries a rule, so location name generation ships **dormant**, kept covered by a positional type the tests create rather than by a fifth seeded type invented to keep the demo alive. Removing a shipped rule reaches new estates only (insert-when-absent), and no `PATCH` can clear one, so an estate that already seeded it keeps it. What survives: a stem-less positional name is right where the position is an arbitrary disambiguator (a parking deck, a rack row) and wrong where the number is a real-world fact |
 
 | [ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it) | 2026-08-11 | Accepted | A create form shows the **stem** a generated name will carry, resolved in the browser from the classification the operator just chose, and writes the ordinal as the token `n`, because the ordinal is allocated against live siblings inside the create's own transaction and does not exist until the row does. A **draft-preview verb that mints and rolls back** is refused: its answer is provisional (another create can take the ordinal between the preview and the commit), and the rolled-back mint takes the same advisory lock real creates need, so a form that previewed on every keystroke would serialise the estate's creates behind a UI affordance. **Re-rendering the label rule in TypeScript** is refused outright, as the second implementation of an engine slice 3 swept 42 copies of. The label is therefore not previewed at all: its data map carries `Name` and `Ordinal`, so it is unknowable for the same reason. The placement bucket is shown beside the field as a PATH and never as a prefix inside it, since names became scoped to placement and a name no longer contains its ancestry. **Amended (#699):** a RENDER is not a mint, and both refusals were about allocating, so `:renderLabel` resolves the rule through the same tiers with the same one engine, writes the token where the ordinal goes, and takes no lock; the form now shows both values in LOCKED fields, gated by the entity's `:create` with the placement resolved in the caller's read scope. **Amended again (#657):** the lock is an inline square icon action in the field's join, matching Settings' own Restore to default, and a locked field is `readonly` rather than `disabled`, because a disabled input fires no click and leaves the value out of the tab order; focus does not claim the pen, since a locked field is a tab stop and tabbing past would otherwise blank both fields. **Amended again (#702):** READING the lowest free ordinal is not minting one either, so the form shows `display-3` rather than `display-n` and the token retires; the answer is provisional, so the form posts it back as the create's `expected_ordinal` and a create that would land a different number is a 409 naming the one that moved, located on `body.expected_name` so the form can tell it from a name collision. The NAME's shape stops being client-side, which closes the naming half of #695. **Amended again (#695):** the ICON half closes the same way, the listing serving `resolved_icon` beside the raw `icon`, so `lib/typechain.ts` is deleted and no type-chain walk runs in the browser; it costs no read, since the list already loads the whole registry in one query. **Amended again (#702 review):** the precondition binds the drafted NAME rather than the ordinal, because a name carries the stem and the suppression rule as well as the number and an ordinal claim was met by a create that landed `monitor-1` where the form showed `display-1`; and the draft now REFUSES the parentless bucket its create refuses, reversing this entry's own "the draft does not rehearse the all-scope gate", since the previewed ordinal reports which of that bucket's names are taken and the stem asked about is the caller's to choose **Amended again (#693):** the lock is the console's ONE vocabulary for the pen, so it reaches the EDIT BLADE and the list's full-text `Generated` chip retires from both list renderers: an ownership fact belongs beside the field an operator can change it on, not in a cell charging the Name column the width of the word on every platform-labelled row. The NAME's own chip stays, on the blade beside the name, which is the same rule rather than an exception. The blade gains a state the create form has no equivalent for, a locked field showing a value about to change (the hand-back), because `:renderLabel` previews a row that does not exist and would answer an existing row with the NEXT sibling's ordinal; the hint carries it instead. It closes a silent pen theft: every blade posted `display() \|\| undefined` seeded from the stored label, so saving any unrelated field posted the platform's own rendering back as an override and took the pen **Amended again (#713):** "the placement resolved in the caller's read scope" no longer holds for one reference, the component's `system`, which the create binds as a membership under `system:update` (ADR-0107); the draft resolves it in that same set and carries the same conditional permission, so a preview is never served for a create the platform would refuse |
@@ -151,6 +151,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0111](#adr-0111-a-service-accounts-identifier-is-a-name-and-it-is-unique) | 2026-08-13 | Accepted | `service.label` becomes **`service.name`**: it is the username analogue for `kind=service`, the only handle the row has, so under the identity triad it is a name and it was the one place in the schema where `label` meant an identifier. The uniqueness question is answered rather than inherited: **unique**, matching `human_username_key` and `node_name_key`, because the string is denormalized as bare text into `audit_log.actor_username` and into an alarm's acknowledgement, where a duplicate is unresolvable after the fact. The table's declared identity shape moves from `ShapeIDOnly` to `ShapeHumanNotAKey`, and a new guard refuses any `ShapeIDOnly` table that carries a `name`. **Breaking wire change:** `svcBody.label` becomes `name`, and the group roster's mixed `coalesce(h.display_name, s.label, '')` splits into `name` and `display_name`, two fields each meaning one thing |
 | [ADR-0112](#adr-0112-a-generated-flag-carries-the-schemas-type-and-a-structured-field-carries-json) | 2026-08-13 | Accepted | `cmd/cligen` derives each body flag's TYPE from the OpenAPI property: an `integer` field is an `int` flag, a `boolean` a `bool` flag, a `number` a `float64` flag, so a value the schema refuses is refused at the shell rather than by the server's 422. Every other shape keeps ONE string flag parsed as JSON (an object, an array, an untyped `any`, and a nullable number or boolean), because a nested value has no shell-native flag type and `null` has to stay sendable: it is what clears a field named in `update_mask` (ADR-0106). A nullable STRING is the exception and stays a plain string flag, since this API clears a string with the empty string. `--propagates=false` becomes the spelling for a bool flag, and the docs flag check fails on a bool flag handed a space-separated value |
 | [ADR-0113](#adr-0113-a-validation-rule-is-typescript-and-a-native-constraint-attribute-is-not-one) | 2026-08-13 | Accepted | A console control carries **no** `required`, `min`, `max`, `pattern` or `step`: a rule is a pure function over the typed value, the surface renders its message inline beside the field, and the binding's `disabled` / `valid` refuses the submit. The audit decided it: 21 attributes on 24 rendered controls and **zero could ever fire**, because a Drawer's rail is portaled outside the `<form>` (ADR-0054), a blade has no form at all, and the four on genuine form paths sit in forms whose submit is disabled in exactly the states native validation would refuse. Wiring `form.requestSubmit()` instead would have covered the Drawers only, left every blade needing this decision anyway, and meant undoing the disabled gate so an unstyled browser bubble could refuse in place of an inline message. `aria-required` stays as the honest spelling, `type="email"` and `type="number"` stay as input types, and a guard test scans every `.tsx` |
+| [ADR-0114](#adr-0114-an-inherited-registry-fact-clears-with-the-empty-string-and-the-pattern-is-what-admits-it) | 2026-08-14 | Accepted | `stem`, `abbrev` and `icon` on `component_type` and `system_type` join the **three-state string sentinel** their `label_rule` neighbour already honoured: omitted is unchanged, an explicit `""` clears the column to NULL so the inheritance walk resumes, a value sets. Not the mask, which ADR-0106 scopes to nullable OBJECT fields because an object has no empty value to overload. The clearing spelling is a pattern **alternation**, `^([a-z0-9][a-z0-9-]*)?$` with `minLength` dropped from the PATCH body (the same spelling `name_rule.stem` ships), so exactly one new string is admitted and every malformed stem is still a 422; CREATE keeps `minLength: 1`, since a row that does not exist yet has nothing to clear. A **root** cannot clear its stem, the refusal create already gives moved to the second path that reaches the same broken row, stated as one pure function so the two handlers cannot disagree. The fork leg decodes the sentinel too, since a shadow image is read back as the row. Both blades now send `""` for an empty box, so #677's and #656's "no `''` ever rides the body" guards **invert** to assert the sentinel rather than being deleted |
+| [ADR-0115](#adr-0115-an-inherited-fact-is-served-with-the-value-it-inherits-and-the-ancestor-it-came-from) | 2026-08-14 | Accepted | A type registry's LISTING serves `inherited_stem`, `inherited_icon` and `inherited_abbrev` beside the raw fields, each with the **name of the ancestor it came from**, because `resolved_icon` ([ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)'s #695 amendment) answers what a row SHOWS and an edit blade's placeholder asks what it would show if it stated nothing, which is a different string on every row that states its own: using the shown value would print the string an operator had just deleted back at them as the thing they were about to inherit. The console renders it as the placeholder carrying the VALUE (a placeholder natively means "leave this blank and you get this") and a mark naming the ancestor, read from the data rather than written as "its parent" because a fact can come from any distance up the chain. The **lock is not borrowed**: ADR-0104 gives it one meaning, the platform owns this value, and an inherited fact is one an operator MAY set. The source is per FACT, since one type can take its stem from a grandparent and its abbrev from its parent. **Amended in the same wave (#716):** "no new glyph" is reversed and the read state's `inherited from <ancestor>` sentence is REPLACED by one teal **provenance dot beside the field's LABEL**, present when the value comes from somewhere that is not this row and absent when the row states it, because the sentence was the third telling of one fact on a line with no room for it and could not appear in the edit state at all, where a grey placeholder in a box that looks empty is the state that needed it; the label is the only placement that holds in both states (beside the VALUE, trailing is right in read and lands 380px from a 407px box's placeholder in edit, leading is right in edit and reads as a bullet in read), the mark encodes no distance (a segment-per-rung version swung 8px to 28px on estate shape and never lined up across three labels), it carries the whole fact in its accessible name as a focusable tab stop rather than in a hover no keyboard reaches, it agrees with the hint by construction (one predicate over the text the field is showing, so a keystroke moves both), and it is threaded as a NAME rather than as an element, since a `JSX.Element` prop is a getter that rebuilds the mark under the pointer on every refetch. **Amended again in the same wave (#742):** the hint's `Inherited from <ancestor>.` comes out, since the mark states that in the same field at the same moment, and its conditional twin `Empty inherits from <ancestor>.` STAYS, since it shows only while the box holds a value, where there is no mark and no visible placeholder and it is therefore the only thing telling an operator how to return the field to inheriting; the two take turns off the one predicate, and the CREATE forms keep their own `Leave blank to inherit` hints because neither the mark nor `InheritedField` reaches a row that does not exist yet. Cost measured rather than carried over from #695: the registry read is one statement for a registry twenty levels deeper, so the walk is a pass over rows already in hand. `location_type` is flat and takes none of it. The blade's discard action reads **Restore default** rather than Restore shipped, matching Settings' own restore-to-default vocabulary |
 
 ## Entries
 
@@ -4410,6 +4412,29 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   substitute into, and a positional location's name already is its ordinal.
 - **Tracked under** [#687](https://github.com/hyperscaleav/omniglass/issues/687), the seventh slice of
   epic [#657](https://github.com/hyperscaleav/omniglass/issues/657).
+- **Amended (#710):** the console gets the **editor** this entry's "declaration" makes small, a tick
+  box, a stem, and the suppression flag, and the rule's PRESENCE stays the opt-in, so the tick box is
+  the rule's existence rather than a fourth field. [#692](https://github.com/hyperscaleav/omniglass/issues/692)'s
+  clear MOVES INTO it (unticking is the clear) rather than sitting beside it as a button, which is
+  what stops the affordance being half a control: it could undo a state it could not create, and
+  after ADR-0103's reversal no shipped type carries a rule, so opting IN is the only route to a
+  generated location name at all. Because the mask governs the whole write, the clear names every
+  field the blade writes rather than `name_rule` alone. **What the editor shows about what a rule
+  produces comes from the server**: `name_rule` reads back with `examples`, the first two names the
+  rule mints, from the same `nameMint` a create allocates from, and the blade composes its sentence
+  around those two strings. Nothing in `web/` knows that a counted name is `<stem>-<n>`, which is
+  ADR-0104's refusal of a second implementation applied to a rule rather than to a row. An UNSAVED
+  rule is shown nothing about its output, deliberately: the only honest source is the mint, and
+  predicting from the browser is the duplication this closes. The character rule for a stem IS
+  restated in TypeScript (ADR-0113's inline vocabulary, refusing the save), the 90-character ceiling
+  is NOT, because that number is arithmetic over the mint's output space rather than a name rule.
+  **The mint's own refusal turns out to be unreachable through this body**: `stem` carries
+  `maxLength: 90`, and 90 plus the widest provable ordinal is exactly the 100-character name cap, so
+  every stem the schema admits mints legally at both ends and `ErrInvalidNameRule` (still live, still
+  unit-tested) is fenced off by the schema. The refusals a surface actually renders are the schema's,
+  which is why `describeError` now appends Huma's `errors[]`: a schema 422's `detail` is always the
+  literal "validation failed", so every console surface had been showing an operator nothing they
+  could act on.
 
 ### ADR-0103: A positional name is allocation order, and the real-world designation is a label
 
@@ -5319,3 +5344,151 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
 - **Found by** [#718](https://github.com/hyperscaleav/omniglass/issues/718), whose brief asked for a
   `min="0"` on an input that had carried one since [#411](https://github.com/hyperscaleav/omniglass/issues/411)
   and had never fired once. **Tracked under** [#724](https://github.com/hyperscaleav/omniglass/issues/724).
+
+### ADR-0114: An inherited registry fact clears with the empty string, and the pattern is what admits it
+
+- **Date:** 2026-08-14 | **Status:** Accepted | **Pages:** [the API](/architecture/api/), [core entities](/architecture/core-entities/)
+- **Decision:** `stem`, `abbrev` and `icon` on `component_type` and `system_type` join the
+  **three-state string sentinel** their `label_rule` neighbour has always honoured: an omitted field
+  is unchanged, an explicit `""` clears the column to NULL so the inheritance walk resumes at the
+  nearest ancestor, and a value sets. All four columns are the same `case ... nullif(...)` line in
+  both handlers, and the **fork leg decodes the sentinel too**, since a shadow image is read back as
+  the row. The mask is **not** the instrument
+  ([ADR-0106](#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask)
+  scopes mask-with-no-value to nullable OBJECT fields, on the ground that an object has no empty
+  value to overload;
+  [ADR-0091](#adr-0091-an-update_mask-says-which-fields-a-patch-writes) keeps the sentinel for
+  strings).
+- **The clearing spelling is a pattern alternation, not a dropped rule.** `stem` carried
+  `minLength: 1` and `^[a-z0-9][a-z0-9-]*$` on the PATCH body, so `""` was a 422 in the validator
+  **before the handler ran** and the capability was unreachable from every client. The patch's
+  `minLength` goes and the character rule is wrapped in an optional group,
+  `^([a-z0-9][a-z0-9-]*)?$`, which is the spelling `location_type.name_rule.stem` already ships. That
+  admits exactly one new string. `Bad Stem`, `-leading-hyphen`, `UPPER` and a trailing space are all
+  still refused, on both registries, and there is an e2e that says so. **CREATE keeps
+  `minLength: 1`**: there is nothing to clear on a row that does not exist yet, so `""` there is a
+  typo rather than an intent.
+- **A root keeps its stem.** A root has no ancestor to inherit from, so clearing its stem is
+  `ErrRootComponentTypeNeedsStem` (and its system twin), the same refusal create gives, moved to the
+  second path that can reach the same broken row. The rule is one pure function over the patch and
+  the parent id, so the two handlers cannot disagree about it, and it is deliberately narrower than
+  "a root clears nothing": a root with no icon of its own is answered by the console's fallback,
+  where a root with no stem is a name the platform cannot mint.
+- **Why this and not the mask, restated for the columns that prompted it:** the mask would work, and
+  it would mean two spellings of "clear a string" in one PATCH body, since `label_rule` beside these
+  three already clears on `""`. One vocabulary per kind of field is the property worth having.
+- **What it cost.** Both console blades now send `""` for an empty box where
+  [#677](https://github.com/hyperscaleav/omniglass/issues/677) and
+  [#656](https://github.com/hyperscaleav/omniglass/issues/656) taught them to send nothing, so the
+  three guard tests those slices left ("no `''` ever rides the body") **invert** rather than being
+  deleted: they now assert the sentinel. That is the correct reading of both slices. They were
+  data-destruction fixes against a coalescing patch, and the patch stopped coalescing here.
+- **Found by** [#716](https://github.com/hyperscaleav/omniglass/issues/716), filed out of #677's
+  review rather than folded into it, so the destructive bug shipped the day it was found and the
+  missing capability stayed honest until it could land on two registries, the wire, validation and
+  both consoles at once.
+
+### ADR-0115: An inherited fact is served with the value it inherits, and the ancestor it came from
+
+- **Date:** 2026-08-14 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [the UI](/architecture/ui/)
+- **Decision:** The `component_type` and `system_type` LISTINGS serve `inherited_stem`,
+  `inherited_icon` and `inherited_abbrev` beside the raw fields, each paired with an
+  `inherited_*_source` naming the ancestor the value comes from. The console's edit blade shows the
+  value as the field's **placeholder** and the ancestor in a **provenance dot** beside the label, and
+  its read state shows the value in place of the em dash it used to render, marked with the same dot
+  in the same slot (see the two amendments below: the first replaced the attribution sentence the
+  read state shipped with, the second removed the hint sentence that then duplicated the dot).
+- **This is a different question from `resolved_icon`, and that is the whole reason it exists.**
+  [ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)'s
+  #695 amendment serves what a row SHOWS, which is the row's own value on every row that states one.
+  A placeholder asks what the row would show if it stated **nothing**. Those are the same string only
+  on rows that already inherit, so a blade that used `resolved_icon` as its placeholder would print
+  the value an operator had just deleted back at them as the thing they were about to inherit. The
+  new fields start their climb at the PARENT; `resolved_* = own ?? inherited_*` falls out of that,
+  and one walk answers both.
+- **A mark of its own, and not the lock.** A placeholder natively means "leave this blank and you get
+  this", so the value goes there; the RELATION gets one new mark of its own (below), and the lock was
+  available and is refused: ADR-0104 gives it one meaning, **the platform owns this value**, and an
+  inherited fact is one an operator MAY set, which is the opposite. Borrowing the icon would cost the
+  lock the only meaning it has.
+- **Amended, in this same wave (#716): the mark is a teal dot beside the LABEL, and the read state's
+  attribution sentence comes out.** This entry first said "no new glyph", with the read state
+  rendering the inherited value and `inherited from <ancestor>` under it. That shipped in the morning
+  and two spikes against the real console falsified it by lunchtime. The sentence was the third
+  telling of one fact on the one line that had no room for it (a dimmed value, an attribution beneath
+  it, and a hint beneath the box), and it could not appear in the EDIT state at all, which is the
+  state that needs it most: there the inherited value is a grey placeholder in a box that looks
+  exactly like an empty one. What ships instead is **one teal dot, present or absent**, present
+  meaning this value comes from somewhere that is not this row.
+  - **Beside the label, because that is the only placement that works in both states.** Measured on
+    the real console at 1320px: beside the VALUE, trailing is right in read (every value starts at
+    the same x and the dot follows the last character) and collapses in edit (a 407px input exiles it
+    380px from the placeholder it is about, into the slot the console's own in-field actions occupy),
+    while leading is right in edit and reads as a list bullet in read, stepping every marked value
+    11px out of a column the unmarked ones hold. A hanging gutter lands at two different x in the two
+    states. The LABEL is in the same position in both, and `FieldRow`'s label row and `KVStacked`'s
+    eyebrow are the same slot, so one treatment covers read and edit and the mark does not move when
+    the pencil is clicked.
+  - **Present or absent, with no encoding of distance.** A segment-per-rung mark was built first and
+    refused on its own frames: its width was driven by how deep that corner of the estate happens to
+    nest (8px at two rungs, 28px at six, the same object in the design's mind and a different one on
+    screen), and three marks encoding one chain never lined up, because each trailed a label of a
+    different length. Distance lives in the hover. The full CHAIN stays a follow-on that needs the
+    server to serve it, since `inherited_*_source` names the winning ancestor and nothing between, and
+    filling the gap in the browser is the climb #695 deleted.
+  - **A hover-only fact is unreachable, so the dot is not one.** The trigger is a button, so it is a
+    tab stop that opens on focus, and the whole fact is in its accessible name (`Stem is inherited
+    from mic`) rather than only in the tooltip, because a hover has no keyboard and no touch
+    equivalent.
+  - **The mark and the hint cannot disagree, including mid-keystroke.** The spike caught the dot
+    vanishing live as the operator typed, before any save, while the hint under the box still promised
+    the inheritance in the present tense. Both answers now come from one predicate over one string,
+    the text the field is currently showing, which the field primitive supplies (the persisted value
+    while reading, the draft while editing), so the keystroke that empties a box moves both at once.
+  - **The mark is threaded as DATA, never as an element.** A `JSX.Element` in a prop compiles to a
+    getter, so it is rebuilt whenever anything that getter reads notifies; a mark derived from a query
+    is then replaced under the pointer on every refetch, and a `createMemo` over the derived value is
+    not a fix, since the array it tracks is rebuilt equal-but-new. The primitives take the ancestor's
+    NAME and build the mark themselves, which is the same shape `FieldRow` already had for the (i).
+- **Amended again, same wave (#742): the hint stops restating the mark, and keeps the one sentence
+  the mark cannot say.** The amendment above left the field saying the relation twice while the box
+  was empty: the dot beside the label, and `Inherited from <ancestor>.` appended to the hint, one
+  fact in one field at one instant. The appended clause comes out. What stays is its conditional
+  twin, `Empty inherits from <ancestor>.`, which the field shows only while the box HOLDS a value,
+  and that asymmetry is the point rather than an oversight. In that state there is no dot (the row
+  states this value) and no visible placeholder (the box is not empty), so the sentence is the only
+  thing that tells an operator emptying the box returns the field to inheriting, and the only thing
+  that names what it would inherit. The first sentence described a **state** the mark already shows;
+  the second describes an **action** nothing else offers, and deleting both would leave the console
+  with no route back to inheriting. The two therefore take turns, off the same single predicate:
+  exactly one of the dot and the sentence is on screen in any state, and the keystroke that empties
+  the box swaps them. The CREATE forms keep their own `Leave blank to inherit` hints, since neither
+  the dot nor `InheritedField` reaches a row that does not exist yet.
+- **The ancestor is read, never described.** Both affordances that name it, the mark and the
+  conditional hint, name the row the value actually came from rather than saying "its parent",
+  because a grandchild whose parent states no stem takes its
+  grandparent's, and an operator told to change "its parent" would edit the wrong row. It is per FACT
+  rather than per row for the same reason: one type can take its stem from a grandparent and its
+  abbrev from its parent, which the e2e fixture is built to exhibit.
+- **Nothing is derived in the browser.** [#695](https://github.com/hyperscaleav/omniglass/issues/695)
+  deleted `lib/typechain.ts` and #702 and #710 each refused to reintroduce a client-side walk; the
+  two facts with no served answer were the reason a blade could not show this at all, so the read
+  model grew rather than the console. The web fixtures seed inherited values no client-side climb
+  could produce, so a console that derived them would fail.
+- **What it cost, measured.** #695's report established that the listing is a single unfiltered
+  whole-registry select; that its blade READ is the same query is a separate fact, and it holds
+  because `useComponentTypeRow` finds its row in the listing rather than fetching one.
+  `TestListComponentTypesCostIsFlatInRegistryDepth` grows the registry twenty levels **deeper**, the
+  dimension a per-level query would charge for, and pins the read at one statement, the same number
+  the seeded registry costs.
+- **`location_type` takes none of it.** It is flat (no parent link) and carries no `stem` or `abbrev`
+  column at all, so it has no inherited fact to show. It gains only the vocabulary change below.
+- **"Restore shipped" becomes "Restore default".** The blade's destructive slot on a forked shipped
+  row named the thing being restored FROM rather than the thing being restored TO, and diverged from
+  the console's own restore vocabulary (Settings and the pen both say default, per ADR-0104's #657
+  amendment). Both registries that offer it move, with the operator guide; the term is added to the
+  `internal/docslint` denylist, and the two historical records the denylist already allowlists
+  (`decisions.md`, `build-log.md`) keep the wording that was true on the day they were written.
+- **Found by** [#716](https://github.com/hyperscaleav/omniglass/issues/716)'s own review: the clear it
+  shipped is what made the empty box reachable on purpose, and an empty box that says nothing is a
+  capability that teaches the operator nothing.

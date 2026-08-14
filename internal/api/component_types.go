@@ -41,6 +41,24 @@ type componentTypeBody struct {
 	Forked       bool     `json:"forked" doc:"True when this shipped row carries changes of yours overriding it. Restore discards them"`
 	ParentID     *string  `json:"parent_id,omitempty" doc:"The parent component_type's id, the canonical handle; absent for a root type"`
 	Parent       *string  `json:"parent,omitempty" doc:"The parent component_type's name, for display; absent for a root type"`
+	// The three Inherited* pairs answer the OTHER question about the same chain
+	// (#716's console half). ResolvedIcon says what this row shows; these say
+	// what it would show if it stated nothing, which is a different string on
+	// every row that states its own. An edit blade's placeholder is the second
+	// question ("clear this box and you get what?"), so serving only the first
+	// would put the value the operator had just deleted back in front of them
+	// as the thing they were about to inherit.
+	//
+	// Each carries its ancestor's NAME beside it, read from the data rather
+	// than assumed to be the parent (a fact can come from any distance up the
+	// chain), and per fact rather than per row, since one row can take its stem
+	// from a grandparent and its abbrev from its parent.
+	InheritedStem         string `json:"inherited_stem,omitempty" doc:"The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"`
+	InheritedStemSource   string `json:"inherited_stem_source,omitempty" doc:"The name of the ancestor component_type inherited_stem comes from, which may be further up the chain than the parent"`
+	InheritedIcon         string `json:"inherited_icon,omitempty" doc:"The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"`
+	InheritedIconSource   string `json:"inherited_icon_source,omitempty" doc:"The name of the ancestor component_type inherited_icon comes from, which may be further up the chain than the parent"`
+	InheritedAbbrev       string `json:"inherited_abbrev,omitempty" doc:"The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"`
+	InheritedAbbrevSource string `json:"inherited_abbrev_source,omitempty" doc:"The name of the ancestor component_type inherited_abbrev comes from, which may be further up the chain than the parent"`
 }
 
 func toComponentTypeBody(ct *storage.ComponentType, parentName *string) componentTypeBody {
@@ -87,10 +105,19 @@ type updateComponentTypeInput struct {
 	ID   string `path:"id"`
 	Body struct {
 		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
-		// Same rule as create's Stem: a name prefix follows the name rule.
-		Stem        *string   `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"A new name prefix. Lowercase letters, digits, and hyphens."`
-		Icon        *string   `json:"icon,omitempty" doc:"A new glyph key"`
-		Abbrev      *string   `json:"abbrev,omitempty" doc:"A new compact form"`
+		// Create's rule with one alternation added, and that alternation is the
+		// whole of #716's wire change: a stem is inherited, so an operator has
+		// to be able to hand it back, and the house spelling of "clear a
+		// nullable string" is the empty string (ADR-0091; ADR-0106 scopes the
+		// mask to nullable OBJECT fields, which have no empty value to
+		// overload). minLength:1 made that a 422 before the handler ran, so it
+		// goes; the character rule stays, wrapped in an optional group, and
+		// every malformed stem it refused before is refused still. CREATE keeps
+		// minLength:1, since there is nothing to clear on a row that does not
+		// exist yet and "" there would be a typo, not an intent.
+		Stem        *string   `json:"stem,omitempty" maxLength:"100" pattern:"^([a-z0-9][a-z0-9-]*)?$" doc:"A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422)."`
+		Icon        *string   `json:"icon,omitempty" doc:"A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again"`
+		Abbrev      *string   `json:"abbrev,omitempty" doc:"A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again"`
 		LabelRule   *string   `json:"label_rule,omitempty" doc:"A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse."`
 		DefaultTags *[]string `json:"default_tags,omitempty" doc:"Replaces the default-tag set; omit to leave unchanged"`
 	}
@@ -152,7 +179,7 @@ func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gate
 		for i := range types {
 			byID[types[i].ID] = types[i].Name
 		}
-		icons := storage.ResolvedComponentTypeIcons(types)
+		facts := storage.ComponentTypeChainFacts(types)
 		out := &listComponentTypesOutput{}
 		out.Body.ComponentTypes = make([]componentTypeBody, 0, len(types))
 		for i := range types {
@@ -163,7 +190,11 @@ func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gate
 				}
 			}
 			body := toComponentTypeBody(&types[i], parentName)
-			body.ResolvedIcon = icons[types[i].ID]
+			f := facts[types[i].ID]
+			body.ResolvedIcon = f.Icon.Shown
+			body.InheritedStem, body.InheritedStemSource = f.Stem.Inherited, f.Stem.InheritedFrom
+			body.InheritedIcon, body.InheritedIconSource = f.Icon.Inherited, f.Icon.InheritedFrom
+			body.InheritedAbbrev, body.InheritedAbbrevSource = f.Abbrev.Inherited, f.Abbrev.InheritedFrom
 			out.Body.ComponentTypes = append(out.Body.ComponentTypes, body)
 		}
 		return out, nil

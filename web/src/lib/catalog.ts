@@ -198,3 +198,61 @@ export function visibleGroups(allow: (tokens: string[]) => boolean): CatalogGrou
 export const CATALOG_STUB_PATHS: string[] = CATALOG_GROUPS.flatMap((g) =>
   g.entries.filter((e) => e.soon && e.path).map((e) => e.path!),
 );
+
+// InheritedFacts is what the type registries' LISTING serves beside the raw
+// fields (#716's console half, extending #695's `resolved_icon`): for each fact
+// a row can inherit, the value it would take if it stated none, and the name of
+// the ancestor that value comes from.
+//
+// It is a different question from `resolved_icon`, which answers what a row
+// SHOWS and is therefore the row's own value on every row that states one. A
+// blade's placeholder needs "clear this box and you get what?", so it needs
+// this one; using the shown value would print the string the operator had just
+// deleted back at them.
+//
+// The source is per FACT rather than per row, because one type can take its
+// stem from a grandparent and its abbrev from its parent, and it is served
+// rather than derived, because deriving it means climbing the type chain in
+// TypeScript, which is what #695 deleted and #702 and #710 both refused to
+// bring back.
+export type InheritedFacts = {
+  inherited_stem?: string;
+  inherited_stem_source?: string;
+  inherited_icon?: string;
+  inherited_icon_source?: string;
+  inherited_abbrev?: string;
+  inherited_abbrev_source?: string;
+};
+
+// InheritedFact is one of them, in the shape a field consumes. Both halves are
+// absent together: a chain that states the fact nowhere has no value to offer
+// and no ancestor to name.
+export type InheritedFact = { value: string; from: string };
+
+// inheritedFact reads one fact off a served row. An undefined row (still
+// loading, or not found) inherits nothing, which is the same answer a root
+// gives and renders identically.
+export function inheritedFact(row: InheritedFacts | undefined, fact: "stem" | "icon" | "abbrev"): InheritedFact {
+  if (!row) return { value: "", from: "" };
+  switch (fact) {
+    case "stem":
+      return { value: row.inherited_stem ?? "", from: row.inherited_stem_source ?? "" };
+    case "icon":
+      return { value: row.inherited_icon ?? "", from: row.inherited_icon_source ?? "" };
+    default:
+      return { value: row.inherited_abbrev ?? "", from: row.inherited_abbrev_source ?? "" };
+  }
+}
+
+// pickInheritedFacts copies the served pairs off a wire row, the one place the
+// six field names are spelled for both registries' data layers.
+export function pickInheritedFacts(t: InheritedFacts): InheritedFacts {
+  return {
+    inherited_stem: t.inherited_stem,
+    inherited_stem_source: t.inherited_stem_source,
+    inherited_icon: t.inherited_icon,
+    inherited_icon_source: t.inherited_icon_source,
+    inherited_abbrev: t.inherited_abbrev,
+    inherited_abbrev_source: t.inherited_abbrev_source,
+  };
+}

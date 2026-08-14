@@ -8,20 +8,21 @@ import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import ContractEditor from "../components/ContractEditor";
-import Button from "../components/Button";
 import { Plus } from "../components/icons";
 import {
   type LocationType,
+  type UpdateLocationType,
   LOCATION_TYPES_KEY,
+  LOCATION_TYPE_PATCH_FIELDS,
   ROOT_PLACEMENT,
   listLocationTypes,
   createLocationType,
   updateLocationType,
   deleteLocationType,
-  clearNameRule,
   restoreLocationType,
 } from "../lib/location_types";
 import { useMe, can } from "../lib/auth";
+import { nameStemError } from "../lib/validate";
 import { registryLock, registryOrigin } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
@@ -63,13 +64,20 @@ function originBadge(row: { official: boolean; forked?: boolean }): JSX.Element 
 
 // How the platform names locations of this type, in the operator's words. Absent
 // is the opt-out and the state every shipped type is in (ADR-0103).
+//
+// The NAMES in the sentence are the server's `examples`, the first two the rule
+// actually mints. Nothing here knows that a counted name is "<stem>-<n>" or that
+// a suppressed first carries no number: this composes a sentence around two
+// strings it was given. That is the #695 / #702 rule applied to a rule rather
+// than to a row, and it is what stops the console promising a name no create
+// produces. The fallback covers a rule from a server too old to send them, which
+// says less rather than something possibly wrong.
 function namingSummary(r: LocationType): string {
-  if (!r.name_rule) return "You name every location of this type.";
-  if (r.name_rule.stem === "") return "Positional: named 1, 2, 3 within their parent.";
-  const stem = r.name_rule.stem;
-  return r.name_rule.bare_first
-    ? `Named ${stem}, then ${stem}-2, within their parent.`
-    : `Named ${stem}-1, ${stem}-2, within their parent.`;
+  const rule = r.name_rule;
+  if (!rule) return "You name every location of this type.";
+  const [first, second] = rule.examples ?? [];
+  if (!first || !second) return "The platform names locations of this type.";
+  return `Named ${first}, then ${second}, within their parent.`;
 }
 
 // Identity (the display name above the name, ADR-0062: the name is the
@@ -153,13 +161,34 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
     return row ? entityLabel(row) : name;
   };
   const [allowedParents, setAllowedParents] = createSignal<string[]>([]);
+  // The name rule's three drafts. `naming` is the opt-in itself: a rule's
+  // PRESENCE is what says this type generates (ADR-0102 keeps no boolean beside
+  // it), so the checkbox is the rule's existence rather than a fourth field.
+  const [naming, setNaming] = createSignal(false);
+  const [ruleStem, setRuleStem] = createSignal("");
+  const [bareFirst, setBareFirst] = createSignal(false);
+  const stemErr = () => (naming() ? nameStemError(ruleStem().trim()) : null);
 
-  createEffect(on(edit.editing, (editing) => {
-    if (!editing) return;
+  // Every draft this blade edits, seeded from the row. Entering edit is one
+  // caller; RESTORE is the other, because it replaces the row underneath an open
+  // editor and the drafts would otherwise still hold the values the operator
+  // just discarded. That was invisible while the blade's fields were a display
+  // name and an icon, which restore rarely changes; it is not invisible with the
+  // naming rule in the same form, where a stale draft means the next Save
+  // re-forks the row with the rule Restore had just taken away.
+  function seedDrafts() {
     const r = row();
     setDisplayName(r?.display_name ?? "");
     setIcon(r?.icon ?? "");
     setAllowedParents(r?.allowed_parent_types ?? []);
+    setNaming(!!r?.name_rule);
+    setRuleStem(r?.name_rule?.stem ?? "");
+    setBareFirst(!!r?.name_rule?.bare_first);
+  }
+
+  createEffect(on(edit.editing, (editing) => {
+    if (!editing) return;
+    seedDrafts();
     setErr(null);
   }));
 
@@ -187,22 +216,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
     try {
       await restoreLocationType(r.name);
       await qc.invalidateQueries({ queryKey: LOCATION_TYPES_KEY });
-    } catch (e) {
-      setErr(describeError(e));
-    }
-  }
-
-  // Turning naming off is its own act rather than a field, because the rule is
-  // not editable from the console at all yet: what an operator needs here is the
-  // exit (#692), and the mask is the one spelling of it.
-  async function turnNamingOff() {
-    const r = row();
-    if (!r) return;
-    if (!confirm(`Stop naming locations of type "${r.name}"? Existing names are left alone.`)) return;
-    setErr(null);
-    try {
-      await clearNameRule(r.name);
-      await qc.invalidateQueries({ queryKey: LOCATION_TYPES_KEY });
+      seedDrafts();
     } catch (e) {
       setErr(describeError(e));
     }
@@ -212,12 +226,28 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
     const r = row();
     if (!r) return;
     setErr(null);
+    const body: UpdateLocationType = {
+      display_name: displayName(),
+      icon: icon(),
+      allowed_parent_types: allowedParents(),
+    };
+    if (naming()) {
+      // Setting is the ordinary implied-mask write: a populated field is
+      // written. An empty stem is a real value here (the positional type), not
+      // an omission, which is why the rule is an object rather than two loose
+      // fields the body could half-carry.
+      body.name_rule = { stem: ruleStem().trim(), bare_first: bareFirst() };
+    } else if (r.name_rule) {
+      // Clearing is the mask (#692, ADR-0106): an omitted key and an explicit
+      // null are the same absent value once a body is decoded, so the mask is
+      // what carries the intent for a nullable OBJECT. It names every field this
+      // write changes rather than name_rule alone, because a mask governs the
+      // WHOLE write and a narrower one would drop the display name and icon
+      // edited in the same pass.
+      body.update_mask = [...LOCATION_TYPE_PATCH_FIELDS];
+    }
     try {
-      await updateLocationType(r.name, {
-        display_name: displayName(),
-        icon: icon(),
-        allowed_parent_types: allowedParents(),
-      });
+      await updateLocationType(r.name, body);
       await qc.invalidateQueries({ queryKey: LOCATION_TYPES_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -229,6 +259,10 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
     // A shipped row is editable now: the edit forks it rather than writing it.
     editable: () => !!row() && can(me.data, "location_type", "update"),
     save,
+    // ADR-0113: the rule is a TypeScript pure function and the footer Save is
+    // what refuses, since a blade has no <form> for a native constraint to fire
+    // on.
+    valid: () => !stemErr(),
     // One destructive slot, two meanings, chosen by what the row IS: a custom
     // row is deleted, a forked shipped row has the fork discarded, and a
     // pristine shipped row offers nothing (there is neither a row to delete nor
@@ -238,7 +272,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
       if (!r) return undefined;
       if (r.official) {
         return r.forked && can(me.data, "location_type", "update")
-          ? { label: "Restore shipped", tone: "danger" as const, onClick: restoreType }
+          ? { label: "Restore default", tone: "danger" as const, onClick: restoreType }
           : undefined;
       }
       return can(me.data, "location_type", "delete")
@@ -275,17 +309,18 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
           />
           <BladeField
             label="Naming"
-            hint="How locations of this type are named. Turning it off leaves existing names alone."
+            hint="Turning naming on or off leaves every existing name alone: the rule decides how the NEXT one is named."
             read={<span class="text-base-content/70">{namingSummary(r())}</span>}
           >
-            <div class="flex items-center gap-3">
-              <span class="text-sm text-base-content/70">{namingSummary(r())}</span>
-              <Show when={r().name_rule}>
-                <Button intent="warn" size="sm" onClick={() => void turnNamingOff()}>
-                  Turn naming off
-                </Button>
-              </Show>
-            </div>
+            <NameRuleEditor
+              naming={naming()}
+              onNaming={setNaming}
+              stem={ruleStem()}
+              onStem={setRuleStem}
+              stemError={stemErr()}
+              bareFirst={bareFirst()}
+              onBareFirst={setBareFirst}
+            />
           </BladeField>
           <BladeField
             label="Allowed parents"
@@ -396,6 +431,80 @@ export function CreateLocationTypeForm(p: { onCreated: (t: LocationType) => void
         <AllowedParentsPicker options={typeOptions()} value={allowedParents()} onChange={setAllowedParents} />
       </FieldRow>
     </form>
+  );
+}
+
+// NameRuleEditor: the whole of a location type's name rule, which after ADR-0102
+// is a DECLARATION rather than a template, so it is a checkbox, a stem, and one
+// more checkbox. Its presence is the opt-in (there is no boolean beside it in
+// the data, so there is none here either): unchecking it is the clear #692 gave
+// the wire, which now lives inside the editor instead of as a button beside it.
+//
+// It deliberately shows NOTHING about what the rule will produce. A rule being
+// edited has not been saved, and the only honest source for the names a rule
+// mints is the mint itself, which the server answers with once the rule exists
+// (`name_rule.examples`, read by namingSummary above). Predicting them here
+// would be the TypeScript re-implementation #695 tracked and #702 closed, and
+// ADR-0104 already refused the same trade for a create form's name. So the loop
+// is: set the rule, save, and read what it produces from the server.
+//
+// Each option is its own <label> wrapping its control, which gives the control
+// its accessible name without a `for` (the pattern AllowedParentsPicker uses);
+// the stem input carries an aria-label, since its own text sits under it as a
+// hint rather than above it as a label.
+function NameRuleEditor(p: {
+  naming: boolean;
+  onNaming: (v: boolean) => void;
+  stem: string;
+  onStem: (v: string) => void;
+  stemError: string | null;
+  bareFirst: boolean;
+  onBareFirst: (v: boolean) => void;
+}): JSX.Element {
+  return (
+    <div class="flex flex-col gap-2 rounded-box border border-base-300 p-2.5">
+      <label class="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          class="checkbox checkbox-sm"
+          checked={p.naming}
+          onChange={(e) => p.onNaming(e.currentTarget.checked)}
+        />
+        <span>The platform names locations of this type</span>
+      </label>
+      <Show when={p.naming}>
+        <div class="flex flex-col gap-2 pl-6">
+          <input
+            class="input input-bordered input-sm w-full font-data"
+            classList={{ "input-error": !!p.stemError }}
+            aria-label="Name stem"
+            placeholder="wing"
+            value={p.stem}
+            onInput={(e) => p.onStem(e.currentTarget.value)}
+          />
+          <Show
+            when={p.stemError}
+            fallback={
+              <p class="text-[11px] text-base-content/40">
+                The generated name's prefix. Leave it empty for a positional type, whose number is its
+                whole name (a parking deck called 1, then 2).
+              </p>
+            }
+          >
+            {(msg) => <p class="text-[11px] text-error">{msg()}</p>}
+          </Show>
+          <label class="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              class="checkbox checkbox-sm"
+              checked={p.bareFirst}
+              onChange={(e) => p.onBareFirst(e.currentTarget.checked)}
+            />
+            <span>No number on the first one under a parent</span>
+          </label>
+        </div>
+      </Show>
+    </div>
   );
 }
 

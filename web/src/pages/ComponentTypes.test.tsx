@@ -15,11 +15,31 @@ import { uuidFor } from "../lib/testids";
 // down the tree unless a node overrides it. There is no reparent leg (the
 // gateway does not offer one yet), so a custom type's placement in the tree
 // is fixed at create; the edit blade may only revise a node's own facts.
+// The inherited_* facts are the SERVER's answer to "clear this box and you get
+// what?" (#716's console half), and they are seeded here with values the browser
+// could not possibly have computed: `mic` states a stem of "mic", so a console
+// that climbed the chain in TypeScript would print "mic" and every assertion
+// below would fail. "from-the-server" can only have been served.
 const seed: ComponentType[] = [
   { id: uuidFor("ct-display"), name: "display", display_name: "Display", official: true, forked: false, stem: "display", abbrev: "fp", icon: "monitor", default_tags: [] },
   { id: uuidFor("ct-interactive-display"), name: "interactive-display", display_name: "Interactive Display", official: true, forked: false, parent: "display", parent_id: uuidFor("ct-display"), default_tags: [] },
   { id: uuidFor("ct-mic"), name: "mic", display_name: "Microphone", official: true, forked: false, stem: "mic", abbrev: "mic", icon: "mic", default_tags: [] },
-  { id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", display_name: "Ceiling Microphone", official: false, forked: false, parent: "mic", parent_id: uuidFor("ct-mic"), default_tags: [] },
+  {
+    id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", display_name: "Ceiling Microphone", official: false, forked: false,
+    parent: "mic", parent_id: uuidFor("ct-mic"), default_tags: [],
+    inherited_stem: "from-the-server", inherited_stem_source: "mic",
+    inherited_abbrev: "abbrev-from-the-server", inherited_abbrev_source: "mic",
+    inherited_icon: "icon-from-the-server", inherited_icon_source: "mic",
+  },
+  // A grandchild that states a stem of its own and inherits its abbrev from one
+  // level up and its stem source from TWO: the case a hint reading "its parent"
+  // gets wrong, and the case a placeholder taken from resolved_* gets wrong.
+  {
+    id: uuidFor("ct-ceiling-array"), name: "ceiling-array", display_name: "Ceiling Array", official: false, forked: false,
+    parent: "ceiling-mic", parent_id: uuidFor("ct-ceiling-mic"), stem: "carray", default_tags: [],
+    inherited_stem: "from-the-server", inherited_stem_source: "mic",
+    inherited_abbrev: "abbrev-from-the-server", inherited_abbrev_source: "ceiling-mic",
+  },
   // A shipped row the operator has overridden (#655, ADR-0095): the third
   // origin state, and the only one where what the console shows is not what
   // the release ships.
@@ -30,6 +50,17 @@ const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { usernam
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
+
+// factOf scopes one READ-state blade field by its eyebrow label. KVStacked
+// renders the eyebrow and the value as siblings under one div, so the eyebrow's
+// parent is the whole fact and nothing else. Needed because three fields on this
+// blade can inherit from the same ancestor, and a blade-wide text query would
+// pass on another field's answer.
+function factOf(blade: HTMLElement, label: string): HTMLElement {
+  const eyebrow = within(blade).getAllByText(label).find((el) => el.classList.contains("eyebrow"));
+  if (!eyebrow?.parentElement) throw new Error(`no read-state fact labelled ${label}`);
+  return eyebrow.parentElement;
+}
 
 function mount(me: Me = admin) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
@@ -106,6 +137,24 @@ describe("ComponentTypes page", () => {
     expect(sent).toMatchObject({ name: "boundary-mic", display_name: "Boundary Mic", parent_id: "mic" });
   });
 
+  // #742 removed the blade hint's present-tense sentence because the provenance
+  // mark says it. The CREATE form is a different surface and keeps its own: the
+  // row does not exist yet, so the server has served no `inherited_*` answer,
+  // no `InheritedField` renders here (these are plain `FieldRow`s) and there is
+  // therefore no mark on this form at all. The clause below is the only thing
+  // telling an operator that a blank box is a choice rather than an omission, at
+  // the one moment they are deciding whether to type a value.
+  it("tells the create form's operator that a blank fact inherits, where there is no mark to say it", async () => {
+    mount();
+    fireEvent.click(screen.getByText("New component type"));
+    await screen.findByPlaceholderText("Wireless Microphone");
+    const form = screen.getByPlaceholderText("wireless-mic").closest("form") as HTMLElement;
+    expect(within(form).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+    expect(within(form).getByText("The auto-generated component name's prefix. Leave blank to inherit the parent's.")).toBeTruthy();
+    expect(within(form).getByText("The compact hostname-render form (fp, cam, dsp). Leave blank to inherit.")).toBeTruthy();
+    expect(within(form).getByText("A glyph key. Leave blank to inherit.")).toBeTruthy();
+  });
+
   it("a shipped row offers Edit (the edit forks it) to a caller holding update, and none to a viewer", async () => {
     mount(admin);
     fireEvent.click(screen.getByText("Display"));
@@ -151,7 +200,7 @@ describe("ComponentTypes page", () => {
     expect(originOf("House Projector")).toBe("overridden");
   });
 
-  it("a forked shipped row offers Restore shipped, and a pristine one offers nothing to discard", async () => {
+  it("a forked shipped row offers Restore default, and a pristine one offers nothing to discard", async () => {
     let restored: string | undefined;
     vi.spyOn(globalThis, "confirm").mockReturnValue(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -170,7 +219,7 @@ describe("ComponentTypes page", () => {
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
-    expect(within(pristine).queryByText("Restore shipped")).toBeNull();
+    expect(within(pristine).queryByText("Restore default")).toBeNull();
     // A shipped row that is still pristine greys its destructive slot with the
     // official sentence: nothing to delete, nothing yet to discard.
     expect((within(pristine).getByLabelText("Delete") as HTMLButtonElement).disabled).toBe(true);
@@ -183,7 +232,7 @@ describe("ComponentTypes page", () => {
       return el as HTMLElement;
     });
     expect(within(forked).queryByLabelText("Delete")).toBeNull();
-    fireEvent.click(within(forked).getByText("Restore shipped"));
+    fireEvent.click(within(forked).getByText("Restore default"));
     await waitFor(() => expect(restored).toBeTruthy());
     expect(restored).toContain(`${uuidFor("ct-projector")}:restore`);
   });
@@ -212,23 +261,54 @@ describe("ComponentTypes page", () => {
     await waitFor(() => expect(sent).toBeTruthy());
     expect(sent).toMatchObject({ stem: "ceiling-mic" });
     expect(sent).not.toHaveProperty("parent_id");
-    // An inherited fact must ride as OMITTED, never as "". The columns are
-    // nullable and the server's walk treats only NULL as inherit while the
-    // patch coalesces, so an empty string would write a real value that stops
-    // the walk for this node and every descendant, silently and permanently.
-    // Ceiling Microphone carries no icon and no abbrev of its own, so those
-    // two are the inherited case.
-    expect(sent).not.toHaveProperty("icon");
-    expect(sent).not.toHaveProperty("abbrev");
-    expect(Object.values(sent as Record<string, unknown>)).not.toContain("");
+    // An empty box rides as the three-state string sentinel "" (#716), which
+    // is the wire's spelling of "this node declares no fact of its own": the
+    // patch routes all three through a CASE where "" clears to NULL, so the
+    // inheritance walk resumes at the nearest ancestor. This INVERTS what #677
+    // asserted here (an inherited fact rode as OMITTED, because the coalescing
+    // patch would otherwise have written a real empty value and stopped the
+    // walk). Ceiling Microphone carries no icon and no abbrev of its own, so
+    // those two are the empty-box case.
+    expect(sent).toMatchObject({ icon: "", abbrev: "" });
   });
 
-  // The second leg of #677: a custom child with no stem of its own is legal
-  // (the server requires a stem only on a root), but the patch body gives stem
-  // a minLength, so an empty string is a 422 before the handler runs. Such a
-  // row must stay editable from the console without inventing a stem it never
-  // wanted.
-  it("edits a custom child that has no stem of its own, sending no stem at all", async () => {
+  // The clearing move #716 exists for, and the one the console could not spell
+  // at all: a node that HAS its own fact is edited back to inheriting its
+  // parent's. Display carries a stem, an abbrev and an icon; emptying every box
+  // has to reach the server as the sentinel on each, not as a silent no-op that
+  // leaves the value the operator just deleted in place.
+  it("sends the sentinel for a fact the operator cleared back to inheriting", async () => {
+    let sent: unknown;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH" && req.url.includes("/component-types/")) {
+        sent = JSON.parse(await req.clone().text());
+        return new Response(JSON.stringify({}), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ component_types: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    mount();
+    fireEvent.click(screen.getByText("Display"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    for (const label of ["Stem", "Abbrev", "Icon"]) {
+      fireEvent.input(within(blade).getByLabelText(label) as HTMLInputElement, { target: { value: "" } });
+    }
+    fireEvent.click(within(blade).getByText("Save"));
+    await waitFor(() => expect(sent).toBeTruthy());
+    expect(sent).toMatchObject({ stem: "", abbrev: "", icon: "" });
+  });
+
+  // The second leg of #677, converted by #716: a custom child with no stem of
+  // its own is legal (the server requires a stem only on a root), and the empty
+  // box now rides as the sentinel rather than being dropped. It is a no-op
+  // against a column already NULL, and it is the same body a clear sends, which
+  // is the point: the console has one spelling for an empty box.
+  it("edits a custom child that has no stem of its own, sending the sentinel", async () => {
     let sent: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
@@ -249,8 +329,154 @@ describe("ComponentTypes page", () => {
     fireEvent.input(within(blade).getByLabelText("Display name") as HTMLInputElement, { target: { value: "Ceiling Mic" } });
     fireEvent.click(within(blade).getByText("Save"));
     await waitFor(() => expect(sent).toBeTruthy());
-    expect(sent).toMatchObject({ display_name: "Ceiling Mic" });
-    expect(sent).not.toHaveProperty("stem");
-    expect(Object.values(sent as Record<string, unknown>)).not.toContain("");
+    expect(sent).toMatchObject({ display_name: "Ceiling Mic", stem: "" });
+  });
+  // #716's console half: an emptied box has to say what it just fell back to.
+  //
+  // The values asserted here are the SERVER's (`inherited_stem` etc.), seeded
+  // with strings no client-side walk could produce, which is what makes this a
+  // test of the read model rather than of a TypeScript climb. #695 deleted that
+  // climb and #702 and #710 refused to bring it back; this closes the same gap
+  // for the two facts that had no served answer at all.
+  it("an inheriting box carries the value it would inherit, and the hint names the ancestor", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Ceiling Microphone"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    const stem = within(blade).getByLabelText("Stem") as HTMLInputElement;
+    expect(stem.value).toBe("");
+    expect(stem.placeholder).toBe("from-the-server");
+    // The box is empty, so the field IS taking its value from elsewhere right
+    // now, and the MARK is what says so. The hint says only what the fact is
+    // (#742): the sentence it used to append here restated the mark in the same
+    // field at the same instant. The conditional wording ("Empty inherits from")
+    // belongs to the state where the box holds a value of its own, and the two
+    // never overlap.
+    expect(within(blade).getByText("The auto-generated component name's prefix.")).toBeTruthy();
+    expect(within(blade).queryByText(/[Ii]nherit(ed|s) from/)).toBeNull();
+    expect(within(blade).getByRole("button", { name: "Stem is inherited from mic" })).toBeTruthy();
+    // The other two carry their own served answers rather than the stem's.
+    expect((within(blade).getByLabelText("Abbrev") as HTMLInputElement).placeholder).toBe("abbrev-from-the-server");
+    expect((within(blade).getByLabelText("Icon") as HTMLInputElement).placeholder).toBe("icon-from-the-server");
+  });
+
+  // The ancestor is read from the data, not described as "its parent": Ceiling
+  // Array's parent is Ceiling Microphone, and its stem comes from mic, two
+  // levels up. A hint that named the parent would send the operator to the
+  // wrong row to change it for everything below.
+  it("names the ancestor a fact actually came from, which may not be the parent", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Ceiling Array"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    // The stem states its own value here, so it gets the conditional sentence
+    // and no mark; the abbrev is inheriting, so it gets the mark and its hint
+    // says only what the fact is. One blade, both states, and the two ancestors
+    // are named from the data at two different distances up the chain: the stem
+    // by the sentence (`mic`, two levels up) and the abbrev by the mark
+    // (`ceiling-mic`, one).
+    expect(within(blade).getByText(/The auto-generated component name's prefix\. Empty inherits from mic\./)).toBeTruthy();
+    expect(within(blade).getByText("The compact hostname-render form (fp, cam, dsp).")).toBeTruthy();
+    expect(within(blade).getByRole("button", { name: "Abbrev is inherited from ceiling-mic" })).toBeTruthy();
+    expect(within(blade).queryByRole("button", { name: /^Stem is inherited from/ })).toBeNull();
+  });
+
+  // The placeholder answers "clear this box and you get what?", so it must be
+  // the ANCESTOR's value even while the row still states its own. A console
+  // that used the row's shown value would print the string the operator had
+  // just deleted back at them as the thing they were about to inherit.
+  it("a box that states its own value still offers the inherited one behind it", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Ceiling Array"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    const stem = within(blade).getByLabelText("Stem") as HTMLInputElement;
+    expect(stem.value).toBe("carray");
+    expect(stem.placeholder).toBe("from-the-server");
+    fireEvent.input(stem, { target: { value: "" } });
+    expect(stem.value).toBe("");
+    expect(stem.placeholder).toBe("from-the-server");
+  });
+
+  // Read mode is where the operator lands the moment Save leaves edit, so it
+  // has to answer the same question: before this it rendered an em dash and
+  // told them nothing about what they had just fallen back to.
+  //
+  // The ancestor is named by the MARK rather than by a sentence under the value
+  // (the sentence shipped in this wave and came out): the value line carries the
+  // value, the dot beside the label carries the relation, and it is the same dot
+  // in the same place the edit state shows.
+  it("reads an inheriting fact as the inherited value, marked with where it came from", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Ceiling Microphone"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    const stemFact = factOf(blade, "Stem");
+    expect(stemFact.textContent).toContain("from-the-server");
+    expect(within(stemFact).getByRole("button", { name: "Stem is inherited from mic" })).toBeTruthy();
+    expect(stemFact.textContent).not.toContain("inherited from");
+    // Not the em dash it used to be, which is the whole defect.
+    expect(stemFact.textContent).not.toContain("\u2014");
+  });
+
+  // A node with a fact of its own shows that fact normally: no attribution, and
+  // above all no LOCK. ADR-0104 gives the lock one meaning, the platform owns
+  // this value, and an inherited fact is one an operator MAY set, which is the
+  // opposite. The pen's two buttons are named here so borrowing either one
+  // fails.
+  it("shows a fact the row states normally, with no inheritance marker and no lock", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Ceiling Array"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    const stemFact = factOf(blade, "Stem");
+    expect(stemFact.textContent).toContain("carray");
+    expect(within(stemFact).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+    // Its abbrev IS inheriting, on the same blade, so the absence above is a
+    // per-field answer rather than a blade with the feature switched off.
+    expect(
+      within(factOf(blade, "Abbrev")).getByRole("button", { name: "Abbrev is inherited from ceiling-mic" }),
+    ).toBeTruthy();
+    expect(within(blade).queryByLabelText(/^Override the /)).toBeNull();
+    expect(within(blade).queryByLabelText(/^Restore the .* to default$/)).toBeNull();
+  });
+
+  // A root has nothing above it, so there is no inherited value to offer and no
+  // ancestor to name. The field must not invent either.
+  it("offers no inherited value on a root, which has nothing above it", async () => {
+    mount();
+    fireEvent.click(screen.getByText("Display"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    const stem = within(blade).getByLabelText("Stem") as HTMLInputElement;
+    fireEvent.input(stem, { target: { value: "" } });
+    expect(stem.placeholder).toBe("");
+    expect(within(blade).queryByText(/inherits from/)).toBeNull();
+    expect(within(blade).getByText(/The auto-generated component name's prefix\. Nothing above this states one\./)).toBeTruthy();
+    // An empty box on a root is genuinely empty, not inheriting, so there is
+    // nothing for the mark to point at and it must not invent one.
+    expect(within(blade).queryByRole("button", { name: /is inherited from/ })).toBeNull();
   });
 });

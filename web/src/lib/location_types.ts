@@ -33,6 +33,26 @@ export type NameRule = {
   bare_first?: boolean;
 };
 
+// NameRuleRead is a rule as it comes BACK: the declaration plus `examples`, the
+// first two names the rule actually mints, produced server-side by the same mint
+// a create allocates from (#710).
+//
+// The console reads those strings and never rebuilds them. That is the rule #695
+// tracked and #702 settled for the drafted name: a shape implemented twice, once
+// in Go and once here, eventually disagrees, and the failure an operator meets is
+// a name they were promised that no create produces. So nothing in `web/` knows
+// that a counted name is "<stem>-<n>", and a change to the mint reaches every
+// surface without a TypeScript edit.
+export type NameRuleRead = NameRule & { examples: string[] };
+
+// toNameRuleRead normalizes the generated shape's nullable list into the one the
+// console reads: an absent `examples` is a server that did not answer, which the
+// naming summary says less about rather than filling in itself.
+function toNameRuleRead(r: { stem: string; bare_first?: boolean; examples?: string[] | null } | undefined): NameRuleRead | undefined {
+  if (!r) return undefined;
+  return { stem: r.stem, bare_first: r.bare_first, examples: r.examples ?? [] };
+}
+
 export type LocationType = {
   // The uuid, the stable handle that survives a rename; name is the kebab
   // handle the rest of the estate stores and compares (ADR-0062), so
@@ -54,9 +74,9 @@ export type LocationType = {
   // unconstrained. Drives the reparent picker's candidate filter.
   allowed_parent_types: string[];
   // How the platform names locations of this type, absent when an operator
-  // names every one of them. The create form reads it to show what a nameless
-  // create would be called (lib/namegen.ts).
-  name_rule?: NameRule;
+  // names every one of them. Carries the names it mints beside the declaration,
+  // so a surface shows what a rule produces without restating the shape.
+  name_rule?: NameRuleRead;
 };
 
 // The one cache key for the registry, shared by the LocationTypes page and the
@@ -74,7 +94,7 @@ export async function listLocationTypes(): Promise<LocationType[]> {
     forked: t.forked,
     icon: t.icon,
     allowed_parent_types: t.allowed_parent_types ?? [],
-    name_rule: t.name_rule,
+    name_rule: toNameRuleRead(t.name_rule),
   }));
 }
 
@@ -106,17 +126,17 @@ export type UpdateLocationType = {
   name_rule?: NameRule;
 };
 
+// LOCATION_TYPE_PATCH_FIELDS is every field the blade writes, in the order the
+// server lists them (storage.LocationTypePatchFields, minus label_rule, which
+// this surface does not edit). The blade names all of them in update_mask on the
+// one write that CLEARS the rule: the mask governs the whole write, so a mask
+// naming name_rule alone would silently drop the display name and icon edited
+// beside it.
+export const LOCATION_TYPE_PATCH_FIELDS = ["display_name", "icon", "allowed_parent_types", "name_rule"] as const;
+
 export async function updateLocationType(id: string, body: UpdateLocationType): Promise<void> {
   const { error } = await api.PATCH("/location-types/{id}", { params: { path: { id } }, body });
   if (error) throw error;
-}
-
-// clearNameRule turns a type's location naming back off, the one spelling of it
-// (#692): name name_rule in the mask and send no rule. On a SHIPPED type this
-// forks the row, on the operator's own it writes null, and the operator sees
-// one behavior either way.
-export async function clearNameRule(id: string): Promise<void> {
-  await updateLocationType(id, { update_mask: ["name_rule"] });
 }
 
 // restoreLocationType discards the operator's fork of a shipped row, so reads

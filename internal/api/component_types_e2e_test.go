@@ -16,19 +16,25 @@ import (
 // componentTypeWire is the decoded component_type wire shape for the e2e
 // assertions.
 type componentTypeWire struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	DisplayName  string   `json:"display_name"`
-	Stem         string   `json:"stem"`
-	Icon         string   `json:"icon"`
-	ResolvedIcon string   `json:"resolved_icon"`
-	Abbrev       string   `json:"abbrev"`
-	LabelRule    string   `json:"label_rule"`
-	DefaultTags  []string `json:"default_tags"`
-	Official     bool     `json:"official"`
-	Forked       bool     `json:"forked"`
-	ParentID     string   `json:"parent_id"`
-	Parent       string   `json:"parent"`
+	ID                    string   `json:"id"`
+	Name                  string   `json:"name"`
+	DisplayName           string   `json:"display_name"`
+	Stem                  string   `json:"stem"`
+	Icon                  string   `json:"icon"`
+	ResolvedIcon          string   `json:"resolved_icon"`
+	InheritedStem         string   `json:"inherited_stem"`
+	InheritedStemSource   string   `json:"inherited_stem_source"`
+	InheritedIcon         string   `json:"inherited_icon"`
+	InheritedIconSource   string   `json:"inherited_icon_source"`
+	InheritedAbbrev       string   `json:"inherited_abbrev"`
+	InheritedAbbrevSource string   `json:"inherited_abbrev_source"`
+	Abbrev                string   `json:"abbrev"`
+	LabelRule             string   `json:"label_rule"`
+	DefaultTags           []string `json:"default_tags"`
+	Official              bool     `json:"official"`
+	Forked                bool     `json:"forked"`
+	ParentID              string   `json:"parent_id"`
+	Parent                string   `json:"parent"`
 }
 
 // TestComponentTypesAPI drives the component_type registry over HTTP: list

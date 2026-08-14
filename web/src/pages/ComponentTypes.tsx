@@ -5,6 +5,7 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
 import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
+import InheritedField from "../components/InheritedField";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
@@ -21,7 +22,7 @@ import {
   restoreComponentType,
 } from "../lib/component_types";
 import { useMe, can } from "../lib/auth";
-import { registryLock, registryOrigin } from "../lib/catalog";
+import { inheritedFact, registryLock, registryOrigin } from "../lib/catalog";
 import { createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -205,26 +206,25 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      // An empty box means "this node inherits", which on the wire is the field
-      // OMITTED, never an empty string. The three inherited facts are nullable
-      // and the walk treats only NULL as inherit (resolveTypeFacts), while the
-      // patch coalesces, so sending "" would write a real empty value that
-      // STOPS the walk for this node and every descendant under it. That is
-      // silent and permanent, and it lands on the facts the generated name and
-      // the abbrev-compacted render read. `stem` would also 422 outright on a
-      // child that legitimately has none, since it carries a minLength.
+      // An empty box means "this node declares no fact of its own, inherit the
+      // nearest ancestor's", and the wire spells that with the empty string
+      // (#716): the patch routes all three through a CASE where "" clears the
+      // column to NULL, which is the state resolveTypeFacts's walk reads as
+      // inherit. Sending `undefined` instead is what this used to do, and it
+      // made the clear inexpressible: the coalescing patch kept the old value
+      // and the console silently retained a fact the operator had just deleted.
       //
-      // Clearing a fact back to inherit is therefore not expressible here yet.
-      // The instrument for it is the house three-state string sentinel already
-      // live on label_rule in this same handler ("" clears to NULL), not the
-      // update_mask, which ADR-0106 scopes to nullable OBJECT fields. Tracked
-      // in #716 rather than papered over with a sentinel this route does not
-      // yet honour on these three columns.
+      // The sentinel, not the update_mask: ADR-0106 scopes mask-with-no-value to
+      // nullable OBJECT fields, on the ground that an object has no empty value
+      // to overload, and ADR-0091 keeps the sentinel for strings.
+      //
+      // Emptying a ROOT type's stem is refused (422), since a root has no
+      // ancestor to inherit one from; the message lands in the blade's alert.
       await updateComponentType(r.id, {
         display_name: displayName(),
-        stem: stem().trim() || undefined,
-        abbrev: abbrev().trim() || undefined,
-        icon: icon().trim() || undefined,
+        stem: stem().trim(),
+        abbrev: abbrev().trim(),
+        icon: icon().trim(),
       });
       await qc.invalidateQueries({ queryKey: COMPONENT_TYPES_KEY });
     } catch (e) {
@@ -245,7 +245,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
       if (!r) return undefined;
       if (r.official) {
         return r.forked && can(me.data, "component_type", "update")
-          ? { label: "Restore shipped", tone: "danger" as const, onClick: restoreType }
+          ? { label: "Restore default", tone: "danger" as const, onClick: restoreType }
           : undefined;
       }
       return can(me.data, "component_type", "delete")
@@ -276,32 +276,36 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
             draft={displayName}
             onInput={setDisplayName}
           />
-          <BladeField
+          {/*
+            The three inherited facts, each showing what it would inherit rather
+            than only announcing that it inherits something (#716). The values
+            and the ancestors come off the row the listing served; nothing here
+            climbs the type chain, which is what #695 deleted and #702 and #710
+            refused to reintroduce.
+          */}
+          <InheritedField
             label="Stem"
-            mono
-            placeholder="inherits from its parent"
             value={() => r().stem ?? ""}
             draft={stem}
             onInput={setStem}
-            hint="The auto-generated component name's prefix. Empty inherits the nearest ancestor's."
+            inherited={() => inheritedFact(r(), "stem")}
+            hint="The auto-generated component name's prefix."
           />
-          <BladeField
+          <InheritedField
             label="Abbrev"
-            mono
-            placeholder="inherits from its parent"
             value={() => r().abbrev ?? ""}
             draft={abbrev}
             onInput={setAbbrev}
-            hint="The compact hostname-render form (fp, cam, dsp). Empty inherits."
+            inherited={() => inheritedFact(r(), "abbrev")}
+            hint="The compact hostname-render form (fp, cam, dsp)."
           />
-          <BladeField
+          <InheritedField
             label="Icon"
-            mono
-            placeholder="inherits from its parent"
             value={() => r().icon ?? ""}
             draft={icon}
             onInput={setIcon}
-            hint="A glyph key. Empty inherits the nearest ancestor's."
+            inherited={() => inheritedFact(r(), "icon")}
+            hint="A glyph key."
           />
         </div>
       )}

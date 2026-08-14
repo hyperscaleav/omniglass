@@ -15,15 +15,17 @@ import (
 // They exist for different reasons rather than by accident. ResolveTypeFacts
 // reads one node at a time through a caller's own querier, because the name
 // generator and the label renderer resolve facts INSIDE a transaction and have
-// to see the write still in flight. ResolvedComponentTypeIcons is a pure pass
+// to see the write still in flight. ComponentTypeChainFacts is a pure pass
 // over a listing the caller already holds, because resolving per row on a list
 // read would turn one query into one per row per level.
 //
-// What must never differ is the ANSWER. The console reads the listing's icon
+// What must never differ is the ANSWER. The console reads the listing's facts
 // and the write paths read the query walk's, so a disagreement between them is
 // the same defect #695 closed across the language boundary, reopened inside one
 // package. This runs both over the whole seeded registry, every row, and
-// compares. It is the test that permits the duplication.
+// compares ALL THREE inherited facts (#716 widened the listing walk from the
+// icon to the stem and the abbrev, so the agreement has to widen with it). It
+// is the test that permits the duplication.
 func TestBothTypeChainWalksAgreeOnEverySeededRow(t *testing.T) {
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
@@ -42,14 +44,21 @@ func TestBothTypeChainWalksAgreeOnEverySeededRow(t *testing.T) {
 	if len(cts) == 0 {
 		t.Fatal("no seeded component types")
 	}
-	icons := storage.ResolvedComponentTypeIcons(cts)
+	facts := storage.ComponentTypeChainFacts(cts)
 	for _, ct := range cts {
-		_, want, _, _, err := gw.ResolveTypeFacts(ctx, ct.ID)
+		wantStem, wantIcon, wantAbbrev, _, err := gw.ResolveTypeFacts(ctx, ct.ID)
 		if err != nil {
 			t.Fatalf("ResolveTypeFacts(%s): %v", ct.Name, err)
 		}
-		if got := icons[ct.ID]; got != want {
-			t.Errorf("component_type %s: the listing resolves icon %q, the query walk resolves %q", ct.Name, got, want)
+		got := facts[ct.ID]
+		if got.Stem.Shown != wantStem {
+			t.Errorf("component_type %s: the listing resolves stem %q, the query walk resolves %q", ct.Name, got.Stem.Shown, wantStem)
+		}
+		if got.Icon.Shown != wantIcon {
+			t.Errorf("component_type %s: the listing resolves icon %q, the query walk resolves %q", ct.Name, got.Icon.Shown, wantIcon)
+		}
+		if got.Abbrev.Shown != wantAbbrev {
+			t.Errorf("component_type %s: the listing resolves abbrev %q, the query walk resolves %q", ct.Name, got.Abbrev.Shown, wantAbbrev)
 		}
 	}
 
@@ -60,14 +69,21 @@ func TestBothTypeChainWalksAgreeOnEverySeededRow(t *testing.T) {
 	if len(sts) == 0 {
 		t.Fatal("no seeded system types")
 	}
-	sicons := storage.ResolvedSystemTypeIcons(sts)
+	sfacts := storage.SystemTypeChainFacts(sts)
 	for _, st := range sts {
-		_, want, _, err := gw.ResolveSystemTypeFacts(ctx, st.ID)
+		wantStem, wantIcon, wantAbbrev, err := gw.ResolveSystemTypeFacts(ctx, st.ID)
 		if err != nil {
 			t.Fatalf("ResolveSystemTypeFacts(%s): %v", st.Name, err)
 		}
-		if got := sicons[st.ID]; got != want {
-			t.Errorf("system_type %s: the listing resolves icon %q, the query walk resolves %q", st.Name, got, want)
+		got := sfacts[st.ID]
+		if got.Stem.Shown != wantStem {
+			t.Errorf("system_type %s: the listing resolves stem %q, the query walk resolves %q", st.Name, got.Stem.Shown, wantStem)
+		}
+		if got.Icon.Shown != wantIcon {
+			t.Errorf("system_type %s: the listing resolves icon %q, the query walk resolves %q", st.Name, got.Icon.Shown, wantIcon)
+		}
+		if got.Abbrev.Shown != wantAbbrev {
+			t.Errorf("system_type %s: the listing resolves abbrev %q, the query walk resolves %q", st.Name, got.Abbrev.Shown, wantAbbrev)
 		}
 	}
 }

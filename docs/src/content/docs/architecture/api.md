@@ -144,16 +144,20 @@ sets: `moveComponentInput`, a system's `standard`) is untouched and stays the id
 string. The mask is what generalizes clearing to everything that is not a string; retiring the
 sentinel in its favor is a separate ripple, not folded in here.
 
-That cuts both ways, and the **inherited registry facts** are where it currently bites. A
-`component_type` or `system_type` stores `stem`, `abbrev`, `icon` and `label_rule` as nullable
-strings where NULL means "inherit from the nearest ancestor that sets one". Only `label_rule` honors
-the sentinel (its patch clears on `""`); the other three still `coalesce`, so `""` writes a real
-empty value that stops the inheritance walk for that node and every descendant. Until they adopt the
-sentinel too ([#716](https://github.com/hyperscaleav/omniglass/issues/716)), an inherited fact rides
-as **omitted**, never as `""`, and both edit blades send `undefined` for an empty box. The
-instrument for the missing capability is the sentinel these columns already document elsewhere, not
-the mask: a nullable string has an empty value to overload, which is the exact distinction ADR-0106
-draws when it sends objects to the mask instead.
+The **inherited registry facts** are where that pays off. A `component_type` or `system_type` stores
+`stem`, `abbrev`, `icon` and `label_rule` as nullable strings where NULL means "inherit from the
+nearest ancestor that sets one", so each of the four has a clear state, and all four spell it the
+same way ([#716](https://github.com/hyperscaleav/omniglass/issues/716)): omit the field and it is
+unchanged, send `""` and the column goes back to NULL so the walk resumes, send a value and it sets.
+Both edit blades send `""` for an empty box, which is what makes an emptied box mean what it
+displays. The instrument is the sentinel rather than the mask because a nullable string has an empty
+value to overload, the exact distinction ADR-0106 draws when it sends objects to the mask instead.
+
+Two things the clear does not do. `stem` keeps its character rule on the patch, now written
+`^([a-z0-9][a-z0-9-]*)?$` with `minLength` gone, so `""` is admitted and every malformed stem is
+still a 422; only the clear got in, not a relaxation. And a **root** type cannot clear its stem:
+there is no ancestor behind it, so the refusal that guards create guards the clear, 422 naming the
+reason.
 
 **Clearing a nullable OBJECT field is the mask, always** (`name_rule` is the first,
 [ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask)).
@@ -168,7 +172,19 @@ PATCH /location-types/{id}
 ```
 
 Sending the `null` is optional and reads well; the mask is what carries the intent. This is the
-convention for every nullable object field that follows, not a `name_rule` special case.
+convention for every nullable object field that follows, not a `name_rule` special case. The mask
+governs the **whole write**, so a caller changing other fields in the same request names those too
+(`["display_name", "icon", "allowed_parent_types", "name_rule"]`) rather than the cleared field
+alone, which would silently leave the rest unwritten. The console's location type blade does exactly
+that when an operator turns naming off while editing something else.
+
+A `name_rule` also reads back with **`examples`**, the first two names it mints, produced by the same
+mint a create allocates from. It is served rather than derived by a surface for the reason the
+resolved icon and the drafted name are
+([ADR-0104](/architecture/decisions/#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)):
+a shape implemented twice eventually disagrees, and here the wrong answer would be a name an operator
+was promised that no create produces. It is a fact about the RULE and not the estate, so it costs no
+read, reserves no ordinal, and needs no scope.
 
 Built on the role declarations (`PATCH /standards/{id}/roles/{role}`, `PATCH
 /systems/{name}/roles/{role}`) and adopted by `PATCH /location-types/{id}`. The other `PATCH` routes
