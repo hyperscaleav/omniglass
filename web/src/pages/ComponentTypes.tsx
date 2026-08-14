@@ -73,20 +73,15 @@ function NameCell(p: { row: ComponentType & { depth: number } }): JSX.Element {
 }
 
 // The Icon cell resolves through the same InheritedCell the other two inherited
-// facts use. It has shown the server's resolved glyph since #695 and said
-// nothing about where the glyph came from, so it rendered an inherited value
-// exactly as it rendered a stated one; once Stem and Abbrev tell the two apart
-// (#743) it would be the only column left conflating them. The GLYPH still comes
-// from `resolved_icon` (what the row shows) and the mark from `inherited_icon`
-// (what an emptied box would take), which are the same string on a row stating
-// no icon of its own.
+// facts use. It has shown the server's resolved glyph since #695, saying nothing
+// about where the glyph came from, and that is the treatment Stem and Abbrev now
+// MATCH (#743): a table shows the value, and the blade is where its origin is
+// explained.
 function IconCell(p: { row: ComponentType; resolvedIcon: string }): JSX.Element {
   return (
     <InheritedCell
-      label="Icon"
       own={p.row.icon}
-      inherited={inheritedFact(p.row, "icon")}
-      shown={p.resolvedIcon}
+      resolved={p.resolvedIcon}
       leading={<Dynamic component={resolveIcon(p.resolvedIcon)} size={14} />}
     />
   );
@@ -108,11 +103,13 @@ export default function ComponentTypes() {
     // Parent is the row's own fact and never inherits: it IS the edge the other
     // three facts inherit along.
     { key: "parent", label: "Parent", width: "140px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.parent ?? EMPTY_VALUE}</span> },
-    // Stem and Abbrev show what the row TAKES when it states nothing, marked
-    // with where it came from (#743). Before this they showed an em dash on
-    // exactly the rows whose blade, two clicks away, showed the value.
-    { key: "stem", label: "Stem", width: "110px", cell: (r) => <InheritedCell label="Stem" own={r.stem} inherited={inheritedFact(r, "stem")} /> },
-    { key: "abbrev", label: "Abbrev", width: "90px", cell: (r) => <InheritedCell label="Abbrev" own={r.abbrev} inherited={inheritedFact(r, "abbrev")} /> },
+    // Stem and Abbrev show what the row TAKES when it states nothing, and show
+    // it undifferentiated (#743). Before this they showed an em dash on exactly
+    // the rows whose blade, two clicks away, showed the value. Where it came
+    // from is the blade's answer, not a table's: no provenance mark belongs in
+    // a row.
+    { key: "stem", label: "Stem", width: "110px", cell: (r) => <InheritedCell own={r.stem} resolved={inheritedFact(r, "stem").value} /> },
+    { key: "abbrev", label: "Abbrev", width: "90px", cell: (r) => <InheritedCell own={r.abbrev} resolved={inheritedFact(r, "abbrev").value} /> },
     { key: "icon", label: "Icon", width: "150px", cell: (r) => <IconCell row={r} resolvedIcon={r.resolved_icon || "box"} /> },
     { key: "official", label: "Origin", width: "110px", sortVal: (r) => registryOrigin(r), cell: (r) => originBadge(r) },
   ];

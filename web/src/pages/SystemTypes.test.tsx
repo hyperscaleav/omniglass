@@ -113,35 +113,47 @@ describe("SystemTypes page", () => {
     const stem = cellOf(row, "Stem");
     expect(stem.textContent).toContain("stem-from-the-server");
     expect(stem.textContent).not.toContain("\u2014");
-    expect(within(stem).getByRole("button", { name: "Stem is inherited from room" })).toBeTruthy();
     const abbrev = cellOf(row, "Abbrev");
     expect(abbrev.textContent).toContain("abbrev-from-the-server");
-    expect(within(abbrev).getByRole("button", { name: "Abbrev is inherited from av" })).toBeTruthy();
+    expect(abbrev.textContent).not.toContain("\u2014");
   });
 
-  // Both values in these columns are muted already, so the DOT is the whole
-  // distinction. One table, one column, both states.
-  it("marks an inherited value and leaves a stated one unmarked, in the same column", () => {
+  // A stated value and an inherited one render IDENTICALLY in a table: the mark
+  // is a blade and detail affordance, because a table is for scanning values and
+  // the blade is where a value's origin is explained. One table, one column,
+  // both states, nothing telling them apart.
+  it("renders an inherited value exactly as a stated one, in the same column", () => {
     mount();
     const stated = cellOf(rowFor("Lab"), "Stem");
     expect(stated.textContent).toContain("lab");
     expect(within(stated).queryByRole("button", { name: /is inherited from/ })).toBeNull();
     const inherited = cellOf(rowFor("Studio"), "Stem");
-    expect(within(inherited).getByRole("button", { name: "Stem is inherited from room" })).toBeTruthy();
+    expect(inherited.textContent).toContain("stem-from-the-server");
+    expect(within(inherited).queryByRole("button", { name: /is inherited from/ })).toBeNull();
   });
 
-  // The Icon cell has shown the resolved glyph since #695 and never said where
-  // it came from. Boardroom is the control: it states no icon and the server
-  // served it no inherited answer, so the cell names what it shows and marks
+  // The Icon cell has shown the resolved glyph since #695 without saying where
+  // it came from, which is the treatment the other two now match. Boardroom is
+  // the control: it states no icon and the server served it no inherited answer,
+  // so the cell names what it shows and, like every other cell, attributes
   // nothing.
-  it("marks an inherited icon too, and marks nothing where no ancestor was named", () => {
+  it("shows an inherited icon as plainly as a resolved one with no ancestor named", () => {
     mount();
-    const marked = cellOf(rowFor("Studio"), "Icon");
-    expect(marked.textContent).toContain("icon-from-the-server");
-    expect(within(marked).getByRole("button", { name: "Icon is inherited from av" })).toBeTruthy();
-    const unmarked = cellOf(rowFor("Boardroom"), "Icon");
-    expect(unmarked.textContent).toContain("door-open");
-    expect(within(unmarked).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+    const inherited = cellOf(rowFor("Studio"), "Icon");
+    expect(inherited.textContent).toContain("icon-from-the-server");
+    expect(within(inherited).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+    const unattributed = cellOf(rowFor("Boardroom"), "Icon");
+    expect(unattributed.textContent).toContain("door-open");
+    expect(within(unattributed).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+  });
+
+  // The guard for the ruling, asked of the WHOLE table rather than of the two
+  // columns that changed. The blade's own marks are asserted below and are
+  // untouched, so this is a statement about the surface, not about the feature.
+  it("puts no provenance mark anywhere in the table, which is a blade affordance", () => {
+    mount();
+    const table = screen.getAllByRole("table")[0];
+    expect(within(table).queryAllByRole("button", { name: /is inherited from/ })).toHaveLength(0);
   });
 
   it("shows New system type only for a caller holding system_type:create", () => {

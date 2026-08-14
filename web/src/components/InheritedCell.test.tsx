@@ -3,97 +3,78 @@ import { render } from "@solidjs/testing-library";
 import InheritedCell from "./InheritedCell";
 import { EMPTY_VALUE } from "./BladeField";
 
-// InheritedCell is the list-side half of the console's inheritance vocabulary
-// (#743). Its whole job is to answer, per cell, which of three states a fact is
-// in: stated here, taken from somewhere above, or absent everywhere. The three
-// have to be told apart in a table cell with no room for a hint line and no
-// per-row label to hang a mark beside.
+// InheritedCell is the list-side render of a fact that inherits (#743). Its job
+// is one fallback chain, in one place instead of at six cells across two
+// registries: the row's own value, else what the server resolved for it, else
+// the em dash.
+//
+// It says NOTHING about where the value came from, and every assertion about a
+// mark below is an assertion of ABSENCE. That is the ruling, not an omission: a
+// table is for scanning values, and the blade is where a value's origin is
+// explained, so the provenance mark is a blade and detail affordance only.
 describe("InheritedCell", () => {
-  it("shows the row's own value, unmarked", () => {
+  it("shows the row's own value", () => {
     const { container, queryByRole } = render(() => (
-      <InheritedCell label="Stem" own="carray" inherited={{ value: "from-above", from: "mic" }} />
+      <InheritedCell own="carray" resolved="from-above" />
     ));
     expect(container.textContent).toContain("carray");
-    // The inherited value is what the cell would show if the row stated none, so
+    // The resolved value is what the cell would show if the row stated none, so
     // it must not leak into a cell whose row states one.
     expect(container.textContent).not.toContain("from-above");
     expect(queryByRole("button", { name: /is inherited from/ })).toBeNull();
   });
 
-  it("shows the value a stating-nothing row takes, marked with the ancestor it came from", () => {
-    const { container, getByRole } = render(() => (
-      <InheritedCell label="Stem" own={undefined} inherited={{ value: "from-above", from: "mic" }} />
+  it("shows the value a stating-nothing row takes, rather than an em dash", () => {
+    const { container, queryByRole } = render(() => (
+      <InheritedCell own={undefined} resolved="from-above" />
     ));
     expect(container.textContent).toContain("from-above");
     expect(container.textContent).not.toContain(EMPTY_VALUE);
-    // The mark states the whole fact in its accessible NAME, not only on hover:
-    // a column of dots readable only with a mouse is a column of noise.
-    expect(getByRole("button", { name: "Stem is inherited from mic" })).toBeTruthy();
+    // No mark, and no hover affordance of any kind: this is the whole of the
+    // departure from the blade, which marks the same fact and names its
+    // ancestor.
+    expect(queryByRole("button", { name: /is inherited from/ })).toBeNull();
   });
 
   // The em dash keeps its one meaning. Removing it outright would be #743's
-  // defect pointed the other way, a cell claiming a value that does not exist.
+  // defect pointed the other way, a cell asserting a value that does not exist.
   it("reads an em dash when the row states nothing and nothing above it does", () => {
-    const { container, queryByRole } = render(() => (
-      <InheritedCell label="Abbrev" own={undefined} inherited={{ value: "", from: "" }} />
-    ));
+    const { container } = render(() => <InheritedCell own={undefined} resolved="" />);
     expect(container.textContent).toContain(EMPTY_VALUE);
-    expect(queryByRole("button", { name: /is inherited from/ })).toBeNull();
   });
 
   // An empty string is the wire's spelling of "this node declares no fact of its
-  // own" (#716), so it has to read as inheriting exactly as an absent field does.
+  // own" (#716), so it has to fall back exactly as an absent field does.
   it("treats an empty own value as stating nothing, the way the wire spells it", () => {
-    const { getByRole } = render(() => (
-      <InheritedCell label="Abbrev" own="" inherited={{ value: "from-above", from: "ceiling-mic" }} />
-    ));
-    expect(getByRole("button", { name: "Abbrev is inherited from ceiling-mic" })).toBeTruthy();
+    const { container } = render(() => <InheritedCell own="" resolved="from-above" />);
+    expect(container.textContent).toContain("from-above");
   });
 
-  // The Icon column is the one fact the server answers twice: `resolved_icon` is
-  // what the row SHOWS and `inherited_icon` is what an emptied box would take.
-  // The cell renders the first and marks from the second.
-  it("shows the caller's resolved text while marking from the inherited answer", () => {
-    const { container, getByRole } = render(() => (
-      <InheritedCell
-        label="Icon"
-        own={undefined}
-        inherited={{ value: "inherited-answer", from: "av" }}
-        shown="resolved-answer"
-        leading={<svg data-testid="glyph" />}
-      />
+  // The Icon column passes `resolved_icon` (what the row SHOWS) rather than
+  // `inherited_icon` (what an emptied box would take), and renders its glyph
+  // ahead of the text.
+  it("shows the caller's resolved text behind an optional leading glyph", () => {
+    const { container } = render(() => (
+      <InheritedCell own={undefined} resolved="resolved-answer" leading={<svg data-testid="glyph" />} />
     ));
     expect(container.textContent).toContain("resolved-answer");
-    expect(container.textContent).not.toContain("inherited-answer");
-    expect(getByRole("button", { name: "Icon is inherited from av" })).toBeTruthy();
     expect(container.querySelector('[data-testid="glyph"]')).toBeTruthy();
   });
 
-  // The console's DEFAULT glyph is not an inherited value: a chain that states
-  // no icon anywhere resolves to "box", which came from nowhere and must carry
-  // no mark pointing at a row that never supplied it.
-  it("marks nothing when the caller's resolved text came from no ancestor", () => {
-    const { container, queryByRole } = render(() => (
-      <InheritedCell label="Icon" own={undefined} inherited={{ value: "", from: "" }} shown="box" />
-    ));
-    expect(container.textContent).toContain("box");
-    expect(queryByRole("button", { name: /is inherited from/ })).toBeNull();
-  });
-
-  // Every value in these columns is muted already, so the mark is the whole
-  // distinction: an inherited value is not dimmed further, because `/40` is what
-  // this console gives an ABSENT value and borrowing it would make "comes from
-  // elsewhere" look like "nothing here".
-  it("gives a stated and an inherited value the same muted treatment", () => {
-    const stated = render(() => (
-      <InheritedCell label="Stem" own="carray" inherited={{ value: "from-above", from: "mic" }} />
-    ));
-    const inherited = render(() => (
-      <InheritedCell label="Stem" own={undefined} inherited={{ value: "from-above", from: "mic" }} />
-    ));
-    const classOf = (root: HTMLElement) =>
-      (Array.from(root.querySelectorAll("span")).find((s) => s.className.includes("font-data")) as HTMLElement).className;
-    expect(classOf(inherited.container)).toBe(classOf(stated.container));
-    expect(classOf(stated.container)).toContain("text-base-content/60");
+  // THE rule this component exists to hold, after the ruling that kept the mark
+  // out of a table: a stated value and an inherited one are rendered
+  // identically. It is not a consequence of dropping the mark, it is the
+  // treatment, so it is asserted rather than left to be noticed.
+  it("renders a stated and an inherited value identically", () => {
+    const stated = render(() => <InheritedCell own="carray" resolved="from-above" />);
+    const inherited = render(() => <InheritedCell own={undefined} resolved="from-above" />);
+    const cellOf = (root: HTMLElement) =>
+      Array.from(root.querySelectorAll("span")).find((s) => s.className.includes("font-data")) as HTMLElement;
+    expect(cellOf(inherited.container).className).toBe(cellOf(stated.container).className);
+    expect(cellOf(stated.container).className).toContain("text-base-content/60");
+    // Nothing else separates them either: no mark on one and not the other, and
+    // no extra node on either.
+    expect(inherited.container.querySelectorAll("button")).toHaveLength(0);
+    expect(stated.container.querySelectorAll("button")).toHaveLength(0);
   });
 });

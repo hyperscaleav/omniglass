@@ -5101,27 +5101,30 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   registries' BLADE to show the value a row inherits and name the ancestor it came from. The LIST
   went on rendering an em dash in the Stem and Abbrev cells for exactly those rows, so the console
   asserted a value was absent on one surface and showed it on another, two clicks apart. Both cells
-  now render the inherited value, marked with the same teal dot.
+  now render the value the row takes.
 
   No new query: `inherited_stem`, `inherited_abbrev` and their `_source` fields already ride the
   listing (ADR-0115), which is also the blade's read, so this is a rendering change over rows already
   in hand.
 
-  The mark **trails the value** here, which scopes ADR-0115's beside-the-label placement rather than
-  reversing it: a table's label is in the header, one per column instead of one per row, so there is
-  no per-row label to share and the read-versus-edit argument has nothing to bite on. The dot carries
-  the distinction ALONE, because dimming is already spent: every value in these columns is muted
-  (`text-base-content/60`), so telling an inherited one apart by dimming would mean either brightening
-  every stated value, a change to rows that are not the subject, or borrowing the `/40` this console
-  gives an ABSENT value, which would make "comes from elsewhere" read as "nothing here".
+  **The value only: the provenance mark stays a blade and detail affordance.** A table is for
+  scanning values, and the blade is where a value's origin is explained; a reader running down the
+  Stem column is answering "what is this type's stem", and a per-row attribution would charge them
+  for a question they did not ask. So a stated value and an inherited one render **identically** in a
+  table, which is the treatment rather than an omission and is asserted as such. It settles the
+  dimming question with it: every value in these columns is `text-base-content/60` already, and
+  nothing separates them further.
 
-  The **Icon** cell is brought along rather than kept as precedent. It has rendered `resolved_icon`
-  since #695 with no distinction at all, so it presented an inherited glyph exactly as a stated one;
-  once the two columns beside it tell the two apart, it is the only one left conflating them. It keeps
-  `resolved_icon` as its text (what the row SHOWS) and takes its ancestor from `inherited_icon_source`,
-  which are the same answer on any row stating no icon of its own. One `InheritedCell` primitive holds
-  all six cells across the two registries, and the em dash keeps its one meaning for a row that states
-  nothing with nothing above it.
+  The **Icon** cell is the precedent the other two MATCH. It has rendered `resolved_icon` since #695
+  with no attribution at all, which is the house treatment for a table; Stem and Abbrev join it, and
+  the Icon column changes only in that its fallback chain now lives in the shared cell. One
+  `InheritedCell` holds all six cells across the two registries, with one chain (the row's own value,
+  else what the server resolved for it, else the em dash), and the em dash keeps its one meaning for
+  a row that states nothing with nothing above it.
+
+  The first cut of this slice put the mark in the cells, trailing the value, and was reversed on
+  review before merge; the entry above records what shipped, and ADR-0115's third amendment records
+  the reasoning.
 - **A restore clears the drafts it just discarded**
   ([#741](https://github.com/hyperscaleav/omniglass/issues/741)). A registry blade seeded its edit
   drafts once, on entering edit. `:restore` discards an operator's fork, so the row changes

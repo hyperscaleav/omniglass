@@ -132,31 +132,44 @@ describe("ComponentTypes page", () => {
     expect(abbrev.textContent).not.toContain("\u2014");
   });
 
-  // Both values in these columns are muted already, so the DOT is the whole
-  // distinction (#742's vocabulary: present or absent, one teal, nothing in
-  // between). One table, one column, both states: Ceiling Microphone takes its
-  // stem from elsewhere and Display states its own.
-  it("marks an inherited value and leaves a stated one unmarked, in the same column", () => {
+  // A stated value and an inherited one render IDENTICALLY in a table. That is
+  // the ruling, not an omission: a table is for scanning values, and the blade
+  // is where a value's origin is explained, so the provenance mark is a blade
+  // and detail affordance only. One table, one column, both states: Ceiling
+  // Microphone takes its stem from elsewhere and Display states its own, and
+  // nothing in the row says which is which.
+  it("renders an inherited value exactly as a stated one, in the same column", () => {
     mount();
     const inherited = cellOf(rowFor("Ceiling Microphone"), "Stem");
-    expect(within(inherited).getByRole("button", { name: "Stem is inherited from mic" })).toBeTruthy();
+    expect(inherited.textContent).toContain("from-the-server");
+    expect(within(inherited).queryByRole("button", { name: /is inherited from/ })).toBeNull();
     const stated = cellOf(rowFor("Display"), "Stem");
     expect(stated.textContent).toContain("display");
     expect(within(stated).queryByRole("button", { name: /is inherited from/ })).toBeNull();
   });
 
   // Per FACT, not per row: Ceiling Array states a stem of its own and takes its
-  // abbrev from one level up, so one row carries a marked cell beside an
-  // unmarked one. A per-row treatment would mark both or neither.
-  it("marks the facts that inherit and not the ones the same row states", () => {
+  // abbrev from one level up, so one row shows a value it chose beside a value
+  // it was given, both plainly.
+  it("shows a stated fact and an inherited one on the same row, both plainly", () => {
     mount();
     const row = rowFor("Ceiling Array");
     const stem = cellOf(row, "Stem");
     expect(stem.textContent).toContain("carray");
-    expect(within(stem).queryByRole("button", { name: /is inherited from/ })).toBeNull();
     const abbrev = cellOf(row, "Abbrev");
     expect(abbrev.textContent).toContain("abbrev-from-the-server");
-    expect(within(abbrev).getByRole("button", { name: "Abbrev is inherited from ceiling-mic" })).toBeTruthy();
+    expect(within(stem).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+    expect(within(abbrev).queryByRole("button", { name: /is inherited from/ })).toBeNull();
+  });
+
+  // The guard for the ruling, asked of the WHOLE table rather than of the two
+  // columns that changed: no provenance mark under any cell, on any row, in any
+  // column. The blade's own marks are asserted elsewhere in this file and are
+  // untouched, so this is a statement about the surface, not about the feature.
+  it("puts no provenance mark anywhere in the table, which is a blade affordance", () => {
+    mount();
+    const table = screen.getAllByRole("table")[0];
+    expect(within(table).queryAllByRole("button", { name: /is inherited from/ })).toHaveLength(0);
   });
 
   // The em dash keeps its one meaning: nothing here and nothing above. Deleting
@@ -169,14 +182,14 @@ describe("ComponentTypes page", () => {
     expect(within(stem).queryByRole("button", { name: /is inherited from/ })).toBeNull();
   });
 
-  // The Icon cell has shown the resolved glyph since #695 and has never said
-  // where it came from, so it passed an inherited value off as a stated one.
-  // Once Stem and Abbrev tell the two apart, that is the odd column out (#743).
-  it("marks an inherited icon too, so the Icon cell stops passing one off as stated", () => {
+  // The Icon cell has shown the resolved glyph since #695 without saying where
+  // it came from, and that is the treatment Stem and Abbrev now MATCH rather
+  // than depart from (#743). It is the precedent, not the odd column out.
+  it("shows an inherited icon as plainly as a stated one, the precedent the other two match", () => {
     mount();
     const inherited = cellOf(rowFor("Ceiling Microphone"), "Icon");
     expect(inherited.textContent).toContain("icon-from-the-server");
-    expect(within(inherited).getByRole("button", { name: "Icon is inherited from mic" })).toBeTruthy();
+    expect(within(inherited).queryByRole("button", { name: /is inherited from/ })).toBeNull();
     const stated = cellOf(rowFor("Microphone"), "Icon");
     expect(stated.textContent).toContain("mic");
     expect(within(stated).queryByRole("button", { name: /is inherited from/ })).toBeNull();

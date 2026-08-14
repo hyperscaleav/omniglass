@@ -60,15 +60,13 @@ function NameCell(p: { row: SystemType & { depth: number } }): JSX.Element {
 
 // The Icon cell resolves through the same InheritedCell the other two inherited
 // facts use, for the reason the component registry's copy of it records: it has
-// shown the server's resolved glyph since #695 without ever saying where the
-// glyph came from, so it rendered an inherited value exactly as a stated one.
+// shown the server's resolved glyph since #695 without saying where the glyph
+// came from, and that is the treatment the other two now match.
 function IconCell(p: { row: SystemType; resolvedIcon: string }): JSX.Element {
   return (
     <InheritedCell
-      label="Icon"
       own={p.row.icon}
-      inherited={inheritedFact(p.row, "icon")}
-      shown={p.resolvedIcon}
+      resolved={p.resolvedIcon}
       leading={<Dynamic component={resolveIcon(p.resolvedIcon)} size={14} />}
     />
   );
@@ -91,11 +89,11 @@ export default function SystemTypes() {
     // Parent is the row's own fact and never inherits: it IS the edge the other
     // three facts inherit along.
     { key: "parent", label: "Parent", width: "140px", cell: (r) => <span class="font-data text-xs text-base-content/60">{r.parent ?? EMPTY_VALUE}</span> },
-    // Stem and Abbrev show what the row TAKES when it states nothing, marked
-    // with where it came from (#743), the same treatment the component registry
-    // gives the same three facts.
-    { key: "stem", label: "Stem", width: "120px", cell: (r) => <InheritedCell label="Stem" own={r.stem} inherited={inheritedFact(r, "stem")} /> },
-    { key: "abbrev", label: "Abbrev", width: "90px", cell: (r) => <InheritedCell label="Abbrev" own={r.abbrev} inherited={inheritedFact(r, "abbrev")} /> },
+    // Stem and Abbrev show what the row TAKES when it states nothing, and show
+    // it undifferentiated (#743), the same treatment the component registry
+    // gives the same three facts. Provenance is the blade's answer.
+    { key: "stem", label: "Stem", width: "120px", cell: (r) => <InheritedCell own={r.stem} resolved={inheritedFact(r, "stem").value} /> },
+    { key: "abbrev", label: "Abbrev", width: "90px", cell: (r) => <InheritedCell own={r.abbrev} resolved={inheritedFact(r, "abbrev").value} /> },
     { key: "icon", label: "Icon", width: "150px", cell: (r) => <IconCell row={r} resolvedIcon={r.resolved_icon || "map-pin"} /> },
     { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => officialBadge(r.official) },
   ];
