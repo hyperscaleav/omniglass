@@ -437,31 +437,13 @@ func componentLabelChain(ctx context.Context, q querier, productID string) (comp
 	return in, nil
 }
 
-// componentLabelData is the closed data map for one component. Every key is
-// always present, which is why the map's value type is a string: an absent fact
-// is the empty string, so a rule never renders "<no value>" and {{if}} works on
-// anything.
-//
-// This function IS the sandbox (see internal/label). Adding a key here is the
-// only way to widen what a rule can see, so a key that is a secret, a
-// credential, or a handle to another entity is not filtered out somewhere
-// downstream, it is simply never added. It is also the only place the three
-// halves of a component's inputs (its own row, its classification, its
-// placement) are combined, so the single-row stamp and the bulk recompute
-// cannot drift on what a rule sees: they resolve the halves differently, one
-// row at a time versus a page at a time, and then call this.
+// componentLabelData is the closed data map for one component, built from the
+// one declaration of that map (componentLabelKeys in label_keys.go, #729) rather
+// than from a literal here. The keys, their meanings and the docs that teach them
+// are all readers of that declaration, so a key cannot be added to the sandbox
+// without the page that teaches it moving too.
 func componentLabelData(c *Component, in componentLabelInputs, pl componentPlacement) label.Data {
-	return label.Data{
-		"Name":            c.Name,
-		"Ordinal":         mintedOrdinalText(componentMint(in.stem), c.Ordinal),
-		"TypeName":        in.typeName,
-		"TypeAbbrev":      in.abbrev,
-		"Stem":            in.stem,
-		"ProductName":     in.productName,
-		"VendorName":      in.vendorName,
-		"LocationLabel":   pl.locationLabel,
-		"SystemTypeLabel": pl.systemTypeLabel,
-	}
+	return labelData(componentLabelKeys, componentFacts{c: c, in: in, pl: pl})
 }
 
 // componentPlacement is the per-ROW half of a component's label inputs: the two
@@ -681,10 +663,10 @@ func systemLabelChainWith(ctx context.Context, q querier, standardID, systemType
 	return in, nil
 }
 
-// systemLabelData is the closed data map for one system. Ordinal joined it with
-// #686, which gave a system a generated name and the number behind it, and #693
-// made the shipped rule READ it, which is where the two halves of a divisible
-// boardroom stop reading alike.
+// systemLabelData is the closed data map for one system, built from
+// systemLabelKeys. Ordinal joined it with #686, which gave a system a generated
+// name and the number behind it, and #693 made the shipped rule READ it, which
+// is where the two halves of a divisible boardroom stop reading alike.
 //
 // The value is the number the system's NAME carries (see mintedOrdinalText), so
 // the first of its stem is empty here exactly as it is bare there. The mint is
@@ -692,15 +674,7 @@ func systemLabelChainWith(ctx context.Context, q querier, standardID, systemType
 // at the name, because the suppression is a property of the mint (ADR-0101) and
 // reading it off the string would be a second implementation of the rule.
 func systemLabelData(s *System, in systemLabelInputs, pl systemPlacement) label.Data {
-	return label.Data{
-		"Name":          s.Name,
-		"Ordinal":       mintedOrdinalText(systemMint(in.stem), s.Ordinal),
-		"TypeName":      in.typeName,
-		"TypeAbbrev":    in.abbrev,
-		"Stem":          in.stem,
-		"StandardName":  in.standardName,
-		"LocationLabel": pl.locationLabel,
-	}
+	return labelData(systemLabelKeys, systemFacts{s: s, in: in, pl: pl})
 }
 
 func renderSystemLabel(ctx context.Context, q querier, eng *label.Engine, s *System) (string, error) {
@@ -781,17 +755,16 @@ func locationLabelChainWith(ctx context.Context, q querier, locationTypeID, glob
 	return in, nil
 }
 
-// locationLabelData is the closed data map for one location. No product and no
-// vendor: a location is not an instance of a catalog row.
+// locationLabelData is the closed data map for one location, built from
+// locationLabelKeys, whose comment carries why the absences are absent.
 //
-// And deliberately NO Ordinal, although #687 gave a location one (the comment
-// here used to say a location has none, which that slice made false). The key
-// would be REDUNDANT, which is the whole of the argument now that #693 has
-// settled what the key would carry: the number the name shows. A positional
-// location's name IS that number, so "{{.TypeName}} {{.Name}}" renders "Floor
-// 3" with nothing added, and a stemmed one carries it in the name too, so the
-// shipped rule's "{{title (words .Name)}}" reads "Wing 2" off `wing-2` and
-// "Wing" off the suppressed `wing`.
+// The Ordinal argument is worth keeping here beside the other two maps that DO
+// carry the key. #687 gave a location an ordinal, and the key would still be
+// REDUNDANT now that #693 has settled what it would hold: the number the name
+// shows. A positional location's name IS that number, so "{{.TypeName}}
+// {{.Name}}" renders "Floor 3" with nothing added, and a stemmed one carries it
+// in the name too, so the shipped rule's "{{title (words .Name)}}" reads "Wing 2"
+// off `wing-2` and "Wing" off the suppressed `wing`.
 //
 // The older half of this argument was that a key here would print "Wing 1" for
 // the only wing in a building, which the epic was filed about. That is no
@@ -799,10 +772,7 @@ func locationLabelChainWith(ctx context.Context, q querier, locationTypeID, glob
 // rather than repeated: redundancy is the reason that survives. Adding a key is
 // the only way to widen what a rule can see, so it is not added on a maybe.
 func locationLabelData(l *Location, in locationLabelInputs) label.Data {
-	return label.Data{
-		"Name":     l.Name,
-		"TypeName": in.typeName,
-	}
+	return labelData(locationLabelKeys, locationFacts{l: l, in: in})
 }
 
 func renderLocationLabel(ctx context.Context, q querier, eng *label.Engine, l *Location) (string, error) {
