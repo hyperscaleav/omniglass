@@ -151,7 +151,7 @@ describe("ComponentTypes page", () => {
     expect(originOf("House Projector")).toBe("overridden");
   });
 
-  it("a forked shipped row offers Restore shipped, and a pristine one offers nothing to discard", async () => {
+  it("a forked shipped row offers Restore default, and a pristine one offers nothing to discard", async () => {
     let restored: string | undefined;
     vi.spyOn(globalThis, "confirm").mockReturnValue(true);
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -170,7 +170,7 @@ describe("ComponentTypes page", () => {
       if (!el) throw new Error("no blade yet");
       return el as HTMLElement;
     });
-    expect(within(pristine).queryByText("Restore shipped")).toBeNull();
+    expect(within(pristine).queryByText("Restore default")).toBeNull();
     // A shipped row that is still pristine greys its destructive slot with the
     // official sentence: nothing to delete, nothing yet to discard.
     expect((within(pristine).getByLabelText("Delete") as HTMLButtonElement).disabled).toBe(true);
@@ -183,7 +183,7 @@ describe("ComponentTypes page", () => {
       return el as HTMLElement;
     });
     expect(within(forked).queryByLabelText("Delete")).toBeNull();
-    fireEvent.click(within(forked).getByText("Restore shipped"));
+    fireEvent.click(within(forked).getByText("Restore default"));
     await waitFor(() => expect(restored).toBeTruthy());
     expect(restored).toContain(`${uuidFor("ct-projector")}:restore`);
   });

@@ -244,7 +244,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
       if (!r) return undefined;
       if (r.official) {
         return r.forked && can(me.data, "component_type", "update")
-          ? { label: "Restore shipped", tone: "danger" as const, onClick: restoreType }
+          ? { label: "Restore default", tone: "danger" as const, onClick: restoreType }
           : undefined;
       }
       return can(me.data, "component_type", "delete")

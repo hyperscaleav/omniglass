@@ -293,7 +293,7 @@ describe("LocationTypes page", () => {
       return el as HTMLElement;
     });
     fireEvent.click(within(blade).getByLabelText("Edit"));
-    expect(within(blade).queryByText("Restore shipped")).toBeNull();
+    expect(within(blade).queryByText("Restore default")).toBeNull();
     // Delete is present but greyed with the official sentence: a shipped row is
     // never deleted, and while it is pristine there is nothing to discard either.
     const del = within(blade).getByText("Delete").closest("button") as HTMLButtonElement;
@@ -311,7 +311,7 @@ describe("LocationTypes page", () => {
       return el as HTMLElement;
     });
     fireEvent.click(within(blade).getByLabelText("Edit"));
-    expect(within(blade).getByText("Restore shipped")).toBeTruthy();
+    expect(within(blade).getByText("Restore default")).toBeTruthy();
   });
 
   // #710's editor and #692's exit, now one control. mountOne seeds a single row
@@ -496,7 +496,7 @@ describe("LocationTypes page", () => {
   // forks rather than writing the platform's row, and the fork is restorable.
   // No shipped type carries a rule, so this is the ordinary way an operator
   // reaches generated location names at all.
-  it("sets a rule on a shipped type, which forks it and leaves Restore shipped", async () => {
+  it("sets a rule on a shipped type, which forks it and leaves Restore default", async () => {
     let sent: unknown;
     mountOne({
       id: uuidFor("lt-floor"), name: "floor", display_name: "Floor", official: true, forked: false,
@@ -521,7 +521,7 @@ describe("LocationTypes page", () => {
     fireEvent.click(screen.getByText("floor"));
     const forkedBlade = await openBlade();
     fireEvent.click(within(forkedBlade).getByLabelText("Edit"));
-    expect(within(forkedBlade).getByText("Restore shipped")).toBeTruthy();
+    expect(within(forkedBlade).getByText("Restore default")).toBeTruthy();
     expect(within(forkedBlade).queryByLabelText("Delete")).toBeNull();
   });
 
@@ -561,7 +561,7 @@ describe("LocationTypes page", () => {
     const blade = await openBlade();
     fireEvent.click(within(blade).getByLabelText("Edit"));
     expect((within(blade).getByLabelText("Name stem") as HTMLInputElement).value).toBe("level");
-    fireEvent.click(within(blade).getByText("Restore shipped"));
+    fireEvent.click(within(blade).getByText("Restore default"));
     await waitFor(() =>
       expect((within(blade).getByLabelText("The platform names locations of this type") as HTMLInputElement).checked).toBe(false),
     );
