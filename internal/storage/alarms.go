@@ -40,10 +40,10 @@ type Alarm struct {
 	// unacknowledged (the queue an operator works), raised and acknowledged
 	// (somebody is on it), or cleared having never been acknowledged.
 	// AcknowledgedBy is the acknowledger's IDENTIFIER, not their uuid and not a
-	// label: a human's username or a service account's name, resolved by
-	// principalIdent. It is what an operator surface renders (ADR-0062), and it
-	// reads empty once that principal is purged, while audit_log keeps the
-	// identifier it denormalized.
+	// label: a human's username, a service account's name, or a node's name,
+	// resolved by principalIdent. It is what an operator surface renders
+	// (ADR-0062), and it reads empty once that principal is purged, while
+	// audit_log keeps the identifier it denormalized.
 	AcknowledgedAt *time.Time
 	AcknowledgedBy string
 }
@@ -94,8 +94,8 @@ var alarmSeverities = map[string]bool{"info": true, "warning": true, "critical":
 // an operator recognises (ADR-0062); it reads empty once that principal is
 // purged, which is honest, and audit_log still names them.
 //
-// The two identifier sources are projected as their own columns and folded in
-// Go (principalIdent), which is where that policy lives since #564 dropped the
+// The identifier sources are projected as their own columns and folded in Go
+// (principalIdent), which is where that policy lives since #564 dropped the
 // stored function. A projection rather than a join, because one of the four
 // statements reading this shape is an UPDATE ... RETURNING: RETURNING cannot
 // left-join, and giving the UPDATE a FROM clause would change which rows it
@@ -105,12 +105,12 @@ var alarmCols = `a.id, a.component_id, a.severity, a.message, a.dedup_key, a.rai
 
 func scanAlarm(row pgx.Row) (*Alarm, error) {
 	var a Alarm
-	var ackUsername, ackServiceName *string
+	var ackUsername, ackServiceName, ackNodeName *string
 	if err := row.Scan(&a.ID, &a.ComponentID, &a.Severity, &a.Message,
-		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.AcknowledgedAt, &ackUsername, &ackServiceName); err != nil {
+		&a.DedupKey, &a.RaisedAt, &a.ClearedAt, &a.AcknowledgedAt, &ackUsername, &ackServiceName, &ackNodeName); err != nil {
 		return nil, err
 	}
-	a.AcknowledgedBy = principalIdent(ackUsername, ackServiceName)
+	a.AcknowledgedBy = principalIdent(ackUsername, ackServiceName, ackNodeName)
 	return &a, nil
 }
 
