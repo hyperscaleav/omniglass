@@ -13,7 +13,7 @@ export default function Home() {
   const navigate = useNavigate();
   const me = useMe();
   const locs = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
-  const who = () => me.data?.human?.username ?? me.data?.service?.label ?? "operator";
+  const who = () => me.data?.human?.username ?? me.data?.service?.name ?? "operator";
 
   return (
     <Page title={`Welcome, ${who()}`}>

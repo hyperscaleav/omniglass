@@ -94,6 +94,9 @@ var IdentityShapes = map[string]TableIdentity{
 	// A human identifier that is not a name. These are the exceptions worth stating.
 	"human": {ShapeHumanNotAKey, "a username: its own rule, its own uniqueness, and not an " +
 		"address, since a principal is addressed by uuid"},
+	"service": {ShapeHumanNotAKey, "the username analogue for kind=service: unique like one " +
+		"(#563), on its own rule rather than the entity name rule, and not an address, since a " +
+		"principal is addressed by uuid"},
 	"file": {ShapeHumanNotAKey, "a filename with an extension (codec-firmware-2.1.4.txt): not " +
 		"unique, already the label, and addressed by uuid"},
 	"task": {ShapeHumanNotAKey, "content-addressed, the id IS hash(interface, kind, schedule, " +
@@ -111,7 +114,7 @@ var IdentityShapes = map[string]TableIdentity{
 	"principal": {Shape: ShapeIDOnly}, "principal_grant": {Shape: ShapeIDOnly},
 	"principal_group_member": {Shape: ShapeIDOnly},
 	"product_metric":         {Shape: ShapeIDOnly}, "product_property": {Shape: ShapeIDOnly},
-	"property": {Shape: ShapeIDOnly}, "service": {Shape: ShapeIDOnly},
+	"property":         {Shape: ShapeIDOnly},
 	"setting_override": {Shape: ShapeIDOnly}, "standard_metric": {Shape: ShapeIDOnly},
 	"standard_property": {Shape: ShapeIDOnly}, "system_member": {Shape: ShapeIDOnly},
 	"system_role_assignment": {Shape: ShapeIDOnly},

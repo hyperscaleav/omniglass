@@ -29,11 +29,16 @@ func toGroupBody(g *storage.Group) groupBody {
 	return groupBody{ID: g.ID, Name: g.Name, DisplayName: g.DisplayName, Description: g.Description, MemberCount: g.MemberCount, GrantCount: g.GrantCount}
 }
 
+// memberBody is one principal on a group's roster. The two facts are kept
+// apart: `name` is the identifier, whichever kind the member is (a human's
+// username, a service account's name), and `display_name` is the friendly
+// string, present only where a human set one. It used to be one field carrying
+// either, which crossed an identifier with a label and is what #563 ended.
 type memberBody struct {
 	PrincipalID string `json:"principal_id"`
 	Kind        string `json:"kind"`
-	Username    string `json:"username,omitempty"`
-	DisplayName string `json:"display_name,omitempty"`
+	Name        string `json:"name,omitempty" doc:"The member's identifier: a human's username, or a service account's name"`
+	DisplayName string `json:"display_name,omitempty" doc:"The friendly string, where the member is a human who has one"`
 }
 
 type groupPathInput struct {
@@ -218,7 +223,7 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 		out := &listMembersOutput{}
 		out.Body.Members = make([]memberBody, 0, len(members))
 		for _, m := range members {
-			out.Body.Members = append(out.Body.Members, memberBody{PrincipalID: m.PrincipalID, Kind: m.Kind, Username: m.Username, DisplayName: m.DisplayName})
+			out.Body.Members = append(out.Body.Members, memberBody{PrincipalID: m.PrincipalID, Kind: m.Kind, Name: m.Name, DisplayName: m.DisplayName})
 		}
 		return out, nil
 	})

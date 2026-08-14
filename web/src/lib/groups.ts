@@ -8,7 +8,11 @@ import type { Grant, CreateGrant } from "./principals";
 // principal_group (management) and principal_grant (granting) on the server.
 
 export type Group = { id: string; name: string; display_name?: string; description?: string; member_count?: number; grant_count?: number };
-export type GroupMember = { principal_id: string; kind: string; username?: string; display_name?: string };
+// A roster row carries the two facts apart: `name` is the member's identifier
+// (a human's username, a service account's name) and `display_name` is the
+// friendly string, which only a human has. They used to arrive as one field
+// carrying either, which is what #563 ended.
+export type GroupMember = { principal_id: string; kind: string; name?: string; display_name?: string };
 
 export const GROUPS_KEY = ["principal-groups"] as const;
 
@@ -35,9 +39,11 @@ export function consumePendingGroupEdit(id: string): boolean {
 export function groupName(g: Group): string {
   return entityLabel(g);
 }
-// memberName is a member's label: a human's username, else a service's display name (its label).
+// memberName is what a roster shows for a member: its identifier first, since
+// that is what identifies the principal whatever kind it is, then a human's
+// friendly string, then the uuid.
 export function memberName(m: GroupMember): string {
-  return m.username || m.display_name || m.principal_id;
+  return m.name || m.display_name || m.principal_id;
 }
 
 export async function listGroups(): Promise<Group[]> {

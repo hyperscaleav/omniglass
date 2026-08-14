@@ -53,7 +53,7 @@ package storage
 func principalIdentSources(param string) [2]string {
 	return [2]string{
 		"(select username from human where principal_id = " + param + ")",
-		"(select label from service where principal_id = " + param + ")",
+		"(select name from service where principal_id = " + param + ")",
 	}
 }
 

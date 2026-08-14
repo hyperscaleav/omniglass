@@ -12,7 +12,7 @@ import { uuidFor } from "../lib/testids";
 // group opens the group blade (members drill into the member's user blade), and the
 // per-group caches are seeded so no server is needed. `>` grants every permission.
 const group: Group = { id: uuidFor("g-hd"), name: "help-desk", display_name: "Help Desk", description: "Support crew", member_count: 1, grant_count: 0 };
-const members: GroupMember[] = [{ principal_id: uuidFor("u-alice"), kind: "human", username: "alice" }];
+const members: GroupMember[] = [{ principal_id: uuidFor("u-alice"), kind: "human", name: "alice" }];
 const alice: Principal = { id: uuidFor("u-alice"), kind: "human", active: true, human: { username: "alice", email: "alice@example.com", display_name: "Alice Ng" }, grants: [], groups: [{ id: uuidFor("g-hd"), name: "Help Desk" }] };
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 

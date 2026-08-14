@@ -122,7 +122,7 @@ func insertPrincipalOfKind(t *testing.T, conn *pgx.Conn, kind string) string {
 	case "human":
 		profile = `insert into human (principal_id, username) values ($1, 'jordan-ops')`
 	case "service":
-		profile = `insert into service (principal_id, label) values ($1, 'ingest-bot')`
+		profile = `insert into service (principal_id, name) values ($1, 'ingest-bot')`
 	case "node":
 		profile = `insert into node (principal_id, name) values ($1, 'edge-1')`
 	}

@@ -40,7 +40,7 @@ func toPrincipalBody(pr *storage.Principal) principalBody {
 		b.Human = &humanBody{Username: pr.Human.Username, Email: pr.Human.Email, DisplayName: pr.Human.DisplayName, HasAvatar: pr.Human.HasAvatar}
 	}
 	if pr.Service != nil {
-		b.Service = &svcBody{Label: pr.Service.Label}
+		b.Service = &svcBody{Name: pr.Service.Name}
 	}
 	for i := range pr.Grants {
 		b.Grants = append(b.Grants, toGrantBody(&pr.Grants[i]))

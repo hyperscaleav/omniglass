@@ -22,7 +22,7 @@ import (
 // acknowledgement can be checked for WHO as well as WHEN. The read resolves a
 // service principal to its own identifying column, the same answer the audit
 // write denormalizes (internal/storage/principal_ident.go).
-func ackActor(t *testing.T, dsn, label string) string {
+func ackActor(t *testing.T, dsn, name string) string {
 	t.Helper()
 	ctx := context.Background()
 	conn, err := pgx.Connect(ctx, dsn)
@@ -34,7 +34,7 @@ func ackActor(t *testing.T, dsn, label string) string {
 	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
 		t.Fatalf("insert principal: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into service (principal_id, label) values ($1, $2)`, pid, label); err != nil {
+	if _, err := conn.Exec(ctx, `insert into service (principal_id, name) values ($1, $2)`, pid, name); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	return pid
@@ -77,7 +77,7 @@ func TestAcknowledgeRecordsWhoAndWhenWithoutTouchingRaisedState(t *testing.T) {
 		t.Fatal("acknowledging recorded no acknowledgement time")
 	}
 	if acked.AcknowledgedBy != "jordan-ops" {
-		t.Errorf("acknowledged by %q, want the acting principal's label %q", acked.AcknowledgedBy, "jordan-ops")
+		t.Errorf("acknowledged by %q, want the acting principal's name %q", acked.AcknowledgedBy, "jordan-ops")
 	}
 	if acked.ClearedAt != nil || !acked.Active() {
 		t.Error("acknowledging cleared the alarm: an alarm's raised state belongs to its condition, not to the person who looked at it")
@@ -237,7 +237,7 @@ func TestAcknowledgeWritesItsAuditRow(t *testing.T) {
 		t.Errorf("audit row = actor %s / %s / %s, want %s / alarm / %s", gotActor, gotResource, gotID, actor, raised.ID)
 	}
 	if gotUsername != "jordan-ops" {
-		t.Errorf("audit row names %q, want the acting principal's label", gotUsername)
+		t.Errorf("audit row names %q, want the acting principal's name", gotUsername)
 	}
 }
 

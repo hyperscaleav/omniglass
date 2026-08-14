@@ -431,7 +431,7 @@ func setupScopedPrincipal(t *testing.T, ctx context.Context, dsn, label string, 
 	if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
 		t.Fatalf("insert principal: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into service (principal_id, label) values ($1, $2)`, pid, label); err != nil {
+	if _, err := conn.Exec(ctx, `insert into service (principal_id, name) values ($1, $2)`, pid, label); err != nil {
 		t.Fatalf("insert service: %v", err)
 	}
 	tok, hash, prefix, err := auth.NewBearerToken()

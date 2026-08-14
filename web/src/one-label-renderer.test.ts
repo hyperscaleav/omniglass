@@ -66,11 +66,11 @@ const ALLOWED: { file: string; match: string; why: string }[] = [
   },
   {
     file: "lib/groups.ts",
-    match: "m.username || m.display_name || m.principal_id",
+    match: "m.name || m.display_name || m.principal_id",
     why:
-      "memberName is a PRINCIPAL's name, not an entity's: it has no `name` column at all, " +
-      "and its precedence is username-first (a service account's label is the tail), which " +
-      "entityLabel does not express and must not learn",
+      "memberName is a PRINCIPAL's name, not an entity's: its precedence is identifier-first " +
+      "(a service account has no display name at all), the other way round from the entity " +
+      "rule, which entityLabel does not express and must not learn",
   },
   {
     file: "lib/principals.ts",

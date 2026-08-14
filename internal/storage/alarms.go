@@ -39,9 +39,11 @@ type Alarm struct {
 	// the condition, acknowledgement to a person, so an alarm can be raised and
 	// unacknowledged (the queue an operator works), raised and acknowledged
 	// (somebody is on it), or cleared having never been acknowledged.
-	// AcknowledgedBy is the acknowledger's label, not their uuid: it is what an
-	// operator surface renders (ADR-0062), and it reads empty once that
-	// principal is purged, while audit_log keeps the name it denormalized.
+	// AcknowledgedBy is the acknowledger's IDENTIFIER, not their uuid and not a
+	// label: a human's username or a service account's name, resolved by
+	// principalIdent. It is what an operator surface renders (ADR-0062), and it
+	// reads empty once that principal is purged, while audit_log keeps the
+	// identifier it denormalized.
 	AcknowledgedAt *time.Time
 	AcknowledgedBy string
 }

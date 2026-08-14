@@ -2743,9 +2743,15 @@
       "fk_target": "principal.id"
      },
      {
-      "name": "label",
+      "name": "name",
       "type": "text",
       "nullable": false
+     }
+    ],
+    "uniques": [
+     {
+      "name": "service_name_key",
+      "definition": "CREATE UNIQUE INDEX service_name_key ON public.service USING btree (name)"
      }
     ]
    },

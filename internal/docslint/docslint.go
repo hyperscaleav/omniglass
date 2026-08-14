@@ -93,6 +93,15 @@ var Banned = []BannedTerm{
 		Origin:      "ADR-0065",
 	},
 	{
+		// The one column in the schema where `label` meant an IDENTIFIER, renamed
+		// by ADR-0111 ahead of the sweep that gives the word to the friendly string
+		// on eighteen other tables. Spelled with the table, so it cannot catch the
+		// ordinary noun.
+		Pattern:     regexp.MustCompile(`\bservice\.label\b|\bsvcBody\.Label\b`),
+		Replacement: "service.name, a service account's identifier",
+		Origin:      "ADR-0111",
+	},
+	{
 		// The stored function that resolved a principal to its identifier, dropped
 		// by ADR-0110. It is a retired schema OBJECT, so a page naming it is telling
 		// a contributor to call something that is not there; and it is a retired
