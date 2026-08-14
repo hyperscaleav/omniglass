@@ -57,11 +57,18 @@ type GroupPatch struct {
 	Description *string
 }
 
-// GroupMember is a lightweight view of a principal in a group's roster.
+// GroupMember is a lightweight view of a principal in a group's roster: the two
+// facts a roster shows, kept apart.
+//
+// Name is the principal's IDENTIFIER, whichever kind it is (a human's username,
+// a service account's name), resolved by principalIdent. DisplayName is the
+// friendly string, which only a human has a column for and which is empty when
+// nobody set one. The field that used to carry both is why #563 renamed
+// `service.label`.
 type GroupMember struct {
 	PrincipalID string
 	Kind        string
-	Username    string
+	Name        string
 	DisplayName string
 }
 
@@ -312,16 +319,28 @@ func (p *PG) ListGroupMembers(ctx context.Context, groupID string, read scope.Se
 	if !read.All {
 		return nil, ErrPrincipalForbidden
 	}
-	// A group can hold humans and service accounts; show each by its natural name
-	// (a human's username, a service's label), so the roster reads cleanly for both.
+	// A group can hold humans and service accounts, and a roster shows two
+	// different facts about each: its NAME, the identifier that says which
+	// principal this is, and its display name, the friendly string a human may
+	// have been given and a service account has no column for.
+	//
+	// This read used to return one field for both, `coalesce(h.display_name,
+	// s.label, '')`, which crossed a friendly string and an identifier in one
+	// fallback chain and is the clearest illustration of why #563 renamed that
+	// column: written out after the rename it reads `coalesce(h.display_name,
+	// s.name, '')`, and the mistake is on the page. The fix is not a better chain,
+	// it is two columns, each meaning one thing, with the renderer choosing.
+	//
+	// The join shape, not the sub-select one: a roster has no LIMIT, and the
+	// sub-selects cost 3011 buffer hits over 500 members where these joins cost
+	// 15 (principal_ident.go carries the measurement).
 	rows, err := p.pool.Query(ctx,
-		`select p.id, p.kind, coalesce(h.username, ''), coalesce(h.display_name, s.label, '')
+		`select p.id, p.kind, `+principalIdentJoinedCols("pi")+`, coalesce(h.display_name, '')
 		   from principal_group_member m
 		   join principal p on p.id = m.principal_id
-		   left join human h on h.principal_id = p.id
-		   left join service s on s.principal_id = p.id
+		   left join human h on h.principal_id = p.id`+principalIdentJoins("pi", "p.id")+`
 		  where m.group_id = $1
-		  order by coalesce(h.username, s.label, p.id::text)`, groupID)
+		  order by coalesce(`+principalIdentJoinedSQL("pi")+`, p.id::text)`, groupID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list members: %w", err)
 	}
@@ -329,9 +348,11 @@ func (p *PG) ListGroupMembers(ctx context.Context, groupID string, read scope.Se
 	out := []GroupMember{}
 	for rows.Next() {
 		var m GroupMember
-		if err := rows.Scan(&m.PrincipalID, &m.Kind, &m.Username, &m.DisplayName); err != nil {
+		var username, serviceName *string
+		if err := rows.Scan(&m.PrincipalID, &m.Kind, &username, &serviceName, &m.DisplayName); err != nil {
 			return nil, fmt.Errorf("storage: scan member: %w", err)
 		}
+		m.Name = principalIdent(username, serviceName)
 		out = append(out, m)
 	}
 	return out, rows.Err()

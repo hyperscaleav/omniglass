@@ -32,10 +32,9 @@ const filterKeys: FilterKey<Principal>[] = [
 // A principal wears the two operator-facing identities the console labels everything
 // by, under its own field names: the username stands in for the name (what the API,
 // the CLI, and the sign-in prompt address a human by) and the display name is the
-// display name. A service account has only its label, so that stands in for the name
-// and nothing sits beneath it.
+// display name. A service account carries only its name, so nothing sits beneath it.
 const principalIdentity = (p: Principal): Labelled => ({
-  name: p.human?.username ?? p.service?.label ?? p.kind,
+  name: p.human?.username ?? p.service?.name ?? p.kind,
   display_name: p.human?.display_name,
 });
 

@@ -182,7 +182,8 @@
     },
     {
       "table": "service",
-      "shape": "id only"
+      "shape": "human identifier, not a name",
+      "reason": "the username analogue for kind=service: unique like one (#563), on its own rule rather than the entity name rule, and not an address, since a principal is addressed by uuid"
     },
     {
       "table": "setting_override",

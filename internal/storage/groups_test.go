@@ -89,7 +89,7 @@ func TestGroupGrantsInheritScopeAndPerms(t *testing.T) {
 	if err := gw.AddGroupMember(ctx, owner.ID, grp.ID, bob.ID, all); err != nil {
 		t.Fatalf("re-add member: %v", err)
 	}
-	if members, _ := gw.ListGroupMembers(ctx, grp.ID, all); len(members) != 1 || members[0].Username != "bob" {
+	if members, _ := gw.ListGroupMembers(ctx, grp.ID, all); len(members) != 1 || members[0].Name != "bob" {
 		t.Fatalf("members = %+v, want [bob]", members)
 	}
 

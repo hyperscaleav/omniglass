@@ -204,7 +204,8 @@ type Principal struct {
 type PrincipalGroupRef struct{ ID, Name string }
 
 // HumanProfile, ServiceProfile, and NodeProfile carry the kind-specific
-// attributes. A node's operator-facing label is its name (the estate address).
+// attributes. Each kind's identifier is its own column: a human's username, a
+// service account's name, a node's name (the estate address).
 type HumanProfile struct {
 	Username, Email, DisplayName string
 	// MustChangePassword is set by an admin reset and cleared by the user's own
@@ -216,7 +217,7 @@ type HumanProfile struct {
 	HasAvatar       bool
 	AvatarUpdatedAt *time.Time
 }
-type ServiceProfile struct{ Label string }
+type ServiceProfile struct{ Name string }
 type NodeProfile struct{ Name string }
 
 // Grant is one (role x scope) pairing on a principal, addressable by its id (so
@@ -1405,7 +1406,7 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	case "service":
 		var s ServiceProfile
 		if err := p.pool.QueryRow(ctx,
-			`select label from service where principal_id = $1`, pr.ID).Scan(&s.Label); err != nil {
+			`select name from service where principal_id = $1`, pr.ID).Scan(&s.Name); err != nil {
 			return fmt.Errorf("storage: load service: %w", err)
 		}
 		pr.Service = &s

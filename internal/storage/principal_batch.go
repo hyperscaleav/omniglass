@@ -56,7 +56,7 @@ func (p *PG) loadPrincipals(ctx context.Context, prs []Principal) error {
 //
 // The three profile tables have three different shapes, so the union widens them
 // to one: column three is the kind's own identifying string (a human's username,
-// a service's label, a node's name) and the human-only columns are padded on the
+// a service's name, a node's name) and the human-only columns are padded on the
 // other two branches. A principal of a profiled kind with no profile row is a
 // broken invariant, and it is reported here with the same error the single-row
 // path raises rather than silently returning a principal with a nil profile.
@@ -66,7 +66,7 @@ func (p *PG) attachPrincipalProfiles(ctx context.Context, ids []string, at map[s
 		        must_change_password, avatar is not null, avatar_updated_at
 		   from human where principal_id = any($1::uuid[])
 		  union all
-		 select principal_id, 'service'::text, label, '', '', false, false, null::timestamptz
+		 select principal_id, 'service'::text, name, '', '', false, false, null::timestamptz
 		   from service where principal_id = any($1::uuid[])
 		  union all
 		 select principal_id, 'node'::text, name, '', '', false, false, null::timestamptz
@@ -95,7 +95,7 @@ func (p *PG) attachPrincipalProfiles(ctx context.Context, ids []string, at map[s
 				MustChangePassword: mustChange, HasAvatar: hasAvatar, AvatarUpdatedAt: avatarAt,
 			}
 		case "service":
-			pr.Service = &ServiceProfile{Label: ident}
+			pr.Service = &ServiceProfile{Name: ident}
 		case "node":
 			pr.Node = &NodeProfile{Name: ident}
 		}

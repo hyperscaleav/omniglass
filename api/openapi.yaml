@@ -3646,12 +3646,14 @@ components:
       additionalProperties: false
       properties:
         display_name:
+          description: The friendly string, where the member is a human who has one
           type: string
         kind:
           type: string
-        principal_id:
+        name:
+          description: "The member's identifier: a human's username, or a service account's name"
           type: string
-        username:
+        principal_id:
           type: string
       required:
         - principal_id
@@ -5412,10 +5414,11 @@ components:
     SvcBody:
       additionalProperties: false
       properties:
-        label:
+        name:
+          description: The service account's identifier, unique across service principals
           type: string
       required:
-        - label
+        - name
       type: object
     SwapRolePositionsInputBody:
       additionalProperties: false

@@ -15,7 +15,7 @@ import { uuidFor } from "../lib/testids";
 // permission, so every gated affordance is present.
 const seed: Principal[] = [
   { id: uuidFor("u-alice"), kind: "human", active: true, human: { username: "alice", email: "alice@example.com", display_name: "Alice Ng" }, grants: [{ id: uuidFor("g1"), role: "admin", scope_kind: "all" }], groups: [{ id: uuidFor("g-hd"), name: "Help Desk" }] },
-  { id: "u-svc", kind: "service", active: true, service: { label: "ingest-bot" }, grants: [] },
+  { id: uuidFor("u-svc"), kind: "service", active: true, service: { name: "ingest-bot" }, grants: [] },
   { id: "u-bob", kind: "human", active: false, human: { username: "bob" }, grants: [] },
 ];
 
@@ -56,7 +56,7 @@ describe("Users page", () => {
     const { getByText, getAllByText } = mount();
     expect(getByText("Alice Ng")).toBeTruthy();
     expect(getByText("alice")).toBeTruthy(); // the username under the display name
-    expect(getByText("ingest-bot")).toBeTruthy(); // service principal's label as its name
+    expect(getByText("ingest-bot")).toBeTruthy(); // a service principal is shown by its name
     // Both a human and a service badge render (capitalized via CSS, text is the kind).
     expect(getAllByText("human").length).toBeGreaterThan(0);
     expect(getByText("service")).toBeTruthy();

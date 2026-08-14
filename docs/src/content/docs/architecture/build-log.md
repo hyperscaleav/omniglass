@@ -4693,6 +4693,69 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   in [#736](https://github.com/hyperscaleav/omniglass/issues/736) and the page now marks the branch
   as design.
 
+- **The last stored function retires, and a principal's identifier becomes the gateway's answer
+  (#564).** `principal_label(uuid)` was a stored SQL function, `coalesce(human.username,
+  service.label)`, and it was two defects wearing one name: it put the platform's answer to "what
+  names this principal" in the database, which is the one place this repository says logic never
+  lives, and it called the answer a **label** when both of its branches return an identifier. No
+  test named it, so it could have returned anything and the suite would have agreed.
+
+  The answer now lives in `internal/storage/principal_ident.go`, which names the two sources once
+  and renders every shape a statement can need from it, so a caller picks a shape and never a
+  column. A read over many rows LEFT JOINs the sources and folds them in Go. Two positions cannot
+  join: `alarmCols` is read by an `UPDATE ... RETURNING` and `RETURNING` cannot left-join, and the
+  audit insert runs inside the caller's transaction on every operator write, where a Go fold would
+  cost a second round trip and the alarm write path pins its statement count as the exact equation
+  `12 + 5*slots + 4*locations` (#674) that counts that insert. Both of those render the sources as
+  correlated sub-selects, and both are bounded reads. Which shape is measured rather than assumed:
+  on a 500-member group roster the sub-select shape projected AND sorted on costs 3011 shared buffer
+  hits and 2000 index searches where the join costs 18. Moving the policy out of the database was
+  the point; paying a round trip on every operator write, or two thousand index probes on a roster,
+  was not part of it, and the pinned equation is unmoved.
+
+  Only the ORDER is written twice, so `principal_ident_test.go` is the invariant between the two
+  shapes: it drives a human, a service account, a node and an unknown id through both against a real
+  database. A `node` stays out of the resolution exactly as the dropped function had it, so no audit
+  row changes what it says. Recorded as
+  [ADR-0110](/architecture/decisions/#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions),
+  with `principal_label` appended to the vocabulary denylist.
+
+- **A service account's identifier is a name, and it is unique (#563).** `service` has exactly two
+  columns and the second one is what identifies the row: the username analogue for `kind=service`,
+  the only operator-visible handle it has. It was called `label`, and it was on the wire three lines
+  from the human body's `display_name`, so two different concepts read as one. It is now
+  `service.name`, `name` on the wire, and **Name** in the console.
+
+  **The uniqueness question was answered rather than inherited.** The column carried no index and no
+  constraint; it now carries `service_name_key`, matching `human_username_key` and `node_name_key`.
+  Not for symmetry: the string is denormalized as bare text into `audit_log.actor_username` at write
+  time and into an alarm's acknowledgement on every read, and a duplicate makes both unresolvable
+  after the fact with no uuid left beside the text. The migration copes with duplicates rather than
+  assuming there are none, in the foundation / backfill / floor shape: the oldest row of each
+  duplicated set keeps the name (`principal.id` is uuidv7, so it sorts by creation time) and every
+  other is suffixed with its own principal id, unique by construction. The harness migrates an empty
+  database, so running the chain forward can never exercise that sweep; a test stands the schema
+  between the rename and the floor, writes three accounts under one name, and runs the extracted SQL
+  twice, then lands the constraint on the result.
+
+  **The identity declaration moved with the column, and grew the guard that would have caught it.**
+  `service` was declared `ShapeIDOnly`, which publishes "nobody names it", and that was believable
+  only while the identifier was spelled `label`. It is now `ShapeHumanNotAKey` with its reason, and
+  a new guard reads the generated schema facts and fails any `ShapeIDOnly` table that carries a
+  `name`.
+
+  **The clearest illustration of why the word had to move is the group roster.** It read
+  `coalesce(h.display_name, s.label, '')` into a single field, a human's friendly string falling
+  through to a service account's identifier; after the rename the same chain reads
+  `coalesce(h.display_name, s.name, '')` and the mistake is on the page. It is now two fields, the
+  identifier (`name`, resolved by the gateway's `principalIdent`) and the label (`display_name`,
+  which only a human has a column for). An API test had been asserting a service account's
+  identifier out of a field called `display_name`; it now asserts it out of `name` and asserts the
+  display name is empty. Recorded as
+  [ADR-0111](/architecture/decisions/#adr-0111-a-service-accounts-identifier-is-a-name-and-it-is-unique).
+
+  **Breaking wire change** on two read shapes (`svcBody.label` to `name`, and the roster's
+  `username` to `name`). No CLI flag moves: neither is a request field.
 - **A generated flag carries the schema's own type**
   ([#711](https://github.com/hyperscaleav/omniglass/issues/711)). Every body flag the CLI generator
   emitted was a string, and every non-string field was coerced at run time by `jsonOrString`. So the
