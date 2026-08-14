@@ -4967,13 +4967,38 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   deleted back at them. One walk in `typechain.go` answers both, which is why the agreement test
   against the query walk widened from the icon to all three facts rather than leaving two unchecked.
 
-  The console renders it with no new glyph. The placeholder carries the value (a placeholder natively
-  means "leave this blank and you get this"), the hint names the ancestor, and the read state shows
-  the same pair in place of the em dash, because Save leaves edit mode and that is where an operator
-  lands the instant they clear a box. The lock is deliberately not borrowed: ADR-0104 gives it one
-  meaning, the platform owns this value, and an inherited fact is one an operator MAY set. Nothing
-  climbs the type chain in TypeScript, and the web fixtures seed values no client-side climb could
-  produce so a console that derived them would fail.
+  The console renders it in three places, and the lock is deliberately not borrowed for any of them:
+  ADR-0104 gives the lock one meaning, the platform owns this value, and an inherited fact is one an
+  operator MAY set. The placeholder carries the value (a placeholder natively means "leave this blank
+  and you get this"). The hint names the ancestor while the box is being edited. And a **teal
+  provenance dot beside the field's label** says the value comes from somewhere that is not this row,
+  in read and in edit alike, because Save leaves edit mode and that is where an operator lands the
+  instant they clear a box. Nothing climbs the type chain in TypeScript, and the web fixtures seed
+  values no client-side climb could produce so a console that derived them would fail.
+
+  The dot replaced an `inherited from <ancestor>` sentence under the read value, which this wave
+  shipped in the morning and two spikes against the real console falsified by lunchtime. The sentence
+  was the third telling of one fact on the line least able to carry it, and it could not appear in
+  the edit state at all, which is the state that needed it: there the inherited value is a grey
+  placeholder in a box that looks exactly like an empty one. Four things about the replacement were
+  measured rather than drawn. It goes beside the LABEL because that is the one slot that is in the
+  same position in both states (beside the value, trailing is right in read and lands 380px from a
+  407px input's placeholder, leading is right in edit and reads as a bullet list in read). It encodes
+  no DEPTH, because a segment-per-rung version measured 8px on a two-rung chain and 28px on a
+  six-rung one and three marks encoding one chain never lined up. It is a focusable tab stop carrying
+  the whole fact in its accessible name, since a hover has no keyboard and no touch equivalent. And
+  it agrees with the hint by construction: one predicate over the text the field is currently
+  showing, so the keystroke that empties the box brings the dot back and turns
+  `Empty inherits from mic.` into `Inherited from mic.` at the same instant.
+
+  One rule came out of the spikes and is now the design system's: thread DATA through a field
+  primitive, never an element. `FieldRow` and `KVStacked` take the ancestor's NAME and build the mark
+  themselves (the shape `info` already had for the (i) affordance), because a `JSX.Element` in a prop
+  compiles to a getter, so the element is rebuilt whenever anything that getter reads notifies, and a
+  mark derived from a query is then replaced under the pointer on every refetch. Wrapping it in a
+  `createMemo` looks like the fix and is not: the memo tracks the derived array a refetch hands back
+  equal-but-new. Playwright caught it as an intermittent "element was detached from the DOM"; the
+  suite now pins it as an element-identity test over a refetch that changes nothing.
 
   The cost was measured rather than carried over from #695: the registry read is one statement for a
   registry twenty levels DEEPER, the dimension a per-level query would charge for, and the blade pays

@@ -152,7 +152,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0112](#adr-0112-a-generated-flag-carries-the-schemas-type-and-a-structured-field-carries-json) | 2026-08-13 | Accepted | `cmd/cligen` derives each body flag's TYPE from the OpenAPI property: an `integer` field is an `int` flag, a `boolean` a `bool` flag, a `number` a `float64` flag, so a value the schema refuses is refused at the shell rather than by the server's 422. Every other shape keeps ONE string flag parsed as JSON (an object, an array, an untyped `any`, and a nullable number or boolean), because a nested value has no shell-native flag type and `null` has to stay sendable: it is what clears a field named in `update_mask` (ADR-0106). A nullable STRING is the exception and stays a plain string flag, since this API clears a string with the empty string. `--propagates=false` becomes the spelling for a bool flag, and the docs flag check fails on a bool flag handed a space-separated value |
 | [ADR-0113](#adr-0113-a-validation-rule-is-typescript-and-a-native-constraint-attribute-is-not-one) | 2026-08-13 | Accepted | A console control carries **no** `required`, `min`, `max`, `pattern` or `step`: a rule is a pure function over the typed value, the surface renders its message inline beside the field, and the binding's `disabled` / `valid` refuses the submit. The audit decided it: 21 attributes on 24 rendered controls and **zero could ever fire**, because a Drawer's rail is portaled outside the `<form>` (ADR-0054), a blade has no form at all, and the four on genuine form paths sit in forms whose submit is disabled in exactly the states native validation would refuse. Wiring `form.requestSubmit()` instead would have covered the Drawers only, left every blade needing this decision anyway, and meant undoing the disabled gate so an unstyled browser bubble could refuse in place of an inline message. `aria-required` stays as the honest spelling, `type="email"` and `type="number"` stay as input types, and a guard test scans every `.tsx` |
 | [ADR-0114](#adr-0114-an-inherited-registry-fact-clears-with-the-empty-string-and-the-pattern-is-what-admits-it) | 2026-08-14 | Accepted | `stem`, `abbrev` and `icon` on `component_type` and `system_type` join the **three-state string sentinel** their `label_rule` neighbour already honoured: omitted is unchanged, an explicit `""` clears the column to NULL so the inheritance walk resumes, a value sets. Not the mask, which ADR-0106 scopes to nullable OBJECT fields because an object has no empty value to overload. The clearing spelling is a pattern **alternation**, `^([a-z0-9][a-z0-9-]*)?$` with `minLength` dropped from the PATCH body (the same spelling `name_rule.stem` ships), so exactly one new string is admitted and every malformed stem is still a 422; CREATE keeps `minLength: 1`, since a row that does not exist yet has nothing to clear. A **root** cannot clear its stem, the refusal create already gives moved to the second path that reaches the same broken row, stated as one pure function so the two handlers cannot disagree. The fork leg decodes the sentinel too, since a shadow image is read back as the row. Both blades now send `""` for an empty box, so #677's and #656's "no `''` ever rides the body" guards **invert** to assert the sentinel rather than being deleted |
-| [ADR-0115](#adr-0115-an-inherited-fact-is-served-with-the-value-it-inherits-and-the-ancestor-it-came-from) | 2026-08-14 | Accepted | A type registry's LISTING serves `inherited_stem`, `inherited_icon` and `inherited_abbrev` beside the raw fields, each with the **name of the ancestor it came from**, because `resolved_icon` ([ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)'s #695 amendment) answers what a row SHOWS and an edit blade's placeholder asks what it would show if it stated nothing, which is a different string on every row that states its own: using the shown value would print the string an operator had just deleted back at them as the thing they were about to inherit. The console renders it with **no new glyph**: the placeholder carries the VALUE (a placeholder natively means "leave this blank and you get this") and the hint names the ancestor, read from the data rather than written as "its parent" because a fact can come from any distance up the chain. The **lock is not borrowed**: ADR-0104 gives it one meaning, the platform owns this value, and an inherited fact is one an operator MAY set. The source is per FACT, since one type can take its stem from a grandparent and its abbrev from its parent. Cost measured rather than carried over from #695: the registry read is one statement for a registry twenty levels deeper, so the walk is a pass over rows already in hand. `location_type` is flat and takes none of it. The blade's discard action reads **Restore default** rather than Restore shipped, matching Settings' own restore-to-default vocabulary |
+| [ADR-0115](#adr-0115-an-inherited-fact-is-served-with-the-value-it-inherits-and-the-ancestor-it-came-from) | 2026-08-14 | Accepted | A type registry's LISTING serves `inherited_stem`, `inherited_icon` and `inherited_abbrev` beside the raw fields, each with the **name of the ancestor it came from**, because `resolved_icon` ([ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)'s #695 amendment) answers what a row SHOWS and an edit blade's placeholder asks what it would show if it stated nothing, which is a different string on every row that states its own: using the shown value would print the string an operator had just deleted back at them as the thing they were about to inherit. The console renders it as the placeholder carrying the VALUE (a placeholder natively means "leave this blank and you get this") and the hint naming the ancestor, read from the data rather than written as "its parent" because a fact can come from any distance up the chain. The **lock is not borrowed**: ADR-0104 gives it one meaning, the platform owns this value, and an inherited fact is one an operator MAY set. The source is per FACT, since one type can take its stem from a grandparent and its abbrev from its parent. **Amended in the same wave (#716):** "no new glyph" is reversed and the read state's `inherited from <ancestor>` sentence is REPLACED by one teal **provenance dot beside the field's LABEL**, present when the value comes from somewhere that is not this row and absent when the row states it, because the sentence was the third telling of one fact on a line with no room for it and could not appear in the edit state at all, where a grey placeholder in a box that looks empty is the state that needed it; the label is the only placement that holds in both states (beside the VALUE, trailing is right in read and lands 380px from a 407px box's placeholder in edit, leading is right in edit and reads as a bullet in read), the mark encodes no distance (a segment-per-rung version swung 8px to 28px on estate shape and never lined up across three labels), it carries the whole fact in its accessible name as a focusable tab stop rather than in a hover no keyboard reaches, it agrees with the hint by construction (one predicate over the text the field is showing, so a keystroke moves both), and it is threaded as a NAME rather than as an element, since a `JSX.Element` prop is a getter that rebuilds the mark under the pointer on every refetch Cost measured rather than carried over from #695: the registry read is one statement for a registry twenty levels deeper, so the walk is a pass over rows already in hand. `location_type` is flat and takes none of it. The blade's discard action reads **Restore default** rather than Restore shipped, matching Settings' own restore-to-default vocabulary |
 
 ## Entries
 
@@ -5395,7 +5395,9 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   `inherited_icon` and `inherited_abbrev` beside the raw fields, each paired with an
   `inherited_*_source` naming the ancestor the value comes from. The console's edit blade shows the
   value as the field's **placeholder** and the ancestor in the field's **hint**, and its read state
-  shows the same pair in place of the em dash it used to render.
+  shows the value in place of the em dash it used to render, marked with a **provenance dot** beside
+  the label (see the amendment below, which replaced the attribution sentence the read state first
+  shipped).
 - **This is a different question from `resolved_icon`, and that is the whole reason it exists.**
   [ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)'s
   #695 amendment serves what a row SHOWS, which is the row's own value on every row that states one.
@@ -5404,11 +5406,51 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   the value an operator had just deleted back at them as the thing they were about to inherit. The
   new fields start their climb at the PARENT; `resolved_* = own ?? inherited_*` falls out of that,
   and one walk answers both.
-- **No new glyph, and not the lock.** A placeholder natively means "leave this blank and you get
-  this", so the value goes there and inheritance needs no invented marker. The lock was available and
-  is refused: ADR-0104 gives it one meaning, **the platform owns this value**, and an inherited fact
-  is one an operator MAY set, which is the opposite. Borrowing the icon would cost the lock the only
-  meaning it has.
+- **A mark of its own, and not the lock.** A placeholder natively means "leave this blank and you get
+  this", so the value goes there; the RELATION gets one new mark of its own (below), and the lock was
+  available and is refused: ADR-0104 gives it one meaning, **the platform owns this value**, and an
+  inherited fact is one an operator MAY set, which is the opposite. Borrowing the icon would cost the
+  lock the only meaning it has.
+- **Amended, in this same wave (#716): the mark is a teal dot beside the LABEL, and the read state's
+  attribution sentence comes out.** This entry first said "no new glyph", with the read state
+  rendering the inherited value and `inherited from <ancestor>` under it. That shipped in the morning
+  and two spikes against the real console falsified it by lunchtime. The sentence was the third
+  telling of one fact on the one line that had no room for it (a dimmed value, an attribution beneath
+  it, and a hint beneath the box), and it could not appear in the EDIT state at all, which is the
+  state that needs it most: there the inherited value is a grey placeholder in a box that looks
+  exactly like an empty one. What ships instead is **one teal dot, present or absent**, present
+  meaning this value comes from somewhere that is not this row.
+  - **Beside the label, because that is the only placement that works in both states.** Measured on
+    the real console at 1320px: beside the VALUE, trailing is right in read (every value starts at
+    the same x and the dot follows the last character) and collapses in edit (a 407px input exiles it
+    380px from the placeholder it is about, into the slot the console's own in-field actions occupy),
+    while leading is right in edit and reads as a list bullet in read, stepping every marked value
+    11px out of a column the unmarked ones hold. A hanging gutter lands at two different x in the two
+    states. The LABEL is in the same position in both, and `FieldRow`'s label row and `KVStacked`'s
+    eyebrow are the same slot, so one treatment covers read and edit and the mark does not move when
+    the pencil is clicked.
+  - **Present or absent, with no encoding of distance.** A segment-per-rung mark was built first and
+    refused on its own frames: its width was driven by how deep that corner of the estate happens to
+    nest (8px at two rungs, 28px at six, the same object in the design's mind and a different one on
+    screen), and three marks encoding one chain never lined up, because each trailed a label of a
+    different length. Distance lives in the hover. The full CHAIN stays a follow-on that needs the
+    server to serve it, since `inherited_*_source` names the winning ancestor and nothing between, and
+    filling the gap in the browser is the climb #695 deleted.
+  - **A hover-only fact is unreachable, so the dot is not one.** The trigger is a button, so it is a
+    tab stop that opens on focus, and the whole fact is in its accessible name (`Stem is inherited
+    from mic`) rather than only in the tooltip, because a hover has no keyboard and no touch
+    equivalent.
+  - **The mark and the hint cannot disagree, including mid-keystroke.** The spike caught the dot
+    vanishing live as the operator typed, before any save, while the hint under the box still promised
+    the inheritance in the present tense. Both answers now come from one predicate over one string,
+    the text the field is currently showing, which the field primitive supplies (the persisted value
+    while reading, the draft while editing): the moment the box stops being empty the dot goes and the
+    sentence turns from `Inherited from mic.` into the conditional `Empty inherits from mic.`
+  - **The mark is threaded as DATA, never as an element.** A `JSX.Element` in a prop compiles to a
+    getter, so it is rebuilt whenever anything that getter reads notifies; a mark derived from a query
+    is then replaced under the pointer on every refetch, and a `createMemo` over the derived value is
+    not a fix, since the array it tracks is rebuilt equal-but-new. The primitives take the ancestor's
+    NAME and build the mark themselves, which is the same shape `FieldRow` already had for the (i).
 - **The ancestor is read, never described.** The hint names the row the value actually came from
   rather than saying "its parent", because a grandchild whose parent states no stem takes its
   grandparent's, and an operator told to change "its parent" would edit the wrong row. It is per FACT

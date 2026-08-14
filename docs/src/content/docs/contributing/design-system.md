@@ -253,13 +253,39 @@ own pen already stated itself, on the component blade.
 `stem`, `abbrev` and `icon` inherit from the nearest ancestor that states them, which looks like the
 same picture as the pen (a value this row did not choose) and is the opposite relation: a locked
 value is one the platform owns and the operator may not set, an inherited one is a value the operator
-may set at any moment by typing in the box. `components/InheritedField.tsx` therefore introduces no
-glyph at all. The **placeholder** carries the value the field would inherit, which is what a
-placeholder natively means, and the **hint** names the ancestor it came from; the read state shows the
-same pair in place of the em dash, since Save leaves edit mode and that is where an operator lands
-the instant they clear a box. Both come off the listing the server already sends
+may set at any moment by typing in the box. `components/InheritedField.tsx` therefore leaves the lock
+alone and carries three affordances of its own. The **placeholder** carries the value the field would
+inherit, which is what a placeholder natively means. The **hint** names the ancestor it came from
+while the box is being edited. And the **provenance dot** (`components/ProvenanceDot.tsx`) says the
+one thing both states have to say at a glance: this value comes from somewhere that is not this row.
+All of it comes off the listing the server already sends
 ([ADR-0115](/architecture/decisions/#adr-0115-an-inherited-fact-is-served-with-the-value-it-inherits-and-the-ancestor-it-came-from));
 no type chain is walked in TypeScript, which is what #695 deleted.
+
+**A mark about a value goes beside the LABEL, not beside the value.** The dot is present or absent
+and nothing else, and it sits in `FieldRow`'s label row and `KVStacked`'s eyebrow, which are the same
+slot: a field's label is in the same position whether the field is being read or edited, and its
+value is not. Measured on the real console, a mark beside the value has no right answer: trailing
+suits the read state (values all start at the same x, the dot follows the last character) and lands
+380px away from the placeholder inside a 407px input, where an in-field action would be; leading
+suits the edit state and reads as a bullet list in the read one. The same argument retires any
+attempt to encode DEPTH in the mark: a segment-per-rung version measured 8px on a two-rung chain and
+28px on a six-rung one, so the least important variable controlled the most expensive one, and three
+marks encoding one chain never lined up with each other. Depth belongs in the hover.
+
+**A mark that only a hover reveals is not reachable.** The dot's trigger is a button, so it is a tab
+stop that opens on focus, and the fact is written into its accessible name (`Stem is inherited from
+mic`) rather than living only in the tooltip.
+
+**Thread DATA through a field primitive, never an element.** `FieldRow` and `KVStacked` take the
+ancestor's NAME and build the mark themselves, which is exactly the shape the (i) affordance already
+had (`info` is a string, not an `<InfoTip>`). The rule is not stylistic: a `JSX.Element` in a prop
+compiles to a getter, so the element is rebuilt every time anything that getter reads notifies, and a
+mark derived from a TanStack query is then replaced under the pointer on every refetch (a hover
+half-open, a click landing on a node that is no longer mounted). Wrapping the element in a
+`createMemo` looks like the fix and is not, because the memo tracks the derived array a refetch hands
+back equal-but-new. A string cannot have this problem: `<Show>` re-renders on a change of truthiness,
+and the name updates in place.
 
 The predicates live in `lib/entities` and nowhere else: `labelIsName` (which face) and
 `hasDisplayName` (did a human choose this). The second used to be the string comparison
