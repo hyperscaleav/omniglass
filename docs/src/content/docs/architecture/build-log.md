@@ -4951,3 +4951,38 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   get, on all three rule shapes, and by opting the shipped `floor` type in: the edit forks the
   platform's row, a nameless create then stamps the forked rule's first example, and `:restore`
   takes both the fork and the rule away.
+
+- **An inherited fact shows what it inherits, and Restore reads default.** #716's clear made the
+  empty box reachable on purpose, and an empty box said nothing: the blade's placeholder read
+  "inherits from its parent", which announced that inheritance was happening and never what would be
+  inherited. The list cell had answered this all along; the blade, where the editing happens, had
+  not.
+
+  The registry listing now serves `inherited_stem`, `inherited_icon` and `inherited_abbrev` beside
+  the raw fields, each with the NAME of the ancestor the value comes from
+  ([ADR-0115](/architecture/decisions/#adr-0115-an-inherited-fact-is-served-with-the-value-it-inherits-and-the-ancestor-it-came-from)).
+  It is a different question from `resolved_icon`, which answers what a row SHOWS and is therefore
+  the row's own value on every row that states one: a placeholder asks what the row would show if it
+  stated nothing, so answering it with the shown value would print the string an operator had just
+  deleted back at them. One walk in `typechain.go` answers both, which is why the agreement test
+  against the query walk widened from the icon to all three facts rather than leaving two unchecked.
+
+  The console renders it with no new glyph. The placeholder carries the value (a placeholder natively
+  means "leave this blank and you get this"), the hint names the ancestor, and the read state shows
+  the same pair in place of the em dash, because Save leaves edit mode and that is where an operator
+  lands the instant they clear a box. The lock is deliberately not borrowed: ADR-0104 gives it one
+  meaning, the platform owns this value, and an inherited fact is one an operator MAY set. Nothing
+  climbs the type chain in TypeScript, and the web fixtures seed values no client-side climb could
+  produce so a console that derived them would fail.
+
+  The cost was measured rather than carried over from #695: the registry read is one statement for a
+  registry twenty levels DEEPER, the dimension a per-level query would charge for, and the blade pays
+  nothing on top because its read IS that listing (`useComponentTypeRow` finds its row in the same
+  query). `location_type` is flat, with no parent link and no stem or abbrev column, so it takes none
+  of this.
+
+  The blade's destructive slot on a forked shipped row also stops reading **Restore shipped** and
+  reads **Restore default**: it named the thing being restored FROM rather than the thing being
+  restored TO, and the console's other restores (Settings, the pen) already said default. The retired
+  wording joins the `internal/docslint` denylist, with this log and the decision log keeping the
+  words that were true on the day they were written.

@@ -143,6 +143,12 @@ uuid minted by the database, the internal address the handle resolves to
   that a release must be able to correct the vocabulary it ships.
 - **Delete** is refused (409) while a location still uses that type: reclassify or remove the
   referencing rows first.
+- A location type is **flat**: it has no parent, so it inherits nothing and every fact on it is its
+  own. The nested registries beside it, [component type](/guides/admin/products/) and system type, do
+  inherit, and their blades say so: an empty **Stem**, **Abbrev** or **Icon** box shows the value the
+  type would take in grey, and the hint under it names the ancestor that value comes from, which may
+  be further up than the immediate parent. Clearing a box therefore tells you what you just fell back
+  to instead of going blank.
 - A non-empty **allowed parents** set is enforced when a location is created or moved: an
   out-of-order placement (for example a floor under a room) is refused with a message naming
   both types. An empty set never blocks a placement. Existing locations are grandfathered:

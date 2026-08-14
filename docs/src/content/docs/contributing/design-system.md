@@ -249,6 +249,18 @@ affordance the create form carries (`components/PenToggle.tsx` is the one copy o
 icons and its words), beside the field and next to the act that changes it. That is where the NAME's
 own pen already stated itself, on the component blade.
 
+**An inherited field is not a locked one, and does not borrow the lock.** The type registries'
+`stem`, `abbrev` and `icon` inherit from the nearest ancestor that states them, which looks like the
+same picture as the pen (a value this row did not choose) and is the opposite relation: a locked
+value is one the platform owns and the operator may not set, an inherited one is a value the operator
+may set at any moment by typing in the box. `components/InheritedField.tsx` therefore introduces no
+glyph at all. The **placeholder** carries the value the field would inherit, which is what a
+placeholder natively means, and the **hint** names the ancestor it came from; the read state shows the
+same pair in place of the em dash, since Save leaves edit mode and that is where an operator lands
+the instant they clear a box. Both come off the listing the server already sends
+([ADR-0115](/architecture/decisions/#adr-0115-an-inherited-fact-is-served-with-the-value-it-inherits-and-the-ancestor-it-came-from));
+no type chain is walked in TypeScript, which is what #695 deleted.
+
 The predicates live in `lib/entities` and nowhere else: `labelIsName` (which face) and
 `hasDisplayName` (did a human choose this). The second used to be the string comparison
 `entityLabel(e) !== e.name`, and that was the same question only while a label was only ever

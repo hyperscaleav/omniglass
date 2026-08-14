@@ -209,6 +209,18 @@ different questions: an edit blade posts the raw one back, where blank still mea
 list cell draws the resolved one. It costs no extra read: the listing is the whole registry in one
 query, so every ancestor is already in hand.
 
+The listing also serves **what a row would inherit**, which is a third question and not the second
+one ([#716](https://github.com/hyperscaleav/omniglass/issues/716)). `resolved_icon` says what a row
+SHOWS, so on every row that states its own it is that row's own value; `inherited_stem`,
+`inherited_icon` and `inherited_abbrev` say what the row would show if it stated nothing, each with
+the name of the ancestor it comes from (`inherited_stem_source` and its two siblings). That is the
+question an edit blade's placeholder asks, and answering it with the shown value would print the
+string an operator had just deleted back at them as the thing they were about to inherit. The source
+is per fact rather than per row, because one type can take its stem from a grandparent and its abbrev
+from its parent, and it is measured rather than assumed to be free:
+`TestListComponentTypesCostIsFlatInRegistryDepth` grows the registry twenty levels deeper and pins
+the read at the same one statement.
+
 The shipped taxonomy, rendered from the seed, with a blank cell meaning the row inherits that fact
 from its nearest ancestor:
 

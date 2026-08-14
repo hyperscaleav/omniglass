@@ -152,6 +152,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0112](#adr-0112-a-generated-flag-carries-the-schemas-type-and-a-structured-field-carries-json) | 2026-08-13 | Accepted | `cmd/cligen` derives each body flag's TYPE from the OpenAPI property: an `integer` field is an `int` flag, a `boolean` a `bool` flag, a `number` a `float64` flag, so a value the schema refuses is refused at the shell rather than by the server's 422. Every other shape keeps ONE string flag parsed as JSON (an object, an array, an untyped `any`, and a nullable number or boolean), because a nested value has no shell-native flag type and `null` has to stay sendable: it is what clears a field named in `update_mask` (ADR-0106). A nullable STRING is the exception and stays a plain string flag, since this API clears a string with the empty string. `--propagates=false` becomes the spelling for a bool flag, and the docs flag check fails on a bool flag handed a space-separated value |
 | [ADR-0113](#adr-0113-a-validation-rule-is-typescript-and-a-native-constraint-attribute-is-not-one) | 2026-08-13 | Accepted | A console control carries **no** `required`, `min`, `max`, `pattern` or `step`: a rule is a pure function over the typed value, the surface renders its message inline beside the field, and the binding's `disabled` / `valid` refuses the submit. The audit decided it: 21 attributes on 24 rendered controls and **zero could ever fire**, because a Drawer's rail is portaled outside the `<form>` (ADR-0054), a blade has no form at all, and the four on genuine form paths sit in forms whose submit is disabled in exactly the states native validation would refuse. Wiring `form.requestSubmit()` instead would have covered the Drawers only, left every blade needing this decision anyway, and meant undoing the disabled gate so an unstyled browser bubble could refuse in place of an inline message. `aria-required` stays as the honest spelling, `type="email"` and `type="number"` stay as input types, and a guard test scans every `.tsx` |
 | [ADR-0114](#adr-0114-an-inherited-registry-fact-clears-with-the-empty-string-and-the-pattern-is-what-admits-it) | 2026-08-14 | Accepted | `stem`, `abbrev` and `icon` on `component_type` and `system_type` join the **three-state string sentinel** their `label_rule` neighbour already honoured: omitted is unchanged, an explicit `""` clears the column to NULL so the inheritance walk resumes, a value sets. Not the mask, which ADR-0106 scopes to nullable OBJECT fields because an object has no empty value to overload. The clearing spelling is a pattern **alternation**, `^([a-z0-9][a-z0-9-]*)?$` with `minLength` dropped from the PATCH body (the same spelling `name_rule.stem` ships), so exactly one new string is admitted and every malformed stem is still a 422; CREATE keeps `minLength: 1`, since a row that does not exist yet has nothing to clear. A **root** cannot clear its stem, the refusal create already gives moved to the second path that reaches the same broken row, stated as one pure function so the two handlers cannot disagree. The fork leg decodes the sentinel too, since a shadow image is read back as the row. Both blades now send `""` for an empty box, so #677's and #656's "no `''` ever rides the body" guards **invert** to assert the sentinel rather than being deleted |
+| [ADR-0115](#adr-0115-an-inherited-fact-is-served-with-the-value-it-inherits-and-the-ancestor-it-came-from) | 2026-08-14 | Accepted | A type registry's LISTING serves `inherited_stem`, `inherited_icon` and `inherited_abbrev` beside the raw fields, each with the **name of the ancestor it came from**, because `resolved_icon` ([ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)'s #695 amendment) answers what a row SHOWS and an edit blade's placeholder asks what it would show if it stated nothing, which is a different string on every row that states its own: using the shown value would print the string an operator had just deleted back at them as the thing they were about to inherit. The console renders it with **no new glyph**: the placeholder carries the VALUE (a placeholder natively means "leave this blank and you get this") and the hint names the ancestor, read from the data rather than written as "its parent" because a fact can come from any distance up the chain. The **lock is not borrowed**: ADR-0104 gives it one meaning, the platform owns this value, and an inherited fact is one an operator MAY set. The source is per FACT, since one type can take its stem from a grandparent and its abbrev from its parent. Cost measured rather than carried over from #695: the registry read is one statement for a registry twenty levels deeper, so the walk is a pass over rows already in hand. `location_type` is flat and takes none of it. The blade's discard action reads **Restore default** rather than Restore shipped, matching Settings' own restore-to-default vocabulary |
 
 ## Entries
 
@@ -5386,3 +5387,52 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
   review rather than folded into it, so the destructive bug shipped the day it was found and the
   missing capability stayed honest until it could land on two registries, the wire, validation and
   both consoles at once.
+
+### ADR-0115: An inherited fact is served with the value it inherits, and the ancestor it came from
+
+- **Date:** 2026-08-14 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [the UI](/architecture/ui/)
+- **Decision:** The `component_type` and `system_type` LISTINGS serve `inherited_stem`,
+  `inherited_icon` and `inherited_abbrev` beside the raw fields, each paired with an
+  `inherited_*_source` naming the ancestor the value comes from. The console's edit blade shows the
+  value as the field's **placeholder** and the ancestor in the field's **hint**, and its read state
+  shows the same pair in place of the em dash it used to render.
+- **This is a different question from `resolved_icon`, and that is the whole reason it exists.**
+  [ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)'s
+  #695 amendment serves what a row SHOWS, which is the row's own value on every row that states one.
+  A placeholder asks what the row would show if it stated **nothing**. Those are the same string only
+  on rows that already inherit, so a blade that used `resolved_icon` as its placeholder would print
+  the value an operator had just deleted back at them as the thing they were about to inherit. The
+  new fields start their climb at the PARENT; `resolved_* = own ?? inherited_*` falls out of that,
+  and one walk answers both.
+- **No new glyph, and not the lock.** A placeholder natively means "leave this blank and you get
+  this", so the value goes there and inheritance needs no invented marker. The lock was available and
+  is refused: ADR-0104 gives it one meaning, **the platform owns this value**, and an inherited fact
+  is one an operator MAY set, which is the opposite. Borrowing the icon would cost the lock the only
+  meaning it has.
+- **The ancestor is read, never described.** The hint names the row the value actually came from
+  rather than saying "its parent", because a grandchild whose parent states no stem takes its
+  grandparent's, and an operator told to change "its parent" would edit the wrong row. It is per FACT
+  rather than per row for the same reason: one type can take its stem from a grandparent and its
+  abbrev from its parent, which the e2e fixture is built to exhibit.
+- **Nothing is derived in the browser.** [#695](https://github.com/hyperscaleav/omniglass/issues/695)
+  deleted `lib/typechain.ts` and #702 and #710 each refused to reintroduce a client-side walk; the
+  two facts with no served answer were the reason a blade could not show this at all, so the read
+  model grew rather than the console. The web fixtures seed inherited values no client-side climb
+  could produce, so a console that derived them would fail.
+- **What it cost, measured.** #695's report established that the listing is a single unfiltered
+  whole-registry select; that its blade READ is the same query is a separate fact, and it holds
+  because `useComponentTypeRow` finds its row in the listing rather than fetching one.
+  `TestListComponentTypesCostIsFlatInRegistryDepth` grows the registry twenty levels **deeper**, the
+  dimension a per-level query would charge for, and pins the read at one statement, the same number
+  the seeded registry costs.
+- **`location_type` takes none of it.** It is flat (no parent link) and carries no `stem` or `abbrev`
+  column at all, so it has no inherited fact to show. It gains only the vocabulary change below.
+- **"Restore shipped" becomes "Restore default".** The blade's destructive slot on a forked shipped
+  row named the thing being restored FROM rather than the thing being restored TO, and diverged from
+  the console's own restore vocabulary (Settings and the pen both say default, per ADR-0104's #657
+  amendment). Both registries that offer it move, with the operator guide; the term is added to the
+  `internal/docslint` denylist, and the two historical records the denylist already allowlists
+  (`decisions.md`, `build-log.md`) keep the wording that was true on the day they were written.
+- **Found by** [#716](https://github.com/hyperscaleav/omniglass/issues/716)'s own review: the clear it
+  shipped is what made the empty box reachable on purpose, and an empty box that says nothing is a
+  capability that teaches the operator nothing.
