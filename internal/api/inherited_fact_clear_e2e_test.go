@@ -205,3 +205,164 @@ func TestClearingAStemOnAShippedTypeForksAndTheWalkResumesAPI(t *testing.T) {
 		t.Fatalf("drafted name = %q after the restore, want the shipped mic-1", got.Name)
 	}
 }
+
+// TestTheListingServesWhatAnInheritedFactWouldInheritAPI is #716's console half
+// at the wire, and the acceptance the blade's placeholder rests on.
+//
+// The question a placeholder answers is "clear this box and you get what?", and
+// that is NOT the question resolved_icon answers: a row that states its own
+// value shows that value, so a console using it as a placeholder would print the
+// string the operator had just deleted back at them. So the listing serves the
+// nearest ANCESTOR's value beside the row's own, per fact, with the name of the
+// ancestor it came from.
+//
+// The fixture is three deep on purpose. The middle type states an abbrev and
+// nothing else, so the leaf takes its stem from the GRANDparent and its abbrev
+// from the parent, and a source field that assumed "the parent" would be wrong
+// on one of the two.
+func TestTheListingServesWhatAnInheritedFactWouldInheritAPI(t *testing.T) {
+	ctx := context.Background()
+	gw := storagetest.NewDB(t)
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	c.do(ownerTok, http.MethodPost, "/component-types", map[string]any{
+		"name": "ifh-root", "display_name": "Root", "stem": "rootstem", "icon": "layers", "abbrev": "rt",
+	}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/component-types", map[string]any{
+		"name": "ifh-mid", "display_name": "Mid", "parent_id": "ifh-root", "abbrev": "md",
+	}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/component-types", map[string]any{
+		"name": "ifh-leaf", "display_name": "Leaf", "parent_id": "ifh-mid", "stem": "ownstem",
+	}, http.StatusCreated)
+
+	out := c.do(ownerTok, http.MethodGet, "/component-types", nil, http.StatusOK)
+	var body struct {
+		ComponentTypes []componentTypeWire `json:"component_types"`
+	}
+	if err := json.Unmarshal(out, &body); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	rows := map[string]componentTypeWire{}
+	for _, r := range body.ComponentTypes {
+		rows[r.Name] = r
+	}
+
+	leaf := rows["ifh-leaf"]
+	// The leaf states its own stem, so it SHOWS that. What it would inherit is
+	// the grandparent's, two levels up, and that is the whole point of the pair.
+	if leaf.Stem != "ownstem" {
+		t.Fatalf("leaf stem = %q, want its own %q", leaf.Stem, "ownstem")
+	}
+	if leaf.InheritedStem != "rootstem" || leaf.InheritedStemSource != "ifh-root" {
+		t.Fatalf("leaf inherited_stem = %q from %q, want %q from the GRANDparent %q",
+			leaf.InheritedStem, leaf.InheritedStemSource, "rootstem", "ifh-root")
+	}
+	// The abbrev comes from one level up, on the same row, which is why the
+	// source is per fact rather than per row.
+	if leaf.InheritedAbbrev != "md" || leaf.InheritedAbbrevSource != "ifh-mid" {
+		t.Fatalf("leaf inherited_abbrev = %q from %q, want %q from the parent %q",
+			leaf.InheritedAbbrev, leaf.InheritedAbbrevSource, "md", "ifh-mid")
+	}
+	if leaf.InheritedIcon != "layers" || leaf.InheritedIconSource != "ifh-root" {
+		t.Fatalf("leaf inherited_icon = %q from %q, want %q from %q",
+			leaf.InheritedIcon, leaf.InheritedIconSource, "layers", "ifh-root")
+	}
+
+	// A root has nothing above it, so it carries no inherited answer at all and
+	// the console has no placeholder to draw. Absent, not empty-string-present:
+	// the fields are omitempty for exactly this.
+	root := rows["ifh-root"]
+	if root.InheritedStem != "" || root.InheritedStemSource != "" || root.InheritedIcon != "" || root.InheritedAbbrev != "" {
+		t.Fatalf("root = %+v, want no inherited facts: there is nothing above a root", root)
+	}
+	if !strings.Contains(string(out), `"inherited_stem"`) {
+		t.Fatal("the listing carries no inherited_stem at all, so the omitempty above proved nothing")
+	}
+
+	// And the sentinel clear moves the row from stating its own to inheriting,
+	// where what it shows and what it inherits become the same string. This is
+	// the transition an operator makes by emptying the box.
+	c.do(ownerTok, http.MethodPatch, "/component-types/ifh-leaf", map[string]any{"stem": ""}, http.StatusOK)
+	// A FRESH decode target, not the one above. encoding/json reuses a slice's
+	// existing elements and unmarshals into them field by field, so a key the
+	// new payload omits keeps the old decode's value: `stem` is omitempty, so
+	// re-decoding into `body` would read back the stem this clear just removed
+	// and the assertion would be measuring the decoder.
+	var afterClear struct {
+		ComponentTypes []componentTypeWire `json:"component_types"`
+	}
+	out = c.do(ownerTok, http.MethodGet, "/component-types", nil, http.StatusOK)
+	if err := json.Unmarshal(out, &afterClear); err != nil {
+		t.Fatalf("decode list after clear: %v", err)
+	}
+	for _, r := range afterClear.ComponentTypes {
+		if r.Name != "ifh-leaf" {
+			continue
+		}
+		if r.Stem != "" {
+			t.Fatalf("cleared leaf stem = %q, want it back to inheriting", r.Stem)
+		}
+		if r.InheritedStem != "rootstem" || r.InheritedStemSource != "ifh-root" {
+			t.Fatalf("cleared leaf inherited_stem = %q from %q, want %q from %q",
+				r.InheritedStem, r.InheritedStemSource, "rootstem", "ifh-root")
+		}
+	}
+}
+
+// TestTheSystemTypeListingServesItsInheritedFactsAPI: the system registry nests
+// by the same rule and serves the same pair, so the console has one vocabulary
+// across both blades rather than a fact the component page can teach and the
+// system page cannot.
+func TestTheSystemTypeListingServesItsInheritedFactsAPI(t *testing.T) {
+	ctx := context.Background()
+	gw := storagetest.NewDB(t)
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	c.do(ownerTok, http.MethodPost, "/system-types", map[string]any{
+		"name": "ifh-sys-root", "display_name": "Sys Root", "stem": "sysroot", "icon": "layers", "abbrev": "sr",
+	}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/system-types", map[string]any{
+		"name": "ifh-sys-mid", "display_name": "Sys Mid", "parent_id": "ifh-sys-root", "abbrev": "sm",
+	}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/system-types", map[string]any{
+		"name": "ifh-sys-leaf", "display_name": "Sys Leaf", "parent_id": "ifh-sys-mid",
+	}, http.StatusCreated)
+
+	out := c.do(ownerTok, http.MethodGet, "/system-types", nil, http.StatusOK)
+	var body struct {
+		SystemTypes []systemTypeWire `json:"system_types"`
+	}
+	if err := json.Unmarshal(out, &body); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	var leaf systemTypeWire
+	for _, r := range body.SystemTypes {
+		if r.Name == "ifh-sys-leaf" {
+			leaf = r
+		}
+	}
+	if leaf.InheritedStem != "sysroot" || leaf.InheritedStemSource != "ifh-sys-root" {
+		t.Fatalf("sys leaf inherited_stem = %q from %q, want %q from the grandparent %q",
+			leaf.InheritedStem, leaf.InheritedStemSource, "sysroot", "ifh-sys-root")
+	}
+	if leaf.InheritedAbbrev != "sm" || leaf.InheritedAbbrevSource != "ifh-sys-mid" {
+		t.Fatalf("sys leaf inherited_abbrev = %q from %q, want %q from the parent %q",
+			leaf.InheritedAbbrev, leaf.InheritedAbbrevSource, "sm", "ifh-sys-mid")
+	}
+	if leaf.InheritedIcon != "layers" || leaf.InheritedIconSource != "ifh-sys-root" {
+		t.Fatalf("sys leaf inherited_icon = %q from %q, want %q from %q",
+			leaf.InheritedIcon, leaf.InheritedIconSource, "layers", "ifh-sys-root")
+	}
+}

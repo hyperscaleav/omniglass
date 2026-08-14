@@ -33,6 +33,15 @@ type systemTypeBody struct {
 	Official     bool    `json:"official"`
 	ParentID     *string `json:"parent_id,omitempty" doc:"The parent system_type's id, the canonical handle; absent for a root type"`
 	Parent       *string `json:"parent,omitempty" doc:"The parent system_type's name, for display; absent for a root type"`
+	// The inherited facts, on the same terms as componentTypeBody's (#716):
+	// what this row would show if it stated nothing, which is what an edit
+	// blade's placeholder has to say, with the ancestor each one came from.
+	InheritedStem         string `json:"inherited_stem,omitempty" doc:"The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"`
+	InheritedStemSource   string `json:"inherited_stem_source,omitempty" doc:"The name of the ancestor system_type inherited_stem comes from, which may be further up the chain than the parent"`
+	InheritedIcon         string `json:"inherited_icon,omitempty" doc:"The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"`
+	InheritedIconSource   string `json:"inherited_icon_source,omitempty" doc:"The name of the ancestor system_type inherited_icon comes from, which may be further up the chain than the parent"`
+	InheritedAbbrev       string `json:"inherited_abbrev,omitempty" doc:"The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"`
+	InheritedAbbrevSource string `json:"inherited_abbrev_source,omitempty" doc:"The name of the ancestor system_type inherited_abbrev comes from, which may be further up the chain than the parent"`
 }
 
 func toSystemTypeBody(st *storage.SystemType, parentName *string) systemTypeBody {
@@ -144,7 +153,7 @@ func registerSystemTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		for i := range types {
 			byID[types[i].ID] = types[i].Name
 		}
-		icons := storage.ResolvedSystemTypeIcons(types)
+		facts := storage.SystemTypeChainFacts(types)
 		out := &listSystemTypesOutput{}
 		out.Body.SystemTypes = make([]systemTypeBody, 0, len(types))
 		for i := range types {
@@ -155,7 +164,11 @@ func registerSystemTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 				}
 			}
 			body := toSystemTypeBody(&types[i], parentName)
-			body.ResolvedIcon = icons[types[i].ID]
+			f := facts[types[i].ID]
+			body.ResolvedIcon = f.Icon.Shown
+			body.InheritedStem, body.InheritedStemSource = f.Stem.Inherited, f.Stem.InheritedFrom
+			body.InheritedIcon, body.InheritedIconSource = f.Icon.Inherited, f.Icon.InheritedFrom
+			body.InheritedAbbrev, body.InheritedAbbrevSource = f.Abbrev.Inherited, f.Abbrev.InheritedFrom
 			out.Body.SystemTypes = append(out.Body.SystemTypes, body)
 		}
 		return out, nil

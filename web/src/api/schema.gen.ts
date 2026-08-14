@@ -4161,6 +4161,18 @@ export interface components {
             icon?: string;
             /** @description The component_type's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+            inherited_abbrev?: string;
+            /** @description The name of the ancestor component_type inherited_abbrev comes from, which may be further up the chain than the parent */
+            inherited_abbrev_source?: string;
+            /** @description The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+            inherited_icon?: string;
+            /** @description The name of the ancestor component_type inherited_icon comes from, which may be further up the chain than the parent */
+            inherited_icon_source?: string;
+            /** @description The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+            inherited_stem?: string;
+            /** @description The name of the ancestor component_type inherited_stem comes from, which may be further up the chain than the parent */
+            inherited_stem_source?: string;
             /** @description The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components */
             label_rule?: string;
             /** @description The name an operator reads and types; renameable */
@@ -7019,6 +7031,18 @@ export interface components {
             icon?: string;
             /** @description The system_type's uuid, the stable handle that survives a rename */
             id: string;
+            /** @description The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+            inherited_abbrev?: string;
+            /** @description The name of the ancestor system_type inherited_abbrev comes from, which may be further up the chain than the parent */
+            inherited_abbrev_source?: string;
+            /** @description The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+            inherited_icon?: string;
+            /** @description The name of the ancestor system_type inherited_icon comes from, which may be further up the chain than the parent */
+            inherited_icon_source?: string;
+            /** @description The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon */
+            inherited_stem?: string;
+            /** @description The name of the ancestor system_type inherited_stem comes from, which may be further up the chain than the parent */
+            inherited_stem_source?: string;
             /** @description The label template systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems */
             label_rule?: string;
             /** @description The name an operator reads and types; renameable */

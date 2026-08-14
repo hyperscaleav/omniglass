@@ -542,6 +542,24 @@ components:
         id:
           description: The component_type's uuid, the stable handle that survives a rename
           type: string
+        inherited_abbrev:
+          description: "The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"
+          type: string
+        inherited_abbrev_source:
+          description: The name of the ancestor component_type inherited_abbrev comes from, which may be further up the chain than the parent
+          type: string
+        inherited_icon:
+          description: "The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"
+          type: string
+        inherited_icon_source:
+          description: The name of the ancestor component_type inherited_icon comes from, which may be further up the chain than the parent
+          type: string
+        inherited_stem:
+          description: "The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"
+          type: string
+        inherited_stem_source:
+          description: The name of the ancestor component_type inherited_stem comes from, which may be further up the chain than the parent
+          type: string
         label_rule:
           description: The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components
           type: string
@@ -5721,6 +5739,24 @@ components:
           type: string
         id:
           description: The system_type's uuid, the stable handle that survives a rename
+          type: string
+        inherited_abbrev:
+          description: "The abbrev this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"
+          type: string
+        inherited_abbrev_source:
+          description: The name of the ancestor system_type inherited_abbrev comes from, which may be further up the chain than the parent
+          type: string
+        inherited_icon:
+          description: "The glyph this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"
+          type: string
+        inherited_icon_source:
+          description: The name of the ancestor system_type inherited_icon comes from, which may be further up the chain than the parent
+          type: string
+        inherited_stem:
+          description: "The stem this type would take if it stated none: the nearest ancestor's. Absent when no ancestor states one. Served on the registry listing, on the same terms as resolved_icon"
+          type: string
+        inherited_stem_source:
+          description: The name of the ancestor system_type inherited_stem comes from, which may be further up the chain than the parent
           type: string
         label_rule:
           description: The label template systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems
