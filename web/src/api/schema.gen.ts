@@ -5752,7 +5752,7 @@ export interface components {
             /** @description The name an operator reads and types; renameable */
             name: string;
             /** @description How the platform NAMES locations of this type; absent means an operator names every one of them */
-            name_rule?: components["schemas"]["NameRuleBody"];
+            name_rule?: components["schemas"]["NameRuleReadBody"];
             /** @description True for a row this release ships. A shipped row is never written by an operator: an edit forks it */
             official: boolean;
         };
@@ -5913,7 +5913,15 @@ export interface components {
         NameRuleBody: {
             /** @description Suppress the ordinal on the first of this stem in a parent, so the only wing there is wing and the second is wing-2. Ignored when stem is empty. */
             bare_first?: boolean;
-            /** @description The generated name's prefix (wing gives wing, wing-2); empty makes the type positional, so the name is the ordinal alone (1, 2, 3) */
+            /** @description The generated name's prefix (wing gives wing, wing-2); empty makes the type positional, so the name is the ordinal alone (1, 2, 3). The 90-character ceiling is the mint's: 90 plus the widest ordinal is exactly the 100-character name cap, so every stem this admits mints legally at both ends of its output space */
+            stem: string;
+        };
+        NameRuleReadBody: {
+            /** @description True when the first of this stem in a parent carries no ordinal */
+            bare_first?: boolean;
+            /** @description The first two names this rule mints in one parent, produced by the same mint a create allocates from: the first shows whether the first of a stem carries a number, the second shows the shape every later one takes. Read these rather than rebuilding the shape, which is what keeps one definition of a generated name */
+            examples: string[] | null;
+            /** @description The generated name's prefix; empty makes the type positional */
             stem: string;
         };
         NodeBody: {

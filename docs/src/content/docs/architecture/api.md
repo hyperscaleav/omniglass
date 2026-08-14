@@ -172,7 +172,19 @@ PATCH /location-types/{id}
 ```
 
 Sending the `null` is optional and reads well; the mask is what carries the intent. This is the
-convention for every nullable object field that follows, not a `name_rule` special case.
+convention for every nullable object field that follows, not a `name_rule` special case. The mask
+governs the **whole write**, so a caller changing other fields in the same request names those too
+(`["display_name", "icon", "allowed_parent_types", "name_rule"]`) rather than the cleared field
+alone, which would silently leave the rest unwritten. The console's location type blade does exactly
+that when an operator turns naming off while editing something else.
+
+A `name_rule` also reads back with **`examples`**, the first two names it mints, produced by the same
+mint a create allocates from. It is served rather than derived by a surface for the reason the
+resolved icon and the drafted name are
+([ADR-0104](/architecture/decisions/#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)):
+a shape implemented twice eventually disagrees, and here the wrong answer would be a name an operator
+was promised that no create produces. It is a fact about the RULE and not the estate, so it costs no
+read, reserves no ordinal, and needs no scope.
 
 Built on the role declarations (`PATCH /standards/{id}/roles/{role}`, `PATCH
 /systems/{name}/roles/{role}`) and adopted by `PATCH /location-types/{id}`. The other `PATCH` routes

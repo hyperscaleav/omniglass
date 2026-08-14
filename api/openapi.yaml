@@ -3468,7 +3468,7 @@ components:
           description: The name an operator reads and types; renameable
           type: string
         name_rule:
-          $ref: "#/components/schemas/NameRuleBody"
+          $ref: "#/components/schemas/NameRuleReadBody"
           description: How the platform NAMES locations of this type; absent means an operator names every one of them
         official:
           description: "True for a row this release ships. A shipped row is never written by an operator: an edit forks it"
@@ -3750,12 +3750,32 @@ components:
           description: Suppress the ordinal on the first of this stem in a parent, so the only wing there is wing and the second is wing-2. Ignored when stem is empty.
           type: boolean
         stem:
-          description: The generated name's prefix (wing gives wing, wing-2); empty makes the type positional, so the name is the ordinal alone (1, 2, 3)
+          description: "The generated name's prefix (wing gives wing, wing-2); empty makes the type positional, so the name is the ordinal alone (1, 2, 3). The 90-character ceiling is the mint's: 90 plus the widest ordinal is exactly the 100-character name cap, so every stem this admits mints legally at both ends of its output space"
           maxLength: 90
           pattern: ^([a-z0-9][a-z0-9-]*)?$
           type: string
       required:
         - stem
+      type: object
+    NameRuleReadBody:
+      additionalProperties: false
+      properties:
+        bare_first:
+          description: True when the first of this stem in a parent carries no ordinal
+          type: boolean
+        examples:
+          description: "The first two names this rule mints in one parent, produced by the same mint a create allocates from: the first shows whether the first of a stem carries a number, the second shows the shape every later one takes. Read these rather than rebuilding the shape, which is what keeps one definition of a generated name"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        stem:
+          description: The generated name's prefix; empty makes the type positional
+          type: string
+      required:
+        - stem
+        - examples
       type: object
     NodeBody:
       additionalProperties: false

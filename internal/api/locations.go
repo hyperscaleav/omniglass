@@ -57,15 +57,15 @@ type listLocationsOutput struct {
 // "root" sentinel; empty means unconstrained), and whether it ships with the
 // binary. The registry lists alphabetically by display_name.
 type locationTypeBody struct {
-	ID                 string        `json:"id" doc:"The location type's uuid, the stable handle that survives a rename"`
-	Name               string        `json:"name" doc:"The name an operator reads and types; renameable"`
-	DisplayName        string        `json:"display_name"`
-	Icon               string        `json:"icon"`
-	AllowedParentTypes []string      `json:"allowed_parent_types"`
-	LabelRule          string        `json:"label_rule,omitempty" doc:"The label template locations of this type get; empty falls back to the global rule for locations"`
-	NameRule           *nameRuleBody `json:"name_rule,omitempty" doc:"How the platform NAMES locations of this type; absent means an operator names every one of them"`
-	Official           bool          `json:"official" doc:"True for a row this release ships. A shipped row is never written by an operator: an edit forks it"`
-	Forked             bool          `json:"forked" doc:"True when this shipped row carries changes of yours overriding it. Restore discards them"`
+	ID                 string            `json:"id" doc:"The location type's uuid, the stable handle that survives a rename"`
+	Name               string            `json:"name" doc:"The name an operator reads and types; renameable"`
+	DisplayName        string            `json:"display_name"`
+	Icon               string            `json:"icon"`
+	AllowedParentTypes []string          `json:"allowed_parent_types"`
+	LabelRule          string            `json:"label_rule,omitempty" doc:"The label template locations of this type get; empty falls back to the global rule for locations"`
+	NameRule           *nameRuleReadBody `json:"name_rule,omitempty" doc:"How the platform NAMES locations of this type; absent means an operator names every one of them"`
+	Official           bool              `json:"official" doc:"True for a row this release ships. A shipped row is never written by an operator: an edit forks it"`
+	Forked             bool              `json:"forked" doc:"True when this shipped row carries changes of yours overriding it. Restore discards them"`
 }
 
 // nameRuleBody is the wire shape of a location_type's name rule (#687): a
@@ -77,8 +77,26 @@ type locationTypeBody struct {
 // parking deck called 1, then 2. bare_first is ignored there, since suppressing
 // the ordinal of a name that IS its ordinal would leave nothing.
 type nameRuleBody struct {
-	Stem      string `json:"stem" maxLength:"90" pattern:"^([a-z0-9][a-z0-9-]*)?$" doc:"The generated name's prefix (wing gives wing, wing-2); empty makes the type positional, so the name is the ordinal alone (1, 2, 3)"`
+	Stem      string `json:"stem" maxLength:"90" pattern:"^([a-z0-9][a-z0-9-]*)?$" doc:"The generated name's prefix (wing gives wing, wing-2); empty makes the type positional, so the name is the ordinal alone (1, 2, 3). The 90-character ceiling is the mint's: 90 plus the widest ordinal is exactly the 100-character name cap, so every stem this admits mints legally at both ends of its output space"`
 	BareFirst bool   `json:"bare_first,omitempty" doc:"Suppress the ordinal on the first of this stem in a parent, so the only wing there is wing and the second is wing-2. Ignored when stem is empty."`
+}
+
+// nameRuleReadBody is a rule as it comes BACK: the declaration an operator
+// wrote, plus the names it actually mints. A read shape of its own rather than a
+// read-only field on the write shape, so a request body never carries a field
+// the server would ignore.
+//
+// Examples exist because a surface has to say what a rule PRODUCES, and the only
+// honest source for that is the mint (#710). A console that re-derived
+// "<stem>-<n>" in TypeScript would be the duplication #695 tracked and #702
+// closed for the drafted name: two implementations of one shape, whose failure
+// mode is an operator promised a name no create makes. It costs nothing to serve
+// (a pure function over two fields already in hand) and it is a fact about the
+// RULE, not about the estate, so it needs no read scope and reserves no ordinal.
+type nameRuleReadBody struct {
+	Stem      string   `json:"stem" doc:"The generated name's prefix; empty makes the type positional"`
+	BareFirst bool     `json:"bare_first,omitempty" doc:"True when the first of this stem in a parent carries no ordinal"`
+	Examples  []string `json:"examples" doc:"The first two names this rule mints in one parent, produced by the same mint a create allocates from: the first shows whether the first of a stem carries a number, the second shows the shape every later one takes. Read these rather than rebuilding the shape, which is what keeps one definition of a generated name"`
 }
 
 // toLocationTypeBody is the one projection of a registry row onto the wire.
@@ -93,11 +111,11 @@ func toLocationTypeBody(lt *storage.LocationType) locationTypeBody {
 	}
 }
 
-func toNameRuleBody(r *storage.NameRule) *nameRuleBody {
+func toNameRuleBody(r *storage.NameRule) *nameRuleReadBody {
 	if r == nil {
 		return nil
 	}
-	return &nameRuleBody{Stem: r.Stem, BareFirst: r.BareFirst}
+	return &nameRuleReadBody{Stem: r.Stem, BareFirst: r.BareFirst, Examples: r.Examples()}
 }
 
 func toStorageNameRule(r *nameRuleBody) *storage.NameRule {

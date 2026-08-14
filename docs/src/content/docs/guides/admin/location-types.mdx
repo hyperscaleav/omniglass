@@ -31,7 +31,8 @@ uuid minted by the database, the internal address the handle resolves to
   **unconstrained** (any parent, or root), the default; `root` is a reserved **name** no real
   type may take.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with
-  `location_type:update`) edits the display name, the icon, and the allowed parents; the
+  `location_type:update`) edits the display name, the icon, the allowed parents, and the naming
+  rule; the
   **name** is fixed, since a catalog row carries no rename (`:rename` is a component, system,
   location, and principal group affordance). **Delete** (with `location_type:delete`) removes
   the row, behind a confirm. A verb you lack greys just that button, its hover reason naming
@@ -75,6 +76,18 @@ uuid minted by the database, the internal address the handle resolves to
   the first number. A rule that could produce an illegal name is refused **here, when you save the
   rule** (422), never later as a create you cannot explain.
 
+  **Set one from the blade.** In the detail blade's **Edit** mode, the **Naming** field carries the
+  whole rule: tick **The platform names locations of this type**, type the **name stem** (leave it
+  empty for a positional type), and tick **No number on the first one under a parent** if the only
+  one there should read `wing` rather than `wing-1`. Save, and the field reads back the names the
+  rule actually produces, in the platform's own words: "Named wing, then wing-2, within their
+  parent." Those two names come from the server rather than from the browser, so what you are shown
+  is what a create will stamp. A stem with a capital or a space is refused at the field, before the
+  save; anything else the platform will not accept comes back on the save with the reason at the top
+  of the blade, and the blade stays open so you can fix it.
+
+  The same rule, from the CLI:
+
   ```sh
   omniglass location-type create --name deck --display-name "Deck" --name-rule '{"stem":""}'
   ```
@@ -108,11 +121,11 @@ uuid minted by the database, the internal address the handle resolves to
   `building-1` over the `17c` you typed, so set a rule only on a type whose names you want the
   platform to own.
 
-  **Turning it back off is one gesture.** The blade's **Turn naming off** button clears the rule and
-  hands naming back to you; names already minted are left exactly as they are. On the wire it is the
-  field named in `update_mask` with no rule in the body, which is how every nullable object field
-  clears (an omitted key and an explicit `null` are the same value once a request is decoded, so the
-  mask is what carries the intent):
+  **Turning it back off is the same tick box.** Clear **The platform names locations of this type**
+  and save: the rule goes and naming comes back to you, with names already minted left exactly as
+  they are. On the wire it is the field named in `update_mask` with no rule in the body, which is how
+  every nullable object field clears (an omitted key and an explicit `null` are the same value once a
+  request is decoded, so the mask is what carries the intent):
 
   ```sh
   omniglass location-type update floor --update-mask '["name_rule"]'

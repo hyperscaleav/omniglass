@@ -461,3 +461,43 @@ func TestValidateNameRuleRefusesWhatItCannotMint(t *testing.T) {
 // above: the rule's ceiling is about how long the MINTED name gets, so the stem
 // itself has to be legal for those cases to be testing what they claim.
 func stemOfLen(n int) string { return "w" + strings.Repeat("a", n-1) }
+
+// TestNameRuleExamplesAreWhatItMints is the property the console's naming
+// summary rests on (#710): the strings a surface SHOWS for a rule are produced
+// by the same nameMint a create allocates from, so the two cannot describe
+// different names. #695 closed the naming half of exactly this duplication by
+// having the server return the drafted name; this is the same answer for a rule
+// that is about to be saved rather than a row about to be created.
+//
+// It asserts the values a reader can check by eye AND that they are the mint's
+// own output at 1 and 2, which is what makes a future change to the mint
+// (another suppression rule, a separator) reach the console without anyone
+// editing TypeScript.
+func TestNameRuleExamplesAreWhatItMints(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		rule NameRule
+		want []string
+	}{
+		{"positional", NameRule{}, []string{"1", "2"}},
+		{"stemmed, counted from one", NameRule{Stem: "wing"}, []string{"wing-1", "wing-2"}},
+		{"stemmed, first suppressed", NameRule{Stem: "wing", BareFirst: true}, []string{"wing", "wing-2"}},
+		{"positional, ignoring a suppression it cannot honour", NameRule{BareFirst: true}, []string{"1", "2"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := c.rule.Examples()
+			if len(got) != len(c.want) {
+				t.Fatalf("Examples() = %v, want %v", got, c.want)
+			}
+			m := c.rule.normalized().mint()
+			for i, want := range c.want {
+				if got[i] != want {
+					t.Errorf("Examples()[%d] = %q, want %q", i, got[i], want)
+				}
+				if got[i] != m.name(i+1) {
+					t.Errorf("Examples()[%d] = %q, but the mint produces %q at ordinal %d: a surface would show a name no create makes", i, got[i], m.name(i+1), i+1)
+				}
+			}
+		})
+	}
+}

@@ -13,9 +13,25 @@ export function rel(iso: string): string {
 // describeError pulls a human message out of a thrown API error: openapi-fetch
 // surfaces the parsed Huma problem body ({ title, detail, status }), so String()
 // on it would yield "[object Object]". Falls back to a generic line.
+//
+// A SCHEMA refusal is the case the head line alone cannot carry. Huma's `detail`
+// for one is always the literal "validation failed", and everything an operator
+// could act on is in `errors[]`: which field, and what was wrong with it. Those
+// are appended, `body.` stripped from the location because an operator is
+// looking at a field rather than at a request, and duplicates collapsed because
+// one value failing two keywords (a minLength and a pattern, say) reports twice
+// and says one thing.
 export function describeError(e: unknown): string {
-  const o = e as { detail?: string; title?: string } | null | undefined;
-  return o?.detail ?? o?.title ?? "The operation failed.";
+  const o = e as { detail?: string; title?: string; errors?: { message?: string; location?: string }[] } | null | undefined;
+  const head = o?.detail ?? o?.title ?? "The operation failed.";
+  const seen = new Set<string>();
+  for (const err of o?.errors ?? []) {
+    const message = (err?.message ?? "").trim();
+    if (!message) continue;
+    const where = (err?.location ?? "").replace(/^body\./, "").trim();
+    seen.add(where ? `${where}: ${message}` : message);
+  }
+  return seen.size ? `${head}: ${[...seen].join("; ")}` : head;
 }
 
 export function fmtTime(iso: string): string {

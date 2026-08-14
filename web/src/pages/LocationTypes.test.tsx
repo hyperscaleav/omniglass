@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, fireEvent, screen, waitFor, within } from "@solidjs/testing-library";
+import { render, fireEvent, screen, waitFor, within, cleanup } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import LocationTypes from "./LocationTypes";
 import { LOCATION_TYPES_KEY, type LocationType } from "../lib/location_types";
@@ -314,23 +314,140 @@ describe("LocationTypes page", () => {
     expect(within(blade).getByText("Restore shipped")).toBeTruthy();
   });
 
-  // #692 on the console: the exit from platform naming, spelled the one way the
-  // wire spells it (the field named in update_mask, no rule in the body).
-  it("turns naming off with a masked clear", async () => {
-    let sent: unknown;
+  // #710's editor and #692's exit, now one control. mountOne seeds a single row
+  // with whatever rule the case is about, since the naming surface is per row
+  // and the shared fixture deliberately carries no rule (no shipped type does,
+  // after ADR-0103's reversal).
+  function mountOne(row: LocationType, onPatch?: (body: unknown) => void) {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
-      if (req.method === "PATCH" && req.url.includes("/location-types/deck")) {
-        sent = JSON.parse(await req.clone().text());
+      if (req.method === "PATCH" && req.url.includes(`/location-types/${row.name}`)) {
+        onPatch?.(JSON.parse(await req.clone().text()));
         return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } });
       }
       return new Response(JSON.stringify({ location_types: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
-    vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...LOCATION_TYPES_KEY], [row]);
+    qc.setQueryData([...ME_KEY], admin);
+    qc.setQueryData([...PROPERTIES_KEY], catalog);
+    qc.setQueryData([...METRICS_KEY], []);
+    qc.setQueryData([...classifierPropertiesKey("location-type", row.name)], []);
+    qc.setQueryData([...classifierMetricsKey("location-type", row.name)], []);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <LocationTypes />
+      </QueryClientProvider>
+    ));
+  }
 
+  const openBlade = async () =>
+    waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+
+  // The summary says what a rule PRODUCES, and those strings come from the
+  // server's `examples`, minted by the same nameMint a create allocates from
+  // (#695, #702). The fixture's examples are deliberately NOT what the mint
+  // would produce for this stem, so a console that re-derived them in
+  // TypeScript renders "deck-1, deck-2" and fails here.
+  it("reads what a rule produces from the server rather than re-deriving it", async () => {
+    mountOne({
+      id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", official: false, forked: false,
+      icon: "map-pin", allowed_parent_types: [],
+      name_rule: { stem: "deck", examples: ["from-the-server", "from-the-server-2"] },
+    });
+    fireEvent.click(screen.getByText("deck"));
+    const blade = await openBlade();
+    expect(within(blade).getByText(/from-the-server, then from-the-server-2/)).toBeTruthy();
+    expect(within(blade).queryByText(/deck-1/)).toBeNull();
+  });
+
+  // The gap #710 exists to close: an operator turns naming ON. The rule is a
+  // declaration (ADR-0102), so the editor is a stem and the first-ordinal
+  // suppression flag, and the body carries the rule itself.
+  it("sets a name rule on a type that had none", async () => {
+    let sent: unknown;
+    mountOne({
+      id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", official: false, forked: false,
+      icon: "map-pin", allowed_parent_types: [],
+    }, (b) => { sent = b; });
+    fireEvent.click(screen.getByText("deck"));
+    const blade = await openBlade();
+    expect(within(blade).getByText(/You name every location of this type/)).toBeTruthy();
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    fireEvent.click(within(blade).getByLabelText("The platform names locations of this type"));
+    fireEvent.input(within(blade).getByLabelText("Name stem") as HTMLInputElement, { target: { value: "deck" } });
+    fireEvent.click(within(blade).getByLabelText("No number on the first one under a parent"));
+    fireEvent.click(within(blade).getByText("Save"));
+    await waitFor(() => expect(sent).toBeTruthy());
+    expect(sent).toMatchObject({ name_rule: { stem: "deck", bare_first: true } });
+    expect(sent).not.toHaveProperty("update_mask");
+  });
+
+  // An empty stem is the POSITIONAL type, whose ordinal genuinely is its name.
+  // It has to be settable, since it is the one shape a shipped estate has no
+  // example of and the parking-deck case the capability was built for.
+  it("sets a positional rule, with an empty stem, without falling back to no rule", async () => {
+    let sent: unknown;
+    mountOne({
+      id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", official: false, forked: false,
+      icon: "map-pin", allowed_parent_types: [],
+    }, (b) => { sent = b; });
+    fireEvent.click(screen.getByText("deck"));
+    const blade = await openBlade();
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    fireEvent.click(within(blade).getByLabelText("The platform names locations of this type"));
+    fireEvent.click(within(blade).getByText("Save"));
+    await waitFor(() => expect(sent).toBeTruthy());
+    expect(sent).toMatchObject({ name_rule: { stem: "", bare_first: false } });
+  });
+
+  // #692's exit, moved INTO the editor rather than sitting beside it: unchecking
+  // the toggle clears the rule. The clear is still the one spelling the wire has
+  // for a nullable object (the field named in update_mask with no rule in the
+  // body), and because the mask governs the whole write, it names every field
+  // this blade writes rather than name_rule alone.
+  it("turns naming off from the editor with a masked clear", async () => {
+    let sent: unknown;
+    mountOne({
+      id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", official: false, forked: false,
+      icon: "map-pin", allowed_parent_types: [], name_rule: { stem: "", examples: ["1", "2"] },
+    }, (b) => { sent = b; });
+    fireEvent.click(screen.getByText("deck"));
+    const blade = await openBlade();
+    expect(within(blade).getByText(/Named 1, then 2/)).toBeTruthy();
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    fireEvent.click(within(blade).getByLabelText("The platform names locations of this type"));
+    fireEvent.click(within(blade).getByText("Save"));
+    await waitFor(() => expect(sent).toBeTruthy());
+    expect(sent).toEqual({
+      display_name: "Deck",
+      icon: "map-pin",
+      allowed_parent_types: [],
+      update_mask: ["display_name", "icon", "allowed_parent_types", "name_rule"],
+    });
+  });
+
+  // A rule the server refuses comes back as a 422 naming the reason, and the
+  // operator has to read it where they can act on it. The blade stays in edit
+  // mode, so the stem they typed is still there to fix.
+  it("shows the server's refusal of a rule in the blade", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      if (req.method === "PATCH" && req.url.includes("/location-types/deck")) {
+        return new Response(
+          JSON.stringify({ title: "Unprocessable Entity", status: 422, detail: "validation failed", errors: [{ message: "expected length <= 90", location: "body.name_rule.stem" }] }),
+          { status: 422, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ location_types: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...LOCATION_TYPES_KEY], [
-      { id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", official: false, forked: false, icon: "map-pin", allowed_parent_types: [], name_rule: { stem: "" } },
+      { id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", official: false, forked: false, icon: "map-pin", allowed_parent_types: [] },
     ]);
     qc.setQueryData([...ME_KEY], admin);
     qc.setQueryData([...PROPERTIES_KEY], catalog);
@@ -343,16 +460,69 @@ describe("LocationTypes page", () => {
       </QueryClientProvider>
     ));
     fireEvent.click(screen.getByText("deck"));
-    const blade = await waitFor(() => {
-      const el = asides()[0];
-      if (!el) throw new Error("no blade yet");
-      return el as HTMLElement;
-    });
-    expect(within(blade).getByText(/Positional: named 1, 2, 3/)).toBeTruthy();
+    const blade = await openBlade();
     fireEvent.click(within(blade).getByLabelText("Edit"));
-    fireEvent.click(within(blade).getByText("Turn naming off"));
+    fireEvent.click(within(blade).getByLabelText("The platform names locations of this type"));
+    fireEvent.input(within(blade).getByLabelText("Name stem") as HTMLInputElement, { target: { value: "wing" } });
+    fireEvent.click(within(blade).getByText("Save"));
+    await waitFor(() => expect(within(blade).getByRole("alert").textContent).toMatch(/expected length <= 90/));
+    // Still in edit mode, so the operator can fix the stem rather than retype it.
+    expect(within(blade).getByLabelText("Name stem")).toBeTruthy();
+  });
+
+  // A malformed stem is refused inline instead of at the server, per ADR-0113:
+  // a rule is a TypeScript pure function and the binding's `valid` refuses the
+  // save. The LENGTH bound is deliberately NOT restated here, because it is
+  // arithmetic over the mint's output space (a stem plus the widest ordinal has
+  // to fit the name cap) and that belongs to the server.
+  it("refuses a malformed stem inline and disables Save", async () => {
+    let sent: unknown;
+    mountOne({
+      id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", official: false, forked: false,
+      icon: "map-pin", allowed_parent_types: [],
+    }, (b) => { sent = b; });
+    fireEvent.click(screen.getByText("deck"));
+    const blade = await openBlade();
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    fireEvent.click(within(blade).getByLabelText("The platform names locations of this type"));
+    fireEvent.input(within(blade).getByLabelText("Name stem") as HTMLInputElement, { target: { value: "Bad Stem" } });
+    expect(within(blade).getByText(/lowercase letters, digits, and hyphens/)).toBeTruthy();
+    expect((within(blade).getByText("Save").closest("button") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(blade).getByText("Save"));
+    expect(sent).toBeUndefined();
+  });
+
+  // #703 through the new surface: opting a SHIPPED type in is an edit, so it
+  // forks rather than writing the platform's row, and the fork is restorable.
+  // No shipped type carries a rule, so this is the ordinary way an operator
+  // reaches generated location names at all.
+  it("sets a rule on a shipped type, which forks it and leaves Restore shipped", async () => {
+    let sent: unknown;
+    mountOne({
+      id: uuidFor("lt-floor"), name: "floor", display_name: "Floor", official: true, forked: false,
+      icon: "layers", allowed_parent_types: [],
+    }, (b) => { sent = b; });
+    fireEvent.click(screen.getByText("floor"));
+    const blade = await openBlade();
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    fireEvent.click(within(blade).getByLabelText("The platform names locations of this type"));
+    fireEvent.input(within(blade).getByLabelText("Name stem") as HTMLInputElement, { target: { value: "level" } });
+    fireEvent.click(within(blade).getByText("Save"));
     await waitFor(() => expect(sent).toBeTruthy());
-    expect(sent).toEqual({ update_mask: ["name_rule"] });
+    expect(sent).toMatchObject({ name_rule: { stem: "level" } });
+
+    // A shipped row that now carries the operator's version offers Restore in
+    // the slot a custom row puts Delete.
+    cleanup();
+    mountOne({
+      id: uuidFor("lt-floor"), name: "floor", display_name: "Floor", official: true, forked: true,
+      icon: "layers", allowed_parent_types: [], name_rule: { stem: "level", examples: ["level-1", "level-2"] },
+    });
+    fireEvent.click(screen.getByText("floor"));
+    const forkedBlade = await openBlade();
+    fireEvent.click(within(forkedBlade).getByLabelText("Edit"));
+    expect(within(forkedBlade).getByText("Restore shipped")).toBeTruthy();
+    expect(within(forkedBlade).queryByLabelText("Delete")).toBeNull();
   });
 
   // The blade model (#621): a blade opens read-only, and EVERY mutating control,
