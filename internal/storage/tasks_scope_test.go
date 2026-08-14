@@ -74,7 +74,7 @@ func TestTaskDerivedScope(t *testing.T) {
 
 	// Node PROJECTION: placing the interface on a node projects onto its task (the
 	// task carries no node column of its own).
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all); err != nil {
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
 		t.Fatalf("create node: %v", err)
 	}
 	if _, err := gw.UpdateInterface(ctx, "", ifA.ID, storage.InterfacePatch{Node: strptr("edge-1")}, all, all); err != nil {

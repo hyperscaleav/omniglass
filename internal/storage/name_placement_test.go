@@ -259,10 +259,10 @@ func TestNodeNameStaysGlobal(t *testing.T) {
 	gw := openGateway(t)
 	ctx := context.Background()
 
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-node"}, all); err != nil {
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-node"}, all, all); err != nil {
 		t.Fatalf("first node: %v", err)
 	}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-node"}, all); !errors.Is(err, storage.ErrNodeExists) {
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-node"}, all, all); !errors.Is(err, storage.ErrNodeExists) {
 		t.Fatalf("second node with the same name = %v, want ErrNodeExists", err)
 	}
 }

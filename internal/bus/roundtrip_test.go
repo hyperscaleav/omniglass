@@ -46,7 +46,7 @@ func TestNodeRoundTrip(t *testing.T) {
 
 	// Enroll node-a and node-b: create + mint token.
 	for _, name := range []string{"node-a", "node-b"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all); err != nil {
+		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all, all); err != nil {
 			t.Fatalf("create %s: %v", name, err)
 		}
 	}
@@ -169,7 +169,7 @@ func TestWorklistReplyConfusedDeputy(t *testing.T) {
 	// node-a is enrolled and connects; node-b is enrolled but never heartbeats
 	// and never connects (its liveness can only come from a forge).
 	for _, name := range []string{"node-a", "node-b"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all); err != nil {
+		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all, all); err != nil {
 			t.Fatalf("create %s: %v", name, err)
 		}
 	}

@@ -33,7 +33,7 @@ func TestResolveTaskOwner(t *testing.T) {
 	all := scope.Set{All: true}
 
 	for _, name := range []string{"node-a", "node-b"} {
-		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all); err != nil {
+		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: name}, all, all); err != nil {
 			t.Fatalf("create %s: %v", name, err)
 		}
 	}

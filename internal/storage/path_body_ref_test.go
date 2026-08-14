@@ -184,14 +184,14 @@ func TestCreateNodeDottedMissingLocationMatchesBareNameForm(t *testing.T) {
 
 	_, bareErr := gw.CreateNode(ctx, "", storage.NodeSpec{
 		Name: "node-bare-loc", LocationName: strptr("ghost-loc"),
-	}, all)
+	}, all, all)
 	if !errors.Is(bareErr, storage.ErrLocationNotFound) {
 		t.Fatalf("bare-name missing node location = %v, want ErrLocationNotFound", bareErr)
 	}
 
 	_, dottedErr := gw.CreateNode(ctx, "", storage.NodeSpec{
 		Name: "node-dotted-loc", LocationName: strptr("boi.nope"),
-	}, all)
+	}, all, all)
 	if !errors.Is(dottedErr, storage.ErrLocationNotFound) {
 		t.Fatalf("dotted missing node location (boi.nope) = %v, want ErrLocationNotFound (same as bare-name form)", dottedErr)
 	}

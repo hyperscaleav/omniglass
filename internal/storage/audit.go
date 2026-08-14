@@ -12,7 +12,7 @@ type AuditEntry struct {
 	ID            string
 	TS            string // RFC3339
 	ActorID       string // empty for a system/bootstrap write
-	ActorName     string // the actor's identifier: a human's username, a service account's name
+	ActorName     string // the actor's identifier: a human's username, a service account's name, a node's name
 	RealActorID   string // set when the action was taken while impersonating
 	RealActorName string
 	Verb          string
@@ -83,16 +83,16 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 	var out []AuditEntry
 	for rows.Next() {
 		var e AuditEntry
-		var actorUser, actorSvc, actorSnap *string
-		var realUser, realSvc, realSnap *string
+		var actorUser, actorSvc, actorNode, actorSnap *string
+		var realUser, realSvc, realNode, realSnap *string
 		if err := rows.Scan(&e.ID, &e.TS,
-			&e.ActorID, &actorUser, &actorSvc, &actorSnap,
-			&e.RealActorID, &realUser, &realSvc, &realSnap,
+			&e.ActorID, &actorUser, &actorSvc, &actorNode, &actorSnap,
+			&e.RealActorID, &realUser, &realSvc, &realNode, &realSnap,
 			&e.Verb, &e.Resource, &e.ResourceID, &e.Old, &e.New); err != nil {
 			return nil, fmt.Errorf("storage: scan audit row: %w", err)
 		}
-		e.ActorName = liveOrSnapshot(principalIdent(actorUser, actorSvc), actorSnap)
-		e.RealActorName = liveOrSnapshot(principalIdent(realUser, realSvc), realSnap)
+		e.ActorName = liveOrSnapshot(principalIdent(actorUser, actorSvc, actorNode), actorSnap)
+		e.RealActorName = liveOrSnapshot(principalIdent(realUser, realSvc, realNode), realSnap)
 		out = append(out, e)
 	}
 	return out, rows.Err()

@@ -34,13 +34,13 @@ drawer. See [implementation status](/architecture/status/).
   able to prove that a given uuid is the right table's. The remaining gap is narrow and known: a
   `credential` row is keyed on its principal's uuid rather than its own.
 - **The actor** is resolved by IAM ([identity and access](/architecture/identity-access/)): the
-  human, service, or node. The read resolves it to the actor's **identifier**, a human's username
-  or a service account's name, through the gateway's one resolution
+  human, service, or node. The read resolves it to the actor's **identifier**, a human's username, a
+  service account's name, or a node's name, through the gateway's one resolution
   ([ADR-0110](/architecture/decisions/#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions)),
-  falling back to the snapshot on the row once that principal is purged. A **node** actor is the
-  gap the resolution does not cover and reads empty, which is inherited behaviour and not a design;
-  the principal id is on the row either way. Nothing here surfaces a raw uuid where a name was
-  expected.
+  falling back to the snapshot on the row once that principal is purged. All three profiled kinds
+  resolve, so only a principal with no profile row at all reads empty; a **node** actor read blank
+  until [#738](https://github.com/hyperscaleav/omniglass/issues/738) made `node.name` the third
+  source. Nothing here surfaces a raw uuid where a name was expected.
 - **An AI-accepted suggestion is one row.** An AI tool acts via OAuth as a `human` or `service`
   principal, so the actor is that principal; the AI-sourced marking rides alongside the row
   ([AI](/architecture/ai/)).
@@ -85,8 +85,8 @@ action records **both** actors (`actor_principal_id` the impersonated principal,
 (`actor_username`, `real_actor_username`) with the foreign keys going `ON DELETE SET NULL`, so the
 trail stays attributable after its actor is purged
 ([ADR-0016](/architecture/decisions/#adr-0016-a-principal-can-be-purged-and-the-audit-trail-is-denormalized-to-survive-it)).
-What gets written there is the actor's **identifier**, a human's username or a service account's
-name, and the platform's answer to which one belongs to the gateway rather than to the schema: the
+What gets written there is the actor's **identifier**, a human's username, a service account's name,
+or a node's name, and the platform's answer to which one belongs to the gateway rather than to the schema: the
 stored function that used to resolve it retired, so the order is stated once in Go and rendered into
 the statements the gateway binds
 ([ADR-0110](/architecture/decisions/#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions)).

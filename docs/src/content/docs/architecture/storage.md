@@ -339,7 +339,7 @@ transactions each revoking the second-to-last owner grant both see one remaining
 Everything else composes at the gateway. The last stored function that was NOT that guard retired
 with
 [ADR-0110](/architecture/decisions/#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions):
-what names a principal (a human's username, else a service account's name) is now declared once in
+what names a principal (a human's username, else a service account's name, else a node's name) is now declared once in
 the gateway and rendered into every statement that needs it, so a caller picks a SHAPE and never a
 column. A read over many rows LEFT JOINs the sources and folds them in Go; the two positions a join
 cannot reach (an `UPDATE ... RETURNING`, and the audit insert that denormalizes the actor inside the

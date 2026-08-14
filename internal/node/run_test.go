@@ -40,7 +40,7 @@ func TestNodeRunOnce(t *testing.T) {
 	all := scope.Set{All: true}
 
 	// Enroll the node (create + mint token). The stored form is hex sha256.
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "site-a"}, all); err != nil {
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "site-a"}, all, all); err != nil {
 		t.Fatalf("create node: %v", err)
 	}
 	token := "enroll-token-a"
@@ -160,7 +160,7 @@ func TestNodeVerdictPerInterface(t *testing.T) {
 	target := ln.Addr().String()
 
 	// Enroll the node.
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "site-a"}, all); err != nil {
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "site-a"}, all, all); err != nil {
 		t.Fatalf("create node: %v", err)
 	}
 	token := "enroll-token-verdict"

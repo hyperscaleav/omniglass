@@ -48,7 +48,7 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 			return err
 		},
 		"node": func(s string) error {
-			_, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: s}, all)
+			_, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: s}, all, all)
 			return err
 		},
 		"location_type": func(s string) error {

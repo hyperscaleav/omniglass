@@ -87,7 +87,7 @@ func TestCollectionEndToEnd(t *testing.T) {
 	}
 	defer gw.Close()
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "site-a"}, all); err != nil {
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "site-a"}, all, all); err != nil {
 		t.Fatalf("create node: %v", err)
 	}
 	token := "e2e-enroll-token"

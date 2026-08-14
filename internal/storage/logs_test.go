@@ -96,7 +96,7 @@ func TestInsertNodeLogs(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all); err != nil {
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
 		t.Fatalf("create node: %v", err)
 	}
 

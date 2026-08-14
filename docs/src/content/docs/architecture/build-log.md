@@ -5024,3 +5024,75 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   restored TO, and the console's other restores (Settings, the pen) already said default. The retired
   wording joins the `internal/docslint` denylist, with this log and the decision log keeping the
   words that were true on the day they were written.
+- **A node binds a location the caller can read**
+  ([#705](https://github.com/hyperscaleav/omniglass/issues/705)). `CreateNode` and `UpdateNode`
+  resolved their optional `location` scope-blind, the shape
+  [#700](https://github.com/hyperscaleav/omniglass/issues/700) closed on the component and system
+  create and move paths and left here to keep that slice's diff honest to its own issue. They now
+  take the caller's `location:read` set and resolve through `resolvePlacementRef`, the seam #700
+  built, with the API injecting that scope exactly as the system and component routes already do.
+
+  The node tier reaches the fix by a different argument than the other four, and saying which one
+  matters. #700 was urgent because a create stamps a label rendered from the referenced row's, so an
+  existence-only bind turned a create into a disclosure channel for a row the caller could not read.
+  No node label rule exists, so nothing here is stamped and nothing handed back. What is left is the
+  invariant this repository states as an invariant: ABAC scope is injected by the Storage Gateway on
+  every applicable query, and a caller-supplied reference resolved without it is an exception to that
+  rather than a carve-out anybody decided on. Out of scope answers the same non-disclosing
+  `ErrLocationNotFound` an absent location gives, because a refusal that told them apart would
+  confirm the row exists one level up.
+
+  The regression test drives the gateway seam rather than the wire, and the reason is a fact about
+  the shipped role set rather than a shortcut. `node:create` resolves only from an `all` grant
+  (`applicableKinds` admits no tier for a node), and every seeded role carrying `node:*` inherits the
+  viewer read floor, so no principal that can create a node today has a narrow `location:read`. The
+  seam is where the two sets are separate arguments and where the invariant is written, and a custom
+  role with `node:create` and no read floor is a shape the platform admits. The owner runs the
+  identical body in the same test, so the refusal is proven to be a scope boundary rather than a
+  broken write path, and the out-of-scope refusal is compared against a genuinely absent location's.
+- **The system reclassify guard keys on the stem, not on the type id**
+  ([#706](https://github.com/hyperscaleav/omniglass/issues/706)). `UpdateSystem` re-minted a
+  platform-owned name whenever the classification ID changed, and the mint does not read that id. It
+  reads the STEM the type's chain resolves to (`resolveSystemTypeFacts`, inherited-first-non-null,
+  ADR-0095), so two `system_type` rows inheriting one stem from a shared ancestor mint identical
+  names. A reclassify between them changes no input to the mint, and re-minting anyway moved the
+  name onto a lower ordinal freed by an earlier `:rename`, under `system:update` with no rename
+  requested. That is the failure ADR-0101 refused for the presence-shaped guard, one step narrower.
+
+  The fix is the sentence the component tier already carries, not a new one: `stemForSystemType` is
+  the first half of `generateNameForSystemType` lifted out exactly as `stemForProduct` was lifted,
+  and `systemTypeStemMoved` is `productStemMoved` over the shorter walk (a system reads its chain
+  directly, a component reads a product that points at one). The regression test drives the issue's
+  own reproduction: two stem-less children of one stem-carrying parent, two generated systems of the
+  first type in one room, a `:rename` on the first freeing the bare name, then a reclassify of the
+  second onto the sibling type. The guard-rail rides beside it, because a fix that stopped
+  re-minting entirely would pass that test alone: a reclassify onto a DIFFERENT stem still re-mints,
+  and an un-classify still reaches the generator and is still refused there rather than by a branch
+  in the guard.
+
+  The divergence ADR-0101 recorded between the two tiers, put there by #696/#691, closes with this:
+  both now compare the resolved stem, each over its own path to one.
+- **A node principal has a name in the trail**
+  ([#738](https://github.com/hyperscaleav/omniglass/issues/738)). The gateway's identifier
+  resolution had a human arm and a service arm and no node arm, so a `kind=node` principal resolved
+  to the empty string everywhere a principal is named: the audit actor column, the alarm
+  acknowledgement, the group roster. Preserved behaviour rather than introduced, and deliberately
+  so: the dropped `principal_label(uuid)` was `coalesce(human.username, service.label)` with no node
+  arm either, and #564 kept the shape so a refactor about WHERE the answer lives changed nothing
+  about what it says. What that preserved was a blank actor on an audit row.
+
+  **The node's identifier is its `name`**, on the same reasoning that made the other two columns
+  identifiers: it is the only operator-visible handle the row has, it is unique (`node_name_key`,
+  beside `human_username_key` and `service_name_key`), and it is already the estate address and the
+  NATS subject token, so it is the string an operator would recognise in a trail.
+  `node.display_name` cannot be one, being optional and not unique, and this string is denormalized
+  as bare text into `audit_log` where nothing survives beside it to disambiguate a duplicate.
+
+  Adding it is one row in `principalIdentSources`, because that list is the only place in the tree
+  that names these tables and columns and every shape is rendered from it. The three folds that read
+  those shapes each grew a column, which is the one thing the variadic resolution cannot catch for
+  them, so the test grew to match: the invariant test drives the node arm to a real answer instead
+  of to the empty string, and a new test drives all three kinds through the audit write, the audit
+  read, the alarm read and the group roster, since a fold reading one column fewer than its query
+  returned is a defect only a surface can show. Still not reachable in a shipped estate (nothing
+  seeds a node principal with a grant), which is why it was worth fixing before something did.

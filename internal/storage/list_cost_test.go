@@ -419,7 +419,7 @@ func TestListPrincipalsCostIsFlatInPageSize(t *testing.T) {
 	// A node principal, so the page is not single-kind. A per-kind branch would
 	// cost one more statement here than in a humans-only directory; the union
 	// costs the same, which is what makes the ceiling below a real number.
-	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "probe-node"}, all); err != nil {
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "probe-node"}, all, all); err != nil {
 		t.Fatalf("create node: %v", err)
 	}
 

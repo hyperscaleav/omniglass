@@ -700,18 +700,79 @@ func generateNameForSystemType(ctx context.Context, tx pgx.Tx, systemTypeID *str
 	if systemTypeID == nil || *systemTypeID == "" {
 		return "", 0, ErrSystemTypeRequiredForName
 	}
-	typeID, err := uuid.Parse(*systemTypeID)
+	stem, typeID, err := stemForSystemType(ctx, tx, *systemTypeID)
 	if err != nil {
-		return "", 0, fmt.Errorf("storage: system_type id %q is not a uuid: %w", *systemTypeID, err)
-	}
-	stem, _, _, _, err := resolveSystemTypeFacts(ctx, tx, typeID)
-	if err != nil {
-		return "", 0, fmt.Errorf("storage: resolve system_type facts for %q: %w", typeID, err)
+		return "", 0, err
 	}
 	if stem == "" {
 		return "", 0, fmt.Errorf("%w: system_type %s", ErrSystemTypeNoStem, typeID)
 	}
 	return generateName(ctx, tx, systemMint(stem), systemNameScope(parentID, locationID), excludeID)
+}
+
+// stemForSystemType resolves the stem a system classified by this system_type
+// mints its name from: the type's chain, walked inherited-first-non-null
+// (resolveSystemTypeFacts, ADR-0095). It is the first half of
+// generateNameForSystemType, lifted out the way stemForProduct was lifted on the
+// component tier and for the same reason: a caller can ask what a name WOULD be
+// minted from without minting one, which is what the reclassify guard needs. Two
+// types that inherit one stem from a shared ancestor are two classifications and
+// one mint input.
+//
+// The parsed type id travels back with the stem for the refusal above, which
+// names the TYPE rather than only the reference an operator supplied.
+//
+// An empty stem is a real answer, not an error: the walk reached the root of the
+// ancestry with no stem set anywhere on it.
+func stemForSystemType(ctx context.Context, q querier, systemTypeID string) (string, uuid.UUID, error) {
+	typeID, err := uuid.Parse(systemTypeID)
+	if err != nil {
+		return "", uuid.UUID{}, fmt.Errorf("storage: system_type id %q is not a uuid: %w", systemTypeID, err)
+	}
+	stem, _, _, _, err := resolveSystemTypeFacts(ctx, q, typeID)
+	if err != nil {
+		return "", typeID, fmt.Errorf("storage: resolve system_type facts for %q: %w", typeID, err)
+	}
+	return stem, typeID, nil
+}
+
+// systemTypeStemMoved reports whether reclassifying from one system_type to
+// another changes the stem a platform-owned name is minted from, which is the
+// only thing about a reclassify the mint reads: the placement bucket, its other
+// input, is untouched by that verb.
+//
+// It is deliberately NOT a comparison of the two type ids (#706). A system
+// resolves its stem THROUGH the type's ancestry, so two types inheriting one
+// stem from a shared ancestor mint identical names, and re-minting on such a
+// reclassify moves the name onto a lower ordinal freed by an earlier :rename for
+// no gain. That is ADR-0101's derivation, and it is the same sentence
+// productStemMoved carries one tier down, where a component reaches its stem
+// through a product instead.
+//
+// An absent from-type cannot be compared, so it re-mints. A destination with no
+// type at all (an un-classify) and a destination whose chain resolves no stem
+// are never "the same stem" either: there is nothing left for a platform-owned
+// name to derive from, so both reach the generator and are refused THERE, by the
+// generator rather than by a branch here.
+func systemTypeStemMoved(ctx context.Context, q querier, fromTypeID, toTypeID *string) (bool, error) {
+	if fromTypeID == nil || toTypeID == nil || *toTypeID == "" {
+		return true, nil
+	}
+	if *fromTypeID == *toTypeID {
+		return false, nil
+	}
+	from, _, err := stemForSystemType(ctx, q, *fromTypeID)
+	if err != nil {
+		return false, err
+	}
+	to, _, err := stemForSystemType(ctx, q, *toTypeID)
+	if err != nil {
+		return false, err
+	}
+	if to == "" {
+		return true, nil
+	}
+	return from != to, nil
 }
 
 // locationNameRule reads a location_type's name rule inside the caller's
