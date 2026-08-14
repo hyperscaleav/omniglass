@@ -15,6 +15,13 @@ import (
 // value in the property cache that the target's observed value settles against. It is
 // an AIP custom method (:issue), gated by command:issue and scope-injected through the
 // component. Settlement is computed and returned, never stored.
+//
+// The fence is the ISSUE scope, not the read scope (#749). This route actuates a
+// physical device, so the set that decides which components it reaches has to come
+// from the permission that authorizes the actuation: a principal holding a wide
+// component read beside a room-scoped command grant may command that room and no
+// more. The read scope is still passed, and still grants nothing: it decides only
+// which refusal the caller is owed (ADR-0116).
 
 type issueCommandInput struct {
 	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
@@ -45,18 +52,30 @@ func registerCommandRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPost,
 		Path:        "/components/{name}/commands:issue",
 		Summary:     "Issue a command to a component",
-		Description: "Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue; an out-of-scope component is a non-disclosing 404.",
+		Description: "Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.",
 	}, "command", "issue"), func(ctx context.Context, in *issueCommandInput) (*commandOutput, error) {
-		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
+		// The ACTION scope comes from command:issue, so only the grants whose role
+		// actually carries the actuation contribute their scope. The READ scope is
+		// the caller's own component:read and decides only which refusal that
+		// principal is owed (#749, ADR-0116): a component outside it is the
+		// non-disclosing 404, and one inside it that the issue scope does not
+		// reach is the truthful 403. It grants nothing.
+		//
+		// Resolved ONCE, here, and bound by id from this point on: the two gateway
+		// calls below take that id rather than the caller's raw reference, so
+		// there is no second name resolve to disagree with the first (or to raise
+		// an ambiguity the first already settled).
+		compID, err := gw.ResolveActionTarget(ctx, "component", in.Name,
+			a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "command", "issue"))
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
-		cmd, err := gw.IssueCommand(ctx, actorID(ctx), "component", comp.ID, in.Body.CommandType, in.Body.Instance,
-			in.Body.Value, in.Body.Params, a.scopeFor(ctx, "component", "read"))
+		cmd, err := gw.IssueCommand(ctx, actorID(ctx), "component", compID, in.Body.CommandType, in.Body.Instance,
+			in.Body.Value, in.Body.Params)
 		if err != nil {
 			return nil, mapCommandErr(err)
 		}
-		verdict, err := gw.CommandSettlement(ctx, "component", comp.ID, in.Body.CommandType, in.Body.Instance, a.scopeFor(ctx, "component", "read"))
+		verdict, err := gw.CommandSettlement(ctx, "component", compID, in.Body.CommandType, in.Body.Instance)
 		if err != nil {
 			return nil, mapCommandErr(err)
 		}

@@ -369,6 +369,56 @@ func TestResolveAlarmResolvesOnTheComponentTierFromItsOwnAction(t *testing.T) {
 	}
 }
 
+// TestResolveCommandResolvesOnTheComponentTierFromItsOwnAction is the same pin
+// for #749, and it is the precondition the route's fix depends on rather than a
+// restatement of the alarm case. A command is issued TO a component, so the
+// component tier is what contains it; without this, `command` falls to
+// applicableKinds' default and every grant but an all-scoped one resolves to the
+// empty set, which would deny every scoped issuer instead of fencing them.
+func TestResolveCommandResolvesOnTheComponentTierFromItsOwnAction(t *testing.T) {
+	idx := rbac.NewRoleIndex([]rbac.Role{
+		// An issuer may command and read, and may not edit the component.
+		{ID: "issuer", Permissions: []string{"command:issue"}},
+		// An estate-wide reader may see everything and command nothing.
+		{ID: "viewer", Permissions: []string{"*:read"}},
+	})
+
+	narrow := scope.Grant{Role: "issuer", ScopeKind: "component", ScopeID: "comp-a"}
+	wide := scope.Grant{Role: "viewer", ScopeKind: "all"}
+
+	s := scope.Resolve([]scope.Grant{narrow}, idx, "command", "issue")
+	if s.All || len(s.IDs) != 1 || s.IDs[0] != "comp-a" {
+		t.Fatalf("issue scope = %+v, want [comp-a]: a command resolves on the component tier", s)
+	}
+	// Issuing is a modify action, so a role that may issue need not be able to
+	// edit the component and the fence must not resolve through component:update.
+	if u := scope.Resolve([]scope.Grant{narrow}, idx, "component", "update"); !u.Empty() {
+		t.Fatalf("component update scope = %+v, want empty: the issuer role carries no component write", u)
+	}
+
+	// The defect #749 filed, stated as a scope fact: the all-scoped viewer grant
+	// carries no issue, so it widens the READ everywhere and the actuation
+	// nowhere. A route fencing the write with the read set below gets All.
+	both := []scope.Grant{narrow, wide}
+	if a := scope.Resolve(both, idx, "command", "issue"); a.All || len(a.IDs) != 1 || a.IDs[0] != "comp-a" {
+		t.Fatalf("issue scope beside an all-scoped viewer = %+v, want [comp-a]: a wide read must not widen what may be commanded", a)
+	}
+	if r := scope.Resolve(both, idx, "component", "read"); !r.All {
+		t.Fatalf("component read scope = %+v, want All: the viewer floor is what makes this fixture meaningful", r)
+	}
+
+	// A location- or system-tier grant contains no command, exactly as it contains
+	// no component (#714): the cascade is through the component, no wider. The
+	// route issues only to components today, so admitting the other two tiers
+	// would put roots in the set that the component tree can never match.
+	for _, kind := range []string{"location", "system"} {
+		w := scope.Resolve([]scope.Grant{{Role: "issuer", ScopeKind: kind, ScopeID: "x"}}, idx, "command", "issue")
+		if !w.Empty() {
+			t.Fatalf("command via a %s grant = %+v, want empty", kind, w)
+		}
+	}
+}
+
 func TestResolveDedupRoots(t *testing.T) {
 	idx := index()
 	// Two grants to the same root via different roles collapse to one id.

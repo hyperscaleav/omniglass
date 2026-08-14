@@ -80,7 +80,7 @@ func TestCommandStatusRecording(t *testing.T) {
 		if _, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{Name: "ff-cmd"}); err != nil {
 			t.Fatalf("create command type: %v", err)
 		}
-		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-1", "ff-cmd", "", nil, nil, all)
+		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-1", "ff-cmd", "", nil, nil)
 		if err != nil {
 			t.Fatalf("issue: %v", err)
 		}
@@ -89,7 +89,7 @@ func TestCommandStatusRecording(t *testing.T) {
 			t.Errorf("fire-and-forget: status=%q settled_at=%v, want settled with a moment", status, settledAt)
 		}
 		// The computed verdict is unchanged: no target means nothing to settle.
-		verdict, err := gw.CommandSettlement(ctx, "component", "disp-1", "ff-cmd", "", all)
+		verdict, err := gw.CommandSettlement(ctx, "component", "disp-1", "ff-cmd", "")
 		if err != nil {
 			t.Fatalf("settlement: %v", err)
 		}
@@ -105,7 +105,7 @@ func TestCommandStatusRecording(t *testing.T) {
 	}
 
 	t.Run("zero-window match settles and names the command", func(t *testing.T) {
-		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-1", "set-now", "", json.RawMessage(`"hdmi2"`), nil, all)
+		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-1", "set-now", "", json.RawMessage(`"hdmi2"`), nil)
 		if err != nil {
 			t.Fatalf("issue: %v", err)
 		}
@@ -139,7 +139,7 @@ func TestCommandStatusRecording(t *testing.T) {
 	// values are that one reading of that one clock. A Go-side now cannot land
 	// on it by accident.
 	t.Run("the settle-check judges against the database's clock", func(t *testing.T) {
-		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-1", "set-now", "", json.RawMessage(`"hdmi2"`), nil, all)
+		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-1", "set-now", "", json.RawMessage(`"hdmi2"`), nil)
 		if err != nil {
 			t.Fatalf("issue: %v", err)
 		}
@@ -159,7 +159,7 @@ func TestCommandStatusRecording(t *testing.T) {
 	})
 
 	t.Run("zero-window mismatch fails", func(t *testing.T) {
-		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-1", "set-now", "", json.RawMessage(`"hdmi9"`), nil, all)
+		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-1", "set-now", "", json.RawMessage(`"hdmi9"`), nil)
 		if err != nil {
 			t.Fatalf("issue: %v", err)
 		}
@@ -169,7 +169,7 @@ func TestCommandStatusRecording(t *testing.T) {
 	})
 
 	t.Run("expired window with nothing observed times out", func(t *testing.T) {
-		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-2", "set-now", "", json.RawMessage(`"hdmi2"`), nil, all)
+		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-2", "set-now", "", json.RawMessage(`"hdmi2"`), nil)
 		if err != nil {
 			t.Fatalf("issue: %v", err)
 		}
@@ -178,7 +178,7 @@ func TestCommandStatusRecording(t *testing.T) {
 		}
 		// The computed verdict keeps its shipped meaning: past the window with
 		// no matching observation is failed.
-		verdict, err := gw.CommandSettlement(ctx, "component", "disp-2", "set-now", "", all)
+		verdict, err := gw.CommandSettlement(ctx, "component", "disp-2", "set-now", "")
 		if err != nil {
 			t.Fatalf("settlement: %v", err)
 		}
@@ -196,12 +196,12 @@ func TestCommandStatusRecording(t *testing.T) {
 	// wait". A zero window says settle immediately, so no timestamp of any
 	// provenance can make it pending.
 	t.Run("a zero window is terminal even against a sample stamped in the future", func(t *testing.T) {
-		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-2", "set-now", "", json.RawMessage(`"hdmi7"`), nil, all)
+		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-2", "set-now", "", json.RawMessage(`"hdmi7"`), nil)
 		if err != nil {
 			t.Fatalf("issue: %v", err)
 		}
 		mustExec(t, conn, `update property set ts = now() + interval '1 hour' where command_id = $1`, cmd.ID)
-		verdict, err := gw.CommandSettlement(ctx, "component", "disp-2", "set-now", "", all)
+		verdict, err := gw.CommandSettlement(ctx, "component", "disp-2", "set-now", "")
 		if err != nil {
 			t.Fatalf("settlement: %v", err)
 		}
@@ -216,7 +216,7 @@ func TestCommandStatusRecording(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("create command type: %v", err)
 		}
-		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-3", "set-slow", "", json.RawMessage(`"hdmi2"`), nil, all)
+		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-3", "set-slow", "", json.RawMessage(`"hdmi2"`), nil)
 		if err != nil {
 			t.Fatalf("issue: %v", err)
 		}
@@ -228,7 +228,7 @@ func TestCommandStatusRecording(t *testing.T) {
 		// the next settle-check records the outcome.
 		mustExec(t, conn, `update command set ts = ts - interval '1 hour' where id = $1`, cmd.ID)
 		mustExec(t, conn, `update property set ts = ts - interval '1 hour' where command_id = $1`, cmd.ID)
-		verdict, err := gw.CommandSettlement(ctx, "component", "disp-3", "set-slow", "", all)
+		verdict, err := gw.CommandSettlement(ctx, "component", "disp-3", "set-slow", "")
 		if err != nil {
 			t.Fatalf("settlement: %v", err)
 		}
@@ -250,7 +250,7 @@ func TestCommandStatusRecording(t *testing.T) {
 		}}); err != nil {
 			t.Fatalf("seed observed metric: %v", err)
 		}
-		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-1", "set-volume-x", "", json.RawMessage(`50`), nil, all)
+		cmd, err := gw.IssueCommand(ctx, actor, "component", "disp-1", "set-volume-x", "", json.RawMessage(`50`), nil)
 		if err != nil {
 			t.Fatalf("issue: %v", err)
 		}
@@ -275,7 +275,7 @@ func TestCommandStatusRecording(t *testing.T) {
 		if err := conn.QueryRow(ctx, `select count(*) from command`).Scan(&before); err != nil {
 			t.Fatalf("count commands: %v", err)
 		}
-		if _, err := gw.IssueCommand(ctx, actor, "component", "disp-1", "set-volume-x", "", json.RawMessage(`"loud"`), nil, all); err == nil {
+		if _, err := gw.IssueCommand(ctx, actor, "component", "disp-1", "set-volume-x", "", json.RawMessage(`"loud"`), nil); err == nil {
 			t.Fatal("non-numeric intended value for a metric target accepted, want a loud refusal")
 		}
 		var after int

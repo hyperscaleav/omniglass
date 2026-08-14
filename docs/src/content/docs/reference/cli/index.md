@@ -488,7 +488,7 @@ Issue a command to a component
 omniglass component command issue <name> [flags]
 ```
 
-Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue; an out-of-scope component is a non-disclosing 404.
+Records a command invocation, writes a caused event, and (for a settleable command) opens an intended value the observed value settles against. Returns the computed settlement verdict. Gated by command:issue, whose scope is resolved on the component tier from that permission (not from component:read); a component outside the caller's component:read is a non-disclosing 404, and one it can read but not command is a 403.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|

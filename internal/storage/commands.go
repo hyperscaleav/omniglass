@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/key"
-	"github.com/hyperscaleav/omniglass/internal/scope"
 )
 
 // ErrCommandValueNotNumeric refuses an intended value that cannot open a metric
@@ -49,11 +48,29 @@ type Command struct {
 // the caused event. A command that opens no intended value has nothing to settle and
 // is recorded settled at issue; one that does is swept by the settle-check before
 // the transaction commits, so a zero-window command returns already terminal.
-// Scope-guarded on the owner and audited. `value` is the intended value for the
-// target (nil for a fire-and-forget command); a metric target requires a JSON
-// number. `params` is the raw invocation payload stored on the command and the
-// caused event.
-func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, commandType, instance string, value, params json.RawMessage, write scope.Set) (*Command, error) {
+// Audited. `value` is the intended value for the target (nil for a
+// fire-and-forget command); a metric target requires a JSON number. `params` is
+// the raw invocation payload stored on the command and the caused event.
+//
+// ownerID is a RESOLVED id, and this takes no scope of its own (#749). The fence
+// on an actuation is the caller's command:issue scope, and applying it is not a
+// check this method could make from one set: it decides the target against the
+// caller's READ scope as well (the 404-versus-403 split, ADR-0116), so the
+// resolve that applies both is ResolveActionTarget, at the one route that issues.
+// A set re-checked here would either re-answer that settled question or answer a
+// different one and disagree with it, and re-resolving the caller's raw reference
+// is the second name resolve ruling 2 (#627) forbids. What is left for the id is
+// an existence check, which is what ownerArcValue does. Same contract as
+// AcknowledgeAlarm, whose component is resolved by its route and bound by id
+// here for the same reason.
+//
+// A bare NAME still resolves through that existence check, estate-wide, and a
+// route that passed one would be a route with no fence rather than one with a
+// wide fence. That failure is loud rather than silent: an ambiguous name refuses
+// as ErrAmbiguousName instead of picking a row, and an unambiguous one is a
+// caller that never applied a scope at all, which the conformance matrix's
+// readable-but-not-actionable branch fails on.
+func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, commandType, instance string, value, params json.RawMessage) (*Command, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
 		return nil, err
@@ -90,14 +107,13 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := p.guardOwnerScope(ctx, tx, ownerKind, ownerID, write); err != nil {
-		return nil, err
-	}
-	// ownerArcValueInScope, not ownerArcValue: guardOwnerScope already
-	// confirmed the owner within write, but a bare-name re-resolve here is
-	// STILL scope-blind unless it also goes through the scoped variant
-	// (ruling 2, #627).
-	arc, err := p.ownerArcValueInScope(ctx, tx, ownerKind, ownerID, write)
+	// The owner arrives resolved and in scope, so this binds the arc column and
+	// confirms the row is still there (a component deleted between the resolve
+	// and here is its own not-found rather than a foreign-key error). For the
+	// three tree kinds the arc value IS the id it was handed; the node arm is
+	// what makes the call worth making, since a node's arc value is its
+	// principal_id.
+	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -191,19 +207,20 @@ func (p *PG) IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, comm
 // series' latest intended and observed values within the settle window. It is also
 // the settle-check's read-side trigger: before computing, it sweeps the series'
 // still-issued commands and records any terminal outcome it sees (settleCheck), so a
-// command whose window expired since the last look is stamped here. The owner is
-// scope-guarded (an out-of-scope owner is its non-disclosing not-found).
-func (p *PG) CommandSettlement(ctx context.Context, ownerKind, ownerID, commandType, instance string, read scope.Set) (SettlementVerdict, error) {
-	oc, ok := ownerContracts[ownerKind]
-	if !ok {
+// command whose window expired since the last look is stamped here.
+//
+// ownerID is a RESOLVED id and this takes no scope, for the same reason
+// IssueCommand does not (#749): its one caller is the issue route, which has
+// already resolved this exact row through both the read and the command:issue
+// sets and is now asking about the command it just recorded on it. A second set
+// checked against the same row cannot narrow anything the resolve did not, and a
+// read set checked here would be the wrong question anyway, since the row this
+// verdict describes was reached by the ISSUE scope. A route that computes a
+// settlement from somewhere other than an issue resolves its own target first,
+// exactly as this one does.
+func (p *PG) CommandSettlement(ctx context.Context, ownerKind, ownerID, commandType, instance string) (SettlementVerdict, error) {
+	if _, ok := ownerContracts[ownerKind]; !ok {
 		return "", ErrUnknownOwnerKind
-	}
-	inScope, err := p.ownerInScope(ctx, p.pool, ownerKind, ownerID, read)
-	if err != nil {
-		return "", err
-	}
-	if !inScope {
-		return "", oc.notFound
 	}
 	ct, err := p.GetCommandType(ctx, commandType)
 	if err != nil {
@@ -214,15 +231,14 @@ func (p *PG) CommandSettlement(ctx context.Context, ownerKind, ownerID, commandT
 		return "", fmt.Errorf("storage: begin settle check: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	// Resolved once, inside this transaction, via ownerArcValueInScope (not
-	// the scope-blind ownerArcValue: ruling 2, #627, ownerInScope narrowing
-	// to read first does not help if this next statement re-resolves the
-	// same bare name scope-blind), and threaded through every call below:
-	// passing the id avoids three separate re-derivations of it (settleCheck,
-	// twice through latestTargetValue), each of which is then safe to
-	// resolve scope-blind because it is handed the uuid, never the original
-	// possibly-ambiguous reference.
-	arc, err := p.ownerArcValueInScope(ctx, tx, ownerKind, ownerID, read)
+	// The arc column, bound once inside this transaction from the id the caller
+	// resolved, and threaded through every call below: passing it avoids three
+	// separate re-derivations (settleCheck, twice through latestTargetValue),
+	// each of which is then safe to resolve scope-blind because it is handed the
+	// uuid, never the original possibly-ambiguous reference. Ruling 2 (#627) is
+	// satisfied by there being no name resolve left on this path at all, rather
+	// than by a scoped one: the reference this used to re-resolve is now an id.
+	arc, err := p.ownerArcValue(ctx, tx, ownerKind, ownerID)
 	if err != nil {
 		return "", err
 	}

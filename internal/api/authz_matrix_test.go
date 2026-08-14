@@ -128,7 +128,16 @@ func propertyActions(base string) []actionRoute {
 	}
 }
 
-// componentActions are the alarm writes, the routes that hang off a component.
+// matrixCommand is the command_type the issue route invokes: the seeded
+// fire-and-forget `reboot`. It is the fixture precisely because it has no target
+// arm (nothing is opened to settle) and no params_schema (nothing to satisfy), so
+// the only thing that can decide the status is the scope split. A settleable type
+// would need an observed series row on both targets first, which would put the
+// settlement's own semantics inside an authorization assertion.
+const matrixCommand = "reboot"
+
+// componentActions are the alarm writes and the command issue, the routes that
+// hang off a component.
 func componentActions() []actionRoute {
 	alarms := func(target string) string { return "/components/" + target + "/alarms" }
 	// raiseAs returns a prepare that opens one alarm under its own dedup key, so
@@ -174,6 +183,26 @@ func componentActions() []actionRoute {
 			prepare: raiseAs("matrix-ack"),
 			request: func(target, made string) (string, string, map[string]any) {
 				return http.MethodPost, alarms(target) + "/" + made + ":acknowledge", nil
+			},
+			ok: http.StatusOK,
+		},
+		{
+			// The actuation route (#749), and the only one on this list whose
+			// refusal keeps a physical device from being told to do something.
+			// It is gated on command:issue and, like the acknowledgement,
+			// resolves its ACTION scope from that permission rather than from
+			// component:update, so a wide component read cannot widen what may
+			// be commanded.
+			//
+			// It needs no prepare: a command records an invocation rather than
+			// acting on a row that has to exist first, so the target itself is
+			// the whole fixture and both branches refuse against a component
+			// that is really there.
+			name:  "issue-command",
+			needs: []string{"command:issue"},
+			request: func(target, _ string) (string, string, map[string]any) {
+				return http.MethodPost, "/components/" + target + "/commands:issue",
+					map[string]any{"command_type": matrixCommand}
 			},
 			ok: http.StatusOK,
 		},

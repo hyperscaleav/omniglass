@@ -177,7 +177,7 @@ func applicableKinds(resource string) map[string]bool {
 		return map[string]bool{"location": true}
 	case "system":
 		return map[string]bool{"system": true}
-	case "component", "interface", "task", "alarm":
+	case "component", "interface", "task", "alarm", "command":
 		// An alarm hangs off a component (the thin-cut owner), so the component
 		// tier is what can contain it, exactly as for an interface or a task. It
 		// gets its own case rather than borrowing "component" because the ACTION
@@ -185,6 +185,22 @@ func applicableKinds(resource string) map[string]bool {
 		// alarm:acknowledge, not from the component-update scope, so a role that
 		// may acknowledge without editing components resolves correctly and a
 		// wide component read never widens what may be acknowledged.
+		//
+		// A command is the same shape for the same reason (#749): it is issued TO
+		// a component, and it resolves from grants carrying command:issue, so a
+		// principal that may command one room cannot command another it can
+		// merely see. Registering it here is what makes command:issue resolvable
+		// at all: without it the resource falls to the default below, every grant
+		// but an all-scoped one resolves to the empty set, and a route fencing on
+		// that set would deny every scoped issuer rather than fence them.
+		//
+		// The component tier ALONE, and not the three-tier arc the command table's
+		// owner columns allow: the only route that issues one addresses a
+		// component, and admitting location or system here would put roots in the
+		// set that a component's own ancestor chain can never match (the tier
+		// mismatch resolvePlacementRef records), while telling scope.Covers that a
+		// command scope may be checked against those tables. A route that issues
+		// to another tier adds that tier here, with a test.
 		return map[string]bool{"component": true}
 	case "secret", "variable", "field", "telemetry":
 		// A secret, variable, or field value is owned on the exclusive arc

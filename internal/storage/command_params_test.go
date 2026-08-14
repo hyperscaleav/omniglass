@@ -64,7 +64,7 @@ func TestIssueCommandParamsSchemaEnforced(t *testing.T) {
 
 	t.Run("violating params refuse with the sentinel and write nothing", func(t *testing.T) {
 		_, err := gw.IssueCommand(ctx, actor, "component", "amp-1", "set-level", "",
-			nil, json.RawMessage(`{"level":"loud"}`), all)
+			nil, json.RawMessage(`{"level":"loud"}`))
 		if !errors.Is(err, storage.ErrCommandParamsInvalid) {
 			t.Fatalf("issue with violating params = %v, want ErrCommandParamsInvalid", err)
 		}
@@ -81,7 +81,7 @@ func TestIssueCommandParamsSchemaEnforced(t *testing.T) {
 	})
 
 	t.Run("absent params against a schema with required fields refuse", func(t *testing.T) {
-		_, err := gw.IssueCommand(ctx, actor, "component", "amp-1", "set-level", "", nil, nil, all)
+		_, err := gw.IssueCommand(ctx, actor, "component", "amp-1", "set-level", "", nil, nil)
 		if !errors.Is(err, storage.ErrCommandParamsInvalid) {
 			t.Fatalf("issue with absent params = %v, want ErrCommandParamsInvalid", err)
 		}
@@ -89,7 +89,7 @@ func TestIssueCommandParamsSchemaEnforced(t *testing.T) {
 
 	t.Run("params within the schema issue as before", func(t *testing.T) {
 		cmd, err := gw.IssueCommand(ctx, actor, "component", "amp-1", "set-level", "",
-			nil, json.RawMessage(`{"level":50}`), all)
+			nil, json.RawMessage(`{"level":50}`))
 		if err != nil {
 			t.Fatalf("issue with conforming params: %v", err)
 		}
@@ -103,7 +103,7 @@ func TestIssueCommandParamsSchemaEnforced(t *testing.T) {
 			t.Fatalf("create command type: %v", err)
 		}
 		if _, err := gw.IssueCommand(ctx, actor, "component", "amp-1", "free-cmd", "",
-			nil, json.RawMessage(`{"anything":true}`), all); err != nil {
+			nil, json.RawMessage(`{"anything":true}`)); err != nil {
 			t.Fatalf("issue without a schema: %v", err)
 		}
 	})
