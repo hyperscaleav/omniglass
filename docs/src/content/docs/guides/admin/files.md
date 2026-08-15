@@ -4,13 +4,24 @@ description: "The Files directory under Values: upload, find, download, and dele
 screenshots:
   - id: files
     path: /web/files
-    alt: "The Files directory: a flat list of uploaded files with type, size, and a sensitive badge, plus a New file action."
+    alt: "The Files directory: a flat list of uploaded files with type, size, and a sensitive badge, plus a New file action. Each row's id and Added cell are flat panels because the seed-time values are masked at capture."
     # Mask each row's id subtext and the Added column: both regenerate every
     # seed (a v7 uuid embeds the seed time; Added IS the seed time), so masking
     # keeps the image byte-stable for the zero-tolerance gate (#398, #623).
+    #
+    # The Added mask names the CELL (`xpath=ancestor::td[1]`), not the text
+    # inside it, so the painted box is the 170px the column descriptor pins
+    # rather than the width of the value: `fmtTime` does not zero-pad the day,
+    # so the text is a character narrower on the 9th than on the 15th, and a
+    # mask sized to the text moves with it (#773).
+    #
+    # The id mask stays on the text. A uuid is a fixed 36 characters in a
+    # monospace face, so its box does not move, and its enclosing cell is the
+    # NAME cell (the id renders as a subtext under the file name), which a cell
+    # mask would blank out along with the name the shot exists to show.
     mask:
       - "text=/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/"
-      - "text=/[A-Z][a-z]{2} \\d{1,2}, \\d{2}:\\d{2} (AM|PM)/"
+      - "text=/[A-Z][a-z]{2} \\d{1,2}, \\d{2}:\\d{2} (AM|PM)/ >> xpath=ancestor::td[1]"
 ---
 
 **Files** (under Values) is where you keep the **opaque bytes** that go with an estate, a firmware

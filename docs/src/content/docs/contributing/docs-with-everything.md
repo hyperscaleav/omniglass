@@ -133,7 +133,45 @@ render deterministically (a v7-uuid id subtext, a seed-time timestamp) are maske
 page's `screenshots` frontmatter and painted as constant boxes, so the pinned browser's
 rasters are byte-stable and the tolerance is zero: the old percentage ceiling passed exactly
 the changes the gate exists to catch, a renamed label or a collapsed rail repainting fewer
-pixels than seed jitter (#398, #623).
+pixels than seed jitter (#398, #623). One caveat, tracked as #774: the comparison counts the
+pixels pixelmatch judges different at its default perceptual threshold, so a change confined to
+near-identical dark tones can still score zero. Where byte stability is the claim, compare the
+bytes.
+
+### A mask covers the cell, and says that it is there
+
+Playwright paints a mask over **the element the selector resolves to**, so what a `mask` entry
+resolves to is the whole contract. A `text=/…/` selector resolves to the innermost element
+carrying the text, the value's own `<span>`, so the painted box is the size of the value. The
+console does not zero-pad everything it renders (the audit trail's `toLocaleString` leaves the
+hour bare, `fmtTime` leaves the day bare), which means the same unchanged table paints a box
+seven pixels narrower at 9 o'clock than at 11, and the gate reads that as drift on a PR that
+changed no UI. So a mask over text whose width can change names the **cell**, by appending
+`>> xpath=ancestor::td[1]`, and the cell's width is pinned by its column descriptor. A mask
+over text of fixed width (a uuid in a monospace face) stays on the text, which is also the
+only correct answer when the enclosing cell holds something the shot exists to show (#773).
+
+The fill is **deliberately visible**: the console's own neutral surface, one step lighter than
+the card behind it. A masked cell reads as a block placed over a value rather than as a column
+that failed to render, and the page's `alt` says which cells are masked and why. Painting the
+background instead would publish an empty column with nothing to explain it, and would need a
+hardcoded copy of a theme token to stay invisible.
+
+Prove a mask holds by recapturing **with the clock moved**, never by capturing twice a few
+minutes apart: two captures in the same hour of the same day are structurally blind to exactly
+the jitter a mask exists to absorb.
+
+```bash
+make docs-shots-check                              # the gate
+DOCS_SHOTS_TZ=Asia/Kolkata make docs-shots-check   # the same gate, an hour digit away
+```
+
+Both halves of the contract (the selector resolves to the cell, and the raster survives a
+one-character change) are pinned at the browser tier by `web/e2e/shotmask.spec.ts`, which flips
+a digit on synthetic markup and so also covers the single-digit day a timezone shift cannot
+reach. Every capture logs what each mask resolved to (`mask 59x td 190x37 <- text=/…/`), so a
+mask that lands on the wrong element shows up in the capture output rather than in a raster
+nobody diffs by hand.
 
 ## Style
 

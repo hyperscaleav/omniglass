@@ -11,6 +11,12 @@ import pixelmatch from 'pixelmatch';
 // pass a renamed label (0.033%, #398) or a collapsed rail (0.13%, #623) now
 // fails on a single unmasked pixel. DOCS_SHOTS_MAX_RATIO stays as an escape
 // hatch for unpinned local browsers, never for CI.
+//
+// The zero is a zero COUNT of pixels pixelmatch judges different, and pixelmatch
+// runs at threshold 0.1 below: against this console's dark surfaces that absorbs
+// a whole surface swap, so a dark-on-dark change still scores 0.000%. Measured
+// and tracked in #774; when byte stability is the claim, compare the bytes
+// (web/e2e/shotmask.spec.ts does).
 export const DEFAULT_MAX_RATIO = 0;
 
 export function compareShot(committedBuf, freshBuf, { maxRatio = DEFAULT_MAX_RATIO } = {}) {
