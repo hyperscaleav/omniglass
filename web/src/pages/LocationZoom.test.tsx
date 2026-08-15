@@ -116,6 +116,7 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}?zoom=1`) {
       <Router base="/web">
         <Route path="/locations/:id" component={Locations} />
         <Route path="/fleet" component={() => <div data-testid="fleet-page" />} />
+        <Route path="/systems/:id" component={() => <div data-testid="system-page" />} />
       </Router>
     </QueryClientProvider>
   ));
@@ -161,6 +162,14 @@ describe("the location zoom", () => {
     const west = screen.getByTestId(`zoomband-${uuidFor("lz-b1")}`);
     fireEvent.click(within(west).getByRole("button", { name: /West Building/ }));
     await waitFor(() => expect(window.location.pathname).toBe(`/web/locations/${uuidFor("lz-b1")}`));
+    expect(window.location.search).toContain("zoom=1");
+  });
+
+  it("clicking a system card walks inward to the system zoom", async () => {
+    mount();
+    const card = screen.getByTestId(`syscard-${uuidFor("lz-s-lobby")}`);
+    fireEvent.click(within(card).getByRole("button", { name: /Lobby AV/ }));
+    await waitFor(() => expect(window.location.pathname).toBe(`/web/systems/${uuidFor("lz-s-lobby")}`));
     expect(window.location.search).toContain("zoom=1");
   });
 

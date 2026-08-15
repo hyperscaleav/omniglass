@@ -2,6 +2,9 @@
 title: Explore your fleet
 description: "The fleet zoom: the whole fleet on one canvas, every system a cluster of dots under its root location, coloured by what is wrong."
 screenshots:
+  - id: fleet-system
+    path: /web/systems/huddle?zoom=1
+    alt: "The system zoom: one card per typed slot with the server's arithmetic, choices grouped with the active alternate marked, and the no-role strip."
   - id: fleet-location
     path: /web/locations/east?zoom=1
     alt: "The location zoom: child bands whatever their type, the placed-here systems as cards with the server's quorum arithmetic, and the allowed child types beneath."
@@ -82,6 +85,26 @@ the component dot strip, and each impaired role's shortfall in the server's own 
 nothing has failed, something is missing. Holes in the subtree render dashed under the
 child that contains them, and the footer names which location types this one may contain.
 The breadcrumb walks the real ancestor chain; every crumb is a live link carrying the zoom.
+
+## Zoom into a system
+
+Clicking a system card lands the **system zoom**: the typed slots this system needs filled,
+one card per role, each naming what it accepts (and any pinned products), who occupies it
+(with position labels where the role declares them), and the arithmetic exactly as the
+server reported it.
+
+::screenshot{#fleet-system}
+
+- **A gap tells you which kind it is.** A role nobody staffed wears **incomplete**: a box
+  nobody installed. A role whose occupant is down wears the failure the role declared. Same
+  arithmetic, different cause, different colour.
+- **Choices render as the builds they are.** A role may belong to an alternate within a
+  choice, and only the best-satisfied alternate answers it. The answering build is marked;
+  the build this room did not choose renders quiet and dashed, its figures never presented
+  as reasons for the verdict, because they did not contribute.
+- **A shared occupant is chipped** with the other system it serves, and the members filling
+  no role sit in their own strip at the bottom: in the room, accounted for, and that is a
+  state, not an error.
 
 ## What you see is what you may read
 

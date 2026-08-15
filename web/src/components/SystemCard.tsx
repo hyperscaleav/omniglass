@@ -12,7 +12,7 @@ import type { SystemCluster } from "../lib/fleet";
 // renders figures and never computes one: an unstaffed role arrives as
 // incomplete from the rollup, and the impact word appears only where the
 // server contributed it.
-export default function SystemCard(props: { cluster: SystemCluster }) {
+export default function SystemCard(props: { cluster: SystemCluster; onOpen?: (systemId: string) => void }) {
   const health = useQuery(() => ({
     queryKey: systemHealthKey(props.cluster.systemId),
     queryFn: () => systemHealth(props.cluster.systemId),
@@ -23,10 +23,14 @@ export default function SystemCard(props: { cluster: SystemCluster }) {
       data-testid={`syscard-${props.cluster.systemId}`}
       class="flex w-64 flex-none flex-col gap-2 rounded-lg border border-base-content/10 p-3"
     >
-      <div class="flex items-center gap-2">
+      <button
+        type="button"
+        class="flex cursor-pointer items-center gap-2 text-left"
+        onClick={() => props.onOpen?.(props.cluster.systemId)}
+      >
         <HealthBadge verdict={props.cluster.verdict ?? undefined} size="xs" />
         <span class="truncate text-sm font-medium">{props.cluster.label}</span>
-      </div>
+      </button>
       <BandCanvas clusters={[props.cluster]} ariaLabel={`${props.cluster.label}: ${props.cluster.dots.length} components`} />
       <Show when={health.data}>
         {(h) => (

@@ -1,7 +1,7 @@
 import { byLabel, entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { useNavigate, useParams } from "@solidjs/router";
+import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
 import TreeSelect from "../components/TreeSelect";
 import KVStacked from "../components/KVStacked";
@@ -41,6 +41,7 @@ import HealthBadge from "../components/HealthBadge";
 import SystemHealthPanel from "../components/HealthPanel";
 import { SYSTEM_VERDICTS_KEY, systemVerdicts, verdictOf, verdictRank } from "../lib/health";
 import { hueFor } from "../lib/system_color";
+import SystemZoom from "./SystemZoom";
 
 // Systems: the system inventory on the generic TreeList, the same shell as
 // Locations and Components. Systems form a tree (parent_id) and are placed at a
@@ -68,6 +69,11 @@ export const systemsDescriptor: PageDescriptor = {
 };
 
 export default function Systems() {
+  // The zoom face is a URL fact (ADR-0125): ?zoom=1 on the identity route
+  // renders the system zoom, and the inventory detail stays the default.
+  const [zoomSearch] = useSearchParams();
+  const zoomParams = useParams();
+  if (zoomParams.id && zoomSearch.zoom === "1") return <SystemZoom />;
   const params = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();

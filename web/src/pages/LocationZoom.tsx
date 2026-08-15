@@ -154,7 +154,7 @@ export default function LocationZoom() {
         </div>
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap gap-3">
-            <For each={props.band.clusters}>{(cluster) => <SystemCard cluster={cluster} />}</For>
+            <For each={props.band.clusters}>{(cluster) => <SystemCard cluster={cluster} onOpen={(sid) => navigate(`/systems/${sid}?zoom=1`)} />}</For>
           </div>
           <Show when={bandHoles().length > 0}>
             <div class="mt-2 flex flex-wrap gap-2">
