@@ -36,6 +36,9 @@ export const Package: Component<P> = (p) => (
 export const Layers: Component<P> = (p) => (
   <Svg size={p.size}><path d="m12 3 9 5-9 5-9-5z" /><path d="m3 13 9 5 9-5" /></Svg>
 );
+export const Grid: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></Svg>
+);
 export const Compass: Component<P> = (p) => (
   <Svg size={p.size}><circle cx="12" cy="12" r="9" /><path d="m15 9-2 6-4 2 2-6z" /></Svg>
 );

@@ -297,3 +297,18 @@ describe("nav paths bind to routes (#608)", () => {
     expect(sectionLabel("/web/templates")).toBe("Templates");
   });
 });
+
+describe("the fleet rail entry (#633)", () => {
+  it("is a live top-level leaf gated on the place tree it draws", () => {
+    const entry = navItems.find((n) => n.label === "Fleet");
+    expect(entry?.live).toBe(true);
+    expect(entry?.path).toBe("/fleet");
+    expect(entry?.children).toBeUndefined();
+    expect(routeTokens("/web/fleet")).toEqual(["location", "read"]);
+  });
+
+  it("hides from a principal with no location read, like the sidebar promises", () => {
+    expect(rail(["location:read"])).toContain("Fleet");
+    expect(rail(["component:read"])).not.toContain("Fleet");
+  });
+});

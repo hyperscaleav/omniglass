@@ -1,6 +1,7 @@
 import type { Component } from "solid-js";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
+import Fleet from "./pages/Fleet";
 import Locations from "./pages/Locations";
 import Systems from "./pages/Systems";
 import Components from "./pages/Components";
@@ -39,6 +40,7 @@ import NotFound from "./pages/NotFound";
 export const PAGES: Record<string, Component> = {
   Login,
   Home,
+  Fleet,
   Locations,
   Systems,
   Components,
