@@ -246,10 +246,12 @@ func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) error {
 // The ORDER BY reads the resolved display_name (the shadow's when there is
 // one) so a rename through a fork sorts where an operator expects it, and it
 // stays in SQL rather than moving to a Go sort so the collation the registry
-// has always ordered by is the collation it still orders by.
+// has always ordered by is the collation it still orders by. The nullif(...)
+// nulls last wrapper puts unlabelled rows at the END of the registry; see
+// ListVendors for why a bare ordering does the opposite (#613).
 func (p *PG) ListComponentTypes(ctx context.Context) ([]ComponentType, error) {
 	rows, err := p.pool.Query(ctx, componentTypeResolved+`
-		order by coalesce(s.image->>'display_name', ct.display_name), ct.name`)
+		order by nullif(coalesce(s.image->>'display_name', ct.display_name), '') nulls last, ct.name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list component_types: %w", err)
 	}

@@ -61,10 +61,11 @@ func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 	return nil
 }
 
-// ListDrivers returns every driver, ordered alphabetically by display_name then
-// id.
+// ListDrivers returns every driver, ordered alphabetically by display_name, with
+// unlabelled rows last and the name breaking ties (#613; see ListVendors for why
+// the ordering is spelled nullif(...) nulls last).
 func (p *PG) ListDrivers(ctx context.Context) ([]Driver, error) {
-	rows, err := p.pool.Query(ctx, `select `+driverCols+` from driver order by display_name, name`)
+	rows, err := p.pool.Query(ctx, `select `+driverCols+` from driver order by nullif(display_name, '') nulls last, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list drivers: %w", err)
 	}

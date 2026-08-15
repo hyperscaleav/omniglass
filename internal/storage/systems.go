@@ -257,10 +257,11 @@ func (p *PG) UpsertStandard(ctx context.Context, st Standard) error {
 	return nil
 }
 
-// ListStandards returns every standard, ordered alphabetically by display_name
-// then id.
+// ListStandards returns every standard, ordered alphabetically by display_name,
+// with unlabelled rows last and the name breaking ties (#613; see ListVendors for
+// why the ordering is spelled nullif(...) nulls last).
 func (p *PG) ListStandards(ctx context.Context) ([]Standard, error) {
-	rows, err := p.pool.Query(ctx, `select `+standardCols+` from standard order by display_name, name`)
+	rows, err := p.pool.Query(ctx, `select `+standardCols+` from standard order by nullif(display_name, '') nulls last, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list standards: %w", err)
 	}

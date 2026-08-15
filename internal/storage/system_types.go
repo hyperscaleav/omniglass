@@ -127,9 +127,10 @@ func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 }
 
 // ListSystemTypes returns every system_type, ordered alphabetically by
-// display_name then name.
+// display_name, with unlabelled rows last and the name breaking ties (#613; see
+// ListVendors for why the ordering is spelled nullif(...) nulls last).
 func (p *PG) ListSystemTypes(ctx context.Context) ([]SystemType, error) {
-	rows, err := p.pool.Query(ctx, `select `+systemTypeCols+` from system_type order by display_name, name`)
+	rows, err := p.pool.Query(ctx, `select `+systemTypeCols+` from system_type order by nullif(display_name, '') nulls last, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list system_types: %w", err)
 	}

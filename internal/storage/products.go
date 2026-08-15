@@ -272,10 +272,11 @@ func (p *PG) UpsertProduct(ctx context.Context, m Product) error {
 	return nil
 }
 
-// ListProducts returns every product, ordered alphabetically by display_name
-// then id.
+// ListProducts returns every product, ordered alphabetically by display_name,
+// with unlabelled rows last and the name breaking ties (#613; see ListVendors for
+// why the ordering is spelled nullif(...) nulls last).
 func (p *PG) ListProducts(ctx context.Context) ([]Product, error) {
-	rows, err := p.pool.Query(ctx, `select `+productCols+` from product order by display_name, name`)
+	rows, err := p.pool.Query(ctx, `select `+productCols+` from product order by nullif(display_name, '') nulls last, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list products: %w", err)
 	}

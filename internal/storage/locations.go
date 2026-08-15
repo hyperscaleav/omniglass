@@ -346,10 +346,12 @@ func normalizeAllowedParentTypes(s []string) []string {
 // The ORDER BY reads the resolved display_name (the shadow's when there is one)
 // so a relabelling fork sorts where an operator expects it, and it stays in SQL
 // so the collation the registry has always ordered by is the one it still
-// orders by.
+// orders by. The nullif(...) nulls last wrapper puts unlabelled rows at the END
+// of the registry; see ListVendors for why a bare ordering does the opposite
+// (#613).
 func (p *PG) ListLocationTypes(ctx context.Context) ([]LocationType, error) {
 	rows, err := p.pool.Query(ctx, locationTypeResolved+`
-		order by coalesce(s.image->>'display_name', lt.display_name), lt.name`)
+		order by nullif(coalesce(s.image->>'display_name', lt.display_name), '') nulls last, lt.name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list location_types: %w", err)
 	}

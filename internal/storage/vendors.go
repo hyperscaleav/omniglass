@@ -95,10 +95,13 @@ func (p *PG) UpsertVendor(ctx context.Context, m Vendor) error {
 	return nil
 }
 
-// ListVendors returns every vendor, ordered alphabetically by display_name then
-// id.
+// ListVendors returns every vendor, ordered alphabetically by display_name, with
+// UNLABELLED rows last and the name breaking ties. nullif(...) nulls last rather
+// than a bare column because Postgres sorts NULL last and '' first, so a bare
+// ordering flips the whole tail of the registry to the head the moment the column
+// stops being nullable (#613, registry_ordering_test.go).
 func (p *PG) ListVendors(ctx context.Context) ([]Vendor, error) {
-	rows, err := p.pool.Query(ctx, `select `+vendorCols+` from vendor order by display_name, name`)
+	rows, err := p.pool.Query(ctx, `select `+vendorCols+` from vendor order by nullif(display_name, '') nulls last, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list vendors: %w", err)
 	}
