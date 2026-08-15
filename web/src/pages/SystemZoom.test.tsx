@@ -17,7 +17,7 @@ import type { EffectiveRole } from "../lib/system_zoom";
 // The system zoom's chrome (#636): one card per role with the server's own
 // arithmetic, choices grouped with the active alternate marked and the losing
 // build quiet, shared occupants chipped, and the no-role strip a state rather
-// than an error. Rendered at the identity route behind ?zoom=1 (ADR-0125).
+// than an error. Rendered at the identity route behind ?zoom=1 (ADR-0126).
 
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 

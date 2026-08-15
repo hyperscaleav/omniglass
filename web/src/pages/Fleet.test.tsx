@@ -101,7 +101,7 @@ describe("the fleet zoom's bands", () => {
     expect(within(depot).getByText("healthy")).toBeTruthy();
   });
 
-  it("clicking a band label navigates to the root location by uuid, carrying the zoom face (ADR-0125)", async () => {
+  it("clicking a band label navigates to the root location by uuid, carrying the zoom face (ADR-0126)", async () => {
     mount();
     const hq = screen.getByTestId(`band-${uuidFor("fp-hq")}`);
     fireEvent.click(within(hq).getByRole("button", { name: /Headquarters/ }));

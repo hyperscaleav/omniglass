@@ -13,7 +13,7 @@ import { TAGS_KEY } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
 
 // The location zoom (#635), rendered at the identity route behind ?zoom=1
-// (ADR-0125): the inventory detail stays the route's default face, and the
+// (ADR-0126): the inventory detail stays the route's default face, and the
 // param renders the canvas one level down. Child bands for every direct
 // child whatever its type, the placed-here band first, system cards with the
 // server's own arithmetic, holes dashed and inert.

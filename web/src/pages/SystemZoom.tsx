@@ -14,7 +14,7 @@ import { entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 
 // The system zoom (#636): the typed slots a system needs filled, at the
-// identity route behind ?zoom=1 (ADR-0125). One card per role with the
+// identity route behind ?zoom=1 (ADR-0126). One card per role with the
 // server's own arithmetic, roles grouped by choice with the active alternate
 // marked and the losing build rendered as the legal alternative it is, the
 // shared occupants chipped with the other system they serve, and the members

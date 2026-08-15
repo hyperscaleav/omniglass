@@ -23,7 +23,7 @@ import { entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 
 // The location zoom (#635): the same canvas one level down, at the identity
-// route behind ?zoom=1 (ADR-0125). One band per direct child whatever its
+// route behind ?zoom=1 (ADR-0126). One band per direct child whatever its
 // type, the placed-here band first with this location's own systems as cards,
 // the subtree's holes dashed under the child that contains them, and the
 // allowed child types named beneath: a child can be any type this one allows,

@@ -69,7 +69,7 @@ export const systemsDescriptor: PageDescriptor = {
 };
 
 export default function Systems() {
-  // The zoom face is a URL fact (ADR-0125): ?zoom=1 on the identity route
+  // The zoom face is a URL fact (ADR-0126): ?zoom=1 on the identity route
   // renders the system zoom, and the inventory detail stays the default.
   const [zoomSearch] = useSearchParams();
   const zoomParams = useParams();

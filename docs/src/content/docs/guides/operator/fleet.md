@@ -12,14 +12,14 @@ screenshots:
     path: /web/locations/east?zoom=1
     alt: "The location zoom: child bands whatever their type, the placed-here systems as cards with the server's quorum arithmetic, and the allowed child types beneath."
     # Canvas dot strips masked for the reason fleet's are: the hues are
-    # per-install identity (ADR-0123) and every capture seeds fresh.
+    # per-install identity (ADR-0124) and every capture seeds fresh.
     mask:
       - "canvas"
   - id: fleet
     path: /web/fleet
     alt: "The fleet zoom: bands per root location, system dot clusters, dashed holes, the zoom ladder, and the inspector."
     # The dot fields are masked because their colours derive from system
-    # uuids (ADR-0123 over hueFor), and every capture run seeds a fresh
+    # uuids (ADR-0124 over hueFor), and every capture run seeds a fresh
     # database: the hues are honest per-install identity and can never be
     # byte-stable across captures. The chrome, the holes, and the counts
     # are the shot's deterministic content. Unmask when the diff gate grows

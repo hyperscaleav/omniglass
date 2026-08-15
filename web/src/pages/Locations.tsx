@@ -71,7 +71,7 @@ export const locationsDescriptor: PageDescriptor = {
 
 export default function Locations() {
   const params = useParams();
-  // The zoom face is a URL fact (ADR-0125): ?zoom=1 on the identity route
+  // The zoom face is a URL fact (ADR-0126): ?zoom=1 on the identity route
   // renders the location zoom, and the inventory detail stays the default.
   const [search] = useSearchParams();
   if (params.id && search.zoom === "1") return <LocationZoom />;

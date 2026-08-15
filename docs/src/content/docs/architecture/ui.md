@@ -148,7 +148,7 @@ Two layers, deliberately decoupled:
 
 **The mode rides the URL too**
 ([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact), and
-[ADR-0125](/architecture/decisions/#adr-0125-the-zoom-face-is-a-url-fact-on-the-identity-routes)
+[ADR-0126](/architecture/decisions/#adr-0126-the-zoom-face-is-a-url-fact-on-the-identity-routes)
 for the zoom face: `?zoom=1` beside a location address renders the fleet canvas one level down,
 the inventory detail staying the default): `?edit=1` beside a
 detail address (or beside a blade's id param, `?u=<id>&edit=1`) requests the edit face, behind the

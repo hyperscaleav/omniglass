@@ -82,7 +82,7 @@ export const componentsDescriptor: PageDescriptor = {
 };
 
 export default function Components() {
-  // The zoom face is a URL fact (ADR-0125): ?zoom=1 renders the component
+  // The zoom face is a URL fact (ADR-0126): ?zoom=1 renders the component
   // leaf, and the inventory detail stays the default.
   const [zoomSearch] = useSearchParams();
   const zoomParams = useParams();
