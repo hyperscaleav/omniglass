@@ -441,8 +441,8 @@ func TestRunIdempotent(t *testing.T) {
 		select count(*) from component where location_id = (select id from location where name = 'huddle')`).Scan(&huddleComps); err != nil {
 		t.Fatalf("count huddle components: %v", err)
 	}
-	if huddleComps != 1 {
-		t.Errorf("huddle room components = %d, want 1 (the display carrying the property overrides)", huddleComps)
+	if huddleComps != 3 {
+		t.Errorf("huddle room components = %d, want 3 (the display carrying the property overrides, the bar staffing the all-in-one leg, and the idle touch panel)", huddleComps)
 	}
 	if err := conn.QueryRow(ctx, `
 		select count(*) from property
@@ -659,7 +659,7 @@ const (
 	huddleDisplaySQL = `(select id from component where name = 'display-1'
 		and location_id = (select id from location where name = 'huddle'))`
 	barSQL = `(select id from component where name = 'videobar-2'
-		and location_id = (select id from location where name = 'boardroom'))`
+		and location_id = (select id from location where name = 'boardroom-a'))`
 )
 
 // TestSeededNamesComeFromTheGenerator is the acceptance this slice exists for.
@@ -750,21 +750,31 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 		from location r
 		join location f on f.id = r.parent_id
 		join location b on b.id = f.parent_id
-		where r.name = 'boardroom' and f.name = 'level-2' and b.name = 'west'`).Scan(&roomGenerated, &roomOrdinal); err != nil {
-		t.Fatalf("read the boardroom under the west building's floor: %v", err)
+		where r.name = 'boardroom-a' and f.name = 'level-2' and b.name = 'west'`).Scan(&roomGenerated, &roomOrdinal); err != nil {
+		t.Fatalf("read boardroom A under the west building's floor: %v", err)
 	}
 	if roomGenerated || roomOrdinal != nil {
 		t.Errorf("the boardroom reads (generated %v, ordinal %v), want (false, absent): a room's name is ground truth the platform cannot mint", roomGenerated, roomOrdinal)
 	}
 
-	// A bare `display-1` is three rows, which is the direct proof that the
-	// fixture could not have used a generated name as its own identity.
+	// A bare `display-1` is seven rows, one per room that holds a first
+	// display, which is the direct proof that the fixture could not have used
+	// a generated name as its own identity. The count is derived from the
+	// fixture (the rooms holding at least one display-classified device)
+	// rather than restated, so the estate can grow without this reading as a
+	// failure.
+	roomsWithDisplay := map[string]bool{}
+	for _, c := range fixturesDoc(t).Components {
+		if c.Product == "samsung-qm55" && c.Location != "" {
+			roomsWithDisplay[c.Location] = true
+		}
+	}
 	var displays int
 	if err := conn.QueryRow(ctx, `select count(*) from component where name = 'display-1'`).Scan(&displays); err != nil {
 		t.Fatalf("count display-1: %v", err)
 	}
-	if displays != 3 {
-		t.Errorf("components named display-1 = %d, want 3 (one per room; a name is unique within its placement, not across the estate)", displays)
+	if displays != len(roomsWithDisplay) {
+		t.Errorf("components named display-1 = %d, want %d (one per room holding a display; a name is unique within its placement, not across the estate)", displays, len(roomsWithDisplay))
 	}
 }
 
@@ -818,8 +828,15 @@ func TestASeededComponentNameAgreesWithItsProductsStem(t *testing.T) {
 	if err := rows.Err(); err != nil {
 		t.Fatalf("iterate component stems: %v", err)
 	}
-	if seen != 7 {
-		t.Errorf("platform-named components with a resolvable stem = %d, want 7 (every fixture device)", seen)
+	fixtures, err := devseed.Fixtures()
+	if err != nil {
+		t.Fatalf("parse fixtures: %v", err)
+	}
+	// Every fixture component counts, the deliberately product-free power
+	// conditioner included: a component created with no product classifies as
+	// the generic-device product, so its stem resolves like any other row's.
+	if seen != len(fixtures.Components) {
+		t.Errorf("platform-named components with a resolvable stem = %d, want %d (every fixture device)", seen, len(fixtures.Components))
 	}
 }
 
@@ -899,12 +916,14 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 	// asserted by nothing: releasing a pin leaves no test behind unless the
 	// rendered value is pinned instead.
 	for _, tc := range []struct{ name, label string }{
-		{"boardroom", "Boardroom"},
 		{"auditorium", "Auditorium"},
 		{"annex", "Annex"},
 		// The two-word ones: the rule reads the separator as a space, which is
-		// the whole of what `words` does. `media-lab` was the only such row
-		// until the floors were named for their designations.
+		// the whole of what `words` does. The boardroom halves are the
+		// designation case: the name carries the signage (ADR-0103) and the
+		// rule titles it.
+		{"boardroom-a", "Boardroom A"},
+		{"boardroom-b", "Boardroom B"},
 		{"media-lab", "Media Lab"},
 	} {
 		var label string
@@ -1437,6 +1456,18 @@ func TestSeededEstateShowsEveryVerdict(t *testing.T) {
 	if len(seen) < 3 {
 		t.Errorf("the seeded estate shows %d distinct verdicts (%v), want at least 3 so the canvas is judged against a real spread", len(seen), seen)
 	}
+}
+
+
+// fixturesDoc parses the embedded fixtures, failing the test on error, so a
+// derived expectation reads as one call.
+func fixturesDoc(t *testing.T) devseed.Doc {
+	t.Helper()
+	doc, err := devseed.Fixtures()
+	if err != nil {
+		t.Fatalf("parse fixtures: %v", err)
+	}
+	return doc
 }
 
 // fixtureComponentNames is the fixture's own component list, for counting only

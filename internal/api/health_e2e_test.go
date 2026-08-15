@@ -184,14 +184,15 @@ func TestHealthAPI(t *testing.T) {
 		t.Fatalf("alarm history = %+v, want the cleared row kept", listed.Alarms)
 	}
 
-	// The transition series is edges and only edges: outage the moment the system
-	// was created (it inherited a role the standard already declared and nobody was
-	// filling it), healthy when the bar was assigned, outage on the alarm, healthy
-	// on the clear. Four writes moved the verdict; the reads in between added
-	// nothing, which is the whole point of recomputing at the write rather than on
-	// the page view.
+	// The transition series is edges and only edges: incomplete the moment the
+	// system was created (it inherited a role the standard already declared and
+	// nobody was filling it, which is a commissioning gap, not a failure, #631),
+	// healthy when the bar was assigned, outage on the alarm, healthy on the
+	// clear. Four writes moved the verdict; the reads in between added nothing,
+	// which is the whole point of recomputing at the write rather than on the
+	// page view.
 	sys = health(ownerTok, "/systems/hq-1/health")
-	want := []string{"outage", "healthy", "outage", "healthy"}
+	want := []string{"incomplete", "healthy", "outage", "healthy"}
 	if len(sys.Transitions) != len(want) {
 		t.Fatalf("transitions = %+v, want exactly %d edges, no samples", sys.Transitions, len(want))
 	}
