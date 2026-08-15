@@ -220,7 +220,10 @@ test.describe("operator console", () => {
     // A band click navigates to the root location BY UUID, and the browser
     // back button returns to the fleet zoom (#633 acceptance).
     await band.getByRole("button").first().click();
-    await page.waitForURL(new RegExp(`/web/locations/${root.id}`));
+    await page.waitForURL(new RegExp(`/web/locations/${root.id}\\?zoom=1`));
+    // The zoom face renders at the identity route (ADR-0125): the ladder is
+    // there, and the location chip is live.
+    await expect(page.getByTestId("zoom-ladder")).toBeVisible();
     await page.goBack();
     await page.waitForURL(/\/web\/fleet/);
     await expect(page.getByTestId("zoom-ladder")).toBeVisible();

@@ -1,7 +1,7 @@
 import { entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { useNavigate, useParams } from "@solidjs/router";
+import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor, type Widget } from "../components/TreeList";
 import Donut from "../components/Donut";
 import TreeSelect from "../components/TreeSelect";
@@ -33,6 +33,7 @@ import { ChevronRight, Pencil, Plus, Save, Search, X, resolveIcon } from "../com
 import Button from "../components/Button";
 import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "../components/PropertiesPanel";
 import { LocationHealthPanel } from "../components/HealthPanel";
+import LocationZoom from "./LocationZoom";
 
 // Locations: the place tree on the generic TreeList (campuses, buildings, floors,
 // rooms). The same config-driven shell every inventory page uses: embedded filter,
@@ -70,6 +71,10 @@ export const locationsDescriptor: PageDescriptor = {
 
 export default function Locations() {
   const params = useParams();
+  // The zoom face is a URL fact (ADR-0125): ?zoom=1 on the identity route
+  // renders the location zoom, and the inventory detail stays the default.
+  const [search] = useSearchParams();
+  if (params.id && search.zoom === "1") return <LocationZoom />;
   const navigate = useNavigate();
   const qc = useQueryClient();
   const me = useMe();

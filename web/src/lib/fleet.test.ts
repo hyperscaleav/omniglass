@@ -2,10 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   ancestors,
   bandsOf,
+  byChildOfLocation,
   byRootLocation,
   childrenIndex,
   fleetTotals,
   holesByRoot,
+  holesUnder,
   locationIndex,
   locationsWithoutSystems,
   rootOf,
@@ -247,6 +249,63 @@ describe("holesByRoot", () => {
   it("claims nothing when the systems tier is out of scope, like its source", () => {
     const noSystems = { ...view, systems: [] } as unknown as FleetView;
     expect(holesByRoot(noSystems).size).toBe(0);
+  });
+});
+
+describe("byChildOfLocation", () => {
+  // The location zoom's grouping: one band per DIRECT child of the anchored
+  // location (whatever its type), plus a placed-here band (keyed by the
+  // location itself) for systems attached directly, ordered first. The same
+  // canvas renders it: the seam the epic promised, proven with a second real
+  // grouping.
+  const zoomView: FleetView = {
+    locations: [
+      loc("z2-hq", "hq", "campus"),
+      loc("z2-b1", "b1", "building", "z2-hq"),
+      loc("z2-b2", "b2", "building", "z2-hq"),
+      loc("z2-r1", "r1", "room", "z2-b1"),
+      // A leaf directly under the anchor with no system: its own hole.
+      loc("z2-r0", "r0", "room", "z2-hq"),
+      // A sibling tree the anchor must not see.
+      loc("z2-other", "other", "campus"),
+      loc("z2-or1", "or1", "room", "z2-other"),
+    ],
+    systems: [
+      // Attached to the anchor itself: the placed-here band.
+      { id: uuidFor("z2-s-here"), name: "here", label: "Here", location: uuidFor("z2-hq"), verdict: "healthy", dots: [] },
+      // Deep under b1: lands in b1's band.
+      { id: uuidFor("z2-s-deep"), name: "deep", label: "Deep", location: uuidFor("z2-r1"), verdict: "degraded", dots: [] },
+      // Directly at b2: b2's band.
+      { id: uuidFor("z2-s-b2"), name: "atb2", label: "At B2", location: uuidFor("z2-b2"), verdict: "healthy", dots: [] },
+      // Outside the subtree: dropped.
+      { id: uuidFor("z2-s-out"), name: "out", label: "Out", location: uuidFor("z2-or1"), verdict: "outage", dots: [] },
+    ],
+  } as unknown as FleetView;
+
+  it("bands every direct child whatever its type, and the placed-here band first", () => {
+    const bands = bandsOf(zoomView, byChildOfLocation(uuidFor("z2-hq")));
+    expect(bands.map((b) => b.key)).toEqual([uuidFor("z2-hq"), uuidFor("z2-b1"), uuidFor("z2-b2")]);
+    expect(bands[0].clusters.map((c) => c.label)).toEqual(["Here"]);
+    expect(bands[1].clusters.map((c) => c.label)).toEqual(["Deep"]);
+  });
+
+  it("drops a system outside the anchored subtree rather than inventing a band", () => {
+    const bands = bandsOf(zoomView, byChildOfLocation(uuidFor("z2-hq")));
+    expect(bands.flatMap((b) => b.clusters.map((c) => c.label))).not.toContain("Out");
+  });
+
+  it("carries each child's recorded verdict and depth like any band", () => {
+    const bands = bandsOf(zoomView, byChildOfLocation(uuidFor("z2-hq")));
+    expect(bands[1].recordedVerdict).toBe("healthy");
+    expect(bands[1].depth).toBe(2);
+  });
+
+  it("groups the subtree's holes under their direct-child band, and a bare leaf under the anchor itself", () => {
+    const holes = holesUnder(uuidFor("z2-hq"), zoomView);
+    expect(holes.get(uuidFor("z2-hq"))?.map((l) => l.name)).toEqual(["r0"]);
+    // r1 holds a system, so b1 contributes no hole; the sibling tree's or1 is
+    // not this anchor's business.
+    expect([...holes.values()].flat().map((l) => l.name)).toEqual(["r0"]);
   });
 });
 

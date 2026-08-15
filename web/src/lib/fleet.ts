@@ -211,6 +211,75 @@ export const byRootLocation: Grouping = {
   },
 };
 
+// byChildOfLocation is the location zoom's grouping (#635): one band per
+// DIRECT child of the anchored location, whatever the child's type, plus a
+// placed-here band (keyed by the anchor itself) for systems attached
+// directly, ordered first. A factory rather than a constant because the
+// anchor parameterizes it; the same bandsOf renders it, which is the seam
+// the epic promised (grouping is a mapper, never a second canvas).
+export function byChildOfLocation(locationId: string): Grouping {
+  return {
+    name: "children",
+    bandFor(system, view) {
+      if (!system.location) return null;
+      if (system.location === locationId) return locationId;
+      // Walk the system's chain root-first and take the step BELOW the
+      // anchor: that step is the direct child whose band gathers everything
+      // beneath it. A chain that never passes the anchor is outside this
+      // zoom's subtree and is dropped.
+      const chain = ancestors(system.location, locationIndex(view));
+      const at = chain.findIndex((l) => l.id === locationId);
+      if (at < 0 || at === chain.length - 1) return null;
+      return chain[at + 1].id;
+    },
+    label(key, view) {
+      const l = locationIndex(view).get(key);
+      if (!l) return key;
+      return key === locationId ? "Placed here" : entityLabel(l);
+    },
+    sublabel(key, view) {
+      if (key === locationId) return "";
+      return locationIndex(view).get(key)?.location_type ?? "";
+    },
+    order(keys, view) {
+      const index = locationIndex(view);
+      const label = (k: string) => (index.get(k) ? entityLabel(index.get(k)!) : k);
+      return [...keys].sort((a, b) => {
+        if (a === locationId) return -1;
+        if (b === locationId) return 1;
+        return label(a).localeCompare(label(b));
+      });
+    },
+    recordedVerdict(key, view) {
+      return locationIndex(view).get(key)?.verdict;
+    },
+    depth(key, view) {
+      return subtreeDepth(key, childrenIndex(view));
+    },
+  };
+}
+
+// holesUnder scopes the holes to one location's subtree, grouped the way
+// byChildOfLocation bands them: under the direct child that contains each, or
+// under the anchor itself for a bare leaf directly beneath it.
+export function holesUnder(locationId: string, view: FleetView): Map<string, FleetLocation[]> {
+  const index = locationIndex(view);
+  const out = new Map<string, FleetLocation[]>();
+  for (const hole of locationsWithoutSystems(view)) {
+    if (hole.id === locationId) continue;
+    const chain = ancestors(hole.id, index);
+    const at = chain.findIndex((l) => l.id === locationId);
+    if (at < 0 || at === chain.length - 1) continue;
+    // A hole directly under the anchor is the anchor's own gap; a deeper one
+    // belongs to the child band that contains it.
+    const bandKey = chain[at + 1].id === hole.id ? locationId : chain[at + 1].id;
+    const list = out.get(bandKey);
+    if (list) list.push(hole);
+    else out.set(bandKey, [hole]);
+  }
+  return out;
+}
+
 export function toCluster(system: FleetSystem): SystemCluster {
   return {
     systemId: system.id,
