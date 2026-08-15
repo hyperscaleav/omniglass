@@ -162,6 +162,8 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0121](#adr-0121-the-console-ships-its-own-typefaces) | 2026-08-15 | Accepted | The console serves IBM Plex Sans and JetBrains Mono from its own origin (vendored under `web/public/fonts/`, embedded in the binary, declared by a generated `web/src/fonts.css`) instead of linking a font CDN: rendering correctly stops depending on reaching a third party, which is the deployment this product targets and was also the cause of a docs capture writing fallback-font PNGs the zero-tolerance freshness gate reported as UI drift. Every script the CDN served is vendored (54 files, 1,005,028 bytes) so no operator string renders differently than before; `font-display: block` replaces `swap`; the capture now aborts rather than photograph a fallback render; `DOCS_SHOTS_PROXY` retires |
 | [ADR-0121](#adr-0121-a-commissioning-gap-is-not-a-failure-so-the-verdict-domain-gains-incomplete) | 2026-08-09 | Accepted | The verdict domain gains a fourth value: a role short because its hardware was never installed reads `incomplete` (ranked between healthy and degraded) rather than its declared `impact`, which now describes failure only; `impact: none` stays healthy when empty and a losing alternate's roles contribute nothing. No migration. Amends ADR-0050 |
 | [ADR-0122](#adr-0122-the-word-for-everything-an-install-manages-is-fleet) | 2026-08-14 | Accepted | The totality-of-managed-things noun becomes **fleet**, everywhere at once (code identifiers, routes, docs prose, glossary, scope grammar, nav): a fleet of SYSTEMS, uniform units maintained at scale against a standard, stationed across the location tree. The old noun retires to the docs denylist. Ruled all-in rather than surface-only: two words for one referent is a permanent translation tax |
+| [ADR-0123](#adr-0123-on-the-fleet-canvas-health-colour-is-exceptional-and-identity-colour-is-the-ground) | 2026-08-15 | Accepted | A healthy dot on the fleet canvas wears its system's identity hue (the `.og-system-dot` OKLCH recipe over `hueFor`); incomplete, degraded and outage dots wear the semantic verdict colours; an unnarrowed verdict wears `--og-unknown`. Healthy is the wallpaper and the wallpaper is identity, so failures are the only status-coloured pixels. Diverges from the prototype, which had no per-system hue |
+| [ADR-0124](#adr-0124-a-band-shows-the-locations-recorded-verdict-not-the-consoles-fold) | 2026-08-15 | Accepted | A fleet band's verdict chip renders the location's server-recorded verdict, the same row its detail page reads, never the console's fold over in-scope clusters; the fold remains as a named derivation. A band disagreeing with its own detail one click apart is a visible contradiction, and the fold covers only what the caller may read |
 
 ## Entries
 
@@ -5935,3 +5937,36 @@ interface create form, since that name is the platform's to mint.
   permanent translation tax between nav, glossary, and API vocabulary.
 - **Tracked under** epic [#630](https://github.com/hyperscaleav/omniglass/issues/630), ahead of
   slice [#633](https://github.com/hyperscaleav/omniglass/issues/633).
+### ADR-0123: On the fleet canvas, health colour is exceptional and identity colour is the ground
+
+- **Date:** 2026-08-15 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/), [health](/architecture/health/)
+- **Decision:** a **healthy** component dot wears its system's identity hue, through the exact
+  recipe the DOM's `.og-system-dot` already uses (`oklch(var(--tag-l) var(--tag-c) <hueFor>)`),
+  so a canvas dot and a DOM dot can never drift. **Incomplete, degraded and outage** dots wear
+  the semantic verdict colours (`--og-incomplete`, `--color-warning`, `--color-error`); a verdict
+  the console cannot narrow wears `--og-unknown` and never a substituted word. `hueFor`'s
+  reserved OKLCH bands already guarantee an identity hue cannot land inside a status band, which
+  is the invariant that makes the mixture legible.
+- **Context:** the slice inherited a contradiction: "coloured by state" beside "takes its hue
+  from `system_color`", and the prototype resolved it a third way (no per-system hue at all).
+  Ruled during definition true-up: a healthy fleet should read as identity-coloured wallpaper
+  with the clusters telling themselves apart, and anything not healthy should be the only
+  status-coloured pixels on screen, which is what makes a failure pop at fleet scale. The paint
+  plan (`paintGroups`) pins the rule at the unit tier per group, not per pixel.
+- **Tracked under** epic [#630](https://github.com/hyperscaleav/omniglass/issues/630), slice
+  [#633](https://github.com/hyperscaleav/omniglass/issues/633).
+
+### ADR-0124: A band shows the location's recorded verdict, not the console's fold
+
+- **Date:** 2026-08-15 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/), [health](/architecture/health/)
+- **Decision:** a fleet band's verdict chip renders `FleetLocationBody.verdict`, the location's
+  own server-recorded row, resolved through the grouping's optional `recordedVerdict` seam. The
+  console's fold over in-scope clusters (`Band.verdict`, worst-wins) stays available, named for
+  what it is, and no chip renders it.
+- **Context:** the band navigates to `/locations/{id}`, whose badge reads the same recorded row;
+  a band that says healthy beside a detail page that says outage, one click apart, is a visible
+  contradiction. The fold also covers only the clusters the caller may read, so under a narrow
+  scope it is not the location's verdict at all. The console-computes-no-verdict rule
+  (`web/src/lib/health.ts`) already pointed here; this records the band as a consumer of it.
+- **Tracked under** epic [#630](https://github.com/hyperscaleav/omniglass/issues/630), slice
+  [#633](https://github.com/hyperscaleav/omniglass/issues/633).

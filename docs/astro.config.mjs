@@ -157,6 +157,7 @@ export default defineConfig({
           items: [
             { label: 'Overview', slug: 'guides/operator' },
             { label: 'Sign in and your profile', slug: 'guides/operator/sign-in' },
+            { label: 'Explore your fleet', slug: 'guides/operator/fleet' },
             { label: 'Find things in your fleet', slug: 'guides/operator/inventory' },
             { label: 'Work with an entity', slug: 'guides/operator/entities' },
             { label: 'Nodes and reachability', slug: 'guides/operator/collection' },

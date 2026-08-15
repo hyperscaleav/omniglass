@@ -12,9 +12,12 @@ The console is one renderer over the same views the rest of the platform reads. 
 :::note[What shipped vs the model below]
 Roughly 22 live pages (inventory, catalog, values, admin, plus the shell) ship as **config-driven
 `ListShell` pages (with `FlatList` / `TreeList` bodies) over the typed CRUD client**, not as the
-`ViewResult` renderer described next: an inventory page is CRUD over a scoped resource. The views
-model, the renderer library, and composable dashboards remain the intended **read side** for the
-analytical surfaces (alarms, sample history, the cascade view, fleet dashboards), not built yet.
+`ViewResult` renderer described next: an inventory page is CRUD over a scoped resource. The
+**fleet zoom** (`/fleet`, #633) is the first surface that is neither: a canvas over its own
+views projection (`GET /views/fleet`), with the pure view model in `web/src/lib/fleet.ts` and
+the dot field painted per band. The views model, the renderer library, and composable
+dashboards remain the intended **read side** for the analytical surfaces (alarms, sample
+history, the cascade view, fleet dashboards), not built yet.
 Realized shell: the [design system](/contributing/design-system/); operating it: the
 [operator guide](/guides/operator/); per-slice breakdown:
 [implementation status](/architecture/status/).
@@ -136,7 +139,8 @@ Two layers, deliberately decoupled:
    `/components`, `/templates`, `/config`); a URL addresses the *entity*, never its place in the
    menu, so deep links stay stable however the menu is reorganized. No taxonomy-nested routes, no
    redirects to maintain.
-2. **The sidebar groups those flat routes into clusters for browsing**: Home, Dashboards, Alarms,
+2. **The sidebar groups those flat routes into clusters for browsing**: Home, Fleet (the one
+   canvas, #633), Dashboards, Alarms,
    Inventory (locations, systems, components, nodes), Values (variables, secrets, config, files),
    Catalog (a single entry opening the catalog shell, next), Explore, Learn, Admin (users, roles,
    groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
