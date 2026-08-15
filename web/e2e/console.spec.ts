@@ -179,4 +179,51 @@ test.describe("operator console", () => {
       }
     });
   }
+
+  test("the fleet zoom: bands render, a band click lands on the location by uuid, back returns", async ({ page }) => {
+    // Arrange through the API with the session the login already minted: the
+    // e2e database starts with the boot seed only, so the fleet under test is
+    // this test's own. A campus holding one system, and an empty building
+    // beside it: one band, one hole.
+    const stamp = Date.now();
+    const campus = `e2e-fleet-${stamp}`;
+    const hole = `e2e-hole-${stamp}`;
+    const mk = async (path: string, body: Record<string, unknown>) => {
+      const res = await page.request.post(`/api/v1${path}`, { data: body });
+      expect(res.status(), `POST ${path} ${await res.text()}`).toBe(201);
+      return (await res.json()) as { id: string };
+    };
+    const root = await mk("/locations", { name: campus, location_type: "campus" });
+    await mk("/locations", { name: hole, location_type: "building", parent: campus });
+    await mk("/systems", { name: `e2e-sys-${stamp}`, location: campus });
+
+    await page.goto("/web/fleet");
+
+    // The chrome: title, ladder, inspector, breadcrumb.
+    await expect(page.getByRole("heading", { name: "Fleet" })).toBeVisible();
+    await expect(page.getByTestId("zoom-ladder")).toBeVisible();
+    await expect(page.getByTestId("fleet-inspector")).toBeVisible();
+
+    // The band for this test's own root, and the canvas element inside it
+    // (role img so the pixels have an accessible name). The system holds no
+    // components yet, so the raster itself is proven by the screenshot step
+    // against the seeded dev fleet, not here.
+    const band = page.getByTestId(`band-${root.id}`);
+    await expect(band).toBeVisible();
+    await expect(band.getByText(/1 system/)).toBeVisible();
+    await expect(band.locator("canvas")).toHaveAttribute("role", "img");
+
+    // The empty building renders as a dashed hole, named.
+    const holeLabel = hole.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+    await expect(page.getByText(holeLabel).first()).toBeVisible();
+
+    // A band click navigates to the root location BY UUID, and the browser
+    // back button returns to the fleet zoom (#633 acceptance).
+    await band.getByRole("button").first().click();
+    await page.waitForURL(new RegExp(`/web/locations/${root.id}`));
+    await page.goBack();
+    await page.waitForURL(/\/web\/fleet/);
+    await expect(page.getByTestId("zoom-ladder")).toBeVisible();
+  });
+
 });
