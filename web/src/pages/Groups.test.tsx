@@ -232,3 +232,17 @@ describe("Groups create identity", () => {
     expect(screen.queryByText(/Derived from the label/)).toBeNull();
   });
 });
+
+// The blade's edit mode composes with its id deep link (#762): ?g=<id>&edit=1
+// opens the group's blade already editing, which is also how the create flow
+// hands off (the one-shot openGroupInEdit signal is gone).
+describe("edit as a URL fact", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  it("opens the group's blade in edit when the URL carries ?g=<id>&edit=1", async () => {
+    window.history.pushState({}, "", `/?g=${uuidFor("g-hd")}&edit=1`);
+    mount();
+    // The blade footer's edit pair is the witness: Save renders only in edit mode.
+    await waitFor(() => expect(screen.getByText("Save")).toBeTruthy());
+  });
+});

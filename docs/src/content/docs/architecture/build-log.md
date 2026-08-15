@@ -5383,3 +5383,9 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   and the default tolerance is now zero: the pinned browser's rasters are byte-stable, so any
   unmasked pixel change fails `make docs-shots-check`. The refresh also caught the secrets shot
   0.437% stale against today's console, live proof of the class (#768).
+
+- **The groups blade adopts the edit param.** ADR-0120 left the groups blade on its one-shot
+  signal "until it gains an id deep link"; it already had one (`?g=<id>`), so the adoption was
+  the Users port verbatim: `?g=<id>&edit=1` opens the group's blade already editing behind the
+  manage gate, the create flow hands off through that URL, and `openGroupInEdit` /
+  `consumePendingGroupEdit` retire. No console one-shot edit signal remains (#762).
