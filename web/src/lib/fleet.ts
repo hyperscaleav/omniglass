@@ -218,13 +218,19 @@ export function toCluster(system: FleetSystem): SystemCluster {
     label: entityLabel(system),
     locationId: system.location || null,
     verdict: verdictOf(system.verdict),
-    dots: (system.dots ?? []).map((d) => ({
-      componentId: d.component,
-      name: d.name,
-      verdict: verdictOf(d.verdict),
-      owned: d.primary,
-      shared: d.shared,
-    })),
+    // The wire is a set (the scoped tree query carries no ORDER BY), so the
+    // drawing order is decided here, deterministically: a canvas that
+    // reshuffles its dots between refreshes reads as change where none
+    // happened.
+    dots: (system.dots ?? [])
+      .map((d) => ({
+        componentId: d.component,
+        name: d.name,
+        verdict: verdictOf(d.verdict),
+        owned: d.primary,
+        shared: d.shared,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.componentId.localeCompare(b.componentId)),
   };
 }
 
@@ -243,7 +249,11 @@ export function bandsOf(view: FleetView, grouping: Grouping = byRootLocation): B
 
   return grouping.order([...groups.keys()], view).map((key) => {
     const systems = groups.get(key) ?? [];
-    const clusters = systems.map(toCluster);
+    // Clusters draw in label order for the same reason dots draw in name
+    // order: the wire is a set, and the canvas must not reshuffle.
+    const clusters = systems
+      .map(toCluster)
+      .sort((a, b) => a.label.localeCompare(b.label) || a.name.localeCompare(b.name) || a.systemId.localeCompare(b.systemId));
     // A shared component appears in several clusters and is one box, so the
     // band counts distinct components rather than dots.
     const distinct = new Set<string>();

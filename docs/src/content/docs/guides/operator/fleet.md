@@ -5,6 +5,14 @@ screenshots:
   - id: fleet
     path: /web/fleet
     alt: "The fleet zoom: bands per root location, system dot clusters, dashed holes, the zoom ladder, and the inspector."
+    # The dot fields are masked because their colours derive from system
+    # uuids (ADR-0123 over hueFor), and every capture run seeds a fresh
+    # database: the hues are honest per-install identity and can never be
+    # byte-stable across captures. The chrome, the holes, and the counts
+    # are the shot's deterministic content. Unmask when the diff gate grows
+    # its perceptual threshold (#774).
+    mask:
+      - "canvas"
 ---
 
 **Fleet** is the whole of what you operate, on one canvas: every root location as a band,

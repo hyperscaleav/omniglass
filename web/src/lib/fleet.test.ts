@@ -199,6 +199,24 @@ describe("byRootLocation", () => {
   });
 });
 
+describe("drawing order", () => {
+  // The projection sends SETS (no ORDER BY rides the scoped tree query), so
+  // the view model owns the drawing order: without this, the canvas would
+  // reshuffle its clusters on every refresh.
+  it("orders a band's clusters by label whatever order the wire sent", () => {
+    const shuffled = { ...view, systems: [...view.systems!].reverse() } as unknown as FleetView;
+    const a = bandsOf(view).map((b) => b.clusters.map((c) => c.label));
+    const b = bandsOf(shuffled).map((b2) => b2.clusters.map((c) => c.label));
+    expect(b).toEqual(a);
+  });
+
+  it("orders a cluster's dots by name whatever order the wire sent", () => {
+    const sys = view.systems![0];
+    const shuffled = { ...sys, dots: [...sys.dots!].reverse() };
+    expect(toCluster(shuffled as never).dots.map((d) => d.name)).toEqual(toCluster(sys).dots.map((d) => d.name));
+  });
+});
+
 describe("childrenIndex and subtreeDepth", () => {
   it("measures each root's own depth, which is the variable-depth fact the canvas teaches", () => {
     const children = childrenIndex(view);
