@@ -1175,7 +1175,7 @@ export interface paths {
         put?: never;
         /**
          * Create an interface
-         * @description Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant). The create scope cascades through the owning component. Gated by interface:create.
+         * @description Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is what tells two interfaces of one type apart. The create scope cascades through the owning component. Gated by interface:create.
          */
         post: operations["create-interface"];
         delete?: never;
@@ -1207,7 +1207,7 @@ export interface paths {
         head?: never;
         /**
          * Update an interface
-         * @description Patches an interface's node placement or params. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
+         * @description Patches an interface's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
          */
         patch: operations["update-interface"];
         trace?: never;
@@ -4374,6 +4374,8 @@ export interface components {
             component?: string;
             /** @description An interface_type name (the protocol); the interface is named by it, unique within the component */
             interface_type: string;
+            /** @description What an operator reads in lists (Control processor). Settable here because the name is derived: two ssh interfaces on one component are told apart by this and nothing else */
+            label?: string;
             /** @description Node placement, by name or id */
             node?: string;
             /** @description Endpoint/target settings (jsonb) */
@@ -5213,7 +5215,9 @@ export interface components {
             interface_type: string;
             /** @description The interface_type's uuid, the stable form of interface_type */
             interface_type_id: string;
-            /** @description The friendly name, unique within the owning component */
+            /** @description The friendly string an operator reads, and the only identity string an operator types here: the name is derived from the type. Absent when unset, and a surface with none renders the name verbatim */
+            label?: string;
+            /** @description The derived name (its protocol), unique within the owning component */
             name: string;
             /** @description The node placement name, if assigned */
             node?: string;
@@ -6236,10 +6240,12 @@ export interface components {
             endpoint?: string;
             /** @description The recent verdict transitions, oldest first, for the availability strip */
             history: components["schemas"]["ReachHistoryBody"][] | null;
-            /** @description The interface name */
+            /** @description The interface's derived name (its protocol) */
             interface: string;
             /** @description The interface type (icmp, tcp, ...) */
             interface_type: string;
+            /** @description The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim */
+            label?: string;
             /** @description The per-layer probe signals that compose the verdict */
             layers: components["schemas"]["ReachLayerBody"][] | null;
             /** @description The node that probes this interface */
@@ -7259,6 +7265,8 @@ export interface components {
              * @example /api/v1/schemas/UpdateInterfaceInputBody.json
              */
             readonly $schema?: string;
+            /** @description A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone */
+            label?: string;
             /** @description Reassign the node placement, by name or id */
             node?: string;
             /** @description Replace the endpoint/target settings (jsonb) */

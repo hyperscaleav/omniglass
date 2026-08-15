@@ -32,6 +32,7 @@ var (
 type Interface struct {
 	ID          string
 	Name        string
+	Label       string // the friendly string an operator reads; empty falls back to Name
 	Type        string
 	TypeID      string
 	Component   *string
@@ -46,8 +47,15 @@ type Interface struct {
 // InterfaceSpec is the create input. The interface is protocol-named: its name is
 // DERIVED from its type (the protocol it speaks), unique within the owning
 // component, never operator-typed. The id is server-generated.
+//
+// Which makes Label the ONE operator-typed identity string an interface has, and
+// the reason it is here rather than only on the patch: on a component with three
+// `ssh` interfaces the names collide by construction, so an interface that could
+// only be labelled by a following call is one an operator cannot tell apart at
+// the moment they make it (D2, #613).
 type InterfaceSpec struct {
 	Type      string
+	Label     string
 	Component *string
 	Node      *string
 	Params    []byte
@@ -60,6 +68,10 @@ type InterfaceSpec struct {
 type InterfacePatch struct {
 	Node   *string
 	Params []byte
+	// Label follows the platform's patch convention: nil leaves it alone, an
+	// empty string clears it. It is the only identity field an operator may
+	// move here, and moving it moves nothing else: the name stays derived.
+	Label *string
 }
 
 // interfaceCols is the bare select list (scan order), for the un-aliased
@@ -73,12 +85,12 @@ type InterfacePatch struct {
 // since an unaliased `... c.name ...` would emit a second output column called
 // `name` and make `order by name` ambiguous.
 const (
-	interfaceCols = `id, name,
+	interfaceCols = `id, name, coalesce(label, ''),
 		(select t.name from interface_type t where t.id = interface.type) as type, interface.type as type_id,
 		(select c.name from component c where c.id = interface.component) as component_name, component,
 		(select n.name from node n where n.principal_id = interface.node_name) as node_name_ref, node_name,
 		params, created_at, updated_at`
-	interfaceColsJoin = `i.id, i.name,
+	interfaceColsJoin = `i.id, i.name, coalesce(i.label, ''),
 		(select t2.name from interface_type t2 where t2.id = i.type) as type, i.type as type_id,
 		(select c2.name from component c2 where c2.id = i.component) as component_name, i.component,
 		(select n.name from node n where n.principal_id = i.node_name) as node_name_ref, i.node_name,
@@ -87,7 +99,7 @@ const (
 
 func scanInterface(row pgx.Row) (*Interface, error) {
 	var it Interface
-	if err := row.Scan(&it.ID, &it.Name, &it.Type, &it.TypeID, &it.Component, &it.ComponentID, &it.Node, &it.NodeID, &it.Params, &it.CreatedAt, &it.UpdatedAt); err != nil {
+	if err := row.Scan(&it.ID, &it.Name, &it.Label, &it.Type, &it.TypeID, &it.Component, &it.ComponentID, &it.Node, &it.NodeID, &it.Params, &it.CreatedAt, &it.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &it, nil
@@ -174,7 +186,8 @@ func loadInterface(ctx context.Context, q querier, id string) (*Interface, error
 }
 
 // ListInterfaces returns the interfaces whose owning component is in the caller's
-// read scope, ordered by name. A component-scoped read (the cascade) expands the
+// read scope, ordered by the label an operator reads with the unlabelled last
+// and the derived name breaking ties (D4, #613); both arms order the same way. A component-scoped read (the cascade) expands the
 // component subtree and matches interfaces joined onto it; an all read returns
 // every interface (including component-less ones); an empty scope returns none.
 func (p *PG) ListInterfaces(ctx context.Context, read scope.Set) ([]Interface, error) {
@@ -186,7 +199,7 @@ func (p *PG) ListInterfaces(ctx context.Context, read scope.Set) ([]Interface, e
 		err  error
 	)
 	if read.All {
-		rows, err = p.pool.Query(ctx, `select `+interfaceCols+` from interface order by name`)
+		rows, err = p.pool.Query(ctx, `select `+interfaceCols+` from interface order by label nulls last, name`)
 	} else {
 		roots := uuidRoots(read.IDs)
 		selfIDs := uuidRoots(read.SelfIDs)
@@ -205,7 +218,7 @@ func (p *PG) ListInterfaces(ctx context.Context, read scope.Set) ([]Interface, e
 			select `+interfaceColsJoin+` from interface i
 			join component c on c.id = i.component
 			where c.id in (select id from sub) or c.id = any($2::uuid[])
-			order by i.name`, roots, selfIDs)
+			order by i.label nulls last, i.name`, roots, selfIDs)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("storage: list interfaces: %w", err)
@@ -279,10 +292,10 @@ func (p *PG) CreateInterface(ctx context.Context, actorID string, spec Interface
 		return nil, err
 	}
 	it, err := scanInterface(tx.QueryRow(ctx, `
-		insert into interface (name, type, component, node_name, params)
-		values ($1, (select id from interface_type where name = $1), $2, $3, $4)
+		insert into interface (name, type, component, node_name, params, label)
+		values ($1, (select id from interface_type where name = $1), $2, $3, $4, $5)
 		returning `+interfaceCols,
-		spec.Type, componentID, nodeID, params))
+		spec.Type, componentID, nodeID, params, labelOrNull(spec.Label)))
 	if err != nil {
 		return nil, mapInterfaceWriteErr(err)
 	}
@@ -301,9 +314,11 @@ func (p *PG) CreateInterface(ctx context.Context, actorID string, spec Interface
 	return it, nil
 }
 
-// UpdateInterface patches an interface's node placement or params with the
-// read-then-action scope split (both evaluated against the owning component) and
-// in-transaction audit. Type and component rebind are deferred.
+// UpdateInterface patches an interface's node placement, params or label with
+// the read-then-action scope split (both evaluated against the owning component)
+// and in-transaction audit. Type and component rebind are deferred, and the name
+// is not patchable at all: it is derived from the type, so the label is the only
+// identity string this route moves.
 func (p *PG) UpdateInterface(ctx context.Context, actorID, id string, patch InterfacePatch, read, action scope.Set) (*Interface, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -319,14 +334,16 @@ func (p *PG) UpdateInterface(ctx context.Context, actorID, id string, patch Inte
 	if err != nil {
 		return nil, err
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	after, err := scanInterface(tx.QueryRow(ctx, `
 		update interface set
 			node_name = coalesce($2, node_name),
 			params    = coalesce($3, params),
+			label     = case when $5::boolean then $4 else label end,
 			updated_at = now()
 		where id = $1
 		returning `+interfaceCols,
-		before.ID, nodeID, nullableJSON(patch.Params)))
+		before.ID, nodeID, nullableJSON(patch.Params), labelVal, setLabel))
 	if err != nil {
 		return nil, mapInterfaceWriteErr(err)
 	}

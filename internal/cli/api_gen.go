@@ -1866,12 +1866,13 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fComponent string
 				var fInterfaceType string
+				var fLabel string
 				var fNode string
 				var fParams string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create an interface",
-					Long:    "Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant). The create scope cascades through the owning component. Gated by interface:create.",
+					Long:    "Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is what tells two interfaces of one type apart. The create scope cascades through the owning component. Gated by interface:create.",
 					Example: "  omniglass interface create --interface-type interface_type",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1882,6 +1883,9 @@ func generatedCommands() []*cobra.Command {
 						}
 						if cmd.Flags().Changed("interface-type") {
 							body["interface_type"] = fInterfaceType
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
 						}
 						if cmd.Flags().Changed("node") {
 							body["node"] = fNode
@@ -1895,6 +1899,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fComponent, "component", "", "Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant)")
 				cmd.Flags().StringVar(&fInterfaceType, "interface-type", "", "An interface_type name (the protocol); the interface is named by it, unique within the component")
 				_ = cmd.MarkFlagRequired("interface-type")
+				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists (Control processor). Settable here because the name is derived: two ssh interfaces on one component are told apart by this and nothing else")
 				cmd.Flags().StringVar(&fNode, "node", "", "Node placement, by name or id")
 				cmd.Flags().StringVar(&fParams, "params", "", "Endpoint/target settings (jsonb)")
 				return cmd
@@ -1954,17 +1959,21 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fLabel string
 				var fNode string
 				var fParams string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update an interface",
-					Long:    "Patches an interface's node placement or params. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.",
+					Long:    "Patches an interface's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.",
 					Example: "  omniglass interface update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/interfaces/%s", url.PathEscape(args[0]))
 						body := map[string]any{}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
 						if cmd.Flags().Changed("node") {
 							body["node"] = fNode
 						}
@@ -1974,6 +1983,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fLabel, "label", "", "A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone")
 				cmd.Flags().StringVar(&fNode, "node", "", "Reassign the node placement, by name or id")
 				cmd.Flags().StringVar(&fParams, "params", "", "Replace the endpoint/target settings (jsonb)")
 				return cmd

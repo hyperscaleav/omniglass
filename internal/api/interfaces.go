@@ -19,7 +19,8 @@ import (
 
 type interfaceBody struct {
 	ID          string          `json:"id" doc:"The interface's surrogate id (the address)"`
-	Name        string          `json:"name" doc:"The friendly name, unique within the owning component"`
+	Name        string          `json:"name" doc:"The derived name (its protocol), unique within the owning component"`
+	Label       string          `json:"label,omitempty" doc:"The friendly string an operator reads, and the only identity string an operator types here: the name is derived from the type. Absent when unset, and a surface with none renders the name verbatim"`
 	Type        string          `json:"interface_type" doc:"The interface_type name (the protocol)"`
 	TypeID      string          `json:"interface_type_id" doc:"The interface_type's uuid, the stable form of interface_type"`
 	Component   *string         `json:"component,omitempty" doc:"The owning component name; absent for a server-hosted interface"`
@@ -31,7 +32,7 @@ type interfaceBody struct {
 
 func toInterfaceBody(it *storage.Interface) interfaceBody {
 	b := interfaceBody{
-		ID: it.ID, Name: it.Name, Type: it.Type, TypeID: it.TypeID,
+		ID: it.ID, Name: it.Name, Label: it.Label, Type: it.Type, TypeID: it.TypeID,
 		Component: it.Component, ComponentID: it.ComponentID,
 		Node: it.Node, NodeID: it.NodeID,
 	}
@@ -58,6 +59,7 @@ type interfacePathInput struct {
 type createInterfaceInput struct {
 	Body struct {
 		Type      string          `json:"interface_type" minLength:"1" doc:"An interface_type name (the protocol); the interface is named by it, unique within the component"`
+		Label     string          `json:"label,omitempty" maxLength:"200" doc:"What an operator reads in lists (Control processor). Settable here because the name is derived: two ssh interfaces on one component are told apart by this and nothing else"`
 		Component *string         `json:"component,omitempty" doc:"Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant)"`
 		Node      *string         `json:"node,omitempty" doc:"Node placement, by name or id"`
 		Params    json.RawMessage `json:"params,omitempty" doc:"Endpoint/target settings (jsonb)"`
@@ -68,6 +70,7 @@ type updateInterfaceInput struct {
 	ID   string `path:"id"`
 	Body struct {
 		Node   *string         `json:"node,omitempty" doc:"Reassign the node placement, by name or id"`
+		Label  *string         `json:"label,omitempty" maxLength:"200" doc:"A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone"`
 		Params json.RawMessage `json:"params,omitempty" doc:"Replace the endpoint/target settings (jsonb)"`
 	}
 }
@@ -114,10 +117,11 @@ func registerInterfaceRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Path:          "/interfaces",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create an interface",
-		Description:   "Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant). The create scope cascades through the owning component. Gated by interface:create.",
+		Description:   "Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is what tells two interfaces of one type apart. The create scope cascades through the owning component. Gated by interface:create.",
 	}, "interface", "create"), func(ctx context.Context, in *createInterfaceInput) (*interfaceOutput, error) {
 		it, err := gw.CreateInterface(ctx, actorID(ctx), storage.InterfaceSpec{
 			Type:      in.Body.Type,
+			Label:     in.Body.Label,
 			Component: in.Body.Component,
 			Node:      in.Body.Node,
 			Params:    []byte(in.Body.Params),
@@ -133,11 +137,12 @@ func registerInterfaceRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodPatch,
 		Path:        "/interfaces/{id}",
 		Summary:     "Update an interface",
-		Description: "Patches an interface's node placement or params. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.",
+		Description: "Patches an interface's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.",
 	}, "interface", "update"), func(ctx context.Context, in *updateInterfaceInput) (*interfaceOutput, error) {
 		it, err := gw.UpdateInterface(ctx, actorID(ctx), in.ID, storage.InterfacePatch{
 			Node:   in.Body.Node,
 			Params: []byte(in.Body.Params),
+			Label:  in.Body.Label,
 		}, a.scopeFor(ctx, "interface", "read"), a.scopeFor(ctx, "interface", "update"))
 		if err != nil {
 			return nil, mapInterfaceErr(err)

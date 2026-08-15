@@ -2,6 +2,7 @@ import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { Sliders } from "./icons";
 import KVStacked from "./KVStacked";
+import BladeTitle from "./BladeTitle";
 import {
   type Interface,
   type UpdateInterface,
@@ -61,13 +62,14 @@ export const interfaceBlade: BladeDef = {
   Body: (p) => <InterfaceBladeBody id={p.id} />,
 };
 
-// The heading is the name, in the data face, because a interface carries no display
-// name: the name IS its only operator-facing string, so entityLabel would return
-// it anyway. Deliberate, not an oversight (#581); a interface blade would use BladeTitle
-// the moment the entity gained one.
+// The heading is the label, falling back to the derived name in the data face,
+// through the one blade-heading primitive. It was a bare span until the entity
+// gained a label (#613), which is the moment #581 said to switch, and it matters
+// more here than anywhere: two ssh interfaces on one component open two blades
+// that would otherwise be titled identically.
 function InterfaceBladeTitle(props: { id: string }): JSX.Element {
   const iface = useInterfaceById(props.id);
-  return <span class="font-data">{iface()?.name ?? "interface"}</span>;
+  return <BladeTitle row={() => iface() ?? undefined} fallback="interface" />;
 }
 
 // InterfaceBladeBody re-derives the interface from the live query by id (not a row
@@ -83,6 +85,7 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
   const i = useInterfaceById(props.id);
   const [node, setNode] = createSignal("");
   const [target, setTarget] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [err, setErr] = createSignal<string | null>(null);
 
   // Invalidate the interfaces list and, when the interface is on a component, that
@@ -101,6 +104,9 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
     const iface = i();
     setNode(iface?.node ?? "");
     setTarget(iface ? interfaceTarget(iface) : "");
+    // The RAW column, never entityLabel: seeding the editor with the fallback
+    // would turn "no label" into a label the operator never typed.
+    setLabel(iface?.label ?? "");
     setErr(null);
   }));
 
@@ -128,6 +134,9 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
     const patch: UpdateInterface = {};
     if (node() && node() !== (iface.node ?? "")) patch.node = node();
     if (target() && target() !== interfaceTarget(iface)) patch.params = { target: target().trim() };
+    // The label is sent whenever it differs, including when it is now empty:
+    // clearing one is an instruction, not an omission.
+    if (label() !== (iface.label ?? "")) patch.label = label();
     setErr(null);
     try {
       await updateInterface(iface.id, patch);
@@ -161,6 +170,7 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
             when={edit.editing()}
             fallback={
               <div class="grid grid-cols-2 gap-4">
+                <KVStacked bind="label" value={iface().label ? <span>{iface().label}</span> : <span class="text-base-content/40">unset</span>} />
                 <KVStacked bind="name" value={<span class="font-data">{iface().name}</span>} />
                 <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{iface().interface_type}</span>} />
                 <KVStacked label="Component" value={iface().component ? <span class="font-data">{iface().component}</span> : <span class="text-base-content/40">server-hosted</span>} />
@@ -170,7 +180,11 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
             }
           >
             <div class="flex flex-col gap-3">
-              <p class="text-xs text-base-content/50">Reassign the node placement or change the probed target. The name, type, and component are fixed after creation.</p>
+              <p class="text-xs text-base-content/50">Set the label an operator reads, reassign the node placement, or change the probed target. The name, type, and component are fixed after creation.</p>
+              <div>
+                <label class="eyebrow mb-1.5 block" for="edit-iface-label">Label</label>
+                <input id="edit-iface-label" autocomplete="off" class="input input-bordered w-full" value={label()} placeholder="Control processor" onInput={(e) => setLabel(e.currentTarget.value)} />
+              </div>
               <div>
                 <label class="eyebrow mb-1.5 block" for="edit-iface-node">Node</label>
                 <NodeSelect id="edit-iface-node" value={node()} onChange={setNode} />
@@ -229,6 +243,7 @@ function CreateInterfaceForm(props: { onCreated: (i: Interface) => void; compone
     return match ? entityLabel(match) : props.component;
   };
   const [type, setType] = createSignal<string>(INTERFACE_TYPES[0]);
+  const [label, setLabel] = createSignal("");
   const [component, setComponent] = createSignal(props.component ?? "");
   const [node, setNode] = createSignal("");
   const [target, setTarget] = createSignal("");
@@ -250,6 +265,7 @@ function CreateInterfaceForm(props: { onCreated: (i: Interface) => void; compone
     try {
       const created = await createInterface({
         interface_type: type(),
+        label: label().trim() || undefined,
         component: component() || undefined,
         node: node() || undefined,
         params: target().trim() ? { target: target().trim() } : undefined,
@@ -265,10 +281,14 @@ function CreateInterfaceForm(props: { onCreated: (i: Interface) => void; compone
 
   return (
     <form class="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-      <p class="text-xs text-base-content/50">An API on a component, named by its protocol (its type). Its reachability task derives automatically.</p>
+      <p class="text-xs text-base-content/50">An API on a component, named by its protocol (its type). Give it a label if the component has more than one of a type: the name cannot tell them apart. Its reachability task derives automatically.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
+      <div>
+        <label class="eyebrow mb-1.5 block" for="new-iface-label">Label</label>
+        <input id="new-iface-label" autocomplete="off" class="input input-bordered w-full" value={label()} placeholder="Control processor" onInput={(e) => setLabel(e.currentTarget.value)} disabled={busy()} />
+      </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-iface-type">Protocol (type)</label>
         <select id="new-iface-type" class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)} disabled={busy()}>

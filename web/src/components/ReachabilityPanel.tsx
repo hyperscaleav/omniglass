@@ -4,6 +4,7 @@ import { ChevronRight, Plus, Sliders } from "./icons";
 import Button from "./Button";
 import StateStrip from "./StateStrip";
 import { rel } from "../lib/format";
+import { entityLabel } from "../lib/entities";
 import { INTERFACES_KEY, listInterfaces } from "../lib/interfaces";
 import {
   REACHABILITY_KEY,
@@ -111,7 +112,10 @@ function InterfaceRow(p: { iface: ReachInterface; manageId?: string; onManage?: 
         >
           <span class={`shrink-0 text-base-content/40 transition-transform ${open() ? "rotate-90" : ""}`}><ChevronRight size={14} /></span>
           <div class="flex w-52 shrink-0 flex-col gap-0.5">
-            <span class="truncate text-sm">{p.iface.interface}</span>
+            {/* The label over the derived name, through the one renderer. This
+                panel is where two interfaces of one protocol sit beside each
+                other, so it is where the label earns its place (#613). */}
+            <span class="truncate text-sm">{entityLabel({ name: p.iface.interface, label: p.iface.label })}</span>
             <span class="truncate font-data text-[11px] text-base-content/50">
               {p.iface.interface_type}
               <Show when={p.iface.endpoint}> · {p.iface.endpoint}</Show>

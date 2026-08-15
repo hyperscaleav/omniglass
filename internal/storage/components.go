@@ -982,13 +982,16 @@ func (p *PG) ResetComponentName(ctx context.Context, actorID, name string, read,
 // layer signals, and history are read separately per (component, key, interface).
 type ComponentInterface struct {
 	Name     string
+	Label    string
 	Type     string
 	NodeName string
 	Params   []byte
 }
 
-// ListComponentInterfaces returns a component's interfaces ordered by name, the
-// rows the reachability read composes over. It is not scope-injected: the caller
+// ListComponentInterfaces returns a component's interfaces ordered by the label
+// an operator reads with the unlabelled last (#613), the rows the reachability
+// read composes over. It is the panel where two interfaces of one type sit
+// beside each other, so it is the projection the label matters most on. It is not scope-injected: the caller
 // gates on the component being in read scope (GetComponent) first, then reads its
 // interfaces by the verified reference (name or uuid, ADR-0062), resolved once
 // here rather than left as a name a second row could now share (#627). An
@@ -1004,10 +1007,10 @@ func (p *PG) ListComponentInterfaces(ctx context.Context, componentRef string) (
 		return nil, err
 	}
 	rows, err := p.pool.Query(ctx, `
-		select i.name, (select it.name from interface_type it where it.id = i.type), coalesce((select n.name from node n where n.principal_id = i.node_name), ''), i.params
+		select i.name, coalesce(i.label, ''), (select it.name from interface_type it where it.id = i.type), coalesce((select n.name from node n where n.principal_id = i.node_name), ''), i.params
 		from interface i
 		where i.component = $1::uuid
-		order by i.name asc`, c.ID)
+		order by i.label nulls last, i.name asc`, c.ID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list interfaces for %s: %w", componentRef, err)
 	}
@@ -1015,7 +1018,7 @@ func (p *PG) ListComponentInterfaces(ctx context.Context, componentRef string) (
 	var out []ComponentInterface
 	for rows.Next() {
 		var it ComponentInterface
-		if err := rows.Scan(&it.Name, &it.Type, &it.NodeName, &it.Params); err != nil {
+		if err := rows.Scan(&it.Name, &it.Label, &it.Type, &it.NodeName, &it.Params); err != nil {
 			return nil, fmt.Errorf("storage: scan interface for %s: %w", componentRef, err)
 		}
 		out = append(out, it)

@@ -86,6 +86,18 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 
 	stem := "probe"
 	provers := map[string]func(t *testing.T) (keyCol, key string){
+		"interface": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "lbl-comp"}, all, all, all, all); err != nil {
+				t.Fatalf("create component: %v", err)
+			}
+			ref := "lbl-comp"
+			if _, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{
+				Type: "ssh", Component: &ref, Label: blank,
+			}, all); err != nil {
+				t.Fatalf("create interface: %v", err)
+			}
+			return "name", "ssh"
+		},
 		"secret": func(t *testing.T) (string, string) {
 			if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
 				Name: "lbl-sec", Label: blank, SecretType: "snmp-community", OwnerKind: "platform",
@@ -268,6 +280,9 @@ func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
 
 	empty := ""
 	stem := "probe"
+	// The two uuid-addressed rows carry their id from the prepare to the clear,
+	// since their write path takes a uuid while every row here is keyed by name.
+	var clearInterfaceID, clearSecretID string
 
 	cases := []struct {
 		table   string
@@ -275,6 +290,37 @@ func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
 		prepare func(t *testing.T) string // creates a LABELLED row, returns its key
 		clear   func(t *testing.T, key string)
 	}{
+		{"interface", "name", func(t *testing.T) string {
+			if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "clr-comp"}, all, all, all, all); err != nil {
+				t.Fatalf("create component: %v", err)
+			}
+			ref := "clr-comp"
+			it, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "ssh", Component: &ref, Label: "Labelled"}, all)
+			if err != nil {
+				t.Fatalf("create: %v", err)
+			}
+			clearInterfaceID = it.ID
+			return it.Name
+		}, func(t *testing.T, key string) {
+			if _, err := gw.UpdateInterface(ctx, "", clearInterfaceID, storage.InterfacePatch{Label: &empty}, all, all); err != nil {
+				t.Fatalf("clear: %v", err)
+			}
+		}},
+		{"secret", "name", func(t *testing.T) string {
+			s, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+				Name: "clr-sec", Label: "Labelled", SecretType: "snmp-community", OwnerKind: "platform",
+				Fields: map[string]string{"community": "public"},
+			}, all, true)
+			if err != nil {
+				t.Fatalf("create: %v", err)
+			}
+			clearSecretID = s.ID
+			return s.Name
+		}, func(t *testing.T, key string) {
+			if _, err := gw.UpdateSecret(ctx, "", clearSecretID, storage.SecretPatch{Label: &empty}, all, all, true, true); err != nil {
+				t.Fatalf("clear: %v", err)
+			}
+		}},
 		{"variable", "name", func(t *testing.T) string {
 			v, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
 				Name: "clr-var", Label: "Labelled", ValueType: "int", OwnerKind: "platform",

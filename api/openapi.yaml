@@ -909,6 +909,10 @@ components:
           description: An interface_type name (the protocol); the interface is named by it, unique within the component
           minLength: 1
           type: string
+        label:
+          description: "What an operator reads in lists (Control processor). Settable here because the name is derived: two ssh interfaces on one component are told apart by this and nothing else"
+          maxLength: 200
+          type: string
         node:
           description: Node placement, by name or id
           type: string
@@ -2414,8 +2418,11 @@ components:
         interface_type_id:
           description: The interface_type's uuid, the stable form of interface_type
           type: string
+        label:
+          description: "The friendly string an operator reads, and the only identity string an operator types here: the name is derived from the type. Absent when unset, and a surface with none renders the name verbatim"
+          type: string
         name:
-          description: The friendly name, unique within the owning component
+          description: The derived name (its protocol), unique within the owning component
           type: string
         node:
           description: The node placement name, if assigned
@@ -4340,10 +4347,13 @@ components:
             - array
             - "null"
         interface:
-          description: The interface name
+          description: The interface's derived name (its protocol)
           type: string
         interface_type:
           description: The interface type (icmp, tcp, ...)
+          type: string
+        label:
+          description: The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim
           type: string
         layers:
           description: The per-layer probe signals that compose the verdict
@@ -6122,6 +6132,10 @@ components:
             - /api/v1/schemas/UpdateInterfaceInputBody.json
           format: uri
           readOnly: true
+          type: string
+        label:
+          description: A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone
+          maxLength: 200
           type: string
         node:
           description: Reassign the node placement, by name or id
@@ -8493,7 +8507,7 @@ paths:
       summary: List interfaces in scope
       x-omniglass-permission: interface:read
     post:
-      description: Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant). The create scope cascades through the owning component. Gated by interface:create.
+      description: Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is what tells two interfaces of one type apart. The create scope cascades through the owning component. Gated by interface:create.
       operationId: create-interface
       requestBody:
         content:
@@ -8566,7 +8580,7 @@ paths:
       summary: Get an interface
       x-omniglass-permission: interface:read
     patch:
-      description: Patches an interface's node placement or params. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
+      description: Patches an interface's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
       operationId: update-interface
       parameters:
         - in: path

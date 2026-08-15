@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
@@ -418,4 +419,143 @@ func TestASecretsLabelReachesEveryProjectionThatCarriesItsName(t *testing.T) {
 		t.Errorf("revealed community = %q after a relabel, want private: the sealed value is bound to the "+
 			"NAME, and a relabel is not a rename", after["community"])
 	}
+}
+
+// TestAnInterfacesLabelIsTheOnlyThingTellingTwoApart is the case D2 was decided
+// on, and it is the strongest of the four rather than the weakest.
+//
+// An interface's name is SERVER-derived: InterfaceSpec carries no Name and the
+// column is set from spec.Type, an already-validated interface_type name. So on
+// a component with three `ssh` interfaces the operator has no way at all to say
+// which is which, and the declared name exemption in KeyProvedElsewhere is not
+// something the label replaces: it is the ARGUMENT for the label.
+//
+// Which is why the label has to be settable AT CREATE and not only on a
+// following patch. An interface that can only be told apart after a second call
+// is one an operator cannot tell apart at the moment they make it, which is
+// exactly when there are three of them on the screen.
+func TestAnInterfacesLabelIsTheOnlyThingTellingTwoApart(t *testing.T) {
+	gw := tagGateway(t)
+	ctx := context.Background()
+
+	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "codec-1"}, all, all, all, all)
+	if err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+
+	// Two interfaces of ONE type on one component, distinguished by nothing but
+	// the label. Their derived names collide by construction, which is the shape
+	// of the problem: the unique index is (component, name), so the second one
+	// takes a name the platform disambiguates rather than one an operator chose.
+	first, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{
+		Type: "ssh", Component: strptr(comp.Name), Label: "Control processor",
+	}, all)
+	if err != nil {
+		t.Fatalf("create first interface: %v", err)
+	}
+	if first.Label != "Control processor" {
+		t.Errorf("label = %q on the CREATE return, want it set at create: an interface labelled only by a "+
+			"following patch is one an operator cannot tell apart at the moment they make it", first.Label)
+	}
+
+	// Read it back, since a create return can be right while the column is not.
+	loaded, err := gw.GetInterface(ctx, first.ID, all)
+	if err != nil {
+		t.Fatalf("get interface: %v", err)
+	}
+	if loaded.Label != "Control processor" {
+		t.Errorf("stored label = %q, want Control processor", loaded.Label)
+	}
+	if loaded.Name != first.Name {
+		t.Errorf("name = %q, want the server-derived %q: the label does not name the row", loaded.Name, first.Name)
+	}
+
+	// The patch half, on the same row, and it moves nothing else.
+	relabelled := "Control processor (rack A)"
+	moved, err := gw.UpdateInterface(ctx, "", first.ID, storage.InterfacePatch{Label: &relabelled}, all, all)
+	if err != nil {
+		t.Fatalf("relabel: %v", err)
+	}
+	if moved.Label != relabelled || moved.Name != first.Name || moved.Type != "ssh" || moved.ID != first.ID {
+		t.Errorf("relabel moved something else: %+v", moved)
+	}
+
+	// A patch that says nothing about the label leaves it alone, which is what
+	// makes a node reassignment safe.
+	kept, err := gw.UpdateInterface(ctx, "", first.ID, storage.InterfacePatch{Params: []byte(`{"target":"10.0.0.9"}`)}, all, all)
+	if err != nil {
+		t.Fatalf("retarget: %v", err)
+	}
+	if kept.Label != relabelled {
+		t.Errorf("label = %q after a params-only patch, want it untouched", kept.Label)
+	}
+
+	// An interface created with no label reads back empty and renders its
+	// derived name verbatim, never a prettified version of it.
+	bare, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "http", Component: strptr(comp.Name)}, all)
+	if err != nil {
+		t.Fatalf("create bare interface: %v", err)
+	}
+	if bare.Label != "" {
+		t.Errorf("label = %q on an interface created without one, want empty", bare.Label)
+	}
+}
+
+// TestAnUnlabelledInterfaceSortsLast is D4 on the last of the four. Both arms of
+// ListInterfaces are ordered, the all-scope one and the component-subtree one,
+// so both are driven here.
+func TestAnUnlabelledInterfaceSortsLast(t *testing.T) {
+	gw := tagGateway(t)
+	ctx := context.Background()
+
+	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "codec-1"}, all, all, all, all)
+	if err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	// Three types, so the derived names are distinct and the ordering is about
+	// the label rather than about a disambiguated name.
+	for _, r := range []struct{ kind, label string }{
+		{"tcp", ""},
+		{"ssh", "Zulu"},
+		{"icmp", "Alpha"},
+	} {
+		if _, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{
+			Type: r.kind, Component: strptr(comp.Name), Label: r.label,
+		}, all); err != nil {
+			t.Fatalf("create %s interface: %v", r.kind, err)
+		}
+	}
+
+	want := []string{"icmp", "ssh", "tcp"} // Alpha, Zulu, then the unlabelled
+	check := func(label string, got []storage.Interface) {
+		t.Helper()
+		var seen []string
+		for _, it := range got {
+			for _, w := range want {
+				if it.Name == w {
+					seen = append(seen, it.Name)
+				}
+			}
+		}
+		if len(seen) != len(want) {
+			t.Fatalf("%s: found %v, wanted all of %v", label, seen, want)
+		}
+		for i := range seen {
+			if seen[i] != want[i] {
+				t.Fatalf("%s: order = %v, want %v (unlabelled last, #613)", label, seen, want)
+			}
+		}
+	}
+
+	allScope, err := gw.ListInterfaces(ctx, all)
+	if err != nil {
+		t.Fatalf("list interfaces (all): %v", err)
+	}
+	check("all scope", allScope)
+
+	scoped, err := gw.ListInterfaces(ctx, scope.Set{IDs: []string{comp.ID}})
+	if err != nil {
+		t.Fatalf("list interfaces (scoped): %v", err)
+	}
+	check("component scope", scoped)
 }
