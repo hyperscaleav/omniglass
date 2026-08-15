@@ -29,6 +29,7 @@ import { pathTo, type TreeNode } from "../lib/treeselect";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { useEditParam } from "../lib/editurl";
+import { bindSelectValue } from "../lib/selectvalue";
 import { ChevronRight, Pencil, Plus, Save, Search, X, resolveIcon } from "../components/icons";
 import Button from "../components/Button";
 import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "../components/PropertiesPanel";
@@ -396,7 +397,12 @@ export default function Locations() {
             <div class="flex flex-col gap-3">
               <LabelPenField pen={displayPen} entity={() => n().raw} placeholder="Conf Room 301" />
               <FieldRow label="Location type" info="A location_type name.">
-                <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
+                {/* The registry can answer after the deep link opened edit, and a
+                    <select> keeps no value it has no option for, so the control
+                    takes its value through the shared binder (lib/selectvalue.ts,
+                    #772). Found by the docs screenshot gate: the deep-linked edit
+                    shot flipped between two types across captures (#398). */}
+                <select ref={bindSelectValue(type, () => locationTypes.data)} class="select select-bordered w-full" onChange={(e) => setType(e.currentTarget.value)}>
                   <option value="" disabled>Select a type…</option>
                   <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.label}</option>}</For>
                 </select>

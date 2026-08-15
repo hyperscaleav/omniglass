@@ -44,13 +44,17 @@ const properties: EffectiveProperty[] = [
   { property_type_name: "room.note", property_type_id: "room.note-id", label: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "corner room", value: "corner room", value_id: "v-note" },
 ];
 
-function mount(path: string, systems: System[] = [sys]) {
+// lateRegistries starts the standard and system_type registries EMPTY, so a test
+// can deliver them after the page has rendered and reproduce the order a deep
+// link into edit actually hits (the entity resolves first, the registries answer
+// when they answer).
+function mount(path: string, systems: System[] = [sys], lateRegistries = false) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...SYSTEMS_KEY], systems);
   qc.setQueryData([...LOCATIONS_KEY], []);
   qc.setQueryData([...COMPONENTS_KEY], []);
-  qc.setQueryData([...STANDARDS_KEY], standards);
-  qc.setQueryData([...SYSTEM_TYPES_KEY], systemTypes);
+  qc.setQueryData([...STANDARDS_KEY], lateRegistries ? [] : standards);
+  qc.setQueryData([...SYSTEM_TYPES_KEY], lateRegistries ? [] : systemTypes);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...TAGS_KEY], []);
   // Keyed by uuid (#627 review finding 1): the detail page's panels now
@@ -60,14 +64,17 @@ function mount(path: string, systems: System[] = [sys]) {
     qc.setQueryData([...entityTagsKey("system", s.id)], []);
   }
   window.history.pushState({}, "", path);
-  return render(() => (
-    <QueryClientProvider client={qc}>
-      <Router>
-        <Route path="/systems" component={Systems} />
-        <Route path="/systems/:id" component={Systems} />
-      </Router>
-    </QueryClientProvider>
-  ));
+  return Object.assign(
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/systems" component={Systems} />
+          <Route path="/systems/:id" component={Systems} />
+        </Router>
+      </QueryClientProvider>
+    )),
+    { qc },
+  );
 }
 
 describe("Systems create-as-route", () => {
@@ -722,6 +729,28 @@ describe("Systems edit blade carries the label pen (#693)", () => {
     });
     return bodies;
   }
+
+  it("shows the system's own type and standard when the registries answer after the edit face opened", async () => {
+    // A deep link begins edit as soon as the system resolves, which can be before
+    // either registry query answers. A <select> holds no value it has no option
+    // for, so both pickers used to settle on their first option and stay there:
+    // the type read Unclassified and the standard read None on a system that has
+    // both (#772). The registries are delivered by hand below, so the gap is
+    // opened and closed deterministically rather than raced.
+    const { qc } = mount(`/systems/${sys.id}?edit=1`, [sys], true);
+    await waitFor(() => expect(screen.getByText("Save changes")).toBeTruthy());
+    const type = () => screen.getByLabelText("Type") as HTMLSelectElement;
+    const standard = () => screen.getByLabelText("Standard") as HTMLSelectElement;
+    expect(type().options.length).toBe(1); // "Unclassified" alone
+    expect(standard().options.length).toBe(1); // "None (a one-off system)" alone
+
+    qc.setQueryData([...SYSTEM_TYPES_KEY], systemTypes);
+    qc.setQueryData([...STANDARDS_KEY], standards);
+
+    await waitFor(() => expect(type().options.length).toBeGreaterThan(1));
+    expect(type().value).toBe("class");
+    expect(standard().value).toBe("meeting-room");
+  });
 
   it("opens the label locked on a row the platform labelled", async () => {
     mount(`/systems/${gen.id}`, [gen]);

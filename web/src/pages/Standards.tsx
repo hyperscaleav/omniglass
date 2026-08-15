@@ -7,6 +7,7 @@ import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
+import { bindSelectValue } from "../lib/selectvalue";
 import ContractEditor from "../components/ContractEditor";
 import RoleEditor from "../components/RoleEditor";
 import { Plus } from "../components/icons";
@@ -263,8 +264,11 @@ function ParentStandardSelect(p: { value: string; exclude?: string; onChange: (v
       .filter((s) => s.name !== p.exclude)
       .sort(byLabel),
   );
+  // Bound through the shared binder, not value=: the registry can answer after
+  // the edit face is on screen, and a <select> keeps no value it has no option
+  // for (lib/selectvalue.ts, #772).
   return (
-    <select class="select select-bordered w-full" aria-label="Variant of" value={p.value} onChange={(e) => p.onChange(e.currentTarget.value)}>
+    <select ref={bindSelectValue(() => p.value, options)} class="select select-bordered w-full" aria-label="Variant of" onChange={(e) => p.onChange(e.currentTarget.value)}>
       <option value="">None</option>
       <For each={options()}>{(s) => <option value={s.name}>{s.label}</option>}</For>
     </select>

@@ -32,6 +32,7 @@ import { pathTo } from "../lib/treeselect";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { useEditParam } from "../lib/editurl";
+import { bindSelectValue } from "../lib/selectvalue";
 import { ArrowRight, ChevronRight, Pencil, Plus, Save, Search, X } from "../components/icons";
 import Button from "../components/Button";
 import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "../components/PropertiesPanel";
@@ -321,7 +322,11 @@ export default function Systems() {
                 label="Standard"
                 info="The blueprint this system conforms to; its contract declares the properties below."
               >
-                <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>
+                {/* The registry can answer after the deep link opened edit, and a
+                    <select> keeps no value it has no option for, so the control
+                    takes its value through the shared binder (lib/selectvalue.ts,
+                    #772). */}
+                <select ref={bindSelectValue(standard, standardOptions)} class="select select-bordered w-full" onChange={(e) => setStandard(e.currentTarget.value)}>
                   <option value="">None (a one-off system)</option>
                   <For each={standardOptions()}>{(s) => <option value={s.name}>{s.label}</option>}</For>
                 </select>

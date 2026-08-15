@@ -8,6 +8,7 @@ import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { byLabel, createIdentity, entityLabel } from "../lib/entities";
+import { bindSelectValue } from "../lib/selectvalue";
 import { useFormActions } from "../lib/formactions";
 import ProductContractEditor from "../components/ProductContractEditor";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
@@ -328,8 +329,11 @@ function VendorSelect(p: { value: string; onChange: (v: string) => void }): JSX.
   const options = createMemo(() =>
     [...(vendors.data ?? [])].sort(byLabel),
   );
+  // The registry answers on its own schedule and the blade is often on screen
+  // first, so the value is bound through the shared binder (lib/selectvalue.ts,
+  // #772) rather than a value= prop that would not re-run when the rows land.
   return (
-    <select class="select select-bordered w-full" value={p.value} onChange={(e) => p.onChange(e.currentTarget.value)}>
+    <select ref={bindSelectValue(() => p.value, options)} class="select select-bordered w-full" onChange={(e) => p.onChange(e.currentTarget.value)}>
       <option value="">None</option>
       <For each={options()}>{(v) => <option value={v.name}>{v.label}</option>}</For>
     </select>
@@ -344,7 +348,7 @@ function DriverSelect(p: { value: string; onChange: (v: string) => void }): JSX.
     [...(drivers.data ?? [])].sort(byLabel),
   );
   return (
-    <select class="select select-bordered w-full" value={p.value} onChange={(e) => p.onChange(e.currentTarget.value)}>
+    <select ref={bindSelectValue(() => p.value, options)} class="select select-bordered w-full" onChange={(e) => p.onChange(e.currentTarget.value)}>
       <option value="">None</option>
       <For each={options()}>{(d) => <option value={d.name}>{d.label}</option>}</For>
     </select>

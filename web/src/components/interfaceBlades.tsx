@@ -17,6 +17,7 @@ import {
 import { REACHABILITY_KEY } from "../lib/reachability";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { NODES_KEY, listNodes } from "../lib/nodes";
+import { bindSelectValue } from "../lib/selectvalue";
 import { entityLabel } from "../lib/entities";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -45,8 +46,11 @@ function useInterfaceById(id: string): () => Interface | null {
 // plus an unassigned option. The value is the node's name (its address).
 function NodeSelect(props: { value: string; onChange: (v: string) => void; disabled?: boolean; id?: string; allowNone?: boolean }) {
   const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: () => listNodes() }));
+  // The enrolled-node list answers on its own schedule, and the edit face is
+  // routinely on screen first, so the control takes its value through the shared
+  // binder rather than a value= prop (lib/selectvalue.ts, #772).
   return (
-    <select id={props.id} class="select select-bordered w-full" value={props.value} disabled={props.disabled} onChange={(e) => props.onChange(e.currentTarget.value)}>
+    <select id={props.id} ref={bindSelectValue(() => props.value, () => nodes.data)} class="select select-bordered w-full" disabled={props.disabled} onChange={(e) => props.onChange(e.currentTarget.value)}>
       <Show when={props.allowNone ?? true}><option value="">Unassigned</option></Show>
       <For each={nodes.data}>{(n) => <option value={n.name}>{n.name}</option>}</For>
     </select>
