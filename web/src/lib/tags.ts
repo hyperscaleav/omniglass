@@ -13,6 +13,9 @@ export const ENTITY_KINDS: EntityKind[] = ["component", "system", "location", "n
 export type Tag = {
   id: string;
   name: string;
+  // The friendly string an operator reads. Optional: a key with none renders
+  // its name verbatim, through entityLabel like every other labelled row.
+  label?: string;
   applies_to: string[];
   propagates: boolean;
   allowed_values: string[]; // the value enum; empty means the key is free-text
@@ -22,12 +25,15 @@ export const TAGS_KEY = ["tags"] as const;
 
 export type CreateTag = {
   name: string;
+  label?: string;
   applies_to?: string[];
   propagates?: boolean;
   allowed_values?: string[];
 };
 
 export type UpdateTag = {
+  // Omitted leaves the label alone; an empty string clears it.
+  label?: string;
   applies_to?: string[];
   propagates?: boolean;
   allowed_values?: string[];
@@ -45,8 +51,9 @@ export async function createTag(body: CreateTag): Promise<Tag> {
   return data as Tag;
 }
 
-// updateTag replaces the governance fields (applies_to, propagates); the key name
-// is fixed at creation, so it addresses the row by name.
+// updateTag replaces the governance fields (applies_to, propagates) and patches
+// the label; the key name is fixed at creation, so it addresses the row by name
+// and a relabel never moves that address.
 export async function updateTag(name: string, body: UpdateTag): Promise<Tag> {
   const { data, error } = await api.PATCH("/tags/{name}", { params: { path: { name } }, body });
   if (error) throw error;

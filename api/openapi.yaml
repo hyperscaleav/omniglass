@@ -1402,6 +1402,10 @@ components:
           type:
             - array
             - "null"
+        label:
+          description: What an operator reads in lists and pickers (Cost Center); omit to fall back to the name
+          maxLength: 200
+          type: string
         name:
           description: The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide
           maxLength: 100
@@ -5869,6 +5873,9 @@ components:
             - "null"
         id:
           type: string
+        label:
+          description: The friendly string an operator reads; absent when unset, and a surface with none renders the name verbatim
+          type: string
         name:
           type: string
         propagates:
@@ -6406,6 +6413,10 @@ components:
           type:
             - array
             - "null"
+        label:
+          description: A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone
+          maxLength: 200
+          type: string
         propagates:
           description: Whether bindings cascade to descendants; defaults true
           type: boolean
@@ -12929,7 +12940,7 @@ paths:
       summary: List tag keys
       x-omniglass-permission: tag:read
     post:
-      description: Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).
+      description: Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier); the optional label is what an operator reads instead. Gated by tag:create (all-scope, an admin action).
       operationId: create-tag
       requestBody:
         content:
@@ -12976,7 +12987,7 @@ paths:
       summary: Delete a tag key
       x-omniglass-permission: tag:delete
     patch:
-      description: Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).
+      description: Replaces a key's governance fields (applies_to, propagates) and patches its label; the name is fixed. Gated by tag:update (all-scope).
       operationId: update-tag
       parameters:
         - description: The tag key

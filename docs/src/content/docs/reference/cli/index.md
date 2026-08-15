@@ -4644,12 +4644,13 @@ Mint a tag key
 omniglass tag create [flags]
 ```
 
-Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).
+Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier); the optional label is what an operator reads instead. Gated by tag:create (all-scope, an admin action).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--allowed-values` | string | (none) | The value enum a bound value must belong to; omit for free text |
 | `--applies-to` | string | (none) | Entity kinds this key may bind to (component, system, location); omit for universal |
+| `--label` | string | (none) | What an operator reads in lists and pickers (Cost Center); omit to fall back to the name |
 | `--name` | string | (none) | The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide |
 | `--propagates` | bool | `false` | Whether bindings cascade to descendants; defaults true |
 
@@ -4719,12 +4720,13 @@ Update a tag key
 omniglass tag update <name> [flags]
 ```
 
-Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).
+Replaces a key's governance fields (applies_to, propagates) and patches its label; the name is fixed. Gated by tag:update (all-scope).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--allowed-values` | string | (none) | The value enum a bound value must belong to; omit for free text |
 | `--applies-to` | string | (none) | Entity kinds this key may bind to; omit for universal |
+| `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone |
 | `--propagates` | bool | `false` | Whether bindings cascade to descendants; defaults true |
 
 Example:

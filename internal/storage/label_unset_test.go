@@ -82,6 +82,12 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 
 	stem := "probe"
 	provers := map[string]func(t *testing.T) (keyCol, key string){
+		"tag": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "lbl-tag", Label: blank}, all); err != nil {
+				t.Fatalf("create tag: %v", err)
+			}
+			return "name", "lbl-tag"
+		},
 		"node": func(t *testing.T) (string, string) {
 			if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "lbl-node", Label: blank}, all, all); err != nil {
 				t.Fatalf("create node: %v", err)
@@ -245,6 +251,16 @@ func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
 		prepare func(t *testing.T) string // creates a LABELLED row, returns its key
 		clear   func(t *testing.T, key string)
 	}{
+		{"tag", "name", func(t *testing.T) string {
+			if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "clr-tag", Label: "Labelled"}, all); err != nil {
+				t.Fatalf("create: %v", err)
+			}
+			return "clr-tag"
+		}, func(t *testing.T, key string) {
+			if _, err := gw.UpdateTag(ctx, "", key, storage.TagPatch{Label: &empty}, all); err != nil {
+				t.Fatalf("clear: %v", err)
+			}
+		}},
 		{"vendor", "name", func(t *testing.T) string {
 			if _, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: "clr-ven", Label: "Labelled", Kind: "manufacturer"}); err != nil {
 				t.Fatalf("create: %v", err)

@@ -708,7 +708,7 @@ type Gateway interface {
 	ListTags(ctx context.Context) ([]Tag, error)
 	DistinctTagValues(ctx context.Context, key string) ([]string, error)
 	CreateTag(ctx context.Context, actorID string, spec TagSpec, create scope.Set) (*Tag, error)
-	UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, action scope.Set) (*Tag, error)
+	UpdateTag(ctx context.Context, actorID, name string, patch TagPatch, action scope.Set) (*Tag, error)
 	DeleteTag(ctx context.Context, actorID, name string, action scope.Set) error
 	SetTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, value string, read, action scope.Set) (*TagBinding, error)
 	DeleteTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, read, action scope.Set) error

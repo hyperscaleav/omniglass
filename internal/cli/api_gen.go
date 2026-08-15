@@ -6039,12 +6039,13 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fAllowedValues string
 				var fAppliesTo string
+				var fLabel string
 				var fName string
 				var fPropagates bool
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Mint a tag key",
-					Long:    "Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).",
+					Long:    "Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier); the optional label is what an operator reads instead. Gated by tag:create (all-scope, an admin action).",
 					Example: "  omniglass tag create --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -6055,6 +6056,9 @@ func generatedCommands() []*cobra.Command {
 						}
 						if cmd.Flags().Changed("applies-to") {
 							body["applies_to"] = jsonOrString(fAppliesTo)
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
 						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -6067,6 +6071,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fAllowedValues, "allowed-values", "", "The value enum a bound value must belong to; omit for free text")
 				cmd.Flags().StringVar(&fAppliesTo, "applies-to", "", "Entity kinds this key may bind to (component, system, location); omit for universal")
+				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists and pickers (Cost Center); omit to fall back to the name")
 				cmd.Flags().StringVar(&fName, "name", "", "The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().BoolVar(&fPropagates, "propagates", false, "Whether bindings cascade to descendants; defaults true")
@@ -6136,11 +6141,12 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fAllowedValues string
 				var fAppliesTo string
+				var fLabel string
 				var fPropagates bool
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a tag key",
-					Long:    "Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).",
+					Long:    "Replaces a key's governance fields (applies_to, propagates) and patches its label; the name is fixed. Gated by tag:update (all-scope).",
 					Example: "  omniglass tag update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -6152,6 +6158,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("applies-to") {
 							body["applies_to"] = jsonOrString(fAppliesTo)
 						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
 						if cmd.Flags().Changed("propagates") {
 							body["propagates"] = fPropagates
 						}
@@ -6160,6 +6169,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fAllowedValues, "allowed-values", "", "The value enum a bound value must belong to; omit for free text")
 				cmd.Flags().StringVar(&fAppliesTo, "applies-to", "", "Entity kinds this key may bind to; omit for universal")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone")
 				cmd.Flags().BoolVar(&fPropagates, "propagates", false, "Whether bindings cascade to descendants; defaults true")
 				return cmd
 			}()

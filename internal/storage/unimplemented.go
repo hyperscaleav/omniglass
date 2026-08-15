@@ -663,7 +663,7 @@ func (UnimplementedGateway) DistinctTagValues(context.Context, string) ([]string
 func (UnimplementedGateway) CreateTag(context.Context, string, TagSpec, scope.Set) (*Tag, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateTag(context.Context, string, string, TagSpec, scope.Set) (*Tag, error) {
+func (UnimplementedGateway) UpdateTag(context.Context, string, string, TagPatch, scope.Set) (*Tag, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteTag(context.Context, string, string, scope.Set) error {
