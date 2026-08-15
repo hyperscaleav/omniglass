@@ -32,6 +32,57 @@ func TestEmbeddedConsoleServesBuiltShell(t *testing.T) {
 	}
 }
 
+func TestEmbeddedConsoleCarriesItsTypefaces(t *testing.T) {
+	// The console renders in typefaces this binary serves, never in typefaces it
+	// fetches from a third party (#775): an estate on a closed campus or AV
+	// network is the deployment this product targets, and a capture that lost the
+	// race to a font CDN is what turned main red. The chain that has to hold is
+	// vendored file -> Vite output -> go:embed -> served, so assert it here rather
+	// than trusting the build.
+	sub, err := fs.Sub(distFS, "dist")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := fs.ReadDir(sub, "fonts")
+	if err != nil {
+		t.Fatalf("no fonts/ in the embedded console: %v", err)
+	}
+	var woff2 []string
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".woff2") {
+			woff2 = append(woff2, e.Name())
+		}
+	}
+	if len(woff2) == 0 {
+		t.Fatal("fonts/ carries no woff2; the console would render in fallback metrics")
+	}
+	// OFL 1.1 permits the redistribution and requires the license to travel with
+	// the fonts, so the license text ships inside the binary too.
+	for _, lic := range []string{"fonts/ibm-plex-sans-OFL.txt", "fonts/jetbrains-mono-OFL.txt"} {
+		if _, err := fs.Stat(sub, lic); err != nil {
+			t.Errorf("embedded console is missing %s: %v", lic, err)
+		}
+	}
+
+	rec := httptest.NewRecorder()
+	SPA().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/fonts/"+woff2[0], nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /fonts/%s = %d, want 200", woff2[0], rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "font/woff2" {
+		t.Errorf("font Content-Type = %q, want font/woff2", ct)
+	}
+
+	// And the shell asks for them locally: a remote <link> here is the bug itself.
+	index, err := fs.ReadFile(sub, "index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(index), "fonts.googleapis.com") || strings.Contains(string(index), "fonts.gstatic.com") {
+		t.Error("index.html still links a font CDN")
+	}
+}
+
 func TestEmbeddedConsoleServesHashedAsset(t *testing.T) {
 	sub, err := fs.Sub(distFS, "dist")
 	if err != nil {
