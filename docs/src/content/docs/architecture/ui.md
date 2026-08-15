@@ -143,7 +143,7 @@ Two layers, deliberately decoupled:
    rearrangeable and user-customizable without touching a route.
 
 **The mode rides the URL too**
-([ADR-0119](/architecture/decisions/#adr-0119-the-edit-face-is-a-url-fact)): `?edit=1` beside a
+([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact)): `?edit=1` beside a
 detail address (or beside a blade's id param, `?u=<id>&edit=1`) requests the edit face, behind the
 same `<resource>:update` permission the footer Edit is behind; without it the link lands read-only.
 Leaving edit (Cancel or Save) strips the param via history replace, so a refresh mid-edit keeps the

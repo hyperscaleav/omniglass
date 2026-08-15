@@ -58,7 +58,8 @@ type reachHistoryBody struct {
 }
 
 type reachInterfaceBody struct {
-	Interface string             `json:"interface" doc:"The interface name"`
+	Interface string             `json:"interface" doc:"The interface's derived name (its protocol)"`
+	Label     string             `json:"label,omitempty" doc:"The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim"`
 	Type      string             `json:"interface_type" doc:"The interface type (icmp, tcp, ...)"`
 	Endpoint  string             `json:"endpoint,omitempty" doc:"The probed endpoint (target[:port]) from the interface params"`
 	Node      string             `json:"node,omitempty" doc:"The node that probes this interface"`
@@ -125,6 +126,7 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 func composeInterface(ctx context.Context, gw storage.Gateway, comp string, it storage.ComponentInterface, window time.Duration) (reachInterfaceBody, error) {
 	row := reachInterfaceBody{
 		Interface: it.Name,
+		Label:     it.Label,
 		Type:      it.Type,
 		Endpoint:  endpointFromParams(it.Params),
 		Node:      it.NodeName,

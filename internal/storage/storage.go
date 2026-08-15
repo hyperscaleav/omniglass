@@ -549,7 +549,7 @@ type Gateway interface {
 	// where; canAdmin fences the sensitivity tier.
 	ListSecrets(ctx context.Context, read scope.Set, canAdmin bool) ([]Secret, error)
 	CreateSecret(ctx context.Context, actorID string, spec SecretSpec, create scope.Set, canAdmin bool) (*Secret, error)
-	UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error)
+	UpdateSecret(ctx context.Context, actorID, id string, patch SecretPatch, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error)
 	DeleteSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin, canPlatform bool) error
 	RevealSecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) (map[string]string, error)
 	CopySecret(ctx context.Context, actorID, id string, read, action scope.Set, canAdmin bool) (map[string]string, error)
@@ -561,7 +561,7 @@ type Gateway interface {
 	// effective-value view down the structural cascade.
 	ListVariables(ctx context.Context, read scope.Set) ([]Variable, error)
 	CreateVariable(ctx context.Context, actorID string, spec VariableSpec, create scope.Set) (*Variable, error)
-	UpdateVariable(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set, canPlatform bool) (*Variable, error)
+	UpdateVariable(ctx context.Context, actorID, id string, patch VariablePatch, read, action scope.Set, canPlatform bool) (*Variable, error)
 	DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set, canPlatform bool) error
 	ResolveVariables(ctx context.Context, componentID string, read scope.Set) ([]ResolvedVariable, error)
 
@@ -708,7 +708,7 @@ type Gateway interface {
 	ListTags(ctx context.Context) ([]Tag, error)
 	DistinctTagValues(ctx context.Context, key string) ([]string, error)
 	CreateTag(ctx context.Context, actorID string, spec TagSpec, create scope.Set) (*Tag, error)
-	UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, action scope.Set) (*Tag, error)
+	UpdateTag(ctx context.Context, actorID, name string, patch TagPatch, action scope.Set) (*Tag, error)
 	DeleteTag(ctx context.Context, actorID, name string, action scope.Set) error
 	SetTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, value string, read, action scope.Set) (*TagBinding, error)
 	DeleteTagBinding(ctx context.Context, actorID, key, ownerKind string, ownerName *string, read, action scope.Set) error

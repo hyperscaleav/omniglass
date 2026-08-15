@@ -1,6 +1,9 @@
 package storage
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"sort"
+)
 
 // Identity across the platform is three things:
 //
@@ -61,6 +64,52 @@ const (
 type TableIdentity struct {
 	Shape  IdentityShape `json:"shape"`
 	Reason string        `json:"reason,omitempty"`
+
+	// NoLabel is why a table an operator NAMES carries no label, and it is the
+	// half of the triad this declaration used to leave unsaid.
+	//
+	// A shape says what the identifier is. It said nothing about the friendly
+	// string beside it, so four key-bearing tables (tag, variable, secret,
+	// interface) went without one and nothing noticed until an operator had
+	// nowhere to type the words they would actually say (#613). Every
+	// name-bearing table is now expected to carry a label, and a table that does
+	// not says so here, with its reason, exactly as the name exemptions in
+	// KeyProvedElsewhere do.
+	//
+	// Empty means "carries one", and the guard checks that against the live
+	// schema BOTH ways: a declared label that the schema lacks fails, and a
+	// reason on a table that has the column fails as stale. A table nobody names
+	// (ShapeIDOnly, ShapeFixedKey) is outside the rule and leaves this empty:
+	// there is no name for an unset label to fall back to, so a label on one is
+	// a defect of its own and the guard says so.
+	NoLabel string `json:"no_label,omitempty"`
+}
+
+// NameBearing reports whether an operator (or, for the human-identifier shapes, a
+// human of some kind) names a row of this table. It is what decides whether the
+// label expectation applies: a label is the string an operator reads INSTEAD of
+// the name, so a table with no name has nothing to render when it is unset.
+func (s IdentityShape) NameBearing() bool {
+	switch s {
+	case ShapeKeyBearing, ShapeKeyspace, ShapeHumanNotAKey:
+		return true
+	}
+	return false
+}
+
+// LabelledTables is every table declared to carry a label, sorted. It is the one
+// list, read by the schema guard (label_column_migration_test.go) and by the
+// unset-label sweep (label_unset_test.go), so a table gaining a label is
+// declared once rather than added to three lists and forgotten in a fourth.
+func LabelledTables() []string {
+	out := make([]string, 0, len(IdentityShapes))
+	for table, id := range IdentityShapes {
+		if id.Shape.NameBearing() && id.NoLabel == "" {
+			out = append(out, table)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // IdentityShapes is every table in the schema, by shape. The guard fails on a table
@@ -70,7 +119,7 @@ var IdentityShapes = map[string]TableIdentity{
 	// Key-bearing. The shape is the whole explanation.
 	"component": {Shape: ShapeKeyBearing},
 	"driver":    {Shape: ShapeKeyBearing}, "interface": {Shape: ShapeKeyBearing},
-	"interface_type": {Shape: ShapeKeyBearing}, "location": {Shape: ShapeKeyBearing},
+	"location":      {Shape: ShapeKeyBearing},
 	"location_type": {Shape: ShapeKeyBearing}, "node": {Shape: ShapeKeyBearing},
 	"principal_group": {Shape: ShapeKeyBearing}, "product": {Shape: ShapeKeyBearing},
 	"role": {Shape: ShapeKeyBearing}, "secret": {Shape: ShapeKeyBearing},
@@ -84,24 +133,37 @@ var IdentityShapes = map[string]TableIdentity{
 	// within its choice (choice_id, name), one level narrower, the same
 	// relationship component_type's root/child split already has.
 	"role_choice": {Shape: ShapeKeyBearing}, "choice_alternate": {Shape: ShapeKeyBearing},
+	// The one type registry with no label, and the only key-bearing table left
+	// without one after #613. It is not an oversight and not a gap to fill: the
+	// table retires with the interface.type FK (ADR-0073), so a column added
+	// here would be dropped with the table it sits on.
+	"interface_type": {Shape: ShapeKeyBearing,
+		NoLabel: "retires with the interface.type FK (ADR-0073); a label added here would be " +
+			"dropped with the table"},
 
 	// Keyspace: a name, on the other rule.
-	"property_type": {ShapeKeyspace, "serial-number, a signal name referenced from drivers and templates"},
-	"metric_type":   {ShapeKeyspace, "icmp-rtt-avg, a numeric-series name referenced from drivers and templates"},
-	"event_type":    {ShapeKeyspace, "call-started, an occurrence name"},
-	"command_type":  {ShapeKeyspace, "set-input, a command name"},
+	"property_type": {Shape: ShapeKeyspace, Reason: "serial-number, a signal name referenced from drivers and templates"},
+	"metric_type":   {Shape: ShapeKeyspace, Reason: "icmp-rtt-avg, a numeric-series name referenced from drivers and templates"},
+	"event_type":    {Shape: ShapeKeyspace, Reason: "call-started, an occurrence name"},
+	"command_type":  {Shape: ShapeKeyspace, Reason: "set-input, a command name"},
 
 	// A human identifier that is not a name. These are the exceptions worth stating.
-	"human": {ShapeHumanNotAKey, "a username: its own rule, its own uniqueness, and not an " +
+	"human": {Shape: ShapeHumanNotAKey, Reason: "a username: its own rule, its own uniqueness, and not an " +
 		"address, since a principal is addressed by uuid"},
-	"service": {ShapeHumanNotAKey, "the username analogue for kind=service: unique like one " +
+	"service": {Shape: ShapeHumanNotAKey, Reason: "the username analogue for kind=service: unique like one " +
 		"(#563), on its own rule rather than the entity name rule, and not an address, since a " +
-		"principal is addressed by uuid"},
-	"file": {ShapeHumanNotAKey, "a filename with an extension (codec-firmware-2.1.4.txt): not " +
-		"unique, already the label, and addressed by uuid"},
-	"task": {ShapeHumanNotAKey, "content-addressed, the id IS hash(interface, kind, schedule, " +
+		"principal is addressed by uuid",
+		NoLabel: "the identifier IS what every surface shows: principalIdent resolves a service " +
+			"principal to service.name, and it cannot resolve to a label, which is optional and not unique"},
+	"file": {Shape: ShapeHumanNotAKey, Reason: "a filename with an extension (codec-firmware-2.1.4.txt): not " +
+		"unique, already the label, and addressed by uuid",
+		NoLabel: "its name is already the label, so a second string would be a second label rather " +
+			"than the identifier a label sits beside (#613 out of scope, D1 deferred to #755)"},
+	"task": {Shape: ShapeHumanNotAKey, Reason: "content-addressed, the id IS hash(interface, kind, schedule, " +
 		"params), so a name would be a second identity for the same row"},
-	"blob": {ShapeHumanNotAKey, "content-addressed by sha256, for the same reason"},
+	"blob": {Shape: ShapeHumanNotAKey, Reason: "content-addressed by sha256, for the same reason",
+		NoLabel: "no operator surface of its own: a blob is reached through the file that references " +
+			"it, and nothing renders a blob row for a label to appear on"},
 
 	// Id only.
 	"alarm":     {Shape: ShapeIDOnly},
@@ -153,6 +215,11 @@ func IdentityShapesJSON() ([]byte, error) {
 		Shape          string `json:"shape"`
 		Reason         string `json:"reason,omitempty"`
 		ProvedElsewhen string `json:"proved_elsewhere,omitempty"`
+		// Labelled is the third column of the triad, published so the docs can
+		// render which tables carry the friendly string rather than restate it.
+		// A table nobody names is false with no reason: the shape is the reason.
+		Labelled bool   `json:"labelled"`
+		NoLabel  string `json:"no_label,omitempty"`
 	}
 	out := make([]row, 0, len(IdentityShapes))
 	for table, id := range IdentityShapes {
@@ -161,6 +228,8 @@ func IdentityShapesJSON() ([]byte, error) {
 			Shape:          string(id.Shape),
 			Reason:         id.Reason,
 			ProvedElsewhen: KeyProvedElsewhere[table],
+			Labelled:       id.Shape.NameBearing() && id.NoLabel == "",
+			NoLabel:        id.NoLabel,
 		})
 	}
 	// Sorted so a regeneration is a no-op unless a fact changed.

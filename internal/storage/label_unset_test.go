@@ -1,10 +1,12 @@
 package storage_test
 
 import (
+	"bytes"
 	"context"
 	"sort"
 	"testing"
 
+	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -55,7 +57,9 @@ var labelUnsetExempt = map[string]string{
 func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
-	gw, err := storage.NewPG(ctx, dsn)
+	// A provider, because one of the write paths swept here seals its fields
+	// before it stores a label beside them.
+	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
@@ -82,6 +86,42 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 
 	stem := "probe"
 	provers := map[string]func(t *testing.T) (keyCol, key string){
+		"interface": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "lbl-comp"}, all, all, all, all); err != nil {
+				t.Fatalf("create component: %v", err)
+			}
+			ref := "lbl-comp"
+			if _, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{
+				Type: "ssh", Component: &ref, Label: blank,
+			}, all); err != nil {
+				t.Fatalf("create interface: %v", err)
+			}
+			return "name", "ssh"
+		},
+		"secret": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+				Name: "lbl-sec", Label: blank, SecretType: "snmp-community", OwnerKind: "platform",
+				Fields: map[string]string{"community": "public"},
+			}, all, true); err != nil {
+				t.Fatalf("create secret: %v", err)
+			}
+			return "name", "lbl-sec"
+		},
+		"variable": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
+				Name: "lbl-var", Label: blank, ValueType: "int", OwnerKind: "platform",
+				Value: []byte(`1`),
+			}, all); err != nil {
+				t.Fatalf("create variable: %v", err)
+			}
+			return "name", "lbl-var"
+		},
+		"tag": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "lbl-tag", Label: blank}, all); err != nil {
+				t.Fatalf("create tag: %v", err)
+			}
+			return "name", "lbl-tag"
+		},
 		"node": func(t *testing.T) (string, string) {
 			if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "lbl-node", Label: blank}, all, all); err != nil {
 				t.Fatalf("create node: %v", err)
@@ -226,7 +266,9 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
-	gw, err := storage.NewPG(ctx, dsn)
+	// A provider, because one of the write paths swept here seals its fields
+	// before it stores a label beside them.
+	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
@@ -238,6 +280,9 @@ func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
 
 	empty := ""
 	stem := "probe"
+	// The two uuid-addressed rows carry their id from the prepare to the clear,
+	// since their write path takes a uuid while every row here is keyed by name.
+	var clearInterfaceID, clearSecretID string
 
 	cases := []struct {
 		table   string
@@ -245,6 +290,62 @@ func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
 		prepare func(t *testing.T) string // creates a LABELLED row, returns its key
 		clear   func(t *testing.T, key string)
 	}{
+		{"interface", "name", func(t *testing.T) string {
+			if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "clr-comp"}, all, all, all, all); err != nil {
+				t.Fatalf("create component: %v", err)
+			}
+			ref := "clr-comp"
+			it, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "ssh", Component: &ref, Label: "Labelled"}, all)
+			if err != nil {
+				t.Fatalf("create: %v", err)
+			}
+			clearInterfaceID = it.ID
+			return it.Name
+		}, func(t *testing.T, key string) {
+			if _, err := gw.UpdateInterface(ctx, "", clearInterfaceID, storage.InterfacePatch{Label: &empty}, all, all); err != nil {
+				t.Fatalf("clear: %v", err)
+			}
+		}},
+		{"secret", "name", func(t *testing.T) string {
+			s, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+				Name: "clr-sec", Label: "Labelled", SecretType: "snmp-community", OwnerKind: "platform",
+				Fields: map[string]string{"community": "public"},
+			}, all, true)
+			if err != nil {
+				t.Fatalf("create: %v", err)
+			}
+			clearSecretID = s.ID
+			return s.Name
+		}, func(t *testing.T, key string) {
+			if _, err := gw.UpdateSecret(ctx, "", clearSecretID, storage.SecretPatch{Label: &empty}, all, all, true, true); err != nil {
+				t.Fatalf("clear: %v", err)
+			}
+		}},
+		{"variable", "name", func(t *testing.T) string {
+			v, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
+				Name: "clr-var", Label: "Labelled", ValueType: "int", OwnerKind: "platform",
+				Value: []byte(`1`),
+			}, all)
+			if err != nil {
+				t.Fatalf("create: %v", err)
+			}
+			return v.Name
+		}, func(t *testing.T, key string) {
+			v := variableNamed(t, gw, key)
+			if _, err := gw.UpdateVariable(ctx, "", v.ID, storage.VariablePatch{Label: &empty}, all, all, true); err != nil {
+				t.Fatalf("clear: %v", err)
+			}
+		}},
+		{"tag", "name", func(t *testing.T) string {
+			if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "clr-tag", Label: "Labelled"}, all); err != nil {
+				t.Fatalf("create: %v", err)
+			}
+			return "clr-tag"
+		}, func(t *testing.T, key string) {
+			if _, err := gw.UpdateTag(ctx, "", key, storage.TagPatch{Label: &empty}, all); err != nil {
+				t.Fatalf("clear: %v", err)
+			}
+		}},
 		{"vendor", "name", func(t *testing.T) string {
 			if _, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: "clr-ven", Label: "Labelled", Kind: "manufacturer"}); err != nil {
 				t.Fatalf("create: %v", err)
@@ -339,4 +440,21 @@ func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
 			}
 		})
 	}
+}
+
+// variableNamed finds a variable by name for the clear cases, which key on the
+// name like every other row here while the write path takes the uuid.
+func variableNamed(t *testing.T, gw *storage.PG, name string) storage.Variable {
+	t.Helper()
+	vars, err := gw.ListVariables(context.Background(), all)
+	if err != nil {
+		t.Fatalf("list variables: %v", err)
+	}
+	for _, v := range vars {
+		if v.Name == name {
+			return v
+		}
+	}
+	t.Fatalf("no variable named %q", name)
+	return storage.Variable{}
 }

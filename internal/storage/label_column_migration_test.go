@@ -4,21 +4,23 @@ import (
 	"context"
 	"testing"
 
+	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 	"github.com/jackc/pgx/v5"
 )
 
-// labelledTables is the schema's own list of tables carrying the friendly
-// string an operator reads, kept here rather than derived from the live
-// catalog so that DROPPING the column somewhere is a failure and not a silently
-// shorter list.
-var labelledTables = []string{
-	"choice_alternate", "command_type", "component", "component_type", "driver",
-	"event_type", "human", "location", "location_type", "metric_type", "node",
-	"principal_group", "product", "property_type", "role", "role_choice",
-	"secret_type", "standard", "system", "system_role", "system_type", "task",
-	"vendor",
-}
+// labelledTables is every table declared to carry the friendly string an
+// operator reads, read from the identity declaration rather than from the live
+// catalog, so that DROPPING the column somewhere is a failure and not a
+// silently shorter list.
+//
+// It was a hand-kept literal until #613, which is the same class of artifact as
+// the docs table identitygen replaced: a second copy of a fact the code already
+// knows, and one that could disagree with the declaration without either half
+// being obviously wrong. The declaration is now the only copy, and a table
+// gaining a label is declared once (internal/storage/identity_shape.go) rather
+// than added to this list, to the unset sweep, and forgotten in a third place.
+var labelledTables = storage.LabelledTables()
 
 // pennedTables carry the pen beside the label: label_generated is true when the
 // platform rendered the label from a rule and false when an operator typed it.

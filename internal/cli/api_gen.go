@@ -1866,12 +1866,13 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fComponent string
 				var fInterfaceType string
+				var fLabel string
 				var fNode string
 				var fParams string
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create an interface",
-					Long:    "Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant). The create scope cascades through the owning component. Gated by interface:create.",
+					Long:    "Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by interface:create.",
 					Example: "  omniglass interface create --interface-type interface_type",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1882,6 +1883,9 @@ func generatedCommands() []*cobra.Command {
 						}
 						if cmd.Flags().Changed("interface-type") {
 							body["interface_type"] = fInterfaceType
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
 						}
 						if cmd.Flags().Changed("node") {
 							body["node"] = fNode
@@ -1895,6 +1899,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fComponent, "component", "", "Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant)")
 				cmd.Flags().StringVar(&fInterfaceType, "interface-type", "", "An interface_type name (the protocol); the interface is named by it, unique within the component")
 				_ = cmd.MarkFlagRequired("interface-type")
+				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists (Control processor). Settable here because the name is derived from the type, so it says how the device is reached and never what the connection is for")
 				cmd.Flags().StringVar(&fNode, "node", "", "Node placement, by name or id")
 				cmd.Flags().StringVar(&fParams, "params", "", "Endpoint/target settings (jsonb)")
 				return cmd
@@ -1954,17 +1959,21 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fLabel string
 				var fNode string
 				var fParams string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
 					Short:   "Update an interface",
-					Long:    "Patches an interface's node placement or params. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.",
+					Long:    "Patches an interface's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.",
 					Example: "  omniglass interface update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/interfaces/%s", url.PathEscape(args[0]))
 						body := map[string]any{}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
 						if cmd.Flags().Changed("node") {
 							body["node"] = fNode
 						}
@@ -1974,6 +1983,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fLabel, "label", "", "A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone")
 				cmd.Flags().StringVar(&fNode, "node", "", "Reassign the node placement, by name or id")
 				cmd.Flags().StringVar(&fParams, "params", "", "Replace the endpoint/target settings (jsonb)")
 				return cmd
@@ -4430,6 +4440,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fAdminSensitive bool
 				var fFields string
+				var fLabel string
 				var fName string
 				var fOwner string
 				var fOwnerKind string
@@ -4449,6 +4460,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("fields") {
 							body["fields"] = jsonOrString(fFields)
 						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
@@ -4467,6 +4481,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().BoolVar(&fAdminSensitive, "admin-sensitive", false, "Admin-only visibility; omit to use the type default. Setting true requires the admin tier")
 				cmd.Flags().StringVar(&fFields, "fields", "", "The operator field map, validated against the type shape")
 				_ = cmd.MarkFlagRequired("fields")
+				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists and pickers (Polling community); omit to fall back to the name")
 				cmd.Flags().StringVar(&fName, "name", "", "The cascade name (lowercase letters, digits, and hyphens); unique per owner")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fOwner, "owner", "", "The owning entity's name; omit for a platform secret")
@@ -4532,11 +4547,12 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fFields string
+				var fLabel string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
-					Short:   "Update a secret's field values",
-					Long:    "Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.",
-					Example: "  omniglass secret update <id> --fields <json>",
+					Short:   "Update a secret",
+					Long:    "Replaces the given field values on a secret, re-sealing secret fields, and patches its label. Only those change; name, type, and owner are fixed at creation. An omitted field keeps its value, an omitted label leaves it alone, and an empty label clears it. Gated by secret:update, plus platform:update when the secret sits at the platform tier.",
+					Example: "  omniglass secret update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/secrets/%s", url.PathEscape(args[0]))
@@ -4544,11 +4560,14 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("fields") {
 							body["fields"] = jsonOrString(fFields)
 						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
 				cmd.Flags().StringVar(&fFields, "fields", "", "The field values to replace; an omitted field keeps its value")
-				_ = cmd.MarkFlagRequired("fields")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone")
 				return cmd
 			}()
 			return cmd
@@ -6039,12 +6058,13 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fAllowedValues string
 				var fAppliesTo string
+				var fLabel string
 				var fName string
 				var fPropagates bool
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Mint a tag key",
-					Long:    "Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).",
+					Long:    "Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier); the optional label is what an operator reads instead. Gated by tag:create (all-scope, an admin action).",
 					Example: "  omniglass tag create --name name",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -6055,6 +6075,9 @@ func generatedCommands() []*cobra.Command {
 						}
 						if cmd.Flags().Changed("applies-to") {
 							body["applies_to"] = jsonOrString(fAppliesTo)
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
 						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
@@ -6067,6 +6090,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fAllowedValues, "allowed-values", "", "The value enum a bound value must belong to; omit for free text")
 				cmd.Flags().StringVar(&fAppliesTo, "applies-to", "", "Entity kinds this key may bind to (component, system, location); omit for universal")
+				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists and pickers (Cost Center); omit to fall back to the name")
 				cmd.Flags().StringVar(&fName, "name", "", "The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().BoolVar(&fPropagates, "propagates", false, "Whether bindings cascade to descendants; defaults true")
@@ -6136,11 +6160,12 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fAllowedValues string
 				var fAppliesTo string
+				var fLabel string
 				var fPropagates bool
 				cmd := &cobra.Command{
 					Use:     "update <name>",
 					Short:   "Update a tag key",
-					Long:    "Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).",
+					Long:    "Replaces a key's governance fields (applies_to, propagates) and patches its label; the name is fixed. Gated by tag:update (all-scope).",
 					Example: "  omniglass tag update <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -6152,6 +6177,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("applies-to") {
 							body["applies_to"] = jsonOrString(fAppliesTo)
 						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
 						if cmd.Flags().Changed("propagates") {
 							body["propagates"] = fPropagates
 						}
@@ -6160,6 +6188,7 @@ func generatedCommands() []*cobra.Command {
 				}
 				cmd.Flags().StringVar(&fAllowedValues, "allowed-values", "", "The value enum a bound value must belong to; omit for free text")
 				cmd.Flags().StringVar(&fAppliesTo, "applies-to", "", "Entity kinds this key may bind to; omit for universal")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone")
 				cmd.Flags().BoolVar(&fPropagates, "propagates", false, "Whether bindings cascade to descendants; defaults true")
 				return cmd
 			}()
@@ -6293,6 +6322,7 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fLabel string
 				var fName string
 				var fOwner string
 				var fOwnerKind string
@@ -6301,12 +6331,15 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create a variable",
-					Long:    "Sets a variable at an owner scope. The value is validated against value_type. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).",
+					Long:    "Sets a variable at an owner scope. The value is validated against value_type; the optional label is what an operator reads instead of the name. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).",
 					Example: "  omniglass variable create --name name --owner-kind owner_kind --value <json> --value-type value_type",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/variables")
 						body := map[string]any{}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
@@ -6325,6 +6358,7 @@ func generatedCommands() []*cobra.Command {
 						return runAPICommand(cmd, "POST", path, body)
 					},
 				}
+				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists and pickers (Poll Interval); omit to fall back to the name")
 				cmd.Flags().StringVar(&fName, "name", "", "The cascade name (lowercase letters, digits, and hyphens); unique per owner")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fOwner, "owner", "", "The owning entity's name; omit for a platform variable")
@@ -6374,24 +6408,28 @@ func generatedCommands() []*cobra.Command {
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
+				var fLabel string
 				var fValue string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
-					Short:   "Update a variable's value",
-					Long:    "Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.",
-					Example: "  omniglass variable update <id> --value <json>",
+					Short:   "Update a variable",
+					Long:    "Replaces a variable's value (validated against its fixed value_type) and patches its label; either may be omitted, and an empty label clears it. Name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.",
+					Example: "  omniglass variable update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/variables/%s", url.PathEscape(args[0]))
 						body := map[string]any{}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
 						if cmd.Flags().Changed("value") {
 							body["value"] = jsonOrString(fValue)
 						}
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
-				cmd.Flags().StringVar(&fValue, "value", "", "The new value, validated against the fixed value_type")
-				_ = cmd.MarkFlagRequired("value")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone")
+				cmd.Flags().StringVar(&fValue, "value", "", "The new value, validated against the fixed value_type; omit to leave it")
 				return cmd
 			}()
 			return cmd

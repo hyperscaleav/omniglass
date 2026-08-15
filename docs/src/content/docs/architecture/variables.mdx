@@ -125,6 +125,12 @@ A **secret** is a typed value, encrypted at rest, owned on the exclusive arc
 path), not a sensitivity flag on ordinary values; within it, the `admin_sensitive` flag below splits
 admin-only platform credentials from operator-visible device secrets.
 
+A secret carries a **`label`** beside its name for the same reason a variable does: the name is the
+cascade key, unique per owner and on the entity name rule, and the label is what an operator reads in
+the directory. It reaches every projection the name reaches, the directory and the per-component
+cascade both; the reveal and the copy carry no identity at all, only the decrypted field map, so
+there is nothing there for it to appear in.
+
 **Two senses of "platform", kept apart.** A **platform credential** is a *kind of secret* (a Zoom
 client secret), marked by `admin_sensitive` at whatever scope it sits; the **`platform` tier** is a
 *place on the cascade*, the install-wide rung. The words are unrelated.
@@ -215,6 +221,11 @@ interpolated as `$var:<name>` into functions, interface definitions, and rule sc
   holds, though (one segment of lowercase letters, digits, and hyphens, no dot), so `crestron-ssh`
   names a variable and `crestron.ssh` is refused. Sprawl is controlled by a creation **role-gate**
   ([IAM](/architecture/identity-access/)) and by every variable being **surfaced in the tree**.
+- **A label rides beside the name**, the friendly string an operator reads ("Poll Interval") where
+  the name is what the cascade resolves by
+  ([ADR-0119](/architecture/decisions/#adr-0119-a-table-an-operator-names-carries-a-label-or-declares-why-it-does-not)).
+  Optional, not an identifier, and never interpolated: `$var:` reads the name and only the name. A
+  variable with no label reads its name **verbatim**.
 - **Install-wide and template-local are the same primitive at different scopes** (a company-wide NTP
   server versus a device class's poll interval).
 - **No observed side and no reconcile**, exactly what separates it from config.
@@ -374,6 +385,7 @@ above.
 <SchemaTable
   table="secret"
   notes={{
+    label: 'The friendly string an operator reads; NULL falls back to the name, verbatim',
     secret_type_id: 'The shape this cell instantiates',
     admin_sensitive: 'Flips the secret to the admin tier regardless of placement',
     value: 'Secret fields as {ciphertext, nonce, wrapped_dek, key_id} envelopes; non-secret fields plaintext',
@@ -387,6 +399,7 @@ exclusive arc. Typed inline (no `variable_type` registry: the value is validated
 <SchemaTable
   table="variable"
   notes={{
+    label: 'The friendly string an operator reads; NULL falls back to the name, verbatim',
     value_type: 'string, int, float, bool, or json; the app validates value against it',
     value: 'The cascade-resolved payload',
   }}

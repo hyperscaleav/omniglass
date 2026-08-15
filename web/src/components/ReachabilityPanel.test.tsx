@@ -150,3 +150,25 @@ describe("ReachabilityPanel management affordances", () => {
     expect(screen.queryByLabelText("Manage disp-1-tcp")).toBeNull();
   });
 });
+
+// Two interfaces of ONE protocol on one component: their derived names are the
+// only thing the platform gives them, and it gives them the same one. The label
+// is what tells them apart, and an interface without one still reads its derived
+// name verbatim rather than a prettified version of it (#613).
+describe("ReachabilityPanel identity", () => {
+  const twoOfAKind: Reachability = {
+    component: "codec-1",
+    interfaces: [
+      { interface: "ssh", label: "Control processor", interface_type: "ssh", endpoint: "10.0.0.9:22", node: "node-a", verdict: null, layers: [], history: [] },
+      { interface: "ssh", interface_type: "ssh", endpoint: "10.0.0.10:22", node: "node-a", verdict: null, layers: [], history: [] },
+    ],
+  };
+
+  it("reads the label where there is one and the derived name where there is not", () => {
+    mount(twoOfAKind);
+    expect(screen.getByText("Control processor")).toBeTruthy();
+    // The unlabelled row still says `ssh`, exactly, in its identity line.
+    expect(screen.getAllByText("ssh").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Ssh")).toBeNull();
+  });
+});

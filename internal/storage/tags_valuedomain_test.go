@@ -51,7 +51,7 @@ func TestTagAllowedValuesEnforced(t *testing.T) {
 	}
 
 	// Narrowing the enum by update is enforced on the next bind.
-	if _, err := gw.UpdateTag(ctx, "", "environment", storage.TagSpec{AllowedValues: []string{"prod"}}, all); err != nil {
+	if _, err := gw.UpdateTag(ctx, "", "environment", storage.TagPatch{AllowedValues: []string{"prod"}}, all); err != nil {
 		t.Fatalf("narrow enum: %v", err)
 	}
 	if _, err := gw.SetTagBinding(ctx, "", "environment", "component", strptr("codec-1"), "dev", all, all); !errors.Is(err, storage.ErrTagValueNotAllowed) {

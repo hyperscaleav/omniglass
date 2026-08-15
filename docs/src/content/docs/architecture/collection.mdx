@@ -100,6 +100,7 @@ interfaces:
 ```
 
 - **Type is the `interface_type`, which is the transport**, not the protocol driver: the registry covers `snmp`, `http`, `ssh`, `telnet`, `tcp`, `icmp`, `webhook`, `mqtt`, `syslog`, and `websocket`, each with a connection-param schema and default reachability probe. The protocol handler turning a device's API into a normalized menu of samples and functions is a separate **driver** layer, so a device's OIDs live in its driver, never on a template ([ADR-0039](/architecture/decisions/#adr-0039-an-interface-is-a-device-api-the-interface-type-is-its-transport-not-its-driver)).
+- **A label is the one identity string an operator types on an interface.** The name is derived from the type, so every SSH interface in the estate reads `ssh`: the row says which protocol it speaks and nothing about what it is for. The label ("Control processor") is where that goes, and it is settable at create rather than on a following edit, an interface labelled by a second call being unlabelled at the moment it is made ([ADR-0119](/architecture/decisions/#adr-0119-a-table-an-operator-names-carries-a-label-or-declares-why-it-does-not)). It is optional; an interface with none reads its derived name **verbatim**. Note the corollary of a derived name: since the name IS the protocol and is unique within the component, a component holds at most **one interface per protocol**, and a second of the same type is a 409.
 - **`liveness`**: the per-interface reachability gate deciding whether its functions run ([nodes](/architecture/nodes/)).
 - **`persistent: true`** keeps a session open across runs; scheduled functions borrow it to send, listen functions wake on its inbound.
 - **Codec and framing**: raw-TCP AV control planes wrap payloads (line terminators, length prefixes, NUL framing, JSON-RPC or TTP envelopes); the interface's codec frames outbound and parses inbound to the declared envelope, so a step sees structure, not wire bytes.
@@ -381,6 +382,7 @@ The connection registry, the declared connections, and the node's units of work;
 <SchemaTable
   table="interface"
   notes={{
+    label: 'The friendly string an operator reads, and the ONLY identity string they type here since the name is derived; NULL falls back to that name, verbatim',
     component_id: 'Set: pre-bound to the component; NULL: shared, resolved by match key',
     node_name: 'Placement: holds the node primary key (principal_id), not a name, despite the column name; ON DELETE CASCADE so a purged node takes its interfaces',
     params: 'The transport parameters the authoring schema validated',

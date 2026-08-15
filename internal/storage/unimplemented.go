@@ -555,7 +555,7 @@ func (UnimplementedGateway) ListSecrets(context.Context, scope.Set, bool) ([]Sec
 func (UnimplementedGateway) CreateSecret(context.Context, string, SecretSpec, scope.Set, bool) (*Secret, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateSecret(context.Context, string, string, map[string]string, scope.Set, scope.Set, bool, bool) (*Secret, error) {
+func (UnimplementedGateway) UpdateSecret(context.Context, string, string, SecretPatch, scope.Set, scope.Set, bool, bool) (*Secret, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteSecret(context.Context, string, string, scope.Set, scope.Set, bool, bool) error {
@@ -576,7 +576,7 @@ func (UnimplementedGateway) ListVariables(context.Context, scope.Set) ([]Variabl
 func (UnimplementedGateway) CreateVariable(context.Context, string, VariableSpec, scope.Set) (*Variable, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateVariable(context.Context, string, string, json.RawMessage, scope.Set, scope.Set, bool) (*Variable, error) {
+func (UnimplementedGateway) UpdateVariable(context.Context, string, string, VariablePatch, scope.Set, scope.Set, bool) (*Variable, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteVariable(context.Context, string, string, scope.Set, scope.Set, bool) error {
@@ -663,7 +663,7 @@ func (UnimplementedGateway) DistinctTagValues(context.Context, string) ([]string
 func (UnimplementedGateway) CreateTag(context.Context, string, TagSpec, scope.Set) (*Tag, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateTag(context.Context, string, string, TagSpec, scope.Set) (*Tag, error) {
+func (UnimplementedGateway) UpdateTag(context.Context, string, string, TagPatch, scope.Set) (*Tag, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteTag(context.Context, string, string, scope.Set) error {
