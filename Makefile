@@ -198,10 +198,10 @@ docs-shots:
 	bash docs/screenshots/capture.sh
 
 # Freshness gate for the screenshots, the visual sibling of `make gen`: recapture
-# into a temp dir and fail if any shot differs from the committed image by more
-# than a small tolerance, so a UI change that was not re-captured cannot merge.
-# Tolerance (not byte equality) because the dev seed's random UUIDs make a fresh
-# capture differ from the committed one by a fraction of a percent of pixels.
+# into a temp dir and fail on ANY unmasked pixel difference (#398/#623): the
+# nondeterministic regions a capture renders (v7-uuid text, seed-time stamps)
+# are masked in each page's frontmatter, so the pinned browser's rasters are
+# byte-stable and a nonzero diff is a real, un-recaptured UI change.
 # The temp dir is repo-relative so it lands inside the capture container's mount.
 docs-shots-check:
 	@tmp=.docs-shots-tmp; mkdir -p $$tmp; \

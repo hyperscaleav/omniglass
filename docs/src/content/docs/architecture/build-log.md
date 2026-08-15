@@ -5372,3 +5372,27 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   the route smoke spec in the same tier, a change that breaks any console route in a real browser
   cannot merge; `make test` stays unchanged (the local loop keeps the explicit `make test-e2e`
   target, the Playwright image being too heavy to fold into the default gate) (#758, #761).
+
+- **The screenshot freshness gate stops trusting a tolerance.** The old percentage ceiling
+  existed to absorb dev-seed jitter and passed exactly the changes the gate exists to catch: a
+  renamed label at 0.033% and a collapsed rail at 0.13%, both under 0.5% (#398, #623). A double
+  capture located every jittering region empirically (one page: the Files rows' v7-uuid subtext
+  and seed-time Added column); those regions are masked in frontmatter like the audit shot
+  already was, the comparison moved into a testable unit (`web/e2e/shotdiff.mjs`) with the
+  contract pinned (`web/src/shotdiff-gate.test.ts` proves the old blindness and the new zero),
+  and the default tolerance is now zero: the pinned browser's rasters are byte-stable, so any
+  unmasked pixel change fails `make docs-shots-check`. The refresh also caught the secrets shot
+  0.437% stale against today's console, live proof of the class (#768).
+
+- **The groups blade adopts the edit param.** ADR-0120 left the groups blade on its one-shot
+  signal "until it gains an id deep link"; it already had one (`?g=<id>`), so the adoption was
+  the Users port verbatim: `?g=<id>&edit=1` opens the group's blade already editing behind the
+  manage gate, the create flow hands off through that URL, and `openGroupInEdit` /
+  `consumePendingGroupEdit` retire. No console one-shot edit signal remains (#762).
+
+- **Every blade seeds its edit drafts through the slot.** The thirteen blades still carrying the
+  hand-written `createEffect(on(edit.editing, ...))` seeder (the twelve #748 listed plus
+  SystemTypes, an omission its count missed) convert to `edit.bind({ seed })`: the slot runs the
+  seeder on entering edit and again on `reseed()`, so the pattern is uniform when the next
+  registry grows a `:restore` leg. Behavior unchanged per blade, the existing suites the gate;
+  the page-detail flavor of the same hand-rolled seeding is #769 (#748).

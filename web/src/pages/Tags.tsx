@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
+import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import FieldRow from "../components/FieldRow";
@@ -119,8 +119,9 @@ function TagBladeBody(p: { name: string }): JSX.Element {
   const [isEnum, setIsEnum] = createSignal(false);
   const [allowedValues, setAllowedValues] = createSignal<string[]>([]);
 
-  createEffect(on(edit.editing, (editing) => {
-    if (!editing) return;
+  // Fill the drafts from the row as it stands; bound below, the slot runs this
+  // on entering edit and again on reseed (#748).
+  const seedDrafts = () => {
     const t = tag();
     // The RAW column, never entityLabel: seeding the editor with the fallback
     // would turn "no label" into a label the operator never typed on the next
@@ -131,7 +132,7 @@ function TagBladeBody(p: { name: string }): JSX.Element {
     setIsEnum((t?.allowed_values ?? []).length > 0);
     setAllowedValues(t?.allowed_values ?? []);
     setErr(null);
-  }));
+  };
 
   async function removeTag() {
     const t = tag();
@@ -162,6 +163,7 @@ function TagBladeBody(p: { name: string }): JSX.Element {
 
   edit.bind({
     editable: () => !!tag() && can(me.data, "tag", "update"),
+    seed: seedDrafts,
     save,
     destructive: () => (tag() && can(me.data, "tag", "delete") ? { label: "Delete", tone: "danger", onClick: removeTag } : undefined),
     // A tag key has no official flag (every key is operator-owned), so the

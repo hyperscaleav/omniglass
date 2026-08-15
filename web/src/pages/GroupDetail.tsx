@@ -9,11 +9,13 @@ import type { BladeDef } from "../lib/blades";
 import type { TreeNode } from "../lib/treeselect";
 import type { ExistingGrant, GrantRef, ScopeOp } from "../lib/grantdraft";
 import {
-  GROUPS_KEY, groupName, memberName, consumePendingGroupEdit,
+  GROUPS_KEY, groupName, memberName,
   getGroup, updateGroup, deleteGroup,
   listGroupMembers, addGroupMember, removeGroupMember,
   listGroupGrants, createGroupGrant, revokeGroupGrant,
 } from "../lib/groups";
+import { useSearchParams } from "@solidjs/router";
+import { useEditParam } from "../lib/editurl";
 import { type ScopeKind, PRINCIPALS_KEY, ROLES_KEY, listPrincipals, listRoles, principalName } from "../lib/principals";
 import { listLocations } from "../lib/locations";
 import { listSystems } from "../lib/systems";
@@ -120,14 +122,14 @@ export function GroupDetail(props: { id: string }) {
     },
   });
 
-  // A just-created group opens straight in edit mode (once its data has loaded and
-  // if the caller can manage it), so members and grants are added without a second
-  // step. consumePendingGroupEdit clears the flag so this fires exactly once.
-  createEffect(() => {
-    if (group.data && !edit.editing() && canManage() && consumePendingGroupEdit(props.id)) {
-      edit.begin();
-    }
-  });
+  // The blade's edit mode composes with its id deep link (#762): ?g=<id>&edit=1
+  // opens this blade already editing once its data has loaded (and the caller can
+  // manage it), which is also how the create flow hands off. Gated on the URL
+  // naming THIS blade, so a stale ?edit=1 beside another group's id (or none)
+  // cannot flip a blade the operator merely clicked open.
+  const [searchParams] = useSearchParams();
+  const linked = () => (Array.isArray(searchParams.g) ? searchParams.g[0] : searchParams.g) === props.id;
+  useEditParam(edit, { ready: () => !!group.data && linked(), canUpdate: canManage });
 
   async function removeGroup() {
     if (!confirm(`Delete the group "${group.data ? groupName(group.data) : ""}"? Members keep their direct grants; they stop inheriting this group's.`)) return;

@@ -1,4 +1,4 @@
-import { Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
+import { Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
@@ -129,8 +129,9 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
   const [supportPhone, setSupportPhone] = createSignal("");
   const [website, setWebsite] = createSignal("");
 
-  createEffect(on(edit.editing, (editing) => {
-    if (!editing) return;
+  // Fill the drafts from the row as it stands; bound below, the slot runs this
+  // on entering edit and again on reseed (#748).
+  const seedDrafts = () => {
     const r = row();
     setLabel(r?.label ?? "");
     setKind(r?.kind ?? "manufacturer");
@@ -138,7 +139,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
     setSupportPhone(r?.support_phone ?? "");
     setWebsite(r?.website ?? "");
     setErr(null);
-  }));
+  };
 
   async function removeVendor() {
     const r = row();
@@ -175,6 +176,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
 
   edit.bind({
     editable: () => !!row() && !row()!.official && can(me.data, "vendor", "update"),
+    seed: seedDrafts,
     save,
     destructive: () =>
       row() && !row()!.official && can(me.data, "vendor", "delete")

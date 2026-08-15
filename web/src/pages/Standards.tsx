@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
+import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeTitle from "../components/BladeTitle";
@@ -115,13 +115,14 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
   const [label, setLabel] = createSignal("");
   const [parentId, setParentId] = createSignal("");
 
-  createEffect(on(edit.editing, (editing) => {
-    if (!editing) return;
+  // Fill the drafts from the row as it stands; bound below, the slot runs this
+  // on entering edit and again on reseed (#748).
+  const seedDrafts = () => {
     const r = row();
     setLabel(r?.label ?? "");
     setParentId(r?.parent_standard ?? "");
     setErr(null);
-  }));
+  };
 
   async function removeStandard() {
     const r = row();
@@ -152,6 +153,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
 
   edit.bind({
     editable: () => !!row() && !row()!.official && can(me.data, "standard", "update"),
+    seed: seedDrafts,
     save,
     destructive: () =>
       row() && !row()!.official && can(me.data, "standard", "delete")

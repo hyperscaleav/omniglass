@@ -1,21 +1,24 @@
 // Pixel-freshness gate: compare a freshly captured screenshot dir against the
-// committed images and fail if any differs by more than a small tolerance. Byte
-// equality is not achievable because the dev seed generates random UUIDs (which
-// drive the avatar gradient hues and the audit ids), so a fresh capture differs
-// from the committed one by a fraction of a percent of cosmetic pixels. A real UI
-// change moves far more than that, so a 0.5% ratio (a ~5x margin over the observed
-// seed noise) catches genuine drift without flaking.
+// committed images and fail on ANY unmasked difference. The tolerance is zero
+// (#398, #623): every nondeterministic region a capture can render (v7-uuid
+// text, now-relative timestamps) is masked at capture time through the page's
+// `screenshots` frontmatter, painted as constant-color boxes into the PNG
+// itself, so byte-stable rasters from the pinned browser container leave no
+// legitimate residual diff. The old percentage ceiling passed exactly the
+// changes the gate exists to catch (a renamed label at 0.033%, a collapsed
+// rail at 0.13%); see web/src/shotdiff-gate.test.ts for the pinned contract.
 //
 // Usage: node web/e2e/docs-shots-diff.mjs <fresh-dir> [committed-dir]
+// DOCS_SHOTS_MAX_RATIO overrides the tolerance for unpinned local browsers
+// only; CI runs the pinned container and the zero default.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { PNG } from 'pngjs';
-import pixelmatch from 'pixelmatch';
 import { readdir } from 'node:fs/promises';
+import { compareShot, DEFAULT_MAX_RATIO } from './shotdiff.mjs';
 
 const fresh = process.argv[2];
 const committed = process.argv[3] ?? 'docs/public/screenshots';
-const MAX_RATIO = Number(process.env.DOCS_SHOTS_MAX_RATIO ?? '0.005');
+const MAX_RATIO = process.env.DOCS_SHOTS_MAX_RATIO ? Number(process.env.DOCS_SHOTS_MAX_RATIO) : DEFAULT_MAX_RATIO;
 
 if (!fresh) {
   console.error('usage: node web/e2e/docs-shots-diff.mjs <fresh-dir> [committed-dir]');
@@ -26,23 +29,20 @@ const names = (await readdir(committed)).filter((f) => f.endsWith('.png'));
 const failures = [];
 
 for (const name of names) {
-  let a, b;
+  let r;
   try {
-    a = PNG.sync.read(readFileSync(join(committed, name)));
-    b = PNG.sync.read(readFileSync(join(fresh, name)));
+    r = compareShot(readFileSync(join(committed, name)), readFileSync(join(fresh, name)), { maxRatio: MAX_RATIO });
   } catch (e) {
     failures.push(`${name}: missing in fresh capture (${e.code ?? e.message})`);
     continue;
   }
-  if (a.width !== b.width || a.height !== b.height) {
-    failures.push(`${name}: size changed ${a.width}x${a.height} -> ${b.width}x${b.height}`);
+  if (r.status === 'size') {
+    failures.push(`${name}: size changed ${r.a.width}x${r.a.height} -> ${r.b.width}x${r.b.height}`);
     continue;
   }
-  const diff = pixelmatch(a.data, b.data, null, a.width, a.height, { threshold: 0.1 });
-  const ratio = diff / (a.width * a.height);
-  const pct = (ratio * 100).toFixed(3);
-  if (ratio > MAX_RATIO) {
-    failures.push(`${name}: ${pct}% changed (> ${(MAX_RATIO * 100).toFixed(2)}%)`);
+  const pct = (r.ratio * 100).toFixed(3);
+  if (r.status === 'changed') {
+    failures.push(`${name}: ${pct}% changed (${r.diffPixels}px > ${(MAX_RATIO * 100).toFixed(2)}%)`);
   } else {
     console.log(`ok    ${name} (${pct}%)`);
   }

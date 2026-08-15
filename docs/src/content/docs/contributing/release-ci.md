@@ -29,7 +29,9 @@ Nine workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
   page fails the PR that introduces it instead of the next deploy.
 - **`docs-shots.yml`** (path-filtered to `docs/**` and `web/**`) gates the generated docs
   screenshots: every declared shot has a committed PNG, and a recapture against the real
-  console fails if a shot drifted beyond the tolerance.
+  console fails on any unmasked pixel difference (nondeterministic regions are masked in
+  each page's frontmatter, so the pinned browser's captures are byte-stable and the
+  tolerance is zero).
 
 Two more PR checks: **`image.yml`** builds the multi-arch container image (see
 [Container image](/guides/container-image/)), and **`preview-comment.yml`** reacts to the

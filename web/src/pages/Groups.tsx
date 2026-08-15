@@ -5,7 +5,7 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import { identityColumn } from "../components/IdentityCell";
 import { createIdentity } from "../lib/entities";
 import type { FilterKey } from "../lib/predicate";
-import { type Group, GROUPS_KEY, groupName, listGroups, createGroup, openGroupInEdit } from "../lib/groups";
+import { type Group, GROUPS_KEY, groupName, listGroups, createGroup } from "../lib/groups";
 import { identityRegistry } from "../lib/identityBlades";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -33,7 +33,7 @@ const filterKeys: FilterKey<Group>[] = [
 
 export default function Groups() {
   const me = useMe();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const groups = useQuery(() => ({ queryKey: GROUPS_KEY, queryFn: listGroups }));
   // ?g=<id> deep-links to a group (e.g. the cross-over from a user's inherited grant).
   const openId = () => (Array.isArray(params.g) ? params.g[0] : params.g) || undefined;
@@ -53,7 +53,10 @@ export default function Groups() {
         openId,
         blades: { registry: identityRegistry, rootKind: "group" },
         create: can(me.data, "principal_group", "create")
-          ? { label: "New group", can: () => can(me.data, "principal_group", "create"), body: (ctx) => <CreateGroupForm onCreated={(g) => ctx.select(g)} onClose={ctx.close} /> }
+          // The handoff is the URL (#762): ?g=<id>&edit=1 opens the new group's
+          // blade already editing, so members and grants are added without a
+          // second step.
+          ? { label: "New group", can: () => can(me.data, "principal_group", "create"), body: (ctx) => <CreateGroupForm onCreated={(g) => { setParams({ g: g.id, edit: "1" }); ctx.close(); }} onClose={ctx.close} /> }
           : undefined,
       }}
     />
@@ -87,13 +90,12 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => 
     try {
       const g = await createGroup({ name: name().trim(), label: display().trim() || undefined, description: description().trim() || undefined });
       // Seed the new group's detail caches so its blade opens instantly (no loading
-      // flash), and flag it to open in edit mode so members and grants can be added
-      // right away, then hand it to the create Drawer's select to open it.
+      // flash), then hand it to onCreated, whose URL (#762) carries the
+      // open-in-edit intent.
       qc.setQueryData([...GROUPS_KEY, g.id], g);
       qc.setQueryData([...GROUPS_KEY, g.id, "members"], []);
       qc.setQueryData([...GROUPS_KEY, g.id, "grants"], []);
       await qc.invalidateQueries({ queryKey: GROUPS_KEY });
-      openGroupInEdit(g.id);
       props.onCreated(g);
     } catch (e2) {
       setErr(describeError(e2));
