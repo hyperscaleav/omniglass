@@ -395,12 +395,14 @@ func TestHealthRoleReportsChoiceAndActive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
-	// screen is unstaffed and unconditional, so the verdict is outage
-	// (screen's own impact), not healthy: this pins that an unconditional
-	// role beside a satisfied choice still counts, the same assertion
-	// TestSystemVerdictWithChoices makes at the pure level.
-	if rep.Verdict != "outage" {
-		t.Fatalf("verdict = %q, want outage (screen, unconditional and unstaffed, still counts)", rep.Verdict)
+	// screen is unstaffed and unconditional, so the verdict is incomplete
+	// (#631: a box nobody installed, not a box that broke), not healthy: this
+	// pins that an unconditional role beside a satisfied choice still counts,
+	// the same assertion TestSystemVerdictWithChoices makes at the pure level.
+	// It pinned outage (screen's declared impact) before the incomplete
+	// verdict landed; impact describes failure only now.
+	if rep.Verdict != "incomplete" {
+		t.Fatalf("verdict = %q, want incomplete (screen, unconditional and unstaffed, still counts)", rep.Verdict)
 	}
 
 	byName := map[string]storage.HealthRole{}
@@ -425,7 +427,7 @@ func TestHealthRoleReportsChoiceAndActive(t *testing.T) {
 	screen := byName["screen"]
 	if screen.Choice != "" || screen.Alternate != "" || !screen.Active || !screen.Impaired {
 		t.Fatalf("screen = %+v, want empty choice/alternate, active true, impaired true "+
-			"(unconditional and unstaffed: it IS the reason for the outage verdict)", screen)
+			"(unconditional and unstaffed: it IS the reason for the incomplete verdict)", screen)
 	}
 }
 
