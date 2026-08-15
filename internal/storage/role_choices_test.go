@@ -231,8 +231,8 @@ func TestDetachedRoleBecomesUnconditional(t *testing.T) {
 	if err != nil {
 		t.Fatalf("system health after detach: %v", err)
 	}
-	if rep.Verdict != "outage" {
-		t.Fatalf("verdict after detaching role-a = %q, want outage: it must now count unconditionally "+
+	if rep.Verdict != "incomplete" {
+		t.Fatalf("verdict after detaching role-a = %q, want incomplete: unstaffed, it must now count unconditionally "+
 			"even though the choice it left is still satisfied via b", rep.Verdict)
 	}
 }

@@ -1458,7 +1458,6 @@ func TestSeededEstateShowsEveryVerdict(t *testing.T) {
 	}
 }
 
-
 // fixturesDoc parses the embedded fixtures, failing the test on error, so a
 // derived expectation reads as one call.
 func fixturesDoc(t *testing.T) devseed.Doc {
