@@ -1,4 +1,4 @@
-import { entityLabel } from "../lib/entities";
+import { byLabel, entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
@@ -88,7 +88,7 @@ export default function Systems() {
   // The standard picker's options, and the id -> label lookup the tree and
   // detail read a conforming system's standard through.
   const standardOptions = createMemo(() =>
-    [...(standards.data ?? [])].sort((a, b) => a.label.localeCompare(b.label)),
+    [...(standards.data ?? [])].sort(byLabel),
   );
   const standardLabel = (handle?: string) => {
     if (!handle) return "";

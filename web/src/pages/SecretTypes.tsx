@@ -1,4 +1,4 @@
-import { entityLabel } from "../lib/entities";
+import { byLabel, entityLabel } from "../lib/entities";
 import { For, Show, type JSX } from "solid-js";
 import { useQuery } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
@@ -37,7 +37,7 @@ export default function SecretTypes() {
 
   // Sorted alphabetically by label then name.
   const rows = () =>
-    [...(types.data ?? [])].sort((a, b) => a.label.localeCompare(b.label) || a.name.localeCompare(b.name));
+    [...(types.data ?? [])].sort(byLabel);
 
   return (
     <FlatList<SecretType>

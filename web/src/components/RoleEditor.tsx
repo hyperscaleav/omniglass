@@ -2,6 +2,7 @@ import { For, Show, createEffect, createMemo, createSignal, useContext, type JSX
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Check, Pencil, Plus, Trash, X } from "./icons";
+import { byLabel } from "../lib/entities";
 import { COMPONENT_TYPES_KEY, listComponentTypes } from "../lib/component_types";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import {
@@ -258,7 +259,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
     const left = createMemo(() =>
       [...p.options]
         .filter((o) => !p.picked.includes(o.name))
-        .sort((a, b) => a.label.localeCompare(b.label)),
+        .sort(byLabel),
     );
     return (
       <div class="flex flex-col gap-1.5">

@@ -59,6 +59,34 @@ export function entityLabel(e: Labelled): string {
   return e.label?.trim() || e.name;
 }
 
+// byLabel is how a list of labelled rows is ordered: alphabetically by the label
+// an operator reads, with UNLABELLED rows last and the name breaking ties.
+//
+// It exists because the console re-sorts every registry list client-side, so
+// this rule is written twice and the two halves have to agree. The SQL half is
+// `order by nullif(label, '') nulls last, name` (#613, ADR-0118). Both are
+// spelled explicitly for the same reason: an unset label is the empty string,
+// `"".localeCompare(anything)` is negative, and a plain sort by label therefore
+// puts every unlabelled row at the TOP of the picker rather than the bottom.
+//
+// Whitespace counts as unset, the same way entityLabel treats it, so a label of
+// " " does not sort ahead of every real one.
+//
+// This is NOT the rendered label: it deliberately does not fall back to the name
+// for a row that has no label, because that would interleave labelled and
+// unlabelled rows rather than grouping the unlabelled ones at the end. Ordering
+// by the rendered label is a separate open decision.
+export function byLabel(a: Labelled, b: Labelled): number {
+  const al = a.label?.trim() ?? "";
+  const bl = b.label?.trim() ?? "";
+  if (al !== bl) {
+    if (al === "") return 1;
+    if (bl === "") return -1;
+    return al.localeCompare(bl);
+  }
+  return a.name.localeCompare(b.name);
+}
+
 // labelIsName reports that the label an operator reads IS the identifier, so a
 // surface renders it in the data face and has no second line to show. Whoever
 // holds the pen: a rule that had nothing to say about a row keeps the pen and

@@ -36,6 +36,34 @@ function mount(me: Me = admin) {
 describe("Vendors page", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  // The registry list puts an UNLABELLED row at the END, not the beginning
+  // (#613). The console re-sorts what the gateway already ordered, so fixing
+  // `order by nullif(label, '') nulls last, name` in SQL fixed nothing an
+  // operator could see: a plain `a.label.localeCompare(b.label)` is negative for
+  // an empty label, so the unlabelled row was the first thing on the page. Found
+  // on the live console with the server ordering already correct.
+  it("sorts an unlabelled vendor last, not first", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...VENDORS_KEY], [
+      ...seed,
+      { id: uuidFor("ven-unlabelled"), name: "aaa-unlabelled", label: "", kind: "manufacturer", official: false },
+    ] as Vendor[]);
+    qc.setQueryData([...ME_KEY], admin);
+    const { container } = render(() => (
+      <QueryClientProvider client={qc}>
+        <Vendors />
+      </QueryClientProvider>
+    ));
+    await screen.findByText("Crestron");
+    // The identity cell renders the label on the primary line and the name
+    // below it, except on a row with no label, where the name IS the primary
+    // line. Reading the rendered rows in order is what the operator sees.
+    const rows = [...container.querySelectorAll("tbody tr")].map((r) => r.textContent ?? "");
+    expect(rows.length).toBe(4);
+    const unlabelled = rows.findIndex((t) => t.includes("aaa-unlabelled"));
+    expect(unlabelled).toBe(rows.length - 1);
+  });
+
   it("lists a seeded vendor, an official row greys edit/delete, and create opens for an admin", async () => {
     mount();
     expect(await screen.findByText("Crestron")).toBeInTheDocument();

@@ -24,7 +24,7 @@ import {
 import { useMe, can } from "../lib/auth";
 import { nameStemError } from "../lib/validate";
 import { registryLock, registryOrigin } from "../lib/catalog";
-import { createIdentity, entityLabel } from "../lib/entities";
+import { byLabel, createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -94,7 +94,7 @@ export default function LocationTypes() {
 
   // Sorted alphabetically by label then name.
   const rows = () =>
-    [...(types.data ?? [])].sort((a, b) => a.label.localeCompare(b.label) || a.name.localeCompare(b.name));
+    [...(types.data ?? [])].sort(byLabel);
 
   const canCreate = () => can(me.data, "location_type", "create");
 

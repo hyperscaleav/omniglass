@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createIdentity, deriveName, entityLabel, hasLabel, labelIsName } from "./entities";
+import { byLabel, createIdentity, deriveName, entityLabel, hasLabel, labelIsName } from "./entities";
 import { createPen } from "./namegen";
 import { seedLabelPen } from "../components/LabelPenField";
 
@@ -217,5 +217,50 @@ describe("createIdentity", () => {
     const id = createIdentity();
     id.setDisplay("---");
     expect(id.name()).toBe("");
+  });
+});
+
+// The console re-sorts every registry list client-side, so the ordering rule
+// lives in two places and has to say the same thing in both. The SQL half is
+// `order by nullif(label, '') nulls last, name` (#613); this is its twin.
+//
+// The failure it exists for is silent: `"".localeCompare("Biamp")` is negative,
+// so a plain sort by label puts every UNLABELLED row at the TOP of the picker,
+// which is where a `zz-unlabelled-vendor` landed on the live console with the
+// server ordering already fixed.
+describe("byLabel", () => {
+  const rows = [
+    { name: "zz-unlabelled-vendor", label: "" },
+    { name: "biamp", label: "Biamp" },
+    { name: "crestron", label: "Crestron" },
+    { name: "aaa-also-unlabelled", label: "" },
+  ];
+
+  it("sorts labelled rows alphabetically and unlabelled rows last", () => {
+    expect([...rows].sort(byLabel).map((r) => r.name)).toEqual([
+      "biamp",
+      "crestron",
+      "aaa-also-unlabelled",
+      "zz-unlabelled-vendor",
+    ]);
+  });
+
+  it("breaks a tie on the name, so the order is total", () => {
+    const tied = [
+      { name: "b-one", label: "Same" },
+      { name: "a-two", label: "Same" },
+    ];
+    expect([...tied].sort(byLabel).map((r) => r.name)).toEqual(["a-two", "b-one"]);
+  });
+
+  it("treats whitespace and an absent label as unset, the same way entityLabel does", () => {
+    const ws = [
+      { name: "spaces", label: "   " },
+      { name: "absent" },
+      { name: "labelled", label: "Alpha" },
+    ];
+    const got = [...ws].sort(byLabel).map((r) => r.name);
+    expect(got[0]).toBe("labelled");
+    expect(got.slice(1).sort()).toEqual(["absent", "spaces"]);
   });
 });

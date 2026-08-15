@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import { pickInheritedFacts, type InheritedFacts } from "./catalog";
+import { byLabel } from "./entities";
 
 // The component_type registry data layer: the device-class genus a product is
 // classified under (ADR-0085 partially reverses ADR-0047: the shape returns
@@ -158,7 +159,7 @@ export function componentTypeTree(types: ComponentType[]): ComponentTypeNode[] {
     else roots.push(node);
   }
   const sortLevel = (nodes: ComponentTypeNode[], depth: number) => {
-    nodes.sort((a, b) => a.label.localeCompare(b.label));
+    nodes.sort(byLabel);
     for (const n of nodes) {
       n.depth = depth;
       sortLevel(n.children, depth + 1);

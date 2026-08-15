@@ -7,7 +7,7 @@ import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
-import { createIdentity, entityLabel } from "../lib/entities";
+import { byLabel, createIdentity, entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import ProductContractEditor from "../components/ProductContractEditor";
 import ComponentTypeSelect from "../components/ComponentTypeSelect";
@@ -23,8 +23,8 @@ import {
   resolveProductIcon,
 } from "../lib/products";
 import { COMPONENT_TYPES_KEY, listComponentTypes, componentTypeByName } from "../lib/component_types";
-import { type Vendor, VENDORS_KEY, listVendors } from "../lib/vendors";
-import { type Driver, DRIVERS_KEY, listDrivers } from "../lib/drivers";
+import { VENDORS_KEY, listVendors } from "../lib/vendors";
+import { DRIVERS_KEY, listDrivers } from "../lib/drivers";
 import { useMe, can } from "../lib/auth";
 import { registryLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
@@ -74,7 +74,7 @@ export default function Products() {
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
 
   const rows = createMemo(() =>
-    [...(products.data ?? [])].sort((a, b) => a.label.localeCompare(b.label) || a.name.localeCompare(b.name)),
+    [...(products.data ?? [])].sort(byLabel),
   );
 
   return (
@@ -324,7 +324,7 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
 function VendorSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const vendors = useQuery(() => ({ queryKey: VENDORS_KEY, queryFn: listVendors }));
   const options = createMemo(() =>
-    [...(vendors.data ?? [])].sort((a: Vendor, b: Vendor) => a.label.localeCompare(b.label)),
+    [...(vendors.data ?? [])].sort(byLabel),
   );
   return (
     <select class="select select-bordered w-full" value={p.value} onChange={(e) => p.onChange(e.currentTarget.value)}>
@@ -339,7 +339,7 @@ function VendorSelect(p: { value: string; onChange: (v: string) => void }): JSX.
 function DriverSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers }));
   const options = createMemo(() =>
-    [...(drivers.data ?? [])].sort((a: Driver, b: Driver) => a.label.localeCompare(b.label)),
+    [...(drivers.data ?? [])].sort(byLabel),
   );
   return (
     <select class="select select-bordered w-full" value={p.value} onChange={(e) => p.onChange(e.currentTarget.value)}>

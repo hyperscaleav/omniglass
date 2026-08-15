@@ -18,7 +18,7 @@ import {
 } from "../lib/drivers";
 import { useMe, can } from "../lib/auth";
 import { registryLock } from "../lib/catalog";
-import { createIdentity, entityLabel } from "../lib/entities";
+import { byLabel, createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -45,7 +45,7 @@ export default function Drivers() {
   const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers }));
 
   const rows = createMemo(() =>
-    [...(drivers.data ?? [])].sort((a, b) => a.label.localeCompare(b.label) || a.name.localeCompare(b.name)),
+    [...(drivers.data ?? [])].sort(byLabel),
   );
 
   return (

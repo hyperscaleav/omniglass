@@ -20,7 +20,7 @@ import {
 } from "../lib/standards";
 import { useMe, can } from "../lib/auth";
 import { registryLock } from "../lib/catalog";
-import { createIdentity, entityLabel } from "../lib/entities";
+import { byLabel, createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -58,7 +58,7 @@ export default function Standards() {
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
 
   const rows = createMemo(() =>
-    [...(standards.data ?? [])].sort((a, b) => a.label.localeCompare(b.label) || a.name.localeCompare(b.name)),
+    [...(standards.data ?? [])].sort(byLabel),
   );
 
   return (
@@ -259,7 +259,7 @@ function ParentStandardSelect(p: { value: string; exclude?: string; onChange: (v
   const options = createMemo(() =>
     [...(standards.data ?? [])]
       .filter((s) => s.name !== p.exclude)
-      .sort((a, b) => a.label.localeCompare(b.label)),
+      .sort(byLabel),
   );
   return (
     <select class="select select-bordered w-full" aria-label="Variant of" value={p.value} onChange={(e) => p.onChange(e.currentTarget.value)}>

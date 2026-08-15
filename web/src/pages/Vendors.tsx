@@ -6,7 +6,7 @@ import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import BladeField, { EMPTY_VALUE } from "../components/BladeField";
 import FieldRow from "../components/FieldRow";
-import { createIdentity, entityLabel } from "../lib/entities";
+import { byLabel, createIdentity, entityLabel } from "../lib/entities";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import {
@@ -69,7 +69,7 @@ export default function Vendors() {
   const makes = useQuery(() => ({ queryKey: VENDORS_KEY, queryFn: listVendors }));
 
   const rows = createMemo(() =>
-    [...(makes.data ?? [])].sort((a, b) => a.label.localeCompare(b.label) || a.name.localeCompare(b.name)),
+    [...(makes.data ?? [])].sort(byLabel),
   );
 
   return (

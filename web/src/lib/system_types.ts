@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import { pickInheritedFacts, type InheritedFacts } from "./catalog";
+import { byLabel } from "./entities";
 
 // The system_type registry data layer: the coarse taxonomy of what kind of
 // space a system is (ADR-0096), a boardroom, a classroom, a video wall. It is
@@ -130,7 +131,7 @@ export function systemTypeTree(types: SystemType[]): SystemTypeNode[] {
     else roots.push(node);
   }
   const sortLevel = (nodes: SystemTypeNode[], depth: number) => {
-    nodes.sort((a, b) => a.label.localeCompare(b.label));
+    nodes.sort(byLabel);
     for (const n of nodes) {
       n.depth = depth;
       sortLevel(n.children, depth + 1);

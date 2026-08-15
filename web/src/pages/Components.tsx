@@ -1,4 +1,4 @@
-import { entityLabel } from "../lib/entities";
+import { byLabel, entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
@@ -587,7 +587,7 @@ export default function Components() {
     // anything not yet modeled as a real SKU sits in the same list as every
     // named product, not behind a separate affordance.
     const productOptions = createMemo(() =>
-      [...(products.data ?? [])].sort((a, b) => a.label.localeCompare(b.label)),
+      [...(products.data ?? [])].sort(byLabel),
     );
 
     // What the platform would NAME and LABEL this, which only the server can
