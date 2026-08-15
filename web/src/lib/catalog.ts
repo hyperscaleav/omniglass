@@ -212,8 +212,8 @@ export function visibleGroups(allow: (tokens: string[]) => boolean): CatalogGrou
 }
 
 // The routed soon slots' paths (/rules, /notifications): the router mounts
-// SectionStub for each INSIDE the shell, so the stub renders in the pane, and
-// index.tsx keeps them out of the top-level stub loop.
+// SectionStub for each INSIDE the shell, so the stub renders in the pane. The
+// route manifest carries them with shell "catalog", pinned by the guard test.
 export const CATALOG_STUB_PATHS: string[] = CATALOG_GROUPS.flatMap((g) =>
   g.entries.filter((e) => e.soon && e.path).map((e) => e.path!),
 );

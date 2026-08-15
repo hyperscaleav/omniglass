@@ -62,24 +62,26 @@ describe("catalog gates mirror the route guard", () => {
 });
 
 // The nesting pin: the shell's value is that these URLs render INSIDE
-// CatalogShell. Route structure lives in JSX (index.tsx), which no runtime
-// test reaches without mounting the whole app, so this pins it at the source
-// level: every shell path must appear between the CatalogShell route's opening
-// and closing tags. Crude by design; it fails loudly if a route migrates out.
-describe("shell route nesting (source-level pin)", () => {
-  it("keeps every catalog path inside the CatalogShell route block", async () => {
-    const src = (await import("../index.tsx?raw")).default as string;
-    const open = src.indexOf("<Route component={CatalogShell}>");
-    const close = src.indexOf("</Route>", open);
-    expect(open).toBeGreaterThan(-1);
-    const block = src.slice(open, close);
+// CatalogShell. Since #760 the router renders from the route manifest, so the
+// nesting is a DATA fact (shell: "catalog") plus one source-level seam: the
+// manifest's catalog entries must be the ones mounted inside the CatalogShell
+// route block in index.tsx. Both halves are pinned here.
+describe("shell route nesting", () => {
+  it("keeps every catalog path on the catalog shell in the manifest", async () => {
+    const { ROUTE_MANIFEST } = await import("./routemanifest");
+    const shellOf = new Map(ROUTE_MANIFEST.map((r) => [r.path, r.shell]));
     const paths = [
       "/catalog", "/metrics", "/properties", "/event-types", "/command-types",
       "/vendors", "/products", "/drivers", "/standards",
       "/location-types", "/secret-types", "/tags",
     ];
-    for (const p of paths) expect(block, `${p} escaped the shell block`).toContain(`path="${p}"`);
-    expect(block).toContain("CATALOG_STUB_PATHS.map");
+    for (const p of paths) expect(shellOf.get(p), `${p} escaped the catalog shell`).toBe("catalog");
+    for (const p of CATALOG_STUB_PATHS) expect(shellOf.get(p), `${p} escaped the catalog shell`).toBe("catalog");
+  });
+
+  it("mounts the manifest's catalog entries inside the CatalogShell route block", async () => {
+    const src = (await import("../index.tsx?raw")).default as string;
+    expect(src).toContain('<Route component={CatalogShell}>{routesFor("catalog")}</Route>');
   });
 });
 

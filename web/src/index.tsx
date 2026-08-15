@@ -6,43 +6,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import "./app.css";
 import { setUnauthorizedHandler, clearToken } from "./api/client";
 import { ME_KEY } from "./lib/auth";
-import { STUBS } from "./lib/nav";
 import App from "./App";
 import { AuthGuard } from "./components/AuthGuard";
 import { RouteGuard } from "./components/RouteGuard";
-import Login from "./pages/Login";
-import Home from "./pages/Home";
-import Locations from "./pages/Locations";
-import Systems from "./pages/Systems";
-import Components from "./pages/Components";
-import Profile from "./pages/Profile";
-import Nodes from "./pages/Nodes";
-import Users from "./pages/Users";
-import Roles from "./pages/Roles";
-import Groups from "./pages/Groups";
-import Secrets from "./pages/Secrets";
-import Variables from "./pages/Variables";
-import Metrics from "./pages/Metrics";
-import Properties from "./pages/Properties";
-import EventTypes from "./pages/EventTypes";
-import CommandTypes from "./pages/CommandTypes";
-import Tags from "./pages/Tags";
 import CatalogShell from "./components/CatalogShell";
-import CatalogOverview from "./pages/CatalogOverview";
-import { CATALOG_STUB_PATHS } from "./lib/catalog";
-import LocationTypes from "./pages/LocationTypes";
-import ComponentTypes from "./pages/ComponentTypes";
-import SystemTypes from "./pages/SystemTypes";
-import SecretTypes from "./pages/SecretTypes";
-import Standards from "./pages/Standards";
-import Vendors from "./pages/Vendors";
-import Drivers from "./pages/Drivers";
-import Products from "./pages/Products";
-import Files from "./pages/Files";
-import Audit from "./pages/Audit";
-import Settings from "./pages/Settings";
-import SectionStub from "./pages/SectionStub";
-import NotFound from "./pages/NotFound";
+import { ROUTE_MANIFEST, type RouteEntry } from "./lib/routemanifest";
+import { PAGES } from "./routes";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root element");
@@ -68,69 +37,25 @@ const ProtectedShell: ParentComponent = (props) => (
   </AuthGuard>
 );
 
-// Stubbed sections: backends not built yet. The design draws them as stubs too.
-// The list lives in nav.ts beside the entries it backs, so the nav tests can
-// assert every unlive rail entry resolves to a registered stub, not NotFound.
+// The router renders FROM the route manifest (#760): every <Route> below is a
+// manifest entry resolved through the PAGES registry, so a route cannot be added
+// without the entry the e2e smoke spec drives from. The manifest documents each
+// route's shape (the :id details, the stubs, the catalog layout); the guard test
+// (route-manifest-guard.test.ts) pins registry completeness and the stub lists.
+// The Catalog area stays a layout route: CatalogShell draws the subrail around
+// each registry's own page while the URL stays canonical (/products, /metrics,
+// ...); each page keeps its own route-guard gate.
+const routesFor = (shell: RouteEntry["shell"]) =>
+  ROUTE_MANIFEST.filter((r) => r.shell === shell).map((r) => <Route path={r.path} component={PAGES[r.page]} />);
 
 render(
   () => (
     <QueryClientProvider client={queryClient}>
       <Router base="/web">
-        <Route path="/login" component={Login} />
+        {routesFor("public")}
         <Route path="/" component={ProtectedShell}>
-          <Route path="/" component={Home} />
-          {/* Inventory pages on the generic TreeList. The :id route opens the
-              same page focused on one entity (the addressable full-page detail),
-              addressed by uuid (#627 Task 15c: name uniqueness is scoped to
-              placement, so a name alone is not a reliable route param).
-              TreeList's own focus effect resolves an old name-shaped link
-              (a bookmark, or a cross-entity drill site with no id in hand)
-              through a byAddr fallback. */}
-          <Route path="/locations" component={Locations} />
-          <Route path="/locations/:id" component={Locations} />
-          <Route path="/systems" component={Systems} />
-          <Route path="/systems/:id" component={Systems} />
-          <Route path="/components" component={Components} />
-          <Route path="/components/:id" component={Components} />
-          <Route path="/nodes" component={Nodes} />
-          {/* Files are a flat, tenant-wide list addressed by id (names are not
-              unique across files); the :id route is the addressable full-page detail. */}
-          <Route path="/files" component={Files} />
-          <Route path="/files/:id" component={Files} />
-          <Route path="/profile" component={Profile} />
-          <Route path="/users" component={Users} />
-          <Route path="/roles" component={Roles} />
-          <Route path="/groups" component={Groups} />
-          <Route path="/secrets" component={Secrets} />
-          <Route path="/variables" component={Variables} />
-          {/* The Catalog area is a layout route: CatalogShell draws the subrail
-              navigation around each registry's own page while the URL stays
-              canonical (/products, /metrics, ...). /catalog is the Overview
-              landing; the routed soon slots (/rules, /notifications) render
-              their SectionStub inside the pane; /secret-types renders in the
-              pane too but holds no subrail entry (the standing ruling). Each
-              page keeps its own route-guard gate. */}
-          <Route component={CatalogShell}>
-            <Route path="/catalog" component={CatalogOverview} />
-            <Route path="/metrics" component={Metrics} />
-            <Route path="/properties" component={Properties} />
-            <Route path="/event-types" component={EventTypes} />
-            <Route path="/command-types" component={CommandTypes} />
-            <Route path="/vendors" component={Vendors} />
-            <Route path="/products" component={Products} />
-            <Route path="/drivers" component={Drivers} />
-            <Route path="/component-types" component={ComponentTypes} />
-            <Route path="/standards" component={Standards} />
-            <Route path="/system-types" component={SystemTypes} />
-            <Route path="/location-types" component={LocationTypes} />
-            <Route path="/secret-types" component={SecretTypes} />
-            <Route path="/tags" component={Tags} />
-            {CATALOG_STUB_PATHS.map((p) => <Route path={p} component={SectionStub} />)}
-          </Route>
-          <Route path="/audit" component={Audit} />
-          <Route path="/settings" component={Settings} />
-          {STUBS.filter((p) => !CATALOG_STUB_PATHS.includes(p)).map((p) => <Route path={p} component={SectionStub} />)}
-          <Route path="*" component={NotFound} />
+          {routesFor("protected")}
+          <Route component={CatalogShell}>{routesFor("catalog")}</Route>
         </Route>
       </Router>
     </QueryClientProvider>
