@@ -1175,7 +1175,7 @@ export interface paths {
         put?: never;
         /**
          * Create an interface
-         * @description Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is what tells two interfaces of one type apart. The create scope cascades through the owning component. Gated by interface:create.
+         * @description Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by interface:create.
          */
         post: operations["create-interface"];
         delete?: never;
@@ -4374,7 +4374,7 @@ export interface components {
             component?: string;
             /** @description An interface_type name (the protocol); the interface is named by it, unique within the component */
             interface_type: string;
-            /** @description What an operator reads in lists (Control processor). Settable here because the name is derived: two ssh interfaces on one component are told apart by this and nothing else */
+            /** @description What an operator reads in lists (Control processor). Settable here because the name is derived from the type, so it says how the device is reached and never what the connection is for */
             label?: string;
             /** @description Node placement, by name or id */
             node?: string;

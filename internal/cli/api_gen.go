@@ -1872,7 +1872,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "create",
 					Short:   "Create an interface",
-					Long:    "Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is what tells two interfaces of one type apart. The create scope cascades through the owning component. Gated by interface:create.",
+					Long:    "Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by interface:create.",
 					Example: "  omniglass interface create --interface-type interface_type",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1899,7 +1899,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fComponent, "component", "", "Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant)")
 				cmd.Flags().StringVar(&fInterfaceType, "interface-type", "", "An interface_type name (the protocol); the interface is named by it, unique within the component")
 				_ = cmd.MarkFlagRequired("interface-type")
-				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists (Control processor). Settable here because the name is derived: two ssh interfaces on one component are told apart by this and nothing else")
+				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists (Control processor). Settable here because the name is derived from the type, so it says how the device is reached and never what the connection is for")
 				cmd.Flags().StringVar(&fNode, "node", "", "Node placement, by name or id")
 				cmd.Flags().StringVar(&fParams, "params", "", "Endpoint/target settings (jsonb)")
 				return cmd

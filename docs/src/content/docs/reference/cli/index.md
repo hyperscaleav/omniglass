@@ -1423,13 +1423,13 @@ Create an interface
 omniglass interface create [flags]
 ```
 
-Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is what tells two interfaces of one type apart. The create scope cascades through the owning component. Gated by interface:create.
+Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by interface:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--component` | string | (none) | Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant) |
 | `--interface-type` | string | (none) | An interface_type name (the protocol); the interface is named by it, unique within the component |
-| `--label` | string | (none) | What an operator reads in lists (Control processor). Settable here because the name is derived: two ssh interfaces on one component are told apart by this and nothing else |
+| `--label` | string | (none) | What an operator reads in lists (Control processor). Settable here because the name is derived from the type, so it says how the device is reached and never what the connection is for |
 | `--node` | string | (none) | Node placement, by name or id |
 | `--params` | string | (none) | Endpoint/target settings (jsonb) |
 

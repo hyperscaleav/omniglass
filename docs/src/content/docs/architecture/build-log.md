@@ -5317,11 +5317,17 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   write. `secret` is a sweep rather than a column, since it is read through the directory, the create
   and update returns, the audit image and the per-component cascade; the reveal and the copy carry no
   identity at all, which is pinned rather than assumed. `interface` is the strongest of the four and
-  the reason D2 went the way it did: its name is SERVER-derived from its type, so a component with
-  three `ssh` interfaces gives an operator nothing to tell them apart, and the label is settable at
-  create rather than on a following edit, because the moment three of them exist is the moment they
-  need distinguishing. Its declared name exemption stays exactly where it was: the name really is
+  the reason D2 went the way it did: its name is SERVER-derived from its type, so its only string
+  says which protocol it speaks and nothing about what it is for, and the label is settable at create
+  rather than on a following edit, since an interface labelled by a second call is unlabelled at the
+  moment it is made. Its declared name exemption stays exactly where it was: the name really is
   derived, which is the argument FOR the label rather than something the label replaces.
+
+  **One premise of that argument turned out to be false, and is corrected rather than repeated.** The
+  epic argued from "a component with three `ssh` interfaces", which the schema does not permit: the
+  unique index is `(component, name)` and the name IS the protocol, so the second is a 409. The
+  conflict is now pinned by a test, and the narrower statement carries the decision on its own, every
+  SSH interface in the estate reading `ssh` with nothing to say which device role it plays.
 
   **The ordering was treated as guilty.** Every new list orders `by label nulls last, name`, with a
   test, because #756 had just found seven registries shipping their unlabelled rows at the top of the

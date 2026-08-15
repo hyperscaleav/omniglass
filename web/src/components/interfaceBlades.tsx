@@ -65,8 +65,8 @@ export const interfaceBlade: BladeDef = {
 // The heading is the label, falling back to the derived name in the data face,
 // through the one blade-heading primitive. It was a bare span until the entity
 // gained a label (#613), which is the moment #581 said to switch, and it matters
-// more here than anywhere: two ssh interfaces on one component open two blades
-// that would otherwise be titled identically.
+// more here than anywhere: every SSH interface in the estate is named `ssh`, so
+// without a label two blades on two components are titled identically.
 function InterfaceBladeTitle(props: { id: string }): JSX.Element {
   const iface = useInterfaceById(props.id);
   return <BladeTitle row={() => iface() ?? undefined} fallback="interface" />;
@@ -281,7 +281,7 @@ function CreateInterfaceForm(props: { onCreated: (i: Interface) => void; compone
 
   return (
     <form class="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-      <p class="text-xs text-base-content/50">An API on a component, named by its protocol (its type). Give it a label if the component has more than one of a type: the name cannot tell them apart. Its reachability task derives automatically.</p>
+      <p class="text-xs text-base-content/50">An API on a component, named by its protocol (its type). The label is yours: say what the connection is for, since the name only says how it is reached. Its reachability task derives automatically.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>

@@ -49,10 +49,11 @@ Components** (with `interface:read`) and its interfaces read as a panel on the d
 showing the interface's **label** over its protocol name, its reachability, its node placement, and
 its probed target. An interface is **named by its protocol**: you pick a **type** (the transport) and
 the interface takes that protocol as its name, unique within its component, so one component can
-have one `tcp` and one `http`. Because you never type that name, the **label** is the one string on
-an interface that is yours: give it one ("Control processor") when a component has more than one
-interface of a type, or the two rows read alike. It is optional, and an interface without one reads
-its protocol name exactly.
+have one `tcp` and one `http`, and a second interface of a protocol it already has is refused.
+Because you never type that name, the **label** is the one string on an interface that is yours:
+give it one ("Control processor") to say what the connection is FOR, since `ssh` only says how it is
+reached and reads the same on every component in the estate. It is optional, and an interface
+without one reads its protocol name exactly.
 
 - With `interface:create`, **Add interface** on the component detail creates one: give it a
   **label** (optional, and the only name-like string you type here), choose a

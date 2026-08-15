@@ -3,6 +3,7 @@ package storage_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
@@ -421,20 +422,29 @@ func TestASecretsLabelReachesEveryProjectionThatCarriesItsName(t *testing.T) {
 	}
 }
 
-// TestAnInterfacesLabelIsTheOnlyThingTellingTwoApart is the case D2 was decided
+// TestAnInterfacesLabelIsItsOnlyOperatorTypedString is the case D2 was decided
 // on, and it is the strongest of the four rather than the weakest.
 //
 // An interface's name is SERVER-derived: InterfaceSpec carries no Name and the
-// column is set from spec.Type, an already-validated interface_type name. So on
-// a component with three `ssh` interfaces the operator has no way at all to say
-// which is which, and the declared name exemption in KeyProvedElsewhere is not
-// something the label replaces: it is the ARGUMENT for the label.
+// column is set from spec.Type, an already-validated interface_type name. So an
+// interface's only string is the protocol it speaks, which says what it talks
+// and nothing about what it is FOR, and the declared name exemption in
+// KeyProvedElsewhere is not something the label replaces: it is the ARGUMENT for
+// the label.
 //
-// Which is why the label has to be settable AT CREATE and not only on a
-// following patch. An interface that can only be told apart after a second call
-// is one an operator cannot tell apart at the moment they make it, which is
-// exactly when there are three of them on the screen.
-func TestAnInterfacesLabelIsTheOnlyThingTellingTwoApart(t *testing.T) {
+// One correction to the premise this was argued from, measured here rather than
+// assumed: a component can hold at most ONE interface per protocol today, since
+// the unique index is (component, name) and the name IS the protocol. The
+// three-`ssh`-interfaces case the epic argued from is not reachable, and the
+// conflict is pinned below so the claim cannot quietly become true either way.
+// What IS true today is narrower and enough: every SSH interface in the estate
+// reads `ssh`, on its component and in the estate-wide list, so the label is the
+// only place an operator can say which device role this connection plays.
+//
+// It is settable AT CREATE for the same reason. An interface that can only be
+// labelled by a following call is unlabelled at the moment it is made, which is
+// when the operator knows what they made it for.
+func TestAnInterfacesLabelIsItsOnlyOperatorTypedString(t *testing.T) {
 	gw := tagGateway(t)
 	ctx := context.Background()
 
@@ -443,10 +453,6 @@ func TestAnInterfacesLabelIsTheOnlyThingTellingTwoApart(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 
-	// Two interfaces of ONE type on one component, distinguished by nothing but
-	// the label. Their derived names collide by construction, which is the shape
-	// of the problem: the unique index is (component, name), so the second one
-	// takes a name the platform disambiguates rather than one an operator chose.
 	first, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{
 		Type: "ssh", Component: strptr(comp.Name), Label: "Control processor",
 	}, all)
@@ -488,6 +494,17 @@ func TestAnInterfacesLabelIsTheOnlyThingTellingTwoApart(t *testing.T) {
 	}
 	if kept.Label != relabelled {
 		t.Errorf("label = %q after a params-only patch, want it untouched", kept.Label)
+	}
+
+	// A SECOND interface of the same protocol is refused, which is the fact the
+	// D2 argument got wrong and the reason the label's case is the narrower one
+	// stated above rather than "tell three ssh interfaces apart".
+	if _, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{
+		Type: "ssh", Component: strptr(comp.Name), Label: "Second control processor",
+	}, all); !errors.Is(err, storage.ErrInterfaceExists) {
+		t.Errorf("a second ssh interface on one component = %v, want ErrInterfaceExists.\n"+
+			"If this now succeeds, the label is what tells the two apart and the tests and docs "+
+			"that say a component holds one interface per protocol are stale (#613).", err)
 	}
 
 	// An interface created with no label reads back empty and renders its
