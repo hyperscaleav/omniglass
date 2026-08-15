@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createSignal, on, type JSX } from "solid-js";
+import { For, Show, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { Sliders } from "./icons";
 import KVStacked from "./KVStacked";
@@ -99,8 +99,9 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
     if (iface.component_id) await qc.invalidateQueries({ queryKey: REACHABILITY_KEY(iface.component_id) });
   }
 
-  createEffect(on(edit.editing, (editing) => {
-    if (!editing) return;
+  // Fill the drafts from the row as it stands; bound below, the slot runs this
+  // on entering edit and again on reseed (#748).
+  const seedDrafts = () => {
     const iface = i();
     setNode(iface?.node ?? "");
     setTarget(iface ? interfaceTarget(iface) : "");
@@ -108,7 +109,7 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
     // would turn "no label" into a label the operator never typed.
     setLabel(iface?.label ?? "");
     setErr(null);
-  }));
+  };
 
   async function removeInterface() {
     const iface = i();
@@ -149,6 +150,7 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
 
   edit.bind({
     editable: () => !!i() && can(me.data, "interface", "update"),
+    seed: seedDrafts,
     save,
     destructive: () => (i() && can(me.data, "interface", "delete") ? { label: "Delete", tone: "danger", onClick: removeInterface } : undefined),
   });

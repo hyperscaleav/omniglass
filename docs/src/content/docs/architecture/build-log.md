@@ -5389,3 +5389,10 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   the Users port verbatim: `?g=<id>&edit=1` opens the group's blade already editing behind the
   manage gate, the create flow hands off through that URL, and `openGroupInEdit` /
   `consumePendingGroupEdit` retire. No console one-shot edit signal remains (#762).
+
+- **Every blade seeds its edit drafts through the slot.** The thirteen blades still carrying the
+  hand-written `createEffect(on(edit.editing, ...))` seeder (the twelve #748 listed plus
+  SystemTypes, an omission its count missed) convert to `edit.bind({ seed })`: the slot runs the
+  seeder on entering edit and again on `reseed()`, so the pattern is uniform when the next
+  registry grows a `:restore` leg. Behavior unchanged per blade, the existing suites the gate;
+  the page-detail flavor of the same hand-rolled seeding is #769 (#748).
