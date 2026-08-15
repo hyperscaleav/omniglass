@@ -193,6 +193,13 @@ describe("the location zoom", () => {
     expect(chips[1].hasAttribute("disabled")).toBe(false);
   });
 
+  it("a name-shaped zoom link resolves to the uuid, keeping the param (#759's rule)", async () => {
+    mount(`/web/locations/west?zoom=1`);
+    await waitFor(() => expect(window.location.pathname).toBe(`/web/locations/${uuidFor("lz-b1")}`));
+    expect(window.location.search).toContain("zoom=1");
+    expect(screen.getByTestId(`zoomband-${uuidFor("lz-room")}`)).toBeTruthy();
+  });
+
   it("without the zoom param the route renders the inventory detail, untouched", () => {
     mount(`/web/locations/${uuidFor("lz-hq")}`);
     expect(screen.queryByTestId("zoom-ladder")).toBeNull();

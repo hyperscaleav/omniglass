@@ -1,4 +1,4 @@
-import { For, Show, createMemo } from "solid-js";
+import { For, Show, createEffect, createMemo } from "solid-js";
 import { useNavigate, useParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
@@ -36,6 +36,18 @@ export default function LocationZoom() {
   const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
 
   const anchor = createMemo(() => (view.data ? locationIndex(view.data).get(id()) : undefined));
+
+  // A name-shaped address resolves to the uuid and the URL is rewritten to
+  // keep saying what it means, query string included (#759's rule, applied
+  // here because the zoom branch runs before the inventory detail's own
+  // fallback ever could). Only an unambiguous name resolves: names scope to
+  // placement, so a bare name can legally be two rows, and guessing between
+  // them would open the wrong building.
+  createEffect(() => {
+    if (!view.data || anchor()) return;
+    const matches = (view.data.locations ?? []).filter((l) => l.name === id());
+    if (matches.length === 1) navigate(`/locations/${matches[0].id}?zoom=1`, { replace: true });
+  });
   const bands = createMemo<Band[]>(() => (view.data ? bandsOf(view.data, byChildOfLocation(id())) : []));
   const holes = createMemo(() => (view.data ? holesUnder(id(), view.data) : new Map()));
   const chips = createMemo(() => (view.data ? zoomChips("location", { locationId: id() }, view.data) : []));
