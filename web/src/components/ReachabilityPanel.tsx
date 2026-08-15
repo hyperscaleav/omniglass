@@ -131,7 +131,7 @@ function InterfaceRow(p: { iface: ReachInterface; manageId?: string; onManage?: 
             type="button"
             class="flex shrink-0 items-center px-2.5 text-base-content/40 hover:bg-base-content/5 hover:text-base-content"
             title="Manage interface"
-            aria-label={`Manage ${p.iface.interface}`}
+            aria-label={`Manage ${entityLabel({ name: p.iface.interface, label: p.iface.label })}`}
             onClick={() => p.onManage!(p.manageId!)}
           >
             <Sliders size={15} />
