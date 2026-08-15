@@ -5,10 +5,14 @@ description: "The Tags directory: mint the governed key vocabulary, set what eac
 
 **Catalog, under Metadata: Tags** (with `tag:read`) is the directory of the governed [tag](/architecture/tags/) key
 vocabulary: the tenant-wide set of `key: value` label names an operator binds onto the estate. Each row
-shows the **name** (the key a binding then carries), its **Applies to** (the entity kinds it may bind to,
-or **Any**), and its **Binding** (**cascades** to descendants, or **flat**, a per-entity label).
+shows the **name** (the key a binding then carries) under the **label** where the key has one, its
+**Applies to** (the entity kinds it may bind to, or **Any**), and its **Binding** (**cascades** to
+descendants, or **flat**, a per-entity label). The list reads in label order, with the keys that
+carry none at the end.
 
-- **New tag** (with `tag:create`, an admin permission) opens a create **drawer**: give it a **name**
+- **New tag** (with `tag:create`, an admin permission) opens a create **drawer**: type a **label**
+  ("Cost Center") and the **name** follows it in kebab (`cost-center`) until you edit the name
+  yourself. The label is optional and free-form; the name is what every binding carries
   (lowercase letters, digits, and hyphens, no dots and no underscores, unique tenant-wide), check the
   entity kinds it **applies to** (leave
   all unchecked for any), toggle whether its bindings **cascade**, and set its **value domain**, either free

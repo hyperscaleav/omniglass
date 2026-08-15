@@ -9,6 +9,7 @@ sidebar:
 
 import SchemaTable from '../../../components/SchemaTable.astro';
 import IdentityShapes from '../../../components/IdentityShapes.astro';
+import UnlabelledTables from '../../../components/UnlabelledTables.astro';
 import RuleLanguage from '../../../components/RuleLanguage.astro';
 import LabelDataMap from '../../../components/LabelDataMap.astro';
 import SeededSet from '../../../components/SeededSet.astro';
@@ -673,7 +674,7 @@ Three things, and no fourth:
   address carry (the `rm215a` in `boi.17c.rm215a`). Renameable is the point: `cisco-room-bar` is a
   typo or a rebrand away from being wrong forever if it cannot change.
 - **label**, an optional friendly string a human reads ("HQ Boardroom DSP"). Absent is normal:
-  `crestron` needs no label, and a tag never has one. Absent has exactly one spelling, **SQL NULL**:
+  `crestron` needs no label. Absent has exactly one spelling, **SQL NULL**:
   the column is nullable, and the rule that keeps the empty string out of it lives in Go at the
   gateway write path, where every other rule of its kind lives
   ([ADR-0118](/architecture/decisions/#adr-0118-the-friendly-string-an-operator-reads-is-a-label-and-unset-is-sql-null)).
@@ -712,6 +713,23 @@ name-shaped from a distance and must never acquire the name rule.
 
 Everything else is **id-only**: a join row and a telemetry row are addressed by uuid because nobody
 names them. An operator names the component, not the metric.
+
+### Which tables carry a label
+
+Every table an operator names carries one, and the declaration says so rather than leaving it to be
+noticed. That is not how it started: the shape said what the identifier was and nothing about the
+friendly string beside it, so `tag`, `variable`, `secret` and `interface` went without a label, no
+guard failed, and an operator who could no longer write `cost_center` (the tightening
+[ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)
+made) had nowhere to write "Cost Center" instead. All four carry one now
+([ADR-0119](/architecture/decisions/#adr-0119-a-table-an-operator-names-carries-a-label-or-declares-why-it-does-not)),
+and a name-bearing table that carries neither the column nor a reason fails the guard.
+
+A table nobody names is outside the rule and carries no label at all: there is no name for an unset
+one to fall back to, so the column could only ever render a blank. The exceptions, which are tables
+an operator names that still carry no label, are these, with the reason each one gives:
+
+<UnlabelledTables />
 
 ## An address: a uuid or a dotted path
 

@@ -13,9 +13,11 @@ same way, but shown in the clear because it is not sensitive. The model undernea
 and credentials](/architecture/variables/).
 
 **Values > Variables** (with `variable:read`) is the directory of every
-[variable](/architecture/variables/). Each row shows its name, a **type badge** (`string`,
-`int`, `float`, `bool`, `json`), a **scope** label (Platform, or the location / system / component it
-attaches to), and the **value in the clear** (no mask, no reveal).
+[variable](/architecture/variables/). Each row shows its name under its **label** where it has one, a
+**type badge** (`string`, `int`, `float`, `bool`, `json`), a **scope** label (Platform, or the
+location / system / component it attaches to), and the **value in the clear** (no mask, no reveal).
+The list reads in label order, with the variables that carry none at the end, and a variable with no
+label reads as its name exactly.
 
 ::screenshot{#variables}
 

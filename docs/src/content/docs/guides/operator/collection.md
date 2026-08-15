@@ -46,12 +46,16 @@ gated by `node:read`): the node's own recent operational log lines, newest first
 An interface is an **API on a component** that a node reaches for, and it lives **on the
 component**: there is no standalone Interfaces surface. Open a component from **Inventory >
 Components** (with `interface:read`) and its interfaces read as a panel on the detail, each
-showing the interface's protocol name, its reachability, its node placement, and its probed
-target. An interface is **named by its protocol**: you pick a **type** (the transport) and the
-interface takes that protocol as its name, unique within its component, so one component can
-have one `tcp` and one `http`.
+showing the interface's **label** over its protocol name, its reachability, its node placement, and
+its probed target. An interface is **named by its protocol**: you pick a **type** (the transport) and
+the interface takes that protocol as its name, unique within its component, so one component can
+have one `tcp` and one `http`. Because you never type that name, the **label** is the one string on
+an interface that is yours: give it one ("Control processor") when a component has more than one
+interface of a type, or the two rows read alike. It is optional, and an interface without one reads
+its protocol name exactly.
 
-- With `interface:create`, **Add interface** on the component detail creates one: choose a
+- With `interface:create`, **Add interface** on the component detail creates one: give it a
+  **label** (optional, and the only name-like string you type here), choose a
   **type** (the console picker offers `icmp` and `tcp` today; the `ssh` and `http` types exist
   through the API and CLI, probing as a tcp connect; there is no free-text name),
   a node placement, and a target (`host:port` for the tcp-family transports, `host` for icmp).
@@ -80,7 +84,8 @@ collects, add or remove the **interface**; there is no task create, edit, or del
 ## Reachability
 
 Every component's detail carries an **Interfaces** panel showing composed reachability: is each
-of its interfaces reachable, and why. One row per interface shows the interface and its endpoint, a **verdict
+of its interfaces reachable, and why. One row per interface shows the interface (its label, or its
+protocol name where it has none) and its endpoint, a **verdict
 pill** (responding, down, stale, or unknown), an **availability strip** drawn from the
 verdict's up/down transitions over time, and an expandable **gate breakdown** (the L3/L4 ping
 and port probes this slice ships) with each probe's signal and timing, then the composed
