@@ -110,12 +110,12 @@ describe("the component leaf", () => {
   it("distinguishes a stale sample under a healthy node from an offline node", () => {
     mount();
     const chip = screen.getByTestId("collection-ssh");
-    expect(chip.textContent).toContain("the device or the path, not collection");
+    expect(chip.textContent).toContain("check the device or the path");
   });
 
   it("a component filling no role renders without error", () => {
     mount(`/web/components/${uuidFor("cf-c-bar")}?zoom=1`, []);
-    expect(screen.getByText(/No system yet/)).toBeTruthy();
+    expect(screen.getByText(/Not in any system yet/)).toBeTruthy();
     expect(screen.getByTestId("leaf-collection")).toBeTruthy();
   });
 });

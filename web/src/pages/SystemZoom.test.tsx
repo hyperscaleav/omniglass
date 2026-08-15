@@ -136,9 +136,9 @@ describe("the system zoom", () => {
   it("marks the active alternate and renders the loser as a legal build, not outstanding work", () => {
     mount();
     const winner = screen.getByTestId("alternate-conferencing-all-in-one");
-    expect(within(winner).getByText("answering this choice")).toBeTruthy();
+    expect(within(winner).getByText("in use")).toBeTruthy();
     const loser = screen.getByTestId("alternate-conferencing-component-system");
-    expect(within(loser).getByText("a build this room did not choose")).toBeTruthy();
+    expect(within(loser).getByText("not the build in use")).toBeTruthy();
     // The loser's role card carries no verdict badge: its figures did not
     // contribute, and a badge would contradict the list beneath it.
     const codec = within(loser).getByTestId("slot-conf-codec");

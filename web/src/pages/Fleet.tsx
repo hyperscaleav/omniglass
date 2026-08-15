@@ -49,7 +49,7 @@ export default function Fleet() {
             <div class="flex min-w-0 flex-1 flex-col gap-5">
               <For each={bands()}>{(band) => <FleetBand band={band} view={view.data!} onOpen={(id) => navigate(`/locations/${encodeURIComponent(id)}?zoom=1`)} />}</For>
               <Show when={bands().length === 0}>
-                <p class="text-sm text-base-content/60">Nothing in scope yet: the canvas draws what you can read.</p>
+                <p class="text-sm text-base-content/60">Nothing in scope yet.</p>
               </Show>
             </div>
             <Show when={view.data}>{(v) => <FleetInspector view={v()} />}</Show>

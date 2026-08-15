@@ -47,7 +47,7 @@ export const navItems: NavItem[] = [
   // The fleet zoom (#633): the whole fleet on one canvas, systems as dot
   // clusters under their root locations. Gated like the place tree it draws;
   // the projection scopes each tier on its own read underneath.
-  { label: "Fleet", path: "/fleet", icon: Icons.Grid, live: true, resource: "location", hint: "Explore your environment: the whole fleet on one canvas, every system a cluster of dots coloured by what is wrong." },
+  { label: "Fleet", path: "/fleet", icon: Icons.Grid, live: true, resource: "location", hint: "Every system as a cluster of dots on one page, grouped by location and coloured by status." },
   { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
   { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering sample." },
   {

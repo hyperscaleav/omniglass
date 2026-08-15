@@ -97,7 +97,7 @@ export default function LocationZoom() {
           <div class="flex flex-col gap-5">
             <For each={bands()}>{(band) => <ZoomBand band={band} view={view.data!} />}</For>
             <Show when={bands().length === 0 && holes().size === 0}>
-              <p class="text-sm text-base-content/60">Nothing beneath this location yet.</p>
+              <p class="text-sm text-base-content/60">Nothing under this location yet.</p>
             </Show>
           </div>
           <Show when={childTypes().length > 0}>

@@ -117,7 +117,7 @@ export default function ComponentLeaf() {
 
             <section data-testid="leaf-memberships" class="flex flex-col gap-1 text-sm">
               <h2 class="text-sm font-semibold">Serving</h2>
-              <Show when={rows().length > 0} fallback={<p class="text-base-content/60">No system yet: in the fleet, awaiting commissioning.</p>}>
+              <Show when={rows().length > 0} fallback={<p class="text-base-content/60">Not in any system yet.</p>}>
                 <ul class="flex flex-col gap-1">
                   <For each={rows()}>
                     {(row) => (
@@ -160,9 +160,9 @@ export default function ComponentLeaf() {
                             {
                               {
                                 collecting: "collecting",
-                                "device-or-path": "sample stale under a healthy node: the device or the path, not collection",
-                                "node-offline": "node offline: staleness says nothing about the device",
-                                down: "device answering down",
+                                "device-or-path": "stale sample; the node is healthy, so check the device or the path",
+                                "node-offline": "node offline",
+                                down: "device reports down",
                                 unknown: "no sample yet",
                               }[state().kind]
                             }

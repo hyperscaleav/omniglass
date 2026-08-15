@@ -21,8 +21,7 @@ export default function FleetInspector(props: { view: FleetView }) {
         </div>
         <Show when={holes() > 0}>
           <p class="text-sm text-base-content/60">
-            {holes() === 1 ? "1 location has no system" : `${holes()} locations have no system`}: a dashed room is
-            waiting to be commissioned.
+            {holes() === 1 ? "1 location has no system" : `${holes()} locations have no system`}.
           </p>
         </Show>
       </div>

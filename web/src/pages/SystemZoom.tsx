@@ -113,9 +113,9 @@ export default function SystemZoom() {
                                 <span class="font-medium">{alt.name}</span>
                                 <Show
                                   when={alt.active}
-                                  fallback={<span class="text-base-content/50">a build this room did not choose</span>}
+                                  fallback={<span class="text-base-content/50">not the build in use</span>}
                                 >
-                                  <span class="rounded-md border border-base-content/20 px-1.5 py-0.5">answering this choice</span>
+                                  <span class="rounded-md border border-base-content/20 px-1.5 py-0.5">in use</span>
                                 </Show>
                               </div>
                               <div class="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
@@ -130,7 +130,7 @@ export default function SystemZoom() {
                 </For>
                 <Show when={z().noRole.length > 0}>
                   <section data-testid="no-role-strip" class="flex flex-wrap items-center gap-2 border-t border-base-content/10 pt-3 text-xs text-base-content/60">
-                    <span>In the room, filling no role:</span>
+                    <span>Members with no role:</span>
                     <For each={z().noRole}>
                       {(m) => (
                         <span class="rounded-md border border-base-content/15 px-1.5 py-0.5">
