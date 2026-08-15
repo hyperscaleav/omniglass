@@ -25,8 +25,7 @@
 // woff2 in public/fonts/, so they ship inside the binary and are served next to
 // the faces they cover. Attribution is in the repo NOTICE.
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readdir, writeFile } from "node:fs/promises";
 
 // The exact request web/index.html used to carry: IBM Plex Sans 400/500/600/700
 // plus italic 400, JetBrains Mono 400/500/600/700.
