@@ -555,7 +555,7 @@ func (UnimplementedGateway) ListSecrets(context.Context, scope.Set, bool) ([]Sec
 func (UnimplementedGateway) CreateSecret(context.Context, string, SecretSpec, scope.Set, bool) (*Secret, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateSecret(context.Context, string, string, map[string]string, scope.Set, scope.Set, bool, bool) (*Secret, error) {
+func (UnimplementedGateway) UpdateSecret(context.Context, string, string, SecretPatch, scope.Set, scope.Set, bool, bool) (*Secret, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteSecret(context.Context, string, string, scope.Set, scope.Set, bool, bool) error {

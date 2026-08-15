@@ -1,10 +1,12 @@
 package storage_test
 
 import (
+	"bytes"
 	"context"
 	"sort"
 	"testing"
 
+	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -55,7 +57,9 @@ var labelUnsetExempt = map[string]string{
 func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
-	gw, err := storage.NewPG(ctx, dsn)
+	// A provider, because one of the write paths swept here seals its fields
+	// before it stores a label beside them.
+	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
@@ -82,6 +86,15 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 
 	stem := "probe"
 	provers := map[string]func(t *testing.T) (keyCol, key string){
+		"secret": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+				Name: "lbl-sec", Label: blank, SecretType: "snmp-community", OwnerKind: "platform",
+				Fields: map[string]string{"community": "public"},
+			}, all, true); err != nil {
+				t.Fatalf("create secret: %v", err)
+			}
+			return "name", "lbl-sec"
+		},
 		"variable": func(t *testing.T) (string, string) {
 			if _, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
 				Name: "lbl-var", Label: blank, ValueType: "int", OwnerKind: "platform",
@@ -241,7 +254,9 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
 	ctx := context.Background()
 	dsn := storagetest.NewDSN(t)
-	gw, err := storage.NewPG(ctx, dsn)
+	// A provider, because one of the write paths swept here seals its fields
+	// before it stores a label beside them.
+	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}

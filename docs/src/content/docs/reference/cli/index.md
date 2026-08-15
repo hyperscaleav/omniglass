@@ -3405,6 +3405,7 @@ Seals a secret at an owner scope. Fields are validated and encrypted against the
 |---|---|---|---|
 | `--admin-sensitive` | bool | `false` | Admin-only visibility; omit to use the type default. Setting true requires the admin tier |
 | `--fields` | string | (none) | The operator field map, validated against the type shape |
+| `--label` | string | (none) | What an operator reads in lists and pickers (Polling community); omit to fall back to the name |
 | `--name` | string | (none) | The cascade name (lowercase letters, digits, and hyphens); unique per owner |
 | `--owner` | string | (none) | The owning entity's name; omit for a platform secret |
 | `--owner-kind` | string | (none) | Which tier owns this secret (the system band is retired, ADR-0052) |
@@ -3466,22 +3467,23 @@ omniglass secret reveal <id>
 
 ### `omniglass secret update`
 
-Update a secret's field values
+Update a secret
 
 ```
 omniglass secret update <id> [flags]
 ```
 
-Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
+Replaces the given field values on a secret, re-sealing secret fields, and patches its label. Only those change; name, type, and owner are fixed at creation. An omitted field keeps its value, an omitted label leaves it alone, and an empty label clears it. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--fields` | string | (none) | The field values to replace; an omitted field keeps its value |
+| `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone |
 
 Example:
 
 ```sh
-omniglass secret update <id> --fields <json>
+omniglass secret update <id>
 ```
 
 ## `omniglass secret-type`

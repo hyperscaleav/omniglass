@@ -263,3 +263,159 @@ func TestAVariablesLabelIsIndependentOfItsValue(t *testing.T) {
 		t.Errorf("relabel moved something else: %+v", moved)
 	}
 }
+
+// TestAnUnlabelledSecretSortsLast is D4 on the secret directory, which is the
+// one of the four whose list statement is built twice (an all-scope arm and a
+// scope-predicate arm) and could therefore order two different ways.
+func TestAnUnlabelledSecretSortsLast(t *testing.T) {
+	gw, _ := secretGateway(t)
+	ctx := context.Background()
+
+	for _, r := range []struct{ name, label string }{
+		{fourUnlabelled, ""},
+		{fourLabelledZ, "Zulu"},
+		{fourLabelledA, "Alpha"},
+	} {
+		if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+			Name: r.name, Label: r.label, SecretType: "snmp-community", OwnerKind: "platform",
+			Fields: map[string]string{"community": "public"},
+		}, all, true); err != nil {
+			t.Fatalf("create secret %q: %v", r.name, err)
+		}
+	}
+	secrets, err := gw.ListSecrets(ctx, all, true)
+	if err != nil {
+		t.Fatalf("list secrets: %v", err)
+	}
+	got := make([]string, 0, len(secrets))
+	for _, s := range secrets {
+		got = append(got, s.Name)
+	}
+	assertLabelOrder(t, got)
+}
+
+// TestASecretsLabelReachesEveryProjectionThatCarriesItsName is the sweep the
+// brief asked for by name. A secret is read through more shapes than any other
+// of the four, and a label that appears in the directory but not in the cascade
+// is exactly the gap this epic exists to close: the operator relabels a secret,
+// sees the new words in one list, and the effective-secrets panel on the
+// component still shows the kebab name.
+//
+// Every projection that carries the secret's NAME carries its label, and the two
+// that carry neither are named here rather than left to inference: the reveal
+// and the copy return the decrypted FIELD MAP and nothing else, no id, no name,
+// no type, so there is no identity in them for a label to be missing from.
+func TestASecretsLabelReachesEveryProjectionThatCarriesItsName(t *testing.T) {
+	gw, _ := secretGateway(t)
+	ctx := context.Background()
+
+	// The placement rules want a campus over a building over a room.
+	for _, l := range []storage.LocationSpec{
+		{Name: "campus", LocationType: "campus"},
+		{Name: "bldg", LocationType: "building", ParentName: strptr("campus")},
+		{Name: "room", LocationType: "room", ParentName: strptr("bldg")},
+	} {
+		if _, err := gw.CreateLocation(ctx, "", l, all); err != nil {
+			t.Fatalf("create location %q: %v", l.Name, err)
+		}
+	}
+	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
+		Name: "codec-1", LocationName: strptr("room"),
+	}, all, all, all, all)
+	if err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+
+	const label = "Polling community"
+	made, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+		Name: "poll-community", Label: label, SecretType: "snmp-community", OwnerKind: "location",
+		OwnerName: strptr("room"), Fields: map[string]string{"community": "public"},
+	}, all, true)
+	if err != nil {
+		t.Fatalf("create secret: %v", err)
+	}
+	if made.Label != label {
+		t.Errorf("create returned label %q, want %q", made.Label, label)
+	}
+
+	// The directory.
+	listed, err := gw.ListSecrets(ctx, all, true)
+	if err != nil {
+		t.Fatalf("list secrets: %v", err)
+	}
+	found := false
+	for _, s := range listed {
+		if s.Name == "poll-community" {
+			found = true
+			if s.Label != label {
+				t.Errorf("directory label = %q, want %q", s.Label, label)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("the secret is missing from the directory")
+	}
+
+	// The per-component cascade, which is the projection an operator actually
+	// reads on the component page.
+	resolved, err := gw.ResolveSecrets(ctx, comp.ID, all, true)
+	if err != nil {
+		t.Fatalf("resolve secrets: %v", err)
+	}
+	if len(resolved) == 0 {
+		t.Fatal("the cascade resolved nothing")
+	}
+	for _, r := range resolved {
+		if r.Name == "poll-community" && r.Label != label {
+			t.Errorf("cascade label = %q, want %q.\n"+
+				"A label in the directory and not in the cascade is the gap this epic exists to close.",
+				r.Label, label)
+		}
+	}
+
+	// The update, which returns the same shape the directory does.
+	updated, err := gw.UpdateSecret(ctx, "", made.ID, storage.SecretPatch{
+		Fields: map[string]string{"community": "private"},
+	}, all, all, true, true)
+	if err != nil {
+		t.Fatalf("update secret: %v", err)
+	}
+	if updated.Label != label {
+		t.Errorf("label = %q after a FIELD update that did not mention it, want it untouched", updated.Label)
+	}
+
+	// The reveal and the copy carry no identity at all, so there is nothing for
+	// the label to be absent from. Pinned so a later change that adds identity to
+	// either one has to decide about the label deliberately.
+	fields, err := gw.RevealSecret(ctx, "", made.ID, all, all, true)
+	if err != nil {
+		t.Fatalf("reveal: %v", err)
+	}
+	if _, ok := fields["label"]; ok {
+		t.Error("the reveal returned a `label` key: it returns the decrypted field map and nothing else, " +
+			"so a label here would be indistinguishable from a field called label")
+	}
+	if fields["community"] != "private" {
+		t.Errorf("revealed community = %q, want private", fields["community"])
+	}
+
+	// And a relabel moves nothing else, including the sealed value: the fields
+	// are bound to (owner, name, field) as AAD, so a write that touched the name
+	// would make them undecryptable.
+	relabelled := "SNMP community (read-only)"
+	moved, err := gw.UpdateSecret(ctx, "", made.ID, storage.SecretPatch{Label: &relabelled}, all, all, true, true)
+	if err != nil {
+		t.Fatalf("relabel: %v", err)
+	}
+	if moved.Label != relabelled || moved.Name != "poll-community" || moved.ID != made.ID {
+		t.Errorf("relabel moved something else: %+v", moved)
+	}
+	after, err := gw.RevealSecret(ctx, "", made.ID, all, all, true)
+	if err != nil {
+		t.Fatalf("reveal after relabel: %v", err)
+	}
+	if after["community"] != "private" {
+		t.Errorf("revealed community = %q after a relabel, want private: the sealed value is bound to the "+
+			"NAME, and a relabel is not a rename", after["community"])
+	}
+}

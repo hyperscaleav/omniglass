@@ -2710,8 +2710,8 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Update a secret's field values
-         * @description Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
+         * Update a secret
+         * @description Replaces the given field values on a secret, re-sealing secret fields, and patches its label. Only those change; name, type, and owner are fixed at creation. An omitted field keeps its value, an omitted label leaves it alone, and an empty label clears it. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
          */
         patch: operations["update-secret"];
         trace?: never;
@@ -4572,6 +4572,8 @@ export interface components {
             fields: {
                 [key: string]: string;
             };
+            /** @description What an operator reads in lists and pickers (Polling community); omit to fall back to the name */
+            label?: string;
             /** @description The cascade name (lowercase letters, digits, and hyphens); unique per owner */
             name: string;
             /** @description The owning entity's name; omit for a platform secret */
@@ -6423,6 +6425,8 @@ export interface components {
             depth: number;
             fields: components["schemas"]["SecretFieldBody"][] | null;
             id: string;
+            /** @description The friendly string an operator reads; absent when unset */
+            label?: string;
             name: string;
             /** @description The owning entity's id, the canonical handle; absent for a platform owner */
             owner_id?: string;
@@ -6611,6 +6615,8 @@ export interface components {
             admin_sensitive: boolean;
             fields: components["schemas"]["SecretFieldBody"][] | null;
             id: string;
+            /** @description The friendly string an operator reads; absent when unset, and a surface with none renders the name verbatim */
+            label?: string;
             name: string;
             /** @description The owning entity's id, the canonical handle; absent for a global owner */
             owner_id?: string;
@@ -7396,9 +7402,11 @@ export interface components {
              */
             readonly $schema?: string;
             /** @description The field values to replace; an omitted field keeps its value */
-            fields: {
+            fields?: {
                 [key: string]: string;
             };
+            /** @description A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone */
+            label?: string;
         };
         UpdateStandardInputBody: {
             /**

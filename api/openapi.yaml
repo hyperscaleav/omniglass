@@ -1245,6 +1245,10 @@ components:
             type: string
           description: The operator field map, validated against the type shape
           type: object
+        label:
+          description: What an operator reads in lists and pickers (Polling community); omit to fall back to the name
+          maxLength: 200
+          type: string
         name:
           description: The cascade name (lowercase letters, digits, and hyphens); unique per owner
           maxLength: 100
@@ -4669,6 +4673,9 @@ components:
             - "null"
         id:
           type: string
+        label:
+          description: The friendly string an operator reads; absent when unset
+          type: string
         name:
           type: string
         owner_id:
@@ -5017,6 +5024,9 @@ components:
             - array
             - "null"
         id:
+          type: string
+        label:
+          description: The friendly string an operator reads; absent when unset, and a surface with none renders the name verbatim
           type: string
         name:
           type: string
@@ -6328,8 +6338,10 @@ components:
             type: string
           description: The field values to replace; an omitted field keeps its value
           type: object
-      required:
-        - fields
+        label:
+          description: A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone
+          maxLength: 200
+          type: string
       type: object
     UpdateStandardInputBody:
       additionalProperties: false
@@ -11344,7 +11356,7 @@ paths:
       x-omniglass-permission: secret:delete
       x-omniglass-platform-permission: platform:delete
     patch:
-      description: Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
+      description: Replaces the given field values on a secret, re-sealing secret fields, and patches its label. Only those change; name, type, and owner are fixed at creation. An omitted field keeps its value, an omitted label leaves it alone, and an empty label clears it. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
       operationId: update-secret
       parameters:
         - description: The secret's id
@@ -11373,7 +11385,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Update a secret's field values
+      summary: Update a secret
       x-omniglass-permission: secret:update
       x-omniglass-platform-permission: platform:update
   /secrets/{id}:copy:

@@ -46,12 +46,12 @@ describe("secrets data layer", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ id: uuidFor("sec_123"), name: "poll", secret_type: "snmp-community", owner_kind: "platform", fields: [] }),
     );
-    await updateSecret("sec_123", { community: "rotated" });
+    await updateSecret("sec_123", { fields: { community: "rotated" }, label: "Polling community" });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("PATCH");
     expect(req.url).toContain("/api/v1/secrets/sec_123");
     const sent = await req.json();
-    expect(sent).toMatchObject({ fields: { community: "rotated" } });
+    expect(sent).toMatchObject({ fields: { community: "rotated" }, label: "Polling community" });
   });
 
   it("reveals a secret's plaintext by id", async () => {

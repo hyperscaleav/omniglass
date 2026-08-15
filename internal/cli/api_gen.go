@@ -4430,6 +4430,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fAdminSensitive bool
 				var fFields string
+				var fLabel string
 				var fName string
 				var fOwner string
 				var fOwnerKind string
@@ -4449,6 +4450,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("fields") {
 							body["fields"] = jsonOrString(fFields)
 						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
@@ -4467,6 +4471,7 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().BoolVar(&fAdminSensitive, "admin-sensitive", false, "Admin-only visibility; omit to use the type default. Setting true requires the admin tier")
 				cmd.Flags().StringVar(&fFields, "fields", "", "The operator field map, validated against the type shape")
 				_ = cmd.MarkFlagRequired("fields")
+				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists and pickers (Polling community); omit to fall back to the name")
 				cmd.Flags().StringVar(&fName, "name", "", "The cascade name (lowercase letters, digits, and hyphens); unique per owner")
 				_ = cmd.MarkFlagRequired("name")
 				cmd.Flags().StringVar(&fOwner, "owner", "", "The owning entity's name; omit for a platform secret")
@@ -4532,11 +4537,12 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fFields string
+				var fLabel string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
-					Short:   "Update a secret's field values",
-					Long:    "Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.",
-					Example: "  omniglass secret update <id> --fields <json>",
+					Short:   "Update a secret",
+					Long:    "Replaces the given field values on a secret, re-sealing secret fields, and patches its label. Only those change; name, type, and owner are fixed at creation. An omitted field keeps its value, an omitted label leaves it alone, and an empty label clears it. Gated by secret:update, plus platform:update when the secret sits at the platform tier.",
+					Example: "  omniglass secret update <id>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/secrets/%s", url.PathEscape(args[0]))
@@ -4544,11 +4550,14 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("fields") {
 							body["fields"] = jsonOrString(fFields)
 						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
 						return runAPICommand(cmd, "PATCH", path, body)
 					},
 				}
 				cmd.Flags().StringVar(&fFields, "fields", "", "The field values to replace; an omitted field keeps its value")
-				_ = cmd.MarkFlagRequired("fields")
+				cmd.Flags().StringVar(&fLabel, "label", "", "A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone")
 				return cmd
 			}()
 			return cmd
