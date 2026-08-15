@@ -5242,12 +5242,11 @@ capabilities ship, so an early slice can prove a seam without moving any page of
 
 - **The column an operator reads is called `label`**
   ([#613](https://github.com/hyperscaleav/omniglass/issues/613), ADR-0118). `display_name` becomes
-  `label` on all twenty-three tables that carry it, `display_name_generated` becomes
-  `label_generated` on the three that carry a pen, and the column is `NOT NULL DEFAULT ''`
-  everywhere, so "unset" has one spelling instead of three. One sweep: three migrations (the rename,
-  the null-collapse backfill, the floor), the Storage Gateway, the Huma bodies, every generated
-  artifact, the console, and the docs. A breaking wire change, and the CLI flag `--display-name`
-  becomes `--label`.
+  `label` on all twenty-three tables that carry it, and `display_name_generated` becomes
+  `label_generated` on the three that carry a pen. The column is **nullable**, and "unset" is SQL
+  NULL and nothing else, normalized in Go at the gateway write path. One sweep: the migrations, the
+  Storage Gateway, the Huma bodies, every generated artifact, the console, and the docs. A breaking
+  wire change, and the CLI flag `--display-name` becomes `--label`.
 
   The rename **finishes a word rather than introducing one**. `internal/label/` is the rule engine,
   `label_rule` is a column on five tables plus a table of its own, and the API already said
@@ -5256,14 +5255,26 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `display_name_generated`.
 
   **The ordering was the trap, and it had already sprung.** Postgres sorts NULL last under a default
-  `ASC` and the empty string FIRST, so a bare `order by display_name, name` means opposite things
+  `ASC` and the empty string FIRST, so an `order by display_name, name` means opposite things
   depending on which spelling of unset the column carries. Seven registry lists were spelled that
-  way, and every one of those tables was already `NOT NULL`: vendor, driver, product, standard,
+  way, and every one of those tables was storing `''`: vendor, driver, product, standard,
   system_type, component_type and location_type were all already floating their unlabelled rows to
-  the TOP of the picker, and normalizing the eleven nullable tables would have moved the rest the
-  same way with nothing failing. The test came first and was RED on all seven; the fix spells every
-  such ordering `order by nullif(label, '') nulls last, name`, which reads the same on a nullable
-  column, a `NOT NULL` one, and the mix that exists between two migrations.
+  the TOP of the picker. The test came first and was RED on all seven.
+
+  **Then the storage decision reversed, before merge, on the strength of this slice's own diff.**
+  The first version of it made the column `NOT NULL DEFAULT ''`, which forced all seven of those
+  orderings to be written `order by nullif(label, '') nulls last`. Seven reads undoing the storage
+  choice in one slice is the schema telling you which value it should have stored. `label` is
+  nullable now, unset is NULL, the orderings are `order by label nulls last, name`, and what keeps
+  NULL the only spelling is `labelOrNull` / `labelPatch` in `internal/storage/label_unset.go`, the
+  one place the rule lives. The ordering test stayed RED through the reversal and green after it,
+  re-run against the new spelling rather than assumed equivalent, and it now guards the WRITE side:
+  break the helper or miss a create path and it goes red on that registry, which is how
+  `CreateStandard` was caught still binding its label raw.
+
+  A PATCH carries a set flag beside the value, because clearing a label and leaving it alone are
+  different instructions that both arrive as SQL NULL. Reads coalesce, so nothing above the gateway
+  learns the column is nullable and no generated artifact moves except the schema facts.
 
   Two things the sweep had to be told about. `registry_shadow.image` is an operator's forked copy of
   a registry row stored as jsonb keyed by column name, so a column rename cannot reach it and the

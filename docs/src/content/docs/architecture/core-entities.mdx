@@ -673,15 +673,15 @@ Three things, and no fourth:
   address carry (the `rm215a` in `boi.17c.rm215a`). Renameable is the point: `cisco-room-bar` is a
   typo or a rebrand away from being wrong forever if it cannot change.
 - **label**, an optional friendly string a human reads ("HQ Boardroom DSP"). Absent is normal:
-  `crestron` needs no label, and a tag never has one. Absent has exactly one spelling, the empty
-  string: the column is `NOT NULL DEFAULT ''` on every table that carries it, so no projection has
-  to decide whether `NULL` and `''` mean the same thing
-  ([ADR-0118](/architecture/decisions/#adr-0118-the-friendly-string-an-operator-reads-is-a-label-and-unset-is-the-empty-string)).
-  A surface with no label renders the name **verbatim**, never re-cased or prettified. That one
-  spelling has a consequence worth stating where the rule is: Postgres sorts `NULL` last and `''`
-  first, so a registry list ordered by the label spells its unset tail out,
-  `order by nullif(label, '') nulls last, name`, rather than letting the column's nullability decide
-  which end of the list the unlabelled rows land on.
+  `crestron` needs no label, and a tag never has one. Absent has exactly one spelling, **SQL NULL**:
+  the column is nullable, and the rule that keeps the empty string out of it lives in Go at the
+  gateway write path, where every other rule of its kind lives
+  ([ADR-0118](/architecture/decisions/#adr-0118-the-friendly-string-an-operator-reads-is-a-label-and-unset-is-sql-null)).
+  A read projects `coalesce(label, '')`, so nothing above the Storage Gateway has to know. A surface
+  with no label renders the name **verbatim**, never re-cased or prettified. The one spelling is
+  what lets a registry list say `order by label nulls last, name` and mean it: Postgres sorts NULL
+  last already, and an ordering that had to say `nullif(label, '')` would be a read undoing the way
+  the value was stored.
 
 Because the id is what everything stores, `audit_log.resource_id` included, a rename moves exactly
 one column and the history of the row survives it intact. Changing a name is therefore its own act
