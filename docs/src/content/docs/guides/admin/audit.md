@@ -4,11 +4,22 @@ description: "The read-only record of every privileged action and every sign-in,
 screenshots:
   - id: audit
     path: /web/audit
-    alt: "The audit trail: every privileged action and sign-in, newest first, with who, what, and the resource."
+    alt: "The audit trail: every privileged action and sign-in, newest first, with who, what, and the resource. Each When cell is a flat panel because the seed-time timestamps are masked at capture."
     # Mask the timestamp and id columns: both regenerate every seed (a v7 uuid
     # embeds the seed time), so masking keeps the image byte-stable for the gate.
+    #
+    # The When mask names the CELL (`xpath=ancestor::td[1]`), not the text inside
+    # it. Playwright paints a mask over whatever the selector resolves to, and a
+    # `text=` selector resolves to the innermost span, so a mask on the text is
+    # the size of the text: `toLocaleString` does not zero-pad the hour, so the
+    # box is 7px narrower before 10 o'clock and a clock rollover repaints it
+    # (#773). The cell is pinned at 190px by the column descriptor.
+    #
+    # The Id mask stays on the text: a uuid is a fixed 36 characters in a
+    # monospace face, so its box does not move, and the enclosing cell is the
+    # Id column, which no descriptor pins.
     mask:
-      - "text=/\\d+\\/\\d+\\/\\d{4}/"
+      - "text=/\\d+\\/\\d+\\/\\d{4}/ >> xpath=ancestor::td[1]"
       - "text=/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/"
 ---
 
