@@ -8,7 +8,11 @@
 # frontmatter from every docs page, so a new shot is a frontmatter edit only.
 #
 # Determinism: capture runs in a pinned Playwright image, so raster output is
-# reproducible. The dev seed still generates random UUIDs (avatar hues, audit ids),
+# reproducible, and the console serves its own typefaces from the binary under
+# test, so no shot depends on reaching a font CDN (#775: two shots that lost that
+# race rendered in fallback metrics and were written anyway). A shot not rendering
+# in those faces aborts the capture rather than being written.
+# The dev seed still generates random UUIDs (avatar hues, audit ids),
 # so the regions that render them (id subtexts, seed-time stamps) are masked in
 # each page's frontmatter; the freshness gate (docs-shots-diff.mjs) then compares
 # at zero tolerance, any unmasked pixel change failing it (#398, #623).

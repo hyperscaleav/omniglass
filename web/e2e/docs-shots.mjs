@@ -14,6 +14,7 @@ import { chromium } from '@playwright/test';
 import matter from 'gray-matter';
 import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { assertFontsRendered, watchFontRequests } from './fontguard.mjs';
 
 const BASE = process.env.OG_E2E_BASE ?? 'http://localhost:8080';
 const TOKEN = process.env.OG_TOKEN ?? '';
@@ -21,13 +22,14 @@ const CONTENT = 'docs/src/content/docs';
 // Output dir is overridable so the freshness gate can capture into a temp dir and
 // diff it against the committed images (see docs-shots-diff.mjs).
 const OUT = process.env.DOCS_SHOTS_OUT ?? 'docs/public/screenshots';
-// Optional egress proxy for the browser, for capture hosts whose network cannot
-// reach the web fonts directly (a sandboxed or air-gapped runner). The console
-// under test stays direct: the OG_E2E_BASE host is always bypassed. Rendering
-// with the real fonts matters because the freshness gate compares rasters; a
-// fallback-font capture diffs every text pixel. Unset (the default, including
-// CI) means no proxy, exactly the old behavior.
-const PROXY = process.env.DOCS_SHOTS_PROXY ?? '';
+// There is no font proxy here any more. DOCS_SHOTS_PROXY existed because the
+// console fetched its typefaces from a font CDN, so a capture host that could not
+// reach fonts.gstatic.com rendered every shot in fallback metrics; the escape
+// hatch was an egress proxy for the browser. The console now serves both families
+// from its own origin (web/src/fonts.css, embedded in the binary under test), so
+// the capture makes no request off the OG_E2E_BASE host at all and the hatch has
+// nothing left to open (#775).
+//
 // Optional IANA zone for the capture browser (e.g. DOCS_SHOTS_TZ=Asia/Kolkata),
 // applied as the context's timezoneId. Unset (the default, including CI) renders
 // in the container's own zone, exactly the old behavior.
@@ -75,9 +77,7 @@ for (const s of specs) {
 }
 
 await mkdir(OUT, { recursive: true });
-const browser = await chromium.launch(
-  PROXY ? { proxy: { server: PROXY, bypass: new URL(BASE).hostname } } : {},
-);
+const browser = await chromium.launch();
 
 for (const spec of specs) {
   const ctx = await browser.newContext({
@@ -87,6 +87,9 @@ for (const spec of specs) {
     ...(TZ ? { timezoneId: TZ } : {}),
   });
   const page = await ctx.newPage();
+  // Attached before navigation so a font file that 404s or never arrives is
+  // recorded rather than inferred from the raster later (#775).
+  const failedFontRequests = watchFontRequests(page);
   if ((spec.auth ?? true) && TOKEN) {
     await page.addInitScript((t) => localStorage.setItem('og-token', t), TOKEN);
   }
@@ -99,6 +102,11 @@ for (const spec of specs) {
     await page.waitForTimeout(400);
   }
   await page.waitForTimeout(800);
+  // A shot rendered in the wrong typeface is not a shot of the console, and the
+  // gate that compares it at zero tolerance cannot tell that apart from UI drift.
+  // Refuse to write it (#775): this is what silently shipped two fallback-font
+  // PNGs and turned main red on a PR that changed no UI.
+  await assertFontsRendered(page, spec.id, failedFontRequests);
   // animations/caret disabled and non-deterministic regions masked so the raster
   // is byte-stable for the diff gate.
   //
