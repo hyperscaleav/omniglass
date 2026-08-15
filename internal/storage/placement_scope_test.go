@@ -49,8 +49,8 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create into the readable room: %v", err)
 	}
-	if !strings.HasPrefix(c.DisplayName, "Mine") {
-		t.Fatalf("in-scope create stored %q, want the room's label in it", c.DisplayName)
+	if !strings.HasPrefix(c.Label, "Mine") {
+		t.Fatalf("in-scope create stored %q, want the room's label in it", c.Label)
 	}
 
 	// The room it may not read is refused, and refused as the non-disclosing
@@ -77,8 +77,8 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wide create into the same room: %v", err)
 	}
-	if !strings.HasPrefix(leaked.DisplayName, "Theirs") {
-		t.Errorf("wide create stored %q, want the room's label: the refusal above proves nothing otherwise", leaked.DisplayName)
+	if !strings.HasPrefix(leaked.Label, "Theirs") {
+		t.Errorf("wide create stored %q, want the room's label: the refusal above proves nothing otherwise", leaked.Label)
 	}
 	leaked, err = gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "panel-sys", ProductName: strptr(qm55), SystemName: strptr("board-theirs"),
@@ -86,8 +86,8 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wide create into the same system: %v", err)
 	}
-	if !strings.Contains(leaked.DisplayName, "Boardroom") {
-		t.Errorf("wide create stored %q, want the system type's label in it", leaked.DisplayName)
+	if !strings.Contains(leaked.Label, "Boardroom") {
+		t.Errorf("wide create stored %q, want the system type's label in it", leaked.Label)
 	}
 }
 
@@ -160,8 +160,8 @@ func TestASystemCreateBindsOnlyALocationItCanRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create into the readable room: %v", err)
 	}
-	if !strings.HasPrefix(s.DisplayName, "Mine") {
-		t.Fatalf("in-scope create stored %q, want the room's label in it", s.DisplayName)
+	if !strings.HasPrefix(s.Label, "Mine") {
+		t.Fatalf("in-scope create stored %q, want the room's label in it", s.Label)
 	}
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "board-theirs", SystemTypeID: strptr("board"), LocationName: &theirs.Name,
@@ -174,8 +174,8 @@ func TestASystemCreateBindsOnlyALocationItCanRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wide create into the same room: %v", err)
 	}
-	if !strings.HasPrefix(leaked.DisplayName, "Theirs") {
-		t.Errorf("wide create stored %q, want the room's label: the refusal above proves nothing otherwise", leaked.DisplayName)
+	if !strings.HasPrefix(leaked.Label, "Theirs") {
+		t.Errorf("wide create stored %q, want the room's label: the refusal above proves nothing otherwise", leaked.Label)
 	}
 }
 
@@ -226,15 +226,15 @@ func TestAMoveBindsOnlyADestinationItCanRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wide move: %v", err)
 	}
-	if !strings.HasPrefix(moved.DisplayName, "Theirs") {
-		t.Errorf("wide move stored %q, want the destination's label: the refusal above proves nothing otherwise", moved.DisplayName)
+	if !strings.HasPrefix(moved.Label, "Theirs") {
+		t.Errorf("wide move stored %q, want the destination's label: the refusal above proves nothing otherwise", moved.Label)
 	}
 	movedSys, err := gw.MoveSystem(ctx, "", "board", storage.SystemMove{LocationName: &theirs.Name}, all, all, all)
 	if err != nil {
 		t.Fatalf("wide move: %v", err)
 	}
-	if !strings.HasPrefix(movedSys.DisplayName, "Theirs") {
-		t.Errorf("wide move stored %q, want the destination's label: the refusal above proves nothing otherwise", movedSys.DisplayName)
+	if !strings.HasPrefix(movedSys.Label, "Theirs") {
+		t.Errorf("wide move stored %q, want the destination's label: the refusal above proves nothing otherwise", movedSys.Label)
 	}
 }
 
@@ -338,8 +338,8 @@ func TestTheDraftResolvesTheSystemInTheScopeTheBindRequires(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create with both scopes: %v", err)
 	}
-	if d.Label == "" || d.Label != c.DisplayName {
-		t.Errorf("drafted label %q, stored %q: the form promised a label the create did not write", d.Label, c.DisplayName)
+	if d.Label == "" || d.Label != c.Label {
+		t.Errorf("drafted label %q, stored %q: the form promised a label the create did not write", d.Label, c.Label)
 	}
 	if !strings.Contains(d.Label, "Boardroom") {
 		t.Errorf("drafted label %q does not carry the system type's label, so the refusals above withhold nothing", d.Label)

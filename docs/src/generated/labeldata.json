@@ -14,7 +14,7 @@
     },
     {
      "name": "TypeName",
-     "summary": "The display name of the component_type the product classifies it as, resolved over an operator's fork of a shipped row."
+     "summary": "The label of the component_type the product classifies it as, resolved over an operator's fork of a shipped row."
     },
     {
      "name": "TypeAbbrev",
@@ -26,11 +26,11 @@
     },
     {
      "name": "ProductName",
-     "summary": "The product's display name."
+     "summary": "The product's label."
     },
     {
      "name": "VendorName",
-     "summary": "The vendor's display name, empty when the product names no vendor."
+     "summary": "The vendor's label, empty when the product names no vendor."
     },
     {
      "name": "LocationLabel",
@@ -38,7 +38,7 @@
     },
     {
      "name": "SystemTypeLabel",
-     "summary": "The display name of the type of the system this component is a PRIMARY member of, empty when it is a member of none."
+     "summary": "The label of the type of the system this component is a PRIMARY member of, empty when it is a member of none."
     }
    ]
   },
@@ -55,7 +55,7 @@
     },
     {
      "name": "TypeName",
-     "summary": "The display name of the system_type it is classified as."
+     "summary": "The label of the system_type it is classified as."
     },
     {
      "name": "TypeAbbrev",
@@ -67,7 +67,7 @@
     },
     {
      "name": "StandardName",
-     "summary": "The display name of the standard it conforms to, empty when it conforms to none."
+     "summary": "The label of the standard it conforms to, empty when it conforms to none."
     },
     {
      "name": "LocationLabel",
@@ -84,7 +84,7 @@
     },
     {
      "name": "TypeName",
-     "summary": "The display name of the location_type it is classified as, resolved over an operator's fork."
+     "summary": "The label of the location_type it is classified as, resolved over an operator's fork."
     }
    ]
   }

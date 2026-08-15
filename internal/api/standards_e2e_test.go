@@ -17,7 +17,7 @@ import (
 type standardWire struct {
 	ID               string `json:"id"`
 	Name             string `json:"name"`
-	DisplayName      string `json:"display_name"`
+	Label            string `json:"label"`
 	ParentStandard   string `json:"parent_standard"`
 	ParentStandardID string `json:"parent_standard_id"`
 	Official         bool   `json:"official"`
@@ -65,12 +65,12 @@ func TestStandardsAPI(t *testing.T) {
 
 	// The viewer cannot create (403, capability fast-reject).
 	c.do(viewerTok, http.MethodPost, "/standards",
-		map[string]any{"name": "nope", "display_name": "Nope"}, http.StatusForbidden)
+		map[string]any{"name": "nope", "label": "Nope"}, http.StatusForbidden)
 
 	// Admin (owner) creates a custom standard, then a variant of it.
 	var created standardWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/standards",
-		map[string]any{"name": "kiosk", "display_name": "Kiosk"}, http.StatusCreated), &created); err != nil {
+		map[string]any{"name": "kiosk", "label": "Kiosk"}, http.StatusCreated), &created); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
 	if created.Name != "kiosk" || created.Official {
@@ -78,7 +78,7 @@ func TestStandardsAPI(t *testing.T) {
 	}
 	var variant standardWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/standards",
-		map[string]any{"name": "kiosk-outdoor", "display_name": "Outdoor Kiosk", "parent_standard_id": "kiosk"},
+		map[string]any{"name": "kiosk-outdoor", "label": "Outdoor Kiosk", "parent_standard_id": "kiosk"},
 		http.StatusCreated), &variant); err != nil {
 		t.Fatalf("decode create variant: %v", err)
 	}
@@ -89,20 +89,20 @@ func TestStandardsAPI(t *testing.T) {
 
 	// Duplicate id is a 409; an unknown parent is a 422.
 	c.do(ownerTok, http.MethodPost, "/standards",
-		map[string]any{"name": "kiosk", "display_name": "Dup"}, http.StatusConflict)
+		map[string]any{"name": "kiosk", "label": "Dup"}, http.StatusConflict)
 	c.do(ownerTok, http.MethodPost, "/standards",
-		map[string]any{"name": "orphan", "display_name": "Orphan", "parent_standard_id": "no-such-standard"},
+		map[string]any{"name": "orphan", "label": "Orphan", "parent_standard_id": "no-such-standard"},
 		http.StatusUnprocessableEntity)
 
 	// The custom row is mutable, and the patch reads back on GET.
 	c.do(ownerTok, http.MethodPatch, "/standards/kiosk",
-		map[string]any{"display_name": "Info Kiosk"}, http.StatusOK)
+		map[string]any{"label": "Info Kiosk"}, http.StatusOK)
 	var reread standardWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/standards/kiosk", nil, http.StatusOK), &reread); err != nil {
 		t.Fatalf("decode get: %v", err)
 	}
-	if reread.DisplayName != "Info Kiosk" {
-		t.Fatalf("patched display_name = %q, want Info Kiosk", reread.DisplayName)
+	if reread.Label != "Info Kiosk" {
+		t.Fatalf("patched label = %q, want Info Kiosk", reread.Label)
 	}
 
 	// A system conforming to the standard blocks its delete (409); the freed
@@ -118,7 +118,7 @@ func TestStandardsAPI(t *testing.T) {
 	// guard still exists for genuinely official rows; it is proven at the storage
 	// tier, where a test can mint one.
 	c.do(ownerTok, http.MethodPatch, "/standards/meeting-room",
-		map[string]any{"display_name": "Meeting Room"}, http.StatusOK)
+		map[string]any{"label": "Meeting Room"}, http.StatusOK)
 
 	// Unknown id is a 404, on both read and delete.
 	c.do(ownerTok, http.MethodGet, "/standards/nope", nil, http.StatusNotFound)

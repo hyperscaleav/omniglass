@@ -24,7 +24,7 @@ func TestLocationTypeCRUD(t *testing.T) {
 	}
 
 	// Create a custom type; it is official=false.
-	lt, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "wing", DisplayName: "Wing", Icon: "layers"})
+	lt, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "wing", Label: "Wing", Icon: "layers"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -33,19 +33,19 @@ func TestLocationTypeCRUD(t *testing.T) {
 	}
 
 	// Duplicate id is ErrTypeExists.
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "wing", DisplayName: "Dup"}); !errors.Is(err, storage.ErrTypeExists) {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "wing", Label: "Dup"}); !errors.Is(err, storage.ErrTypeExists) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
 	// "root" is reserved for the allowed_parent_types sentinel: creating a type
 	// with that id is refused, so a real type can never collide with it.
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "root", DisplayName: "Root"}); !errors.Is(err, storage.ErrReservedTypeID) {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "root", Label: "Root"}); !errors.Is(err, storage.ErrReservedTypeID) {
 		t.Fatalf("create root-id type err = %v, want ErrReservedTypeID", err)
 	}
 
-	// Update mutates display_name; icon unchanged when omitted.
+	// Update mutates label; icon unchanged when omitted.
 	name := "West Wing"
-	if _, err := gw.UpdateLocationType(ctx, "", "wing", storage.LocationTypePatch{DisplayName: &name}); err != nil {
+	if _, err := gw.UpdateLocationType(ctx, "", "wing", storage.LocationTypePatch{Label: &name}); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 
@@ -53,7 +53,7 @@ func TestLocationTypeCRUD(t *testing.T) {
 	// estate shapes its own place vocabulary through a FORK now rather than by
 	// owning the row (#703, ADR-0095), and TestShippedLocationTypeForksAndRestores
 	// holds the fork's own behavior.
-	if _, err := gw.UpdateLocationType(ctx, "", "campus", storage.LocationTypePatch{DisplayName: &name}); err != nil {
+	if _, err := gw.UpdateLocationType(ctx, "", "campus", storage.LocationTypePatch{Label: &name}); err != nil {
 		t.Fatalf("update a shipped location type: %v, want it editable", err)
 	}
 
@@ -62,14 +62,14 @@ func TestLocationTypeCRUD(t *testing.T) {
 	// (#703, ADR-0095): the row is untouched and the operator's version resolves
 	// over it. A DELETE is still refused, which is where the guard belongs, since
 	// a fork is an overlay and not ownership.
-	if err := gw.UpsertLocationType(ctx, storage.LocationType{Name: "canon", Official: true, DisplayName: "Canonical"}); err != nil {
+	if err := gw.UpsertLocationType(ctx, storage.LocationType{Name: "canon", Official: true, Label: "Canonical"}); err != nil {
 		t.Fatalf("seed an official location type: %v", err)
 	}
-	forked, err := gw.UpdateLocationType(ctx, "", "canon", storage.LocationTypePatch{DisplayName: &name})
+	forked, err := gw.UpdateLocationType(ctx, "", "canon", storage.LocationTypePatch{Label: &name})
 	if err != nil {
 		t.Fatalf("update official err = %v, want a fork", err)
 	}
-	if !forked.Forked || forked.DisplayName != name {
+	if !forked.Forked || forked.Label != name {
 		t.Fatalf("update official gave %+v, want the patched value marked forked", forked)
 	}
 	if err := gw.DeleteLocationType(ctx, "", "canon"); !errors.Is(err, storage.ErrTypeOfficial) {
@@ -112,7 +112,7 @@ func TestCreateLocationTypeReturnsAndAuditsItsID(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	lt, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "wing", DisplayName: "Wing"})
+	lt, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "wing", Label: "Wing"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}

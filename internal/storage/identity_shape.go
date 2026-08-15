@@ -7,7 +7,7 @@ import "encoding/json"
 //	id            a uuid. immutable, the primary key and every foreign key target.
 //	name          the human-readable machine identifier, what a URL, a CLI argument,
 //	              and a topic carry. renameable.
-//	display_name  an optional friendly string a human reads.
+//	label  an optional friendly string a human reads.
 //
 // The columns have always been called this. An earlier pass renamed the console's
 // words instead and briefly called the identifier a "key", which is why some history

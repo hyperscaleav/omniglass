@@ -18,7 +18,7 @@ import (
 // the standard-arc read, which is where a caller confirms what actually landed.
 type declaredRoleWire struct {
 	Name           string   `json:"name"`
-	DisplayName    string   `json:"display_name"`
+	Label          string   `json:"label"`
 	Quorum         int      `json:"quorum"`
 	Capacity       *int     `json:"capacity"`
 	PositionLabels []string `json:"position_labels"`
@@ -51,10 +51,10 @@ func roleMaskFixture(t *testing.T) (*apiClient, string, string) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{
-		"name": "mask-room", "display_name": "Mask Room",
+		"name": "mask-room", "label": "Mask Room",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPatch, "/standards/mask-room/roles/main-display", map[string]any{
-		"display_name": "Main Display", "quorum": 2, "capacity": 3, "impact": "outage",
+		"label": "Main Display", "quorum": 2, "capacity": 3, "impact": "outage",
 		"position_labels": []string{"left", "right"},
 		"accepted_types":  []string{"display"}, "pinned_products": []string{"samsung-qm55"},
 	}, http.StatusOK)
@@ -82,16 +82,16 @@ func readDeclaredRole(t *testing.T, c *apiClient, tok, name string) declaredRole
 
 // TestRolePatchWithNoMaskLeavesOmittedFieldsAlone is #639 over the wire: the
 // implied mask is the fields the body populated, so an edit that carries a
-// display name changes a display name and nothing else. Before the conversion
+// label changes a label and nothing else. Before the conversion
 // this route was a PUT that wholesale-replaced most of the row.
 func TestRolePatchWithNoMaskLeavesOmittedFieldsAlone(t *testing.T) {
 	c, tok, path := roleMaskFixture(t)
 
-	c.do(tok, http.MethodPatch, path, map[string]any{"display_name": "Main Display (renamed)"}, http.StatusOK)
+	c.do(tok, http.MethodPatch, path, map[string]any{"label": "Main Display (renamed)"}, http.StatusOK)
 
 	got := readDeclaredRole(t, c, tok, "main-display")
-	if got.DisplayName != "Main Display (renamed)" {
-		t.Fatalf("display_name = %q, want the edit to take", got.DisplayName)
+	if got.Label != "Main Display (renamed)" {
+		t.Fatalf("label = %q, want the edit to take", got.Label)
 	}
 	if got.Impact != "outage" {
 		t.Fatalf("impact = %q, want outage: an omitted field is not a cleared field (#639)", got.Impact)
@@ -117,7 +117,7 @@ func TestRolePatchWithAMaskClearsCapacity(t *testing.T) {
 	if got.Capacity != nil {
 		t.Fatalf("capacity = %v, want it cleared back to unbounded (#638)", *got.Capacity)
 	}
-	if got.Impact != "outage" || got.Quorum != 2 || got.DisplayName != "Main Display" {
+	if got.Impact != "outage" || got.Quorum != 2 || got.Label != "Main Display" {
 		t.Fatalf("role after a capacity-only mask = %+v, want everything the mask does not name untouched", got)
 	}
 }
@@ -156,11 +156,11 @@ func TestRolePatchWithAnEmptyMaskWritesNothing(t *testing.T) {
 	c, tok, path := roleMaskFixture(t)
 
 	c.do(tok, http.MethodPatch, path, map[string]any{
-		"update_mask": []string{}, "display_name": "Ignored", "quorum": 1, "impact": "none",
+		"update_mask": []string{}, "label": "Ignored", "quorum": 1, "impact": "none",
 	}, http.StatusOK)
 
 	got := readDeclaredRole(t, c, tok, "main-display")
-	if got.DisplayName != "Main Display" || got.Quorum != 2 || got.Impact != "outage" {
+	if got.Label != "Main Display" || got.Quorum != 2 || got.Impact != "outage" {
 		t.Fatalf("role after an empty mask = %+v, want it exactly as declared: the mask named no fields", got)
 	}
 }
@@ -171,11 +171,11 @@ func TestRolePatchWithAStarMaskReplacesEverything(t *testing.T) {
 	c, tok, path := roleMaskFixture(t)
 
 	c.do(tok, http.MethodPatch, path, map[string]any{
-		"update_mask": []string{"*"}, "display_name": "Wiped",
+		"update_mask": []string{"*"}, "label": "Wiped",
 	}, http.StatusOK)
 
 	got := readDeclaredRole(t, c, tok, "main-display")
-	if got.DisplayName != "Wiped" || got.Quorum != 1 || got.Capacity != nil || got.Impact != "degraded" {
+	if got.Label != "Wiped" || got.Quorum != 1 || got.Capacity != nil || got.Impact != "degraded" {
 		t.Fatalf("role after a full replacement = %+v, want every omitted field back to its default", got)
 	}
 	if len(got.AcceptedTypes) != 0 || len(got.PinnedProducts) != 0 || len(got.PositionLabels) != 0 {
@@ -237,15 +237,15 @@ func TestRoleAlternateRoundTrips(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{
-		"name": "alt-room", "display_name": "Alternate Room",
+		"name": "alt-room", "label": "Alternate Room",
 	}, http.StatusCreated)
 	// A choice has no write route of its own yet, so it arrives the way the
 	// shipped standards' choices do.
 	if _, err := gw.SeedRoleChoice(ctx, "standard", "alt-room", storage.RoleChoiceSpec{
-		Name: "conferencing", DisplayName: "Conferencing",
+		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
-			{Name: "all-in-one", DisplayName: "All-in-one"},
-			{Name: "component-system", DisplayName: "Component System"},
+			{Name: "all-in-one", Label: "All-in-one"},
+			{Name: "component-system", Label: "Component System"},
 		},
 	}); err != nil {
 		t.Fatalf("seed choice: %v", err)
@@ -273,7 +273,7 @@ func TestRoleAlternateRoundTrips(t *testing.T) {
 	// see what it just joined.
 	var echo declaredRoleWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, path, map[string]any{
-		"display_name": "Conferencing Bar", "accepted_types": []string{"video-bar"},
+		"label": "Conferencing Bar", "accepted_types": []string{"video-bar"},
 		"alternate": "conferencing/all-in-one",
 	}, http.StatusOK), &echo); err != nil {
 		t.Fatalf("decode declare echo: %v", err)
@@ -303,7 +303,7 @@ func TestRoleAlternateRoundTrips(t *testing.T) {
 
 	// An unrelated edit leaves it alone (#626, now visible rather than taken on
 	// trust), and an explicit empty string detaches.
-	c.do(ownerTok, http.MethodPatch, path, map[string]any{"display_name": "Conferencing Bar (renamed)"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, path, map[string]any{"label": "Conferencing Bar (renamed)"}, http.StatusOK)
 	if got := readAlt(); got != "conferencing/component-system" {
 		t.Fatalf("alternate after an unrelated edit = %q, want it untouched", got)
 	}
@@ -330,11 +330,11 @@ func TestSystemRolePatchTakesTheSameMask(t *testing.T) {
 	c.do(tok, http.MethodPost, "/systems", map[string]any{"name": "mask-sys"}, http.StatusCreated)
 	const path = "/systems/mask-sys/roles/table-mic"
 	c.do(tok, http.MethodPatch, path, map[string]any{
-		"display_name": "Table Mic", "quorum": 2, "capacity": 4, "impact": "outage",
+		"label": "Table Mic", "quorum": 2, "capacity": 4, "impact": "outage",
 		"accepted_types": []string{"video-bar"},
 	}, http.StatusOK)
 
-	c.do(tok, http.MethodPatch, path, map[string]any{"display_name": "Table Mic (renamed)"}, http.StatusOK)
+	c.do(tok, http.MethodPatch, path, map[string]any{"label": "Table Mic (renamed)"}, http.StatusOK)
 	c.do(tok, http.MethodPatch, path, map[string]any{"update_mask": []string{"capacity"}}, http.StatusOK)
 
 	var w systemRolesWire
@@ -345,7 +345,7 @@ func TestSystemRolePatchTakesTheSameMask(t *testing.T) {
 	if mic.Capacity != nil {
 		t.Fatalf("capacity = %v, want the system arc's mask to clear it too (#638)", *mic.Capacity)
 	}
-	if mic.Impact != "outage" || mic.Quorum != 2 || mic.DisplayName != "Table Mic (renamed)" {
+	if mic.Impact != "outage" || mic.Quorum != 2 || mic.Label != "Table Mic (renamed)" {
 		t.Fatalf("system-declared role = %+v, want the rename kept and impact and quorum untouched (#639)", mic)
 	}
 	if len(mic.AcceptedTypes) != 1 || mic.AcceptedTypes[0] != "video-bar" {

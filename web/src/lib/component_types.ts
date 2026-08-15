@@ -11,7 +11,7 @@ import { pickInheritedFacts, type InheritedFacts } from "./catalog";
 export type ComponentType = {
   id: string;
   name: string;
-  display_name: string;
+  label: string;
   // True for a row this release ships. A shipped row is never written by an
   // operator: an edit forks it (#655, ADR-0095), and `forked` says whether this
   // one carries the operator's version over the shipped values.
@@ -45,7 +45,7 @@ export async function listComponentTypes(): Promise<ComponentType[]> {
   return (data?.component_types ?? []).map((t) => ({
     id: t.id,
     name: t.name,
-    display_name: t.display_name,
+    label: t.label,
     official: t.official,
     forked: t.forked,
     parent: t.parent,
@@ -64,7 +64,7 @@ export async function listComponentTypes(): Promise<ComponentType[]> {
 
 export type CreateComponentType = {
   name: string;
-  display_name: string;
+  label: string;
   // The parent component_type, by name or uuid; omit for a root type.
   parent_id?: string;
   stem?: string;
@@ -80,7 +80,7 @@ export async function createComponentType(body: CreateComponentType): Promise<Co
   return {
     id: t.id,
     name: t.name,
-    display_name: t.display_name,
+    label: t.label,
     official: t.official,
     forked: t.forked,
     parent: t.parent,
@@ -97,7 +97,7 @@ export async function createComponentType(body: CreateComponentType): Promise<Co
 // cycle guard analogous to location's), so a custom type's placement in the
 // tree is fixed at create.
 export type UpdateComponentType = {
-  display_name?: string;
+  label?: string;
   stem?: string;
   icon?: string;
   abbrev?: string;
@@ -146,7 +146,7 @@ export function resolveComponentTypeIcon(typeName: string | undefined, byName: M
 export type ComponentTypeNode = ComponentType & { children: ComponentTypeNode[]; depth: number };
 
 // componentTypeTree groups the flat registry into a forest by parent_id, each
-// level sorted by display name, for the admin page's rows and the
+// level sorted by label, for the admin page's rows and the
 // classification picker's indented option list.
 export function componentTypeTree(types: ComponentType[]): ComponentTypeNode[] {
   const byId = new Map<string, ComponentTypeNode>(types.map((t) => [t.id, { ...t, children: [], depth: 0 }] as const));
@@ -158,7 +158,7 @@ export function componentTypeTree(types: ComponentType[]): ComponentTypeNode[] {
     else roots.push(node);
   }
   const sortLevel = (nodes: ComponentTypeNode[], depth: number) => {
-    nodes.sort((a, b) => a.display_name.localeCompare(b.display_name));
+    nodes.sort((a, b) => a.label.localeCompare(b.label));
     for (const n of nodes) {
       n.depth = depth;
       sortLevel(n.children, depth + 1);

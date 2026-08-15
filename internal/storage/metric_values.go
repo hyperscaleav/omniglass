@@ -19,7 +19,7 @@ import (
 type EffectiveMetric struct {
 	MetricTypeName string
 	MetricTypeID   string
-	DisplayName    string // optional human label; empty when unset
+	Label          string // optional human label; empty when unset
 	DataType       string
 	Required       bool // from the contract; always false for an ad-hoc metric
 	DefaultValue   json.RawMessage
@@ -86,7 +86,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		// from: every series the instance's arc holds.
 		q = fmt.Sprintf(`
 		with inst as (select %[3]s as arc from %[1]s where %[3]s = $1), %[2]s
-		select mt.name as metric_type_name, mt.id as metric_type_id, mt.display_name, mt.data_type, false as required,
+		select mt.name as metric_type_name, mt.id as metric_type_id, mt.label, mt.data_type, false as required,
 		       null::jsonb as default_value,
 		       s.value as sample_value,
 		       s.value as effective_value,
@@ -103,7 +103,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		), %[5]s
 		-- The contract arm: what the instance's classifier declares, resolved
 		-- against the series' latest sample.
-		select mt.name as metric_type_name, mt.id as metric_type_id, mt.display_name, mt.data_type, c.required,
+		select mt.name as metric_type_name, mt.id as metric_type_id, mt.label, mt.data_type, c.required,
 		       c.default_value,
 		       s.value as sample_value,
 		       coalesce(s.value, c.default_value) as effective_value,
@@ -116,7 +116,7 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		union all
 		-- The ad-hoc arm: series landing directly on the instance for metrics the
 		-- contract does not declare.
-		select mt.name, mt.id, mt.display_name, mt.data_type, false,
+		select mt.name, mt.id, mt.label, mt.data_type, false,
 		       null::jsonb,
 		       s.value, s.value, true, false
 		from inst
@@ -141,14 +141,14 @@ func (p *PG) EffectiveMetrics(ctx context.Context, ownerKind, ownerID string, re
 		var (
 			e                EffectiveMetric
 			def, sample, val []byte
-			displayName      *string // NULL when unset
+			label            *string // NULL when unset
 		)
-		if err := rows.Scan(&e.MetricTypeName, &e.MetricTypeID, &displayName, &e.DataType, &e.Required,
+		if err := rows.Scan(&e.MetricTypeName, &e.MetricTypeID, &label, &e.DataType, &e.Required,
 			&def, &sample, &val, &e.IsSampled, &e.FromContract); err != nil {
 			return nil, fmt.Errorf("storage: scan effective metric: %w", err)
 		}
-		if displayName != nil {
-			e.DisplayName = *displayName
+		if label != nil {
+			e.Label = *label
 		}
 		e.DefaultValue = copyRaw(def)
 		e.SampleValue = copyRaw(sample)

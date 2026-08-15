@@ -15,18 +15,19 @@ import (
 // This is the one behaviour in the display_name-to-label sweep that a rename
 // cannot carry across on its own, because it is a property of the VALUE and not
 // of the column name. Postgres sorts NULL last under a default ASC and the empty
-// string FIRST, so a list ordered by a bare `order by display_name, name` puts
+// string FIRST, so a list ordered by a bare `order by label, name` puts
 // unlabelled rows at the bottom while the column is nullable and at the top the
 // moment it is not. Two registries (component_type, system_type) had already
-// crossed that line before this test was written: both are NOT NULL DEFAULT ''
-// today, so both already float their unlabelled rows to the top of the picker.
-// Normalizing the other eighteen tables to the same shape would have moved every
-// remaining registry the same way, silently, with no test failing.
+// crossed that line before this test was written: both are NOT NULL with an
+// empty-string default today, so both already float their unlabelled rows to
+// the top of the picker. Normalizing the other eighteen tables to the same shape
+// would have moved every remaining registry the same way, silently, with no test
+// failing.
 //
 // The fix is to spell the ordering so it does not care which of the two spellings
-// of "unset" the column happens to use: `nullif(label, '') nulls last`. It reads
-// the same on a nullable column, on a NOT NULL one, and on the mix that exists
-// mid-migration.
+// of "unset" the column happens to use: a nullif over the empty string, ordered
+// nulls last. It reads the same on a nullable column, on a NOT NULL one, and on
+// the mix that exists mid-migration.
 //
 // This is deliberately NOT D4 (ordering by the RENDERED label, falling back to
 // the name). That is ruled and belongs to the slice that gives tag, variable,
@@ -63,7 +64,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 		{
 			registry: "vendor",
 			create: func(t *testing.T, name, label string) {
-				if _, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: name, DisplayName: label, Kind: "manufacturer"}); err != nil {
+				if _, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: name, Label: label, Kind: "manufacturer"}); err != nil {
 					t.Fatalf("create vendor %q: %v", name, err)
 				}
 			},
@@ -74,7 +75,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 				}
 				out := make([]row, 0, len(all))
 				for _, v := range all {
-					out = append(out, row{v.Name, v.DisplayName})
+					out = append(out, row{v.Name, v.Label})
 				}
 				return out
 			},
@@ -82,7 +83,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 		{
 			registry: "driver",
 			create: func(t *testing.T, name, label string) {
-				if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: name, DisplayName: label}); err != nil {
+				if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: name, Label: label}); err != nil {
 					t.Fatalf("create driver %q: %v", name, err)
 				}
 			},
@@ -93,7 +94,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 				}
 				out := make([]row, 0, len(all))
 				for _, d := range all {
-					out = append(out, row{d.Name, d.DisplayName})
+					out = append(out, row{d.Name, d.Label})
 				}
 				return out
 			},
@@ -101,7 +102,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 		{
 			registry: "product",
 			create: func(t *testing.T, name, label string) {
-				if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: name, DisplayName: label}); err != nil {
+				if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: name, Label: label}); err != nil {
 					t.Fatalf("create product %q: %v", name, err)
 				}
 			},
@@ -112,7 +113,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 				}
 				out := make([]row, 0, len(all))
 				for _, p := range all {
-					out = append(out, row{p.Name, p.DisplayName})
+					out = append(out, row{p.Name, p.Label})
 				}
 				return out
 			},
@@ -120,7 +121,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 		{
 			registry: "standard",
 			create: func(t *testing.T, name, label string) {
-				if _, err := gw.CreateStandard(ctx, "", storage.Standard{Name: name, DisplayName: label}); err != nil {
+				if _, err := gw.CreateStandard(ctx, "", storage.Standard{Name: name, Label: label}); err != nil {
 					t.Fatalf("create standard %q: %v", name, err)
 				}
 			},
@@ -131,7 +132,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 				}
 				out := make([]row, 0, len(all))
 				for _, s := range all {
-					out = append(out, row{s.Name, s.DisplayName})
+					out = append(out, row{s.Name, s.Label})
 				}
 				return out
 			},
@@ -140,7 +141,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 			registry: "system_type",
 			create: func(t *testing.T, name, label string) {
 				stem := name
-				if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: name, DisplayName: label, Stem: &stem}); err != nil {
+				if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: name, Label: label, Stem: &stem}); err != nil {
 					t.Fatalf("create system_type %q: %v", name, err)
 				}
 			},
@@ -151,7 +152,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 				}
 				out := make([]row, 0, len(all))
 				for _, s := range all {
-					out = append(out, row{s.Name, s.DisplayName})
+					out = append(out, row{s.Name, s.Label})
 				}
 				return out
 			},
@@ -160,7 +161,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 			registry: "component_type",
 			create: func(t *testing.T, name, label string) {
 				stem := name
-				if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: name, DisplayName: label, Stem: &stem}); err != nil {
+				if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: name, Label: label, Stem: &stem}); err != nil {
 					t.Fatalf("create component_type %q: %v", name, err)
 				}
 			},
@@ -171,7 +172,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 				}
 				out := make([]row, 0, len(all))
 				for _, c := range all {
-					out = append(out, row{c.Name, c.DisplayName})
+					out = append(out, row{c.Name, c.Label})
 				}
 				return out
 			},
@@ -179,7 +180,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 		{
 			registry: "location_type",
 			create: func(t *testing.T, name, label string) {
-				if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: name, DisplayName: label}); err != nil {
+				if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: name, Label: label}); err != nil {
 					t.Fatalf("create location_type %q: %v", name, err)
 				}
 			},
@@ -190,7 +191,7 @@ func TestAnUnlabelledRegistryRowSortsLast(t *testing.T) {
 				}
 				out := make([]row, 0, len(all))
 				for _, l := range all {
-					out = append(out, row{l.Name, l.DisplayName})
+					out = append(out, row{l.Name, l.Label})
 				}
 				return out
 			},

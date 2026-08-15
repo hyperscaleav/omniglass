@@ -11,9 +11,9 @@ import { uuidFor } from "../lib/testids";
 // The Groups page is a config over the shared FlatList (rooted on group): a row per
 // group opens the group blade (members drill into the member's user blade), and the
 // per-group caches are seeded so no server is needed. `>` grants every permission.
-const group: Group = { id: uuidFor("g-hd"), name: "help-desk", display_name: "Help Desk", description: "Support crew", member_count: 1, grant_count: 0 };
+const group: Group = { id: uuidFor("g-hd"), name: "help-desk", label: "Help Desk", description: "Support crew", member_count: 1, grant_count: 0 };
 const members: GroupMember[] = [{ principal_id: uuidFor("u-alice"), kind: "human", name: "alice" }];
-const alice: Principal = { id: uuidFor("u-alice"), kind: "human", active: true, human: { username: "alice", email: "alice@example.com", display_name: "Alice Ng" }, grants: [], groups: [{ id: uuidFor("g-hd"), name: "Help Desk" }] };
+const alice: Principal = { id: uuidFor("u-alice"), kind: "human", active: true, human: { username: "alice", email: "alice@example.com", label: "Alice Ng" }, grants: [], groups: [{ id: uuidFor("g-hd"), name: "Help Desk" }] };
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 
 function mount() {
@@ -46,11 +46,11 @@ describe("Groups page", () => {
   it("renders a directory row per group with its member and grant counts", () => {
     mount();
     expect(screen.getByText("Help Desk")).toBeTruthy();
-    expect(screen.getByText("help-desk")).toBeTruthy(); // the name beneath the display name
+    expect(screen.getByText("help-desk")).toBeTruthy(); // the name beneath the label
     expect(screen.getByText("Support crew")).toBeTruthy();
   });
 
-  it("shows a group's name once when it carries no display name", () => {
+  it("shows a group's name once when it carries no label", () => {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...GROUPS_KEY], [{ id: uuidFor("g-bare"), name: "night-ops" } as Group]);
     qc.setQueryData([...ME_KEY], me);
@@ -149,7 +149,7 @@ describe("Groups page", () => {
   });
 
   it("opens a newly created group straight in edit mode to add members and grants", async () => {
-    const created: Group = { id: uuidFor("g-new"), name: "field-crew", display_name: "Field Crew", description: "" };
+    const created: Group = { id: uuidFor("g-new"), name: "field-crew", label: "Field Crew", description: "" };
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
@@ -203,7 +203,7 @@ describe("Groups page", () => {
   });
 });
 
-// The create form leads with the display name and derives the name from it, so an
+// The create form leads with the label and derives the name from it, so an
 // admin types "Field Crew" and never has to invent `field-crew`. These two prove
 // the page is WIRED to lib/entities; the suppression rule itself (a hand-edited
 // name stops following) is asserted in lib/entities.test.ts, because once a test
@@ -216,7 +216,7 @@ describe("Groups create identity", () => {
     return { display, name: screen.getByPlaceholderText("field-crew") as HTMLInputElement };
   };
 
-  it("derives the name as the display name is typed", async () => {
+  it("derives the name as the label is typed", async () => {
     const { display, name } = await openCreate();
     fireEvent.input(display, { target: { value: "Field Crew" } });
     await waitFor(() => expect(name.value).toBe("field-crew"));
@@ -229,6 +229,6 @@ describe("Groups create identity", () => {
 
     fireEvent.input(name, { target: { value: "crew-west" } });
     expect(screen.getByText(/Globally unique address/)).toBeTruthy();
-    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
+    expect(screen.queryByText(/Derived from the label/)).toBeNull();
   });
 });

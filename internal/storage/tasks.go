@@ -31,7 +31,7 @@ var (
 // created, never operator-authored.
 type Task struct {
 	ID          string
-	DisplayName string
+	Label       string
 	Mode        string
 	InterfaceID string
 	Node        *string
@@ -44,7 +44,7 @@ type Task struct {
 
 // taskID is the content-addressed task id: a sha256 over the identity fields
 // (interface, mode, spec) so identical work always maps to the same id and a
-// re-derive dedupes on the primary key. Display name and the enabled toggle are
+// re-derive dedupes on the primary key. Label and the enabled toggle are
 // metadata, not identity, so they do not perturb the id.
 func taskID(interfaceID, mode string, spec []byte) string {
 	h := sha256.New()
@@ -61,13 +61,13 @@ func taskID(interfaceID, mode string, spec []byte) string {
 // to resolve placement. The interface arc stores node.principal_id, so the
 // projection resolves it to the node's name, which is what Task.Node carries.
 // Callers always join `interface i on i.id = t.interface_id`.
-const taskSelectJoin = `t.id, t.display_name, t.mode, t.interface_id,
+const taskSelectJoin = `t.id, t.label, t.mode, t.interface_id,
 	(select n.name from node n where n.principal_id = i.node_name) as node_name, i.node_name,
 	t.spec, t.enabled, t.created_at, t.updated_at`
 
 func scanTask(row pgx.Row) (*Task, error) {
 	var t Task
-	if err := row.Scan(&t.ID, &t.DisplayName, &t.Mode, &t.InterfaceID, &t.Node, &t.NodeID, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt); err != nil {
+	if err := row.Scan(&t.ID, &t.Label, &t.Mode, &t.InterfaceID, &t.Node, &t.NodeID, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &t, nil
@@ -105,7 +105,7 @@ func loadTask(ctx context.Context, q querier, id string) (*Task, *string, error)
 		select `+taskSelectJoin+`, i.component
 		from task t join interface i on i.id = t.interface_id
 		where t.id = $1`, id).Scan(
-		&t.ID, &t.DisplayName, &t.Mode, &t.InterfaceID, &t.Node, &t.NodeID, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt, &component)
+		&t.ID, &t.Label, &t.Mode, &t.InterfaceID, &t.Node, &t.NodeID, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt, &component)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, ErrTaskNotFound
 	} else if err != nil {

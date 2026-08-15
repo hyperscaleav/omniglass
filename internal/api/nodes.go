@@ -15,7 +15,7 @@ import (
 
 type nodeBody struct {
 	Name            string            `json:"name"`
-	DisplayName     string            `json:"display_name,omitempty"`
+	Label           string            `json:"label,omitempty"`
 	Description     string            `json:"description,omitempty"`
 	Location        *string           `json:"location,omitempty" doc:"The location the node sits in (descriptive placement, not scope)"`
 	LocationID      *string           `json:"location_id,omitempty" doc:"The location's id; the stable form of location"`
@@ -27,7 +27,7 @@ type nodeBody struct {
 
 func toNodeBody(n *storage.Node) nodeBody {
 	return nodeBody{
-		Name: n.Name, DisplayName: n.DisplayName, Description: n.Description, Location: n.LocationName, LocationID: n.LocationID,
+		Name: n.Name, Label: n.Label, Description: n.Description, Location: n.LocationName, LocationID: n.LocationID,
 		Enrolled: n.Enrolled, LastHeartbeatAt: n.LastHeartbeatAt, EnrolledAt: n.EnrolledAt,
 	}
 }
@@ -49,7 +49,7 @@ type nodePathInput struct {
 type createNodeInput struct {
 	Body struct {
 		Name        string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot"`
-		DisplayName string  `json:"display_name,omitempty" doc:"Operator label; falls back to the name when empty"`
+		Label       string  `json:"label,omitempty" doc:"Operator label; falls back to the name when empty"`
 		Description string  `json:"description,omitempty" doc:"Free-form operator notes about the node"`
 		Location    *string `json:"location,omitempty" doc:"Optional location the node sits in, by name or id (descriptive placement, not scope)"`
 	}
@@ -60,7 +60,7 @@ type createNodeInput struct {
 type updateNodeInput struct {
 	Name string `path:"name"`
 	Body struct {
-		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		Label       *string `json:"label,omitempty" doc:"A new operator-facing label"`
 		Description *string `json:"description,omitempty" doc:"New free-form operator notes"`
 		Location    *string `json:"location,omitempty" doc:"Set the node's location by name or id, or \"\" to clear it"`
 	}
@@ -154,7 +154,7 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 			return nil, huma.Error422UnprocessableEntity("node name must be a single subject token (no dots, whitespace, or wildcards)")
 		}
 		n, err := gw.CreateNode(ctx, actorID(ctx), storage.NodeSpec{
-			Name: in.Body.Name, DisplayName: in.Body.DisplayName, Description: in.Body.Description, LocationName: in.Body.Location,
+			Name: in.Body.Name, Label: in.Body.Label, Description: in.Body.Description, LocationName: in.Body.Location,
 		}, a.scopeFor(ctx, "node", "create"), a.scopeFor(ctx, "location", "read"))
 		if err != nil {
 			return nil, mapNodeErr(err)
@@ -167,10 +167,10 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 		Method:      http.MethodPatch,
 		Path:        "/nodes/{name}",
 		Summary:     "Update a node",
-		Description: "Patches a node's display name, description, and location (a nil field is unchanged; a location of \"\" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.",
+		Description: "Patches a node's label, description, and location (a nil field is unchanged; a location of \"\" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.",
 	}, "node", "update"), func(ctx context.Context, in *updateNodeInput) (*nodeOutput, error) {
 		n, err := gw.UpdateNode(ctx, actorID(ctx), in.Name, storage.NodePatch{
-			DisplayName: in.Body.DisplayName, Description: in.Body.Description, LocationName: in.Body.Location,
+			Label: in.Body.Label, Description: in.Body.Description, LocationName: in.Body.Location,
 		}, a.scopeFor(ctx, "node", "read"), a.scopeFor(ctx, "node", "update"), a.scopeFor(ctx, "location", "read"))
 		if err != nil {
 			return nil, mapNodeErr(err)

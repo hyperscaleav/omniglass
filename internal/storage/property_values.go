@@ -38,7 +38,7 @@ type Property struct {
 type EffectiveProperty struct {
 	PropertyTypeName string
 	PropertyTypeID   string
-	DisplayName      string // optional human label; empty when unset
+	Label            string // optional human label; empty when unset
 	DataType         string
 	Required         bool // from the product contract; always false for an ad-hoc property
 	DefaultValue     json.RawMessage
@@ -333,7 +333,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		// from: everything the instance declares, minus tombstoned series.
 		q = fmt.Sprintf(`
 		with inst as (select %[3]s as arc from %[1]s where %[3]s = $1), %[2]s
-		select pr.name as property_type_name, pr.id as property_type_id, pr.display_name, pr.data_type, false as required,
+		select pr.name as property_type_name, pr.id as property_type_id, pr.label, pr.data_type, false as required,
 		       null::jsonb as default_value,
 		       d.value as set_value,
 		       d.value as effective_value,
@@ -352,7 +352,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		), %[5]s
 		-- The contract arm: what the instance's classifier declares, resolved
 		-- against the instance's own current declared value.
-		select pr.name as property_type_name, pr.id as property_type_id, pr.display_name, pr.data_type, c.required,
+		select pr.name as property_type_name, pr.id as property_type_id, pr.label, pr.data_type, c.required,
 		       c.default_value,
 		       d.value as set_value,
 		       coalesce(d.value, c.default_value) as effective_value,
@@ -366,7 +366,7 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		union all
 		-- The ad-hoc arm: values set directly on the instance for properties the
 		-- contract does not declare.
-		select pr.name, pr.id, pr.display_name, pr.data_type, false,
+		select pr.name, pr.id, pr.label, pr.data_type, false,
 		       null::jsonb,
 		       d.value, d.value, true, false, d.id::text
 		from inst
@@ -392,15 +392,15 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 		var (
 			e             EffectiveProperty
 			def, set, val []byte
-			displayName   *string // NULL when unset
+			label         *string // NULL when unset
 			valueID       *string // NULL when the property is unset
 		)
-		if err := rows.Scan(&e.PropertyTypeName, &e.PropertyTypeID, &displayName, &e.DataType, &e.Required,
+		if err := rows.Scan(&e.PropertyTypeName, &e.PropertyTypeID, &label, &e.DataType, &e.Required,
 			&def, &set, &val, &e.IsSet, &e.FromContract, &valueID); err != nil {
 			return nil, fmt.Errorf("storage: scan effective property: %w", err)
 		}
-		if displayName != nil {
-			e.DisplayName = *displayName
+		if label != nil {
+			e.Label = *label
 		}
 		e.DefaultValue = copyRaw(def)
 		e.SetValue = copyRaw(set)

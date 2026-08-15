@@ -30,7 +30,7 @@ type nameRuleWire struct {
 type locationTypeWire struct {
 	ID                 string        `json:"id"`
 	Name               string        `json:"name"`
-	DisplayName        string        `json:"display_name"`
+	Label              string        `json:"label"`
 	Icon               string        `json:"icon"`
 	AllowedParentTypes []string      `json:"allowed_parent_types"`
 	NameRule           *nameRuleWire `json:"name_rule"`
@@ -89,7 +89,7 @@ func TestANameRuleReadsBackWithTheNamesItMintsAPI(t *testing.T) {
 		t.Run(tc.typeName, func(t *testing.T) {
 			var created locationTypeWire
 			if err := json.Unmarshal(c.do(owner, http.MethodPost, "/location-types", map[string]any{
-				"name": tc.typeName, "display_name": tc.typeName, "name_rule": tc.rule,
+				"name": tc.typeName, "label": tc.typeName, "name_rule": tc.rule,
 			}, http.StatusCreated), &created); err != nil {
 				t.Fatalf("decode create: %v", err)
 			}
@@ -213,7 +213,7 @@ func TestTheRefusalANameRuleEditorHasToSurfaceAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	c.do(ownerTok, http.MethodPost, "/location-types",
-		map[string]any{"name": "nre-refusal", "display_name": "Refusal"}, http.StatusCreated)
+		map[string]any{"name": "nre-refusal", "label": "Refusal"}, http.StatusCreated)
 
 	stem := func(n int) string {
 		s := make([]byte, n)

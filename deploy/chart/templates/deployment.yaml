@@ -53,9 +53,9 @@ spec:
             - --email
             - {{ .Values.bootstrap.email | quote }}
             {{- end }}
-            {{- if .Values.bootstrap.displayName }}
-            - --display-name
-            - {{ .Values.bootstrap.displayName | quote }}
+            {{- if .Values.bootstrap.label }}
+            - --label
+            - {{ .Values.bootstrap.label | quote }}
             {{- end }}
           env:
             - name: OMNIGLASS_DSN

@@ -17,12 +17,12 @@ import (
 // SystemRole is a slot a system needs filled, declared either on a standard (and
 // inherited by every conforming system) or directly on one system.
 type SystemRole struct {
-	ID          string
-	OwnerKind   string // standard | system
-	OwnerID     string // the standard id or the system name
-	Name        string
-	DisplayName string
-	Quorum      int
+	ID        string
+	OwnerKind string // standard | system
+	OwnerID   string // the standard id or the system name
+	Name      string
+	Label     string
+	Quorum    int
 	// AcceptedTypes is the component_type names the role's typed-slot guard
 	// accepts (a component's product's component_type_id must fall within one
 	// of these subtrees, self-inclusive); empty means any type. PinnedProducts
@@ -72,7 +72,7 @@ type SystemRole struct {
 // mask the API resolves can never drift into naming different fields, which
 // would silently stop writing one.
 const (
-	RoleFieldDisplayName    = "display_name"
+	RoleFieldLabel          = "label"
 	RoleFieldQuorum         = "quorum"
 	RoleFieldCapacity       = "capacity"
 	RoleFieldPositionLabels = "position_labels"
@@ -85,7 +85,7 @@ const (
 // RolePatchFields is every field a role declaration lets a write set, in the
 // order a refusal lists them.
 var RolePatchFields = []string{
-	RoleFieldDisplayName, RoleFieldQuorum, RoleFieldCapacity, RoleFieldPositionLabels,
+	RoleFieldLabel, RoleFieldQuorum, RoleFieldCapacity, RoleFieldPositionLabels,
 	RoleFieldAcceptedTypes, RoleFieldPinnedProducts, RoleFieldImpact, RoleFieldAlternate,
 }
 
@@ -94,7 +94,7 @@ var RolePatchFields = []string{
 // already has, or, when the write creates the role, takes its default.
 type SystemRoleSpec struct {
 	Name           string
-	DisplayName    string
+	Label          string
 	Quorum         int
 	AcceptedTypes  []string
 	PinnedProducts []string
@@ -148,7 +148,7 @@ func (s SystemRoleSpec) Populated() updatemask.Fields {
 			p[name] = true
 		}
 	}
-	set(RoleFieldDisplayName, s.DisplayName != "")
+	set(RoleFieldLabel, s.Label != "")
 	set(RoleFieldQuorum, s.Quorum != 0)
 	set(RoleFieldCapacity, s.Capacity != nil)
 	set(RoleFieldPositionLabels, len(s.PositionLabels) > 0)
@@ -345,7 +345,7 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 			select r.*, false as from_standard
 			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.id
 		)
-		select roles.id, roles.name, roles.display_name, roles.quorum, roles.capacity, roles.position_labels,
+		select roles.id, roles.name, roles.label, roles.quorum, roles.capacity, roles.position_labels,
 		       roles.impact, `+alternateRefExpr("roles")+` as alternate,
 		       roles.from_standard, roles.created_at, roles.updated_at,
 		       coalesce((select array_agg(ct.name order by ct.name)
@@ -370,7 +370,7 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 	var out []EffectiveRole
 	for rows.Next() {
 		var e EffectiveRole
-		if err := rows.Scan(&e.ID, &e.Name, &e.DisplayName, &e.Quorum, &e.Capacity, &e.PositionLabels,
+		if err := rows.Scan(&e.ID, &e.Name, &e.Label, &e.Quorum, &e.Capacity, &e.PositionLabels,
 			&e.Impact, &e.Alternate, &e.FromStandard, &e.CreatedAt, &e.UpdatedAt,
 			&e.AcceptedTypes, &e.PinnedProducts, &e.AssignedTo, &e.Positions); err != nil {
 			return nil, fmt.Errorf("storage: scan effective role: %w", err)
@@ -484,7 +484,7 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	// role a component already holds stays idempotent.
 	var heldRole string
 	err = tx.QueryRow(ctx, `
-		select r.display_name from system_role_assignment ra
+		select r.label from system_role_assignment ra
 		join system_role r on r.id = ra.role_id
 		where ra.system_id = $1::uuid
 		  and ra.component_id = $2::uuid
@@ -783,22 +783,22 @@ func roleRefNames(refs []roleRef) []string {
 
 // resolveRole finds a role by name for a system, looking at both arcs (the
 // system's own roles and those its standard declares), and returns its id,
-// display name, and the typed-slot guard's requirements: the component_types
+// label, and the typed-slot guard's requirements: the component_types
 // it accepts (empty means any) and the products it pins (empty means any
 // product of an accepted type). Takes the system's id directly: every caller
 // has already resolved it (AssignRole, UnassignRole, SwapPositions), and the
 // role name it looks up within stays scoped to a single owner arc either way,
 // so binding the id here avoids one more name-subquery that would raise
 // SQLSTATE 21000 the moment two systems share a name (#627).
-func (p *PG) resolveRole(ctx context.Context, q txQuerier, systemID, roleName string) (id, displayName string, acceptedTypes, pinnedProducts []roleRef, err error) {
+func (p *PG) resolveRole(ctx context.Context, q txQuerier, systemID, roleName string) (id, label string, acceptedTypes, pinnedProducts []roleRef, err error) {
 	err = q.QueryRow(ctx, `
 		with sys as (select id, name, standard_id from system where id = $1::uuid)
-		select r.id, r.display_name
+		select r.id, r.label
 		from sys
 		join system_role r
 		     on (r.owner_kind = 'system' and r.system_id = sys.id)
 		     or (r.owner_kind = 'standard' and r.standard_id = sys.standard_id)
-		where r.name = $2`, systemID, roleName).Scan(&id, &displayName)
+		where r.name = $2`, systemID, roleName).Scan(&id, &label)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", nil, nil, ErrRoleNotFound
 	} else if err != nil {
@@ -841,7 +841,7 @@ func (p *PG) resolveRole(ctx context.Context, q txQuerier, systemID, roleName st
 		}
 		pinnedProducts = append(pinnedProducts, pr)
 	}
-	return id, displayName, acceptedTypes, pinnedProducts, prodRows.Err()
+	return id, label, acceptedTypes, pinnedProducts, prodRows.Err()
 }
 
 // componentClassification is the pair the typed-slot guard compares against a

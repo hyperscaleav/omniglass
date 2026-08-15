@@ -17,7 +17,7 @@ type PropertyType struct {
 	// contract and telemetry foreign keys store.
 	ID           string
 	Name         string
-	DisplayName  string
+	Label        string
 	DataType     string
 	Validation   []byte
 	FusionPolicy []byte
@@ -43,13 +43,13 @@ func (p *PG) UpsertPropertyType(ctx context.Context, prop PropertyType) error {
 		return fmt.Errorf("storage: upsert property %q: %w: %w", prop.Name, ErrPropertyTypeInvalid, err)
 	}
 	_, err := p.pool.Exec(ctx, `
-		insert into property_type (name, display_name, data_type, validation, fusion_policy, description, official)
+		insert into property_type (name, label, data_type, validation, fusion_policy, description, official)
 		values ($1, $2, $3, $4, $5, $6, $7)
 		on conflict (name) do update set
-			display_name = excluded.display_name, data_type = excluded.data_type,
+			label = excluded.label, data_type = excluded.data_type,
 			validation = excluded.validation, fusion_policy = excluded.fusion_policy,
 			description = excluded.description, official = excluded.official`,
-		prop.Name, prop.DisplayName, prop.DataType, prop.Validation, prop.FusionPolicy, prop.Description, prop.Official)
+		prop.Name, prop.Label, prop.DataType, prop.Validation, prop.FusionPolicy, prop.Description, prop.Official)
 	if err != nil {
 		return fmt.Errorf("storage: upsert property %q: %w", prop.Name, err)
 	}
@@ -67,7 +67,7 @@ func (p *PG) ListPropertyTypes(ctx context.Context) ([]PropertyType, error) {
 	var out []PropertyType
 	for rows.Next() {
 		var prop PropertyType
-		if err := rows.Scan(&prop.ID, &prop.Name, &prop.DisplayName, &prop.DataType, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official); err != nil {
+		if err := rows.Scan(&prop.ID, &prop.Name, &prop.Label, &prop.DataType, &prop.Validation, &prop.FusionPolicy, &prop.Description, &prop.Official); err != nil {
 			return nil, fmt.Errorf("storage: scan property: %w", err)
 		}
 		out = append(out, prop)

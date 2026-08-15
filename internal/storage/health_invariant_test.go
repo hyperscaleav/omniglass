@@ -157,14 +157,14 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 	ctx := context.Background()
 
 	std := "choice-huddle"
-	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Choice Huddle"}); err != nil {
+	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Choice Huddle"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	alts, err := f.gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", DisplayName: "Conferencing",
+		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
-			{Name: "all-in-one", DisplayName: "All-in-one"},
-			{Name: "component-system", DisplayName: "Component System"},
+			{Name: "all-in-one", Label: "All-in-one"},
+			{Name: "component-system", Label: "Component System"},
 		},
 	})
 	if err != nil {
@@ -173,7 +173,7 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 
 	// All-in-one: one role, a video bar.
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "conf-bar", DisplayName: "Conferencing Bar", Quorum: 1, Impact: "outage",
+		Name: "conf-bar", Label: "Conferencing Bar", Quorum: 1, Impact: "outage",
 		AcceptedTypes: []string{"video-bar"}, AlternateID: strp(alts["all-in-one"]),
 	}); err != nil {
 		t.Fatalf("declare all-in-one role: %v", err)
@@ -183,7 +183,7 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 	// amp, mic).
 	for _, name := range []string{"conf-codec", "conf-camera", "conf-dsp", "conf-amp", "conf-mic"} {
 		if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-			Name: name, DisplayName: name, Quorum: 1, Impact: "outage",
+			Name: name, Label: name, Quorum: 1, Impact: "outage",
 			AlternateID: strp(alts["component-system"]),
 		}); err != nil {
 			t.Fatalf("declare component-system role %s: %v", name, err)
@@ -238,26 +238,26 @@ func TestAlternateTieBreaksByPosition(t *testing.T) {
 	ctx := context.Background()
 
 	std := "tie-break-huddle"
-	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Tie Break"}); err != nil {
+	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Tie Break"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	alts, err := f.gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", DisplayName: "Conferencing",
+		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
-			{Name: "b-alt", DisplayName: "B Alt"}, // position 1: must win the tie
-			{Name: "a-alt", DisplayName: "A Alt"}, // position 2: sorts first alphabetically, must NOT win
+			{Name: "b-alt", Label: "B Alt"}, // position 1: must win the tie
+			{Name: "a-alt", Label: "A Alt"}, // position 2: sorts first alphabetically, must NOT win
 		},
 	})
 	if err != nil {
 		t.Fatalf("seed choice: %v", err)
 	}
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "b-role", DisplayName: "B Role", Quorum: 1, Impact: "degraded", AlternateID: strp(alts["b-alt"]),
+		Name: "b-role", Label: "B Role", Quorum: 1, Impact: "degraded", AlternateID: strp(alts["b-alt"]),
 	}); err != nil {
 		t.Fatalf("declare b-role: %v", err)
 	}
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "a-role", DisplayName: "A Role", Quorum: 1, Impact: "outage", AlternateID: strp(alts["a-alt"]),
+		Name: "a-role", Label: "A Role", Quorum: 1, Impact: "outage", AlternateID: strp(alts["a-alt"]),
 	}); err != nil {
 		t.Fatalf("declare a-role: %v", err)
 	}
@@ -385,11 +385,11 @@ func (f *healthFixture) staffPair(t *testing.T, ctx context.Context, standard, s
 // pairStandard declares the shared quorum-2 standard the race rooms conform to.
 func (f *healthFixture) pairStandard(t *testing.T, ctx context.Context, id string) string {
 	t.Helper()
-	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: id, DisplayName: "Pair"}); err != nil {
+	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: id, Label: "Pair"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", id, storage.SystemRoleSpec{
-		Name: "pair", DisplayName: "Pair", Quorum: 2, Impact: "degraded",
+		Name: "pair", Label: "Pair", Quorum: 2, Impact: "degraded",
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
@@ -582,17 +582,17 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 		{"staff it again", func() error { return f.gw.AssignRole(ctx, "", "sweep-sys", "pair", "sweep-b", f.all, f.all) }},
 		{"raise the quorum on the standard, moving every conforming system", func() error {
 			_, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-				Name: "pair", DisplayName: "Pair", Quorum: 3, Impact: "outage"})
+				Name: "pair", Label: "Pair", Quorum: 3, Impact: "outage"})
 			return err
 		}},
 		{"lower it back", func() error {
 			_, err := f.gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-				Name: "pair", DisplayName: "Pair", Quorum: 2, Impact: "degraded"})
+				Name: "pair", Label: "Pair", Quorum: 2, Impact: "degraded"})
 			return err
 		}},
 		{"declare a second role on the system itself", func() error {
 			_, err := f.gw.SetSystemRole(ctx, "", "system", "sweep-sys", storage.SystemRoleSpec{
-				Name: "screen", DisplayName: "Screen", Quorum: 1,
+				Name: "screen", Label: "Screen", Quorum: 1,
 				AcceptedTypes: []string{"display"}, Impact: "outage"})
 			return err
 		}},

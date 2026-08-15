@@ -21,7 +21,7 @@ import (
 
 type taskBody struct {
 	ID          string          `json:"id"`
-	DisplayName string          `json:"display_name,omitempty"`
+	Label       string          `json:"label,omitempty"`
 	Mode        string          `json:"mode"`
 	InterfaceID string          `json:"interface_id" doc:"The interface's surrogate id this task runs over"`
 	Node        *string         `json:"node,omitempty" doc:"The node placement name, projected from the interface"`
@@ -32,7 +32,7 @@ type taskBody struct {
 
 func toTaskBody(t *storage.Task) taskBody {
 	b := taskBody{
-		ID: t.ID, DisplayName: t.DisplayName, Mode: t.Mode,
+		ID: t.ID, Label: t.Label, Mode: t.Mode,
 		InterfaceID: t.InterfaceID, Node: t.Node, NodeID: t.NodeID, Enabled: t.Enabled,
 	}
 	if len(t.Spec) > 0 {

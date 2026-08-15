@@ -7,12 +7,12 @@ import type { Grant, CreateGrant } from "./principals";
 // members inherit. A thin typed wrapper over the generated client, gated by
 // principal_group (management) and principal_grant (granting) on the server.
 
-export type Group = { id: string; name: string; display_name?: string; description?: string; member_count?: number; grant_count?: number };
+export type Group = { id: string; name: string; label?: string; description?: string; member_count?: number; grant_count?: number };
 // A roster row carries the two facts apart: `name` is the member's identifier
-// (a human's username, a service account's name) and `display_name` is the
+// (a human's username, a service account's name) and `label` is the
 // friendly string, which only a human has. They used to arrive as one field
 // carrying either, which is what #563 ended.
-export type GroupMember = { principal_id: string; kind: string; name?: string; display_name?: string };
+export type GroupMember = { principal_id: string; kind: string; name?: string; label?: string };
 
 export const GROUPS_KEY = ["principal-groups"] as const;
 
@@ -43,7 +43,7 @@ export function groupName(g: Group): string {
 // that is what identifies the principal whatever kind it is, then a human's
 // friendly string, then the uuid.
 export function memberName(m: GroupMember): string {
-  return m.name || m.display_name || m.principal_id;
+  return m.name || m.label || m.principal_id;
 }
 
 export async function listGroups(): Promise<Group[]> {
@@ -58,7 +58,7 @@ export async function getGroup(id: string): Promise<Group> {
   return data as Group;
 }
 
-export async function createGroup(body: { name: string; display_name?: string; description?: string }): Promise<Group> {
+export async function createGroup(body: { name: string; label?: string; description?: string }): Promise<Group> {
   const { data, error } = await api.POST("/principal-groups", { body });
   if (error) throw error;
   return data as Group;
@@ -66,7 +66,7 @@ export async function createGroup(body: { name: string; display_name?: string; d
 
 // No `name` here: a rename is POST /principal-groups/{id}:rename, and this body
 // declares `additionalProperties: false`, so sending one is a 422.
-export async function updateGroup(id: string, body: { display_name?: string; description?: string }): Promise<Group> {
+export async function updateGroup(id: string, body: { label?: string; description?: string }): Promise<Group> {
   const { data, error } = await api.PATCH("/principal-groups/{id}", { params: { path: { id } }, body });
   if (error) throw error;
   return data as Group;

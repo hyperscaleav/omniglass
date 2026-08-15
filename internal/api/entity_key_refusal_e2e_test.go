@@ -45,15 +45,15 @@ func TestIllegalKeyIsAlways422(t *testing.T) {
 	// Each route, with the minimum body its handler needs beyond the name.
 	routes := map[string]func(seg string) map[string]any{
 		"/vendors": func(s string) map[string]any {
-			return map[string]any{"name": s, "display_name": "X", "kind": "manufacturer"}
+			return map[string]any{"name": s, "label": "X", "kind": "manufacturer"}
 		},
-		"/drivers": func(s string) map[string]any { return map[string]any{"name": s, "display_name": "X"} },
+		"/drivers": func(s string) map[string]any { return map[string]any{"name": s, "label": "X"} },
 		"/component-types": func(s string) map[string]any {
-			return map[string]any{"name": s, "display_name": "X"}
+			return map[string]any{"name": s, "label": "X"}
 		},
-		"/standards":      func(s string) map[string]any { return map[string]any{"name": s, "display_name": "X"} },
-		"/location-types": func(s string) map[string]any { return map[string]any{"name": s, "display_name": "X"} },
-		"/products":       func(s string) map[string]any { return map[string]any{"name": s, "display_name": "X"} },
+		"/standards":      func(s string) map[string]any { return map[string]any{"name": s, "label": "X"} },
+		"/location-types": func(s string) map[string]any { return map[string]any{"name": s, "label": "X"} },
+		"/products":       func(s string) map[string]any { return map[string]any{"name": s, "label": "X"} },
 		"/nodes":          func(s string) map[string]any { return map[string]any{"name": s} },
 		"/components":     func(s string) map[string]any { return map[string]any{"name": s} },
 		"/systems":        func(s string) map[string]any { return map[string]any{"name": s} },

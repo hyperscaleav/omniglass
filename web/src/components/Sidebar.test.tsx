@@ -14,7 +14,7 @@ const jpegB64 = "/9j/4AAQSkZJRg==";
 function meWith(hasAvatar: boolean): Me {
   return {
     principal: { id: "u-me", kind: "human" },
-    human: { username: "ada", display_name: "Ada Lovelace", has_avatar: hasAvatar },
+    human: { username: "ada", label: "Ada Lovelace", has_avatar: hasAvatar },
     permissions: [">"],
     grants: [],
   };
@@ -57,7 +57,7 @@ describe("Sidebar identity avatar", () => {
       async () => new Response(JSON.stringify(meWith(false)), { status: 200, headers: { "Content-Type": "application/json" } }),
     );
     mount(false);
-    // Initials are the first two letters of the display name (uppercased by CSS, so
+    // Initials are the first two letters of the label (uppercased by CSS, so
     // the DOM text is "Ad"), and there is no image element.
     expect(await screen.findByText("Ad")).toBeTruthy();
     expect(document.querySelector('img[alt="Your profile picture"]')).toBeNull();

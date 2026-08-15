@@ -137,7 +137,7 @@ func TestAuditLogAPI(t *testing.T) {
 		Token string `json:"token"`
 	}
 	_ = json.Unmarshal(body, &imp)
-	c.do(imp.Token, http.MethodPatch, "/auth/me", map[string]any{"display_name": "Alice A."}, http.StatusOK)
+	c.do(imp.Token, http.MethodPatch, "/auth/me", map[string]any{"label": "Alice A."}, http.StatusOK)
 
 	impersonated := list(ownerTok, "")
 	if !has(impersonated, func(e auditEvent) bool { return e.RealActorName == "root" && e.ActorName == "alice" }) {
@@ -176,8 +176,8 @@ func TestAuditDiffRoundTrip(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
 
-	c.do(ownerTok, http.MethodPost, "/nodes", map[string]any{"name": "probe-1", "display_name": "Probe"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPatch, "/nodes/probe-1", map[string]any{"display_name": "Probe One"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPost, "/nodes", map[string]any{"name": "probe-1", "label": "Probe"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPatch, "/nodes/probe-1", map[string]any{"label": "Probe One"}, http.StatusOK)
 	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
 		Name: "comm", SecretType: "snmp-community", OwnerKind: "platform",
 		Fields: map[string]string{"community": "hunter2-sealed-material"},
@@ -217,8 +217,8 @@ func TestAuditDiffRoundTrip(t *testing.T) {
 	if updated.Old == nil || updated.New == nil {
 		t.Fatalf("node update must carry both images, got old=%v new=%v", updated.Old, updated.New)
 	}
-	if updated.Old["DisplayName"] != "Probe" || updated.New["DisplayName"] != "Probe One" {
-		t.Errorf("node update diff wrong: old=%v new=%v", updated.Old["DisplayName"], updated.New["DisplayName"])
+	if updated.Old["Label"] != "Probe" || updated.New["Label"] != "Probe One" {
+		t.Errorf("node update diff wrong: old=%v new=%v", updated.Old["Label"], updated.New["Label"])
 	}
 
 	secrets := list("?resource=secret")

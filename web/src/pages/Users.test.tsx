@@ -14,7 +14,7 @@ import { uuidFor } from "../lib/testids";
 // seeded into the query cache so no server is needed; `>` grants the caller every
 // permission, so every gated affordance is present.
 const seed: Principal[] = [
-  { id: uuidFor("u-alice"), kind: "human", active: true, human: { username: "alice", email: "alice@example.com", display_name: "Alice Ng" }, grants: [{ id: uuidFor("g1"), role: "admin", scope_kind: "all" }], groups: [{ id: uuidFor("g-hd"), name: "Help Desk" }] },
+  { id: uuidFor("u-alice"), kind: "human", active: true, human: { username: "alice", email: "alice@example.com", label: "Alice Ng" }, grants: [{ id: uuidFor("g1"), role: "admin", scope_kind: "all" }], groups: [{ id: uuidFor("g-hd"), name: "Help Desk" }] },
   { id: uuidFor("u-svc"), kind: "service", active: true, service: { name: "ingest-bot" }, grants: [] },
   { id: "u-bob", kind: "human", active: false, human: { username: "bob" }, grants: [] },
 ];
@@ -35,7 +35,7 @@ function mount() {
   qc.setQueryData(["systems"], []);
   qc.setQueryData(["components"], []);
   // The group a user drills into (its blade self-fetches these by id).
-  qc.setQueryData([...GROUPS_KEY, "g-hd"], { id: uuidFor("g-hd"), name: "help-desk", display_name: "Help Desk" });
+  qc.setQueryData([...GROUPS_KEY, "g-hd"], { id: uuidFor("g-hd"), name: "help-desk", label: "Help Desk" });
   qc.setQueryData([...GROUPS_KEY, "g-hd", "members"], []);
   qc.setQueryData([...GROUPS_KEY, "g-hd", "grants"], []);
   // A Router wraps the page so its router hooks (the ?u= deep-link uses
@@ -55,7 +55,7 @@ describe("Users page", () => {
   it("renders a directory row per principal: name, username, kind, and grant count", () => {
     const { getByText, getAllByText } = mount();
     expect(getByText("Alice Ng")).toBeTruthy();
-    expect(getByText("alice")).toBeTruthy(); // the username under the display name
+    expect(getByText("alice")).toBeTruthy(); // the username under the label
     expect(getByText("ingest-bot")).toBeTruthy(); // a service principal is shown by its name
     // Both a human and a service badge render (capitalized via CSS, text is the kind).
     expect(getAllByText("human").length).toBeGreaterThan(0);
@@ -63,7 +63,7 @@ describe("Users page", () => {
     expect(getByText("inactive")).toBeTruthy(); // bob is disabled
   });
 
-  it("shows the username once for a user who has no display name", () => {
+  it("shows the username once for a user who has no label", () => {
     // bob's username is his whole identity, so printing it as both the primary
     // line and the line beneath said the same thing twice. The shared identity
     // cell suppresses the second line when the two are equal.
@@ -74,7 +74,7 @@ describe("Users page", () => {
   it("renders an image thumbnail in the name cell for a principal that has an avatar", async () => {
     // A principal with human.has_avatar renders the image (lazily fetched as a data
     // URL) rather than the initials placeholder.
-    const withPic: Principal = { id: "u-eve", kind: "human", active: true, human: { username: "eve", display_name: "Eve Stone", has_avatar: true }, grants: [] };
+    const withPic: Principal = { id: "u-eve", kind: "human", active: true, human: { username: "eve", label: "Eve Stone", has_avatar: true }, grants: [] };
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
@@ -96,7 +96,7 @@ describe("Users page", () => {
   });
 
   it("renders initials (no image) in the name cell for a principal without an avatar", () => {
-    const noPic: Principal = { id: "u-frank", kind: "human", active: true, human: { username: "frank", display_name: "Frank Lin" }, grants: [] };
+    const noPic: Principal = { id: "u-frank", kind: "human", active: true, human: { username: "frank", label: "Frank Lin" }, grants: [] };
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...PRINCIPALS_KEY, false], [noPic]);
     qc.setQueryData([...ME_KEY], me);
@@ -138,7 +138,7 @@ describe("Users page", () => {
     // The create POST returns the new principal; the create flow seeds its detail
     // cache and flags it to open in edit mode, so the blade opens on carol's seeded,
     // editable fields (add grants right away) rather than a read-only view.
-    const carol: Principal = { id: "u-carol", kind: "human", active: true, human: { username: "carol", email: "carol@example.com", display_name: "Carol Diaz" }, grants: [] };
+    const carol: Principal = { id: "u-carol", kind: "human", active: true, human: { username: "carol", email: "carol@example.com", label: "Carol Diaz" }, grants: [] };
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
@@ -232,7 +232,7 @@ describe("Users page", () => {
   });
 
   it("hides the revoke affordances on an owner target (see, not end) and says why", async () => {
-    const owner: Principal = { id: "u-own", kind: "human", active: true, human: { username: "founder", display_name: "Fay Ounder" }, grants: [{ id: "g0", role: "owner", scope_kind: "all" }], groups: [] };
+    const owner: Principal = { id: "u-own", kind: "human", active: true, human: { username: "founder", label: "Fay Ounder" }, grants: [{ id: "g0", role: "owner", scope_kind: "all" }], groups: [] };
     // The owner's session list loads (an admin can see it); no revoke should be offered.
     vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
       new Response(JSON.stringify({ sessions: [{ id: "s1", kind: "session", prefix: "abc123", created_at: "2026-07-13T00:00:00Z", expires_at: "2026-07-13T12:00:00Z", current: false }] }), { status: 200, headers: { "Content-Type": "application/json" } }),
@@ -266,7 +266,7 @@ describe("Users page", () => {
   });
 
   it("an archived user (via Show archived) offers Restore in the slot and Purge in the kebab", async () => {
-    const dana: Principal = { id: "u-dana", kind: "human", active: false, archived_at: "2026-01-01T00:00:00Z", human: { username: "dana", display_name: "Dana Vale" }, grants: [] };
+    const dana: Principal = { id: "u-dana", kind: "human", active: false, archived_at: "2026-01-01T00:00:00Z", human: { username: "dana", label: "Dana Vale" }, grants: [] };
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...PRINCIPALS_KEY, false], []); // default directory hides her
     qc.setQueryData([...PRINCIPALS_KEY, true], [dana]); // the "show archived" view
@@ -320,7 +320,7 @@ describe("Users page", () => {
   });
 
   it("purging an archived user closes the blade and does not refetch the dead detail", async () => {
-    const dana: Principal = { id: "u-dana", kind: "human", active: false, archived_at: "2026-01-01T00:00:00Z", human: { username: "dana", display_name: "Dana Vale" }, grants: [] };
+    const dana: Principal = { id: "u-dana", kind: "human", active: false, archived_at: "2026-01-01T00:00:00Z", human: { username: "dana", label: "Dana Vale" }, grants: [] };
     // Confirm the purge; the POST 204s, the directory refetch returns an empty list,
     // and a GET of the purged principal's own detail 404s (as the real server would).
     // The blade must close, and the now-dead detail query must not be refetched (an
@@ -515,12 +515,12 @@ describe("Users create identity", () => {
   const fields = async () => {
     mount();
     fireEvent.click(screen.getByText("New user"));
-    const display = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    const display = (await screen.findByLabelText("Label")) as HTMLInputElement;
     const username = screen.getByLabelText("Username") as HTMLInputElement;
     return { display, username };
   };
 
-  it("derives the username from the display name as it is typed", async () => {
+  it("derives the username from the label as it is typed", async () => {
     const { display, username } = await fields();
     fireEvent.input(display, { target: { value: "Jordan Rivera" } });
     await waitFor(() => expect(username.value).toBe("jordan-rivera"));
@@ -538,6 +538,6 @@ describe("Users create identity", () => {
     expect(username.value).toBe("jordan");
     // And the field stops advertising itself as derived, which is what the
     // operator actually sees.
-    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
+    expect(screen.queryByText(/Derived from the label/)).toBeNull();
   });
 });

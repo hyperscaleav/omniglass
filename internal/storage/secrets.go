@@ -35,7 +35,7 @@ type SecretType struct {
 	ID                    string
 	Name                  string
 	Official              bool
-	DisplayName           string
+	Label                 string
 	DefaultAdminSensitive bool // seeds the create form's admin_sensitive default
 	Fields                []secret.Field
 }
@@ -120,19 +120,19 @@ func (p *PG) UpsertSecretType(ctx context.Context, st SecretType) error {
 		return fmt.Errorf("storage: marshal secret_type %q schema: %w", st.ID, err)
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into secret_type (name, official, display_name, schema, default_admin_sensitive)
+		insert into secret_type (name, official, label, schema, default_admin_sensitive)
 		values ($1, $2, $3, $4, $5)
 		on conflict (name) do update
-			set official = excluded.official, display_name = excluded.display_name,
+			set official = excluded.official, label = excluded.label,
 			    schema = excluded.schema, default_admin_sensitive = excluded.default_admin_sensitive`,
-		st.Name, st.Official, st.DisplayName, schema, st.DefaultAdminSensitive); err != nil {
+		st.Name, st.Official, st.Label, schema, st.DefaultAdminSensitive); err != nil {
 		return fmt.Errorf("storage: upsert secret_type %q: %w", st.Name, err)
 	}
 	return nil
 }
 
 func (p *PG) ListSecretTypes(ctx context.Context) ([]SecretType, error) {
-	rows, err := p.pool.Query(ctx, `select id, name, official, display_name, default_admin_sensitive, schema from secret_type order by name`)
+	rows, err := p.pool.Query(ctx, `select id, name, official, label, default_admin_sensitive, schema from secret_type order by name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list secret_types: %w", err)
 	}
@@ -150,7 +150,7 @@ func (p *PG) ListSecretTypes(ctx context.Context) ([]SecretType, error) {
 
 func (p *PG) GetSecretType(ctx context.Context, id string) (*SecretType, error) {
 	st, err := scanSecretType(p.pool.QueryRow(ctx,
-		`select id, name, official, display_name, default_admin_sensitive, schema from secret_type where `+registryRefCol(id)+` = $1`, id))
+		`select id, name, official, label, default_admin_sensitive, schema from secret_type where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknownSecretType
 	}
@@ -160,7 +160,7 @@ func (p *PG) GetSecretType(ctx context.Context, id string) (*SecretType, error) 
 func scanSecretType(row pgx.Row) (*SecretType, error) {
 	var st SecretType
 	var schema []byte
-	if err := row.Scan(&st.ID, &st.Name, &st.Official, &st.DisplayName, &st.DefaultAdminSensitive, &schema); err != nil {
+	if err := row.Scan(&st.ID, &st.Name, &st.Official, &st.Label, &st.DefaultAdminSensitive, &schema); err != nil {
 		return nil, err
 	}
 	if err := json.Unmarshal(schema, &st.Fields); err != nil {
@@ -512,7 +512,7 @@ func (p *PG) ResolveSecrets(ctx context.Context, componentID string, read scope.
 // resolveSecretsSQL walks the three owner trees up from a component, tags each
 // owner with its cascade band and depth, joins the secrets owned at those scopes,
 // and ranks per name (highest band, then nearest depth wins). It returns the
-// winner and every shadowed candidate, each with its owner's display name. The
+// winner and every shadowed candidate, each with its owner's label. The
 // CYCLE guards protect against a corrupted parent edge.
 const resolveSecretsSQL = `
 with recursive

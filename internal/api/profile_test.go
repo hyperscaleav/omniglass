@@ -19,7 +19,7 @@ import (
 // TestSelfProfileAndChangePassword drives the slice-2 self-service surface against
 // the real binary: a signed-in human changes their own password (wrong current is
 // refused, a too-short new one is rejected, the right one rotates the login) and
-// edits their own display name and email, with both requiring authentication.
+// edits their own label and email, with both requiring authentication.
 // Skipped under -short.
 func TestSelfProfileAndChangePassword(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
@@ -39,7 +39,7 @@ func TestSelfProfileAndChangePassword(t *testing.T) {
 	}
 	_, bh, bp, _ := auth.NewBearerToken()
 	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{
-		Username: "ops", Email: "ops@old.example", DisplayName: "Old Name",
+		Username: "ops", Email: "ops@old.example", Label: "Old Name",
 		SecretHash: bh, Prefix: bp, PasswordHash: pwHash,
 	}); err != nil {
 		t.Fatalf("bootstrap: %v", err)
@@ -125,14 +125,14 @@ func TestSelfProfileAndChangePassword(t *testing.T) {
 	}
 
 	// --- update profile ---
-	// The display name is self-editable and keeps the bootstrapped email untouched.
+	// The label is self-editable and keeps the bootstrapped email untouched.
 	code, body := send(http.MethodPatch, "/api/v1/auth/me", true,
-		map[string]string{"display_name": "Ops Lead"})
+		map[string]string{"label": "Ops Lead"})
 	if code != http.StatusOK {
 		t.Fatalf("update profile: want 200, got %d (%s)", code, body)
 	}
-	if !bytes.Contains(body, []byte(`"display_name":"Ops Lead"`)) {
-		t.Fatalf("update profile body missing the new display name: %s", body)
+	if !bytes.Contains(body, []byte(`"label":"Ops Lead"`)) {
+		t.Fatalf("update profile body missing the new label: %s", body)
 	}
 	if !bytes.Contains(body, []byte(`"email":"ops@old.example"`)) {
 		t.Fatalf("email must be preserved, but it changed: %s", body)
@@ -142,14 +142,14 @@ func TestSelfProfileAndChangePassword(t *testing.T) {
 		map[string]string{"email": "hacker@evil.example"}); code != http.StatusUnprocessableEntity {
 		t.Fatalf("email in the self-service body: want 422, got %d", code)
 	}
-	// GET /auth/me reflects the display name and keeps the original email.
+	// GET /auth/me reflects the label and keeps the original email.
 	_, me := send(http.MethodGet, "/api/v1/auth/me", true, nil)
-	if !bytes.Contains(me, []byte(`"display_name":"Ops Lead"`)) || !bytes.Contains(me, []byte(`"email":"ops@old.example"`)) {
-		t.Fatalf("me after update: want new display name and unchanged email, got %s", me)
+	if !bytes.Contains(me, []byte(`"label":"Ops Lead"`)) || !bytes.Contains(me, []byte(`"email":"ops@old.example"`)) {
+		t.Fatalf("me after update: want new label and unchanged email, got %s", me)
 	}
 	// Unauthenticated update is 401.
 	if code, _ := send(http.MethodPatch, "/api/v1/auth/me", false,
-		map[string]string{"display_name": "Nope"}); code != http.StatusUnauthorized {
+		map[string]string{"label": "Nope"}); code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated update: want 401, got %d", code)
 	}
 }

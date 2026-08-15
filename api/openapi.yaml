@@ -329,10 +329,10 @@ components:
           type: string
         description:
           type: string
-        display_name:
-          type: string
         id:
           description: The command type's uuid, the stable form of name
+          type: string
+        label:
           type: string
         name:
           type: string
@@ -373,11 +373,6 @@ components:
           type:
             - array
             - "null"
-        display_name:
-          type: string
-        display_name_generated:
-          description: "Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."
-          type: boolean
         effective_tags:
           additionalProperties:
             type: string
@@ -385,6 +380,11 @@ components:
           type: object
         id:
           type: string
+        label:
+          type: string
+        label_generated:
+          description: "Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back."
+          type: boolean
         location:
           description: The location's name, for display
           type: string
@@ -436,7 +436,7 @@ components:
         - name
         - system_count
         - name_generated
-        - display_name_generated
+        - label_generated
       type: object
     ComponentMetricsOutputBody:
       additionalProperties: false
@@ -522,7 +522,7 @@ components:
           readOnly: true
           type: string
         abbrev:
-          description: A compact form of display_name; empty inherits the nearest ancestor's
+          description: A compact form of label; empty inherits the nearest ancestor's
           type: string
         default_tags:
           description: Tags every instance of this type (or a descendant that does not override) starts with
@@ -531,8 +531,6 @@ components:
           type:
             - array
             - "null"
-        display_name:
-          type: string
         forked:
           description: True when this shipped row carries changes of yours overriding it. Restore discards them
           type: boolean
@@ -560,6 +558,8 @@ components:
         inherited_stem_source:
           description: The name of the ancestor component_type inherited_stem comes from, which may be further up the chain than the parent
           type: string
+        label:
+          type: string
         label_rule:
           description: The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components
           type: string
@@ -584,7 +584,7 @@ components:
       required:
         - id
         - name
-        - display_name
+        - label
         - default_tags
         - official
         - forked
@@ -602,7 +602,7 @@ components:
         description:
           description: What the command does
           type: string
-        display_name:
+        label:
           description: A human label
           type: string
         name:
@@ -635,14 +635,14 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
-          description: What an operator reads; the name is the address
-          type: string
         expected_name:
           description: "The name a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+        label:
+          description: What an operator reads; the name is the address
           type: string
         location:
           description: Location name this component is placed at
@@ -674,7 +674,7 @@ components:
           readOnly: true
           type: string
         abbrev:
-          description: A compact form of display_name; omit to inherit the parent's
+          description: A compact form of label; omit to inherit the parent's
           type: string
         default_tags:
           description: Tags every instance of this type starts with
@@ -683,12 +683,12 @@ components:
           type:
             - array
             - "null"
-        display_name:
-          description: What an operator reads in pickers and lists
-          minLength: 1
-          type: string
         icon:
           description: A glyph key; omit to inherit the parent's
+          type: string
+        label:
+          description: What an operator reads in pickers and lists
+          minLength: 1
           type: string
         label_rule:
           description: A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422.
@@ -710,7 +710,7 @@ components:
           type: string
       required:
         - name
-        - display_name
+        - label
       type: object
     CreateDriverInputBody:
       additionalProperties: false
@@ -722,7 +722,7 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
+        label:
           description: What an operator reads in pickers and lists
           minLength: 1
           type: string
@@ -737,7 +737,7 @@ components:
           type: string
       required:
         - name
-        - display_name
+        - label
       type: object
     CreateEventTypeInputBody:
       additionalProperties: false
@@ -752,7 +752,7 @@ components:
         description:
           description: What the occurrence means
           type: string
-        display_name:
+        label:
           description: A human label
           type: string
         name:
@@ -782,7 +782,7 @@ components:
           minLength: 1
           type: string
         name:
-          description: The file's display name (a label, no path separators)
+          description: The file's filename, which is already the label an operator reads (no path separators)
           minLength: 1
           type: string
         sensitive:
@@ -879,7 +879,7 @@ components:
           description: Free-form notes on what the group is for
           maxLength: 1000
           type: string
-        display_name:
+        label:
           description: What an operator reads in lists
           maxLength: 200
           type: string
@@ -927,14 +927,14 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
-          description: What an operator reads; the name is the address
-          type: string
         expected_name:
           description: "The name a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the location_type's name rule moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+        label:
+          description: What an operator reads; the name is the address
           type: string
         location_type:
           description: The location_type, by name or uuid (campus, building, ...)
@@ -969,12 +969,12 @@ components:
           type:
             - array
             - "null"
-        display_name:
-          description: What an operator reads in pickers and lists
-          minLength: 1
-          type: string
         icon:
           description: A glyph key; the console falls back to map-pin when empty
+          type: string
+        label:
+          description: What an operator reads in pickers and lists
+          minLength: 1
           type: string
         label_rule:
           description: The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile
@@ -990,7 +990,7 @@ components:
           description: How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name
       required:
         - name
-        - display_name
+        - label
       type: object
     CreateMeTokenInputBody:
       additionalProperties: false
@@ -1063,7 +1063,7 @@ components:
         description:
           description: What the series measures
           type: string
-        display_name:
+        label:
           description: A human label
           type: string
         name:
@@ -1094,7 +1094,7 @@ components:
         description:
           description: Free-form operator notes about the node
           type: string
-        display_name:
+        label:
           description: Operator label; falls back to the name when empty
           type: string
         location:
@@ -1119,14 +1119,14 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
-          description: What an operator reads in lists; falls back to the username
-          maxLength: 200
-          type: string
         email:
           description: Contact email for the account
           format: email
           maxLength: 320
+          type: string
+        label:
+          description: What an operator reads in lists; falls back to the username
+          maxLength: 200
           type: string
         password:
           description: Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in
@@ -1156,10 +1156,6 @@ components:
           description: The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically.
           minLength: 1
           type: string
-        display_name:
-          description: What an operator reads in pickers and lists
-          minLength: 1
-          type: string
         driver_id:
           description: The driver that talks to it, by handle or uuid
           type: string
@@ -1172,6 +1168,10 @@ components:
             - device
             - app
             - service
+          type: string
+        label:
+          description: What an operator reads in pickers and lists
+          minLength: 1
           type: string
         label_rule:
           description: A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422.
@@ -1190,7 +1190,7 @@ components:
           type: string
       required:
         - name
-        - display_name
+        - label
         - kind
         - component_type
       type: object
@@ -1214,7 +1214,7 @@ components:
         description:
           description: What the property means
           type: string
-        display_name:
+        label:
           description: A human label
           type: string
         name:
@@ -1281,7 +1281,7 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
+        label:
           description: What an operator reads in pickers and lists
           minLength: 1
           type: string
@@ -1296,7 +1296,7 @@ components:
           type: string
       required:
         - name
-        - display_name
+        - label
       type: object
     CreateSystemInputBody:
       additionalProperties: false
@@ -1308,14 +1308,14 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
-          description: What an operator reads; the name is the address
-          type: string
         expected_name:
           description: "The name a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the system_type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422."
           maxLength: 100
           minLength: 1
           pattern: ^[a-z0-9][a-z0-9-]*$
+          type: string
+        label:
+          description: What an operator reads; the name is the address
           type: string
         location:
           description: Location name this system is placed at
@@ -1347,14 +1347,14 @@ components:
           readOnly: true
           type: string
         abbrev:
-          description: A compact form of display_name; omit to inherit the parent's
-          type: string
-        display_name:
-          description: What an operator reads in pickers and lists
-          minLength: 1
+          description: A compact form of label; omit to inherit the parent's
           type: string
         icon:
           description: A glyph key; omit to inherit the parent's
+          type: string
+        label:
+          description: What an operator reads in pickers and lists
+          minLength: 1
           type: string
         label_rule:
           description: The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile
@@ -1376,7 +1376,7 @@ components:
           type: string
       required:
         - name
-        - display_name
+        - label
       type: object
     CreateTagInputBody:
       additionalProperties: false
@@ -1468,10 +1468,6 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
-          description: What an operator reads in pickers and lists
-          minLength: 1
-          type: string
         icon:
           description: A glyph key, e.g. crestron-logo
           type: string
@@ -1482,6 +1478,10 @@ components:
             - manufacturer
             - integrator
             - developer
+          type: string
+        label:
+          description: What an operator reads in pickers and lists
+          minLength: 1
           type: string
         name:
           description: The globally unique name; renameable
@@ -1497,7 +1497,7 @@ components:
           type: string
       required:
         - name
-        - display_name
+        - label
       type: object
     DownloadFileOutputBody:
       additionalProperties: false
@@ -1559,10 +1559,10 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
-          type: string
         id:
           description: The driver's uuid, the stable handle that survives a rename
+          type: string
+        label:
           type: string
         name:
           description: The name an operator reads and types; renameable
@@ -1574,7 +1574,7 @@ components:
       required:
         - id
         - name
-        - display_name
+        - label
         - official
       type: object
     EffectiveMetricBody:
@@ -1585,15 +1585,15 @@ components:
           type: string
         default_value:
           description: The contract default; omitted when the contract sets none
-        display_name:
-          description: The metric's human label; omitted when unset
-          type: string
         from_contract:
           description: True when the owner's classifier declares the metric; false for a series landing directly on the owner
           type: boolean
         is_sampled:
           description: True when the series holds an observed or calculated sample
           type: boolean
+        label:
+          description: The metric's human label; omitted when unset
+          type: string
         metric_type_id:
           description: The catalog metric's uuid, the stable form of metric_type_name
           type: string
@@ -1623,15 +1623,15 @@ components:
           type: string
         default_value:
           description: The contract default; omitted when the contract sets none
-        display_name:
-          description: The property's human label; omitted when unset
-          type: string
         from_contract:
           description: True when the component's product declares the property; false for one set directly on the component
           type: boolean
         is_set:
           description: True when the component overrides the contract default
           type: boolean
+        label:
+          description: The property's human label; omitted when unset
+          type: string
         property_type_id:
           description: The catalog property's uuid, the stable form of property_type_name
           type: string
@@ -1684,13 +1684,13 @@ components:
           description: The most components the role will accept; null means no upper bound beyond quorum
           format: int64
           type: integer
-        display_name:
-          type: string
         from_standard:
           description: True when the role is inherited from the system's standard; false when declared on the system
           type: boolean
         impact:
           description: "What an impaired role means for its system: outage, degraded, or none"
+          type: string
+        label:
           type: string
         name:
           type: string
@@ -1725,7 +1725,7 @@ components:
           type: integer
       required:
         - name
-        - display_name
+        - label
         - quorum
         - position_labels
         - accepted_types
@@ -2026,10 +2026,10 @@ components:
           type: string
         description:
           type: string
-        display_name:
-          type: string
         id:
           description: The event type's uuid, the stable form of name
+          type: string
+        label:
           type: string
         name:
           type: string
@@ -2147,13 +2147,13 @@ components:
           type: string
         description:
           type: string
-        display_name:
-          type: string
         grant_count:
           description: How many grants the group confers on its members.
           format: int64
           type: integer
         id:
+          type: string
+        label:
           type: string
         member_count:
           description: How many principals belong to the group (populated on list and get; 0 from create/update).
@@ -2233,8 +2233,6 @@ components:
         choice:
           description: The choice this role belongs to; absent when the role is unconditional
           type: string
-        display_name:
-          type: string
         down:
           description: The assigned components whose own verdict is outage; empty when the role is merely short-staffed or only degraded
           items:
@@ -2248,6 +2246,8 @@ components:
         impaired:
           description: True when satisfying is below quorum
           type: boolean
+        label:
+          type: string
         name:
           type: string
         quorum:
@@ -2267,7 +2267,7 @@ components:
           type: integer
       required:
         - name
-        - display_name
+        - label
         - impact
         - quorum
         - satisfying
@@ -2312,13 +2312,13 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
-          type: string
         email:
           type: string
         has_avatar:
           description: True when the principal has a profile picture; fetch it from the avatar endpoint.
           type: boolean
+        label:
+          type: string
         must_change_password:
           description: True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears.
           type: boolean
@@ -3330,11 +3330,6 @@ components:
           type:
             - array
             - "null"
-        display_name:
-          type: string
-        display_name_generated:
-          description: "Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."
-          type: boolean
         effective_tags:
           additionalProperties:
             type: string
@@ -3342,6 +3337,11 @@ components:
           type: object
         id:
           type: string
+        label:
+          type: string
+        label_generated:
+          description: "Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back."
+          type: boolean
         location_type:
           description: The location_type name
           type: string
@@ -3376,7 +3376,7 @@ components:
         - id
         - name
         - name_generated
-        - display_name_generated
+        - label_generated
         - location_type
         - location_type_id
       type: object
@@ -3469,8 +3469,6 @@ components:
           type:
             - array
             - "null"
-        display_name:
-          type: string
         forked:
           description: True when this shipped row carries changes of yours overriding it. Restore discards them
           type: boolean
@@ -3478,6 +3476,8 @@ components:
           type: string
         id:
           description: The location type's uuid, the stable handle that survives a rename
+          type: string
+        label:
           type: string
         label_rule:
           description: The label template locations of this type get; empty falls back to the global rule for locations
@@ -3494,7 +3494,7 @@ components:
       required:
         - id
         - name
-        - display_name
+        - label
         - icon
         - allowed_parent_types
         - official
@@ -3663,10 +3663,10 @@ components:
     MemberBody:
       additionalProperties: false
       properties:
-        display_name:
-          description: The friendly string, where the member is a human who has one
-          type: string
         kind:
+          type: string
+        label:
+          description: The friendly string, where the member is a human who has one
           type: string
         name:
           description: "The member's identifier: a human's username, or a service account's name"
@@ -3691,10 +3691,10 @@ components:
           type: string
         description:
           type: string
-        display_name:
-          type: string
         id:
           description: The metric type's uuid, the stable form the contract and telemetry keys store
+          type: string
+        label:
           type: string
         name:
           type: string
@@ -3807,8 +3807,6 @@ components:
           type: string
         description:
           type: string
-        display_name:
-          type: string
         effective_tags:
           additionalProperties:
             type: string
@@ -3818,6 +3816,8 @@ components:
           type: boolean
         enrolled_at:
           format: date-time
+          type: string
+        label:
           type: string
         last_heartbeat_at:
           format: date-time
@@ -3970,8 +3970,6 @@ components:
         component_type_id:
           description: The component_type's uuid; the stable form of component_type
           type: string
-        display_name:
-          type: string
         driver:
           description: The driver's handle
           type: string
@@ -3989,6 +3987,8 @@ components:
             - device
             - app
             - service
+          type: string
+        label:
           type: string
         label_rule:
           description: The label template instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule
@@ -4013,7 +4013,7 @@ components:
       required:
         - id
         - name
-        - display_name
+        - label
         - kind
         - component_type
         - component_type_id
@@ -4085,10 +4085,10 @@ components:
           type: string
         description:
           type: string
-        display_name:
-          type: string
         id:
           description: The property's uuid, the stable form the contract and telemetry keys store
+          type: string
+        label:
           type: string
         name:
           type: string
@@ -4857,8 +4857,6 @@ components:
       properties:
         description:
           type: string
-        display_name:
-          type: string
         effective_permissions:
           items:
             type: string
@@ -4879,6 +4877,8 @@ components:
           type:
             - array
             - "null"
+        label:
+          type: string
         name:
           type: string
         official:
@@ -4923,15 +4923,15 @@ components:
           format: int64
           minimum: 1
           type: integer
-        display_name:
-          description: The role's human label; defaults to the role name on first declare
-          type: string
         impact:
           description: "What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display"
           enum:
             - outage
             - degraded
             - none
+          type: string
+        label:
+          description: The role's human label; defaults to the role name on first declare
           type: string
         pinned_products:
           description: If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask
@@ -5052,8 +5052,6 @@ components:
         default_admin_sensitive:
           description: The admin_sensitive value the create form seeds for this type
           type: boolean
-        display_name:
-          type: string
         fields:
           items:
             $ref: "#/components/schemas/SecretTypeFieldBody"
@@ -5063,6 +5061,8 @@ components:
         id:
           description: The secret type's uuid, the stable handle that survives a rename
           type: string
+        label:
+          type: string
         name:
           description: The name an operator reads and types; renameable
           type: string
@@ -5071,7 +5071,7 @@ components:
       required:
         - id
         - name
-        - display_name
+        - label
         - official
         - default_admin_sensitive
         - fields
@@ -5375,10 +5375,10 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
-          type: string
         id:
           description: The standard's uuid, the stable handle that survives a rename
+          type: string
+        label:
           type: string
         name:
           description: The name an operator reads and types; renameable
@@ -5394,7 +5394,7 @@ components:
       required:
         - id
         - name
-        - display_name
+        - label
         - official
       type: object
     StandardMetricBody:
@@ -5499,11 +5499,6 @@ components:
           type:
             - array
             - "null"
-        display_name:
-          type: string
-        display_name_generated:
-          description: "Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."
-          type: boolean
         effective_tags:
           additionalProperties:
             type: string
@@ -5511,6 +5506,11 @@ components:
           type: object
         id:
           type: string
+        label:
+          type: string
+        label_generated:
+          description: "Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back."
+          type: boolean
         location:
           description: The location's name, for display
           type: string
@@ -5561,7 +5561,7 @@ components:
         - id
         - name
         - name_generated
-        - display_name_generated
+        - label_generated
         - member_count
       type: object
     SystemMemberBody:
@@ -5683,11 +5683,11 @@ components:
           description: The most components the role will accept; null means no upper bound beyond quorum
           format: int64
           type: integer
-        display_name:
-          description: The role's human label
-          type: string
         impact:
           description: "What an impaired role means for its system: outage, degraded, or none"
+          type: string
+        label:
+          description: The role's human label
           type: string
         name:
           description: The role's name within its owner (the address)
@@ -5712,7 +5712,7 @@ components:
           type: integer
       required:
         - name
-        - display_name
+        - label
         - quorum
         - position_labels
         - accepted_types
@@ -5730,9 +5730,7 @@ components:
           readOnly: true
           type: string
         abbrev:
-          description: A compact form of display_name; empty inherits the nearest ancestor's
-          type: string
-        display_name:
+          description: A compact form of label; empty inherits the nearest ancestor's
           type: string
         icon:
           description: A glyph key; empty inherits the nearest ancestor's
@@ -5758,6 +5756,8 @@ components:
         inherited_stem_source:
           description: The name of the ancestor system_type inherited_stem comes from, which may be further up the chain than the parent
           type: string
+        label:
+          type: string
         label_rule:
           description: The label template systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems
           type: string
@@ -5781,7 +5781,7 @@ components:
       required:
         - id
         - name
-        - display_name
+        - label
         - official
       type: object
     SystemVerdictBody:
@@ -5910,14 +5910,14 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
-          type: string
         enabled:
           type: boolean
         id:
           type: string
         interface_id:
           description: The interface's surrogate id this task runs over
+          type: string
+        label:
           type: string
         mode:
           type: string
@@ -5967,7 +5967,7 @@ components:
         description:
           description: What the command does
           type: string
-        display_name:
+        label:
           description: A human label
           type: string
         params_schema:
@@ -5994,7 +5994,7 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
+        label:
           description: A new operator-facing label
           type: string
         product:
@@ -6019,11 +6019,11 @@ components:
           items:
             type: string
           type: array
-        display_name:
-          description: A new operator-facing label
-          type: string
         icon:
           description: A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again
+          type: string
+        label:
+          description: A new operator-facing label
           type: string
         label_rule:
           description: A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse.
@@ -6044,7 +6044,7 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
+        label:
           description: A new operator-facing label
           type: string
         version:
@@ -6064,7 +6064,7 @@ components:
         description:
           description: What the occurrence means
           type: string
-        display_name:
+        label:
           description: A human label
           type: string
         payload_schema:
@@ -6084,8 +6084,8 @@ components:
           description: Description; empty clears it
           maxLength: 1000
           type: string
-        display_name:
-          description: Display name; empty clears it
+        label:
+          description: Label; empty clears it
           maxLength: 200
           type: string
       type: object
@@ -6115,7 +6115,7 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
+        label:
           description: A new operator-facing label
           type: string
         location_type:
@@ -6137,11 +6137,11 @@ components:
           items:
             type: string
           type: array
-        display_name:
-          description: A new operator-facing label
-          type: string
         icon:
           description: A new glyph key; the console falls back to map-pin when empty
+          type: string
+        label:
+          description: A new operator-facing label
           type: string
         label_rule:
           description: "A new label template for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels"
@@ -6167,8 +6167,8 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
-          description: Your display name; empty clears it
+        label:
+          description: Your label; empty clears it
           maxLength: 200
           type: string
       type: object
@@ -6185,7 +6185,7 @@ components:
         description:
           description: What the series measures
           type: string
-        display_name:
+        label:
           description: A human label
           type: string
         precision:
@@ -6209,7 +6209,7 @@ components:
         description:
           description: New free-form operator notes
           type: string
-        display_name:
+        label:
           description: A new operator-facing label
           type: string
         location:
@@ -6226,13 +6226,13 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
-          description: Display name; empty clears it
-          maxLength: 200
-          type: string
         email:
           description: Email; empty clears it
           maxLength: 320
+          type: string
+        label:
+          description: Label; empty clears it
+          maxLength: 200
           type: string
         username:
           description: Sign-in name (lowercase letters, digits, and . _ -); renaming is safe
@@ -6254,9 +6254,6 @@ components:
         component_type:
           description: Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears
           type: string
-        display_name:
-          description: A new operator-facing label
-          type: string
         driver_id:
           description: A new driver, by handle or uuid
           type: string
@@ -6269,6 +6266,9 @@ components:
             - device
             - app
             - service
+          type: string
+        label:
+          description: A new operator-facing label
           type: string
         label_rule:
           description: A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse.
@@ -6293,7 +6293,7 @@ components:
         description:
           description: What the property means
           type: string
-        display_name:
+        label:
           description: A human label
           type: string
         validation:
@@ -6327,7 +6327,7 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
+        label:
           description: A new operator-facing label
           type: string
         parent_standard_id:
@@ -6344,7 +6344,7 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
+        label:
           description: A new operator-facing label
           type: string
         standard_id:
@@ -6367,11 +6367,11 @@ components:
         abbrev:
           description: A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again
           type: string
-        display_name:
-          description: A new operator-facing label
-          type: string
         icon:
           description: A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again
+          type: string
+        label:
+          description: A new operator-facing label
           type: string
         label_rule:
           description: "A new label template for systems of this type; omit to leave unchanged, \"\" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels"
@@ -6435,9 +6435,6 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
-          description: A new operator-facing label
-          type: string
         icon:
           description: A new glyph key
           type: string
@@ -6447,6 +6444,9 @@ components:
             - manufacturer
             - integrator
             - developer
+          type: string
+        label:
+          description: A new operator-facing label
           type: string
         support_phone:
           description: A new support line
@@ -6497,8 +6497,6 @@ components:
           format: uri
           readOnly: true
           type: string
-        display_name:
-          type: string
         icon:
           type: string
         id:
@@ -6509,6 +6507,8 @@ components:
             - manufacturer
             - integrator
             - developer
+          type: string
+        label:
           type: string
         name:
           description: The name an operator reads and types; renameable
@@ -6522,7 +6522,7 @@ components:
       required:
         - id
         - name
-        - display_name
+        - label
         - kind
         - official
       type: object
@@ -6664,7 +6664,7 @@ paths:
           description: Error
       summary: The authenticated principal, its permissions, and grants
     patch:
-      description: Updates the caller's own display name (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).
+      description: Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).
       operationId: update-auth-me
       requestBody:
         content:
@@ -7022,7 +7022,7 @@ paths:
       x-omniglass-permission: command_type:update
   /component-types:
     get:
-      description: "Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read."
+      description: "Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read."
       operationId: list-component-types
       responses:
         "200":
@@ -7087,7 +7087,7 @@ paths:
       summary: Delete a component type
       x-omniglass-permission: component_type:delete
     patch:
-      description: "Patches a component_type's display_name, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update."
+      description: "Patches a component_type's label, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update."
       operationId: update-component-type
       parameters:
         - in: path
@@ -7237,7 +7237,7 @@ paths:
       summary: Get a component
       x-omniglass-permission: component:read
     patch:
-      description: "Patches a component's display_name or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split."
+      description: "Patches a component's label or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split."
       operationId: update-component
       parameters:
         - description: The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
@@ -8057,7 +8057,7 @@ paths:
       x-omniglass-permission: component:create
   /drivers:
     get:
-      description: Lists the driver registry, ordered alphabetically by display name. Populates the driver picker on the product form. Gated by driver:read.
+      description: Lists the driver registry, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
       operationId: list-drivers
       responses:
         "200":
@@ -8148,7 +8148,7 @@ paths:
       summary: Get a driver
       x-omniglass-permission: driver:read
     patch:
-      description: Patches a custom driver's display_name or version. Official drivers are read-only (422). Gated by driver:update.
+      description: Patches a custom driver's label or version. Official drivers are read-only (422). Gated by driver:update.
       operationId: update-driver
       parameters:
         - in: path
@@ -8562,7 +8562,7 @@ paths:
       x-omniglass-permission: interface:update
   /location-types:
     get:
-      description: Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by location_type:read.
+      description: Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.
       operationId: list-location-types
       responses:
         "200":
@@ -8627,7 +8627,7 @@ paths:
       summary: Delete a location type
       x-omniglass-permission: location_type:delete
     patch:
-      description: "Patches a location_type's display_name, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update."
+      description: "Patches a location_type's label, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update."
       operationId: update-location-type
       parameters:
         - in: path
@@ -8968,7 +8968,7 @@ paths:
       summary: Get a location
       x-omniglass-permission: location:read
     patch:
-      description: "Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split."
+      description: "Patches a location's label or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split."
       operationId: update-location
       parameters:
         - description: The location's name, or a dotted address (e.g. boi.17c.415a)
@@ -9636,7 +9636,7 @@ paths:
       summary: Get a node
       x-omniglass-permission: node:read
     patch:
-      description: Patches a node's display name, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.
+      description: Patches a node's label, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.
       operationId: update-node
       parameters:
         - in: path
@@ -10264,7 +10264,7 @@ paths:
       summary: Get a principal
       x-omniglass-permission: principal:read:admin
     patch:
-      description: "Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it."
+      description: "Updates a human principal's label, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it."
       operationId: update-principal
       parameters:
         - description: The principal, addressed by its uuid or a human username
@@ -10778,7 +10778,7 @@ paths:
       x-omniglass-permission: principal:set-avatar
   /products:
     get:
-      description: Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+      description: Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
       operationId: list-products
       responses:
         "200":
@@ -10869,7 +10869,7 @@ paths:
       summary: Get a product
       x-omniglass-permission: product:read
     patch:
-      description: Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
+      description: Patches a custom product's label, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
       operationId: update-product
       parameters:
         - in: path
@@ -11521,7 +11521,7 @@ paths:
       x-omniglass-platform-permission: platform:update
   /standards:
     get:
-      description: Lists the standard catalog, ordered alphabetically by display name. A standard is the blueprint a system conforms to. Gated by standard:read.
+      description: Lists the standard catalog, ordered alphabetically by label. A standard is the blueprint a system conforms to. Gated by standard:read.
       operationId: list-standards
       responses:
         "200":
@@ -11612,7 +11612,7 @@ paths:
       summary: Get a standard
       x-omniglass-permission: standard:read
     patch:
-      description: Patches a custom standard's display_name or parent. Official standards are read-only (422). Gated by standard:update.
+      description: Patches a custom standard's label or parent. Official standards are read-only (422). Gated by standard:update.
       operationId: update-standard
       parameters:
         - in: path
@@ -11931,7 +11931,7 @@ paths:
       x-omniglass-permission: standard:update
   /system-types:
     get:
-      description: "Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read."
+      description: "Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read."
       operationId: list-system-types
       responses:
         "200":
@@ -11996,7 +11996,7 @@ paths:
       summary: Delete a system type
       x-omniglass-permission: system_type:delete
     patch:
-      description: "Patches a custom system_type's display_name, stem, icon, abbrev, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /systems:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by system_type:update."
+      description: "Patches a custom system_type's label, stem, icon, abbrev, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /systems:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by system_type:update."
       operationId: update-system-type
       parameters:
         - in: path
@@ -12118,7 +12118,7 @@ paths:
       summary: Get a system
       x-omniglass-permission: system:read
     patch:
-      description: "Patches a system's display_name, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split."
+      description: "Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split."
       operationId: update-system
       parameters:
         - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
@@ -13266,7 +13266,7 @@ paths:
       x-omniglass-platform-permission: platform:update
   /vendors:
     get:
-      description: Lists the vendor registry, ordered alphabetically by display name. Populates the vendor picker on the product form. Gated by vendor:read.
+      description: Lists the vendor registry, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
       operationId: list-vendors
       responses:
         "200":
@@ -13357,7 +13357,7 @@ paths:
       summary: Get a vendor
       x-omniglass-permission: vendor:read
     patch:
-      description: Patches a custom vendor's display_name, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.
+      description: Patches a custom vendor's label, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.
       operationId: update-vendor
       parameters:
         - in: path

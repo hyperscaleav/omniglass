@@ -37,7 +37,7 @@ bootstrap:
   enabled: true
   username: preview
   email: ""
-  displayName: "Preview Owner"
+  label: "Preview Owner"
 
 # Bundled ephemeral Postgres for disposable previews. Data is emptyDir: it does
 # not survive a pod restart, which is the point. Disable for production and set

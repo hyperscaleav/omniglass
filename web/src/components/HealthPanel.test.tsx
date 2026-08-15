@@ -24,7 +24,7 @@ const degraded: EstateHealth = {
     // holds 1 of the 2 it needs and takes the system out.
     {
       name: "main-display",
-      display_name: "Main display",
+      label: "Main display",
       impact: "outage",
       impaired: true,
       active: true,
@@ -47,7 +47,7 @@ const degraded: EstateHealth = {
     // Impaired with no alarm: simply short of components.
     {
       name: "table-mic",
-      display_name: "Table microphone",
+      label: "Table microphone",
       impact: "degraded",
       impaired: true,
       active: true,
@@ -62,7 +62,7 @@ const degraded: EstateHealth = {
     // Holding, so it is named as such rather than left implicit.
     {
       name: "touch-panel",
-      display_name: "Touch panel",
+      label: "Touch panel",
       impact: "degraded",
       impaired: false,
       active: true,
@@ -90,7 +90,7 @@ const healthy: EstateHealth = {
   roles: [
     {
       name: "main-display",
-      display_name: "Main display",
+      label: "Main display",
       impact: "outage",
       impaired: false,
       active: true,
@@ -224,17 +224,17 @@ describe("SystemHealthPanel reconciliation", () => {
     systems: [],
     roles: [
       {
-        name: "video-bar", display_name: "Video bar", impact: "outage", impaired: false, active: true,
+        name: "video-bar", label: "Video bar", impact: "outage", impaired: false, active: true,
         quorum: 1, satisfying: 1, short: 0, spare: 0, down: [], assigned_to: ["bar-1"], alarms: [],
         choice: "conferencing", alternate: "all-in-one",
       },
       {
-        name: "codec", display_name: "Codec", impact: "outage", impaired: true, active: false,
+        name: "codec", label: "Codec", impact: "outage", impaired: true, active: false,
         quorum: 1, satisfying: 0, short: 1, spare: 0, down: [], assigned_to: [], alarms: [],
         choice: "conferencing", alternate: "component-built",
       },
       {
-        name: "camera", display_name: "Camera", impact: "outage", impaired: true, active: false,
+        name: "camera", label: "Camera", impact: "outage", impaired: true, active: false,
         quorum: 1, satisfying: 0, short: 1, spare: 0, down: [], assigned_to: [], alarms: [],
         choice: "conferencing", alternate: "component-built",
       },

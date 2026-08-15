@@ -88,7 +88,7 @@ func twoDisplayOnes(t *testing.T, gw storage.Gateway) (compA, compB *storage.Com
 		t.Fatalf("system: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "system", sys.Name, storage.SystemRoleSpec{
-		Name: "seat", DisplayName: "Seat", Quorum: 1,
+		Name: "seat", Label: "Seat", Quorum: 1,
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestSystemOwnedRoleDeclarationSurvivesDuplicateNames(t *testing.T) {
 	sysA, sysB := twoSameNamedSystems(t, gw)
 
 	if _, err := gw.SetSystemRole(ctx, "", "system", sysA.ID, storage.SystemRoleSpec{
-		Name: "seat", DisplayName: "Seat", Quorum: 1,
+		Name: "seat", Label: "Seat", Quorum: 1,
 	}); err != nil {
 		t.Fatalf("declare role on sysA by id: %v", err)
 	}
@@ -320,7 +320,7 @@ func TestSystemOwnedRoleDeclarationSurvivesDuplicateNames(t *testing.T) {
 	// Re-declaring (an upsert on owner_kind/owner_arc/name) must still land on
 	// sysA only.
 	if _, err := gw.SetSystemRole(ctx, "", "system", sysA.ID, storage.SystemRoleSpec{
-		Name: "seat", DisplayName: "Seat (revised)", Quorum: 1,
+		Name: "seat", Label: "Seat (revised)", Quorum: 1,
 	}); err != nil {
 		t.Fatalf("revise role on sysA by id: %v", err)
 	}
@@ -328,8 +328,8 @@ func TestSystemOwnedRoleDeclarationSurvivesDuplicateNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list roles on sysA by id (after revise): %v", err)
 	}
-	if len(rolesA) != 1 || rolesA[0].DisplayName != "Seat (revised)" {
-		t.Fatalf("sysA roles after revise = %+v, want the revised display name", rolesA)
+	if len(rolesA) != 1 || rolesA[0].Label != "Seat (revised)" {
+		t.Fatalf("sysA roles after revise = %+v, want the revised label", rolesA)
 	}
 
 	if err := gw.DeleteSystemRole(ctx, "", "system", sysA.ID, "seat"); err != nil {
@@ -347,7 +347,7 @@ func TestSystemOwnedRoleDeclarationSurvivesDuplicateNames(t *testing.T) {
 	// constraint's ErrRoleRefNotFound, unchanged (roleOwnerArg's documented
 	// not-found behavior).
 	_, err = gw.SetSystemRole(ctx, "", "system", "00000000-0000-0000-0000-000000000000", storage.SystemRoleSpec{
-		Name: "seat", DisplayName: "Seat", Quorum: 1,
+		Name: "seat", Label: "Seat", Quorum: 1,
 	})
 	if !errors.Is(err, storage.ErrRoleRefNotFound) {
 		t.Fatalf("declare role on an unknown system = %v, want ErrRoleRefNotFound", err)
@@ -606,7 +606,7 @@ func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 	all := scope.Set{All: true}
 	sysA, sysB := twoSameNamedSystems(t, gw)
 
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "dup-std", DisplayName: "Dup Standard"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "dup-std", Label: "Dup Standard"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	if _, err := gw.UpdateSystem(ctx, "", sysA.ID, storage.SystemPatch{StandardID: strptr("dup-std")}, all, all); err != nil {
@@ -628,7 +628,7 @@ func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 	}
 
 	if _, err := gw.SetSystemRole(ctx, "", "standard", "dup-std", storage.SystemRoleSpec{
-		Name: "seat", DisplayName: "Seat", Quorum: 1,
+		Name: "seat", Label: "Seat", Quorum: 1,
 	}); err != nil {
 		t.Fatalf("declare standard role: %v", err)
 	}

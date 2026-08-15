@@ -7,7 +7,7 @@
 # insert-if-absent could not do at all: a value REMOVED from this file is
 # actually withdrawn from an estate that already seeded it.
 #
-# The registry lists alphabetically by display_name; that ordering does NOT
+# The registry lists alphabetically by label; that ordering does NOT
 # constrain nesting. allowed_parent_types is what does: a set of
 # location_type ids and/or the reserved "root" sentinel (may sit at the top,
 # no parent) this type may be placed under. Empty means unconstrained; these
@@ -34,18 +34,18 @@
 # the generator is there.
 location_types:
   - id: campus
-    display_name: Campus
+    label: Campus
     icon: landmark
     allowed_parent_types: [root]
   - id: building
-    display_name: Building
+    label: Building
     icon: building
     allowed_parent_types: [root, campus]
   - id: floor
-    display_name: Floor
+    label: Floor
     icon: layers
     allowed_parent_types: [building, campus]
   - id: room
-    display_name: Room
+    label: Room
     icon: door-open
     allowed_parent_types: [floor, building, campus]

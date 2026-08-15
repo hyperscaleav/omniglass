@@ -51,12 +51,12 @@ type Doc struct {
 // boot-seeded coarse space classifier (what kind of space it is, a separate axis
 // from the standard); Location names a fixture location BY KEY.
 type System struct {
-	Key         string `yaml:"key"`
-	Name        string `yaml:"name"`
-	DisplayName string `yaml:"display_name"`
-	Standard    string `yaml:"standard"`
-	SystemType  string `yaml:"system_type"`
-	Location    string `yaml:"location"`
+	Key        string `yaml:"key"`
+	Name       string `yaml:"name"`
+	Label      string `yaml:"label"`
+	Standard   string `yaml:"standard"`
+	SystemType string `yaml:"system_type"`
+	Location   string `yaml:"location"`
 }
 
 // Member binds a component into a system without giving it a job. The dev estate
@@ -99,11 +99,11 @@ type ProductProperty struct {
 // component's properties and whose classification supplies the name's stem. A
 // system binding is omitted for now (optional on create).
 type Component struct {
-	Key         string `yaml:"key"`
-	Name        string `yaml:"name"`
-	DisplayName string `yaml:"display_name"`
-	Product     string `yaml:"product"`
-	Location    string `yaml:"location"`
+	Key      string `yaml:"key"`
+	Name     string `yaml:"name"`
+	Label    string `yaml:"label"`
+	Product  string `yaml:"product"`
+	Location string `yaml:"location"`
 }
 
 // PropertyValue is one example literal a component declares over its product's
@@ -160,19 +160,19 @@ type Variable struct {
 // building and a room must each carry a name). Parent names a location declared
 // earlier in the document BY KEY (empty for a root).
 type Location struct {
-	Key         string `yaml:"key"`
-	Name        string `yaml:"name"`
-	DisplayName string `yaml:"display_name"`
-	Type        string `yaml:"type"`
-	Parent      string `yaml:"parent"`
+	Key    string `yaml:"key"`
+	Name   string `yaml:"name"`
+	Label  string `yaml:"label"`
+	Type   string `yaml:"type"`
+	Parent string `yaml:"parent"`
 }
 
 // User is one example human principal with a known password and its grants.
 type User struct {
-	Username    string  `yaml:"username"`
-	Password    string  `yaml:"password"`
-	DisplayName string  `yaml:"display_name"`
-	Grants      []Grant `yaml:"grants"`
+	Username string  `yaml:"username"`
+	Password string  `yaml:"password"`
+	Label    string  `yaml:"label"`
+	Grants   []Grant `yaml:"grants"`
 }
 
 // Grant assigns a role at a scope. ScopeRef names a fixture location BY KEY
@@ -248,7 +248,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		// (ADR-0103). So every location in this estate carries a name and the
 		// spec below always supplies one; the components and the systems are
 		// what demonstrate the generator.
-		spec := storage.LocationSpec{Name: l.Name, DisplayName: l.DisplayName, LocationType: l.Type}
+		spec := storage.LocationSpec{Name: l.Name, Label: l.Label, LocationType: l.Type}
 		if parentID != "" {
 			p := parentID
 			spec.ParentName = &p
@@ -274,7 +274,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		}
 		pr, err := gw.CreateHumanPrincipal(ctx, actorID, storage.HumanSpec{
 			Username:     u.Username,
-			DisplayName:  u.DisplayName,
+			Label:        u.Label,
 			PasswordHash: hash,
 		}, all)
 		if errors.Is(err, storage.ErrUsernameTaken) {
@@ -428,7 +428,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			compIDs[c.Key] = id
 			continue
 		}
-		spec := storage.ComponentSpec{Name: c.Name, DisplayName: c.DisplayName}
+		spec := storage.ComponentSpec{Name: c.Name, Label: c.Label}
 		if locID != "" {
 			l := locID
 			spec.LocationName = &l
@@ -480,7 +480,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			sysIDs[s.Key] = id
 			continue
 		}
-		spec := storage.SystemSpec{Name: s.Name, DisplayName: s.DisplayName}
+		spec := storage.SystemSpec{Name: s.Name, Label: s.Label}
 		if s.Standard != "" {
 			std := s.Standard
 			spec.StandardID = &std
@@ -764,7 +764,7 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string, l
 	if _, err := gw.GetComponent(ctx, reachComponent, all); errors.Is(err, storage.ErrComponentNotFound) {
 		if _, err := gw.CreateComponent(ctx, actorID, storage.ComponentSpec{
 			Name:         reachComponent,
-			DisplayName:  "Boardroom DSP",
+			Label:        "Boardroom DSP",
 			LocationName: &roomID,
 		}, all, all, all, all); err != nil {
 			return fmt.Errorf("devseed: create reachability component: %w", err)
@@ -779,7 +779,7 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string, l
 	if _, err := gw.GetNode(ctx, reachNode, all); errors.Is(err, storage.ErrNodeNotFound) {
 		if _, err := gw.CreateNode(ctx, actorID, storage.NodeSpec{
 			Name:         reachNode,
-			DisplayName:  "HQ Edge Node",
+			Label:        "HQ Edge Node",
 			Description:  "HQ network closet",
 			LocationName: &closetID,
 		}, all, all); err != nil {

@@ -18,7 +18,7 @@ type MetricType struct {
 	// the contract and telemetry foreign keys store.
 	ID           string
 	Name         string
-	DisplayName  string
+	Label        string
 	DataType     string
 	Unit         *string
 	Precision    *int
@@ -38,7 +38,7 @@ var (
 // MetricTypeSpec is the create input for a metric type.
 type MetricTypeSpec struct {
 	Name        string
-	DisplayName string
+	Label       string
 	DataType    string
 	Unit        *string
 	Precision   *int
@@ -49,17 +49,17 @@ type MetricTypeSpec struct {
 // is unchanged. DataType is fixed at create (a series' type must not shift under
 // its consumers).
 type MetricTypePatch struct {
-	DisplayName *string
+	Label       *string
 	Description *string
 	Unit        *string
 	Precision   *int
 }
 
-const metricTypeCols = `id, name, coalesce(display_name, ''), data_type, unit, "precision", fusion_policy, description, official`
+const metricTypeCols = `id, name, label, data_type, unit, "precision", fusion_policy, description, official`
 
 func scanMetricType(row pgx.Row) (*MetricType, error) {
 	var mt MetricType
-	if err := row.Scan(&mt.ID, &mt.Name, &mt.DisplayName, &mt.DataType, &mt.Unit, &mt.Precision, &mt.FusionPolicy, &mt.Description, &mt.Official); err != nil {
+	if err := row.Scan(&mt.ID, &mt.Name, &mt.Label, &mt.DataType, &mt.Unit, &mt.Precision, &mt.FusionPolicy, &mt.Description, &mt.Official); err != nil {
 		return nil, err
 	}
 	return &mt, nil
@@ -70,14 +70,14 @@ func scanMetricType(row pgx.Row) (*MetricType, error) {
 // keyed by a distinct name and untouched. Mirrors UpsertPropertyType.
 func (p *PG) UpsertMetricType(ctx context.Context, mt MetricType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into metric_type (name, display_name, data_type, unit, "precision", fusion_policy, description, official)
+		insert into metric_type (name, label, data_type, unit, "precision", fusion_policy, description, official)
 		values ($1, $2, $3, $4, $5, $6, $7, $8)
 		on conflict (name) do update set
-			display_name = excluded.display_name, data_type = excluded.data_type,
+			label = excluded.label, data_type = excluded.data_type,
 			unit = excluded.unit, "precision" = excluded."precision",
 			fusion_policy = excluded.fusion_policy, description = excluded.description,
 			official = excluded.official`,
-		mt.Name, mt.DisplayName, mt.DataType, mt.Unit, mt.Precision, mt.FusionPolicy, mt.Description, mt.Official)
+		mt.Name, mt.Label, mt.DataType, mt.Unit, mt.Precision, mt.FusionPolicy, mt.Description, mt.Official)
 	if err != nil {
 		return fmt.Errorf("storage: upsert metric type %q: %w", mt.Name, err)
 	}
@@ -95,7 +95,7 @@ func (p *PG) ListMetricTypes(ctx context.Context) ([]MetricType, error) {
 	var out []MetricType
 	for rows.Next() {
 		var mt MetricType
-		if err := rows.Scan(&mt.ID, &mt.Name, &mt.DisplayName, &mt.DataType, &mt.Unit, &mt.Precision, &mt.FusionPolicy, &mt.Description, &mt.Official); err != nil {
+		if err := rows.Scan(&mt.ID, &mt.Name, &mt.Label, &mt.DataType, &mt.Unit, &mt.Precision, &mt.FusionPolicy, &mt.Description, &mt.Official); err != nil {
 			return nil, fmt.Errorf("storage: scan metric type: %w", err)
 		}
 		out = append(out, mt)
@@ -170,10 +170,10 @@ func (p *PG) CreateMetricType(ctx context.Context, actorID string, spec MetricTy
 	// key, which survives a later rename, rather than on the name.
 	var mtID string
 	if err := tx.QueryRow(ctx,
-		`insert into metric_type (name, display_name, data_type, unit, "precision", description, official)
+		`insert into metric_type (name, label, data_type, unit, "precision", description, official)
 		 values ($1, $2, $3, $4, $5, $6, false)
 		 returning id`,
-		spec.Name, spec.DisplayName, spec.DataType, spec.Unit, spec.Precision, spec.Description).Scan(&mtID); err != nil {
+		spec.Name, spec.Label, spec.DataType, spec.Unit, spec.Precision, spec.Description).Scan(&mtID); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrMetricTypeExists
 		}
@@ -210,12 +210,12 @@ func (p *PG) UpdateMetricType(ctx context.Context, actorID, name string, patch M
 	}
 	if _, err := tx.Exec(ctx, `
 		update metric_type set
-			display_name = coalesce($2, display_name),
+			label = coalesce($2, label),
 			description  = coalesce($3, description),
 			unit         = coalesce($4, unit),
 			"precision"  = coalesce($5, "precision")
 		where name = $1`,
-		name, patch.DisplayName, patch.Description, patch.Unit, patch.Precision); err != nil {
+		name, patch.Label, patch.Description, patch.Unit, patch.Precision); err != nil {
 		return nil, fmt.Errorf("storage: update metric type %q: %w", name, err)
 	}
 	mt, err := scanMetricType(tx.QueryRow(ctx, `select `+metricTypeCols+` from metric_type where name = $1`, name))

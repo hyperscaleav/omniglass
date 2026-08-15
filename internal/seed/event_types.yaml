@@ -4,13 +4,13 @@
 # value and not a raw log line (raw logs are a separate ingest lane).
 event_types:
   - name: call-started
-    display_name: Call Started
+    label: Call Started
     description: >-
       A conferencing endpoint entered an active call. A caught occurrence when the
       device reports it natively (an xAPI event), or a derived one when a rule
       infers it from other signals.
   - name: command-issued
-    display_name: Command Issued
+    label: Command Issued
     description: >-
       A command was issued to a component (the caused event a command records). It
       opens the intended value the command sets and is the lineage cause of that

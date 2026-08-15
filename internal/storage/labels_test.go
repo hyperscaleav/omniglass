@@ -16,14 +16,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The generated label (#682). Everything below asserts against display_name and
+// The generated label (#682). Everything below asserts against label and
 // its PEN together, because the pair is the unit: a value with no pen is an
 // operator's, a value with the pen is the rule's, and the two disagreeing is
 // the defect the invariant test at the bottom of this file exists to catch.
 //
 // The seeded global rule for a component is
 // "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}", and samsung-qm55 is
-// classified under the "display" component_type whose display_name is
+// classified under the "display" component_type whose label is
 // "Display", so the first display in an empty bucket labels "Display 1".
 
 const qm55 = "samsung-qm55"
@@ -38,10 +38,10 @@ func TestCreatedComponentGetsALabelNobodyTyped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if c.DisplayName != "Display 1" {
-		t.Fatalf("label = %q, want %q", c.DisplayName, "Display 1")
+	if c.Label != "Display 1" {
+		t.Fatalf("label = %q, want %q", c.Label, "Display 1")
 	}
-	if !c.DisplayNameGenerated {
+	if !c.LabelGenerated {
 		t.Fatal("the platform generated the label but does not hold the pen")
 	}
 	// The read path carries it, not just the write's returned row.
@@ -49,8 +49,8 @@ func TestCreatedComponentGetsALabelNobodyTyped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if got.DisplayName != "Display 1" || !got.DisplayNameGenerated {
-		t.Fatalf("on read: label = %q generated = %v, want %q true", got.DisplayName, got.DisplayNameGenerated, "Display 1")
+	if got.Label != "Display 1" || !got.LabelGenerated {
+		t.Fatalf("on read: label = %q generated = %v, want %q true", got.Label, got.LabelGenerated, "Display 1")
 	}
 	// The second display in the same bucket takes the next ordinal, and the
 	// label follows it: proof the label reads the row's own facts rather than
@@ -59,8 +59,8 @@ func TestCreatedComponentGetsALabelNobodyTyped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create second: %v", err)
 	}
-	if second.DisplayName != "Display 2" {
-		t.Fatalf("second label = %q, want %q", second.DisplayName, "Display 2")
+	if second.Label != "Display 2" {
+		t.Fatalf("second label = %q, want %q", second.Label, "Display 2")
 	}
 }
 
@@ -75,14 +75,14 @@ func TestSettingALabelTakesThePenAndClearingItGivesItBack(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 
-	typed, err := gw.UpdateComponent(ctx, "", c.ID, storage.ComponentPatch{DisplayName: strptr("Front of House")}, all, all)
+	typed, err := gw.UpdateComponent(ctx, "", c.ID, storage.ComponentPatch{Label: strptr("Front of House")}, all, all)
 	if err != nil {
 		t.Fatalf("set label: %v", err)
 	}
-	if typed.DisplayName != "Front of House" {
-		t.Fatalf("label after typing = %q, want %q", typed.DisplayName, "Front of House")
+	if typed.Label != "Front of House" {
+		t.Fatalf("label after typing = %q, want %q", typed.Label, "Front of House")
 	}
-	if typed.DisplayNameGenerated {
+	if typed.LabelGenerated {
 		t.Fatal("an operator typed the label and the platform still holds the pen")
 	}
 
@@ -92,27 +92,32 @@ func TestSettingALabelTakesThePenAndClearingItGivesItBack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rename: %v", err)
 	}
-	if renamed.DisplayName != "Front of House" {
-		t.Fatalf("label after rename = %q, want the operator's %q", renamed.DisplayName, "Front of House")
+	if renamed.Label != "Front of House" {
+		t.Fatalf("label after rename = %q, want the operator's %q", renamed.Label, "Front of House")
 	}
 
-	cleared, err := gw.UpdateComponent(ctx, "", renamed.ID, storage.ComponentPatch{DisplayName: strptr("")}, all, all)
+	cleared, err := gw.UpdateComponent(ctx, "", renamed.ID, storage.ComponentPatch{Label: strptr("")}, all, all)
 	if err != nil {
 		t.Fatalf("clear label: %v", err)
 	}
-	if !cleared.DisplayNameGenerated {
+	if !cleared.LabelGenerated {
 		t.Fatal("the operator cleared the label and the platform did not take the pen back")
 	}
 	// The rename above took the name's pen and nulled the ordinal, so the rule
 	// renders without one: "Display", not "Display 1".
-	if cleared.DisplayName != "Display" {
-		t.Fatalf("label after clearing = %q, want the rule's %q", cleared.DisplayName, "Display")
+	if cleared.Label != "Display" {
+		t.Fatalf("label after clearing = %q, want the rule's %q", cleared.Label, "Display")
 	}
 }
 
-// A rule producing an empty string leaves the label UNSET, not blank. Asserted
-// against the raw column, since the read projection coalesces NULL to "" and
-// would report the two as identical.
+// A rule producing an empty string leaves the label UNSET. Asserted against the
+// RAW column rather than the projection, because the point is what is stored.
+//
+// Before #613 unset was SQL NULL here and the read projection coalesced it to
+// "", so this test's job was to tell the two apart. The floor (ADR-0118) makes
+// the empty string the single spelling of unset on every label column, so the
+// assertion is now that the column holds it and, just as importantly, that the
+// write does not attempt a NULL the column would refuse.
 //
 // The pen stays with the platform. A row marked operator-owned because a rule
 // happened to render nothing would never be reconsidered by the recompute that
@@ -130,11 +135,11 @@ func TestARuleRenderingNothingLeavesTheLabelUnsetRatherThanBlank(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if !c.DisplayNameGenerated {
+	if !c.LabelGenerated {
 		t.Fatal("an empty render took the pen away from the platform")
 	}
-	if raw := rawLabel(t, ctx, dsn, c.ID); raw != nil {
-		t.Fatalf("on create the stored label is %q, want SQL NULL rather than a blank string", *raw)
+	if raw := rawLabel(t, ctx, dsn, c.ID); raw == nil || *raw != "" {
+		t.Fatalf("on create the stored label is %v, want the empty string, the one spelling of unset (#613)", raw)
 	}
 
 	// Then the case that actually WRITES the empty value, which is the one a
@@ -149,8 +154,8 @@ func TestARuleRenderingNothingLeavesTheLabelUnsetRatherThanBlank(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reset to pick up the producing rule: %v", err)
 	}
-	if labelled.DisplayName != "Panel 1" {
-		t.Fatalf("precondition: label = %q, want %q", labelled.DisplayName, "Panel 1")
+	if labelled.Label != "Panel 1" {
+		t.Fatalf("precondition: label = %q, want %q", labelled.Label, "Panel 1")
 	}
 	if _, err := gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{LabelRule: strptr("{{.NoSuchFact}}")}); err != nil {
 		t.Fatalf("back to the empty-producing rule: %v", err)
@@ -159,14 +164,14 @@ func TestARuleRenderingNothingLeavesTheLabelUnsetRatherThanBlank(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rename to re-render: %v", err)
 	}
-	if emptied.DisplayName != "" {
-		t.Fatalf("label = %q, want none", emptied.DisplayName)
+	if emptied.Label != "" {
+		t.Fatalf("label = %q, want none", emptied.Label)
 	}
-	if !emptied.DisplayNameGenerated {
+	if !emptied.LabelGenerated {
 		t.Fatal("an empty re-render took the pen away from the platform")
 	}
-	if raw := rawLabel(t, ctx, dsn, c.ID); raw != nil {
-		t.Fatalf("after an empty re-render the stored label is %q, want SQL NULL rather than a blank string", *raw)
+	if raw := rawLabel(t, ctx, dsn, c.ID); raw == nil || *raw != "" {
+		t.Fatalf("after an empty re-render the stored label is %v, want the empty string (#613)", raw)
 	}
 }
 
@@ -223,7 +228,7 @@ func TestARuleThatWouldAllocateWithoutBoundCannotBeStored(t *testing.T) {
 		if _, err := gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{LabelRule: &bad}); !errors.Is(err, storage.ErrInvalidLabelRule) {
 			t.Fatalf("UpdateComponentType with a %d-byte unbounded rule = %v, want ErrInvalidLabelRule", len(bad), err)
 		}
-		if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "p" + strconv.Itoa(len(bad)), DisplayName: "P", ComponentType: "display", LabelRule: &bad}); !errors.Is(err, storage.ErrInvalidLabelRule) {
+		if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "p" + strconv.Itoa(len(bad)), Label: "P", ComponentType: "display", LabelRule: &bad}); !errors.Is(err, storage.ErrInvalidLabelRule) {
 			t.Fatalf("CreateProduct with an unbounded rule = %v, want ErrInvalidLabelRule", err)
 		}
 		if _, err := gw.SetLabelRule(ctx, "", "component", bad); !errors.Is(err, storage.ErrInvalidLabelRule) {
@@ -254,8 +259,8 @@ func TestARuleThatFailsToRenderDegradesRatherThanFailingTheWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create with a failing rule: %v", err)
 	}
-	if c.DisplayName != "" {
-		t.Fatalf("label = %q, want none", c.DisplayName)
+	if c.Label != "" {
+		t.Fatalf("label = %q, want none", c.Label)
 	}
 	if _, err := gw.GetComponent(ctx, c.ID, all); err != nil {
 		t.Fatalf("read after a failing rule: %v", err)
@@ -274,8 +279,8 @@ func TestAMoreSpecificTierWins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if c.DisplayName != "Display 1" {
-		t.Fatalf("global tier label = %q, want %q", c.DisplayName, "Display 1")
+	if c.Label != "Display 1" {
+		t.Fatalf("global tier label = %q, want %q", c.Label, "Display 1")
 	}
 
 	if _, err := gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{LabelRule: strptr("type says {{.Stem}}")}); err != nil {
@@ -288,7 +293,7 @@ func TestAMoreSpecificTierWins(t *testing.T) {
 	// A product an operator owns, since a shipped product cannot be edited
 	// until the fork primitive reaches that registry.
 	mine, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "my-panel", DisplayName: "My Panel", ComponentType: "display",
+		Name: "my-panel", Label: "My Panel", ComponentType: "display",
 		LabelRule: strptr("product says {{.ProductName}}"),
 	})
 	if err != nil {
@@ -298,8 +303,8 @@ func TestAMoreSpecificTierWins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reclassify: %v", err)
 	}
-	if reclassified.DisplayName != "product says My Panel" {
-		t.Fatalf("with a product rule = %q, want %q", reclassified.DisplayName, "product says My Panel")
+	if reclassified.Label != "product says My Panel" {
+		t.Fatalf("with a product rule = %q, want %q", reclassified.Label, "product says My Panel")
 	}
 }
 
@@ -328,8 +333,8 @@ func TestARuleOnAShippedTypeForksItRatherThanWritingIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if c.DisplayName != "Panel 1" {
-		t.Fatalf("label = %q, want the forked rule's %q", c.DisplayName, "Panel 1")
+	if c.Label != "Panel 1" {
+		t.Fatalf("label = %q, want the forked rule's %q", c.Label, "Panel 1")
 	}
 
 	// Restoring defaults discards the fork, and the rule goes with it.
@@ -351,7 +356,7 @@ func TestATypeRuleInheritsFromItsAncestorAndAChildOverrides(t *testing.T) {
 	// An operator's product classified under the child type, so the component
 	// resolves through interactive-display -> display.
 	child, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "my-touch-panel", DisplayName: "My Touch Panel", ComponentType: "interactive-display",
+		Name: "my-touch-panel", Label: "My Touch Panel", ComponentType: "interactive-display",
 	})
 	if err != nil {
 		t.Fatalf("create product: %v", err)
@@ -380,8 +385,8 @@ func TestATypeRuleInheritsFromItsAncestorAndAChildOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create sibling: %v", err)
 	}
-	if sibling.DisplayName != "from the parent" {
-		t.Fatalf("sibling label = %q, want the parent's %q", sibling.DisplayName, "from the parent")
+	if sibling.Label != "from the parent" {
+		t.Fatalf("sibling label = %q, want the parent's %q", sibling.Label, "from the parent")
 	}
 }
 
@@ -524,8 +529,8 @@ func TestALabelFollowsEveryActThatChangesItsInputs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if c.DisplayName != "Display/display-1/1" {
-		t.Fatalf("on create = %q, want %q", c.DisplayName, "Display/display-1/1")
+	if c.Label != "Display/display-1/1" {
+		t.Fatalf("on create = %q, want %q", c.Label, "Display/display-1/1")
 	}
 
 	// rename: takes the name's pen and nulls the ordinal, so both halves move
@@ -533,8 +538,8 @@ func TestALabelFollowsEveryActThatChangesItsInputs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rename: %v", err)
 	}
-	if renamed.DisplayName != "Display/front-panel/-" {
-		t.Fatalf("after rename = %q, want %q", renamed.DisplayName, "Display/front-panel/-")
+	if renamed.Label != "Display/front-panel/-" {
+		t.Fatalf("after rename = %q, want %q", renamed.Label, "Display/front-panel/-")
 	}
 
 	// reset: a fresh generated name and a fresh ordinal
@@ -542,8 +547,8 @@ func TestALabelFollowsEveryActThatChangesItsInputs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reset: %v", err)
 	}
-	if reset.DisplayName != "Display/display-1/1" {
-		t.Fatalf("after reset = %q, want %q", reset.DisplayName, "Display/display-1/1")
+	if reset.Label != "Display/display-1/1" {
+		t.Fatalf("after reset = %q, want %q", reset.Label, "Display/display-1/1")
 	}
 
 	// move: a new placement bucket, so a re-minted ordinal
@@ -556,12 +561,12 @@ func TestALabelFollowsEveryActThatChangesItsInputs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
-	if moved.DisplayName != "Display/display-2/2" {
-		t.Fatalf("after move = %q, want %q", moved.DisplayName, "Display/display-2/2")
+	if moved.Label != "Display/display-2/2" {
+		t.Fatalf("after move = %q, want %q", moved.Label, "Display/display-2/2")
 	}
 
 	// reclassify: a different product under a different type
-	other, err := gw.CreateProduct(ctx, "", storage.Product{Name: "my-mic", DisplayName: "My Mic", ComponentType: "mic"})
+	other, err := gw.CreateProduct(ctx, "", storage.Product{Name: "my-mic", Label: "My Mic", ComponentType: "mic"})
 	if err != nil {
 		t.Fatalf("create product: %v", err)
 	}
@@ -571,8 +576,8 @@ func TestALabelFollowsEveryActThatChangesItsInputs(t *testing.T) {
 	}
 	// The mic type declares no rule of its own and inherits none, so the
 	// global rule applies again.
-	if reclassified.DisplayName != "Microphone 1" {
-		t.Fatalf("after reclassify = %q, want the global rule's %q", reclassified.DisplayName, "Microphone 1")
+	if reclassified.Label != "Microphone 1" {
+		t.Fatalf("after reclassify = %q, want the global rule's %q", reclassified.Label, "Microphone 1")
 	}
 }
 
@@ -587,11 +592,11 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get location: %v", err)
 	}
-	if loc.DisplayName != "Room A" {
-		t.Fatalf("location label = %q, want the shipped global rule's %q", loc.DisplayName, "Room A")
+	if loc.Label != "Room A" {
+		t.Fatalf("location label = %q, want the shipped global rule's %q", loc.Label, "Room A")
 	}
 	lt, err := gw.CreateLocationType(ctx, "", storage.LocationType{
-		Name: "pod", DisplayName: "Pod", LabelRule: strptr("{{.TypeName}} {{.Name | upper}}"),
+		Name: "pod", Label: "Pod", LabelRule: strptr("{{.TypeName}} {{.Name | upper}}"),
 	})
 	if err != nil {
 		t.Fatalf("create location_type: %v", err)
@@ -600,25 +605,25 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create location: %v", err)
 	}
-	if pod.DisplayName != "Pod POD-7" || !pod.DisplayNameGenerated {
-		t.Fatalf("location label = %q generated = %v, want %q true", pod.DisplayName, pod.DisplayNameGenerated, "Pod POD-7")
+	if pod.Label != "Pod POD-7" || !pod.LabelGenerated {
+		t.Fatalf("location label = %q generated = %v, want %q true", pod.Label, pod.LabelGenerated, "Pod POD-7")
 	}
 
-	// A system's shipped rule is its type's display_name, so an unclassified
+	// A system's shipped rule is its type's label, so an unclassified
 	// system renders nothing and a classified one renders its kind of space.
 	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
-	if sys.DisplayName != "" {
-		t.Fatalf("unclassified system label = %q, want none", sys.DisplayName)
+	if sys.Label != "" {
+		t.Fatalf("unclassified system label = %q, want none", sys.Label)
 	}
 	classified, err := gw.UpdateSystem(ctx, "", sys.ID, storage.SystemPatch{SystemTypeID: strptr("board")}, all, all)
 	if err != nil {
 		t.Fatalf("classify system: %v", err)
 	}
-	if classified.DisplayName == "" || !classified.DisplayNameGenerated {
-		t.Fatalf("classified system label = %q generated = %v, want the type's display name", classified.DisplayName, classified.DisplayNameGenerated)
+	if classified.Label == "" || !classified.LabelGenerated {
+		t.Fatalf("classified system label = %q generated = %v, want the type's label", classified.Label, classified.LabelGenerated)
 	}
 }
 
@@ -653,19 +658,19 @@ func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
 	if first.Name != "boardroom" || second.Name != "boardroom-2" {
 		t.Fatalf("names = %q and %q, want %q and %q", first.Name, second.Name, "boardroom", "boardroom-2")
 	}
-	if first.DisplayName != "Boardroom" {
-		t.Errorf("the first half's label = %q, want %q: its name carries no ordinal, so neither does its label", first.DisplayName, "Boardroom")
+	if first.Label != "Boardroom" {
+		t.Errorf("the first half's label = %q, want %q: its name carries no ordinal, so neither does its label", first.Label, "Boardroom")
 	}
-	if second.DisplayName != "Boardroom 2" {
-		t.Errorf("the second half's label = %q, want %q", second.DisplayName, "Boardroom 2")
+	if second.Label != "Boardroom 2" {
+		t.Errorf("the second half's label = %q, want %q", second.Label, "Boardroom 2")
 	}
-	if first.DisplayName == second.DisplayName {
-		t.Errorf("both halves read %q, so the console cannot tell them apart", first.DisplayName)
+	if first.Label == second.Label {
+		t.Errorf("both halves read %q, so the console cannot tell them apart", first.Label)
 	}
 	// And the platform still holds the pen on both, which is what makes these
 	// the platform's to keep current through a later move or reclassify.
-	if !first.DisplayNameGenerated || !second.DisplayNameGenerated {
-		t.Errorf("generated = %v and %v, want both platform-owned", first.DisplayNameGenerated, second.DisplayNameGenerated)
+	if !first.LabelGenerated || !second.LabelGenerated {
+		t.Errorf("generated = %v and %v, want both platform-owned", first.LabelGenerated, second.LabelGenerated)
 	}
 }
 
@@ -719,8 +724,8 @@ func TestTheGlobalRuleIsSeededAuthoritativelyAndStillOperatorOwned(t *testing.T)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if c.DisplayName != "mine: Display" {
-		t.Fatalf("label = %q, want the operator's rule to be what renders", c.DisplayName)
+	if c.Label != "mine: Display" {
+		t.Fatalf("label = %q, want the operator's rule to be what renders", c.Label)
 	}
 
 	// Clearing the override is restore-to-defaults; no verb of its own, because
@@ -765,8 +770,8 @@ func TestTheShippedLocationRuleReadsTheNameAsWords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create campus: %v", err)
 	}
-	if campus.DisplayName != "Hq" || !campus.DisplayNameGenerated {
-		t.Errorf("campus label = %q generated = %v, want %q from the shipped rule", campus.DisplayName, campus.DisplayNameGenerated, "Hq")
+	if campus.Label != "Hq" || !campus.LabelGenerated {
+		t.Errorf("campus label = %q generated = %v, want %q from the shipped rule", campus.Label, campus.LabelGenerated, "Hq")
 	}
 	wing, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
 		Name: "north-wing", LocationType: "building", ParentName: &campus.Name,
@@ -774,8 +779,8 @@ func TestTheShippedLocationRuleReadsTheNameAsWords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create building: %v", err)
 	}
-	if wing.DisplayName != "North Wing" || !wing.DisplayNameGenerated {
-		t.Errorf("building label = %q generated = %v, want %q: the separator is what words turns into a space", wing.DisplayName, wing.DisplayNameGenerated, "North Wing")
+	if wing.Label != "North Wing" || !wing.LabelGenerated {
+		t.Errorf("building label = %q generated = %v, want %q: the separator is what words turns into a space", wing.Label, wing.LabelGenerated, "North Wing")
 	}
 
 	// The dictionary reaches it, which is the point of connecting the two: with
@@ -786,18 +791,18 @@ func TestTheShippedLocationRuleReadsTheNameAsWords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create the second building: %v", err)
 	}
-	if rack.DisplayName != "AV Store" {
-		t.Errorf("label = %q, want %q: the shipped acronym list did not reach the shipped rule", rack.DisplayName, "AV Store")
+	if rack.Label != "AV Store" {
+		t.Errorf("label = %q, want %q: the shipped acronym list did not reach the shipped rule", rack.Label, "AV Store")
 	}
 
 	// And an operator's own label still wins over it, pen and all: the rule
 	// renders where nobody has spoken, never over somebody who has.
-	mine, err := gw.UpdateLocation(ctx, "", wing.ID, storage.LocationPatch{DisplayName: strptr("The North Wing")}, all, all)
+	mine, err := gw.UpdateLocation(ctx, "", wing.ID, storage.LocationPatch{Label: strptr("The North Wing")}, all, all)
 	if err != nil {
 		t.Fatalf("relabel: %v", err)
 	}
-	if mine.DisplayName != "The North Wing" || mine.DisplayNameGenerated {
-		t.Errorf("after relabel = %q generated = %v, want the operator's words and the pen with them", mine.DisplayName, mine.DisplayNameGenerated)
+	if mine.Label != "The North Wing" || mine.LabelGenerated {
+		t.Errorf("after relabel = %q generated = %v, want the operator's words and the pen with them", mine.Label, mine.LabelGenerated)
 	}
 
 	// A re-seed restates the shipped default and does not reach an operator's
@@ -835,22 +840,22 @@ func TestASystemsLabelFollowsItsRenameAndItsReclassify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if sys.DisplayName != "Boardroom/sys-a" {
-		t.Fatalf("on create = %q, want %q", sys.DisplayName, "Boardroom/sys-a")
+	if sys.Label != "Boardroom/sys-a" {
+		t.Fatalf("on create = %q, want %q", sys.Label, "Boardroom/sys-a")
 	}
 	renamed, err := gw.RenameSystem(ctx, "", sys.ID, "sys-b", all, all)
 	if err != nil {
 		t.Fatalf("rename: %v", err)
 	}
-	if renamed.DisplayName != "Boardroom/sys-b" {
-		t.Fatalf("after rename = %q, want %q", renamed.DisplayName, "Boardroom/sys-b")
+	if renamed.Label != "Boardroom/sys-b" {
+		t.Fatalf("after rename = %q, want %q", renamed.Label, "Boardroom/sys-b")
 	}
 	reclassified, err := gw.UpdateSystem(ctx, "", renamed.ID, storage.SystemPatch{SystemTypeID: strptr("class")}, all, all)
 	if err != nil {
 		t.Fatalf("reclassify: %v", err)
 	}
-	if reclassified.DisplayName != "Classroom/sys-b" {
-		t.Fatalf("after reclassify = %q, want %q", reclassified.DisplayName, "Classroom/sys-b")
+	if reclassified.Label != "Classroom/sys-b" {
+		t.Fatalf("after reclassify = %q, want %q", reclassified.Label, "Classroom/sys-b")
 	}
 }
 
@@ -864,15 +869,15 @@ func TestALocationsLabelFollowsItsRenameAndItsReclassify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if loc.DisplayName != "Room/room-a" {
-		t.Fatalf("on create = %q, want %q", loc.DisplayName, "Room/room-a")
+	if loc.Label != "Room/room-a" {
+		t.Fatalf("on create = %q, want %q", loc.Label, "Room/room-a")
 	}
 	renamed, err := gw.RenameLocation(ctx, "", loc.ID, "room-b", all, all)
 	if err != nil {
 		t.Fatalf("rename: %v", err)
 	}
-	if renamed.DisplayName != "Room/room-b" {
-		t.Fatalf("after rename = %q, want %q", renamed.DisplayName, "Room/room-b")
+	if renamed.Label != "Room/room-b" {
+		t.Fatalf("after rename = %q, want %q", renamed.Label, "Room/room-b")
 	}
 	// A location_type is seed-if-absent example content an operator owns, so
 	// reclassifying to a second seeded type needs no custom registry row.
@@ -880,8 +885,8 @@ func TestALocationsLabelFollowsItsRenameAndItsReclassify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reclassify: %v", err)
 	}
-	if reclassified.DisplayName != "Floor/room-b" {
-		t.Fatalf("after reclassify = %q, want %q", reclassified.DisplayName, "Floor/room-b")
+	if reclassified.Label != "Floor/room-b" {
+		t.Fatalf("after reclassify = %q, want %q", reclassified.Label, "Floor/room-b")
 	}
 }
 
@@ -904,7 +909,7 @@ func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
 		t.Fatalf("type rule: %v", err)
 	}
 	mine, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "my-bar", DisplayName: "My Bar", ComponentType: "video-bar",
+		Name: "my-bar", Label: "My Bar", ComponentType: "video-bar",
 		LabelRule: strptr("{{.VendorName}} {{.ProductName | slug}} {{.Ordinal}}"),
 	})
 	if err != nil {
@@ -958,7 +963,7 @@ func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
 	if _, err := gw.ResetComponentName(ctx, "", built[6], all, all); err != nil {
 		t.Fatalf("reset after rename: %v", err)
 	}
-	if _, err := gw.UpdateComponent(ctx, "", built[5], storage.ComponentPatch{DisplayName: strptr("The Operator's Own")}, all, all); err != nil {
+	if _, err := gw.UpdateComponent(ctx, "", built[5], storage.ComponentPatch{Label: strptr("The Operator's Own")}, all, all); err != nil {
 		t.Fatalf("hand-label: %v", err)
 	}
 	// The mover's label must have MOVED with it, or the fixture is not exercising
@@ -981,11 +986,11 @@ func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
 	checked := 0
 	for i := range components {
 		c := components[i]
-		if !c.DisplayNameGenerated {
+		if !c.LabelGenerated {
 			// The operator owns this one. It must NOT match a rule by
 			// accident, or the invariant below would be vacuous for it.
-			if c.DisplayName != "The Operator's Own" {
-				t.Errorf("component %s: pen with the operator but label %q, want the one they typed", c.Name, c.DisplayName)
+			if c.Label != "The Operator's Own" {
+				t.Errorf("component %s: pen with the operator but label %q, want the one they typed", c.Name, c.Label)
 			}
 			continue
 		}
@@ -993,8 +998,8 @@ func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
 		if err != nil {
 			t.Fatalf("recompute %s: %v", c.Name, err)
 		}
-		if c.DisplayName != want {
-			t.Errorf("component %s: stored label %q, rule now produces %q", c.Name, c.DisplayName, want)
+		if c.Label != want {
+			t.Errorf("component %s: stored label %q, rule now produces %q", c.Name, c.Label, want)
 		}
 		checked++
 	}
@@ -1026,7 +1031,7 @@ func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T
 		{Name: "sys-a", SystemTypeID: strptr("board"), LocationName: &roomA},
 		{Name: "sys-b", SystemTypeID: strptr("class"), LocationName: &roomB},
 		{Name: "sys-c", LocationName: &roomA},
-		{Name: "sys-d", DisplayName: "The Operator's Own", SystemTypeID: strptr("board"), LocationName: &roomB},
+		{Name: "sys-d", Label: "The Operator's Own", SystemTypeID: strptr("board"), LocationName: &roomB},
 	} {
 		s, err := gw.CreateSystem(ctx, "", spec, all, all)
 		if err != nil {
@@ -1053,7 +1058,7 @@ func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T
 	if _, err := gw.UpdateLocation(ctx, "", third, storage.LocationPatch{LocationType: strptr("floor")}, all, all); err != nil {
 		t.Fatalf("reclassify location: %v", err)
 	}
-	if _, err := gw.UpdateLocation(ctx, "", roomB, storage.LocationPatch{DisplayName: strptr("The Operator's Own")}, all, all); err != nil {
+	if _, err := gw.UpdateLocation(ctx, "", roomB, storage.LocationPatch{Label: strptr("The Operator's Own")}, all, all); err != nil {
 		t.Fatalf("hand-label location: %v", err)
 	}
 
@@ -1063,9 +1068,9 @@ func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T
 	}
 	checkedSystems := 0
 	for i := range sys {
-		if !sys[i].DisplayNameGenerated {
-			if sys[i].DisplayName != "The Operator's Own" {
-				t.Errorf("system %s: pen with the operator but label %q", sys[i].Name, sys[i].DisplayName)
+		if !sys[i].LabelGenerated {
+			if sys[i].Label != "The Operator's Own" {
+				t.Errorf("system %s: pen with the operator but label %q", sys[i].Name, sys[i].Label)
 			}
 			continue
 		}
@@ -1073,8 +1078,8 @@ func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T
 		if err != nil {
 			t.Fatalf("recompute system %s: %v", sys[i].Name, err)
 		}
-		if sys[i].DisplayName != want {
-			t.Errorf("system %s: stored label %q, rule now produces %q", sys[i].Name, sys[i].DisplayName, want)
+		if sys[i].Label != want {
+			t.Errorf("system %s: stored label %q, rule now produces %q", sys[i].Name, sys[i].Label, want)
 		}
 		checkedSystems++
 	}
@@ -1088,9 +1093,9 @@ func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T
 	}
 	checkedLocations := 0
 	for i := range locs {
-		if !locs[i].DisplayNameGenerated {
-			if locs[i].DisplayName != "The Operator's Own" {
-				t.Errorf("location %s: pen with the operator but label %q", locs[i].Name, locs[i].DisplayName)
+		if !locs[i].LabelGenerated {
+			if locs[i].Label != "The Operator's Own" {
+				t.Errorf("location %s: pen with the operator but label %q", locs[i].Name, locs[i].Label)
 			}
 			continue
 		}
@@ -1098,8 +1103,8 @@ func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T
 		if err != nil {
 			t.Fatalf("recompute location %s: %v", locs[i].Name, err)
 		}
-		if locs[i].DisplayName != want {
-			t.Errorf("location %s: stored label %q, rule now produces %q", locs[i].Name, locs[i].DisplayName, want)
+		if locs[i].Label != want {
+			t.Errorf("location %s: stored label %q, rule now produces %q", locs[i].Name, locs[i].Label, want)
 		}
 		checkedLocations++
 	}
@@ -1157,13 +1162,13 @@ func makeRoom(t *testing.T, gw *storage.PG, ctx context.Context, name string) st
 	return l.Name
 }
 
-// rawLabel reads display_name as the column actually holds it, since every read
+// rawLabel reads label as the column actually holds it, since every read
 // projection coalesces NULL to "" and would report unset and blank as the same
 // answer, which is the distinction one of these tests exists to make.
 func rawLabel(t *testing.T, ctx context.Context, dsn, id string) *string {
 	t.Helper()
 	var label *string
-	if err := rawConn(t, dsn).QueryRow(ctx, `select display_name from component where id = $1`, id).Scan(&label); err != nil {
+	if err := rawConn(t, dsn).QueryRow(ctx, `select label from component where id = $1`, id).Scan(&label); err != nil {
 		t.Fatalf("read raw label: %v", err)
 	}
 	return label

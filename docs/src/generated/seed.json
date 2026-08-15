@@ -3,7 +3,7 @@
  "roles": [
   {
    "id": "viewer",
-   "display_name": "Viewer",
+   "label": "Viewer",
    "description": "Read-only access to everything. The floor every other role inherits.",
    "declared": [
     "*:read"
@@ -14,7 +14,7 @@
   },
   {
    "id": "operator",
-   "display_name": "Operator",
+   "label": "Operator",
    "description": "Day-to-day operations: create or edit components, interfaces, secrets, variables, and the property, metric, event, and command catalogs, and issue commands in scope. Sees and reveals the device secrets in its scope (never the admin-sensitive platform credentials). Inherits Viewer.",
    "inherits": [
     "viewer"
@@ -64,7 +64,7 @@
   },
   {
    "id": "deploy",
-   "display_name": "Deploy",
+   "label": "Deploy",
    "description": "Integrator or field tech: create, update, rename, and move on locations, systems, and components, and no delete. A grant of it reaches ONE tier, the tier it is scoped at. Granted at a location with the \"under only\" operator, it builds out and edits the rooms under that location, never the location itself, plus the secrets those locations own; it reaches no system and no component there, not even to read one. Building those out inside a building takes a system-scoped and a component-scoped grant of this role beside the location one, until a grant's scope can span tiers. Inherits Viewer, whose read floor is scoped the same way.",
    "inherits": [
     "viewer"
@@ -99,7 +99,7 @@
   },
   {
    "id": "admin",
-   "display_name": "Administrator",
+   "label": "Administrator",
    "description": "Manages the estate, users, roles, and grants: full create, update, and delete on locations, systems, and components, and on principals, credentials, grants, and roles. Deliberately NOT the superuser: it cannot grant a role above its own tier, so it cannot make itself owner. Inherits Operator.",
    "inherits": [
     "operator"
@@ -224,7 +224,7 @@
   },
   {
    "id": "owner",
-   "display_name": "Owner",
+   "label": "Owner",
    "description": "Full control of everything, the break-glass superuser (the tail wildcard, so it covers every capability at every tier, including admin-sensitive ones and future resources). At least one active owner always exists, and an owner account cannot be impersonated.",
    "declared": [
     "\u003e"
@@ -238,43 +238,43 @@
   {
    "name": "interface-reachable",
    "data_type": "string",
-   "display_name": "Interface Reachable",
+   "label": "Interface Reachable",
    "description": "Per-interface reachability verdict, the AND of the interface's probe results (up = every applicable probe reached the target). A built-in state: availability is time_in_state over it. Unknown/stale are read-time derivations, not stored values."
   },
   {
    "name": "health",
    "data_type": "string",
-   "display_name": "Health",
+   "label": "Health",
    "description": "The rolled-up health verdict for a component, system, or location, worst-wins over its inputs (a component's active alarms, a system's roles, the systems under a location). Recorded transition-only, so the series is the edges: when it broke and when it came back, not a sample per check."
   },
   {
    "name": "video-input",
    "data_type": "string",
-   "display_name": "Video Input",
+   "label": "Video Input",
    "description": "The selected video input on a display or switcher. A settable state: the set-input command tells the device which input to select (opening an intended value), and the device reports the observed input, so the two reconcile."
   },
   {
    "name": "serial-number",
    "data_type": "string",
-   "display_name": "Serial number",
+   "label": "Serial number",
    "description": "The manufacturer serial number of the device."
   },
   {
    "name": "mac-address",
    "data_type": "string",
-   "display_name": "MAC address",
+   "label": "MAC address",
    "description": "The primary hardware (MAC) address, lowercase colon-separated."
   },
   {
    "name": "firmware-version",
    "data_type": "string",
-   "display_name": "Firmware version",
+   "label": "Firmware version",
    "description": "The installed firmware or software version."
   },
   {
    "name": "model-number",
    "data_type": "string",
-   "display_name": "Model number",
+   "label": "Model number",
    "description": "The manufacturer model number."
   }
  ],
@@ -282,58 +282,58 @@
   {
    "name": "icmp-reachable",
    "data_type": "int",
-   "display_name": "ICMP Reachable",
+   "label": "ICMP Reachable",
    "description": "ICMP inline probe result (1 = at least one echo returned, 0 = none)."
   },
   {
    "name": "icmp-rtt-avg",
    "data_type": "float",
    "unit": "ms",
-   "display_name": "ICMP RTT (avg)",
+   "label": "ICMP RTT (avg)",
    "description": "Average round-trip time over the task's echoes; absent when unreachable."
   },
   {
    "name": "tcp-open",
    "data_type": "int",
-   "display_name": "TCP Port Open",
+   "label": "TCP Port Open",
    "description": "TCP-connect probe result (1 = the port accepted a connection, 0 = refused/timeout)."
   },
   {
    "name": "tcp-connect-time",
    "data_type": "float",
    "unit": "ms",
-   "display_name": "TCP Connect Time",
+   "label": "TCP Connect Time",
    "description": "Time to establish the TCP connection; absent when the port is closed."
   }
  ],
  "event_types": [
   {
    "name": "call-started",
-   "display_name": "Call Started",
+   "label": "Call Started",
    "description": "A conferencing endpoint entered an active call. A caught occurrence when the device reports it natively (an xAPI event), or a derived one when a rule infers it from other signals."
   },
   {
    "name": "command-issued",
-   "display_name": "Command Issued",
+   "label": "Command Issued",
    "description": "A command was issued to a component (the caused event a command records). It opens the intended value the command sets and is the lineage cause of that intended value."
   }
  ],
  "command_types": [
   {
    "name": "set-input",
-   "display_name": "Set Input",
+   "label": "Set Input",
    "description": "Tell a display or switcher which video input to select. A settleable command: it opens an intended video-input and settles when the device reports that input within the settle window."
   },
   {
    "name": "reboot",
-   "display_name": "Reboot",
+   "label": "Reboot",
    "description": "Tell a component to restart. A fire-and-forget command: it records the invocation and a caused event, with no intended value to settle."
   }
  ],
  "secret_types": [
   {
    "id": "snmp-community",
-   "display_name": "SNMP Community",
+   "label": "SNMP Community",
    "default_admin_sensitive": false,
    "fields": [
     {
@@ -346,7 +346,7 @@
   },
   {
    "id": "basic-auth",
-   "display_name": "Basic Auth",
+   "label": "Basic Auth",
    "default_admin_sensitive": false,
    "fields": [
     {
@@ -365,7 +365,7 @@
   },
   {
    "id": "oauth2-client",
-   "display_name": "OAuth2 Client",
+   "label": "OAuth2 Client",
    "default_admin_sensitive": true,
    "fields": [
     {
@@ -408,7 +408,7 @@
  "location_types": [
   {
    "id": "campus",
-   "display_name": "Campus",
+   "label": "Campus",
    "icon": "landmark",
    "allowed_parent_types": [
     "root"
@@ -416,7 +416,7 @@
   },
   {
    "id": "building",
-   "display_name": "Building",
+   "label": "Building",
    "icon": "building",
    "allowed_parent_types": [
     "root",
@@ -425,7 +425,7 @@
   },
   {
    "id": "floor",
-   "display_name": "Floor",
+   "label": "Floor",
    "icon": "layers",
    "allowed_parent_types": [
     "building",
@@ -434,7 +434,7 @@
   },
   {
    "id": "room",
-   "display_name": "Room",
+   "label": "Room",
    "icon": "door-open",
    "allowed_parent_types": [
     "floor",
@@ -446,132 +446,132 @@
  "component_types": [
   {
    "id": "display",
-   "display_name": "Display",
+   "label": "Display",
    "stem": "display",
    "abbrev": "fp",
    "icon": "monitor"
   },
   {
    "id": "interactive-display",
-   "display_name": "Interactive Display",
+   "label": "Interactive Display",
    "parent_id": "display"
   },
   {
    "id": "projector",
-   "display_name": "Projector",
+   "label": "Projector",
    "stem": "projector",
    "abbrev": "proj",
    "icon": "projector"
   },
   {
    "id": "screen",
-   "display_name": "Screen",
+   "label": "Screen",
    "stem": "screen",
    "abbrev": "scr",
    "icon": "tv"
   },
   {
    "id": "presentation-switcher",
-   "display_name": "Presentation Switcher",
+   "label": "Presentation Switcher",
    "stem": "switcher",
    "abbrev": "sw",
    "icon": "shuffle"
   },
   {
    "id": "video-bar",
-   "display_name": "Video Bar",
+   "label": "Video Bar",
    "stem": "videobar",
    "abbrev": "vb",
    "icon": "video"
   },
   {
    "id": "dsp",
-   "display_name": "DSP",
+   "label": "DSP",
    "stem": "dsp",
    "abbrev": "dsp",
    "icon": "cpu"
   },
   {
    "id": "amplifier",
-   "display_name": "Amplifier",
+   "label": "Amplifier",
    "stem": "amp",
    "abbrev": "amp",
    "icon": "speaker"
   },
   {
    "id": "mic",
-   "display_name": "Microphone",
+   "label": "Microphone",
    "stem": "mic",
    "abbrev": "mic",
    "icon": "mic"
   },
   {
    "id": "wireless-mic",
-   "display_name": "Wireless Microphone",
+   "label": "Wireless Microphone",
    "parent_id": "mic"
   },
   {
    "id": "ceiling-mic",
-   "display_name": "Ceiling Microphone",
+   "label": "Ceiling Microphone",
    "parent_id": "mic"
   },
   {
    "id": "boundary-mic",
-   "display_name": "Boundary Microphone",
+   "label": "Boundary Microphone",
    "parent_id": "mic"
   },
   {
    "id": "camera",
-   "display_name": "Camera",
+   "label": "Camera",
    "stem": "camera",
    "abbrev": "cam",
    "icon": "camera"
   },
   {
    "id": "codec",
-   "display_name": "Codec",
+   "label": "Codec",
    "stem": "codec",
    "abbrev": "cdc",
    "icon": "video"
   },
   {
    "id": "control-processor",
-   "display_name": "Control Processor",
+   "label": "Control Processor",
    "stem": "processor",
    "abbrev": "cp",
    "icon": "cpu"
   },
   {
    "id": "touch-panel",
-   "display_name": "Touch Panel",
+   "label": "Touch Panel",
    "stem": "panel",
    "abbrev": "tp",
    "icon": "touchpad"
   },
   {
    "id": "dante-card",
-   "display_name": "Dante Card",
+   "label": "Dante Card",
    "stem": "dante",
    "abbrev": "dc",
    "icon": "network"
   },
   {
    "id": "generic-device",
-   "display_name": "Generic Device",
+   "label": "Generic Device",
    "stem": "device",
    "abbrev": "dev",
    "icon": "box"
   },
   {
    "id": "generic-app",
-   "display_name": "Generic App",
+   "label": "Generic App",
    "stem": "app",
    "abbrev": "app",
    "icon": "app-window"
   },
   {
    "id": "generic-service",
-   "display_name": "Generic Service",
+   "label": "Generic Service",
    "stem": "service",
    "abbrev": "svc",
    "icon": "server"
@@ -580,14 +580,14 @@
  "system_types": [
   {
    "id": "av",
-   "display_name": "AV",
+   "label": "AV",
    "stem": "av",
    "abbrev": "av",
    "icon": "layers"
   },
   {
    "id": "room",
-   "display_name": "Room",
+   "label": "Room",
    "parent_id": "av",
    "stem": "room",
    "abbrev": "rm",
@@ -595,49 +595,49 @@
   },
   {
    "id": "board",
-   "display_name": "Boardroom",
+   "label": "Boardroom",
    "parent_id": "room",
    "stem": "boardroom",
    "abbrev": "br"
   },
   {
    "id": "class",
-   "display_name": "Classroom",
+   "label": "Classroom",
    "parent_id": "room",
    "stem": "classroom",
    "abbrev": "cls"
   },
   {
    "id": "meeting",
-   "display_name": "Meeting Room",
+   "label": "Meeting Room",
    "parent_id": "room",
    "stem": "meeting",
    "abbrev": "mtg"
   },
   {
    "id": "training",
-   "display_name": "Training Room",
+   "label": "Training Room",
    "parent_id": "room",
    "stem": "training",
    "abbrev": "trn"
   },
   {
    "id": "conference",
-   "display_name": "Conference Room",
+   "label": "Conference Room",
    "parent_id": "room",
    "stem": "conference",
    "abbrev": "conf"
   },
   {
    "id": "huddle",
-   "display_name": "Huddle Room",
+   "label": "Huddle Room",
    "parent_id": "room",
    "stem": "huddle",
    "abbrev": "hud"
   },
   {
    "id": "sign",
-   "display_name": "Signage",
+   "label": "Signage",
    "parent_id": "av",
    "stem": "signage",
    "abbrev": "sgn",
@@ -645,14 +645,14 @@
   },
   {
    "id": "video-wall",
-   "display_name": "Video Wall",
+   "label": "Video Wall",
    "parent_id": "sign",
    "stem": "video-wall",
    "abbrev": "vw"
   },
   {
    "id": "interactive-sign",
-   "display_name": "Interactive Sign",
+   "label": "Interactive Sign",
    "parent_id": "sign",
    "stem": "interactive-sign",
    "abbrev": "isgn",
@@ -662,11 +662,11 @@
  "standards": [
   {
    "id": "meeting-room",
-   "display_name": "Meeting Room",
+   "label": "Meeting Room",
    "roles": [
     {
      "name": "room-mic",
-     "display_name": "Room Microphone",
+     "label": "Room Microphone",
      "quorum": 2,
      "accepted_types": [
       "video-bar"
@@ -674,7 +674,7 @@
     },
     {
      "name": "main-display",
-     "display_name": "Main Display",
+     "label": "Main Display",
      "quorum": 0,
      "accepted_types": [
       "display"
@@ -684,11 +684,11 @@
   },
   {
    "id": "huddle-room",
-   "display_name": "Huddle Room",
+   "label": "Huddle Room",
    "roles": [
     {
      "name": "conf-bar",
-     "display_name": "Conferencing Bar",
+     "label": "Conferencing Bar",
      "quorum": 1,
      "accepted_types": [
       "video-bar"
@@ -696,7 +696,7 @@
     },
     {
      "name": "conf-codec",
-     "display_name": "Codec",
+     "label": "Codec",
      "quorum": 0,
      "accepted_types": [
       "codec"
@@ -704,7 +704,7 @@
     },
     {
      "name": "conf-camera",
-     "display_name": "Camera",
+     "label": "Camera",
      "quorum": 0,
      "accepted_types": [
       "camera"
@@ -712,7 +712,7 @@
     },
     {
      "name": "conf-dsp",
-     "display_name": "DSP",
+     "label": "DSP",
      "quorum": 0,
      "accepted_types": [
       "dsp"
@@ -720,7 +720,7 @@
     },
     {
      "name": "conf-amp",
-     "display_name": "Amplifier",
+     "label": "Amplifier",
      "quorum": 0,
      "accepted_types": [
       "amplifier"
@@ -728,7 +728,7 @@
     },
     {
      "name": "conf-mic",
-     "display_name": "Microphone",
+     "label": "Microphone",
      "quorum": 0,
      "accepted_types": [
       "mic"
@@ -738,67 +738,67 @@
   },
   {
    "id": "classroom",
-   "display_name": "Classroom"
+   "label": "Classroom"
   },
   {
    "id": "auditorium",
-   "display_name": "Auditorium"
+   "label": "Auditorium"
   },
   {
    "id": "signage",
-   "display_name": "Digital Signage"
+   "label": "Digital Signage"
   },
   {
    "id": "control-room",
-   "display_name": "Control Room"
+   "label": "Control Room"
   }
  ],
  "vendors": [
   {
    "id": "crestron",
-   "display_name": "Crestron",
+   "label": "Crestron",
    "kind": "manufacturer",
    "website": "https://www.crestron.com"
   },
   {
    "id": "biamp",
-   "display_name": "Biamp",
+   "label": "Biamp",
    "kind": "manufacturer",
    "website": "https://www.biamp.com"
   },
   {
    "id": "qsc",
-   "display_name": "QSC",
+   "label": "QSC",
    "kind": "manufacturer",
    "website": "https://www.qsc.com"
   },
   {
    "id": "shure",
-   "display_name": "Shure",
+   "label": "Shure",
    "kind": "manufacturer",
    "website": "https://www.shure.com"
   },
   {
    "id": "cisco",
-   "display_name": "Cisco",
+   "label": "Cisco",
    "kind": "manufacturer",
    "website": "https://www.cisco.com"
   },
   {
    "id": "extron",
-   "display_name": "Extron",
+   "label": "Extron",
    "kind": "manufacturer",
    "website": "https://www.extron.com"
   },
   {
    "id": "sony",
-   "display_name": "Sony",
+   "label": "Sony",
    "kind": "manufacturer",
    "website": "https://www.sony.com"
   },
   {
    "id": "samsung",
-   "display_name": "Samsung",
+   "label": "Samsung",
    "kind": "manufacturer",
    "website": "https://www.samsung.com"
   }
@@ -806,27 +806,27 @@
  "drivers": [
   {
    "id": "snmp-generic",
-   "display_name": "Generic SNMP",
+   "label": "Generic SNMP",
    "version": "1.0.0"
   },
   {
    "id": "cisco-xapi",
-   "display_name": "Cisco xAPI"
+   "label": "Cisco xAPI"
   },
   {
    "id": "crestron-cip",
-   "display_name": "Crestron CIP"
+   "label": "Crestron CIP"
   },
   {
    "id": "http-json",
-   "display_name": "HTTP JSON",
+   "label": "HTTP JSON",
    "version": "1.0.0"
   }
  ],
  "products": [
   {
    "id": "cisco-room-bar",
-   "display_name": "Cisco Room Bar",
+   "label": "Cisco Room Bar",
    "vendor_id": "cisco",
    "driver_id": "cisco-xapi",
    "kind": "device",
@@ -845,7 +845,7 @@
   },
   {
    "id": "samsung-qm55",
-   "display_name": "Samsung QM55",
+   "label": "Samsung QM55",
    "vendor_id": "samsung",
    "kind": "device",
    "properties": [
@@ -863,31 +863,31 @@
   },
   {
    "id": "shure-mxa920",
-   "display_name": "Shure MXA920",
+   "label": "Shure MXA920",
    "vendor_id": "shure",
    "driver_id": "snmp-generic",
    "kind": "device"
   },
   {
    "id": "crestron-tss-1070",
-   "display_name": "Crestron TSS-1070",
+   "label": "Crestron TSS-1070",
    "vendor_id": "crestron",
    "driver_id": "crestron-cip",
    "kind": "device"
   },
   {
    "id": "generic-device",
-   "display_name": "Generic Device",
+   "label": "Generic Device",
    "kind": "device"
   },
   {
    "id": "generic-app",
-   "display_name": "Generic App",
+   "label": "Generic App",
    "kind": "app"
   },
   {
    "id": "generic-service",
-   "display_name": "Generic Service",
+   "label": "Generic Service",
    "kind": "service"
   }
  ],

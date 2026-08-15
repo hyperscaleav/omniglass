@@ -52,27 +52,27 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 			return err
 		},
 		"location_type": func(s string) error {
-			_, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: s, DisplayName: "X"})
+			_, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: s, Label: "X"})
 			return err
 		},
 		"standard": func(s string) error {
-			_, err := gw.CreateStandard(ctx, "", storage.Standard{Name: s, DisplayName: "X"})
+			_, err := gw.CreateStandard(ctx, "", storage.Standard{Name: s, Label: "X"})
 			return err
 		},
 		"vendor": func(s string) error {
-			_, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: s, DisplayName: "X", Kind: "manufacturer"})
+			_, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: s, Label: "X", Kind: "manufacturer"})
 			return err
 		},
 		"driver": func(s string) error {
-			_, err := gw.CreateDriver(ctx, "", storage.Driver{Name: s, DisplayName: "X"})
+			_, err := gw.CreateDriver(ctx, "", storage.Driver{Name: s, Label: "X"})
 			return err
 		},
 		"product": func(s string) error {
-			_, err := gw.CreateProduct(ctx, "", storage.Product{Name: s, DisplayName: "X"})
+			_, err := gw.CreateProduct(ctx, "", storage.Product{Name: s, Label: "X"})
 			return err
 		},
 		"component_type": func(s string) error {
-			_, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: s, DisplayName: "X"})
+			_, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: s, Label: "X"})
 			return err
 		},
 		// Stem set: a root with none is refused by its own structural guard
@@ -80,7 +80,7 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 		// which would prove the wrong refusal.
 		"system_type": func(s string) error {
 			stem := "x"
-			_, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: s, DisplayName: "X", Stem: &stem})
+			_, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: s, Label: "X", Stem: &stem})
 			return err
 		},
 		// A role's key arrives as a bare {role} path param on PUT
@@ -130,19 +130,19 @@ func provedByCreate(ctx context.Context, gw *storage.PG) map[string]func(key str
 func provedByCreateKeyspace(ctx context.Context, gw *storage.PG) map[string]func(name string) error {
 	return map[string]func(name string) error{
 		"property_type": func(s string) error {
-			_, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{Name: s, DisplayName: "X", DataType: "string"})
+			_, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{Name: s, Label: "X", DataType: "string"})
 			return err
 		},
 		"metric_type": func(s string) error {
-			_, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{Name: s, DisplayName: "X", DataType: "int"})
+			_, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{Name: s, Label: "X", DataType: "int"})
 			return err
 		},
 		"event_type": func(s string) error {
-			_, err := gw.CreateEventType(ctx, "", storage.EventTypeSpec{Name: s, DisplayName: "X"})
+			_, err := gw.CreateEventType(ctx, "", storage.EventTypeSpec{Name: s, Label: "X"})
 			return err
 		},
 		"command_type": func(s string) error {
-			_, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{Name: s, DisplayName: "X"})
+			_, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{Name: s, Label: "X"})
 			return err
 		},
 	}

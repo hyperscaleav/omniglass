@@ -31,7 +31,7 @@ func TestMetricTypeCRUD(t *testing.T) {
 	unit := "rpm"
 	precision := 0
 	mt, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{
-		Name: "fan-speed", DataType: "int", DisplayName: "Fan speed",
+		Name: "fan-speed", DataType: "int", Label: "Fan speed",
 		Unit: &unit, Precision: &precision, Description: "Rotations per minute.",
 	})
 	if err != nil {
@@ -43,7 +43,7 @@ func TestMetricTypeCRUD(t *testing.T) {
 
 	// Get it back, numeric facts intact.
 	got, err := gw.GetMetricType(ctx, "fan-speed")
-	if err != nil || got.DataType != "int" || got.DisplayName != "Fan speed" {
+	if err != nil || got.DataType != "int" || got.Label != "Fan speed" {
 		t.Fatalf("get: %v (%+v)", err, got)
 	}
 	if got.Unit == nil || *got.Unit != "rpm" || got.Precision == nil || *got.Precision != 0 {
@@ -65,10 +65,10 @@ func TestMetricTypeCRUD(t *testing.T) {
 
 	// Update the mutable fields.
 	label, ms := "Fan Speed (RPM)", "ms"
-	if _, err := gw.UpdateMetricType(ctx, "", "fan-speed", storage.MetricTypePatch{DisplayName: &label, Unit: &ms}); err != nil {
+	if _, err := gw.UpdateMetricType(ctx, "", "fan-speed", storage.MetricTypePatch{Label: &label, Unit: &ms}); err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if got, _ := gw.GetMetricType(ctx, "fan-speed"); got.DisplayName != label || got.Unit == nil || *got.Unit != "ms" {
+	if got, _ := gw.GetMetricType(ctx, "fan-speed"); got.Label != label || got.Unit == nil || *got.Unit != "ms" {
 		t.Fatalf("update not applied: %+v", got)
 	}
 
@@ -83,7 +83,7 @@ func TestMetricTypeCRUD(t *testing.T) {
 	}
 
 	// Official (seeded) metric types are read-only.
-	if _, err := gw.UpdateMetricType(ctx, "", "tcp-open", storage.MetricTypePatch{DisplayName: &label}); !errors.Is(err, storage.ErrMetricTypeOfficial) {
+	if _, err := gw.UpdateMetricType(ctx, "", "tcp-open", storage.MetricTypePatch{Label: &label}); !errors.Is(err, storage.ErrMetricTypeOfficial) {
 		t.Fatalf("update official err = %v, want ErrMetricTypeOfficial", err)
 	}
 	if err := gw.DeleteMetricType(ctx, "", "tcp-open"); !errors.Is(err, storage.ErrMetricTypeOfficial) {
@@ -126,12 +126,12 @@ func TestAuditResourceIDOnTheMetricLane(t *testing.T) {
 
 	const name = "audit-key-metric"
 	created, err := gw.CreateMetricType(ctx, "", storage.MetricTypeSpec{
-		Name: name, DisplayName: "X", DataType: "int"})
+		Name: name, Label: "X", DataType: "int"})
 	if err != nil {
 		t.Fatalf("create metric type: %v", err)
 	}
 	display := "Y"
-	if _, err := gw.UpdateMetricType(ctx, "", name, storage.MetricTypePatch{DisplayName: &display}); err != nil {
+	if _, err := gw.UpdateMetricType(ctx, "", name, storage.MetricTypePatch{Label: &display}); err != nil {
 		t.Fatalf("update metric type: %v", err)
 	}
 	if err := gw.DeleteMetricType(ctx, "", name); err != nil {

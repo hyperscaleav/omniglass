@@ -162,7 +162,7 @@ export default function Components() {
         id: c.id,
         addr: c.name,
         display: entityLabel(c),
-        generated: c.display_name_generated,
+        generated: c.label_generated,
         // The server's own dash render of this component's dotted path
         // (#627 Task 15): the list-mode ancestor sub-line falls back to it
         // for a component with no component parent, which the page's own
@@ -211,7 +211,7 @@ export default function Components() {
   }
 
   // ComponentDetail: the entity accordion, read-only in view, editable in edit. Own
-  // fields (name, display name) are editable; placement and product are
+  // fields (name, label) are editable; placement and product are
   // fixed at creation. The Tags section is the shared TagAdder, whose write controls
   // appear only in edit (canUpdate gates them), so view carries no mutation. The
   // Properties section is the component's value surface, resolved against its
@@ -295,7 +295,7 @@ export default function Components() {
             // The pen's own value, always keyed (#693): see Systems.tsx's save
             // for why the empty string is the right thing to post from a locked
             // field.
-            display_name: displayPen.value(),
+            label: displayPen.value(),
           });
           // The rename is a second call and it goes LAST, because it is the one that
           // can be refused on its own: it needs <resource>:rename, and a duplicate
@@ -304,7 +304,7 @@ export default function Components() {
           //
           // The invalidation is in a finally for the same reason. It used to sit
           // after the rename, so a 409 skipped it and the list went on rendering the
-          // display name the server had already accepted: the operator saw a total
+          // label the server had already accepted: the operator saw a total
           // failure for a half-committed save, and Cancel re-seeded the inputs from
           // that stale cache.
           // No hand-off navigate after a rename (#627 Task 15c): the route
@@ -555,7 +555,7 @@ export default function Components() {
     // (#627 Task 15d): a blank name here means "the platform generates one
     // from the product's component_type" (the same "<stem>-<n>" rule
     // :resetName applies), so auto-filling it from whatever the operator
-    // types as a display name would silently claim the pen on their behalf
+    // types as a label would silently claim the pen on their behalf
     // the moment they typed a label. #688 moved system and location to the
     // same footing, and createIdentity's derive path stays in use on the
     // registry and identity pages, whose names have no generator and stay
@@ -583,11 +583,11 @@ export default function Components() {
     const [busy, setBusy] = createSignal(false);
     const [formErr, setFormErr] = createSignal<string | null>(null);
 
-    // Sorted by display name, generics included: the fallback choice for
+    // Sorted by label, generics included: the fallback choice for
     // anything not yet modeled as a real SKU sits in the same list as every
     // named product, not behind a separate affordance.
     const productOptions = createMemo(() =>
-      [...(products.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name)),
+      [...(products.data ?? [])].sort((a, b) => a.label.localeCompare(b.label)),
     );
 
     // What the platform would NAME and LABEL this, which only the server can
@@ -638,7 +638,7 @@ export default function Components() {
         const created = await createComponent({
           name: nm || undefined,
           expected_name: nm ? undefined : labelDraft.data?.name,
-          display_name: displayPen.value().trim() || undefined,
+          label: displayPen.value().trim() || undefined,
           system: system() || undefined,
           location: location() || undefined,
           parent: parent() || undefined,
@@ -675,7 +675,7 @@ export default function Components() {
           >
             <select class="select select-bordered w-full" value={product()} onChange={(e) => setProduct(e.currentTarget.value)}>
               <option value="" disabled>Choose a product…</option>
-              <For each={productOptions()}>{(p) => <option value={p.name}>{p.display_name}</option>}</For>
+              <For each={productOptions()}>{(p) => <option value={p.name}>{p.label}</option>}</For>
             </select>
           </FieldRow>
         </div>

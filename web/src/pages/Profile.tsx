@@ -9,7 +9,7 @@ import { useMe, useUpdateProfile, useChangePassword, setMyAvatar, removeMyAvatar
 import { useSessions, useRevokeSession, useRevokeAllSelfSessions, createSelfToken, type Session } from "../lib/sessions";
 import { Check, Copy, Key, LogOut, Plus, Save, Trash } from "../components/icons";
 
-// Profile is the signed-in operator's own account surface: edit your display name
+// Profile is the signed-in operator's own account surface: edit your label
 // and email, change your password, and (pedagogically) see the identity model you
 // operate under, your principal, its permissions, and its role grants. Every field
 // here is self-scoped; the server edits only the caller's own principal.
@@ -84,12 +84,12 @@ export default function Profile() {
 
   // Seed the editable field once, when /auth/me first resolves, so later keystrokes
   // are not clobbered by the query settling.
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [seeded, setSeeded] = createSignal(false);
   createEffect(() => {
     const h = me.data?.human;
     if (h && !seeded()) {
-      setDisplayName(h.display_name ?? "");
+      setLabel(h.label ?? "");
       setSeeded(true);
     }
   });
@@ -100,15 +100,15 @@ export default function Profile() {
     e.preventDefault();
     setProfileBusy(true);
     setProfileMsg(null);
-    const r = await updateProfile({ display_name: displayName().trim() });
+    const r = await updateProfile({ label: label().trim() });
     setProfileMsg(r.ok ? { tone: "success", text: "Profile saved." } : { tone: "error", text: r.message });
     setProfileBusy(false);
   }
 
-  // The avatar preview: the first two letters of the display name being typed, or of
+  // The avatar preview: the first two letters of the label being typed, or of
   // the username when it is blank, matching the sidebar avatar. A live preview of how
   // you appear (a real image lands later, see the profile-picture issue).
-  const initials = () => (displayName().trim() || human()?.username || "").slice(0, 2).toUpperCase();
+  const initials = () => (label().trim() || human()?.username || "").slice(0, 2).toUpperCase();
 
   const [current, setCurrent] = createSignal("");
   const [next, setNext] = createSignal("");
@@ -312,7 +312,7 @@ export default function Profile() {
         <form onSubmit={saveProfile} class="card border border-base-300 bg-base-200">
           <div class="card-body gap-3">
             <h2 class="card-title text-base">Profile</h2>
-            {/* Avatar: the profile picture when set, else initials from the display name. */}
+            {/* Avatar: the profile picture when set, else initials from the label. */}
             <div class="flex items-center gap-3">
               <Show
                 when={avatarUrl()}
@@ -351,13 +351,13 @@ export default function Profile() {
               <p class="mt-1 text-[11px] text-base-content/40">Your sign-in name. An administrator can change it.</p>
             </div>
             <div>
-              <label class="eyebrow mb-1.5 block" for="profile-display-name">Name</label>
+              <label class="eyebrow mb-1.5 block" for="profile-label">Name</label>
               <input
-                id="profile-display-name"
+                id="profile-label"
                 type="text"
                 class="input input-bordered w-full"
-                value={displayName()}
-                onInput={(e) => setDisplayName(e.currentTarget.value)}
+                value={label()}
+                onInput={(e) => setLabel(e.currentTarget.value)}
                 disabled={profileBusy()}
               />
             </div>

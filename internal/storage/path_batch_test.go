@@ -102,7 +102,7 @@ func buildBatchPathFixture(t *testing.T, pool *pgxpool.Pool) batchPathFixture {
 		return id
 	}
 
-	locType := scan1(`insert into location_type (name, display_name) values ('room', 'Room') returning id`)
+	locType := scan1(`insert into location_type (name, label) values ('room', 'Room') returning id`)
 	// generic-device exists on any migrated database (the product/type floor
 	// backfill creates it), and product_id is NOT NULL on component, so the
 	// fixture classifies against that rather than inventing a product.

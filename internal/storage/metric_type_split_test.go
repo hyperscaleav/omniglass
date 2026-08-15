@@ -13,10 +13,10 @@ func TestMetricTypeSplitMigration(t *testing.T) {
 	conn := connectMigrated(t)
 
 	// metric_type takes a numeric row with the numeric facts.
-	mustExec(t, conn, `insert into metric_type (name, display_name, data_type, unit, "precision")
+	mustExec(t, conn, `insert into metric_type (name, label, data_type, unit, "precision")
 		values ('cpu-load', 'CPU load', 'float', 'ratio', 2)`)
 	// property_type takes a text row.
-	mustExec(t, conn, `insert into property_type (name, display_name, data_type)
+	mustExec(t, conn, `insert into property_type (name, label, data_type)
 		values ('power-state', 'Power state', 'string')`)
 
 	// Neither lane holds the other's row: the data_type domains are disjoint.

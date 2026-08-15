@@ -225,7 +225,7 @@ func systemActions() []actionRoute {
 	}
 	declareRole := func(c *apiClient, ownerTok, target, role string) {
 		c.do(ownerTok, http.MethodPatch, roles(target, role),
-			map[string]any{"display_name": "Matrix role"}, http.StatusOK)
+			map[string]any{"label": "Matrix role"}, http.StatusOK)
 	}
 	return []actionRoute{
 		{
@@ -266,7 +266,7 @@ func systemActions() []actionRoute {
 			name: "set-system-role",
 			request: func(target, _ string) (string, string, map[string]any) {
 				return http.MethodPatch, roles(target, "matrix-declare"),
-					map[string]any{"display_name": "Matrix role"}
+					map[string]any{"label": "Matrix role"}
 			},
 			ok: http.StatusOK,
 		},
@@ -412,7 +412,7 @@ func runAuthzMatrix(t *testing.T, e scopedEntity) {
 	c.do(ownerTok, http.MethodPost, e.base, e.createBody("az-other", ""), http.StatusCreated)
 	rootID := entityID(t, c, ownerTok, e.base, "az-root")
 
-	patch := map[string]any{"display_name": "x"}
+	patch := map[string]any{"label": "x"}
 	path := func(name string) string { return e.base + "/" + name }
 
 	// Principal 1: viewer@all (read everywhere, write nothing).

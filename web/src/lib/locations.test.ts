@@ -38,11 +38,11 @@ describe("locations data layer", () => {
     expect(sent).toMatchObject({ name: "hq-b1", location_type: "building", parent: "hq" });
   });
 
-  it("patches display_name and location_type, never parent", async () => {
+  it("patches label and location_type, never parent", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: uuidFor("4"), name: "hq-b1", location_type: "building", display_name: "Building 1" }),
+      jsonResponse({ id: uuidFor("4"), name: "hq-b1", location_type: "building", label: "Building 1" }),
     );
-    await updateLocation("hq-b1", { display_name: "Building 1", location_type: "building" });
+    await updateLocation("hq-b1", { label: "Building 1", location_type: "building" });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("PATCH");
     const sent = await req.json();

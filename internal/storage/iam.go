@@ -22,7 +22,7 @@ type Role struct {
 	Official    bool
 	Permissions []string
 	Inherits    []string
-	DisplayName string // operator-facing name; empty falls back to the id
+	Label       string // operator-facing name; empty falls back to the id
 	Description string // what the role grants, for the Roles view and tooltips
 }
 
@@ -39,15 +39,15 @@ func (p *PG) UpsertRole(ctx context.Context, r Role) error {
 		r.Inherits = []string{}
 	}
 	_, err := p.pool.Exec(ctx, `
-		insert into role (name, official, permissions, inherits, display_name, description)
+		insert into role (name, official, permissions, inherits, label, description)
 		values ($1, $2, $3, $4, $5, $6)
 		on conflict (name) do update
 			set official     = excluded.official,
 			    permissions  = excluded.permissions,
 			    inherits     = excluded.inherits,
-			    display_name = excluded.display_name,
+			    label = excluded.label,
 			    description  = excluded.description`,
-		r.Name, r.Official, r.Permissions, r.Inherits, nullize(r.DisplayName), nullize(r.Description))
+		r.Name, r.Official, r.Permissions, r.Inherits, r.Label, nullize(r.Description))
 	if err != nil {
 		return fmt.Errorf("storage: upsert role %q: %w", r.Name, err)
 	}
@@ -58,11 +58,11 @@ func (p *PG) UpsertRole(ctx context.Context, r Role) error {
 // hashed bearer credential to install. The cleartext token never reaches the
 // gateway; the caller generates it, hashes it, and shows it once.
 type OwnerSpec struct {
-	Username    string
-	Email       string
-	DisplayName string
-	SecretHash  []byte
-	Prefix      string
+	Username   string
+	Email      string
+	Label      string
+	SecretHash []byte
+	Prefix     string
 	// PasswordHash, when set, installs an argon2id password credential (PHC
 	// encoded) so the owner can log in with a username and password. Optional.
 	PasswordHash string
@@ -98,8 +98,8 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 		return false, fmt.Errorf("storage: bootstrap principal: %w", err)
 	}
 	if _, err := tx.Exec(ctx,
-		`insert into human (principal_id, username, email, display_name) values ($1, $2, $3, $4)`,
-		pid, spec.Username, nullize(spec.Email), nullize(spec.DisplayName)); err != nil {
+		`insert into human (principal_id, username, email, label) values ($1, $2, $3, $4)`,
+		pid, spec.Username, nullize(spec.Email), spec.Label); err != nil {
 		return false, fmt.Errorf("storage: bootstrap human: %w", err)
 	}
 	if _, err := tx.Exec(ctx,
@@ -169,6 +169,13 @@ func (p *PG) IssueBearerCredential(ctx context.Context, spec BearerIssue) (bool,
 
 // nullize maps an empty string to a SQL NULL so optional text columns stay null
 // rather than empty.
+//
+// It is NOT for a `label`. Since #613 (ADR-0118) every label column is
+// NOT NULL with an empty-string default, so unset is the empty string and
+// nothing else, and a nullized label is now a not-null violation rather than a
+// second spelling of the same fact. The columns still on this helper are the
+// ones that genuinely keep a null: an optional email, a description, an actor
+// id on a system-written audit row, a scope id on an all-scoped grant.
 func nullize(s string) any {
 	if s == "" {
 		return nil
@@ -207,7 +214,7 @@ type PrincipalGroupRef struct{ ID, Name string }
 // attributes. Each kind's identifier is its own column: a human's username, a
 // service account's name, a node's name (the estate address).
 type HumanProfile struct {
-	Username, Email, DisplayName string
+	Username, Email, Label string
 	// MustChangePassword is set by an admin reset and cleared by the user's own
 	// change-password; while true the account is gated to the change-password lane.
 	MustChangePassword bool
@@ -233,7 +240,7 @@ type Grant struct {
 	// distinctly from direct. A principal's effective grants are its direct grants
 	// unioned with its groups' grants; both flatten and scope-resolve the same way.
 	GroupID *string
-	// GroupName is the source group's label (display name or name), set alongside
+	// GroupName is the source group's label (label or name), set alongside
 	// GroupID, so a caller can name where an inherited grant comes from.
 	GroupName *string
 }
@@ -627,8 +634,8 @@ func (p *PG) GetPrincipalAvatar(ctx context.Context, id string, action scope.Set
 // leaves the column unchanged; a non-nil pointer sets it, with an empty string
 // clearing the nullable column to NULL.
 type HumanProfilePatch struct {
-	DisplayName *string
-	Email       *string
+	Label *string
+	Email *string
 }
 
 // UpdateHumanProfile applies a partial update to a human's own profile, addressed
@@ -636,9 +643,9 @@ type HumanProfilePatch struct {
 // as-is; a provided empty string clears the column. The row exists by
 // construction (the caller is that principal), so a no-match is not signalled.
 func (p *PG) UpdateHumanProfile(ctx context.Context, principalID string, patch HumanProfilePatch) error {
-	setDisplay, display := patch.DisplayName != nil, any(nil)
-	if patch.DisplayName != nil {
-		display = nullize(*patch.DisplayName)
+	setDisplay, display := patch.Label != nil, any(nil)
+	if patch.Label != nil {
+		display = *patch.Label
 	}
 	setEmail, email := patch.Email != nil, any(nil)
 	if patch.Email != nil {
@@ -651,7 +658,7 @@ func (p *PG) UpdateHumanProfile(ctx context.Context, principalID string, patch H
 	defer func() { _ = tx.Rollback(ctx) }()
 	if _, err := tx.Exec(ctx, `
 		update human set
-			display_name = case when $2 then $3 else display_name end,
+			label = case when $2 then $3 else label end,
 			email        = case when $4 then $5 else email end
 		where principal_id = $1`,
 		principalID, setDisplay, display, setEmail, email); err != nil {
@@ -660,8 +667,8 @@ func (p *PG) UpdateHumanProfile(ctx context.Context, principalID string, patch H
 	// Audit the self-profile change so an impersonated (act-as) edit records the
 	// real actor, and every profile edit leaves a trail. Log the changed fields.
 	summary := map[string]any{}
-	if patch.DisplayName != nil {
-		summary["display_name"] = *patch.DisplayName
+	if patch.Label != nil {
+		summary["label"] = *patch.Label
 	}
 	if patch.Email != nil {
 		summary["email"] = *patch.Email
@@ -819,7 +826,7 @@ var ErrUsernameTaken = errors.New("storage: username already exists")
 type HumanSpec struct {
 	Username     string
 	Email        string
-	DisplayName  string
+	Label        string
 	PasswordHash string
 }
 
@@ -914,8 +921,8 @@ func (p *PG) CreateHumanPrincipal(ctx context.Context, actorID string, spec Huma
 		return nil, fmt.Errorf("storage: create principal: %w", err)
 	}
 	if _, err := tx.Exec(ctx,
-		`insert into human (principal_id, username, email, display_name) values ($1, $2, $3, $4)`,
-		pid, spec.Username, nullize(spec.Email), nullize(spec.DisplayName)); err != nil {
+		`insert into human (principal_id, username, email, label) values ($1, $2, $3, $4)`,
+		pid, spec.Username, nullize(spec.Email), spec.Label); err != nil {
 		return nil, mapPrincipalWriteErr(err)
 	}
 	if spec.PasswordHash != "" {
@@ -941,18 +948,18 @@ func (p *PG) CreateHumanPrincipal(ctx context.Context, actorID string, spec Huma
 }
 
 // ErrPrincipalNotHuman is returned when an admin profile update targets a
-// non-human principal (only humans have username / email / display name). The API
+// non-human principal (only humans have username / email / label). The API
 // maps it to 422.
 var ErrPrincipalNotHuman = errors.New("storage: principal is not a human")
 
 // AdminHumanPatch carries the admin-editable fields of a human principal. A nil
 // pointer leaves the field unchanged; a provided empty string clears the nullable
-// display name or email. Username is not nullable: a provided empty string is a
+// label or email. Username is not nullable: a provided empty string is a
 // request fault the API rejects before the gateway.
 type AdminHumanPatch struct {
-	DisplayName *string
-	Email       *string
-	Username    *string
+	Label    *string
+	Email    *string
+	Username *string
 }
 
 // UpdatePrincipalHuman applies an admin profile update to a human principal by id,
@@ -988,14 +995,14 @@ func (p *PG) UpdatePrincipalHuman(ctx context.Context, actorID, principalID stri
 	// The audit "before" is the current human row.
 	var before HumanProfile
 	if err := tx.QueryRow(ctx,
-		`select username, coalesce(email, ''), coalesce(display_name, '') from human where principal_id = $1`,
-		principalID).Scan(&before.Username, &before.Email, &before.DisplayName); err != nil {
+		`select username, coalesce(email, ''), label from human where principal_id = $1`,
+		principalID).Scan(&before.Username, &before.Email, &before.Label); err != nil {
 		return nil, fmt.Errorf("storage: update principal before: %w", err)
 	}
 
-	setDisplay, display := patch.DisplayName != nil, any(nil)
-	if patch.DisplayName != nil {
-		display = nullize(*patch.DisplayName)
+	setDisplay, display := patch.Label != nil, any(nil)
+	if patch.Label != nil {
+		display = *patch.Label
 	}
 	setEmail, email := patch.Email != nil, any(nil)
 	if patch.Email != nil {
@@ -1008,7 +1015,7 @@ func (p *PG) UpdatePrincipalHuman(ctx context.Context, actorID, principalID stri
 	}
 	if _, err := tx.Exec(ctx, `
 		update human set
-			display_name = case when $2 then $3 else display_name end,
+			label = case when $2 then $3 else label end,
 			email        = case when $4 then $5 else email end,
 			username     = case when $6 then $7 else username end
 		where principal_id = $1`,
@@ -1017,8 +1024,8 @@ func (p *PG) UpdatePrincipalHuman(ctx context.Context, actorID, principalID stri
 	}
 
 	after := before
-	if patch.DisplayName != nil {
-		after.DisplayName = *patch.DisplayName
+	if patch.Label != nil {
+		after.Label = *patch.Label
 	}
 	if patch.Email != nil {
 		after.Email = *patch.Email
@@ -1395,10 +1402,10 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	case "human":
 		var h HumanProfile
 		if err := p.pool.QueryRow(ctx,
-			`select username, coalesce(email, ''), coalesce(display_name, ''), must_change_password,
+			`select username, coalesce(email, ''), label, must_change_password,
 			        avatar is not null, avatar_updated_at
 			 from human where principal_id = $1`,
-			pr.ID).Scan(&h.Username, &h.Email, &h.DisplayName, &h.MustChangePassword,
+			pr.ID).Scan(&h.Username, &h.Email, &h.Label, &h.MustChangePassword,
 			&h.HasAvatar, &h.AvatarUpdatedAt); err != nil {
 			return fmt.Errorf("storage: load human: %w", err)
 		}
@@ -1425,7 +1432,7 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	// both read pr.Grants, so a member inherits a group's role and scope here and
 	// nowhere else. group_id tags an inherited grant so callers can tell it apart.
 	rows, err := p.pool.Query(ctx,
-		`select g.id, (select name from role where id = g.role_id), g.scope_kind, g.scope_id, g.scope_op, g.group_id, coalesce(pg.display_name, pg.name)
+		`select g.id, (select name from role where id = g.role_id), g.scope_kind, g.scope_id, g.scope_op, g.group_id, coalesce(pg.label, pg.name)
 		   from principal_grant g
 		   left join principal_group pg on pg.id = g.group_id
 		  where g.principal_id = $1
@@ -1449,7 +1456,7 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	// The principal's group memberships (id + label), so the admin directory can
 	// show where a principal's inherited access comes from.
 	grows, err := p.pool.Query(ctx,
-		`select g.id, coalesce(g.display_name, g.name)
+		`select g.id, coalesce(g.label, g.name)
 		   from principal_group_member m join principal_group g on g.id = m.group_id
 		  where m.principal_id = $1 order by g.name`, pr.ID)
 	if err != nil {
@@ -1468,7 +1475,7 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 
 // ListRoles returns every role, for building the in-process role index.
 func (p *PG) ListRoles(ctx context.Context) ([]Role, error) {
-	rows, err := p.pool.Query(ctx, `select id, name, official, permissions, inherits, coalesce(display_name, ''), coalesce(description, '') from role order by name`)
+	rows, err := p.pool.Query(ctx, `select id, name, official, permissions, inherits, label, coalesce(description, '') from role order by name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list roles: %w", err)
 	}
@@ -1476,7 +1483,7 @@ func (p *PG) ListRoles(ctx context.Context) ([]Role, error) {
 	var out []Role
 	for rows.Next() {
 		var r Role
-		if err := rows.Scan(&r.ID, &r.Name, &r.Official, &r.Permissions, &r.Inherits, &r.DisplayName, &r.Description); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.Official, &r.Permissions, &r.Inherits, &r.Label, &r.Description); err != nil {
 			return nil, fmt.Errorf("storage: scan role: %w", err)
 		}
 		out = append(out, r)

@@ -57,7 +57,7 @@ func TestExcludeRootDeployScopeAPI(t *testing.T) {
 	// update on the three tree tiers, read via the viewer floor).
 	deployTok := principalWithGrants(t, ctx, dsn, "integrator",
 		[]grant{{role: "deploy", scopeKind: "location", scopeID: roomID, scopeOp: "subtree_excl_root"}})
-	patch := map[string]any{"display_name": "x"}
+	patch := map[string]any{"label": "x"}
 
 	// Read keeps the root: the integrator can see the room it deploys into.
 	c.do(deployTok, http.MethodGet, "/locations/room-42", nil, http.StatusOK)

@@ -730,7 +730,7 @@ func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 		t.Fatalf("role-sys: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `
-		insert into system_role (owner_kind, system_id, name, display_name)
+		insert into system_role (owner_kind, system_id, name, label)
 		values ('system', $1, 'seat', 'Seat')`, sys.ID); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
@@ -810,7 +810,7 @@ func TestUnassignRoleResolvesEstateWideDuplicateWithinOccupancy(t *testing.T) {
 		t.Fatalf("create system: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `
-		insert into system_role (owner_kind, system_id, name, display_name)
+		insert into system_role (owner_kind, system_id, name, label)
 		values ('system', $1, 'seat', 'Seat')`, sys.ID); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
@@ -886,7 +886,7 @@ func TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole(t *testing.
 		t.Fatalf("create system: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `
-		insert into system_role (owner_kind, system_id, name, display_name)
+		insert into system_role (owner_kind, system_id, name, label)
 		values ('system', $1, 'seat', 'Seat')`, sys.ID); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}

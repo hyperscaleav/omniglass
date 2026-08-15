@@ -23,11 +23,11 @@ function mount(e: Labelled, placeholder = "Executive Boardroom") {
   };
 }
 
-const platformLabelled: Labelled = { name: "boardroom-2", display_name: "Boardroom 2", display_name_generated: true };
-const operatorLabelled: Labelled = { name: "boardroom-2", display_name: "The East Half", display_name_generated: false };
+const platformLabelled: Labelled = { name: "boardroom-2", label: "Boardroom 2", label_generated: true };
+const operatorLabelled: Labelled = { name: "boardroom-2", label: "The East Half", label_generated: false };
 // The rule resolved nowhere, so the platform stores nothing and the surface
 // reads the name. Every location in an estate that predates a location name rule.
-const noRule: Labelled = { name: "north-wing", display_name: "", display_name_generated: true };
+const noRule: Labelled = { name: "north-wing", label: "", label_generated: true };
 
 describe("LabelPenField", () => {
   it("opens locked on the label the rule rendered, and says a rule edit rewrites it", () => {
@@ -43,7 +43,7 @@ describe("LabelPenField", () => {
 
   it("holds no value of its own while it is locked, so a save posts the platform's pen back", () => {
     // The wire contract, structurally. The blade posts pen.value(), and the API
-    // reads an empty display_name as "the platform's": that is the whole of how
+    // reads an empty label as "the platform's": that is the whole of how
     // a locked field leaves the pen where it was.
     const { pen } = mount(platformLabelled);
     expect(pen.value()).toBe("");
@@ -74,7 +74,7 @@ describe("LabelPenField", () => {
     // has a label on screen already, so taking the pen means amending it. An
     // empty box here would silently discard the label the operator meant to edit.
     const { input, toggle, pen } = mount(platformLabelled);
-    expect(toggle().getAttribute("aria-label")).toBe("Override the display name");
+    expect(toggle().getAttribute("aria-label")).toBe("Override the label");
     fireEvent.click(toggle());
     expect(input.readOnly).toBe(false);
     expect(input.value).toBe("Boardroom 2");
@@ -107,7 +107,7 @@ describe("LabelPenField", () => {
     // EXISTING row (:renderLabel previews the next free ordinal, not this row's),
     // so the words carry it rather than a guessed value.
     const { input, toggle, pen } = mount(operatorLabelled);
-    expect(toggle().getAttribute("aria-label")).toBe("Restore the display name to default");
+    expect(toggle().getAttribute("aria-label")).toBe("Restore the label to default");
     fireEvent.click(toggle());
     expect(pen.value()).toBe("");
     expect(input.readOnly).toBe(true);
@@ -142,7 +142,7 @@ describe("LabelPenField", () => {
     const label = document.querySelector("label")!;
     expect(label.getAttribute("for")).toBe(input.id);
     expect(input.id).toBeTruthy();
-    expect(screen.getByLabelText("Display name")).toBe(input);
+    expect(screen.getByLabelText("Label")).toBe(input);
   });
 
   it("keeps the locked value and its action on the keyboard", () => {

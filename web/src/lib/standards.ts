@@ -13,7 +13,7 @@ import { api } from "../api/client";
 export type Standard = {
   id: string;
   name: string;
-  display_name: string;
+  label: string;
   official: boolean;
   parent_standard?: string;
   parent_standard_id?: string;
@@ -30,7 +30,7 @@ export async function listStandards(): Promise<Standard[]> {
 export type CreateStandard = {
   // The name. The uuid is the database\'s to mint.
   name: string;
-  display_name: string;
+  label: string;
   parent_standard_id?: string;
 };
 
@@ -41,7 +41,7 @@ export async function createStandard(body: CreateStandard): Promise<Standard> {
 }
 
 export type UpdateStandard = {
-  display_name?: string;
+  label?: string;
   parent_standard_id?: string;
 };
 

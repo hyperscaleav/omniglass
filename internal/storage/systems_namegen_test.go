@@ -106,7 +106,7 @@ func TestSystemCreateGeneratesFromTypeStem(t *testing.T) {
 func TestSystemSuppressedFirstOrdinal(t *testing.T) {
 	gw, ctx, room := newSystemNamegenDB(t)
 	if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-		Name: "br-type", DisplayName: "Br", Stem: strp("br"),
+		Name: "br-type", Label: "Br", Stem: strp("br"),
 	}); err != nil {
 		t.Fatalf("create system_type with stem br: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestSystemSuppressedFirstOrdinal(t *testing.T) {
 func TestSystemGeneratorYieldsToAHandTypedName(t *testing.T) {
 	gw, ctx, room := newSystemNamegenDB(t)
 	if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-		Name: "br-type", DisplayName: "Br", Stem: strp("br"),
+		Name: "br-type", Label: "Br", Stem: strp("br"),
 	}); err != nil {
 		t.Fatalf("create system_type: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestSystemGeneratorYieldsToAHandTypedName(t *testing.T) {
 func TestSystemDeleteFreesTheBareName(t *testing.T) {
 	gw, ctx, room := newSystemNamegenDB(t)
 	if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-		Name: "br-type", DisplayName: "Br", Stem: strp("br"),
+		Name: "br-type", Label: "Br", Stem: strp("br"),
 	}); err != nil {
 		t.Fatalf("create system_type: %v", err)
 	}
@@ -434,7 +434,7 @@ func TestSystemUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 	}
 
 	after, err := gw.UpdateSystem(ctx, "", second.ID, storage.SystemPatch{
-		DisplayName:  strp("The Small Boardroom"),
+		Label:        strp("The Small Boardroom"),
 		SystemTypeID: strp("board"), // unchanged, and always sent by the console
 	}, all, all)
 	if err != nil {
@@ -446,8 +446,8 @@ func TestSystemUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 	if after.Ordinal == nil || *after.Ordinal != 2 {
 		t.Fatalf("after.Ordinal = %s, want 2 (unchanged)", ordstr(after.Ordinal))
 	}
-	if after.DisplayName != "The Small Boardroom" {
-		t.Fatalf("after.DisplayName = %q, want the label the patch set", after.DisplayName)
+	if after.Label != "The Small Boardroom" {
+		t.Fatalf("after.Label = %q, want the label the patch set", after.Label)
 	}
 	// A REAL reclassify still re-mints, so the guard narrows the trigger without
 	// disabling it.
@@ -479,14 +479,14 @@ func TestSystemReclassifyWithinOneStemKeepsTheName(t *testing.T) {
 	// One ancestor carries the stem; neither child carries its own, so both
 	// resolve to it and both mint the same name.
 	parent, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-		Name: "twin-parent", DisplayName: "Twin Parent", Stem: strp("twinroom"),
+		Name: "twin-parent", Label: "Twin Parent", Stem: strp("twinroom"),
 	})
 	if err != nil {
 		t.Fatalf("create the parent type: %v", err)
 	}
 	for _, name := range []string{"twin-a", "twin-b"} {
 		if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-			Name: name, DisplayName: name, ParentID: &parent.ID,
+			Name: name, Label: name, ParentID: &parent.ID,
 		}); err != nil {
 			t.Fatalf("create system_type %s: %v", name, err)
 		}

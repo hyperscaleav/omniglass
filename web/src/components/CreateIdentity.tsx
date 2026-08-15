@@ -9,7 +9,7 @@ import { type DraftLabel } from "../lib/labeldraft";
 //
 // It exists as one component because those three forms had drifted into three
 // near-identical shapes that differed in the small ways that matter: two of them
-// derived the name from the display name and one did not, two of them refused to
+// derived the name from the label and one did not, two of them refused to
 // submit without a name the API would happily have generated, and none of them
 // said what the generated name would be. Slice 3 of this epic swept 42 copies of
 // one label rule onto a single primitive; three copies of one create form is the
@@ -175,8 +175,8 @@ export default function CreateIdentity(props: CreateIdentityProps): JSX.Element 
         </FieldRow>
 
         <FieldRow
-          bind="display_name"
-          actions={<PenToggle pen={props.displayPen} what="display name" />}
+          bind="label"
+          actions={<PenToggle pen={props.displayPen} what="label" />}
           hint={
             displayState() === "overridden"
               ? "Labelled by you."

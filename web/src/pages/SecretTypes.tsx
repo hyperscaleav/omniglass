@@ -25,7 +25,7 @@ function officialBadge(official: boolean): JSX.Element {
     : <span class="badge badge-outline badge-sm">custom</span>;
 }
 
-// Identity (the display name above the name, ADR-0062) and origin. No icon
+// Identity (the label above the name, ADR-0062) and origin. No icon
 // column: a secret type carries no glyph.
 const columns: FlatColumn<SecretType>[] = [
   identityColumn<SecretType>(),
@@ -35,9 +35,9 @@ const columns: FlatColumn<SecretType>[] = [
 export default function SecretTypes() {
   const types = useQuery(() => ({ queryKey: SECRET_TYPES_KEY, queryFn: listSecretTypes }));
 
-  // Sorted alphabetically by display name then name.
+  // Sorted alphabetically by label then name.
   const rows = () =>
-    [...(types.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.name.localeCompare(b.name));
+    [...(types.data ?? [])].sort((a, b) => a.label.localeCompare(b.label) || a.name.localeCompare(b.name));
 
   return (
     <FlatList<SecretType>

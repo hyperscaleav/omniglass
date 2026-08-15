@@ -219,7 +219,7 @@ describe("CreateIdentity", () => {
     expect(namePen.value()).toBe("");
   });
 
-  it("never rewrites the name from the display name", () => {
+  it("never rewrites the name from the label", () => {
     // The coupling lib/entities.ts's createIdentity owns for the registry
     // pages, which is exactly wrong here: a blank name is the request to
     // GENERATE one, so filling it from a typed label would claim the pen on the
@@ -231,7 +231,7 @@ describe("CreateIdentity", () => {
     expect(name.value).toBe("display-3");
   });
 
-  it("leaves the display name alone when the name is overridden", () => {
+  it("leaves the label alone when the name is overridden", () => {
     const { name, display, unlockName, unlockDisplay, displayPen } = mount(NAMED);
     unlockDisplay();
     fireEvent.input(display, { target: { value: "Front Ceiling Mic" } });

@@ -19,7 +19,7 @@ import { uuidFor } from "../lib/testids";
 // capability it is missing rather than earn a 403. Same treatment as the Settings
 // page, which meets the same paired gate.
 const types: SecretType[] = [
-  { id: uuidFor("snmp-community"), name: "snmp-community", display_name: "SNMP community", official: true, fields: [{ name: "community", type: "string", secret: true, origin: "operator" }] },
+  { id: uuidFor("snmp-community"), name: "snmp-community", label: "SNMP community", official: true, fields: [{ name: "community", type: "string", secret: true, origin: "operator" }] },
 ];
 
 const seed: Secret[] = [

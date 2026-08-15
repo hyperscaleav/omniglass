@@ -42,7 +42,7 @@ Column schemas live with each owning feature: [samples](/architecture/properties
 
 - **Identity is three columns.** **`id`** is a uuid: immutable, the primary key, and what every
   foreign key stores. **`name`** is the renameable identifier an operator types and an address
-  carries (the `rm215a` in `boi.17c.rm215a`). **`display_name`** is an optional friendly string a
+  carries (the `rm215a` in `boi.17c.rm215a`). **`label`** is an optional friendly string a
   human reads ("HQ Boardroom DSP"), and a surface that has none falls back to the name rather than
   re-casing it. A rename moves `name` and nothing else, which is why references store the id and why
   `audit_log.resource_id` does too. `storage.ValidateName` is the one validator, applying the one

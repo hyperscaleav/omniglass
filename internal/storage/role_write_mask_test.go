@@ -36,7 +36,7 @@ func roleMaskGateway(t *testing.T) (*storage.PG, context.Context, scope.Set) {
 }
 
 // TestUnrelatedEditLeavesTheRestOfTheDeclarationAlone is #639, both halves at
-// once: an edit that carries only a display name must not reset the impact to
+// once: an edit that carries only a label must not reset the impact to
 // degraded (which moves the system's verdict rollup with no visible field and
 // no warning) and must not drop the position labels. capacity and the typed
 // slot go with them, so the whole declaration now reads one way instead of
@@ -49,7 +49,7 @@ func TestUnrelatedEditLeavesTheRestOfTheDeclarationAlone(t *testing.T) {
 
 	cap3 := 3
 	if _, err := gw.SetSystemRole(ctx, "", "system", "mask-preserve-sys", storage.SystemRoleSpec{
-		Name: "main-display", DisplayName: "Main Display", Quorum: 2, Impact: "outage",
+		Name: "main-display", Label: "Main Display", Quorum: 2, Impact: "outage",
 		Capacity: &cap3, PositionLabels: []string{"left", "right"},
 		AcceptedTypes: []string{"display"}, PinnedProducts: []string{"samsung-qm55"},
 	}); err != nil {
@@ -57,13 +57,13 @@ func TestUnrelatedEditLeavesTheRestOfTheDeclarationAlone(t *testing.T) {
 	}
 
 	r, err := gw.SetSystemRole(ctx, "", "system", "mask-preserve-sys", storage.SystemRoleSpec{
-		Name: "main-display", DisplayName: "Main Display (renamed)",
+		Name: "main-display", Label: "Main Display (renamed)",
 	})
 	if err != nil {
-		t.Fatalf("edit display_name only: %v", err)
+		t.Fatalf("edit label only: %v", err)
 	}
-	if r.DisplayName != "Main Display (renamed)" {
-		t.Fatalf("display_name = %q, want the edit to take", r.DisplayName)
+	if r.Label != "Main Display (renamed)" {
+		t.Fatalf("label = %q, want the edit to take", r.Label)
 	}
 	if r.Impact != "outage" {
 		t.Fatalf("impact after an edit that never mentions it = %q, want outage: an omitted impact "+
@@ -98,7 +98,7 @@ func TestExplicitMaskClearsCapacity(t *testing.T) {
 
 	cap3 := 3
 	if _, err := gw.SetSystemRole(ctx, "", "system", "mask-clear-sys", storage.SystemRoleSpec{
-		Name: "main-display", DisplayName: "Main Display", Impact: "outage", Capacity: &cap3,
+		Name: "main-display", Label: "Main Display", Impact: "outage", Capacity: &cap3,
 	}); err != nil {
 		t.Fatalf("declare with capacity: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestExplicitMaskClearsCapacity(t *testing.T) {
 		t.Fatalf("capacity = %v, want it cleared back to unbounded: a masked field carrying its "+
 			"zero value clears (#638)", *r.Capacity)
 	}
-	if r.Impact != "outage" || r.DisplayName != "Main Display" {
+	if r.Impact != "outage" || r.Label != "Main Display" {
 		t.Fatalf("role after a capacity-only mask = %+v, want every other field untouched", r)
 	}
 }
@@ -128,7 +128,7 @@ func TestExplicitMaskClearsTheTypedSlotAndLabels(t *testing.T) {
 		t.Fatalf("create system: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "system", "mask-clear-list-sys", storage.SystemRoleSpec{
-		Name: "main-display", DisplayName: "Main Display",
+		Name: "main-display", Label: "Main Display",
 		PositionLabels: []string{"left"}, AcceptedTypes: []string{"display"},
 		PinnedProducts: []string{"samsung-qm55"},
 	}); err != nil {
@@ -146,8 +146,8 @@ func TestExplicitMaskClearsTheTypedSlotAndLabels(t *testing.T) {
 	if len(r.PositionLabels) != 0 || len(r.AcceptedTypes) != 0 || len(r.PinnedProducts) != 0 {
 		t.Fatalf("role after a list-clearing mask = %+v, want all three lists empty", r)
 	}
-	if r.DisplayName != "Main Display" {
-		t.Fatalf("display_name = %q, want it untouched by a mask that does not name it", r.DisplayName)
+	if r.Label != "Main Display" {
+		t.Fatalf("label = %q, want it untouched by a mask that does not name it", r.Label)
 	}
 }
 
@@ -162,7 +162,7 @@ func TestStarMaskReplacesTheWholeDeclaration(t *testing.T) {
 	}
 	cap3 := 3
 	if _, err := gw.SetSystemRole(ctx, "", "system", "mask-star-sys", storage.SystemRoleSpec{
-		Name: "main-display", DisplayName: "Main Display", Quorum: 2, Impact: "outage", Capacity: &cap3,
+		Name: "main-display", Label: "Main Display", Quorum: 2, Impact: "outage", Capacity: &cap3,
 		PositionLabels: []string{"left", "right"}, AcceptedTypes: []string{"display"},
 	}); err != nil {
 		t.Fatalf("declare: %v", err)
@@ -182,8 +182,8 @@ func TestStarMaskReplacesTheWholeDeclaration(t *testing.T) {
 		len(r.PositionLabels) != 0 || len(r.AcceptedTypes) != 0 {
 		t.Fatalf("role after a full replacement = %+v, want every omitted field back to its default", r)
 	}
-	if r.DisplayName != "main-display" {
-		t.Fatalf("display_name after a full replacement = %q, want the role name (its default)", r.DisplayName)
+	if r.Label != "main-display" {
+		t.Fatalf("label after a full replacement = %q, want the role name (its default)", r.Label)
 	}
 }
 
@@ -197,14 +197,14 @@ func TestMaskedCreateTakesDefaultsForWhatItDoesNotName(t *testing.T) {
 	}
 	cap5 := 5
 	r, err := gw.SetSystemRole(ctx, "", "system", "mask-create-sys", storage.SystemRoleSpec{
-		Name: "main-display", DisplayName: "Main Display", Quorum: 4, Impact: "outage", Capacity: &cap5,
-		Write: updatemask.Of(storage.RoleFieldDisplayName),
+		Name: "main-display", Label: "Main Display", Quorum: 4, Impact: "outage", Capacity: &cap5,
+		Write: updatemask.Of(storage.RoleFieldLabel),
 	})
 	if err != nil {
 		t.Fatalf("masked create: %v", err)
 	}
-	if r.DisplayName != "Main Display" {
-		t.Fatalf("display_name = %q, want the one field the mask named", r.DisplayName)
+	if r.Label != "Main Display" {
+		t.Fatalf("label = %q, want the one field the mask named", r.Label)
 	}
 	if r.Quorum != 1 || r.Impact != "degraded" || r.Capacity != nil {
 		t.Fatalf("masked create = %+v, want the unnamed fields on their defaults, not on the body's values", r)
@@ -219,7 +219,7 @@ func TestAnEmptyMaskWritesNothing(t *testing.T) {
 		t.Fatalf("create system: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "system", "mask-empty-sys", storage.SystemRoleSpec{
-		Name: "main-display", DisplayName: "Main Display", Quorum: 2, Impact: "outage",
+		Name: "main-display", Label: "Main Display", Quorum: 2, Impact: "outage",
 	}); err != nil {
 		t.Fatalf("declare: %v", err)
 	}
@@ -228,12 +228,12 @@ func TestAnEmptyMaskWritesNothing(t *testing.T) {
 		t.Fatalf("resolve an empty mask: %v", err)
 	}
 	r, err := gw.SetSystemRole(ctx, "", "system", "mask-empty-sys", storage.SystemRoleSpec{
-		Name: "main-display", DisplayName: "Ignored", Quorum: 9, Impact: "none", Write: empty,
+		Name: "main-display", Label: "Ignored", Quorum: 9, Impact: "none", Write: empty,
 	})
 	if err != nil {
 		t.Fatalf("write with an empty mask: %v", err)
 	}
-	if r.DisplayName != "Main Display" || r.Quorum != 2 || r.Impact != "outage" {
+	if r.Label != "Main Display" || r.Quorum != 2 || r.Impact != "outage" {
 		t.Fatalf("role after an empty mask = %+v, want it exactly as declared", r)
 	}
 }

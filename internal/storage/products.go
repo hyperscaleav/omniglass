@@ -43,19 +43,19 @@ func validProductKind(s string) bool {
 }
 
 // Product is a registry row naming a concrete SKU in the estate model (e.g.
-// "Cisco Room Bar"): a stable id, the official flag, a display_name, a kind
+// "Cisco Room Bar"): a stable id, the official flag, a label, a kind
 // (device/app/service), the component_type it is classified under (the
 // taxonomy above product; mic, camera, wireless-mic...), an optional icon
 // override, and optional pointers at a vendor (who makes it), a driver (what
 // talks to it), and a parent product (a variant it inherits from). The
-// registry lists alphabetically by display_name; there is no ordering field.
+// registry lists alphabetically by label; there is no ordering field.
 type Product struct {
 	// ID is the uuid primary key, Name the renameable name. Its two
 	// references carry both forms for the same reason the estate bodies do: the
 	// id is what the row points at, the name is what an operator reads and types.
 	ID                string
 	Name              string
-	DisplayName       string
+	Label             string
 	VendorID          *string
 	VendorName        *string
 	DriverID          *string
@@ -88,7 +88,7 @@ type Product struct {
 // required classification, so a patch either leaves it (nil) or
 // reclassifies it (set), never empties it.
 type ProductPatch struct {
-	DisplayName     *string
+	Label           *string
 	VendorID        *string
 	DriverID        *string
 	ParentProductID *string
@@ -102,7 +102,7 @@ type ProductPatch struct {
 // target's current handle. Both derived columns are aliased: an unaliased
 // `select v.name` would emit a second output column called `name` and make
 // `order by name` ambiguous.
-const productCols = `id, name, display_name,
+const productCols = `id, name, label,
 	vendor_id, (select v.name from vendor v where v.id = product.vendor_id) as vendor_handle,
 	driver_id, (select d.name from driver d where d.id = product.driver_id) as driver_handle, kind,
 	parent_product_id, (select q.name from product q where q.id = product.parent_product_id) as parent_handle,
@@ -201,7 +201,7 @@ func genericComponentTypeForKind(kind string) string {
 
 func scanProduct(row pgx.Row) (*Product, error) {
 	var m Product
-	if err := row.Scan(&m.ID, &m.Name, &m.DisplayName, &m.VendorID, &m.VendorName, &m.DriverID, &m.DriverName, &m.Kind, &m.ParentProductID, &m.ParentProductName, &m.ComponentType, &m.ComponentTypeID, &m.Icon, &m.LabelRule, &m.Official, &m.CreatedAt, &m.UpdatedAt); err != nil {
+	if err := row.Scan(&m.ID, &m.Name, &m.Label, &m.VendorID, &m.VendorName, &m.DriverID, &m.DriverName, &m.Kind, &m.ParentProductID, &m.ParentProductName, &m.ComponentType, &m.ComponentTypeID, &m.Icon, &m.LabelRule, &m.Official, &m.CreatedAt, &m.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &m, nil
@@ -250,10 +250,10 @@ func (p *PG) UpsertProduct(ctx context.Context, m Product) error {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `
-		insert into product (name, display_name, vendor_id, driver_id, kind, parent_product_id, component_type_id, icon, label_rule, official)
+		insert into product (name, label, vendor_id, driver_id, kind, parent_product_id, component_type_id, icon, label_rule, official)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		on conflict (name) do update
-			set display_name      = excluded.display_name,
+			set label      = excluded.label,
 			    vendor_id         = excluded.vendor_id,
 			    driver_id         = excluded.driver_id,
 			    kind              = excluded.kind,
@@ -263,7 +263,7 @@ func (p *PG) UpsertProduct(ctx context.Context, m Product) error {
 			    label_rule        = excluded.label_rule,
 			    official          = excluded.official,
 			    updated_at        = now()`,
-		m.Name, m.DisplayName, m.VendorID, m.DriverID, m.Kind, m.ParentProductID, componentTypeID, m.Icon, nilIfEmpty(m.LabelRule), m.Official); err != nil {
+		m.Name, m.Label, m.VendorID, m.DriverID, m.Kind, m.ParentProductID, componentTypeID, m.Icon, nilIfEmpty(m.LabelRule), m.Official); err != nil {
 		return fmt.Errorf("storage: upsert product %q: %w", m.Name, err)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -272,11 +272,11 @@ func (p *PG) UpsertProduct(ctx context.Context, m Product) error {
 	return nil
 }
 
-// ListProducts returns every product, ordered alphabetically by display_name,
+// ListProducts returns every product, ordered alphabetically by label,
 // with unlabelled rows last and the name breaking ties (#613; see ListVendors for
 // why the ordering is spelled nullif(...) nulls last).
 func (p *PG) ListProducts(ctx context.Context) ([]Product, error) {
-	rows, err := p.pool.Query(ctx, `select `+productCols+` from product order by nullif(display_name, '') nulls last, name`)
+	rows, err := p.pool.Query(ctx, `select `+productCols+` from product order by nullif(label, '') nulls last, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list products: %w", err)
 	}
@@ -350,10 +350,10 @@ func (p *PG) CreateProduct(ctx context.Context, actorID string, m Product) (*Pro
 		return nil, err
 	}
 	if err := tx.QueryRow(ctx, `
-		insert into product (name, display_name, vendor_id, driver_id, kind, parent_product_id, component_type_id, icon, label_rule, official)
+		insert into product (name, label, vendor_id, driver_id, kind, parent_product_id, component_type_id, icon, label_rule, official)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, false)
 		returning id, created_at, updated_at`,
-		m.Name, m.DisplayName, m.VendorID, m.DriverID, m.Kind, m.ParentProductID, componentTypeID, m.Icon, m.LabelRule).
+		m.Name, m.Label, m.VendorID, m.DriverID, m.Kind, m.ParentProductID, componentTypeID, m.Icon, m.LabelRule).
 		Scan(&m.ID, &m.CreatedAt, &m.UpdatedAt); err != nil {
 		return nil, mapProductWriteErr(err)
 	}
@@ -368,7 +368,7 @@ func (p *PG) CreateProduct(ctx context.Context, actorID string, m Product) (*Pro
 	return p.GetProduct(ctx, m.ID)
 }
 
-// UpdateProduct patches a custom product's display_name, vendor, driver, kind,
+// UpdateProduct patches a custom product's label, vendor, driver, kind,
 // parent, component_type, or icon (nil fields unchanged) and audits it.
 // Official rows are read-only (ErrTypeOfficial); an unknown id is
 // ErrTypeNotFound; an unknown reference is ErrProductRefNotFound; an
@@ -414,7 +414,7 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 	}
 	m, err := scanProduct(tx.QueryRow(ctx, `
 		update product set
-			display_name      = coalesce($2, display_name),
+			label      = coalesce($2, label),
 			vendor_id         = coalesce($3, vendor_id),
 			driver_id         = coalesce($4, driver_id),
 			kind              = coalesce($5, kind),
@@ -431,7 +431,7 @@ func (p *PG) UpdateProduct(ctx context.Context, actorID, id string, patch Produc
 			updated_at        = now()
 		where `+registryRefCol(id)+` = $1
 		returning `+productCols,
-		id, patch.DisplayName, resolved.VendorID, resolved.DriverID, patch.Kind, resolved.ParentProductID, componentTypeID, patch.Icon, patch.LabelRule))
+		id, patch.Label, resolved.VendorID, resolved.DriverID, patch.Kind, resolved.ParentProductID, componentTypeID, patch.Icon, patch.LabelRule))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound

@@ -32,8 +32,8 @@ describe("role cache keys", () => {
 // member list. Pure, so it is tested without a server.
 describe("roleByComponent", () => {
   const roles: EffectiveRole[] = [
-    { name: "table-mic", display_name: "Table microphone", quorum: 2, impact: "degraded", accepted_types: [], pinned_products: [], position_labels: [], from_standard: true, assigned_to: ["mic-1", "mic-2"], positions: [1, 2], assigned: 2, understaffed: 0 },
-    { name: "main-display", display_name: "Main display", quorum: 1, impact: "outage", accepted_types: [], pinned_products: [], position_labels: [], from_standard: true, assigned_to: ["disp-1"], positions: [1], assigned: 1, understaffed: 0 },
+    { name: "table-mic", label: "Table microphone", quorum: 2, impact: "degraded", accepted_types: [], pinned_products: [], position_labels: [], from_standard: true, assigned_to: ["mic-1", "mic-2"], positions: [1, 2], assigned: 2, understaffed: 0 },
+    { name: "main-display", label: "Main display", quorum: 1, impact: "outage", accepted_types: [], pinned_products: [], position_labels: [], from_standard: true, assigned_to: ["disp-1"], positions: [1], assigned: 1, understaffed: 0 },
   ];
 
   it("maps each occupant to the role it fills", () => {

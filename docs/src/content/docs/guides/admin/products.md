@@ -10,7 +10,7 @@ a specific model (a **Cisco Room Bar**, a **Samsung QM55**), not an organization
 unit. It is where the two leaf catalogs converge: the [vendor](/guides/admin/vendors/) that makes
 it and the [driver](/guides/admin/drivers/) that speaks to it, classified by a **kind** and a
 **component type**. Each row shows the
-**name** (for example `cisco-room-bar`), the **display name**, its
+**name** (for example `cisco-room-bar`), the **label**, its
 **vendor**, **driver**, **kind**, and its **origin** (**official** or **custom**). A
 product also carries an `id`, a uuid minted by the database, the internal address the handle resolves
 to ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
@@ -53,11 +53,11 @@ model.
   with `parent_product_id` (a trim or regional variant of the same model). A product with no parent is
   a base product.
 - **New product** (with `product:create`, an admin permission) opens a create drawer: give it a
-  **name** (unique tenant-wide, e.g. `cisco-room-bar`) and a **display name**, pick
+  **name** (unique tenant-wide, e.g. `cisco-room-bar`) and a **label**, pick
   its **kind** (defaults to device) and its **component type**, and, optionally, its **vendor**,
   **driver**, and **parent product**.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `product:update`) edits the
-  display name, vendor, driver, kind, type, and parent; the **name** is fixed, since a catalog
+  label, vendor, driver, kind, type, and parent; the **name** is fixed, since a catalog
   row carries no rename. **Delete** (with `product:delete`) removes the row, behind a confirm. A
   verb you lack greys just that button, its hover reason naming the permission
   (`Requires product:update`, `Requires product:delete`); the pair never disappears.

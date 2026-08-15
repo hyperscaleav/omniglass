@@ -13,8 +13,8 @@ import { ME_KEY, type Me } from "../lib/auth";
 // custom rows are writable only when the caller holds metric_type:*. Data is
 // seeded into the query cache so no server is needed.
 const seed: MetricRow[] = [
-  { name: "icmp-rtt-avg", data_type: "float", display_name: "ICMP RTT (avg)", unit: "ms", precision: 1, official: true },
-  { name: "cpu-load", data_type: "float", display_name: "CPU load", unit: "percent", official: true },
+  { name: "icmp-rtt-avg", data_type: "float", label: "ICMP RTT (avg)", unit: "ms", precision: 1, official: true },
+  { name: "cpu-load", data_type: "float", label: "CPU load", unit: "percent", official: true },
   { name: "boot-count", data_type: "int", official: false },
 ];
 
@@ -63,7 +63,7 @@ describe("Metrics page", () => {
     expect(within(row).getByText("ms")).toBeInTheDocument();
   });
 
-  it("renders the display name above the name in one identity cell, no Label column", () => {
+  it("renders the label above the name in one identity cell, no Label column", () => {
     mount();
     const cell = screen.getByText("icmp-rtt-avg").closest("td");
     expect(cell?.textContent).toContain("ICMP RTT (avg)");

@@ -132,7 +132,7 @@ func TestABooleanBodyFlagIsABoolFlag(t *testing.T) {
 func TestAnObjectBodyFlagStaysOneJSONString(t *testing.T) {
 	url, got := captureBody(t)
 	if _, err := runCLI(t, "location-type", "create", "--name", "wing",
-		"--display-name", "Wing", "--name-rule", `{"stem":"wing","bare_first":true}`,
+		"--label", "Wing", "--name-rule", `{"stem":"wing","bare_first":true}`,
 		"--server", url); err != nil {
 		t.Fatalf("create: %v", err)
 	}

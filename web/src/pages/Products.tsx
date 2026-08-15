@@ -74,7 +74,7 @@ export default function Products() {
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
 
   const rows = createMemo(() =>
-    [...(products.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.name.localeCompare(b.name)),
+    [...(products.data ?? [])].sort((a, b) => a.label.localeCompare(b.label) || a.name.localeCompare(b.name)),
   );
 
   return (
@@ -129,7 +129,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
   const edit = useBladeEdit();
   const row = useProductRow(p.id);
   const [err, setErr] = createSignal<string | null>(null);
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [kind, setKind] = createSignal<ProductKind>("device");
   const [componentType, setComponentType] = createSignal("");
   const [icon, setIcon] = createSignal("");
@@ -139,7 +139,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const r = row();
-    setDisplayName(r?.display_name ?? "");
+    setLabel(r?.label ?? "");
     setKind(r?.kind ?? "device");
     setComponentType(r?.component_type ?? "");
     setIcon(r?.icon ?? "");
@@ -168,7 +168,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
     setErr(null);
     try {
       await updateProduct(r.name, {
-        display_name: displayName(),
+        label: label(),
         kind: kind(),
         component_type: componentType(),
         icon: icon(),
@@ -205,10 +205,10 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <BladeField
-            bind="display_name"
-            value={() => r().display_name ?? ""}
-            draft={displayName}
-            onInput={setDisplayName}
+            bind="label"
+            value={() => r().label ?? ""}
+            draft={label}
+            onInput={setLabel}
           />
           <BladeField label="Kind" read={kindBadge(r().kind)}>
             <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as ProductKind)}>
@@ -238,7 +238,7 @@ function ProductBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateProductForm: the display name leads and the kebab name (the
+// CreateProductForm: the label leads and the kebab name (the
 // operator-facing address; the uuid is the database's to mint) derives from it
 // until the operator edits it by hand (lib/entities). Kind defaults to device;
 // component_type (the device-class genus, #614) is required, no default, so
@@ -270,7 +270,7 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
     try {
       const created = await createProduct({
         name: name().trim(),
-        display_name: display().trim(),
+        label: display().trim(),
         kind: kind(),
         component_type: componentType(),
         icon: icon() || undefined,
@@ -291,10 +291,10 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="display_name">
+      <FieldRow bind="label">
         <input class="input input-bordered w-full" value={display()} placeholder="Crestron TSW-1070" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </FieldRow>
-      <FieldRow bind="name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
+      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="crestron-tsw-1070" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Kind" hint="What class of thing the product is.">
@@ -324,12 +324,12 @@ export function CreateProductForm(p: { onCreated: (r: Product) => void }): JSX.E
 function VendorSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const vendors = useQuery(() => ({ queryKey: VENDORS_KEY, queryFn: listVendors }));
   const options = createMemo(() =>
-    [...(vendors.data ?? [])].sort((a: Vendor, b: Vendor) => a.display_name.localeCompare(b.display_name)),
+    [...(vendors.data ?? [])].sort((a: Vendor, b: Vendor) => a.label.localeCompare(b.label)),
   );
   return (
     <select class="select select-bordered w-full" value={p.value} onChange={(e) => p.onChange(e.currentTarget.value)}>
       <option value="">None</option>
-      <For each={options()}>{(v) => <option value={v.name}>{v.display_name}</option>}</For>
+      <For each={options()}>{(v) => <option value={v.name}>{v.label}</option>}</For>
     </select>
   );
 }
@@ -339,12 +339,12 @@ function VendorSelect(p: { value: string; onChange: (v: string) => void }): JSX.
 function DriverSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers }));
   const options = createMemo(() =>
-    [...(drivers.data ?? [])].sort((a: Driver, b: Driver) => a.display_name.localeCompare(b.display_name)),
+    [...(drivers.data ?? [])].sort((a: Driver, b: Driver) => a.label.localeCompare(b.label)),
   );
   return (
     <select class="select select-bordered w-full" value={p.value} onChange={(e) => p.onChange(e.currentTarget.value)}>
       <option value="">None</option>
-      <For each={options()}>{(d) => <option value={d.name}>{d.display_name}</option>}</For>
+      <For each={options()}>{(d) => <option value={d.name}>{d.label}</option>}</For>
     </select>
   );
 }

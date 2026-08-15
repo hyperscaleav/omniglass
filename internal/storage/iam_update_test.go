@@ -12,7 +12,7 @@ import (
 )
 
 // TestUpdatePrincipalHuman proves the admin profile update against a real Postgres:
-// display name, email, and username are editable; a rename follows the principal id
+// label, email, and username are editable; a rename follows the principal id
 // (the password still authenticates under the new username, not the old); a clash is
 // refused; and a non-all scope is refused. Skipped under -short.
 func TestUpdatePrincipalHuman(t *testing.T) {
@@ -34,7 +34,7 @@ func TestUpdatePrincipalHuman(t *testing.T) {
 	all := scope.Set{All: true}
 
 	hash, _ := auth.HashPassword("alice-s3cret")
-	alice, err := gw.CreateHumanPrincipal(ctx, owner.ID, storage.HumanSpec{Username: "alice", DisplayName: "Alice", PasswordHash: hash}, all)
+	alice, err := gw.CreateHumanPrincipal(ctx, owner.ID, storage.HumanSpec{Username: "alice", Label: "Alice", PasswordHash: hash}, all)
 	if err != nil {
 		t.Fatalf("create alice: %v", err)
 	}
@@ -42,12 +42,12 @@ func TestUpdatePrincipalHuman(t *testing.T) {
 	// Update all three admin-owned fields, including a rename.
 	newName, newEmail, newUser := "Alice Cooper", "ac@example.test", "alice2"
 	updated, err := gw.UpdatePrincipalHuman(ctx, owner.ID, alice.ID, storage.AdminHumanPatch{
-		DisplayName: &newName, Email: &newEmail, Username: &newUser,
+		Label: &newName, Email: &newEmail, Username: &newUser,
 	}, all)
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if updated.Human.Username != "alice2" || updated.Human.DisplayName != "Alice Cooper" || updated.Human.Email != "ac@example.test" {
+	if updated.Human.Username != "alice2" || updated.Human.Label != "Alice Cooper" || updated.Human.Email != "ac@example.test" {
 		t.Fatalf("update did not stick: %+v", updated.Human)
 	}
 
@@ -62,7 +62,7 @@ func TestUpdatePrincipalHuman(t *testing.T) {
 
 	// A partial update leaves the other fields alone.
 	onlyDisplay := "Just Display"
-	again, err := gw.UpdatePrincipalHuman(ctx, owner.ID, alice.ID, storage.AdminHumanPatch{DisplayName: &onlyDisplay}, all)
+	again, err := gw.UpdatePrincipalHuman(ctx, owner.ID, alice.ID, storage.AdminHumanPatch{Label: &onlyDisplay}, all)
 	if err != nil || again.Human.Username != "alice2" || again.Human.Email != "ac@example.test" {
 		t.Fatalf("partial update touched other fields: %+v (err %v)", again.Human, err)
 	}
@@ -83,10 +83,10 @@ func TestUpdatePrincipalHuman(t *testing.T) {
 	}
 
 	// Scope and not-found guards.
-	if _, err := gw.UpdatePrincipalHuman(ctx, owner.ID, alice.ID, storage.AdminHumanPatch{DisplayName: &newName}, scope.Set{}); !errors.Is(err, storage.ErrPrincipalForbidden) {
+	if _, err := gw.UpdatePrincipalHuman(ctx, owner.ID, alice.ID, storage.AdminHumanPatch{Label: &newName}, scope.Set{}); !errors.Is(err, storage.ErrPrincipalForbidden) {
 		t.Fatalf("non-all scope: want ErrPrincipalForbidden, got %v", err)
 	}
-	if _, err := gw.UpdatePrincipalHuman(ctx, owner.ID, "00000000-0000-0000-0000-000000000000", storage.AdminHumanPatch{DisplayName: &newName}, all); !errors.Is(err, storage.ErrPrincipalNotFound) {
+	if _, err := gw.UpdatePrincipalHuman(ctx, owner.ID, "00000000-0000-0000-0000-000000000000", storage.AdminHumanPatch{Label: &newName}, all); !errors.Is(err, storage.ErrPrincipalNotFound) {
 		t.Fatalf("unknown id: want ErrPrincipalNotFound, got %v", err)
 	}
 }

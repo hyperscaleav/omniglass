@@ -249,7 +249,7 @@ func TestCheckFlagsValidatesDocumentedFlags(t *testing.T) {
 	if err := checkFlags(idx, "location list --server https://x"); err != nil {
 		t.Errorf("persistent flag rejected: %v", err)
 	}
-	if err := checkFlags(idx, "location create hq --display-name=\"HQ\""); err != nil {
+	if err := checkFlags(idx, "location create hq --label=\"HQ\""); err != nil {
 		t.Errorf("=value form rejected: %v", err)
 	}
 	if err := checkFlags(idx, "nonexistent-noun list --whatever"); err != nil {

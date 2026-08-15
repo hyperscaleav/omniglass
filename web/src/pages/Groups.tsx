@@ -65,7 +65,7 @@ export default function Groups() {
 // detail blade, so an admin lands on it to add members and grants.
 function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => void }) {
   const qc = useQueryClient();
-  // Display name leads and the name follows it, stopping the moment the operator
+  // Label leads and the name follows it, stopping the moment the operator
   // edits the name by hand (lib/entities).
   const { display, setDisplay, name, setName, nameDerived } = createIdentity();
   const [description, setDescription] = createSignal("");
@@ -85,7 +85,7 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => 
     setBusy(true);
     setErr(null);
     try {
-      const g = await createGroup({ name: name().trim(), display_name: display().trim() || undefined, description: description().trim() || undefined });
+      const g = await createGroup({ name: name().trim(), label: display().trim() || undefined, description: description().trim() || undefined });
       // Seed the new group's detail caches so its blade opens instantly (no loading
       // flash), and flag it to open in edit mode so members and grants can be added
       // right away, then hand it to the create Drawer's select to open it.
@@ -108,7 +108,7 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => 
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <label class="flex flex-col gap-1">
-        <span class="eyebrow">Display name</span>
+        <span class="eyebrow">Label</span>
         <input class="input input-bordered w-full" value={display()} placeholder="Field Crew" onInput={(e) => setDisplay(e.currentTarget.value)} disabled={busy()} />
       </label>
       <label class="flex flex-col gap-1">
@@ -116,7 +116,7 @@ function CreateGroupForm(props: { onCreated: (g: Group) => void; onClose: () => 
         <input class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(name()) }} value={name()} placeholder="field-crew" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} aria-required="true" />
         <Show
           when={handleError(name())}
-          fallback={<p class="text-[11px] text-base-content/40">{nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}</p>}
+          fallback={<p class="text-[11px] text-base-content/40">{nameDerived() ? "Derived from the label. Edit to set your own." : "Globally unique address, used by the API and CLI."}</p>}
         >
           {(msg) => <p class="text-[11px] text-error">{msg()}</p>}
         </Show>

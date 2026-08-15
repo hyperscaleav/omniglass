@@ -4,7 +4,7 @@ import PenToggle, { takeOver } from "./PenToggle";
 import { type Pen, penState } from "../lib/namegen";
 import { entityLabel, type Labelled } from "../lib/entities";
 
-// LabelPenField is the display-name field on the edit blade of the three estate
+// LabelPenField is the label field on the edit blade of the three estate
 // entities whose labels a rule can render (component, system, location), and it
 // is where the label's pen now lives (#693).
 //
@@ -46,12 +46,12 @@ import { entityLabel, type Labelled } from "../lib/entities";
 //
 // The field posts `pen.value()`, always, and the Pen's own invariant does the
 // rest: a locked pen holds no value, so a locked field posts the empty string,
-// and the API reads an empty display_name as "the platform's" (labelPen, #682).
+// and the API reads an empty label as "the platform's" (labelPen, #682).
 // That makes the locked state a no-op where the platform already held the pen
 // and a hand-back where it did not, in one expression with no branch.
 //
 // It also closes the defect this component was built on top of. Every blade
-// seeded a plain signal from `raw.display_name` and posted `display() ||
+// seeded a plain signal from `raw.label` and posted `display() ||
 // undefined`, so opening the pencil on a platform-labelled row and saving ANY
 // other field (a standard, a type, a tag) posted the platform's own rendering
 // back as an override and took the pen on the operator's behalf, silently. The
@@ -62,14 +62,14 @@ import { entityLabel, type Labelled } from "../lib/entities";
 // re-seeds). It lives here rather than in each page because getting it wrong in
 // one page is the drift this component exists to prevent.
 //
-// An empty display_name always carries the platform's pen: a create with no
-// label stamps `display_name_generated` true, an update clearing it hands the
+// An empty label always carries the platform's pen: a create with no
+// label stamps `label_generated` true, an update clearing it hands the
 // pen back, and the backfill did the same to every pre-pen row. So there is no
 // fourth state where an operator holds the pen over nothing.
 export function seedLabelPen(pen: Pen, e: Labelled): void {
   pen.setOverridden(false); // clears any value a previous edit left behind
-  if (!e.display_name_generated) {
-    pen.setValue(e.display_name ?? "");
+  if (!e.label_generated) {
+    pen.setValue(e.label ?? "");
     pen.setOverridden(true);
   }
 }
@@ -86,12 +86,12 @@ export default function LabelPenField(props: {
   // What the rule rendered, which is empty when no rule resolved at any tier: a
   // real state (every location in an estate that predates a location name rule),
   // and the read ladder's answer for it is the row's own name.
-  const rendered = () => props.entity().display_name?.trim() ?? "";
+  const rendered = () => props.entity().label?.trim() ?? "";
   const available = () => rendered() !== "";
   // True while the stored row still carries the platform's pen. False in the
   // hand-back state, which is a locked field whose value is the operator's old
   // label rather than the platform's render.
-  const platform = () => Boolean(props.entity().display_name_generated);
+  const platform = () => Boolean(props.entity().label_generated);
   const hint = () => {
     if (state() === "overridden") {
       return props.pen.value().trim() === ""
@@ -105,8 +105,8 @@ export default function LabelPenField(props: {
   };
   return (
     <FieldRow
-      bind="display_name"
-      actions={<PenToggle pen={props.pen} what="display name" seed={rendered} />}
+      bind="label"
+      actions={<PenToggle pen={props.pen} what="label" seed={rendered} />}
       hint={hint()}
     >
       <input

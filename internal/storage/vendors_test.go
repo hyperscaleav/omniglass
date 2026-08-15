@@ -23,7 +23,7 @@ func TestVendorCRUD(t *testing.T) {
 
 	// Create a custom vendor; it is official=false and round-trips its kind.
 	m, err := gw.CreateVendor(ctx, "", storage.Vendor{
-		Name: "acme", DisplayName: "Acme", Kind: "integrator", Website: "https://acme.example",
+		Name: "acme", Label: "Acme", Kind: "integrator", Website: "https://acme.example",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -39,7 +39,7 @@ func TestVendorCRUD(t *testing.T) {
 	}
 
 	// Duplicate id is ErrTypeExists.
-	if _, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: "acme", DisplayName: "Dup", Kind: "manufacturer"}); !errors.Is(err, storage.ErrTypeExists) {
+	if _, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: "acme", Label: "Dup", Kind: "manufacturer"}); !errors.Is(err, storage.ErrTypeExists) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
@@ -48,8 +48,8 @@ func TestVendorCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if got.DisplayName != "Acme" {
-		t.Fatalf("get display_name = %q, want Acme", got.DisplayName)
+	if got.Label != "Acme" {
+		t.Fatalf("get label = %q, want Acme", got.Label)
 	}
 	if got.Kind != "integrator" {
 		t.Fatalf("get kind = %q, want integrator", got.Kind)
@@ -68,8 +68,8 @@ func TestVendorCRUD(t *testing.T) {
 	if found == nil {
 		t.Fatalf("list does not contain acme; got %d rows", len(all))
 	}
-	if found.DisplayName != "Acme" {
-		t.Fatalf("list acme display_name = %q, want Acme", found.DisplayName)
+	if found.Label != "Acme" {
+		t.Fatalf("list acme label = %q, want Acme", found.Label)
 	}
 	if found.Kind != "integrator" {
 		t.Fatalf("list acme kind = %q, want integrator", found.Kind)
@@ -78,14 +78,14 @@ func TestVendorCRUD(t *testing.T) {
 		t.Fatalf("list acme official=true, want false")
 	}
 
-	// Update patch (display name + support phone + kind); icon/website unchanged when omitted.
+	// Update patch (label + support phone + kind); icon/website unchanged when omitted.
 	dn, ph, kd := "Acme Inc.", "+1-555-0100", "developer"
-	upd, err := gw.UpdateVendor(ctx, "", "acme", storage.VendorPatch{DisplayName: &dn, SupportPhone: &ph, Kind: &kd})
+	upd, err := gw.UpdateVendor(ctx, "", "acme", storage.VendorPatch{Label: &dn, SupportPhone: &ph, Kind: &kd})
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if upd.DisplayName != "Acme Inc." {
-		t.Fatalf("update display_name = %q, want Acme Inc.", upd.DisplayName)
+	if upd.Label != "Acme Inc." {
+		t.Fatalf("update label = %q, want Acme Inc.", upd.Label)
 	}
 	if upd.SupportPhone != "+1-555-0100" {
 		t.Fatalf("update support_phone = %q, want +1-555-0100", upd.SupportPhone)
@@ -98,10 +98,10 @@ func TestVendorCRUD(t *testing.T) {
 	}
 
 	// Official rows are read-only.
-	if err := gw.UpsertVendor(ctx, storage.Vendor{Name: "official-co", DisplayName: "Official Co", Kind: "manufacturer", Official: true}); err != nil {
+	if err := gw.UpsertVendor(ctx, storage.Vendor{Name: "official-co", Label: "Official Co", Kind: "manufacturer", Official: true}); err != nil {
 		t.Fatalf("upsert official: %v", err)
 	}
-	if _, err := gw.UpdateVendor(ctx, "", "official-co", storage.VendorPatch{DisplayName: &dn}); !errors.Is(err, storage.ErrTypeOfficial) {
+	if _, err := gw.UpdateVendor(ctx, "", "official-co", storage.VendorPatch{Label: &dn}); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("update official err = %v, want ErrTypeOfficial", err)
 	}
 	if err := gw.DeleteVendor(ctx, "", "official-co"); !errors.Is(err, storage.ErrTypeOfficial) {

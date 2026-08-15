@@ -44,7 +44,7 @@ func TestUnknownOwnerRefused(t *testing.T) {
 	gw, ctx, _ := newChoiceTestGateway(t)
 
 	_, err := gw.SetSystemRole(ctx, "", "standard", "no-such-standard-at-all", storage.SystemRoleSpec{
-		Name: "ghost", DisplayName: "Ghost", Quorum: 1,
+		Name: "ghost", Label: "Ghost", Quorum: 1,
 	})
 	if !errors.Is(err, storage.ErrRoleRefNotFound) {
 		t.Fatalf("SetSystemRole with a bogus standard id = %v, want ErrRoleRefNotFound", err)
@@ -54,7 +54,7 @@ func TestUnknownOwnerRefused(t *testing.T) {
 	// update) the first refused attempt: neither should have landed a row
 	// at all.
 	_, err = gw.SetSystemRole(ctx, "", "standard", "also-no-such-standard", storage.SystemRoleSpec{
-		Name: "ghost", DisplayName: "Ghost", Quorum: 1,
+		Name: "ghost", Label: "Ghost", Quorum: 1,
 	})
 	if !errors.Is(err, storage.ErrRoleRefNotFound) {
 		t.Fatalf("second bogus owner = %v, want ErrRoleRefNotFound (no orphan to collide with)", err)
@@ -71,13 +71,13 @@ func TestRoleCannotJoinForeignAlternate(t *testing.T) {
 	gw, ctx, _ := newChoiceTestGateway(t)
 
 	for _, name := range []string{"foreign-std-a", "foreign-std-b"} {
-		if err := gw.UpsertStandard(ctx, storage.Standard{Name: name, DisplayName: name}); err != nil {
+		if err := gw.UpsertStandard(ctx, storage.Standard{Name: name, Label: name}); err != nil {
 			t.Fatalf("create standard %s: %v", name, err)
 		}
 	}
 	alts, err := gw.SeedRoleChoice(ctx, "standard", "foreign-std-a", storage.RoleChoiceSpec{
-		Name: "conferencing", DisplayName: "Conferencing",
-		Alternates: []storage.AlternateSpec{{Name: "all-in-one", DisplayName: "All-in-one"}},
+		Name: "conferencing", Label: "Conferencing",
+		Alternates: []storage.AlternateSpec{{Name: "all-in-one", Label: "All-in-one"}},
 	})
 	if err != nil {
 		t.Fatalf("seed choice on std-a: %v", err)
@@ -88,7 +88,7 @@ func TestRoleCannotJoinForeignAlternate(t *testing.T) {
 	}
 
 	_, err = gw.SetSystemRole(ctx, "", "standard", "foreign-std-b", storage.SystemRoleSpec{
-		Name: "video-bar", DisplayName: "Video Bar", Quorum: 1, AlternateID: strp(foreignAlt),
+		Name: "video-bar", Label: "Video Bar", Quorum: 1, AlternateID: strp(foreignAlt),
 	})
 	if !errors.Is(err, storage.ErrRoleRefNotFound) {
 		t.Fatalf("role on std-b joining std-a's alternate = %v, want ErrRoleRefNotFound (422, not 500)", err)
@@ -97,7 +97,7 @@ func TestRoleCannotJoinForeignAlternate(t *testing.T) {
 	// The matching owner is unaffected: the same alternate id under its own
 	// standard succeeds.
 	if _, err := gw.SetSystemRole(ctx, "", "standard", "foreign-std-a", storage.SystemRoleSpec{
-		Name: "video-bar", DisplayName: "Video Bar", Quorum: 1, AlternateID: strp(foreignAlt),
+		Name: "video-bar", Label: "Video Bar", Quorum: 1, AlternateID: strp(foreignAlt),
 	}); err != nil {
 		t.Fatalf("role joining its own owner's alternate: %v", err)
 	}
@@ -113,21 +113,21 @@ func TestDeletingAlternateWithRolesRefused(t *testing.T) {
 	gw, ctx, _ := newChoiceTestGateway(t)
 
 	std := "delete-refused-std"
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Delete Refused"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Delete Refused"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	alts, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", DisplayName: "Conferencing",
+		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
-			{Name: "all-in-one", DisplayName: "All-in-one"},
-			{Name: "component-system", DisplayName: "Component System"},
+			{Name: "all-in-one", Label: "All-in-one"},
+			{Name: "component-system", Label: "Component System"},
 		},
 	})
 	if err != nil {
 		t.Fatalf("seed choice: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "video-bar", DisplayName: "Video Bar", Quorum: 1, AlternateID: strp(alts["all-in-one"]),
+		Name: "video-bar", Label: "Video Bar", Quorum: 1, AlternateID: strp(alts["all-in-one"]),
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestDeletingAlternateWithRolesRefused(t *testing.T) {
 
 	// Detach the role, then both deletes succeed.
 	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "video-bar", DisplayName: "Video Bar", Quorum: 1, AlternateID: strp(""),
+		Name: "video-bar", Label: "Video Bar", Quorum: 1, AlternateID: strp(""),
 	}); err != nil {
 		t.Fatalf("detach role: %v", err)
 	}
@@ -177,23 +177,23 @@ func TestDetachedRoleBecomesUnconditional(t *testing.T) {
 	all := scopeAll()
 
 	std := "detach-std"
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Detach"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Detach"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	alts, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", DisplayName: "Conferencing",
-		Alternates: []storage.AlternateSpec{{Name: "a", DisplayName: "A"}, {Name: "b", DisplayName: "B"}},
+		Name: "conferencing", Label: "Conferencing",
+		Alternates: []storage.AlternateSpec{{Name: "a", Label: "A"}, {Name: "b", Label: "B"}},
 	})
 	if err != nil {
 		t.Fatalf("seed choice: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "role-a", DisplayName: "Role A", Quorum: 1, Impact: "outage", AlternateID: strp(alts["a"]),
+		Name: "role-a", Label: "Role A", Quorum: 1, Impact: "outage", AlternateID: strp(alts["a"]),
 	}); err != nil {
 		t.Fatalf("declare role-a: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "role-b", DisplayName: "Role B", Quorum: 1, Impact: "outage", AlternateID: strp(alts["b"]),
+		Name: "role-b", Label: "Role B", Quorum: 1, Impact: "outage", AlternateID: strp(alts["b"]),
 	}); err != nil {
 		t.Fatalf("declare role-b: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestDetachedRoleBecomesUnconditional(t *testing.T) {
 	// Detach role-a explicitly (re-declare with no alternate), the sanctioned
 	// path #626 keeps open now that deleting the alternate itself is refused.
 	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "role-a", DisplayName: "Role A", Quorum: 1, Impact: "outage", AlternateID: strp(""),
+		Name: "role-a", Label: "Role A", Quorum: 1, Impact: "outage", AlternateID: strp(""),
 	}); err != nil {
 		t.Fatalf("detach role-a: %v", err)
 	}
@@ -241,10 +241,10 @@ func TestDetachedRoleBecomesUnconditional(t *testing.T) {
 // critical finding: SetSystemRole used to wholesale-replace alternate_id on
 // every write, and no API route ever populated it, so ANY edit through the
 // existing PUT routes (including the console's own role-editor save, which
-// sends display_name, quorum, accepted_types, pinned_products and impact but
+// sends label, quorum, accepted_types, pinned_products and impact but
 // has no concept of a choice) silently wrote NULL over a role's alternate
 // and promoted it from conditional to mandatory. This mirrors the console's
-// save exactly: a second SetSystemRole call that changes only display_name
+// save exactly: a second SetSystemRole call that changes only label
 // and omits AlternateID (nil, "the caller did not mention this field") must
 // leave the stored alternate_id untouched and the system's verdict
 // unmoved, not just the recorded string but the live column too.
@@ -253,14 +253,14 @@ func TestEditingRoleLeavesAlternateAlone(t *testing.T) {
 	all := scopeAll()
 
 	std := "edit-preserve-std"
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Edit Preserve"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Edit Preserve"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	alts, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", DisplayName: "Conferencing",
+		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
-			{Name: "all-in-one", DisplayName: "All-in-one"},
-			{Name: "component-system", DisplayName: "Component System"},
+			{Name: "all-in-one", Label: "All-in-one"},
+			{Name: "component-system", Label: "Component System"},
 		},
 	})
 	if err != nil {
@@ -270,7 +270,7 @@ func TestEditingRoleLeavesAlternateAlone(t *testing.T) {
 	// all-in-one is the only real candidate and wins the tie by default;
 	// what matters here is only that conf-bar stays grouped under it.
 	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "conf-bar", DisplayName: "Conferencing Bar", Quorum: 1, Impact: "outage",
+		Name: "conf-bar", Label: "Conferencing Bar", Quorum: 1, Impact: "outage",
 		AcceptedTypes: []string{"video-bar"}, AlternateID: strp(alts["all-in-one"]),
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
@@ -294,15 +294,15 @@ func TestEditingRoleLeavesAlternateAlone(t *testing.T) {
 		t.Fatalf("verdict before edit = %q, want healthy", before.Verdict)
 	}
 
-	// The regression: an edit that changes only display_name and does not
+	// The regression: an edit that changes only label and does not
 	// mention AlternateID at all (the zero value of *string is nil, exactly
 	// what roleSpec builds from a request body whose "alternate" field was
 	// omitted).
 	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "conf-bar", DisplayName: "Conferencing Video Bar", Quorum: 1, Impact: "outage",
+		Name: "conf-bar", Label: "Conferencing Video Bar", Quorum: 1, Impact: "outage",
 		AcceptedTypes: []string{"video-bar"},
 	}); err != nil {
-		t.Fatalf("edit display_name: %v", err)
+		t.Fatalf("edit label: %v", err)
 	}
 
 	after, err := gw.SystemHealth(ctx, "edit-sys", 0, all)
@@ -310,7 +310,7 @@ func TestEditingRoleLeavesAlternateAlone(t *testing.T) {
 		t.Fatalf("system health after edit: %v", err)
 	}
 	if after.Verdict != "healthy" {
-		t.Fatalf("verdict after an unrelated display_name edit = %q, want healthy: "+
+		t.Fatalf("verdict after an unrelated label edit = %q, want healthy: "+
 			"alternate_id must survive an edit that does not mention it", after.Verdict)
 	}
 
@@ -346,28 +346,28 @@ func TestHealthRoleReportsChoiceAndActive(t *testing.T) {
 	all := scopeAll()
 
 	std := "report-active-std"
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Report Active"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Report Active"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	alts, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", DisplayName: "Conferencing",
+		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
-			{Name: "all-in-one", DisplayName: "All-in-one"},
-			{Name: "component-system", DisplayName: "Component System"},
+			{Name: "all-in-one", Label: "All-in-one"},
+			{Name: "component-system", Label: "Component System"},
 		},
 	})
 	if err != nil {
 		t.Fatalf("seed choice: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "conf-bar", DisplayName: "Conferencing Bar", Quorum: 1, Impact: "outage",
+		Name: "conf-bar", Label: "Conferencing Bar", Quorum: 1, Impact: "outage",
 		AcceptedTypes: []string{"video-bar"}, AlternateID: strp(alts["all-in-one"]),
 	}); err != nil {
 		t.Fatalf("declare all-in-one role: %v", err)
 	}
 	for _, name := range []string{"conf-codec", "conf-camera"} {
 		if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-			Name: name, DisplayName: name, Quorum: 1, Impact: "outage", AlternateID: strp(alts["component-system"]),
+			Name: name, Label: name, Quorum: 1, Impact: "outage", AlternateID: strp(alts["component-system"]),
 		}); err != nil {
 			t.Fatalf("declare component-system role %s: %v", name, err)
 		}
@@ -375,7 +375,7 @@ func TestHealthRoleReportsChoiceAndActive(t *testing.T) {
 	// An unconditional role beside the choice: it must report Active true
 	// and empty Choice/Alternate, the same as before #626 existed.
 	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "screen", DisplayName: "Screen", Quorum: 1, Impact: "outage",
+		Name: "screen", Label: "Screen", Quorum: 1, Impact: "outage",
 	}); err != nil {
 		t.Fatalf("declare unconditional role: %v", err)
 	}
@@ -444,14 +444,14 @@ func TestSeedRoleChoiceConvergesOnReorderedPositions(t *testing.T) {
 	gw, ctx, dsn := newChoiceTestGateway(t)
 
 	std := "reorder-std"
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Reorder"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Reorder"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	alts1, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", DisplayName: "Conferencing",
+		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
-			{Name: "all-in-one", DisplayName: "All-in-one"},
-			{Name: "component-system", DisplayName: "Component System"},
+			{Name: "all-in-one", Label: "All-in-one"},
+			{Name: "component-system", Label: "Component System"},
 		},
 	})
 	if err != nil {
@@ -462,11 +462,11 @@ func TestSeedRoleChoiceConvergesOnReorderedPositions(t *testing.T) {
 	// pushing the two existing ones back a position each: a genuine,
 	// non-append reorder. The pre-fix version aborted server boot here.
 	alts2, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", DisplayName: "Conferencing",
+		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
-			{Name: "hybrid", DisplayName: "Hybrid"},
-			{Name: "all-in-one", DisplayName: "All-in-one"},
-			{Name: "component-system", DisplayName: "Component System"},
+			{Name: "hybrid", Label: "Hybrid"},
+			{Name: "all-in-one", Label: "All-in-one"},
+			{Name: "component-system", Label: "Component System"},
 		},
 	})
 	if err != nil {
@@ -515,15 +515,15 @@ func TestSeedRoleChoiceReconcilesRenamesAndDrops(t *testing.T) {
 	gw, ctx, dsn := newChoiceTestGateway(t)
 
 	std := "reconcile-std"
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Reconcile"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Reconcile"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	first, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", DisplayName: "Conferencing",
+		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
-			{Name: "all-in-one", DisplayName: "All-in-one"},
-			{Name: "component-system", DisplayName: "Component System"},
-			{Name: "legacy", DisplayName: "Legacy"},
+			{Name: "all-in-one", Label: "All-in-one"},
+			{Name: "component-system", Label: "Component System"},
+			{Name: "legacy", Label: "Legacy"},
 		},
 	})
 	if err != nil {
@@ -533,7 +533,7 @@ func TestSeedRoleChoiceReconcilesRenamesAndDrops(t *testing.T) {
 	// A role holds "legacy": dropping it must be refused, not silently
 	// detach the role or crash on the FK.
 	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "legacy-role", DisplayName: "Legacy Role", Quorum: 1, AlternateID: strp(first["legacy"]),
+		Name: "legacy-role", Label: "Legacy Role", Quorum: 1, AlternateID: strp(first["legacy"]),
 	}); err != nil {
 		t.Fatalf("declare legacy role: %v", err)
 	}
@@ -541,10 +541,10 @@ func TestSeedRoleChoiceReconcilesRenamesAndDrops(t *testing.T) {
 	// Drop "legacy" (still holds a role) and rename "component-system" to
 	// "hybrid", keeping "all-in-one" untouched.
 	_, err = gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", DisplayName: "Conferencing",
+		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
-			{Name: "all-in-one", DisplayName: "All-in-one"},
-			{Name: "hybrid", DisplayName: "Hybrid"},
+			{Name: "all-in-one", Label: "All-in-one"},
+			{Name: "hybrid", Label: "Hybrid"},
 		},
 	})
 	var shortfall *storage.ChoiceInUseShortfall
@@ -573,15 +573,15 @@ func TestSeedRoleChoiceReconcilesRenamesAndDrops(t *testing.T) {
 	// Detach the role, then the same reseed (drop legacy, rename
 	// component-system to hybrid) must succeed.
 	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "legacy-role", DisplayName: "Legacy Role", Quorum: 1, AlternateID: strp(""),
+		Name: "legacy-role", Label: "Legacy Role", Quorum: 1, AlternateID: strp(""),
 	}); err != nil {
 		t.Fatalf("detach legacy-role: %v", err)
 	}
 	second, err := gw.SeedRoleChoice(ctx, "standard", std, storage.RoleChoiceSpec{
-		Name: "conferencing", DisplayName: "Conferencing",
+		Name: "conferencing", Label: "Conferencing",
 		Alternates: []storage.AlternateSpec{
-			{Name: "all-in-one", DisplayName: "All-in-one"},
-			{Name: "hybrid", DisplayName: "Hybrid"},
+			{Name: "all-in-one", Label: "All-in-one"},
+			{Name: "hybrid", Label: "Hybrid"},
 		},
 	})
 	if err != nil {

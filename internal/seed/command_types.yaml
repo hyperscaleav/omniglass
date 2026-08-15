@@ -6,7 +6,7 @@
 # target fails the seed run naming the row.
 command_types:
   - name: set-input
-    display_name: Set Input
+    label: Set Input
     description: >-
       Tell a display or switcher which video input to select. A settleable command:
       it opens an intended video-input and settles when the device reports that input
@@ -14,7 +14,7 @@ command_types:
     target_property_type: video-input
     settle_window_seconds: 15
   - name: reboot
-    display_name: Reboot
+    label: Reboot
     description: >-
       Tell a component to restart. A fire-and-forget command: it records the
       invocation and a caused event, with no intended value to settle.

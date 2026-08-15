@@ -23,7 +23,7 @@ import { createSignal } from "solid-js";
 // EstateKind is the three entities whose names the platform can own. The
 // registry pages (products, vendors, types, users) are not here: their names
 // have no generator and stay globally unique, so a create form there derives the
-// name from the display name instead (lib/entities.ts's createIdentity).
+// name from the label instead (lib/entities.ts's createIdentity).
 export type EstateKind = "component" | "system" | "location";
 
 // ordinalNote is the sentence that travels with a drafted name. It says the one

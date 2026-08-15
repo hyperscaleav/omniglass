@@ -19,7 +19,7 @@ import (
 // came from, and its staffing.
 type effectiveRoleWire struct {
 	Name           string   `json:"name"`
-	DisplayName    string   `json:"display_name"`
+	Label          string   `json:"label"`
 	Quorum         int      `json:"quorum"`
 	Capacity       *int     `json:"capacity"`
 	PositionLabels []string `json:"position_labels"`
@@ -79,10 +79,10 @@ func TestSystemRolesAPI(t *testing.T) {
 	// A standard that wants a table mic (a video-bar, two of them), and a
 	// system that conforms to it.
 	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{
-		"name": "acme-room", "display_name": "Acme Room",
+		"name": "acme-room", "label": "Acme Room",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPatch, "/standards/acme-room/roles/table-mic", map[string]any{
-		"display_name": "Table Microphone", "quorum": 2,
+		"label": "Table Microphone", "quorum": 2,
 		"accepted_types": []string{"video-bar"},
 	}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{
@@ -93,7 +93,7 @@ func TestSystemRolesAPI(t *testing.T) {
 	var declared struct {
 		Roles []struct {
 			Name          string   `json:"name"`
-			DisplayName   string   `json:"display_name"`
+			Label         string   `json:"label"`
 			Quorum        int      `json:"quorum"`
 			AcceptedTypes []string `json:"accepted_types"`
 		} `json:"roles"`
@@ -128,7 +128,7 @@ func TestSystemRolesAPI(t *testing.T) {
 	// An ad-hoc role declared straight on the system sits beside the inherited
 	// one, marked as not coming from the standard.
 	c.do(ownerTok, http.MethodPatch, "/systems/acme-1/roles/wall-display", map[string]any{
-		"display_name": "Wall Display", "accepted_types": []string{"display"},
+		"label": "Wall Display", "accepted_types": []string{"display"},
 	}, http.StatusOK)
 	got = read(ownerTok, "acme-1")
 	if len(got.Roles) != 2 {
@@ -298,12 +298,12 @@ func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
 
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "swap-api-sys"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPatch, "/systems/swap-api-sys/roles/table-mic", map[string]any{
-		"display_name": "Table Mic", "quorum": 2, "accepted_types": []string{"video-bar"},
+		"label": "Table Mic", "quorum": 2, "accepted_types": []string{"video-bar"},
 	}, http.StatusOK)
 	// No accepted_types: main-display takes any type, so the double-staffing
 	// refusal below is isolated from the typed-slot guard.
 	c.do(ownerTok, http.MethodPatch, "/systems/swap-api-sys/roles/main-display", map[string]any{
-		"display_name": "Main Display",
+		"label": "Main Display",
 	}, http.StatusOK)
 
 	bar := "cisco-room-bar"
@@ -347,7 +347,7 @@ func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
 	// is invalid, independent of any other row): main-display has nobody
 	// assigned yet, so this cannot also trip the below-assigned-count check.
 	c.do(ownerTok, http.MethodPatch, "/systems/swap-api-sys/roles/main-display", map[string]any{
-		"display_name": "Main Display", "quorum": 2, "accepted_types": []string{"display"}, "capacity": 1,
+		"label": "Main Display", "quorum": 2, "accepted_types": []string{"display"}, "capacity": 1,
 	}, http.StatusUnprocessableEntity)
 
 	// A capacity below what is currently assigned is a 409 (it conflicts
@@ -358,7 +358,7 @@ func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "gamma", "product": bar}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/roles/table-mic/assignments/gamma", nil, http.StatusNoContent)
 	c.do(ownerTok, http.MethodPatch, "/systems/swap-api-sys/roles/table-mic", map[string]any{
-		"display_name": "Table Mic", "quorum": 2, "accepted_types": []string{"video-bar"}, "capacity": 2,
+		"label": "Table Mic", "quorum": 2, "accepted_types": []string{"video-bar"}, "capacity": 2,
 	}, http.StatusConflict)
 }
 
@@ -415,12 +415,12 @@ func TestSetSystemRoleResolvesAmbiguousNameWithinCallerScope(t *testing.T) {
 	// entirely outside it), so the scoped caller's declare succeeds even
 	// though the bare name is ambiguous estate-wide.
 	c.do(deployTok, http.MethodPatch, "/systems/seat-1/roles/table-mic", map[string]any{
-		"display_name": "Table Mic", "quorum": 1,
+		"label": "Table Mic", "quorum": 1,
 	}, http.StatusOK)
 
 	// The all-scoped owner, who CAN see both rows, is genuinely ambiguous.
 	status, body := c.send(ownerTok, http.MethodPatch, "/systems/seat-1/roles/table-mic", map[string]any{
-		"display_name": "Table Mic", "quorum": 1,
+		"label": "Table Mic", "quorum": 1,
 	})
 	if status != http.StatusConflict {
 		t.Fatalf("owner declare on ambiguous seat-1 status = %d, want 409\nbody: %s", status, body)

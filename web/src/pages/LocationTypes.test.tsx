@@ -18,19 +18,19 @@ import { uuidFor } from "../lib/testids";
 // declared-property contract. Data is seeded into the query cache so no server
 // is needed (except where a test says otherwise).
 const seed: LocationType[] = [
-  { id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", official: true, forked: false, icon: "map-pin", allowed_parent_types: [] },
-  { id: uuidFor("lt-wing"), name: "wing", display_name: "Wing", official: false, forked: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] },
-  // A handle its display name does not contain, so filtering by it can only
+  { id: uuidFor("lt-campus"), name: "campus", label: "Campus", official: true, forked: false, icon: "map-pin", allowed_parent_types: [] },
+  { id: uuidFor("lt-wing"), name: "wing", label: "Wing", official: false, forked: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] },
+  // A handle its label does not contain, so filtering by it can only
   // succeed through the name field (the addressing-honesty test below).
-  { id: uuidFor("lt-server-room"), name: "server-room", display_name: "Machine hall", official: false, forked: false, icon: "map-pin", allowed_parent_types: [] },
+  { id: uuidFor("lt-server-room"), name: "server-room", label: "Machine hall", official: false, forked: false, icon: "map-pin", allowed_parent_types: [] },
 ];
 
 // The location type contract shown on the wing blade, plus the catalog the editor
-// joins each line to for its display name and data type.
+// joins each line to for its label and data type.
 const wingContract: ClassifierProperty[] = [{ property_type_name: "floor_area_sqm", property_type_id: "floor_area_sqm-id", default_value: 40, required: false }];
 const catalog: PropertyRow[] = [
-  { name: "floor_area_sqm", data_type: "int", display_name: "Floor area", official: true },
-  { name: "seat_count", data_type: "int", display_name: "Seat count", official: true },
+  { name: "floor_area_sqm", data_type: "int", label: "Floor area", official: true },
+  { name: "seat_count", data_type: "int", label: "Seat count", official: true },
 ];
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
@@ -60,7 +60,7 @@ function mount(me: Me = admin) {
 describe("LocationTypes page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("lists the registry rows, alphabetical by display name", () => {
+  it("lists the registry rows, alphabetical by label", () => {
     mount();
     expect(screen.getByText("campus")).toBeTruthy();
     expect(screen.getByText("wing")).toBeTruthy();
@@ -71,9 +71,9 @@ describe("LocationTypes page", () => {
     expect(hallAt).toBeGreaterThan(campusAt);
   });
 
-  // One identity column carries both operator-facing identities (the display name
+  // One identity column carries both operator-facing identities (the label
   // above, the name beneath).
-  it("carries the display name and the name in a single Name column", () => {
+  it("carries the label and the name in a single Name column", () => {
     mount();
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent?.trim());
     expect(headers).toContain("Name");
@@ -99,10 +99,10 @@ describe("LocationTypes page", () => {
     expect(screen.getByText("Root (no parent)")).toBeTruthy();
   });
 
-  // The create form leads with the display name and lets the name follow it, so an
+  // The create form leads with the label and lets the name follow it, so an
   // operator never has to think about the character class. A hand-edit claims the
   // name, and relabelling after that leaves it alone.
-  it("derives the name from the display name until the operator edits it", async () => {
+  it("derives the name from the label until the operator edits it", async () => {
     mount();
     fireEvent.click(screen.getByText("New location type"));
     const display = (await screen.findByPlaceholderText("Wing")) as HTMLInputElement;
@@ -110,13 +110,13 @@ describe("LocationTypes page", () => {
 
     fireEvent.input(display, { target: { value: "Server Room" } });
     expect(name.value).toBe("server-room");
-    expect(screen.getByText(/Derived from the display name/)).toBeTruthy();
+    expect(screen.getByText(/Derived from the label/)).toBeTruthy();
 
     fireEvent.input(name, { target: { value: "svr" } });
     fireEvent.input(display, { target: { value: "Server Room B" } });
     expect(name.value).toBe("svr");
     // The field says so too: the name is the operator's now, not derived.
-    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
+    expect(screen.queryByText(/Derived from the label/)).toBeNull();
   });
 
   // Regression for the nested-<label> bug: the picker used to live inside the
@@ -143,7 +143,7 @@ describe("LocationTypes page", () => {
       if (req.method === "PATCH" && req.url.includes("/location-types/wing")) {
         sent = JSON.parse(await req.clone().text());
         return new Response(
-          JSON.stringify({ id: uuidFor("lt-wing"), name: "wing", display_name: "Wing", official: false, forked: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] }),
+          JSON.stringify({ id: uuidFor("lt-wing"), name: "wing", label: "Wing", official: false, forked: false, icon: "map-pin", allowed_parent_types: ["campus", "root"] }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
@@ -173,7 +173,7 @@ describe("LocationTypes page", () => {
     expect((sent as { allowed_parent_types: string[] }).allowed_parent_types).toHaveLength(2);
   });
 
-  it("read-only blade shows allowed parents by display name, with the root sentinel labeled", async () => {
+  it("read-only blade shows allowed parents by label, with the root sentinel labeled", async () => {
     mount(viewer);
     fireEvent.click(screen.getByText("wing"));
     const blade = await waitFor(() => {
@@ -182,7 +182,7 @@ describe("LocationTypes page", () => {
       return el as HTMLElement;
     });
     // Read-only (the Edit pair is greyed by the lock): wing's set is [campus,
-    // root]. The chip resolves the type name to its display name (Campus, not
+    // root]. The chip resolves the type name to its label (Campus, not
     // the raw "campus"), and the sentinel renders as "Root", so the two read
     // consistently.
     expect((within(blade).getByLabelText("Edit") as HTMLButtonElement).disabled).toBe(true);
@@ -268,7 +268,7 @@ describe("LocationTypes page", () => {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...LOCATION_TYPES_KEY], [
       ...seed,
-      { id: uuidFor("lt-room"), name: "room", display_name: "Room", official: true, forked: true, icon: "map-pin", allowed_parent_types: [] },
+      { id: uuidFor("lt-room"), name: "room", label: "Room", official: true, forked: true, icon: "map-pin", allowed_parent_types: [] },
     ]);
     qc.setQueryData([...ME_KEY], admin);
     qc.setQueryData([...PROPERTIES_KEY], catalog);
@@ -355,7 +355,7 @@ describe("LocationTypes page", () => {
   // TypeScript renders "deck-1, deck-2" and fails here.
   it("reads what a rule produces from the server rather than re-deriving it", async () => {
     mountOne({
-      id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", official: false, forked: false,
+      id: uuidFor("lt-deck"), name: "deck", label: "Deck", official: false, forked: false,
       icon: "map-pin", allowed_parent_types: [],
       name_rule: { stem: "deck", examples: ["from-the-server", "from-the-server-2"] },
     });
@@ -371,7 +371,7 @@ describe("LocationTypes page", () => {
   it("sets a name rule on a type that had none", async () => {
     let sent: unknown;
     mountOne({
-      id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", official: false, forked: false,
+      id: uuidFor("lt-deck"), name: "deck", label: "Deck", official: false, forked: false,
       icon: "map-pin", allowed_parent_types: [],
     }, (b) => { sent = b; });
     fireEvent.click(screen.getByText("deck"));
@@ -393,7 +393,7 @@ describe("LocationTypes page", () => {
   it("sets a positional rule, with an empty stem, without falling back to no rule", async () => {
     let sent: unknown;
     mountOne({
-      id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", official: false, forked: false,
+      id: uuidFor("lt-deck"), name: "deck", label: "Deck", official: false, forked: false,
       icon: "map-pin", allowed_parent_types: [],
     }, (b) => { sent = b; });
     fireEvent.click(screen.getByText("deck"));
@@ -413,7 +413,7 @@ describe("LocationTypes page", () => {
   it("turns naming off from the editor with a masked clear", async () => {
     let sent: unknown;
     mountOne({
-      id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", official: false, forked: false,
+      id: uuidFor("lt-deck"), name: "deck", label: "Deck", official: false, forked: false,
       icon: "map-pin", allowed_parent_types: [], name_rule: { stem: "", examples: ["1", "2"] },
     }, (b) => { sent = b; });
     fireEvent.click(screen.getByText("deck"));
@@ -424,10 +424,10 @@ describe("LocationTypes page", () => {
     fireEvent.click(within(blade).getByText("Save"));
     await waitFor(() => expect(sent).toBeTruthy());
     expect(sent).toEqual({
-      display_name: "Deck",
+      label: "Deck",
       icon: "map-pin",
       allowed_parent_types: [],
-      update_mask: ["display_name", "icon", "allowed_parent_types", "name_rule"],
+      update_mask: ["label", "icon", "allowed_parent_types", "name_rule"],
     });
   });
 
@@ -447,7 +447,7 @@ describe("LocationTypes page", () => {
     });
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...LOCATION_TYPES_KEY], [
-      { id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", official: false, forked: false, icon: "map-pin", allowed_parent_types: [] },
+      { id: uuidFor("lt-deck"), name: "deck", label: "Deck", official: false, forked: false, icon: "map-pin", allowed_parent_types: [] },
     ]);
     qc.setQueryData([...ME_KEY], admin);
     qc.setQueryData([...PROPERTIES_KEY], catalog);
@@ -478,7 +478,7 @@ describe("LocationTypes page", () => {
   it("refuses a malformed stem inline and disables Save", async () => {
     let sent: unknown;
     mountOne({
-      id: uuidFor("lt-deck"), name: "deck", display_name: "Deck", official: false, forked: false,
+      id: uuidFor("lt-deck"), name: "deck", label: "Deck", official: false, forked: false,
       icon: "map-pin", allowed_parent_types: [],
     }, (b) => { sent = b; });
     fireEvent.click(screen.getByText("deck"));
@@ -499,7 +499,7 @@ describe("LocationTypes page", () => {
   it("sets a rule on a shipped type, which forks it and leaves Restore default", async () => {
     let sent: unknown;
     mountOne({
-      id: uuidFor("lt-floor"), name: "floor", display_name: "Floor", official: true, forked: false,
+      id: uuidFor("lt-floor"), name: "floor", label: "Floor", official: true, forked: false,
       icon: "layers", allowed_parent_types: [],
     }, (b) => { sent = b; });
     fireEvent.click(screen.getByText("floor"));
@@ -515,7 +515,7 @@ describe("LocationTypes page", () => {
     // the slot a custom row puts Delete.
     cleanup();
     mountOne({
-      id: uuidFor("lt-floor"), name: "floor", display_name: "Floor", official: true, forked: true,
+      id: uuidFor("lt-floor"), name: "floor", label: "Floor", official: true, forked: true,
       icon: "layers", allowed_parent_types: [], name_rule: { stem: "level", examples: ["level-1", "level-2"] },
     });
     fireEvent.click(screen.getByText("floor"));
@@ -532,7 +532,7 @@ describe("LocationTypes page", () => {
   // Restore had taken away.
   it("re-seeds the editor from the restored row rather than holding the discarded rule", async () => {
     const restored: LocationType = {
-      id: uuidFor("lt-floor"), name: "floor", display_name: "Floor", official: true, forked: false,
+      id: uuidFor("lt-floor"), name: "floor", label: "Floor", official: true, forked: false,
       icon: "layers", allowed_parent_types: [],
     };
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -644,7 +644,7 @@ describe("LocationTypes for a viewer-floor principal (#598)", () => {
       const req = input as Request;
       if (req.url.includes("/location-types")) {
         return new Response(
-          JSON.stringify({ location_types: [{ id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", official: false, forked: false, icon: "map-pin", allowed_parent_types: [] }] }),
+          JSON.stringify({ location_types: [{ id: uuidFor("lt-campus"), name: "campus", label: "Campus", official: false, forked: false, icon: "map-pin", allowed_parent_types: [] }] }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
@@ -667,7 +667,7 @@ describe("LocationTypes for a viewer-floor principal (#598)", () => {
 
 // The catalog addresses rows by the name (ADR-0062): the first column
 // shows it, and the substring filter matches it. The server-room fixture's
-// display name ("Machine hall") does not contain the handle, so the filter can
+// label ("Machine hall") does not contain the handle, so the filter can
 // only find it through the name field.
 describe("LocationTypes addressing honesty (#469)", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -685,7 +685,7 @@ describe("LocationTypes addressing honesty (#469)", () => {
   });
 });
 
-// #581. The list renders the display name as the primary line (identityColumn),
+// #581. The list renders the label as the primary line (identityColumn),
 // so the blade heading must be the words the row showed, not the identifier.
 describe("LocationTypes blade heading", () => {
   afterEach(() => vi.restoreAllMocks());

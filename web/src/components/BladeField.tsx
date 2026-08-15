@@ -11,7 +11,7 @@ import { IDENTITY_LABELS, type IdentityBinding } from "../lib/entities";
 // It exists because eleven pages defined a byte-identical local `Field`, four
 // more went through positional `ctx.field(...)` / `ctx.fact(...)` helpers, and
 // the read-only rendering was hand-rolled 24 times. Every blade defect was
-// therefore an N-place defect: `display_name` was labelled "Name" on 11 blades,
+// therefore an N-place defect: `label` was labelled "Name" on 11 blades,
 // a long description failed to wrap in 24 fields, and a read-only blade rendered
 // as a form nobody could type in.
 //
@@ -87,7 +87,7 @@ type BladeFieldBase = {
 
 // A field either says which identity fact it is bound to, and takes its label
 // from that, or carries a label of its own. The two are mutually exclusive at
-// the type level: there is no way to type "Name" onto a display_name field,
+// the type level: there is no way to type "Name" onto a label field,
 // which is the defect that reached eleven blades at once.
 export type BladeFieldProps =
   | (BladeFieldBase & { label: string; bind?: never })

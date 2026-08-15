@@ -26,10 +26,10 @@ The catalog is estate-wide reference data, not a scoped resource, so every comma
 visible to every reader; the write gates decide who may change it.
 
 - The directory lists every command type sorted by name, each showing its **name** (the
-  canonical identifier, with its display name on the line above it), **target** (the property or
+  canonical identifier, with its label on the line above it), **target** (the property or
   metric it sets, labelled with its lane, or fire-and-forget), **settle window** (seconds), and
   **origin** (**official** or **custom**). **name** filters by the name or its
-  display name; **official** narrows the list.
+  label; **official** narrows the list.
 - The **target is two-armed**: a **settleable** command names the value it sets in exactly one
   lane, a property (`set-input` targets `video-input`) or a metric (a volume command targets a
   numeric level), **never both**. A command with no target is **fire-and-forget** (`reboot`): it
@@ -53,11 +53,11 @@ visible to every reader; the write gates decide who may change it.
   records a window of 0 and nothing ever consults it. That is `reboot`'s shape.
 - **New command type** (with `command_type:create`, granted to operators) opens a create
   **drawer**: give it a **name** (a single lowercase kebab segment, for example `set-input` or
-  `reboot`), optionally add a **display name** and **description**, pick a **target** (or None),
+  `reboot`), optionally add a **label** and **description**, pick a **target** (or None),
   and, if you picked one, state the **settle window**. An invalid name (an uppercase letter, an
   underscore, a leading hyphen, a dot) is refused with a message.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with
-  `command_type:update`) edits the display name, description, target, and settle window; the
+  `command_type:update`) edits the label, description, target, and settle window; the
   name is fixed at creation, since it is what every invocation is typed by. **Delete** (with
   `command_type:delete`) removes a custom command type, behind a confirm. A verb you lack greys
   just that button, its hover reason naming the permission (`Requires command_type:update`,

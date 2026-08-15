@@ -85,7 +85,7 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": false,
       "default": "''::text"
@@ -157,9 +157,10 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "version",
@@ -208,9 +209,10 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "kind",
@@ -449,9 +451,10 @@
       "default": "false"
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "created_at",
@@ -615,7 +618,7 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": false,
       "default": "''::text"
@@ -681,9 +684,10 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "icon",
@@ -800,9 +804,10 @@
       "default": "now()"
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": true
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "location_id",
@@ -893,7 +898,7 @@
       "pk": true
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": false,
       "default": "''::text"
@@ -1183,9 +1188,10 @@
       "default": "false"
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "schema",
@@ -1625,9 +1631,10 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": true
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "parent_id",
@@ -1674,7 +1681,7 @@
       "nullable": true
      },
      {
-      "name": "display_name_generated",
+      "name": "label_generated",
       "type": "boolean",
       "nullable": false,
       "default": "false"
@@ -1823,9 +1830,10 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": true
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "parent_id",
@@ -1854,7 +1862,7 @@
       "fk_target": "location_type.id"
      },
      {
-      "name": "display_name_generated",
+      "name": "label_generated",
       "type": "boolean",
       "nullable": false,
       "default": "false"
@@ -1902,9 +1910,10 @@
       "default": "false"
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "created_at",
@@ -2078,9 +2087,10 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": true
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "parent_id",
@@ -2123,7 +2133,7 @@
       "fk_target": "system_type.id"
      },
      {
-      "name": "display_name_generated",
+      "name": "label_generated",
       "type": "boolean",
       "nullable": false,
       "default": "false"
@@ -2262,7 +2272,7 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": false,
       "default": "''::text"
@@ -2309,9 +2319,10 @@
       "nullable": true
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": true
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "failed_login_count",
@@ -2543,9 +2554,10 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": true
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "description",
@@ -2630,9 +2642,10 @@
       "default": "now()"
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": true
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "description",
@@ -2693,7 +2706,7 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": false,
       "default": "''::text"
@@ -2777,9 +2790,10 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "quorum",
@@ -3183,9 +3197,10 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": true
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "description",
@@ -3402,9 +3417,10 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": true
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "description",
@@ -3631,9 +3647,10 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": true
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "data_type",
@@ -3823,9 +3840,10 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": true
+      "nullable": false,
+      "default": "''::text"
      },
      {
       "name": "data_type",

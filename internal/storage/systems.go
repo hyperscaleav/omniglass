@@ -55,16 +55,16 @@ var (
 
 // Standard is the blueprint a system conforms to (huddle room, classroom,
 // auditorium): the system-side counterpart of product for a component. Beyond
-// the registry shape (id, official, display_name) it carries an optional parent
+// the registry shape (id, official, label) it carries an optional parent
 // standard, so a variant inherits from a base one exactly as
 // product.parent_product_id does. The registry lists alphabetically by
-// display_name; there is no ordering field.
+// label; there is no ordering field.
 type Standard struct {
 	// ID is the uuid primary key and Name the renameable name (ADR-0062).
 	ID                 string
 	Name               string
 	Official           bool
-	DisplayName        string
+	Label              string
 	ParentStandardID   *string
 	ParentStandardName *string
 	// LabelRule is this standard's label template (#682), the most specific
@@ -87,9 +87,9 @@ type Standard struct {
 // the stable handle and the name the one an operator reads. Nullable, and
 // nullable it stays until the floor slice.
 type System struct {
-	ID          string
-	Name        string
-	DisplayName string
+	ID    string
+	Name  string
+	Label string
 	// NameGenerated is the NAME's pen (#686), the same shape and polarity
 	// component's has carried since #627: true means the platform minted this
 	// name from the system_type's stem and a later act on the row (a move, a
@@ -112,17 +112,17 @@ type System struct {
 	// A storage fact, not a wire field: a label rule reads it server-side, and
 	// the console learns who holds the pen from NameGenerated.
 	Ordinal *int
-	// DisplayNameGenerated is the label's pen (#682), mirroring
+	// LabelGenerated is the label's pen (#682), mirroring
 	// name_generated's polarity: true means the platform owns the field and a
 	// write re-renders it from the resolved rule. Setting the label by hand
 	// clears it; clearing the field returns it.
-	DisplayNameGenerated bool
-	StandardID           *string
-	StandardName         *string
-	SystemTypeID         *string
-	SystemTypeName       *string
-	ParentID             *string
-	LocationID           *string
+	LabelGenerated bool
+	StandardID     *string
+	StandardName   *string
+	SystemTypeID   *string
+	SystemTypeName *string
+	ParentID       *string
+	LocationID     *string
 	// MemberCount is how many components are bound into this system. It comes from
 	// system_member, not from any pointer on the component: membership is the
 	// relation that says what is in a system, and reading it from anywhere else is
@@ -148,7 +148,7 @@ type System struct {
 // SystemTypeID the coarse kind of space it is, each by name or uuid.
 type SystemSpec struct {
 	Name         string
-	DisplayName  string
+	Label        string
 	StandardID   *string
 	SystemTypeID *string
 	ParentName   *string
@@ -173,7 +173,7 @@ type SystemSpec struct {
 // the same reason: reclassifying a room and un-classifying it are different
 // acts, and coalesce alone cannot tell "omitted" from "clear".
 type SystemPatch struct {
-	DisplayName  *string
+	Label        *string
 	StandardID   *string
 	SystemTypeID *string
 }
@@ -193,12 +193,12 @@ type SystemMove struct {
 
 // parent_standard_id stores a uuid; the parent's handle is projected beside it,
 // as the estate arcs do.
-const standardCols = `id, name, official, display_name, parent_standard_id,
+const standardCols = `id, name, official, label, parent_standard_id,
 	(select p.name from standard p where p.id = standard.parent_standard_id) as parent_handle, label_rule`
 
 func scanStandard(row pgx.Row) (*Standard, error) {
 	var st Standard
-	if err := row.Scan(&st.ID, &st.Name, &st.Official, &st.DisplayName, &st.ParentStandardID, &st.ParentStandardName, &st.LabelRule); err != nil {
+	if err := row.Scan(&st.ID, &st.Name, &st.Official, &st.Label, &st.ParentStandardID, &st.ParentStandardName, &st.LabelRule); err != nil {
 		return nil, err
 	}
 	return &st, nil
@@ -230,10 +230,10 @@ func mapStandardWriteErr(err error) error {
 // UPDATE is the authoritative behavior the canonical catalogs want.
 func (p *PG) SeedStandard(ctx context.Context, st Standard) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into standard (name, official, display_name, parent_standard_id, label_rule)
+		insert into standard (name, official, label, parent_standard_id, label_rule)
 		values ($1, $2, $3, (select id from standard where name = nullif($4, '')), $5)
 		on conflict (name) do nothing`,
-		st.Name, st.Official, st.DisplayName, st.ParentStandardID, nilIfEmpty(st.LabelRule))
+		st.Name, st.Official, st.Label, st.ParentStandardID, nilIfEmpty(st.LabelRule))
 	if err != nil {
 		return fmt.Errorf("storage: seed standard %q: %w", st.Name, err)
 	}
@@ -242,26 +242,26 @@ func (p *PG) SeedStandard(ctx context.Context, st Standard) error {
 
 func (p *PG) UpsertStandard(ctx context.Context, st Standard) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into standard (name, official, display_name, parent_standard_id, label_rule)
+		insert into standard (name, official, label, parent_standard_id, label_rule)
 		values ($1, $2, $3, (select id from standard where name = nullif($4, '')), $5)
 		on conflict (name) do update
 			set official           = excluded.official,
-			    display_name       = excluded.display_name,
+			    label       = excluded.label,
 			    parent_standard_id = excluded.parent_standard_id,
 			    label_rule         = excluded.label_rule,
 			    updated_at         = now()`,
-		st.Name, st.Official, st.DisplayName, st.ParentStandardID, nilIfEmpty(st.LabelRule))
+		st.Name, st.Official, st.Label, st.ParentStandardID, nilIfEmpty(st.LabelRule))
 	if err != nil {
 		return fmt.Errorf("storage: upsert standard %q: %w", st.ID, err)
 	}
 	return nil
 }
 
-// ListStandards returns every standard, ordered alphabetically by display_name,
+// ListStandards returns every standard, ordered alphabetically by label,
 // with unlabelled rows last and the name breaking ties (#613; see ListVendors for
 // why the ordering is spelled nullif(...) nulls last).
 func (p *PG) ListStandards(ctx context.Context) ([]Standard, error) {
-	rows, err := p.pool.Query(ctx, `select `+standardCols+` from standard order by nullif(display_name, '') nulls last, name`)
+	rows, err := p.pool.Query(ctx, `select `+standardCols+` from standard order by nullif(label, '') nulls last, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list standards: %w", err)
 	}
@@ -292,7 +292,7 @@ func (p *PG) GetStandard(ctx context.Context, id string) (*Standard, error) {
 // StandardPatch carries the mutable fields of a standard update; a nil field is
 // left unchanged.
 type StandardPatch struct {
-	DisplayName      *string
+	Label            *string
 	ParentStandardID *string
 	LabelRule        *string
 }
@@ -320,10 +320,10 @@ func (p *PG) CreateStandard(ctx context.Context, actorID string, st Standard) (*
 		}
 	}
 	created, err := scanStandard(tx.QueryRow(ctx, `
-		insert into standard (name, official, display_name, parent_standard_id, label_rule)
+		insert into standard (name, official, label, parent_standard_id, label_rule)
 		values ($1, false, $2, (select id from standard where name = $3 or id::text = $3), $4)
 		returning `+standardCols,
-		st.Name, st.DisplayName, st.ParentStandardID, nilIfEmpty(st.LabelRule)))
+		st.Name, st.Label, st.ParentStandardID, nilIfEmpty(st.LabelRule)))
 	if err != nil {
 		return nil, mapStandardWriteErr(err)
 	}
@@ -336,7 +336,7 @@ func (p *PG) CreateStandard(ctx context.Context, actorID string, st Standard) (*
 	return created, nil
 }
 
-// UpdateStandard patches a custom standard's display_name or parent (nil fields
+// UpdateStandard patches a custom standard's label or parent (nil fields
 // unchanged) and audits it. Official rows are read-only (ErrTypeOfficial); an
 // unknown id is ErrTypeNotFound; an unknown parent is ErrParentStandardNotFound.
 func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch StandardPatch) (*Standard, error) {
@@ -361,7 +361,7 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 	}
 	st, err := scanStandard(tx.QueryRow(ctx, `
 		update standard set
-			display_name       = coalesce($2, display_name),
+			label       = coalesce($2, label),
 			parent_standard_id = coalesce((select id from standard where name = $3 or id::text = $3), parent_standard_id),
 			-- An explicit empty string CLEARS the rule; see UpdateComponentType's
 			-- own label_rule CASE for why this is not a coalesce.
@@ -373,7 +373,7 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 			updated_at         = now()
 		where `+registryRefCol(id)+` = $1
 		returning `+standardCols,
-		id, patch.DisplayName, patch.ParentStandardID, patch.LabelRule))
+		id, patch.Label, patch.ParentStandardID, patch.LabelRule))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -405,7 +405,7 @@ func (p *PG) DeleteStandard(ctx context.Context, actorID, id string) error {
 // The system_type handle is a live subselect, not a stored copy: the row is
 // pinned by uuid, so renaming the registry row moves the projected name with it
 // and can never orphan the classification.
-const systemCols = `id, name, coalesce(display_name, ''), name_generated, ordinal, display_name_generated, standard_id,
+const systemCols = `id, name, label, name_generated, ordinal, label_generated, standard_id,
 	(select st.name from standard st where st.id = system.standard_id) as standard_handle,
 	system_type_id,
 	(select ty.name from system_type ty where ty.id = system.system_type_id) as system_type_handle,
@@ -417,7 +417,7 @@ const systemCols = `id, name, coalesce(display_name, ''), name_generated, ordina
 
 func scanSystem(row pgx.Row) (*System, error) {
 	var s System
-	if err := row.Scan(&s.ID, &s.Name, &s.DisplayName, &s.NameGenerated, &s.Ordinal, &s.DisplayNameGenerated, &s.StandardID, &s.StandardName,
+	if err := row.Scan(&s.ID, &s.Name, &s.Label, &s.NameGenerated, &s.Ordinal, &s.LabelGenerated, &s.StandardID, &s.StandardName,
 		&s.SystemTypeID, &s.SystemTypeName, &s.ParentID, &s.LocationID,
 		&s.MemberCount, &s.ParentName, &s.LocationName, &s.CreatedAt, &s.UpdatedAt); err != nil {
 		return nil, err
@@ -633,14 +633,14 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 		return nil, err
 	}
 
-	// An empty display_name hands the LABEL's pen to the platform (#682); the
+	// An empty label hands the LABEL's pen to the platform (#682); the
 	// row is inserted with no label and stamped once its classification is
 	// resolvable, which is now.
 	s, err := scanSystem(tx.QueryRow(ctx, `
-		insert into system (name, display_name, standard_id, system_type_id, parent_id, location_id, name_generated, ordinal, display_name_generated)
+		insert into system (name, label, standard_id, system_type_id, parent_id, location_id, name_generated, ordinal, label_generated)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		returning `+systemCols,
-		name, nullize(spec.DisplayName), standardID, systemTypeID, parentID, locationID, generated, ordinal, spec.DisplayName == ""))
+		name, spec.Label, standardID, systemTypeID, parentID, locationID, generated, ordinal, spec.Label == ""))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}
@@ -745,7 +745,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	// both halves of that are load-bearing rather than tidy. The console sends
 	// system_type_id on every save (web/src/pages/Systems.tsx keys it always, so
 	// an unclassify can clear), so a presence test re-mints on an edit to the
-	// display name alone; and an id test re-mints on a reclassify between two
+	// label alone; and an id test re-mints on a reclassify between two
 	// types that inherit ONE stem from a shared ancestor, which the mint cannot
 	// tell apart because it never reads the id (#706). With a lower ordinal
 	// freed in the meantime by a rename, either re-mint MOVES THE NAME:
@@ -777,14 +777,15 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 			name    = coalesce($8, name),
 			ordinal = coalesce($9::integer, ordinal),
 			-- Three-state like the fields below it, not a coalesce: a value is
-			-- the operator typing a label and taking the pen ($7), an explicit
-			-- empty string clears it and hands the pen back (#682).
-			display_name = case
-				when $2::text is null then display_name
-				when $2 = '' then null
+			-- the operator typing a label and taking the pen ($7), and the empty
+			-- string is how they clear it and hand the pen back (#682). Two
+			-- branches, not three: since #613 '' IS the cleared state and a null
+			-- would violate the column (ADR-0118).
+			label = case
+				when $2::text is null then label
 				else $2::text
 			end,
-			display_name_generated = $7,
+			label_generated = $7,
 			-- standard_id follows the house patch convention: a nil field is left
 			-- unchanged, and a provided empty string CLEARS the column, which is how a
 			-- classified system is converted back to a one-off. coalesce alone cannot
@@ -805,8 +806,8 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 			updated_at   = now()
 		where id = $1
 		returning `+systemCols,
-		before.ID, patch.DisplayName, patch.StandardID, standardPatchID, patch.SystemTypeID, systemTypePatchID,
-		labelPen(before.DisplayNameGenerated, patch.DisplayName), namePatch, ordinalPatch))
+		before.ID, patch.Label, patch.StandardID, standardPatchID, patch.SystemTypeID, systemTypePatchID,
+		labelPen(before.LabelGenerated, patch.Label), namePatch, ordinalPatch))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}

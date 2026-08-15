@@ -12,9 +12,9 @@ import { uuidFor } from "../lib/testids";
 // read-only, same invariant as the Types catalog's official rows: no edit
 // pencil, no Delete. Data is seeded into the query cache so no server is needed.
 const seed: Vendor[] = [
-  { id: uuidFor("ven-crestron"), name: "crestron", display_name: "Crestron", kind: "manufacturer", official: true, icon: "crestron-logo" },
-  { id: uuidFor("ven-acme-av"), name: "acme-av", display_name: "Acme AV", kind: "integrator", official: false, website: "https://acme.example" },
-  { id: uuidFor("ven-evil-corp"), name: "evil-corp", display_name: "Evil Corp", kind: "manufacturer", official: false, website: "javascript:alert(document.cookie)" },
+  { id: uuidFor("ven-crestron"), name: "crestron", label: "Crestron", kind: "manufacturer", official: true, icon: "crestron-logo" },
+  { id: uuidFor("ven-acme-av"), name: "acme-av", label: "Acme AV", kind: "integrator", official: false, website: "https://acme.example" },
+  { id: uuidFor("ven-evil-corp"), name: "evil-corp", label: "Evil Corp", kind: "manufacturer", official: false, website: "javascript:alert(document.cookie)" },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -54,7 +54,7 @@ describe("Vendors page", () => {
     expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
 
     // create is available to an admin. Anchored, because the Name field's hint
-    // mentions the display name it derives from.
+    // mentions the label it derives from.
     fireEvent.click(screen.getByRole("button", { name: /new vendor/i }));
     expect(screen.getByLabelText(/^Name/)).toBeInTheDocument();
   });
@@ -109,8 +109,8 @@ describe("Vendors page", () => {
   // after Save updated the row, the list, and the body, and never the heading.
   // Driving the whole save is the point. A test that only re-rendered the title
   // would have passed against the broken code.
-  it("updates the blade heading when the display name is saved, without reopening", async () => {
-    const renamed = seed.map((v) => (v.name === "acme-av" ? { ...v, display_name: "Acme Audio Visual" } : v));
+  it("updates the blade heading when the label is saved, without reopening", async () => {
+    const renamed = seed.map((v) => (v.name === "acme-av" ? { ...v, label: "Acme Audio Visual" } : v));
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : (input as Request).url;
       const body = url.includes("/vendors/") ? renamed[1] : { vendors: renamed };
@@ -166,7 +166,7 @@ describe("Vendors identity column", () => {
     mount();
     expect(await screen.findByText("Acme AV")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /^Name$/ })).toBeInTheDocument();
-    expect(screen.queryByRole("columnheader", { name: /display name/i })).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: /label/i })).toBeNull();
     const row = screen.getByText("Acme AV").closest("tr")!;
     expect(within(row).getByText("acme-av")).toBeInTheDocument();
   });
@@ -178,21 +178,21 @@ describe("Vendors identity column", () => {
 describe("Vendors create form identity", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("derives the handle from the display name until the operator edits the handle", () => {
+  it("derives the handle from the label until the operator edits the handle", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /new vendor/i }));
-    const display = screen.getByLabelText(/^Display name/) as HTMLInputElement;
+    const display = screen.getByLabelText(/^Label/) as HTMLInputElement;
     const handle = screen.getByLabelText(/^Name/) as HTMLInputElement;
 
     fireEvent.input(display, { target: { value: "Acme AV" } });
     expect(handle.value).toBe("acme-av");
-    expect(screen.getByText(/Derived from the display name/)).toBeInTheDocument();
+    expect(screen.getByText(/Derived from the label/)).toBeInTheDocument();
 
     fireEvent.input(handle, { target: { value: "acme" } });
     fireEvent.input(display, { target: { value: "Acme AV Holdings" } });
     expect(handle.value).toBe("acme");
     // And the field says so, so the operator is not left guessing whether it
     // still follows.
-    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
+    expect(screen.queryByText(/Derived from the label/)).toBeNull();
   });
 });

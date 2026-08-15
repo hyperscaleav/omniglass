@@ -26,7 +26,7 @@ func TestProductCRUD(t *testing.T) {
 	// Create a custom product with a vendor, driver, and kind. It is
 	// official=false.
 	m, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "room-bar", DisplayName: "Room Bar",
+		Name: "room-bar", Label: "Room Bar",
 		VendorID: &vendor, DriverID: &driver, Kind: "device",
 	})
 	if err != nil {
@@ -67,34 +67,34 @@ func TestProductCRUD(t *testing.T) {
 	}
 
 	// Duplicate id is ErrTypeExists.
-	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "room-bar", DisplayName: "Dup", Kind: "device"}); !errors.Is(err, storage.ErrTypeExists) {
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "room-bar", Label: "Dup", Kind: "device"}); !errors.Is(err, storage.ErrTypeExists) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
 	// An unknown vendor reference is ErrProductRefNotFound (422-worthy).
 	badVendor := "nonexistent-vendor"
-	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "bad-ref", DisplayName: "Bad", VendorID: &badVendor, Kind: "device"}); !errors.Is(err, storage.ErrProductRefNotFound) {
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "bad-ref", Label: "Bad", VendorID: &badVendor, Kind: "device"}); !errors.Is(err, storage.ErrProductRefNotFound) {
 		t.Fatalf("bad vendor err = %v, want ErrProductRefNotFound", err)
 	}
 
 	// An out-of-set kind is ErrProductInvalidKind (422-worthy), rejected before
 	// the DB CHECK.
-	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "bad-kind", DisplayName: "Bad", Kind: "gizmo"}); !errors.Is(err, storage.ErrProductInvalidKind) {
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "bad-kind", Label: "Bad", Kind: "gizmo"}); !errors.Is(err, storage.ErrProductInvalidKind) {
 		t.Fatalf("bad kind err = %v, want ErrProductInvalidKind", err)
 	}
 
-	// Update changes display_name and kind; vendor is left untouched (nil patch
+	// Update changes label and kind; vendor is left untouched (nil patch
 	// field).
 	dn, kd := "Room Bar Pro", "app"
 	upd, err := gw.UpdateProduct(ctx, "", "room-bar", storage.ProductPatch{
-		DisplayName: &dn,
-		Kind:        &kd,
+		Label: &dn,
+		Kind:  &kd,
 	})
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if upd.DisplayName != "Room Bar Pro" || upd.Kind != "app" {
-		t.Fatalf("update = %+v, want display_name=Room Bar Pro kind=app", upd)
+	if upd.Label != "Room Bar Pro" || upd.Kind != "app" {
+		t.Fatalf("update = %+v, want label=Room Bar Pro kind=app", upd)
 	}
 	if upd.VendorName == nil || *upd.VendorName != "cisco" {
 		t.Fatalf("update vendor = %v, want unchanged cisco", upd.VendorName)
@@ -107,7 +107,7 @@ func TestProductCRUD(t *testing.T) {
 	}
 
 	// Official rows are read-only.
-	if err := gw.UpsertProduct(ctx, storage.Product{Name: "official-prod", DisplayName: "Official", Kind: "device", Official: true}); err != nil {
+	if err := gw.UpsertProduct(ctx, storage.Product{Name: "official-prod", Label: "Official", Kind: "device", Official: true}); err != nil {
 		t.Fatalf("upsert official: %v", err)
 	}
 	op, err := gw.GetProduct(ctx, "official-prod")
@@ -117,7 +117,7 @@ func TestProductCRUD(t *testing.T) {
 	if !op.Official {
 		t.Fatalf("official = %+v, want official=true", op)
 	}
-	if _, err := gw.UpdateProduct(ctx, "", "official-prod", storage.ProductPatch{DisplayName: &dn}); !errors.Is(err, storage.ErrTypeOfficial) {
+	if _, err := gw.UpdateProduct(ctx, "", "official-prod", storage.ProductPatch{Label: &dn}); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("update official err = %v, want ErrTypeOfficial", err)
 	}
 	if err := gw.DeleteProduct(ctx, "", "official-prod"); !errors.Is(err, storage.ErrTypeOfficial) {
@@ -161,7 +161,7 @@ func TestProductComponentTypeAndIcon(t *testing.T) {
 
 	icon := "camera"
 	m, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "acme-cam", DisplayName: "Acme Cam", Kind: "device",
+		Name: "acme-cam", Label: "Acme Cam", Kind: "device",
 		ComponentType: "camera", Icon: &icon,
 	})
 	if err != nil {
@@ -175,7 +175,7 @@ func TestProductComponentTypeAndIcon(t *testing.T) {
 	}
 
 	// No component_type named: defaults to the generic instance of the kind.
-	svc, err := gw.CreateProduct(ctx, "", storage.Product{Name: "acme-svc", DisplayName: "Acme Svc", Kind: "service"})
+	svc, err := gw.CreateProduct(ctx, "", storage.Product{Name: "acme-svc", Label: "Acme Svc", Kind: "service"})
 	if err != nil {
 		t.Fatalf("create with no component_type: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestProductComponentTypeAndIcon(t *testing.T) {
 	// An unknown component_type is ErrProductRefNotFound (422-worthy), the same
 	// sentinel an unknown vendor or driver raises.
 	if _, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "acme-bad-type", DisplayName: "Bad", Kind: "device", ComponentType: "no-such-type",
+		Name: "acme-bad-type", Label: "Bad", Kind: "device", ComponentType: "no-such-type",
 	}); !errors.Is(err, storage.ErrProductRefNotFound) {
 		t.Fatalf("bad component_type err = %v, want ErrProductRefNotFound", err)
 	}

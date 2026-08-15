@@ -5,19 +5,19 @@
 metric_types:
   - name: icmp-reachable
     data_type: int
-    display_name: ICMP Reachable
+    label: ICMP Reachable
     description: ICMP inline probe result (1 = at least one echo returned, 0 = none).
   - name: icmp-rtt-avg
     data_type: float
     unit: ms
-    display_name: ICMP RTT (avg)
+    label: ICMP RTT (avg)
     description: Average round-trip time over the task's echoes; absent when unreachable.
   - name: tcp-open
     data_type: int
-    display_name: TCP Port Open
+    label: TCP Port Open
     description: TCP-connect probe result (1 = the port accepted a connection, 0 = refused/timeout).
   - name: tcp-connect-time
     data_type: float
     unit: ms
-    display_name: TCP Connect Time
+    label: TCP Connect Time
     description: Time to establish the TCP connection; absent when the port is closed.

@@ -80,7 +80,7 @@ function namingSummary(r: LocationType): string {
   return `Named ${first}, then ${second}, within their parent.`;
 }
 
-// Identity (the display name above the name, ADR-0062: the name is the
+// Identity (the label above the name, ADR-0062: the name is the
 // operator-facing address; the uuid stays in the blade), the icon glyph, origin.
 const columns: FlatColumn<LocationType>[] = [
   identityColumn<LocationType>(),
@@ -92,9 +92,9 @@ export default function LocationTypes() {
   const me = useMe();
   const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
 
-  // Sorted alphabetically by display name then name.
+  // Sorted alphabetically by label then name.
   const rows = () =>
-    [...(types.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.name.localeCompare(b.name));
+    [...(types.data ?? [])].sort((a, b) => a.label.localeCompare(b.label) || a.name.localeCompare(b.name));
 
   const canCreate = () => can(me.data, "location_type", "create");
 
@@ -148,7 +148,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
   const edit = useBladeEdit();
   const row = useLocationTypeRow(p.id);
   const [err, setErr] = createSignal<string | null>(null);
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [icon, setIcon] = createSignal("");
   const allTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
   const typeOptions = () => allTypes.data ?? [];
@@ -183,7 +183,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
   // effect here and a remembered call there.
   function seedDrafts() {
     const r = row();
-    setDisplayName(r?.display_name ?? "");
+    setLabel(r?.label ?? "");
     setIcon(r?.icon ?? "");
     setAllowedParents(r?.allowed_parent_types ?? []);
     setNaming(!!r?.name_rule);
@@ -227,7 +227,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     const body: UpdateLocationType = {
-      display_name: displayName(),
+      label: label(),
       icon: icon(),
       allowed_parent_types: allowedParents(),
     };
@@ -242,7 +242,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
       // null are the same absent value once a body is decoded, so the mask is
       // what carries the intent for a nullable OBJECT. It names every field this
       // write changes rather than name_rule alone, because a mask governs the
-      // WHOLE write and a narrower one would drop the display name and icon
+      // WHOLE write and a narrower one would drop the label and icon
       // edited in the same pass.
       body.update_mask = [...LOCATION_TYPE_PATCH_FIELDS];
     }
@@ -295,10 +295,10 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <BladeField
-            bind="display_name"
-            value={() => r().display_name ?? ""}
-            draft={displayName}
-            onInput={setDisplayName}
+            bind="label"
+            value={() => r().label ?? ""}
+            draft={label}
+            onInput={setLabel}
           />
           <BladeField
             label="Icon"
@@ -364,7 +364,7 @@ function LocationTypeBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateLocationTypeForm: name a new custom location type. The display name
+// CreateLocationTypeForm: name a new custom location type. The label
 // leads and the kebab name (the operator-facing address; the uuid is the
 // database's to mint) follows it, stopping the moment the operator edits the
 // name by hand (lib/entities). An icon glyph key and the allowed-parents
@@ -393,7 +393,7 @@ export function CreateLocationTypeForm(p: { onCreated: (t: LocationType) => void
     try {
       const created = await createLocationType({
         name: name().trim(),
-        display_name: display().trim(),
+        label: display().trim(),
         icon: icon().trim() || "map-pin",
         allowed_parent_types: allowedParents(),
       });
@@ -411,10 +411,10 @@ export function CreateLocationTypeForm(p: { onCreated: (t: LocationType) => void
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="display_name" hint="What an operator reads.">
+      <FieldRow bind="label" hint="What an operator reads.">
         <input class="input input-bordered w-full" value={display()} placeholder="Wing" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </FieldRow>
-      <FieldRow bind="name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. wing. Addressed by the API and CLI."}>
+      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "A kebab name, e.g. wing. Addressed by the API and CLI."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="wing" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Icon" hint="A glyph key, e.g. map-pin (the default).">
@@ -529,7 +529,7 @@ function AllowedParentsPicker(p: { options: LocationType[]; value: string[]; onC
         {(t) => (
           <label class="flex items-center gap-2 text-sm">
             <input type="checkbox" class="checkbox checkbox-sm" checked={p.value.includes(t.name)} onChange={() => toggle(t.name)} />
-            <span>{t.display_name}</span>
+            <span>{t.label}</span>
             <span class="font-data text-xs text-base-content/40">{t.name}</span>
           </label>
         )}

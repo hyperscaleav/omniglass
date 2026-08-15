@@ -10,8 +10,8 @@ import { ME_KEY, type Me } from "../lib/auth";
 // the caller holds event_type:create / event_type:update. Data is seeded into the
 // query cache so no server is needed.
 const seed: EventTypeRow[] = [
-  { name: "call-started", display_name: "Call Started", official: true },
-  { name: "cable-unplugged", display_name: "Cable unplugged", official: false },
+  { name: "call-started", label: "Call Started", official: true },
+  { name: "cable-unplugged", label: "Cable unplugged", official: false },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -48,7 +48,7 @@ describe("Event Types page", () => {
 
   // One header word everywhere, "Name", even though this table's name is dotted
   // (call-started) rather than kebab. The separate Label column goes: the cell
-  // already renders the display name, so the column only repeated it.
+  // already renders the label, so the column only repeated it.
   it("keeps the Name header and drops the redundant Label column", () => {
     mount();
     expect(screen.getByRole("columnheader", { name: "Name" })).toBeTruthy();

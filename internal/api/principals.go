@@ -37,7 +37,7 @@ type principalBody struct {
 func toPrincipalBody(pr *storage.Principal) principalBody {
 	b := principalBody{ID: pr.ID, Kind: pr.Kind, Active: pr.Active, ArchivedAt: pr.ArchivedAt, Grants: make([]grantBody, 0, len(pr.Grants)), Groups: make([]principalGroupRef, 0, len(pr.Groups))}
 	if pr.Human != nil {
-		b.Human = &humanBody{Username: pr.Human.Username, Email: pr.Human.Email, DisplayName: pr.Human.DisplayName, HasAvatar: pr.Human.HasAvatar}
+		b.Human = &humanBody{Username: pr.Human.Username, Email: pr.Human.Email, Label: pr.Human.Label, HasAvatar: pr.Human.HasAvatar}
 	}
 	if pr.Service != nil {
 		b.Service = &svcBody{Name: pr.Service.Name}
@@ -100,19 +100,19 @@ type principalOutput struct {
 
 type createPrincipalInput struct {
 	Body struct {
-		Username    string `json:"username" minLength:"1" maxLength:"200" pattern:"^[a-z0-9][a-z0-9._-]*$" doc:"Unique sign-in name (lowercase letters, digits, and . _ -)"`
-		DisplayName string `json:"display_name,omitempty" maxLength:"200" doc:"What an operator reads in lists; falls back to the username"`
-		Email       string `json:"email,omitempty" maxLength:"320" format:"email" doc:"Contact email for the account"`
-		Password    string `json:"password,omitempty" minLength:"12" maxLength:"256" doc:"Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in"`
+		Username string `json:"username" minLength:"1" maxLength:"200" pattern:"^[a-z0-9][a-z0-9._-]*$" doc:"Unique sign-in name (lowercase letters, digits, and . _ -)"`
+		Label    string `json:"label,omitempty" maxLength:"200" doc:"What an operator reads in lists; falls back to the username"`
+		Email    string `json:"email,omitempty" maxLength:"320" format:"email" doc:"Contact email for the account"`
+		Password string `json:"password,omitempty" minLength:"12" maxLength:"256" doc:"Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in"`
 	}
 }
 
 type updatePrincipalInput struct {
 	ID   string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
 	Body struct {
-		DisplayName *string `json:"display_name,omitempty" maxLength:"200" doc:"Display name; empty clears it"`
-		Email       *string `json:"email,omitempty" maxLength:"320" doc:"Email; empty clears it"`
-		Username    *string `json:"username,omitempty" minLength:"1" maxLength:"200" pattern:"^[a-z0-9][a-z0-9._-]*$" doc:"Sign-in name (lowercase letters, digits, and . _ -); renaming is safe"`
+		Label    *string `json:"label,omitempty" maxLength:"200" doc:"Label; empty clears it"`
+		Email    *string `json:"email,omitempty" maxLength:"320" doc:"Email; empty clears it"`
+		Username *string `json:"username,omitempty" minLength:"1" maxLength:"200" pattern:"^[a-z0-9][a-z0-9._-]*$" doc:"Sign-in name (lowercase letters, digits, and . _ -); renaming is safe"`
 	}
 }
 
@@ -220,9 +220,9 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Description:   "Creates a human principal with an optional initial password. Gated by principal:create (all-scope). The new principal holds no grants; assign roles separately.",
 	}, "principal", "create"), func(ctx context.Context, in *createPrincipalInput) (*principalOutput, error) {
 		spec := storage.HumanSpec{
-			Username:    in.Body.Username,
-			Email:       in.Body.Email,
-			DisplayName: in.Body.DisplayName,
+			Username: in.Body.Username,
+			Email:    in.Body.Email,
+			Label:    in.Body.Label,
 		}
 		if in.Body.Password != "" {
 			if err := mapPasswordErr(auth.ValidatePassword(in.Body.Password, in.Body.Username)); err != nil {
@@ -246,7 +246,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodPatch,
 		Path:        "/principals/{id}",
 		Summary:     "Update a principal",
-		Description: "Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.",
+		Description: "Updates a human principal's label, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.",
 	}, "principal", "update"), func(ctx context.Context, in *updatePrincipalInput) (*principalOutput, error) {
 		id, rerr := a.resolvePrincipalRef(ctx, in.ID)
 		if rerr != nil {
@@ -254,9 +254,9 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		}
 		in.ID = id
 		pr, err := gw.UpdatePrincipalHuman(ctx, actorID(ctx), in.ID, storage.AdminHumanPatch{
-			DisplayName: in.Body.DisplayName,
-			Email:       in.Body.Email,
-			Username:    in.Body.Username,
+			Label:    in.Body.Label,
+			Email:    in.Body.Email,
+			Username: in.Body.Username,
 		}, a.scopeFor(ctx, "principal", "update"))
 		if err != nil {
 			return nil, mapPrincipalErr(err)

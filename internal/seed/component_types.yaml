@@ -13,94 +13,94 @@
 # this list.
 component_types:
   - id: display
-    display_name: Display
+    label: Display
     stem: display
     abbrev: fp
     icon: monitor
   - id: interactive-display
-    display_name: Interactive Display
+    label: Interactive Display
     parent_id: display
   - id: projector
-    display_name: Projector
+    label: Projector
     stem: projector
     abbrev: proj
     icon: projector
   - id: screen
-    display_name: Screen
+    label: Screen
     stem: screen
     abbrev: scr
     icon: tv
   - id: presentation-switcher
-    display_name: Presentation Switcher
+    label: Presentation Switcher
     stem: switcher
     abbrev: sw
     icon: shuffle
   - id: video-bar
-    display_name: Video Bar
+    label: Video Bar
     stem: videobar
     abbrev: vb
     icon: video
   - id: dsp
-    display_name: DSP
+    label: DSP
     stem: dsp
     abbrev: dsp
     icon: cpu
   - id: amplifier
-    display_name: Amplifier
+    label: Amplifier
     stem: amp
     abbrev: amp
     icon: speaker
   - id: mic
-    display_name: Microphone
+    label: Microphone
     stem: mic
     abbrev: mic
     icon: mic
   - id: wireless-mic
-    display_name: Wireless Microphone
+    label: Wireless Microphone
     parent_id: mic
   - id: ceiling-mic
-    display_name: Ceiling Microphone
+    label: Ceiling Microphone
     parent_id: mic
   - id: boundary-mic
-    display_name: Boundary Microphone
+    label: Boundary Microphone
     parent_id: mic
   - id: camera
-    display_name: Camera
+    label: Camera
     stem: camera
     abbrev: cam
     icon: camera
   - id: codec
-    display_name: Codec
+    label: Codec
     stem: codec
     abbrev: cdc
     icon: video
   - id: control-processor
-    display_name: Control Processor
+    label: Control Processor
     stem: processor
     abbrev: cp
     icon: cpu
   - id: touch-panel
-    display_name: Touch Panel
+    label: Touch Panel
     stem: panel
     abbrev: tp
     icon: touchpad
   - id: dante-card
-    display_name: Dante Card
+    label: Dante Card
     stem: dante
     abbrev: dc
     icon: network
   - id: generic-device
-    display_name: Generic Device
+    label: Generic Device
     stem: device
     abbrev: dev
     icon: box
   - id: generic-app
-    display_name: Generic App
+    label: Generic App
     stem: app
     abbrev: app
     icon: app-window
   - id: generic-service
-    display_name: Generic Service
+    label: Generic Service
     stem: service
     abbrev: svc
     icon: server

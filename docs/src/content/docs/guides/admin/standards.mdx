@@ -9,7 +9,7 @@ import SeededSet from '../../../../components/SeededSet.astro';
 is the directory of **standards**: the blueprints your systems are built against. A **Huddle Room**, a
 **Classroom**, an **Auditorium** are standards; the meeting room on the third floor is a
 [system](/guides/operator/inventory/) that **conforms** to one. Each row shows the **name** (the
-operator-facing name, for example `huddle-room`), the **display name**, its **parent
+operator-facing name, for example `huddle-room`), the **label**, its **parent
 standard** if it is a variant, and its **origin**. A standard also carries an `id`, a uuid minted
 by the database, the internal address the handle resolves to
 ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
@@ -36,10 +36,10 @@ classifier is its own registry rather than a use of a standard's own parent-vari
   **parent standard** (a Large Classroom under Classroom). A standard with no parent is a base
   standard.
 - **New standard** (with `standard:create`, an admin permission) opens a create drawer: give it a
-  **name** (unique tenant-wide, e.g. `lecture-hall`) and a **display name**, and
+  **name** (unique tenant-wide, e.g. `lecture-hall`) and a **label**, and
   optionally pick a **parent standard**. An unknown parent is refused (422).
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `standard:update`) edits the
-  display name and parent; the **name** is fixed, since a catalog row carries no rename. **Delete** (with
+  label and parent; the **name** is fixed, since a catalog row carries no rename. **Delete** (with
   `standard:delete`) removes the row, behind
   a confirm.
 - **Delete is refused (409) while a system still conforms to it.** Repoint or remove those systems
@@ -107,7 +107,7 @@ no overlap.
 
 The standard's blade carries a **Roles** panel beside its contract. Each role has:
 
-- a **name** (its address within the standard, e.g. `room-mic`) and a **display name**;
+- a **name** (its address within the standard, e.g. `room-mic`) and a **label**;
 - a **quorum**, how many components should fill it. Two ceiling mics is **one role with quorum 2**, not
   two roles. The minimum is one, since a role no component need fill is not a role;
 - **accepted types**, the [component types](/architecture/core-entities/#catalog-reference-data-component_type)
@@ -151,7 +151,7 @@ themselves they are **seeded only if absent**, so retuning quorum to what your r
 survives the next restart.
 
 From the CLI: `omniglass standard role list <id>`,
-`omniglass standard role update <id> <role> --display-name <label> --quorum <n> --accepted-types <types>
+`omniglass standard role update <id> <role> --label <label> --quorum <n> --accepted-types <types>
 --pinned-products <ids> --impact <outage|degraded|none>`, and `omniglass standard role delete <id> <role>`.
 
 ## Staff a system against its standard

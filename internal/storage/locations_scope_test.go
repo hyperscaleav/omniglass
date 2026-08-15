@@ -70,18 +70,18 @@ func TestLocationScopeCRUD(t *testing.T) {
 	}
 
 	// The three-way split on update. Readable (hq scope) but no action scope = 403.
-	_, err = gw.UpdateLocation(ctx, "", "hq-b1", storage.LocationPatch{DisplayName: strptr("B1")}, readHQ, scope.Set{})
+	_, err = gw.UpdateLocation(ctx, "", "hq-b1", storage.LocationPatch{Label: strptr("B1")}, readHQ, scope.Set{})
 	if !errors.Is(err, storage.ErrLocationForbidden) {
 		t.Errorf("update in-read not-in-action = %v, want ErrLocationForbidden", err)
 	}
 	// Outside read scope entirely = non-disclosing 404, even with an action scope.
-	_, err = gw.UpdateLocation(ctx, "", "lab", storage.LocationPatch{DisplayName: strptr("X")}, readHQ, readHQ)
+	_, err = gw.UpdateLocation(ctx, "", "lab", storage.LocationPatch{Label: strptr("X")}, readHQ, readHQ)
 	if !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Errorf("update out-of-read = %v, want ErrLocationNotFound", err)
 	}
 	// Fully scoped update succeeds and returns the new shape.
-	updated, err := gw.UpdateLocation(ctx, "", "hq-b1", storage.LocationPatch{DisplayName: strptr("Building One")}, all, all)
-	if err != nil || updated.DisplayName != "Building One" {
+	updated, err := gw.UpdateLocation(ctx, "", "hq-b1", storage.LocationPatch{Label: strptr("Building One")}, all, all)
+	if err != nil || updated.Label != "Building One" {
 		t.Fatalf("scoped update = %+v, err %v", updated, err)
 	}
 

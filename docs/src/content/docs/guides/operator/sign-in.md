@@ -1,6 +1,6 @@
 ---
 title: Sign in and your profile
-description: "Getting into the console with a password or a bearer token, and managing your own display name, picture, and password."
+description: "Getting into the console with a password or a bearer token, and managing your own label, picture, and password."
 screenshots:
   - id: sign-in
     path: /web/login
@@ -29,7 +29,7 @@ The first owner is created on the server with
 Click your name in the sidebar footer to open **Your profile**. It is self-service: you edit
 only your own account, whatever your role.
 
-- **Profile.** Change your display name; it drives how you appear in the console (the sidebar
+- **Profile.** Change your label; it drives how you appear in the console (the sidebar
   label and the initials avatar). Your username and email are set by an administrator, not you,
   and are shown read-only.
 - **Profile picture.** The avatar at the top of the panel shows your picture when you have one and

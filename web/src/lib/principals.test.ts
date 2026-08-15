@@ -52,12 +52,12 @@ describe("principals data layer", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ id: "p1", kind: "human", human: { username: "renamed" }, grants: [] }, 200),
     );
-    const out = await updatePrincipal("p1", { username: "renamed", display_name: "New" });
+    const out = await updatePrincipal("p1", { username: "renamed", label: "New" });
     expect(out.human?.username).toBe("renamed");
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("PATCH");
     expect(req.url).toContain("/api/v1/principals/p1");
-    expect(await req.json()).toMatchObject({ username: "renamed", display_name: "New" });
+    expect(await req.json()).toMatchObject({ username: "renamed", label: "New" });
   });
 
   it("POSTs a grant to the principal's grants path", async () => {
@@ -92,34 +92,34 @@ describe("principals data layer", () => {
     expect(calls[1]).toContain("/api/v1/principals/p1:enable");
   });
 
-  it("principalName prefers display name, then username, then the service name", () => {
+  it("principalName prefers label, then username, then the service name", () => {
     const human = (h: Partial<Principal["human"]>): Principal => ({ id: "x", kind: "human", active: true, human: h as never, grants: [] });
-    expect(principalName(human({ username: "u", display_name: "Dee" }))).toBe("Dee");
+    expect(principalName(human({ username: "u", label: "Dee" }))).toBe("Dee");
     expect(principalName(human({ username: "u" }))).toBe("u");
     expect(principalName({ id: uuidFor("p-svc"), kind: "service", active: true, service: { name: "svc" }, grants: [] })).toBe("svc");
   });
 });
 
 // The role facets are the console's shared faceted search applied to the roles
-// catalog: name (display name or id substring, the default), id (exact), and
+// catalog: name (label or id substring, the default), id (exact), and
 // permission (a substring over the role's effective permission strings). These
 // pin the filtering behavior the FilterBar/ListShell drives, independent of the
 // page render.
 const role = (p: Partial<Role>): Role => ({ id: p.id ?? "x", name: p.id ?? "x", official: true, permissions: [], inherits: [], ...p });
 
 const roles: Role[] = [
-  role({ id: "viewer", display_name: "Viewer", effective_permissions: ["*:read"] }),
-  role({ id: "operator", display_name: "Operator", effective_permissions: ["*:read", "alarm:ack"] }),
-  role({ id: "admin", display_name: "Administrator", effective_permissions: ["*:read", "principal:*", "audit:read:admin"] }),
-  role({ id: "owner", display_name: "Owner", effective_permissions: [">"] }),
+  role({ id: "viewer", label: "Viewer", effective_permissions: ["*:read"] }),
+  role({ id: "operator", label: "Operator", effective_permissions: ["*:read", "alarm:ack"] }),
+  role({ id: "admin", label: "Administrator", effective_permissions: ["*:read", "principal:*", "audit:read:admin"] }),
+  role({ id: "owner", label: "Owner", effective_permissions: [">"] }),
 ];
 
 const matched = (chips: Chip[]): string[] => roles.filter(buildPredicate(roleFilterKeys, chips)).map((r) => r.id);
 
 describe("roleFilterKeys", () => {
-  it("filters by name (display name or id substring)", () => {
+  it("filters by name (label or id substring)", () => {
     expect(matched([{ key: "name", op: "contains", values: ["op"] }])).toEqual(["operator"]);
-    // The display name matches even when the id would not.
+    // The label matches even when the id would not.
     expect(matched([{ key: "name", op: "contains", values: ["admini"] }])).toEqual(["admin"]);
   });
   it("filters by id (exact)", () => {

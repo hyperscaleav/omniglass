@@ -145,7 +145,7 @@ func TestALocationGrantWritesNoSystem(t *testing.T) {
 
 	// Edit, rename, move: readable, so the read half resolves and the action half
 	// does not, which is the 403 side of the read-then-action split.
-	f.c.do(f.floored, http.MethodPatch, "/systems/av", map[string]any{"display_name": "Renamed"}, http.StatusForbidden)
+	f.c.do(f.floored, http.MethodPatch, "/systems/av", map[string]any{"label": "Renamed"}, http.StatusForbidden)
 	f.c.do(f.floored, http.MethodPost, "/systems/av:rename", map[string]any{"name": "av-renamed"}, http.StatusForbidden)
 	f.c.do(f.floored, http.MethodPost, "/systems/av:move", map[string]any{"location": "annex"}, http.StatusForbidden)
 
@@ -161,7 +161,7 @@ func TestALocationGrantWritesNoSystem(t *testing.T) {
 	f.c.do(f.owner, http.MethodPost, "/systems", map[string]any{
 		"name": "av-2", "system_type_id": "board", "location": "annex",
 	}, http.StatusCreated)
-	f.c.do(f.owner, http.MethodPatch, "/systems/av", map[string]any{"display_name": "Renamed"}, http.StatusOK)
+	f.c.do(f.owner, http.MethodPatch, "/systems/av", map[string]any{"label": "Renamed"}, http.StatusOK)
 	f.c.do(f.owner, http.MethodPost, "/systems/av:move", map[string]any{"location": "annex"}, http.StatusOK)
 	f.c.do(f.owner, http.MethodPut, "/systems/av/members/"+f.rackID, nil, http.StatusNoContent)
 }
@@ -237,7 +237,7 @@ func TestALocationGrantWritesNoComponentEither(t *testing.T) {
 
 	// Edit, rename, move: readable, so the read half resolves and the action
 	// half does not.
-	f.c.do(f.floored, http.MethodPatch, "/components/rack", map[string]any{"display_name": "Renamed"}, http.StatusForbidden)
+	f.c.do(f.floored, http.MethodPatch, "/components/rack", map[string]any{"label": "Renamed"}, http.StatusForbidden)
 	f.c.do(f.floored, http.MethodPost, "/components/rack:rename", map[string]any{"name": "rack-renamed"}, http.StatusForbidden)
 	f.c.do(f.floored, http.MethodPost, "/components/rack:move", map[string]any{"location": "annex"}, http.StatusForbidden)
 
@@ -246,13 +246,13 @@ func TestALocationGrantWritesNoComponentEither(t *testing.T) {
 	f.c.do(f.floored, http.MethodPost, "/locations", map[string]any{
 		"name": "closet", "location_type": "room", "parent": "annex",
 	}, http.StatusCreated)
-	f.c.do(f.floored, http.MethodPatch, "/locations/east", map[string]any{"display_name": "Renamed root"}, http.StatusForbidden)
+	f.c.do(f.floored, http.MethodPatch, "/locations/east", map[string]any{"label": "Renamed root"}, http.StatusForbidden)
 
 	// The owner runs the identical bodies and is served on each, so every
 	// refusal above is a scope boundary rather than a broken route.
 	f.c.do(f.owner, http.MethodPost, "/components", map[string]any{
 		"name": "panel-a", "product": "generic-device", "location": "annex",
 	}, http.StatusCreated)
-	f.c.do(f.owner, http.MethodPatch, "/components/rack", map[string]any{"display_name": "Renamed"}, http.StatusOK)
+	f.c.do(f.owner, http.MethodPatch, "/components/rack", map[string]any{"label": "Renamed"}, http.StatusOK)
 	f.c.do(f.owner, http.MethodPost, "/components/rack:move", map[string]any{"location": "annex"}, http.StatusOK)
 }

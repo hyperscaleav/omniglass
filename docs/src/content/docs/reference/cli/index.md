@@ -241,11 +241,11 @@ Update your own profile
 omniglass auth update-profile [flags]
 ```
 
-Updates the caller's own display name (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).
+Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | Your display name; empty clears it |
+| `--label` | string | (none) | Your label; empty clears it |
 
 Example:
 
@@ -263,8 +263,8 @@ omniglass bootstrap <username> [flags]
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | owner display name (optional) |
 | `--email` | string | (none) | owner email (optional) |
+| `--label` | string | (none) | owner label (optional) |
 | `--password` | string | (none) | owner password, so the owner can sign in to the console (optional) |
 | `--ttl` | duration | `2160h0m0s` | how long the bootstrap token is valid before it expires (max 365 days) |
 
@@ -285,7 +285,7 @@ Registers a custom command type (official=false). The name must be a single keba
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the command does |
-| `--display-name` | string | (none) | A human label |
+| `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The command type name (lowercase kebab) |
 | `--params-schema` | string | (none) | A JSON Schema fragment for the params |
 | `--settle-window-seconds` | int | `0` | The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so. |
@@ -359,7 +359,7 @@ Patches a custom command type's label, description, params schema, settle window
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the command does |
-| `--display-name` | string | (none) | A human label |
+| `--label` | string | (none) | A human label |
 | `--params-schema` | string | (none) | A JSON Schema fragment (replaces wholesale) |
 | `--settle-window-seconds` | int | `0` | The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately) |
 | `--target-metric-type` | string | (none) | The metric this command sets (empty clears it; a non-empty arm clears the other) |
@@ -515,8 +515,8 @@ Creates a component, optionally under a parent (a root needs an all-scoped grant
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--expected-name` | string | (none) | The name a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422. |
+| `--label` | string | (none) | What an operator reads; the name is the address |
 | `--location` | string | (none) | Location name this component is placed at |
 | `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type. |
 | `--parent` | string | (none) | Parent component name; omit for a root component |
@@ -995,11 +995,11 @@ Update a component
 omniglass component update <name> [flags]
 ```
 
-Patches a component's display_name or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+Patches a component's label or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | A new operator-facing label |
+| `--label` | string | (none) | A new operator-facing label |
 | `--product` | string | (none) | Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow. |
 
 Example:
@@ -1024,10 +1024,10 @@ Creates a custom (non-official) component_type, optionally under a parent. Gated
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--abbrev` | string | (none) | A compact form of display_name; omit to inherit the parent's |
+| `--abbrev` | string | (none) | A compact form of label; omit to inherit the parent's |
 | `--default-tags` | string | (none) | Tags every instance of this type starts with |
-| `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--icon` | string | (none) | A glyph key; omit to inherit the parent's |
+| `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--label-rule` | string | (none) | A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422. |
 | `--name` | string | (none) | The globally unique name |
 | `--parent-id` | string | (none) | The parent component_type, by name or uuid; omit for a root type |
@@ -1036,7 +1036,7 @@ Creates a custom (non-official) component_type, optionally under a parent. Gated
 Example:
 
 ```sh
-omniglass component-type create --display-name display_name --name name
+omniglass component-type create --label label --name name
 ```
 
 ### `omniglass component-type delete`
@@ -1063,7 +1063,7 @@ List component types
 omniglass component-type list
 ```
 
-Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
+Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
 
 Example:
 
@@ -1095,14 +1095,14 @@ Update a component type
 omniglass component-type update <id> [flags]
 ```
 
-Patches a component_type's display_name, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.
+Patches a component_type's label, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--abbrev` | string | (none) | A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again |
 | `--default-tags` | string | (none) | Replaces the default-tag set; omit to leave unchanged |
-| `--display-name` | string | (none) | A new operator-facing label |
 | `--icon` | string | (none) | A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again |
+| `--label` | string | (none) | A new operator-facing label |
 | `--label-rule` | string | (none) | A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse. |
 | `--stem` | string | (none) | A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422). |
 
@@ -1128,14 +1128,14 @@ Creates a custom (non-official) driver. Gated by driver:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | What an operator reads in pickers and lists |
+| `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--name` | string | (none) | The globally unique name; renameable |
 | `--version` | string | (none) | A free-form version string, e.g. 1.0.0 |
 
 Example:
 
 ```sh
-omniglass driver create --display-name display_name --name name
+omniglass driver create --label label --name name
 ```
 
 ### `omniglass driver delete`
@@ -1178,7 +1178,7 @@ List drivers
 omniglass driver list
 ```
 
-Lists the driver registry, ordered alphabetically by display name. Populates the driver picker on the product form. Gated by driver:read.
+Lists the driver registry, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
 
 Example:
 
@@ -1194,11 +1194,11 @@ Update a driver
 omniglass driver update <id> [flags]
 ```
 
-Patches a custom driver's display_name or version. Official drivers are read-only (422). Gated by driver:update.
+Patches a custom driver's label or version. Official drivers are read-only (422). Gated by driver:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | A new operator-facing label |
+| `--label` | string | (none) | A new operator-facing label |
 | `--version` | string | (none) | A new version string, e.g. 1.0.1 |
 
 Example:
@@ -1224,7 +1224,7 @@ Registers a custom event type (official=false). The name must be a single kebab 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the occurrence means |
-| `--display-name` | string | (none) | A human label |
+| `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The event type name (lowercase kebab) |
 | `--payload-schema` | string | (none) | A JSON Schema fragment for the payload |
 
@@ -1295,7 +1295,7 @@ Patches a custom event type's label, description, or payload schema (a nil field
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the occurrence means |
-| `--display-name` | string | (none) | A human label |
+| `--label` | string | (none) | A human label |
 | `--payload-schema` | string | (none) | A JSON Schema fragment (replaces wholesale) |
 
 Example:
@@ -1322,7 +1322,7 @@ Stores the uploaded bytes as a content-addressed blob (identical bytes dedup to 
 |---|---|---|---|
 | `--content` | string | (none) | The file bytes, base64-encoded |
 | `--content-type` | string | (none) | The MIME type used to serve the file |
-| `--name` | string | (none) | The file's display name (a label, no path separators) |
+| `--name` | string | (none) | The file's filename, which is already the label an operator reads (no path separators) |
 | `--sensitive` | bool | `false` | Admin-only visibility; defaults false. Setting true requires the admin tier |
 
 Example:
@@ -1545,8 +1545,8 @@ Creates a location, optionally under a parent (a root needs an all-scoped grant)
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--expected-name` | string | (none) | The name a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the location_type's name rule moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422. |
+| `--label` | string | (none) | What an operator reads; the name is the address |
 | `--location-type` | string | (none) | The location_type, by name or uuid (campus, building, ...) |
 | `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule. |
 | `--parent` | string | (none) | Parent location name; omit for a root location |
@@ -1876,11 +1876,11 @@ Update a location
 omniglass location update <name> [flags]
 ```
 
-Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+Patches a location's label or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | A new operator-facing label |
+| `--label` | string | (none) | A new operator-facing label |
 | `--location-type` | string | (none) | Re-types the location: a location_type, by name or uuid |
 
 Example:
@@ -1906,8 +1906,8 @@ Creates a custom (non-official) location_type, optionally with the label_rule lo
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--allowed-parent-types` | string | (none) | location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained |
-| `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--icon` | string | (none) | A glyph key; the console falls back to map-pin when empty |
+| `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--label-rule` | string | (none) | The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile |
 | `--name` | string | (none) | The globally unique name (e.g. wing); "root" is reserved |
 | `--name-rule` | string | (none) | How the platform NAMES locations of this type; omit to have an operator name every one of them. Refused (422) if it cannot mint a legal name |
@@ -1915,7 +1915,7 @@ Creates a custom (non-official) location_type, optionally with the label_rule lo
 Example:
 
 ```sh
-omniglass location-type create --display-name display_name --name name
+omniglass location-type create --label label --name name
 ```
 
 ### `omniglass location-type delete`
@@ -1942,7 +1942,7 @@ List location types
 omniglass location-type list
 ```
 
-Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by location_type:read.
+Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.
 
 Example:
 
@@ -2088,13 +2088,13 @@ Update a location type
 omniglass location-type update <id> [flags]
 ```
 
-Patches a location_type's display_name, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update.
+Patches a location_type's label, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--allowed-parent-types` | string | (none) | Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained |
-| `--display-name` | string | (none) | A new operator-facing label |
 | `--icon` | string | (none) | A new glyph key; the console falls back to map-pin when empty |
+| `--label` | string | (none) | A new operator-facing label |
 | `--label-rule` | string | (none) | A new label template for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels |
 | `--name-rule` | string | (none) | A new name rule for locations of this type; omit to leave unchanged, or name name_rule in update_mask with no rule here to CLEAR it back to operator-named. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row |
 | `--update-mask` | string | (none) | Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (name_rule back to operator-named); send ["*"] for full replacement. A field this resource does not patch is a 422 naming it |
@@ -2123,7 +2123,7 @@ Registers a custom metric type (official=false). The name must be a valid metric
 |---|---|---|---|
 | `--data-type` | string | (none) | The value type; a metric is always a number |
 | `--description` | string | (none) | What the series measures |
-| `--display-name` | string | (none) | A human label |
+| `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The metric type name (lowercase kebab) |
 | `--precision` | int | `0` | Decimal places a rendered value keeps |
 | `--unit` | string | (none) | The display unit of the series (ms, dB, percent) |
@@ -2195,7 +2195,7 @@ Patches a custom metric type's label, description, unit, or precision (a nil fie
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the series measures |
-| `--display-name` | string | (none) | A human label |
+| `--label` | string | (none) | A human label |
 | `--precision` | int | `0` | Decimal places a rendered value keeps |
 | `--unit` | string | (none) | The display unit of the series |
 
@@ -2251,7 +2251,7 @@ Registers an edge node server-side (day-one enrollment: create, then :enroll to 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | Free-form operator notes about the node |
-| `--display-name` | string | (none) | Operator label; falls back to the name when empty |
+| `--label` | string | (none) | Operator label; falls back to the name when empty |
 | `--location` | string | (none) | Optional location the node sits in, by name or id (descriptive placement, not scope) |
 | `--name` | string | (none) | Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot |
 
@@ -2426,12 +2426,12 @@ Update a node
 omniglass node update <name> [flags]
 ```
 
-Patches a node's display name, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.
+Patches a node's label, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | New free-form operator notes |
-| `--display-name` | string | (none) | A new operator-facing label |
+| `--label` | string | (none) | A new operator-facing label |
 | `--location` | string | (none) | Set the node's location by name or id, or "" to clear it |
 
 Example:
@@ -2492,8 +2492,8 @@ Creates a human principal with an optional initial password. Gated by principal:
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | What an operator reads in lists; falls back to the username |
 | `--email` | string | (none) | Contact email for the account |
+| `--label` | string | (none) | What an operator reads in lists; falls back to the username |
 | `--password` | string | (none) | Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in |
 | `--username` | string | (none) | Unique sign-in name (lowercase letters, digits, and . _ -) |
 
@@ -2788,12 +2788,12 @@ Update a principal
 omniglass principal update <id> [flags]
 ```
 
-Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.
+Updates a human principal's label, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | Display name; empty clears it |
 | `--email` | string | (none) | Email; empty clears it |
+| `--label` | string | (none) | Label; empty clears it |
 | `--username` | string | (none) | Sign-in name (lowercase letters, digits, and . _ -); renaming is safe |
 
 Example:
@@ -2819,7 +2819,7 @@ Creates a principal group. Gated by principal_group:create (all-scope). A duplic
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | Free-form notes on what the group is for |
-| `--display-name` | string | (none) | What an operator reads in lists |
+| `--label` | string | (none) | What an operator reads in lists |
 | `--name` | string | (none) | Unique group name (lowercase letters, digits, and hyphens) |
 
 Example:
@@ -3024,7 +3024,7 @@ Updates a group's presentational fields. The name is not patchable: renaming is 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | Description; empty clears it |
-| `--display-name` | string | (none) | Display name; empty clears it |
+| `--label` | string | (none) | Label; empty clears it |
 
 Example:
 
@@ -3049,10 +3049,10 @@ Creates a custom (non-official) product, classified under a component_type. kind
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--component-type` | string | (none) | The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically. |
-| `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--driver-id` | string | (none) | The driver that talks to it, by handle or uuid |
 | `--icon` | string | (none) | A product-level icon override; unset inherits the component_type's icon |
 | `--kind` | string | (none) | What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly. |
+| `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--label-rule` | string | (none) | A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422. |
 | `--name` | string | (none) | The globally unique name; renameable |
 | `--parent-product-id` | string | (none) | The parent product, by handle or uuid |
@@ -3061,7 +3061,7 @@ Creates a custom (non-official) product, classified under a component_type. kind
 Example:
 
 ```sh
-omniglass product create --component-type component_type --display-name display_name --kind kind --name name
+omniglass product create --component-type component_type --kind kind --label label --name name
 ```
 
 ### `omniglass product delete`
@@ -3104,7 +3104,7 @@ List products
 omniglass product list
 ```
 
-Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
 
 Example:
 
@@ -3234,15 +3234,15 @@ Update a product
 omniglass product update <id> [flags]
 ```
 
-Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
+Patches a custom product's label, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--component-type` | string | (none) | Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears |
-| `--display-name` | string | (none) | A new operator-facing label |
 | `--driver-id` | string | (none) | A new driver, by handle or uuid |
 | `--icon` | string | (none) | A new icon override |
 | `--kind` | string | (none) | A new product class |
+| `--label` | string | (none) | A new operator-facing label |
 | `--label-rule` | string | (none) | A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse. |
 | `--parent-product-id` | string | (none) | A new parent product, by handle or uuid |
 | `--vendor-id` | string | (none) | A new vendor, by handle or uuid |
@@ -3271,7 +3271,7 @@ Registers a custom property (official=false). The name must be a valid property 
 |---|---|---|---|
 | `--data-type` | string | (none) | The value type; a numeric signal is a metric type |
 | `--description` | string | (none) | What the property means |
-| `--display-name` | string | (none) | A human label |
+| `--label` | string | (none) | A human label |
 | `--name` | string | (none) | The property name (lowercase kebab) |
 | `--validation` | string | (none) | A JSON Schema fragment constraining the value |
 
@@ -3342,7 +3342,7 @@ Patches a custom property's label, description, or validation (a nil field is un
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--description` | string | (none) | What the property means |
-| `--display-name` | string | (none) | A human label |
+| `--label` | string | (none) | A human label |
 | `--validation` | string | (none) | A JSON Schema fragment (replaces wholesale) |
 
 Example:
@@ -3696,14 +3696,14 @@ Creates a custom (non-official) standard, optionally as a variant of another. Ga
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | What an operator reads in pickers and lists |
+| `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--name` | string | (none) | The globally unique name; renameable |
 | `--parent-standard-id` | string | (none) | A standard this one is a variant of, by handle or uuid |
 
 Example:
 
 ```sh
-omniglass standard create --display-name display_name --name name
+omniglass standard create --label label --name name
 ```
 
 ### `omniglass standard delete`
@@ -3746,7 +3746,7 @@ List standards
 omniglass standard list
 ```
 
-Lists the standard catalog, ordered alphabetically by display name. A standard is the blueprint a system conforms to. Gated by standard:read.
+Lists the standard catalog, ordered alphabetically by label. A standard is the blueprint a system conforms to. Gated by standard:read.
 
 Example:
 
@@ -3919,8 +3919,8 @@ Declares a role every conforming system needs filled, or revises it in place (th
 | `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask |
 | `--alternate` | string | (none) | The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 |
 | `--capacity` | int | `0` | The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded |
-| `--display-name` | string | (none) | The role's human label; defaults to the role name on first declare |
 | `--impact` | string | (none) | What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
+| `--label` | string | (none) | The role's human label; defaults to the role name on first declare |
 | `--pinned-products` | string | (none) | If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask |
 | `--position-labels` | string | (none) | Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask |
 | `--quorum` | int | `0` | How many components must fill the role; one on first declare |
@@ -3940,11 +3940,11 @@ Update a standard
 omniglass standard update <id> [flags]
 ```
 
-Patches a custom standard's display_name or parent. Official standards are read-only (422). Gated by standard:update.
+Patches a custom standard's label or parent. Official standards are read-only (422). Gated by standard:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | A new operator-facing label |
+| `--label` | string | (none) | A new operator-facing label |
 | `--parent-standard-id` | string | (none) | A new variant parent, by handle or uuid |
 
 Example:
@@ -3991,8 +3991,8 @@ Creates a system, optionally under a parent (a root needs an all-scoped grant), 
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | What an operator reads; the name is the address |
 | `--expected-name` | string | (none) | The name a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the system_type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422. |
+| `--label` | string | (none) | What an operator reads; the name is the address |
 | `--location` | string | (none) | Location name this system is placed at |
 | `--name` | string | (none) | Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem. |
 | `--parent` | string | (none) | Parent system name; omit for a root system |
@@ -4474,8 +4474,8 @@ Declares a role directly on this system (how a one-off system gets roles at all,
 | `--accepted-types` | string | (none) | The component_types a filling component's product must be classified within (self or a descendant); replaces the accepted set wholesale when written, and an empty set accepts any type. Clearing it means naming accepted_types in update_mask |
 | `--alternate` | string | (none) | The choice/alternate this role joins, addressed as "choice-name/alternate-name" (#626). An empty string detaches the role, making it unconditional; an unknown choice or alternate is a 422 |
 | `--capacity` | int | `0` | The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded |
-| `--display-name` | string | (none) | The role's human label; defaults to the role name on first declare |
 | `--impact` | string | (none) | What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display |
+| `--label` | string | (none) | The role's human label; defaults to the role name on first declare |
 | `--pinned-products` | string | (none) | If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask |
 | `--position-labels` | string | (none) | Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask |
 | `--quorum` | int | `0` | How many components must fill the role; one on first declare |
@@ -4516,11 +4516,11 @@ Update a system
 omniglass system update <name> [flags]
 ```
 
-Patches a system's display_name, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | A new operator-facing label |
+| `--label` | string | (none) | A new operator-facing label |
 | `--standard-id` | string | (none) | A new standard, by handle or uuid; "" clears it (a one-off system) |
 | `--system-type-id` | string | (none) | A new system_type, by name or uuid; "" clears it (an unclassified system) |
 
@@ -4546,9 +4546,9 @@ Creates a custom (non-official) system_type, optionally under a parent and optio
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--abbrev` | string | (none) | A compact form of display_name; omit to inherit the parent's |
-| `--display-name` | string | (none) | What an operator reads in pickers and lists |
+| `--abbrev` | string | (none) | A compact form of label; omit to inherit the parent's |
 | `--icon` | string | (none) | A glyph key; omit to inherit the parent's |
+| `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--label-rule` | string | (none) | The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile |
 | `--name` | string | (none) | The globally unique name |
 | `--parent-id` | string | (none) | The parent system_type, by name or uuid; omit for a root type |
@@ -4557,7 +4557,7 @@ Creates a custom (non-official) system_type, optionally under a parent and optio
 Example:
 
 ```sh
-omniglass system-type create --display-name display_name --name name
+omniglass system-type create --label label --name name
 ```
 
 ### `omniglass system-type delete`
@@ -4584,7 +4584,7 @@ List system types
 omniglass system-type list
 ```
 
-Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.
+Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.
 
 Example:
 
@@ -4600,13 +4600,13 @@ Update a system type
 omniglass system-type update <id> [flags]
 ```
 
-Patches a custom system_type's display_name, stem, icon, abbrev, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /systems:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by system_type:update.
+Patches a custom system_type's label, stem, icon, abbrev, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /systems:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by system_type:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--abbrev` | string | (none) | A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again |
-| `--display-name` | string | (none) | A new operator-facing label |
 | `--icon` | string | (none) | A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again |
+| `--label` | string | (none) | A new operator-facing label |
 | `--label-rule` | string | (none) | A new label template for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels |
 | `--stem` | string | (none) | A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422). |
 
@@ -4926,9 +4926,9 @@ Creates a custom (non-official) vendor. Gated by vendor:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | What an operator reads in pickers and lists |
 | `--icon` | string | (none) | A glyph key, e.g. crestron-logo |
 | `--kind` | string | (none) | The role the organization plays |
+| `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--name` | string | (none) | The globally unique name; renameable |
 | `--support-phone` | string | (none) | The vendor's support line |
 | `--website` | string | (none) | The vendor's website (http or https) |
@@ -4936,7 +4936,7 @@ Creates a custom (non-official) vendor. Gated by vendor:create.
 Example:
 
 ```sh
-omniglass vendor create --display-name display_name --name name
+omniglass vendor create --label label --name name
 ```
 
 ### `omniglass vendor delete`
@@ -4979,7 +4979,7 @@ List vendors
 omniglass vendor list
 ```
 
-Lists the vendor registry, ordered alphabetically by display name. Populates the vendor picker on the product form. Gated by vendor:read.
+Lists the vendor registry, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
 
 Example:
 
@@ -4995,13 +4995,13 @@ Update a vendor
 omniglass vendor update <id> [flags]
 ```
 
-Patches a custom vendor's display_name, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.
+Patches a custom vendor's label, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--display-name` | string | (none) | A new operator-facing label |
 | `--icon` | string | (none) | A new glyph key |
 | `--kind` | string | (none) | A new organization role |
+| `--label` | string | (none) | A new operator-facing label |
 | `--support-phone` | string | (none) | A new support line |
 | `--website` | string | (none) | A new website (http or https) |
 

@@ -19,9 +19,9 @@ const contract: ProductProperty[] = [
 ];
 
 const catalog: PropertyRow[] = [
-  { name: "serial-number", data_type: "string", display_name: "Serial number", official: true },
-  { name: "firmware-version", data_type: "string", display_name: "Firmware version", official: true },
-  { name: "port_count", data_type: "int", display_name: "Port count", official: true },
+  { name: "serial-number", data_type: "string", label: "Serial number", official: true },
+  { name: "firmware-version", data_type: "string", label: "Firmware version", official: true },
+  { name: "port_count", data_type: "int", label: "Port count", official: true },
 ];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };

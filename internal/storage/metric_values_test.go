@@ -47,7 +47,7 @@ func TestEffectiveMetrics(t *testing.T) {
 
 	// A custom product with a two-metric contract: one with a default, one
 	// required with no default.
-	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "acme-dsp", DisplayName: "Acme DSP", Kind: "device"}); err != nil {
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "acme-dsp", Label: "Acme DSP", Kind: "device"}); err != nil {
 		t.Fatalf("create product: %v", err)
 	}
 	if _, err := gw.SetProductMetric(ctx, "", "acme-dsp", storage.ProductMetricSpec{

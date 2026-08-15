@@ -18,7 +18,7 @@ const roles: EffectiveRole[] = [
   // Inherited and short a component: the standard wants two, one is in place.
   {
     name: "table-mic",
-    display_name: "Table microphone",
+    label: "Table microphone",
     quorum: 2,
     impact: "degraded",
     accepted_types: ["video-bar"],
@@ -33,7 +33,7 @@ const roles: EffectiveRole[] = [
   // Inherited and staffed: no marker, nothing wanted.
   {
     name: "main-display",
-    display_name: "Main display",
+    label: "Main display",
     quorum: 1,
     impact: "outage",
     accepted_types: ["display"],
@@ -48,7 +48,7 @@ const roles: EffectiveRole[] = [
   // Declared on this system, not by its standard.
   {
     name: "spare-panel",
-    display_name: "Spare panel",
+    label: "Spare panel",
     quorum: 1,
     impact: "none",
     accepted_types: ["touch-panel"],
@@ -62,11 +62,11 @@ const roles: EffectiveRole[] = [
   },
 ];
 
-const system: System = { id: uuidFor("s-1"), name: "boardroom", display_name: "Boardroom", member_count: 3 };
+const system: System = { id: uuidFor("s-1"), name: "boardroom", label: "Boardroom", member_count: 3 };
 const components: Comp[] = [
-  { id: uuidFor("c-1"), name: "mic-1", display_name: "Ceiling Mic 1", system: "boardroom", system_count: 1 },
-  { id: uuidFor("c-2"), name: "panel-1", display_name: "Touch Panel 1", system: "boardroom", system_count: 1 },
-  { id: uuidFor("c-3"), name: "disp-1", display_name: "Display 1", system: "boardroom", system_count: 1 },
+  { id: uuidFor("c-1"), name: "mic-1", label: "Ceiling Mic 1", system: "boardroom", system_count: 1 },
+  { id: uuidFor("c-2"), name: "panel-1", label: "Touch Panel 1", system: "boardroom", system_count: 1 },
+  { id: uuidFor("c-3"), name: "disp-1", label: "Display 1", system: "boardroom", system_count: 1 },
 ];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
@@ -84,17 +84,17 @@ const health: EstateHealth = {
   systems: [],
   roles: [
     {
-      name: "table-mic", display_name: "Table microphone", impact: "degraded",
+      name: "table-mic", label: "Table microphone", impact: "degraded",
       quorum: 2, satisfying: 1, short: 1, spare: 0, impaired: true, active: true,
       assigned_to: ["mic-1"], down: [], alarms: [],
     },
     {
-      name: "main-display", display_name: "Main display", impact: "outage",
+      name: "main-display", label: "Main display", impact: "outage",
       quorum: 1, satisfying: 1, short: 0, spare: 0, impaired: false, active: true,
       assigned_to: ["disp-1"], down: [], alarms: [],
     },
     {
-      name: "spare-panel", display_name: "Spare panel", impact: "none",
+      name: "spare-panel", label: "Spare panel", impact: "none",
       quorum: 1, satisfying: 0, short: 1, spare: 0, impaired: true, active: true,
       assigned_to: [], down: [], alarms: [],
     },
@@ -120,7 +120,7 @@ function mount(opts: { rows?: EffectiveRole[]; canUpdate?: boolean; health?: Est
   return { ...result, qc };
 }
 
-// A role's row is the block its display name sits in.
+// A role's row is the block its label sits in.
 const roleRow = (label: HTMLElement) => label.closest("div.flex-col") as HTMLElement;
 
 describe("RolesPanel", () => {

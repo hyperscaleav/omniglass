@@ -36,7 +36,7 @@ function originBadge(official: boolean): JSX.Element {
 const columns: FlatColumn<EventTypeRow>[] = [
   // The shared identity cell under the one header word, "Name": a single kebab
   // token (call-started) on the same rule as every other name. The cell renders the
-  // display name above the name, which is why there is no longer a Label column.
+  // label above the name, which is why there is no longer a Label column.
   identityColumn<EventTypeRow>(),
   { key: "official", label: "Origin", width: "100px", sortVal: (r) => String(r.official), cell: (r) => originBadge(r.official) },
 ];
@@ -59,7 +59,7 @@ export default function EventTypes(): JSX.Element {
             { key: "name", type: "string", hint: "substring", get: (r) => `${entityLabel(r)} ${r.name}`, values: () => [] },
             { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
           ],
-          filterPlaceholder: "filter event types by name, display name…",
+          filterPlaceholder: "filter event types by name, label…",
           columns,
           empty: "No event types.",
           rowId: (r) => r.name,
@@ -80,7 +80,7 @@ export const eventTypeBlade: BladeDef = {
   Body: (p) => <EventTypeBladeBody name={p.id} />,
 };
 
-// The blade heading is the display name, falling back to the name, so opening a row
+// The blade heading is the label, falling back to the name, so opening a row
 // lands on the same words the row showed. It rendered the bare name before, so
 // clicking "ICMP RTT (avg)" opened a panel headed icmp.rtt-avg.
 function EventTypeBladeTitle(p: { name: string }): JSX.Element {
@@ -99,13 +99,13 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
   const edit = useBladeEdit();
   const row = useEventTypeRow(p.name);
   const [err, setErr] = createSignal<string | null>(null);
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
 
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const r = row();
-    setDisplayName(r?.display_name ?? "");
+    setLabel(r?.label ?? "");
     setDescription(r?.description ?? "");
     setErr(null);
   }));
@@ -129,7 +129,7 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateEventType(r.name, { display_name: displayName(), description: description() });
+      await updateEventType(r.name, { label: label(), description: description() });
       await qc.invalidateQueries({ queryKey: EVENT_TYPES_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -159,10 +159,10 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
           <BladeField
-            bind="display_name"
-            value={() => r().display_name ?? ""}
-            draft={displayName}
-            onInput={setDisplayName}
+            bind="label"
+            value={() => r().label ?? ""}
+            draft={label}
+            onInput={setLabel}
           />
           <BladeField
             label="Description"
@@ -188,7 +188,7 @@ function EventTypeBladeBody(p: { name: string }): JSX.Element {
 export function CreateEventTypeForm(p: { onCreated: (r: EventTypeRow) => void }): JSX.Element {
   const qc = useQueryClient();
   const [name, setName] = createSignal("");
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
@@ -207,7 +207,7 @@ export function CreateEventTypeForm(p: { onCreated: (r: EventTypeRow) => void })
     try {
       const created = await createEventType({
         name: name().trim(),
-        display_name: displayName().trim() || undefined,
+        label: label().trim() || undefined,
         description: description().trim() || undefined,
       });
       await qc.invalidateQueries({ queryKey: EVENT_TYPES_KEY });
@@ -227,8 +227,8 @@ export function CreateEventTypeForm(p: { onCreated: (r: EventTypeRow) => void })
       <FieldRow bind="name" hint="A lowercase kebab name, e.g. call-started or cable-unplugged.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="call-started" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
-      <FieldRow bind="display_name">
-        <input class="input input-bordered w-full" value={displayName()} placeholder="Call started" onInput={(e) => setDisplayName(e.currentTarget.value)} />
+      <FieldRow bind="label">
+        <input class="input input-bordered w-full" value={label()} placeholder="Call started" onInput={(e) => setLabel(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Description">
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />

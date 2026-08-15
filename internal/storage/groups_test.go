@@ -74,7 +74,7 @@ func TestGroupGrantsInheritScopeAndPerms(t *testing.T) {
 		t.Fatalf("bob should start with no grants, got %+v", got.Grants)
 	}
 
-	grp, err := gw.CreateGroup(ctx, owner.ID, storage.GroupSpec{Name: "field-crew", DisplayName: "Field Crew"}, all)
+	grp, err := gw.CreateGroup(ctx, owner.ID, storage.GroupSpec{Name: "field-crew", Label: "Field Crew"}, all)
 	if err != nil {
 		t.Fatalf("create group: %v", err)
 	}

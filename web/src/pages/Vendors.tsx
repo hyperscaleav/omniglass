@@ -69,7 +69,7 @@ export default function Vendors() {
   const makes = useQuery(() => ({ queryKey: VENDORS_KEY, queryFn: listVendors }));
 
   const rows = createMemo(() =>
-    [...(makes.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.name.localeCompare(b.name)),
+    [...(makes.data ?? [])].sort((a, b) => a.label.localeCompare(b.label) || a.name.localeCompare(b.name)),
   );
 
   return (
@@ -123,7 +123,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
   const edit = useBladeEdit();
   const row = useVendorRow(p.id);
   const [err, setErr] = createSignal<string | null>(null);
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [kind, setKind] = createSignal<VendorKind>("manufacturer");
   const [icon, setIcon] = createSignal("");
   const [supportPhone, setSupportPhone] = createSignal("");
@@ -132,7 +132,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const r = row();
-    setDisplayName(r?.display_name ?? "");
+    setLabel(r?.label ?? "");
     setKind(r?.kind ?? "manufacturer");
     setIcon(r?.icon ?? "");
     setSupportPhone(r?.support_phone ?? "");
@@ -160,7 +160,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
     setErr(null);
     try {
       await updateVendor(r.name, {
-        display_name: displayName(),
+        label: label(),
         kind: kind(),
         icon: icon(),
         support_phone: supportPhone(),
@@ -196,10 +196,10 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <BladeField
-            bind="display_name"
-            value={() => r().display_name ?? ""}
-            draft={displayName}
-            onInput={setDisplayName}
+            bind="label"
+            value={() => r().label ?? ""}
+            draft={label}
+            onInput={setLabel}
           />
           <BladeField label="Kind" read={kindBadge(r().kind)}>
             <select class="select select-bordered w-full" value={kind()} onChange={(e) => setKind(e.currentTarget.value as VendorKind)}>
@@ -246,7 +246,7 @@ function VendorBladeBody(p: { id: string }): JSX.Element {
 // support phone, and website are optional.
 export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Element {
   const qc = useQueryClient();
-  // Display name leads and the name follows it, stopping the moment the operator
+  // Label leads and the name follows it, stopping the moment the operator
   // edits the name by hand (lib/entities).
   const { display, setDisplay, name, setName, nameDerived } = createIdentity();
   const [kind, setKind] = createSignal<VendorKind>("manufacturer");
@@ -270,7 +270,7 @@ export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Ele
     try {
       const created = await createVendor({
         name: name().trim(),
-        display_name: display().trim(),
+        label: display().trim(),
         kind: kind(),
         icon: icon().trim() || undefined,
         support_phone: supportPhone().trim() || undefined,
@@ -290,12 +290,12 @@ export function CreateVendorForm(p: { onCreated: (v: Vendor) => void }): JSX.Ele
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="display_name" hint="What an operator reads, e.g. Crestron.">
+      <FieldRow bind="label" hint="What an operator reads, e.g. Crestron.">
         <input class="input input-bordered w-full" value={display()} placeholder="Crestron" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow
         bind="name"
-        hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, the address the API and CLI accept."}
+        hint={nameDerived() ? "Derived from the label. Edit to set your own." : "A kebab name, the address the API and CLI accept."}
       >
         <input class="input input-bordered w-full font-data" value={name()} placeholder="crestron" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>

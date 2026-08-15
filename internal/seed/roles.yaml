@@ -3,16 +3,16 @@
 # comma-separated; a wildcard stands alone. inherits names parent role ids.
 # Inheritance, wildcard expansion, and the :read floor are resolved at runtime in
 # the role index, not stored expanded here. A release may patch a default here.
-# display_name and description are operator-facing (the Roles view and the
+# label and description are operator-facing (the Roles view and the
 # grant-builder tooltips).
 roles:
   - id: viewer
-    display_name: Viewer
+    label: Viewer
     description: Read-only access to everything. The floor every other role inherits.
     permissions:
       - "*:read"
   - id: operator
-    display_name: Operator
+    label: Operator
     description: >-
       Day-to-day operations: create or edit components, interfaces, secrets,
       variables, and the property, metric, event, and command catalogs, and issue
@@ -48,7 +48,7 @@ roles:
       # sensitive file needs the admin tier, which operator does not hold.
       - "file:create,delete"
   - id: deploy
-    display_name: Deploy
+    label: Deploy
     description: >-
       Integrator or field tech: create, update, rename, and move on locations,
       systems, and components, and no delete. A grant of it reaches ONE tier, the
@@ -67,7 +67,7 @@ roles:
       - "secret:read,reveal,create,update"
       - "file:create"
   - id: admin
-    display_name: Administrator
+    label: Administrator
     description: >-
       Manages the estate, users, roles, and grants: full create, update, and
       delete on locations, systems, and components, and on principals,
@@ -129,7 +129,7 @@ roles:
       - "standard:create,update,delete"
       - "tag:*"
   - id: owner
-    display_name: Owner
+    label: Owner
     description: >-
       Full control of everything, the break-glass superuser (the tail wildcard,
       so it covers every capability at every tier, including admin-sensitive ones

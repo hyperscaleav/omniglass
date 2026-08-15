@@ -103,7 +103,7 @@ export default function Locations() {
       // path (#627 Task 15); a location's own tree never crosses a plane
       // boundary the way component/system can, but it is wired through for
       // the same reason (one server-authoritative render, not two).
-      byUuid.set(l.id, { id: l.id, addr: l.name, display: entityLabel(l), generated: l.display_name_generated, pathRender: l.renders?.dash, children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
+      byUuid.set(l.id, { id: l.id, addr: l.name, display: entityLabel(l), generated: l.label_generated, pathRender: l.renders?.dash, children: [], type: l.location_type, actions: l.actions, tags: l.effective_tags ?? {}, raw: l });
     }
     const roots: LocNode[] = [];
     for (const l of list) {
@@ -227,7 +227,7 @@ export default function Locations() {
   }
 
   // LocationDetail: the entity accordion, read-only in view, editable in edit. Own
-  // fields (display name, location type) are editable; placement is fixed at
+  // fields (label, location type) are editable; placement is fixed at
   // creation. The Tags section is the shared TagAdder, whose write controls appear
   // only in edit (canUpdate gates them), so view carries no mutation. The full page
   // renders its own Save/Cancel/Edit footer from ctx.edit; a blade gets those from
@@ -327,7 +327,7 @@ export default function Locations() {
             // The pen's own value, always keyed (#693): see Systems.tsx's save
             // for why the empty string is the right thing to post from a locked
             // field.
-            display_name: displayPen.value(),
+            label: displayPen.value(),
             location_type: type() || undefined,
           });
           // The move is a second call, not a PATCH field (#627): placement left the
@@ -345,7 +345,7 @@ export default function Locations() {
           //
           // The invalidation is in a finally for the same reason. It used to sit
           // after the rename, so a 409 skipped it and the list went on rendering the
-          // display name the server had already accepted: the operator saw a total
+          // label the server had already accepted: the operator saw a total
           // failure for a half-committed save, and Cancel re-seeded the inputs from
           // that stale cache.
           // No hand-off navigate after a rename (#627 Task 15c): see
@@ -397,7 +397,7 @@ export default function Locations() {
               <FieldRow label="Location type" info="A location_type name.">
                 <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
                   <option value="" disabled>Select a type…</option>
-                  <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.display_name}</option>}</For>
+                  <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.label}</option>}</For>
                 </select>
               </FieldRow>
               <FieldRow
@@ -594,7 +594,7 @@ export default function Locations() {
         // An empty name is OMITTED rather than posted as "": omitted is
         // "generate one from the type's rule", where "" is a name of nothing
         // the API refuses against the entity-name pattern.
-        const created = await createLocation({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, location_type: type().trim(), display_name: displayPen.value().trim() || undefined, parent: parent() || undefined });
+        const created = await createLocation({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, location_type: type().trim(), label: displayPen.value().trim() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
         openInEdit(created.id);
         navigate(`/locations/${encodeURIComponent(created.id)}`);
@@ -626,7 +626,7 @@ export default function Locations() {
           >
             <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
               <option value="" disabled>Select a type…</option>
-              <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.display_name}</option>}</For>
+              <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.label}</option>}</For>
             </select>
           </FieldRow>
         </div>

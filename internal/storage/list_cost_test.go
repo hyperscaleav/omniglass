@@ -409,7 +409,7 @@ func TestListPrincipalsCostIsFlatInPageSize(t *testing.T) {
 
 	// One group holding a grant, so every member's effective grants include an
 	// inherited one and the read exercises both halves of the union.
-	grp, err := gw.CreateGroup(ctx, "", storage.GroupSpec{Name: "probes", DisplayName: "Probes"}, all)
+	grp, err := gw.CreateGroup(ctx, "", storage.GroupSpec{Name: "probes", Label: "Probes"}, all)
 	if err != nil {
 		t.Fatalf("create group: %v", err)
 	}
@@ -430,7 +430,7 @@ func TestListPrincipalsCostIsFlatInPageSize(t *testing.T) {
 	add := func(i int) {
 		t.Helper()
 		pr, err := gw.CreateHumanPrincipal(ctx, "", storage.HumanSpec{
-			Username: fmt.Sprintf("probe-%d", i), Email: fmt.Sprintf("probe-%d@example.test", i), DisplayName: "Probe",
+			Username: fmt.Sprintf("probe-%d", i), Email: fmt.Sprintf("probe-%d@example.test", i), Label: "Probe",
 		}, all)
 		if err != nil {
 			t.Fatalf("create principal %d: %v", i, err)
@@ -520,7 +520,7 @@ func TestListComponentTypesCostIsFlatInRegistryDepth(t *testing.T) {
 	for i := range widePage {
 		name := fmt.Sprintf("probe-type-%d", i)
 		if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-			Name: name, DisplayName: name, ParentID: mustComponentTypeID(t, gw, parent),
+			Name: name, Label: name, ParentID: mustComponentTypeID(t, gw, parent),
 		}); err != nil {
 			t.Fatalf("create component_type %d: %v", i, err)
 		}
@@ -547,7 +547,7 @@ func TestListSystemTypesCostIsFlatInRegistryDepth(t *testing.T) {
 	for i := range widePage {
 		name := fmt.Sprintf("probe-sys-type-%d", i)
 		if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-			Name: name, DisplayName: name, ParentID: mustSystemTypeID(t, gw, parent),
+			Name: name, Label: name, ParentID: mustSystemTypeID(t, gw, parent),
 		}); err != nil {
 			t.Fatalf("create system_type %d: %v", i, err)
 		}

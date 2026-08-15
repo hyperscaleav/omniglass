@@ -46,7 +46,7 @@ func TestCommandTypeAPI(t *testing.T) {
 
 	// Register a custom, settleable command type targeting a seeded property.
 	created := c.do(ownerTok, http.MethodPost, "/command-types", map[string]any{
-		"name": "set-volume", "display_name": "Set volume",
+		"name": "set-volume", "label": "Set volume",
 		"settle_window_seconds": 5, "target_property_type": "video-input",
 	}, http.StatusCreated)
 	var ct struct {
@@ -156,7 +156,7 @@ func TestCommandTypeAPI(t *testing.T) {
 	}
 
 	// An official (seeded) command type is read-only.
-	c.do(ownerTok, http.MethodPatch, "/command-types/set-input", map[string]any{"display_name": "x"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPatch, "/command-types/set-input", map[string]any{"label": "x"}, http.StatusConflict)
 	c.do(ownerTok, http.MethodDelete, "/command-types/reboot", nil, http.StatusConflict)
 
 	// An unknown command type is a 404.

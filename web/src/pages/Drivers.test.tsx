@@ -12,8 +12,8 @@ import { uuidFor } from "../lib/testids";
 // server is needed. Registry rows carry a uuid id and the name in
 // name (ADR-0062); the console addresses rows by the handle.
 const seed: Driver[] = [
-  { id: uuidFor("drv-snmp-generic"), name: "snmp-generic", display_name: "Generic SNMP", official: true, version: "1.0.0" },
-  { id: uuidFor("drv-acme-driver"), name: "acme-driver", display_name: "Acme Driver", official: false },
+  { id: uuidFor("drv-snmp-generic"), name: "snmp-generic", label: "Generic SNMP", official: true, version: "1.0.0" },
+  { id: uuidFor("drv-acme-driver"), name: "acme-driver", label: "Acme Driver", official: false },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -57,7 +57,7 @@ describe("Drivers identity column", () => {
     mount();
     await screen.findByText("Generic SNMP");
     expect(screen.getByRole("columnheader", { name: "Name" })).toBeInTheDocument();
-    expect(screen.queryByRole("columnheader", { name: /display name/i })).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: /label/i })).toBeNull();
   });
 });
 
@@ -67,7 +67,7 @@ describe("Drivers identity column", () => {
 describe("Drivers create derives the handle", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("derives the handle from the display name until the operator edits it", async () => {
+  it("derives the handle from the label until the operator edits it", async () => {
     mount();
     fireEvent.click(await screen.findByRole("button", { name: /new driver/i }));
     const display = screen.getByPlaceholderText("Generic SNMP") as HTMLInputElement;
@@ -75,13 +75,13 @@ describe("Drivers create derives the handle", () => {
 
     fireEvent.input(display, { target: { value: "Acme PTZ Camera" } });
     expect(handle.value).toBe("acme-ptz-camera");
-    expect(screen.getByText(/derived from the display name/i)).toBeInTheDocument();
+    expect(screen.getByText(/derived from the label/i)).toBeInTheDocument();
 
     fireEvent.input(handle, { target: { value: "acme-ptz" } });
     fireEvent.input(display, { target: { value: "Acme PTZ Camera v2" } });
     expect(handle.value).toBe("acme-ptz");
     // The field stops advertising a coupling it no longer has.
-    expect(screen.queryByText(/derived from the display name/i)).toBeNull();
+    expect(screen.queryByText(/derived from the label/i)).toBeNull();
   });
 });
 
@@ -92,7 +92,7 @@ describe("Drivers create lands on the new row (#471)", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("opens the created driver's blade after a successful create", async () => {
-    const created = { id: uuidFor("drv-custom-x"), name: "custom-x", display_name: "Custom X", official: false };
+    const created = { id: uuidFor("drv-custom-x"), name: "custom-x", label: "Custom X", official: false };
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "POST" && req.url.includes("/drivers")) {

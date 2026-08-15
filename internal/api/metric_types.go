@@ -16,7 +16,7 @@ type metricTypeBody struct {
 	ID          string  `json:"id" doc:"The metric type's uuid, the stable form the contract and telemetry keys store"`
 	Name        string  `json:"name"`
 	DataType    string  `json:"data_type"`
-	DisplayName string  `json:"display_name,omitempty"`
+	Label       string  `json:"label,omitempty"`
 	Description string  `json:"description,omitempty"`
 	Unit        *string `json:"unit,omitempty" doc:"The display unit of the series (ms, dB, percent)"`
 	Precision   *int    `json:"precision,omitempty" doc:"Decimal places a rendered value keeps"`
@@ -25,7 +25,7 @@ type metricTypeBody struct {
 
 func toMetricTypeBody(mt *storage.MetricType) metricTypeBody {
 	return metricTypeBody{
-		ID: mt.ID, Name: mt.Name, DataType: mt.DataType, DisplayName: mt.DisplayName,
+		ID: mt.ID, Name: mt.Name, DataType: mt.DataType, Label: mt.Label,
 		Description: mt.Description, Unit: mt.Unit, Precision: mt.Precision, Official: mt.Official,
 	}
 }
@@ -44,7 +44,7 @@ type createMetricTypeInput struct {
 	Body struct {
 		Name        string  `json:"name" minLength:"1" doc:"The metric type name (lowercase kebab)"`
 		DataType    string  `json:"data_type" enum:"int,float" doc:"The value type; a metric is always a number"`
-		DisplayName string  `json:"display_name,omitempty" doc:"A human label"`
+		Label       string  `json:"label,omitempty" doc:"A human label"`
 		Description string  `json:"description,omitempty" doc:"What the series measures"`
 		Unit        *string `json:"unit,omitempty" doc:"The display unit of the series (ms, dB, percent)"`
 		Precision   *int    `json:"precision,omitempty" doc:"Decimal places a rendered value keeps"`
@@ -58,7 +58,7 @@ type metricTypeNameInput struct {
 type updateMetricTypeInput struct {
 	Name string `path:"name" doc:"The metric type's name"`
 	Body struct {
-		DisplayName *string `json:"display_name,omitempty" doc:"A human label"`
+		Label       *string `json:"label,omitempty" doc:"A human label"`
 		Description *string `json:"description,omitempty" doc:"What the series measures"`
 		Unit        *string `json:"unit,omitempty" doc:"The display unit of the series"`
 		Precision   *int    `json:"precision,omitempty" doc:"Decimal places a rendered value keeps"`
@@ -115,7 +115,7 @@ func registerMetricTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		mt, err := gw.CreateMetricType(ctx, actorID(ctx), storage.MetricTypeSpec{
 			Name:        in.Body.Name,
 			DataType:    in.Body.DataType,
-			DisplayName: in.Body.DisplayName,
+			Label:       in.Body.Label,
 			Description: in.Body.Description,
 			Unit:        in.Body.Unit,
 			Precision:   in.Body.Precision,
@@ -134,7 +134,7 @@ func registerMetricTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Description: "Patches a custom metric type's label, description, unit, or precision (a nil field is unchanged). Data type is fixed at creation. Official metric types are read-only. Gated by metric_type:update.",
 	}, "metric_type", "update"), func(ctx context.Context, in *updateMetricTypeInput) (*metricTypeOutput, error) {
 		mt, err := gw.UpdateMetricType(ctx, actorID(ctx), in.Name, storage.MetricTypePatch{
-			DisplayName: in.Body.DisplayName,
+			Label:       in.Body.Label,
 			Description: in.Body.Description,
 			Unit:        in.Body.Unit,
 			Precision:   in.Body.Precision,

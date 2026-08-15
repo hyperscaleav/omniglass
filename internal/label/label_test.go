@@ -355,7 +355,7 @@ func TestUpperAndLower(t *testing.T) {
 
 // title upper-cases the first letter of each word and LEAVES THE REST ALONE.
 // Lower-casing the remainder would be the obvious implementation and is wrong
-// here: the strings this runs over are display names out of the catalog, so
+// here: the strings this runs over are labels out of the catalog, so
 // "Shure MXA920" would come back "Shure Mxa920", turning a correct product
 // name into a misspelling of one.
 func TestTitleUpperCasesEachWordWithoutFlatteningTheRest(t *testing.T) {
@@ -465,7 +465,7 @@ func TestWordsTurnsSeparatorsIntoSpaces(t *testing.T) {
 		{"", ""},
 		// Everything that is not one of the two separators is left exactly as it
 		// was, including whitespace the fact already carried and the punctuation
-		// a catalog display name is full of.
+		// a catalog label is full of.
 		{"Shure MXA920", "Shure MXA920"},
 		{"Wireless Mic (Handheld)", "Wireless Mic (Handheld)"},
 		{"1", "1"},

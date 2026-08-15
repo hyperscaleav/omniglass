@@ -9,7 +9,7 @@ import { api } from "../api/client";
 
 export type CommandTypeRow = {
   name: string;
-  display_name?: string;
+  label?: string;
   description?: string;
   params_schema?: unknown;
   settle_window_seconds: number;
@@ -82,7 +82,7 @@ export async function listCommandTypes(): Promise<CommandTypeRow[]> {
 
 export type CreateCommandType = {
   name: string;
-  display_name?: string;
+  label?: string;
   description?: string;
   settle_window_seconds?: number;
   target_property_type?: string;
@@ -96,7 +96,7 @@ export async function createCommandType(body: CreateCommandType): Promise<Comman
 }
 
 export type UpdateCommandType = {
-  display_name?: string;
+  label?: string;
   description?: string;
   settle_window_seconds?: number;
   target_property_type?: string;

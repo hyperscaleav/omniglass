@@ -65,7 +65,7 @@ import (
 // location table would deny every non-all caller instead of narrowing anything.
 //
 // A LOCATION draft takes no READ scope. Its data map is the location's own name
-// and its type's display name (labels.go keeps placement off that tier
+// and its type's label (labels.go keeps placement off that tier
 // deliberately), so there is no other estate row's label in the answer to guard.
 // It takes the create scope like the other two, because the ordinal is read from
 // a placement bucket either way.
@@ -207,7 +207,7 @@ func registerSystemLabelDraft(api huma.API, a *authenticator, gw storage.Gateway
 //
 // It injects one scope where it used to inject none, and the one it injects is
 // the create's rather than a read scope. A location's label data map carries
-// its own name and its type's display name and nothing about where it sits, so
+// its own name and its type's label and nothing about where it sits, so
 // the RENDER still contains no fact from another estate row to leak; what the
 // scope guards is the parent whose bucket the ordinal is read from, which is
 // the same reference the create resolves in the same set.

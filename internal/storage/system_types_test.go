@@ -29,13 +29,13 @@ func TestSystemTypeRoundTrip(t *testing.T) {
 	}
 
 	root, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-		Name: "rt-space", DisplayName: "Space", Stem: strp("space"), Icon: strp("box"), Abbrev: strp("sp"),
+		Name: "rt-space", Label: "Space", Stem: strp("space"), Icon: strp("box"), Abbrev: strp("sp"),
 	})
 	if err != nil {
 		t.Fatalf("create root: %v", err)
 	}
-	if root.Name != "rt-space" || root.DisplayName != "Space" {
-		t.Fatalf("root = %+v, want name rt-space display_name Space", root)
+	if root.Name != "rt-space" || root.Label != "Space" {
+		t.Fatalf("root = %+v, want name rt-space label Space", root)
 	}
 	if root.Official {
 		t.Fatalf("new system_type official=true, want false")
@@ -45,7 +45,7 @@ func TestSystemTypeRoundTrip(t *testing.T) {
 	}
 
 	child, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-		Name: "rt-huddle", DisplayName: "Huddle Room", ParentID: &root.ID,
+		Name: "rt-huddle", Label: "Huddle Room", ParentID: &root.ID,
 	})
 	if err != nil {
 		t.Fatalf("create child: %v", err)
@@ -80,17 +80,17 @@ func TestSystemTypeRoundTrip(t *testing.T) {
 	}
 
 	dn := "Huddle Space"
-	upd, err := gw.UpdateSystemType(ctx, "", "rt-huddle", storage.SystemTypePatch{DisplayName: &dn})
+	upd, err := gw.UpdateSystemType(ctx, "", "rt-huddle", storage.SystemTypePatch{Label: &dn})
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if upd.DisplayName != dn {
-		t.Fatalf("update display_name = %q, want %q", upd.DisplayName, dn)
+	if upd.Label != dn {
+		t.Fatalf("update label = %q, want %q", upd.Label, dn)
 	}
 
 	// A duplicate name is ErrTypeExists. Stem set (a root needs one) so the
 	// write reaches the unique-name check this asserts, not the stem guard.
-	if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "rt-space", DisplayName: "Dup", Stem: strp("dup")}); !errors.Is(err, storage.ErrTypeExists) {
+	if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "rt-space", Label: "Dup", Stem: strp("dup")}); !errors.Is(err, storage.ErrTypeExists) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
@@ -101,7 +101,7 @@ func TestSystemTypeRoundTrip(t *testing.T) {
 
 	// A parent naming no row is ErrParentSystemTypeNotFound.
 	stray := uuid.New()
-	if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "rt-orphan", DisplayName: "Orphan", ParentID: &stray}); !errors.Is(err, storage.ErrParentSystemTypeNotFound) {
+	if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "rt-orphan", Label: "Orphan", ParentID: &stray}); !errors.Is(err, storage.ErrParentSystemTypeNotFound) {
 		t.Fatalf("unknown parent err = %v, want ErrParentSystemTypeNotFound", err)
 	}
 
@@ -141,20 +141,20 @@ func TestSystemTypeFactsInheritOverrideMidChain(t *testing.T) {
 	}
 
 	root, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-		Name: "fi-root", DisplayName: "Root", Stem: strp("root-stem"), Icon: strp("root-icon"), Abbrev: strp("rt"),
+		Name: "fi-root", Label: "Root", Stem: strp("root-stem"), Icon: strp("root-icon"), Abbrev: strp("rt"),
 	})
 	if err != nil {
 		t.Fatalf("create root: %v", err)
 	}
 	mid, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-		Name: "fi-mid", DisplayName: "Mid", ParentID: &root.ID,
+		Name: "fi-mid", Label: "Mid", ParentID: &root.ID,
 		Icon: strp("mid-icon"), // the mid-chain override; stem and abbrev inherit
 	})
 	if err != nil {
 		t.Fatalf("create mid: %v", err)
 	}
 	leaf, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-		Name: "fi-leaf", DisplayName: "Leaf", ParentID: &mid.ID,
+		Name: "fi-leaf", Label: "Leaf", ParentID: &mid.ID,
 		Abbrev: strp("lf"), // the leaf override; stem and icon inherit
 	})
 	if err != nil {
@@ -273,11 +273,11 @@ func TestSystemTypeDeleteRestricted(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	parent, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "dr-room", DisplayName: "Room", Stem: strp("room")})
+	parent, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "dr-room", Label: "Room", Stem: strp("room")})
 	if err != nil {
 		t.Fatalf("create parent: %v", err)
 	}
-	child, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "dr-huddle", DisplayName: "Huddle", ParentID: &parent.ID})
+	child, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "dr-huddle", Label: "Huddle", ParentID: &parent.ID})
 	if err != nil {
 		t.Fatalf("create child: %v", err)
 	}
@@ -328,7 +328,7 @@ func TestSystemCarriesItsType(t *testing.T) {
 	}
 
 	name := "board"
-	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sct-room", DisplayName: "Room 101", SystemTypeID: &name}, all, all)
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sct-room", Label: "Room 101", SystemTypeID: &name}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
@@ -341,9 +341,9 @@ func TestSystemCarriesItsType(t *testing.T) {
 
 	// An omitted field leaves the classification alone.
 	dn := "Room 101A"
-	kept, err := gw.UpdateSystem(ctx, "", "sct-room", storage.SystemPatch{DisplayName: &dn}, all, all)
+	kept, err := gw.UpdateSystem(ctx, "", "sct-room", storage.SystemPatch{Label: &dn}, all, all)
 	if err != nil {
-		t.Fatalf("patch display_name: %v", err)
+		t.Fatalf("patch label: %v", err)
 	}
 	if kept.SystemTypeID == nil || *kept.SystemTypeID != board.ID.String() {
 		t.Fatalf("system_type_id after an unrelated patch = %v, want it unchanged (%v)", kept.SystemTypeID, board.ID)
@@ -403,7 +403,7 @@ func TestSystemTypeRenameKeepsItsSystems(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	st, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "rn-before", DisplayName: "Before", Stem: strp("before")})
+	st, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "rn-before", Label: "Before", Stem: strp("before")})
 	if err != nil {
 		t.Fatalf("create type: %v", err)
 	}
@@ -466,7 +466,7 @@ func TestSeedSystemTypesIdempotent(t *testing.T) {
 
 	// An operator row the seed must never touch.
 	mine, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-		Name: "sid-mine", DisplayName: "Mine", ParentID: &room.ID, Abbrev: strp("mn"),
+		Name: "sid-mine", Label: "Mine", ParentID: &room.ID, Abbrev: strp("mn"),
 	})
 	if err != nil {
 		t.Fatalf("create operator row: %v", err)
@@ -495,7 +495,7 @@ func TestSeedSystemTypesIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get operator row after re-seed: %v", err)
 	}
-	if mineAgain.ID != mine.ID || mineAgain.Official || mineAgain.DisplayName != "Mine" || mineAgain.Abbrev == nil || *mineAgain.Abbrev != "mn" {
+	if mineAgain.ID != mine.ID || mineAgain.Official || mineAgain.Label != "Mine" || mineAgain.Abbrev == nil || *mineAgain.Abbrev != "mn" {
 		t.Fatalf("operator row after re-seed = %+v, want it untouched (%+v)", mineAgain, mine)
 	}
 
@@ -505,7 +505,7 @@ func TestSeedSystemTypesIdempotent(t *testing.T) {
 		t.Fatal("seeded room has no parent; the shipped tree must nest under av")
 	}
 	x := "X"
-	if _, err := gw.UpdateSystemType(ctx, "", "room", storage.SystemTypePatch{DisplayName: &x}); !errors.Is(err, storage.ErrTypeOfficial) {
+	if _, err := gw.UpdateSystemType(ctx, "", "room", storage.SystemTypePatch{Label: &x}); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("patch official room err = %v, want ErrTypeOfficial", err)
 	}
 	if err := gw.DeleteSystemType(ctx, "", "room"); !errors.Is(err, storage.ErrTypeOfficial) {
@@ -528,15 +528,15 @@ func TestRootSystemTypeRequiresStem(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "rs-root", DisplayName: "Root"}); !errors.Is(err, storage.ErrRootSystemTypeNeedsStem) {
+	if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "rs-root", Label: "Root"}); !errors.Is(err, storage.ErrRootSystemTypeNeedsStem) {
 		t.Fatalf("stemless root err = %v, want ErrRootSystemTypeNeedsStem", err)
 	}
 
-	root, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "rs-root", DisplayName: "Root", Stem: strp("root")})
+	root, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "rs-root", Label: "Root", Stem: strp("root")})
 	if err != nil {
 		t.Fatalf("create root with a stem: %v", err)
 	}
-	if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "rs-child", DisplayName: "Child", ParentID: &root.ID}); err != nil {
+	if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "rs-child", Label: "Child", ParentID: &root.ID}); err != nil {
 		t.Fatalf("a stemless CHILD must be legal (it inherits): %v", err)
 	}
 }
@@ -557,12 +557,12 @@ func TestSystemTypeStemMustBeAValidName(t *testing.T) {
 	}
 
 	for _, bad := range []string{"Bad Stem", "with.dot", "UPPER", "-leading"} {
-		if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "sv-" + "x", DisplayName: "X", Stem: strp(bad)}); err == nil {
+		if _, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "sv-" + "x", Label: "X", Stem: strp(bad)}); err == nil {
 			t.Fatalf("create accepted the invalid stem %q", bad)
 		}
 	}
 
-	ok, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "sv-ok", DisplayName: "OK", Stem: strp("good-stem")})
+	ok, err := gw.CreateSystemType(ctx, "", storage.SystemType{Name: "sv-ok", Label: "OK", Stem: strp("good-stem")})
 	if err != nil {
 		t.Fatalf("create with a valid stem: %v", err)
 	}

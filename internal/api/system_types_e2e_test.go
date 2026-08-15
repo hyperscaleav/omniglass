@@ -17,7 +17,7 @@ import (
 type systemTypeWire struct {
 	ID                    string `json:"id"`
 	Name                  string `json:"name"`
-	DisplayName           string `json:"display_name"`
+	Label                 string `json:"label"`
 	Stem                  string `json:"stem"`
 	Icon                  string `json:"icon"`
 	ResolvedIcon          string `json:"resolved_icon"`
@@ -121,12 +121,12 @@ func TestSystemTypesAPI(t *testing.T) {
 
 	// The viewer cannot create (403, capability fast-reject).
 	c.do(viewerTok, http.MethodPost, "/system-types",
-		map[string]any{"name": "nope", "display_name": "Nope"}, http.StatusForbidden)
+		map[string]any{"name": "nope", "label": "Nope"}, http.StatusForbidden)
 
 	// Admin (owner) creates a custom child under room.
 	var created systemTypeWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/system-types", map[string]any{
-		"name": "custom-room", "display_name": "Custom Room", "parent_id": "room", "abbrev": "cst",
+		"name": "custom-room", "label": "Custom Room", "parent_id": "room", "abbrev": "cst",
 	}, http.StatusCreated), &created); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
@@ -143,26 +143,26 @@ func TestSystemTypesAPI(t *testing.T) {
 	// An unknown parent is a 422; a stemless ROOT is a 422 too (nothing to
 	// inherit from).
 	c.do(ownerTok, http.MethodPost, "/system-types",
-		map[string]any{"name": "orphan", "display_name": "Orphan", "parent_id": "no-such-type"}, http.StatusUnprocessableEntity)
+		map[string]any{"name": "orphan", "label": "Orphan", "parent_id": "no-such-type"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/system-types",
-		map[string]any{"name": "stemless-root", "display_name": "Stemless Root"}, http.StatusUnprocessableEntity)
+		map[string]any{"name": "stemless-root", "label": "Stemless Root"}, http.StatusUnprocessableEntity)
 
 	// A stem is a name prefix, so a bad slug is refused at the edge on both verbs.
 	c.do(ownerTok, http.MethodPost, "/system-types",
-		map[string]any{"name": "bad-stem", "display_name": "Bad Stem", "stem": "Bad Stem"}, http.StatusUnprocessableEntity)
+		map[string]any{"name": "bad-stem", "label": "Bad Stem", "stem": "Bad Stem"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPatch, "/system-types/custom-room",
 		map[string]any{"stem": "also bad"}, http.StatusUnprocessableEntity)
 
 	// The custom row is mutable; the shipped one is not, on either verb.
 	c.do(ownerTok, http.MethodPatch, "/system-types/custom-room",
-		map[string]any{"display_name": "Custom Room Pro"}, http.StatusOK)
+		map[string]any{"label": "Custom Room Pro"}, http.StatusOK)
 	c.do(ownerTok, http.MethodPatch, "/system-types/room",
-		map[string]any{"display_name": "X"}, http.StatusUnprocessableEntity)
+		map[string]any{"label": "X"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodDelete, "/system-types/room", nil, http.StatusUnprocessableEntity)
 
 	// A custom row that still parents another is refused (409); its leaf is not.
 	c.do(ownerTok, http.MethodPost, "/system-types", map[string]any{
-		"name": "custom-room-leaf", "display_name": "Custom Room Leaf", "parent_id": "custom-room",
+		"name": "custom-room-leaf", "label": "Custom Room Leaf", "parent_id": "custom-room",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodDelete, "/system-types/custom-room", nil, http.StatusConflict)
 	c.do(ownerTok, http.MethodDelete, "/system-types/custom-room-leaf", nil, http.StatusNoContent)
@@ -205,7 +205,7 @@ func TestSystemCarriesItsTypeAPI(t *testing.T) {
 	}
 
 	created := decode(c.do(ownerTok, http.MethodPost, "/systems", map[string]any{
-		"name": "sct-api-room", "display_name": "Room 101", "system_type_id": "board",
+		"name": "sct-api-room", "label": "Room 101", "system_type_id": "board",
 	}, http.StatusCreated))
 	if created.SystemType != "board" || created.SystemTypeID == "" {
 		t.Fatalf("created system = %+v, want system_type board with its uuid", created)
@@ -219,7 +219,7 @@ func TestSystemCarriesItsTypeAPI(t *testing.T) {
 
 	// A patch that names another field leaves the classification alone.
 	kept := decode(c.do(ownerTok, http.MethodPatch, "/systems/sct-api-room",
-		map[string]any{"display_name": "Room 101A"}, http.StatusOK))
+		map[string]any{"label": "Room 101A"}, http.StatusOK))
 	if kept.SystemType != "board" {
 		t.Fatalf("system_type after an unrelated patch = %q, want it unchanged (board)", kept.SystemType)
 	}
@@ -247,7 +247,7 @@ func TestSystemCarriesItsTypeAPI(t *testing.T) {
 
 	// A custom type in use is the same refusal without the official short-circuit.
 	c.do(ownerTok, http.MethodPost, "/system-types", map[string]any{
-		"name": "sct-api-custom", "display_name": "Custom", "parent_id": "room",
+		"name": "sct-api-custom", "label": "Custom", "parent_id": "room",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPatch, "/systems/sct-api-room",
 		map[string]any{"system_type_id": "sct-api-custom"}, http.StatusOK)

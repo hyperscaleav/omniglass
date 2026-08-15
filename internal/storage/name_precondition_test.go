@@ -273,7 +273,7 @@ func TestTheNamePreconditionHoldsOnEveryTierThatGenerates(t *testing.T) {
 	// Location: a positional type of the operator's own, since no shipped type
 	// carries a name rule (ADR-0103).
 	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{
-		Name: "deck", DisplayName: "Deck", NameRule: &storage.NameRule{},
+		Name: "deck", Label: "Deck", NameRule: &storage.NameRule{},
 	}); err != nil {
 		t.Fatalf("create the positional location type: %v", err)
 	}

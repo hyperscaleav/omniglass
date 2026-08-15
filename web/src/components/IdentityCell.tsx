@@ -1,13 +1,13 @@
 import { Show } from "solid-js";
-import { entityLabel, hasDisplayName, labelIsName, type Labelled } from "../lib/entities";
+import { entityLabel, hasLabel, labelIsName, type Labelled } from "../lib/entities";
 
 // How an entity's identity reads in a list, in one place.
 //
 // The platform's identity triad is `id` (a uuid, immutable), `name` (the
 // renameable identifier an operator types, `hq-boardroom-dsp`), and
-// `display_name` (an optional friendly string a human reads, "HQ Boardroom
+// `label` (an optional friendly string a human reads, "HQ Boardroom
 // DSP"). Two of those are operator-facing, and the rule between them is one
-// sentence: the display name is the primary line, the name sits beneath it, and
+// sentence: the label is the primary line, the name sits beneath it, and
 // the name is suppressed when the two are the same thing.
 //
 // That rule was previously written sixteen times, in four mutually incompatible
@@ -17,7 +17,7 @@ import { entityLabel, hasDisplayName, labelIsName, type Labelled } from "../lib/
 //     Products, Standards, Types)
 //   - "Key" and "Label" columns                    (Properties, EventTypes,
 //     CommandTypes, Tags)
-//   - one column, display name plus inline muted name (Groups, Roles, Users, Nodes)
+//   - one column, label plus inline muted name (Groups, Roles, Users, Nodes)
 //   - the name alone                               (Secrets, Variables)
 //
 // Four idioms is why the same estate read four different ways depending on which
@@ -32,10 +32,10 @@ import { entityLabel, hasDisplayName, labelIsName, type Labelled } from "../lib/
 // exist on touch, is not discoverable, and cannot be selected to copy. Copying it
 // into a CLI invocation is the entire point of showing it.
 //
-// Why the name is NOT re-cased or prettified into a display name when the display
+// Why the name is NOT re-cased or prettified into a label when the display
 // name is absent: this domain is acronyms (DSP, HDMI, NVX, PTZ, UC, AVoIP), so any
-// mechanical casing mangles them, and it would make an ABSENT display name look
-// like a typo rather than an absence. When the display name IS the name it renders
+// mechanical casing mangles them, and it would make an ABSENT label look
+// like a typo rather than an absence. When the label IS the name it renders
 // once, in the data face, which marks it as an identifier rather than a friendly
 // string somebody chose.
 //
@@ -58,18 +58,18 @@ import { entityLabel, hasDisplayName, labelIsName, type Labelled } from "../lib/
 // platform-labelled row of the 18 pages this cell serves plus every TreeList,
 // which is a permanent charge for a fact most rows in a settled estate share.
 // And it was unactionable where it stood: an operator reading it in a list could
-// do nothing about it there. It is now the lock on the display-name field of the
+// do nothing about it there. It is now the lock on the label field of the
 // edit blade (components/LabelPenField.tsx), beside the field it owns and next
 // to the act that changes it, which is where the NAME's own pen already stated
 // itself. The estate-wide question the chip half-answered, which rows a rule
 // edit would rewrite, is answered whole by `<entity> previewLabels`.
 //
-// The pen has not left this cell, only its badge: hasDisplayName still reads it
+// The pen has not left this cell, only its badge: hasLabel still reads it
 // to decide whether an identifier goes on the second line, which is the whole
 // reason the three states above are three and not two.
 export function IdentityCell(props: { entity: Labelled; weight?: number }) {
   const label = () => entityLabel(props.entity);
-  const showName = () => hasDisplayName(props.entity);
+  const showName = () => hasLabel(props.entity);
   // The label IS the name, so it reads as an identifier and takes the data face.
   const isIdentifier = () => labelIsName(props.entity);
   return (
@@ -96,9 +96,9 @@ export function IdentityCell(props: { entity: Labelled; weight?: number }) {
 // that can invent a second word for the identifier, which is the drift this
 // primitive exists to end.
 //
-// It sorts on the display name rather than the name, because the display name is
+// It sorts on the label rather than the name, because the label is
 // what the operator is reading down; sorting on a hidden-when-equal name would make
-// the order look arbitrary on any page where most rows carry a display name.
+// the order look arbitrary on any page where most rows carry a label.
 export function identityColumn<T extends Labelled>(opts?: { weight?: (row: T) => number }) {
   return {
     key: "name",

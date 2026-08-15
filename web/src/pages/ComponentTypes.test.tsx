@@ -21,11 +21,11 @@ import { uuidFor } from "../lib/testids";
 // that climbed the chain in TypeScript would print "mic" and every assertion
 // below would fail. "from-the-server" can only have been served.
 const seed: ComponentType[] = [
-  { id: uuidFor("ct-display"), name: "display", display_name: "Display", official: true, forked: false, stem: "display", abbrev: "fp", icon: "monitor", default_tags: [] },
-  { id: uuidFor("ct-interactive-display"), name: "interactive-display", display_name: "Interactive Display", official: true, forked: false, parent: "display", parent_id: uuidFor("ct-display"), default_tags: [] },
-  { id: uuidFor("ct-mic"), name: "mic", display_name: "Microphone", official: true, forked: false, stem: "mic", abbrev: "mic", icon: "mic", default_tags: [] },
+  { id: uuidFor("ct-display"), name: "display", label: "Display", official: true, forked: false, stem: "display", abbrev: "fp", icon: "monitor", default_tags: [] },
+  { id: uuidFor("ct-interactive-display"), name: "interactive-display", label: "Interactive Display", official: true, forked: false, parent: "display", parent_id: uuidFor("ct-display"), default_tags: [] },
+  { id: uuidFor("ct-mic"), name: "mic", label: "Microphone", official: true, forked: false, stem: "mic", abbrev: "mic", icon: "mic", default_tags: [] },
   {
-    id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", display_name: "Ceiling Microphone", official: false, forked: false,
+    id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", label: "Ceiling Microphone", official: false, forked: false,
     parent: "mic", parent_id: uuidFor("ct-mic"), default_tags: [],
     // resolved_icon is what the row SHOWS and inherited_icon is what it would
     // take with its own box cleared: the same string on a row that states no
@@ -39,7 +39,7 @@ const seed: ComponentType[] = [
   // level up and its stem source from TWO: the case a hint reading "its parent"
   // gets wrong, and the case a placeholder taken from resolved_* gets wrong.
   {
-    id: uuidFor("ct-ceiling-array"), name: "ceiling-array", display_name: "Ceiling Array", official: false, forked: false,
+    id: uuidFor("ct-ceiling-array"), name: "ceiling-array", label: "Ceiling Array", official: false, forked: false,
     parent: "ceiling-mic", parent_id: uuidFor("ct-ceiling-mic"), stem: "carray", default_tags: [],
     inherited_stem: "from-the-server", inherited_stem_source: "mic",
     inherited_abbrev: "abbrev-from-the-server", inherited_abbrev_source: "ceiling-mic",
@@ -47,7 +47,7 @@ const seed: ComponentType[] = [
   // A shipped row the operator has overridden (#655, ADR-0095): the third
   // origin state, and the only one where what the console shows is not what
   // the release ships.
-  { id: uuidFor("ct-projector"), name: "projector", display_name: "House Projector", official: true, forked: true, stem: "projector", abbrev: "proj", icon: "projector", default_tags: [] },
+  { id: uuidFor("ct-projector"), name: "projector", label: "House Projector", official: true, forked: true, stem: "projector", abbrev: "proj", icon: "projector", default_tags: [] },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -215,7 +215,7 @@ describe("ComponentTypes page", () => {
     expect(labels).toContain("Microphone");
   });
 
-  it("derives the name from the display name until the operator edits it", async () => {
+  it("derives the name from the label until the operator edits it", async () => {
     mount();
     fireEvent.click(screen.getByText("New component type"));
     const display = (await screen.findByPlaceholderText("Wireless Microphone")) as HTMLInputElement;
@@ -230,7 +230,7 @@ describe("ComponentTypes page", () => {
       const req = input as Request;
       if (req.method === "POST" && req.url.endsWith("/component-types")) {
         sent = JSON.parse(await req.clone().text());
-        return new Response(JSON.stringify({ id: uuidFor("ct-boundary-mic"), name: "boundary-mic", display_name: "Boundary Microphone", official: false, parent: "mic", parent_id: uuidFor("ct-mic") }), { status: 201, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ id: uuidFor("ct-boundary-mic"), name: "boundary-mic", label: "Boundary Microphone", official: false, parent: "mic", parent_id: uuidFor("ct-mic") }), { status: 201, headers: { "Content-Type": "application/json" } });
       }
       return new Response(JSON.stringify({ component_types: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
@@ -240,7 +240,7 @@ describe("ComponentTypes page", () => {
     fireEvent.change(screen.getByLabelText("Parent"), { target: { value: "mic" } });
     fireEvent.click(screen.getByRole("button", { name: /create component type/i }));
     await waitFor(() => expect(sent).toBeTruthy());
-    expect(sent).toMatchObject({ name: "boundary-mic", display_name: "Boundary Mic", parent_id: "mic" });
+    expect(sent).toMatchObject({ name: "boundary-mic", label: "Boundary Mic", parent_id: "mic" });
   });
 
   // #742 removed the blade hint's present-tense sentence because the provenance
@@ -363,7 +363,7 @@ describe("ComponentTypes page", () => {
   // broken.
   it("re-seeds the editor from the restored row rather than holding the discarded fork", async () => {
     const shipped: ComponentType = {
-      id: uuidFor("ct-projector"), name: "projector", display_name: "House Projector",
+      id: uuidFor("ct-projector"), name: "projector", label: "House Projector",
       official: true, forked: false, stem: "projector", abbrev: "proj", icon: "projector", default_tags: [],
     };
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -378,7 +378,7 @@ describe("ComponentTypes page", () => {
     // The operator's fork: every fact on the blade overridden over the shipped
     // row, so a draft that survives the restore is visible in any of them.
     qc.setQueryData([...COMPONENT_TYPES_KEY], [
-      { ...shipped, forked: true, display_name: "Big Projector", stem: "bigproj", abbrev: "bp", icon: "tv" },
+      { ...shipped, forked: true, label: "Big Projector", stem: "bigproj", abbrev: "bp", icon: "tv" },
     ]);
     qc.setQueryData([...ME_KEY], admin);
     render(() => (
@@ -403,7 +403,7 @@ describe("ComponentTypes page", () => {
     await waitFor(() => expect((within(blade).getByLabelText("Stem") as HTMLInputElement).value).toBe("projector"));
     expect((within(blade).getByLabelText("Abbrev") as HTMLInputElement).value).toBe("proj");
     expect((within(blade).getByLabelText("Icon") as HTMLInputElement).value).toBe("projector");
-    expect((within(blade).getByLabelText("Display name") as HTMLInputElement).value).toBe("House Projector");
+    expect((within(blade).getByLabelText("Label") as HTMLInputElement).value).toBe("House Projector");
   });
 
   it("edit mode exposes stem/abbrev/icon fields and saves them, never the parent", async () => {
@@ -495,10 +495,10 @@ describe("ComponentTypes page", () => {
       return el as HTMLElement;
     });
     fireEvent.click(within(blade).getByLabelText("Edit"));
-    fireEvent.input(within(blade).getByLabelText("Display name") as HTMLInputElement, { target: { value: "Ceiling Mic" } });
+    fireEvent.input(within(blade).getByLabelText("Label") as HTMLInputElement, { target: { value: "Ceiling Mic" } });
     fireEvent.click(within(blade).getByText("Save"));
     await waitFor(() => expect(sent).toBeTruthy());
-    expect(sent).toMatchObject({ display_name: "Ceiling Mic", stem: "" });
+    expect(sent).toMatchObject({ label: "Ceiling Mic", stem: "" });
   });
   // #716's console half: an emptied box has to say what it just fell back to.
   //

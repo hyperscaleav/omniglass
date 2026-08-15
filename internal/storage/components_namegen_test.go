@@ -86,7 +86,7 @@ func TestSubtypeInheritsStem(t *testing.T) {
 	}
 
 	prod, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "subtype-test-panel", DisplayName: "Subtype Test Panel", Kind: "device", ComponentType: "interactive-display",
+		Name: "subtype-test-panel", Label: "Subtype Test Panel", Kind: "device", ComponentType: "interactive-display",
 	})
 	if err != nil {
 		t.Fatalf("create product under interactive-display: %v", err)
@@ -197,7 +197,7 @@ func TestResetReturnsPen(t *testing.T) {
 // TestReclassifyRecomputes proves a product reclassify (UpdateComponent's
 // Product field) recomputes a still-platform-owned name to the NEW stem,
 // within the SAME placement, while leaving an operator-typed name alone
-// (covered by TestRenameFreezes) and never touching display_name.
+// (covered by TestRenameFreezes) and never touching label.
 func TestReclassifyRecomputes(t *testing.T) {
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
@@ -208,7 +208,7 @@ func TestReclassifyRecomputes(t *testing.T) {
 	qm55 := "samsung-qm55"
 	mic := "shure-mxa920"
 
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, DisplayName: "My Display"}, all, all, all, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, Label: "My Display"}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -226,18 +226,18 @@ func TestReclassifyRecomputes(t *testing.T) {
 	if !after.NameGenerated {
 		t.Fatalf("NameGenerated after reclassify = false, want true")
 	}
-	if after.DisplayName != "My Display" {
-		t.Fatalf("display_name after reclassify = %q, want unchanged %q (never generated, never touched)", after.DisplayName, "My Display")
+	if after.Label != "My Display" {
+		t.Fatalf("label after reclassify = %q, want unchanged %q (never generated, never touched)", after.Label, "My Display")
 	}
 
-	// A patch that does not touch product at all (only display_name) must not
+	// A patch that does not touch product at all (only label) must not
 	// recompute the name, even though the component is still platform-owned.
-	untouched, err := gw.UpdateComponent(ctx, "", after.ID, storage.ComponentPatch{DisplayName: strptr("Renamed Label")}, all, all)
+	untouched, err := gw.UpdateComponent(ctx, "", after.ID, storage.ComponentPatch{Label: strptr("Renamed Label")}, all, all)
 	if err != nil {
-		t.Fatalf("display_name-only patch: %v", err)
+		t.Fatalf("label-only patch: %v", err)
 	}
 	if untouched.Name != "mic-1" {
-		t.Fatalf("name after a display_name-only patch = %q, want unchanged mic-1", untouched.Name)
+		t.Fatalf("name after a label-only patch = %q, want unchanged mic-1", untouched.Name)
 	}
 }
 
@@ -259,13 +259,13 @@ func TestComponentTypeStemEditDoesNotRecomputeExistingNames(t *testing.T) {
 	}
 
 	ct, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "registry-edit-type", DisplayName: "Registry Edit Type", Stem: strp("orig-stem"),
+		Name: "registry-edit-type", Label: "Registry Edit Type", Stem: strp("orig-stem"),
 	})
 	if err != nil {
 		t.Fatalf("create custom component_type: %v", err)
 	}
 	prod, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "registry-edit-product", DisplayName: "Registry Edit Product", Kind: "device", ComponentType: ct.Name,
+		Name: "registry-edit-product", Label: "Registry Edit Product", Kind: "device", ComponentType: ct.Name,
 	})
 	if err != nil {
 		t.Fatalf("create product: %v", err)

@@ -38,7 +38,7 @@ func TestClearingAnInheritedComponentFactOverTheWireAPI(t *testing.T) {
 
 	var child componentTypeWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/component-types", map[string]any{
-		"name": "ifc-lapel-mic", "display_name": "Lapel Mic", "parent_id": "mic",
+		"name": "ifc-lapel-mic", "label": "Lapel Mic", "parent_id": "mic",
 		"stem": "lapel", "icon": "radio", "abbrev": "lp",
 	}, http.StatusCreated), &child); err != nil {
 		t.Fatalf("decode create: %v", err)
@@ -88,10 +88,10 @@ func TestClearingAStemDoesNotWeakenTheStemRuleAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	c.do(ownerTok, http.MethodPost, "/component-types", map[string]any{
-		"name": "ifc-stem-rule", "display_name": "Stem Rule", "parent_id": "mic", "stem": "good",
+		"name": "ifc-stem-rule", "label": "Stem Rule", "parent_id": "mic", "stem": "good",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/system-types", map[string]any{
-		"name": "ifc-sys-stem-rule", "display_name": "Sys Stem Rule", "parent_id": "room", "stem": "good",
+		"name": "ifc-sys-stem-rule", "label": "Sys Stem Rule", "parent_id": "room", "stem": "good",
 	}, http.StatusCreated)
 
 	for _, bad := range []string{"Bad Stem", "-leading-hyphen", "has space", "UPPER", "trailing space "} {
@@ -121,10 +121,10 @@ func TestClearingARootTypesStemIsA422API(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	c.do(ownerTok, http.MethodPost, "/component-types", map[string]any{
-		"name": "ifc-root", "display_name": "Root", "stem": "rootstem",
+		"name": "ifc-root", "label": "Root", "stem": "rootstem",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/system-types", map[string]any{
-		"name": "ifc-sys-root", "display_name": "Sys Root", "stem": "sysrootstem",
+		"name": "ifc-sys-root", "label": "Sys Root", "stem": "sysrootstem",
 	}, http.StatusCreated)
 
 	for path := range map[string]struct{}{"/component-types/ifc-root": {}, "/system-types/ifc-sys-root": {}} {
@@ -232,13 +232,13 @@ func TestTheListingServesWhatAnInheritedFactWouldInheritAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	c.do(ownerTok, http.MethodPost, "/component-types", map[string]any{
-		"name": "ifh-root", "display_name": "Root", "stem": "rootstem", "icon": "layers", "abbrev": "rt",
+		"name": "ifh-root", "label": "Root", "stem": "rootstem", "icon": "layers", "abbrev": "rt",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/component-types", map[string]any{
-		"name": "ifh-mid", "display_name": "Mid", "parent_id": "ifh-root", "abbrev": "md",
+		"name": "ifh-mid", "label": "Mid", "parent_id": "ifh-root", "abbrev": "md",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/component-types", map[string]any{
-		"name": "ifh-leaf", "display_name": "Leaf", "parent_id": "ifh-mid", "stem": "ownstem",
+		"name": "ifh-leaf", "label": "Leaf", "parent_id": "ifh-mid", "stem": "ownstem",
 	}, http.StatusCreated)
 
 	out := c.do(ownerTok, http.MethodGet, "/component-types", nil, http.StatusOK)
@@ -331,13 +331,13 @@ func TestTheSystemTypeListingServesItsInheritedFactsAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	c.do(ownerTok, http.MethodPost, "/system-types", map[string]any{
-		"name": "ifh-sys-root", "display_name": "Sys Root", "stem": "sysroot", "icon": "layers", "abbrev": "sr",
+		"name": "ifh-sys-root", "label": "Sys Root", "stem": "sysroot", "icon": "layers", "abbrev": "sr",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/system-types", map[string]any{
-		"name": "ifh-sys-mid", "display_name": "Sys Mid", "parent_id": "ifh-sys-root", "abbrev": "sm",
+		"name": "ifh-sys-mid", "label": "Sys Mid", "parent_id": "ifh-sys-root", "abbrev": "sm",
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/system-types", map[string]any{
-		"name": "ifh-sys-leaf", "display_name": "Sys Leaf", "parent_id": "ifh-sys-mid",
+		"name": "ifh-sys-leaf", "label": "Sys Leaf", "parent_id": "ifh-sys-mid",
 	}, http.StatusCreated)
 
 	out := c.do(ownerTok, http.MethodGet, "/system-types", nil, http.StatusOK)

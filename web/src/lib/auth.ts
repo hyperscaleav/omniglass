@@ -8,7 +8,7 @@ import { api, setToken, clearToken } from "../api/client";
 
 export type Me = {
   principal: { id: string; kind: string };
-  human?: { username: string; email?: string; display_name?: string; must_change_password?: boolean; has_avatar?: boolean };
+  human?: { username: string; email?: string; label?: string; must_change_password?: boolean; has_avatar?: boolean };
   service?: { name: string };
   permissions: string[];
   grants: { role: string; scope_kind: string; scope_id?: string }[];
@@ -98,12 +98,12 @@ export function useLogout() {
   };
 }
 
-// useUpdateProfile patches the caller's own display name (email is set by an
+// useUpdateProfile patches the caller's own label (email is set by an
 // administrator, not here), then invalidates /auth/me so the console reflects the
 // change everywhere it is shown.
 export function useUpdateProfile() {
   const qc = useQueryClient();
-  return async (patch: { display_name?: string }): Promise<{ ok: true } | { ok: false; message: string }> => {
+  return async (patch: { label?: string }): Promise<{ ok: true } | { ok: false; message: string }> => {
     const { error } = await api.PATCH("/auth/me", { body: patch });
     if (error) {
       return { ok: false, message: "Could not save your profile." };

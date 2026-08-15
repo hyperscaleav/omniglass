@@ -8,7 +8,7 @@ import { api } from "../api/client";
 
 export type EventTypeRow = {
   name: string;
-  display_name?: string;
+  label?: string;
   description?: string;
   payload_schema?: unknown;
   official: boolean;
@@ -24,7 +24,7 @@ export async function listEventTypes(): Promise<EventTypeRow[]> {
 
 export type CreateEventType = {
   name: string;
-  display_name?: string;
+  label?: string;
   description?: string;
   payload_schema?: unknown;
 };
@@ -36,7 +36,7 @@ export async function createEventType(body: CreateEventType): Promise<EventTypeR
 }
 
 export type UpdateEventType = {
-  display_name?: string;
+  label?: string;
   description?: string;
   payload_schema?: unknown;
 };

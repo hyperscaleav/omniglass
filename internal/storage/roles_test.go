@@ -43,7 +43,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	// what the boot seed happens to declare cannot change what this asserts. It
 	// wants a table mic (a video-bar, quorum 2); the system itself also
 	// declares an ad-hoc display role.
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "test-huddle", DisplayName: "Test Huddle"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "test-huddle", Label: "Test Huddle"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	std := "test-huddle"
@@ -52,7 +52,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	}
 	var micRole string
 	if err := conn.QueryRow(ctx, `
-		insert into system_role (owner_kind, standard_id, name, display_name, quorum)
+		insert into system_role (owner_kind, standard_id, name, label, quorum)
 		values ('standard',(select id from standard where name = 'test-huddle'),'table-mic','Table microphone',2)
 		returning id`).Scan(&micRole); err != nil {
 		t.Fatalf("declare standard role: %v", err)
@@ -65,7 +65,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 		t.Fatalf("require accepted type: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `
-		insert into system_role (owner_kind, system_id, name, display_name)
+		insert into system_role (owner_kind, system_id, name, label)
 		select 'system', id, 'wall-display', 'Wall display' from system where name = 'hq-huddle'`); err != nil {
 		t.Fatalf("declare ad-hoc role: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestAssignRefusesWrongType(t *testing.T) {
 	typedSlotSystem(t, ctx, gw, all, "wrong-type-sys")
 
 	if _, err := gw.SetSystemRole(ctx, "", "system", "wrong-type-sys", storage.SystemRoleSpec{
-		Name: "display-left", DisplayName: "Display (Left)", AcceptedTypes: []string{"display"},
+		Name: "display-left", Label: "Display (Left)", AcceptedTypes: []string{"display"},
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
@@ -266,13 +266,13 @@ func TestAssignAcceptsSubtype(t *testing.T) {
 	typedSlotSystem(t, ctx, gw, all, "subtype-sys")
 
 	if _, err := gw.SetSystemRole(ctx, "", "system", "subtype-sys", storage.SystemRoleSpec{
-		Name: "display-left", DisplayName: "Display (Left)", AcceptedTypes: []string{"display"},
+		Name: "display-left", Label: "Display (Left)", AcceptedTypes: []string{"display"},
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
 
 	if _, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "test-interactive-display", DisplayName: "Test Interactive Display",
+		Name: "test-interactive-display", Label: "Test Interactive Display",
 		ComponentType: "interactive-display", Kind: "device",
 	}); err != nil {
 		t.Fatalf("create subtype product: %v", err)
@@ -308,14 +308,14 @@ func TestAssignProductPin(t *testing.T) {
 	typedSlotSystem(t, ctx, gw, all, "pin-sys")
 
 	if _, err := gw.SetSystemRole(ctx, "", "system", "pin-sys", storage.SystemRoleSpec{
-		Name: "main-display", DisplayName: "Main Display",
+		Name: "main-display", Label: "Main Display",
 		AcceptedTypes: []string{"display"}, PinnedProducts: []string{"samsung-qm55"},
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
 
 	if _, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "other-display", DisplayName: "Other Display", ComponentType: "display", Kind: "device",
+		Name: "other-display", Label: "Other Display", ComponentType: "display", Kind: "device",
 	}); err != nil {
 		t.Fatalf("create other display product: %v", err)
 	}
@@ -364,12 +364,12 @@ func TestSecondRoleSameComponentRefused(t *testing.T) {
 	typedSlotSystem(t, ctx, gw, all, "double-staff-sys")
 
 	if _, err := gw.SetSystemRole(ctx, "", "system", "double-staff-sys", storage.SystemRoleSpec{
-		Name: "main-display", DisplayName: "Main Display",
+		Name: "main-display", Label: "Main Display",
 	}); err != nil {
 		t.Fatalf("declare main-display: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "system", "double-staff-sys", storage.SystemRoleSpec{
-		Name: "confidence-monitor", DisplayName: "Confidence Monitor",
+		Name: "confidence-monitor", Label: "Confidence Monitor",
 	}); err != nil {
 		t.Fatalf("declare confidence-monitor: %v", err)
 	}
@@ -424,22 +424,22 @@ func TestCapacitySurvivesUnrelatedEdit(t *testing.T) {
 
 	cap3 := 3
 	if _, err := gw.SetSystemRole(ctx, "", "system", "capacity-persist-sys", storage.SystemRoleSpec{
-		Name: "main-display", DisplayName: "Main Display", Capacity: &cap3,
+		Name: "main-display", Label: "Main Display", Capacity: &cap3,
 	}); err != nil {
 		t.Fatalf("declare with capacity: %v", err)
 	}
 
 	r, err := gw.SetSystemRole(ctx, "", "system", "capacity-persist-sys", storage.SystemRoleSpec{
-		Name: "main-display", DisplayName: "Main Display (renamed)",
+		Name: "main-display", Label: "Main Display (renamed)",
 	})
 	if err != nil {
-		t.Fatalf("edit display_name only: %v", err)
+		t.Fatalf("edit label only: %v", err)
 	}
 	if r.Capacity == nil || *r.Capacity != 3 {
 		t.Fatalf("capacity after an unrelated edit = %v, want it to survive at 3", r.Capacity)
 	}
-	if r.DisplayName != "Main Display (renamed)" {
-		t.Fatalf("display_name = %q, want the edit to take", r.DisplayName)
+	if r.Label != "Main Display (renamed)" {
+		t.Fatalf("label = %q, want the edit to take", r.Label)
 	}
 }
 
@@ -465,7 +465,7 @@ func TestCapacityBelowQuorumRefused(t *testing.T) {
 
 	badCap := 1
 	_, err = gw.SetSystemRole(ctx, "", "system", "capacity-quorum-sys", storage.SystemRoleSpec{
-		Name: "main-display", DisplayName: "Main Display", Quorum: 2, Capacity: &badCap,
+		Name: "main-display", Label: "Main Display", Quorum: 2, Capacity: &badCap,
 	})
 	if !errors.Is(err, storage.ErrCapacityBelowQuorum) {
 		t.Fatalf("declare capacity below quorum: err = %v, want ErrCapacityBelowQuorum", err)
@@ -493,11 +493,11 @@ func TestLoweringCapacityBelowCountRefusedAcrossInheritingSystems(t *testing.T) 
 	all := scope.Set{All: true}
 
 	std := "pair-cap-standard"
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, DisplayName: "Pair Cap"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: std, Label: "Pair Cap"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "table-mic", DisplayName: "Table Mic", AcceptedTypes: []string{"video-bar"},
+		Name: "table-mic", Label: "Table Mic", AcceptedTypes: []string{"video-bar"},
 	}); err != nil {
 		t.Fatalf("declare standard role: %v", err)
 	}
@@ -530,7 +530,7 @@ func TestLoweringCapacityBelowCountRefusedAcrossInheritingSystems(t *testing.T) 
 
 	cap2 := 2
 	_, err = gw.SetSystemRole(ctx, "", "standard", std, storage.SystemRoleSpec{
-		Name: "table-mic", DisplayName: "Table Mic", AcceptedTypes: []string{"video-bar"}, Capacity: &cap2,
+		Name: "table-mic", Label: "Table Mic", AcceptedTypes: []string{"video-bar"}, Capacity: &cap2,
 	})
 	var short *storage.CapacityShortfall
 	if !errors.As(err, &short) {

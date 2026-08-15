@@ -54,8 +54,8 @@ the read floor resolved exactly as the authorizer resolves them at runtime:
 user. Pick a row to open the group's **blade**: its **members** (add any principal, remove one, or open a member to
 stack that user's blade over the group) and its **grants**, built with the same grant builder the user detail uses. A grant added to the group takes effect for every member
 immediately, and is bounded by the same rule as a direct grant (you cannot grant a role above your own tier).
-**New group** creates one (name, display name, description); the **name** is an ordinary entity name
-(lowercase letters, digits, and hyphens, no dots and no underscores), while the display name is free
+**New group** creates one (name, label, description); the **name** is an ordinary entity name
+(lowercase letters, digits, and hyphens, no dots and no underscores), while the label is free
 text. The name is not patchable once the group exists: moving it is `POST /principal-groups/{id}:rename`,
 gated by `principal_group:rename` rather than `:update` ([ADR-0077](/architecture/decisions/)), and the
 console's group blade shows the name read-only. The new group then opens

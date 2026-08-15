@@ -486,7 +486,7 @@ func (p *PG) ResolveTags(ctx context.Context, componentID, forSystem string, rea
 // ranks per key (highest band, then nearest depth wins). A non-propagating key
 // is admitted only from the component itself (band 3, depth 0), the flat-set
 // behavior. It returns the winner and every shadowed candidate, each with its
-// owner's display name. The CYCLE guards protect against a corrupted parent edge.
+// owner's label. The CYCLE guards protect against a corrupted parent edge.
 const resolveTagsSQL = `
 with recursive
 target as (
@@ -761,7 +761,7 @@ select target_id::text, key, value from ranked where rnk = 1 order by target_id,
 // enforcing the read-then-action scope split on the owner entity: a platform
 // owner needs an all-scope action (and read); a scoped one resolves its entity
 // in the matching tree and requires it within read (else not-found) then action
-// (else forbidden). Returns a nil id and empty display name for a platform owner.
+// (else forbidden). Returns a nil id and empty label for a platform owner.
 func resolveTagBindingOwner(ctx context.Context, q querier, kind string, name *string, read, action scope.Set) (*string, string, error) {
 	if kind == "platform" {
 		if !action.All || !read.All {

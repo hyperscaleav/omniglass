@@ -80,12 +80,12 @@ func TestLocationAPI(t *testing.T) {
 	c.get(viewerTok, "hq-b1", http.StatusOK)
 
 	// The viewer cannot write: PATCH is a 403 at the capability fast-reject.
-	c.patch(viewerTok, "hq-b1", patchReq{DisplayName: ptr("nope")}, http.StatusForbidden)
+	c.patch(viewerTok, "hq-b1", patchReq{Label: ptr("nope")}, http.StatusForbidden)
 
 	// Owner full CRUD: patch, then delete-occupied 409, then leaf delete, then 404.
-	c.patch(ownerTok, "hq-b1", patchReq{DisplayName: ptr("Building One")}, http.StatusOK)
-	if l := c.getBody(ownerTok, "hq-b1"); l.DisplayName != "Building One" {
-		t.Errorf("patched display_name = %q, want Building One", l.DisplayName)
+	c.patch(ownerTok, "hq-b1", patchReq{Label: ptr("Building One")}, http.StatusOK)
+	if l := c.getBody(ownerTok, "hq-b1"); l.Label != "Building One" {
+		t.Errorf("patched label = %q, want Building One", l.Label)
 	}
 	c.delete(ownerTok, "hq", http.StatusConflict) // has children
 	c.delete(ownerTok, "hq-r1", http.StatusNoContent)
@@ -272,20 +272,20 @@ func TestLocationCheckNameIsScopedToPlacement(t *testing.T) {
 
 type locReq struct {
 	Name         string  `json:"name"`
-	DisplayName  string  `json:"display_name,omitempty"`
+	Label        string  `json:"label,omitempty"`
 	LocationType string  `json:"location_type"`
 	Parent       *string `json:"parent,omitempty"`
 }
 
 type patchReq struct {
-	DisplayName  *string `json:"display_name,omitempty"`
+	Label        *string `json:"label,omitempty"`
 	LocationType *string `json:"location_type,omitempty"`
 }
 
 type locResp struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
-	DisplayName  string `json:"display_name"`
+	Label        string `json:"label"`
 	LocationType string `json:"location_type"`
 }
 

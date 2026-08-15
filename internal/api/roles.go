@@ -35,7 +35,7 @@ import (
 
 type systemRoleBody struct {
 	Name           string   `json:"name" doc:"The role's name within its owner (the address)"`
-	DisplayName    string   `json:"display_name" doc:"The role's human label"`
+	Label          string   `json:"label" doc:"The role's human label"`
 	Quorum         int      `json:"quorum" doc:"How many components must fill the role"`
 	Capacity       *int     `json:"capacity,omitempty" doc:"The most components the role will accept; null means no upper bound beyond quorum"`
 	PositionLabels []string `json:"position_labels" doc:"Human labels for each position within the role, by index; empty when unlabeled"`
@@ -58,7 +58,7 @@ func toSystemRoleBody(r *storage.SystemRole) systemRoleBody {
 	}
 	return systemRoleBody{
 		Name:           r.Name,
-		DisplayName:    r.DisplayName,
+		Label:          r.Label,
 		Quorum:         r.Quorum,
 		Capacity:       r.Capacity,
 		PositionLabels: labels,
@@ -74,7 +74,7 @@ func toSystemRoleBody(r *storage.SystemRole) systemRoleBody {
 // than left to the client so every surface reads staffing the same way.
 type effectiveRoleBody struct {
 	Name           string   `json:"name"`
-	DisplayName    string   `json:"display_name"`
+	Label          string   `json:"label"`
 	Quorum         int      `json:"quorum"`
 	Capacity       *int     `json:"capacity,omitempty" doc:"The most components the role will accept; null means no upper bound beyond quorum"`
 	PositionLabels []string `json:"position_labels" doc:"Human labels for each position within the role, by index; empty when unlabeled"`
@@ -120,7 +120,7 @@ func toEffectiveRoleBody(e *storage.EffectiveRole) effectiveRoleBody {
 	}
 	return effectiveRoleBody{
 		Name:           e.Name,
-		DisplayName:    e.DisplayName,
+		Label:          e.Label,
 		Quorum:         e.Quorum,
 		Capacity:       e.Capacity,
 		PositionLabels: labels,
@@ -164,7 +164,7 @@ type listSystemRolesOutput struct {
 // cleared field and an omitted field carry the same empty value on the wire.
 type roleSpecBody struct {
 	UpdateMask     []string `json:"update_mask,omitempty" doc:"Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED; send [\"*\"] for full replacement, where every field the body omits goes back to its default. A field this resource does not patch is a 422 naming it"`
-	DisplayName    string   `json:"display_name,omitempty" doc:"The role's human label; defaults to the role name on first declare"`
+	Label          string   `json:"label,omitempty" doc:"The role's human label; defaults to the role name on first declare"`
 	Quorum         int      `json:"quorum,omitempty" minimum:"0" doc:"How many components must fill the role; one on first declare"`
 	Capacity       *int     `json:"capacity,omitempty" minimum:"1" doc:"The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded"`
 	PositionLabels []string `json:"position_labels,omitempty" doc:"Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask"`
@@ -430,7 +430,7 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 // roleSpec fills the declaration spec from the path and body, field for field:
 // nothing is defaulted here, because a default applied on the way in is
 // indistinguishable from a value the caller sent, and the implied mask is
-// exactly that distinction (the role-name default for an absent display_name
+// exactly that distinction (the role-name default for an absent label
 // lives in SetSystemRole, on the value, where it applies only to a write that
 // actually writes the field). altID is the already-resolved AlternateID
 // (resolveAlternateBody), not read from body directly: resolution needs the
@@ -439,7 +439,7 @@ func registerSystemRoleRoutes(api huma.API, a *authenticator, gw storage.Gateway
 func roleSpec(name string, body roleSpecBody, altID *string) storage.SystemRoleSpec {
 	return storage.SystemRoleSpec{
 		Name:           name,
-		DisplayName:    body.DisplayName,
+		Label:          body.Label,
 		Quorum:         body.Quorum,
 		Capacity:       body.Capacity,
 		PositionLabels: body.PositionLabels,

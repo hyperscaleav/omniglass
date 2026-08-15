@@ -33,7 +33,7 @@ func makeRoomWithLabel(t *testing.T, gw *storage.PG, ctx context.Context, name, 
 	}
 	hq := "hq"
 	l, err := gw.CreateLocation(ctx, "", storage.LocationSpec{
-		Name: name, DisplayName: label, LocationType: "room", ParentName: &hq,
+		Name: name, Label: label, LocationType: "room", ParentName: &hq,
 	}, all)
 	if err != nil {
 		t.Fatalf("create location %s: %v", name, err)
@@ -61,8 +61,8 @@ func TestTheWorkedExampleReadsPlacement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if c.DisplayName != "Boardroom 204B Display" {
-		t.Fatalf("label = %q, want %q", c.DisplayName, "Boardroom 204B Display")
+	if c.Label != "Boardroom 204B Display" {
+		t.Fatalf("label = %q, want %q", c.Label, "Boardroom 204B Display")
 	}
 }
 
@@ -144,15 +144,15 @@ func TestLocationLabelFallsThroughToTheLocationName(t *testing.T) {
 		t.Fatalf("blank the shipped location rule: %v", err)
 	}
 	unlabelled := makeRoom(t, gw, ctx, "room-plain")
-	if l := mustGetLocation(t, gw, ctx, unlabelled); l.DisplayName != "" {
-		t.Fatalf("precondition: the location carries the label %q, so the rung under test is unreachable", l.DisplayName)
+	if l := mustGetLocation(t, gw, ctx, unlabelled); l.Label != "" {
+		t.Fatalf("precondition: the location carries the label %q, so the rung under test is unreachable", l.Label)
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &unlabelled}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if c.DisplayName != "[room-plain]" {
-		t.Fatalf("label = %q, want %q: an unlabelled location must read as its name, not as nothing", c.DisplayName, "[room-plain]")
+	if c.Label != "[room-plain]" {
+		t.Fatalf("label = %q, want %q: an unlabelled location must read as its name, not as nothing", c.Label, "[room-plain]")
 	}
 
 	// And an unplaced component reads placement as absent rather than as an
@@ -161,8 +161,8 @@ func TestLocationLabelFallsThroughToTheLocationName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create unplaced: %v", err)
 	}
-	if orphan.DisplayName != "[]" {
-		t.Fatalf("unplaced label = %q, want %q", orphan.DisplayName, "[]")
+	if orphan.Label != "[]" {
+		t.Fatalf("unplaced label = %q, want %q", orphan.Label, "[]")
 	}
 }
 
@@ -192,8 +192,8 @@ func TestRenamingALocationRestampsTheRowsThatReadIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create system here: %v", err)
 	}
-	if inHere.DisplayName != "Room Here Display" {
-		t.Fatalf("before = %q, want %q", inHere.DisplayName, "Room Here Display")
+	if inHere.Label != "Room Here Display" {
+		t.Fatalf("before = %q, want %q", inHere.Label, "Room Here Display")
 	}
 	beforeElsewhere := inElsewhere.UpdatedAt
 
@@ -205,15 +205,15 @@ func TestRenamingALocationRestampsTheRowsThatReadIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-read: %v", err)
 	}
-	if after.DisplayName != "Room 204b Display" {
-		t.Fatalf("after the rename = %q, want %q: the label reads a location it no longer names", after.DisplayName, "Room 204b Display")
+	if after.Label != "Room 204b Display" {
+		t.Fatalf("after the rename = %q, want %q: the label reads a location it no longer names", after.Label, "Room 204b Display")
 	}
 	afterSys, err := gw.GetSystem(ctx, sysHere.ID, all)
 	if err != nil {
 		t.Fatalf("re-read system: %v", err)
 	}
-	if afterSys.DisplayName != "Room 204b Boardroom" {
-		t.Fatalf("system after the rename = %q, want %q", afterSys.DisplayName, "Room 204b Boardroom")
+	if afterSys.Label != "Room 204b Boardroom" {
+		t.Fatalf("system after the rename = %q, want %q", afterSys.Label, "Room 204b Boardroom")
 	}
 
 	// And only those: a row in another room is not touched at all, neither its
@@ -222,8 +222,8 @@ func TestRenamingALocationRestampsTheRowsThatReadIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-read elsewhere: %v", err)
 	}
-	if other.DisplayName != "Room Elsewhere Display" {
-		t.Fatalf("a component in another room reads %q, want %q", other.DisplayName, "Room Elsewhere Display")
+	if other.Label != "Room Elsewhere Display" {
+		t.Fatalf("a component in another room reads %q, want %q", other.Label, "Room Elsewhere Display")
 	}
 	if !other.UpdatedAt.Equal(beforeElsewhere) {
 		t.Errorf("a component in another room was written (updated_at moved): the cascade is restamping rows that read nothing that changed")
@@ -242,32 +242,32 @@ func TestRelabellingALocationRestampsTheRowsThatReadIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if c.DisplayName != "204B Display" {
-		t.Fatalf("before = %q, want %q", c.DisplayName, "204B Display")
+	if c.Label != "204B Display" {
+		t.Fatalf("before = %q, want %q", c.Label, "204B Display")
 	}
-	if _, err := gw.UpdateLocation(ctx, "", room.Name, storage.LocationPatch{DisplayName: strptr("204C")}, all, all); err != nil {
+	if _, err := gw.UpdateLocation(ctx, "", room.Name, storage.LocationPatch{Label: strptr("204C")}, all, all); err != nil {
 		t.Fatalf("relabel: %v", err)
 	}
 	after, err := gw.GetComponent(ctx, c.ID, all)
 	if err != nil {
 		t.Fatalf("re-read: %v", err)
 	}
-	if after.DisplayName != "204C Display" {
-		t.Fatalf("after the relabel = %q, want %q", after.DisplayName, "204C Display")
+	if after.Label != "204C Display" {
+		t.Fatalf("after the relabel = %q, want %q", after.Label, "204C Display")
 	}
 
 	// Clearing the location's label hands its pen back to the platform, and the
 	// ladder falls through to the name: the components below must follow that
 	// too, not only a label swapped for another label.
-	if _, err := gw.UpdateLocation(ctx, "", room.Name, storage.LocationPatch{DisplayName: strptr("")}, all, all); err != nil {
+	if _, err := gw.UpdateLocation(ctx, "", room.Name, storage.LocationPatch{Label: strptr("")}, all, all); err != nil {
 		t.Fatalf("clear the label: %v", err)
 	}
 	cleared, err := gw.GetComponent(ctx, c.ID, all)
 	if err != nil {
 		t.Fatalf("re-read after clear: %v", err)
 	}
-	if cleared.DisplayName != "Room A Display" {
-		t.Fatalf("after clearing the location label = %q, want %q", cleared.DisplayName, "Room A Display")
+	if cleared.Label != "Room A Display" {
+		t.Fatalf("after clearing the location label = %q, want %q", cleared.Label, "Room A Display")
 	}
 }
 
@@ -290,8 +290,8 @@ func TestReclassifyingASystemRestampsItsMembers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create member: %v", err)
 	}
-	if member.DisplayName != "Boardroom Display" {
-		t.Fatalf("before = %q, want %q", member.DisplayName, "Boardroom Display")
+	if member.Label != "Boardroom Display" {
+		t.Fatalf("before = %q, want %q", member.Label, "Boardroom Display")
 	}
 	if _, err := gw.UpdateSystem(ctx, "", s.ID, storage.SystemPatch{SystemTypeID: strptr("huddle")}, all, all); err != nil {
 		t.Fatalf("reclassify: %v", err)
@@ -300,8 +300,8 @@ func TestReclassifyingASystemRestampsItsMembers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-read: %v", err)
 	}
-	if after.DisplayName != "Huddle Room Display" {
-		t.Fatalf("after the reclassify = %q, want %q", after.DisplayName, "Huddle Room Display")
+	if after.Label != "Huddle Room Display" {
+		t.Fatalf("after the reclassify = %q, want %q", after.Label, "Huddle Room Display")
 	}
 }
 
@@ -326,8 +326,8 @@ func TestMembershipChangesRestampTheComponent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if c.DisplayName != "[]" {
-		t.Fatalf("an unbound component reads %q, want %q", c.DisplayName, "[]")
+	if c.Label != "[]" {
+		t.Fatalf("an unbound component reads %q, want %q", c.Label, "[]")
 	}
 
 	// bind: the first membership becomes the primary with nobody asking
@@ -385,15 +385,15 @@ func TestMovingASystemRestampsItsOwnLabel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
-	if s.DisplayName != "Room From Boardroom" {
-		t.Fatalf("before = %q, want %q", s.DisplayName, "Room From Boardroom")
+	if s.Label != "Room From Boardroom" {
+		t.Fatalf("before = %q, want %q", s.Label, "Room From Boardroom")
 	}
 	moved, err := gw.MoveSystem(ctx, "", s.ID, storage.SystemMove{LocationName: &to}, all, all, all)
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
-	if moved.DisplayName != "Room To Boardroom" {
-		t.Fatalf("after the move = %q, want %q", moved.DisplayName, "Room To Boardroom")
+	if moved.Label != "Room To Boardroom" {
+		t.Fatalf("after the move = %q, want %q", moved.Label, "Room To Boardroom")
 	}
 }
 
@@ -414,8 +414,8 @@ func TestMovingAComponentRestampsItsLocationLabel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("move: %v", err)
 	}
-	if moved.DisplayName != "Room To Display" {
-		t.Fatalf("after the move = %q, want %q", moved.DisplayName, "Room To Display")
+	if moved.Label != "Room To Display" {
+		t.Fatalf("after the move = %q, want %q", moved.Label, "Room To Display")
 	}
 }
 
@@ -432,13 +432,13 @@ func TestAnOperatorOwnedLabelSurvivesEveryCascade(t *testing.T) {
 	}
 	room := makeRoom(t, gw, ctx, "room-a")
 	s, err := gw.CreateSystem(ctx, "", storage.SystemSpec{
-		Name: "sys-a", DisplayName: "The Operator's System", SystemTypeID: strptr("board"), LocationName: &room,
+		Name: "sys-a", Label: "The Operator's System", SystemTypeID: strptr("board"), LocationName: &room,
 	}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "hand-named", DisplayName: "The Operator's Own", ProductName: strptr(qm55),
+		Name: "hand-named", Label: "The Operator's Own", ProductName: strptr(qm55),
 		LocationName: &room, SystemName: &s.Name,
 	}, all, all, all, all)
 	if err != nil {
@@ -460,8 +460,8 @@ func TestAnOperatorOwnedLabelSurvivesEveryCascade(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-read system: %v", err)
 	}
-	if after.DisplayName != "The Operator's System" {
-		t.Fatalf("the operator's system label became %q", after.DisplayName)
+	if after.Label != "The Operator's System" {
+		t.Fatalf("the operator's system label became %q", after.Label)
 	}
 }
 
@@ -519,7 +519,7 @@ func TestAPreviewListsExactlyWhatAnApplyThenChanges(t *testing.T) {
 	// One row the operator owns, which must appear in neither the preview nor
 	// the applied set.
 	owned, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		ProductName: strptr(qm55), LocationName: &room, DisplayName: "The Operator's Own",
+		ProductName: strptr(qm55), LocationName: &room, Label: "The Operator's Own",
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create owned: %v", err)
@@ -551,8 +551,8 @@ func TestAPreviewListsExactlyWhatAnApplyThenChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-read: %v", err)
 	}
-	if still.DisplayName != "Display 1" {
-		t.Fatalf("after the preview the label is %q, want the unchanged %q", still.DisplayName, "Display 1")
+	if still.Label != "Display 1" {
+		t.Fatalf("after the preview the label is %q, want the unchanged %q", still.Label, "Display 1")
 	}
 
 	applied, err := gw.RecomputeLabels(ctx, "", "component", all, all)
@@ -726,7 +726,7 @@ func labelOf(t *testing.T, gw *storage.PG, ctx context.Context, id string) strin
 	if err != nil {
 		t.Fatalf("get component %s: %v", id, err)
 	}
-	return c.DisplayName
+	return c.Label
 }
 
 func sameChangeSet(a, b []storage.LabelChange) bool {
@@ -812,13 +812,13 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 
 	var comps []string
 	for _, spec := range []storage.ComponentSpec{
-		{ProductName: strptr(qm55), LocationName: &roomA.Name, SystemName: &board.Name},  // 0 stays put
-		{ProductName: strptr(qm55), LocationName: &roomA.Name, SystemName: &board.Name},  // 1 moves rooms
-		{ProductName: strptr(qm55), LocationName: &roomB, SystemName: &huddle.Name},      // 2 re-defaulted
-		{ProductName: strptr(qm55), LocationName: &roomB},                                // 3 bound later
-		{ProductName: strptr("shure-mxa920"), LocationName: &roomC},                      // 4 renamed then reset
-		{ProductName: strptr(qm55), LocationName: &roomC, DisplayName: "Operator's Own"}, // 5 the pen stays theirs
-		{ProductName: strptr(qm55), LocationName: &roomC, SystemName: &mover.Name},       // 6 its system moves
+		{ProductName: strptr(qm55), LocationName: &roomA.Name, SystemName: &board.Name}, // 0 stays put
+		{ProductName: strptr(qm55), LocationName: &roomA.Name, SystemName: &board.Name}, // 1 moves rooms
+		{ProductName: strptr(qm55), LocationName: &roomB, SystemName: &huddle.Name},     // 2 re-defaulted
+		{ProductName: strptr(qm55), LocationName: &roomB},                               // 3 bound later
+		{ProductName: strptr("shure-mxa920"), LocationName: &roomC},                     // 4 renamed then reset
+		{ProductName: strptr(qm55), LocationName: &roomC, Label: "Operator's Own"},      // 5 the pen stays theirs
+		{ProductName: strptr(qm55), LocationName: &roomC, SystemName: &mover.Name},      // 6 its system moves
 	} {
 		c, err := gw.CreateComponent(ctx, "", spec, all, all, all, all)
 		if err != nil {
@@ -837,11 +837,11 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 			return err
 		}},
 		{"relabel that location", func() error {
-			_, err := gw.UpdateLocation(ctx, "", "room-204a", storage.LocationPatch{DisplayName: strptr("204A West")}, all, all)
+			_, err := gw.UpdateLocation(ctx, "", "room-204a", storage.LocationPatch{Label: strptr("204A West")}, all, all)
 			return err
 		}},
 		{"clear that label so the ladder falls through to the name", func() error {
-			_, err := gw.UpdateLocation(ctx, "", "room-204a", storage.LocationPatch{DisplayName: strptr("")}, all, all)
+			_, err := gw.UpdateLocation(ctx, "", "room-204a", storage.LocationPatch{Label: strptr("")}, all, all)
 			return err
 		}},
 		{"reclassify a location", func() error {
@@ -938,7 +938,7 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 		t.Fatalf("list: %v", err)
 	}
 	for _, c := range cs {
-		if c.DisplayNameGenerated {
+		if c.LabelGenerated {
 			owned++
 		}
 	}
@@ -970,8 +970,8 @@ func TestStaffingARoleRestampsTheComponentItBinds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create video bar: %v", err)
 	}
-	if bar.DisplayName != "[]" {
-		t.Fatalf("an unbound component reads %q, want %q", bar.DisplayName, "[]")
+	if bar.Label != "[]" {
+		t.Fatalf("an unbound component reads %q, want %q", bar.Label, "[]")
 	}
 	if err := gw.AssignRole(ctx, "", s.Name, "conf-bar", bar.ID, all, all); err != nil {
 		t.Fatalf("assign role: %v", err)
@@ -1007,8 +1007,8 @@ func TestDeletingASystemRestampsItsMembers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if c.DisplayName != "[Boardroom]" {
-		t.Fatalf("a bound component reads %q, want %q", c.DisplayName, "[Boardroom]")
+	if c.Label != "[Boardroom]" {
+		t.Fatalf("a bound component reads %q, want %q", c.Label, "[Boardroom]")
 	}
 	if err := gw.DeleteSystem(ctx, "", s.ID, all, all); err != nil {
 		t.Fatalf("delete system: %v", err)

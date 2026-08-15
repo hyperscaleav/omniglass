@@ -40,18 +40,21 @@ func TestShippedLocationTypesFlipToPlatformOwned(t *testing.T) {
 	// (official=false, which is what insert-if-absent wrote), one of them
 	// carrying a rule a release shipped and ADR-0103 withdrew.
 	rows := []struct {
-		name, displayName, icon string
-		parents                 string
-		rule                    any
+		name, label, icon string
+		parents           string
+		rule              any
 	}{
-		{name: "campus", displayName: "Campus", icon: "landmark", parents: "{root}"},
-		{name: "building", displayName: "Building", icon: "building", parents: "{root,campus}"},
-		{name: "floor", displayName: "Floor", icon: "layers", parents: "{building,campus}", rule: `{"stem":"","bare_first":false}`},
-		{name: "room", displayName: "Room", icon: "door-open", parents: "{floor,building,campus}"},
+		{name: "campus", label: "Campus", icon: "landmark", parents: "{root}"},
+		{name: "building", label: "Building", icon: "building", parents: "{root,campus}"},
+		{name: "floor", label: "Floor", icon: "layers", parents: "{building,campus}", rule: `{"stem":"","bare_first":false}`},
+		{name: "room", label: "Room", icon: "door-open", parents: "{floor,building,campus}"},
 	}
 	for _, r := range rows {
+		// The column is `display_name` at this point in the chain: #613's rename
+		// (20260814100000_label_is_the_column.sql) is above the version this test
+		// stands the database at.
 		mustExec(t, conn, `insert into location_type (name, official, display_name, icon, allowed_parent_types, name_rule)
-		                   values ($1, false, $2, $3, $4, $5)`, r.name, r.displayName, r.icon, r.parents, r.rule)
+		                   values ($1, false, $2, $3, $4, $5)`, r.name, r.label, r.icon, r.parents, r.rule)
 	}
 	// An operator's own type, which the flip may not touch: nothing seeds it, so
 	// marking it official would take it away from the operator who made it.
@@ -143,7 +146,7 @@ func TestShippedLocationTypesFlipToPlatformOwned(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get wing: %v", err)
 	}
-	if wing.DisplayName != "West Wing" || wing.Official || wing.Forked {
+	if wing.Label != "West Wing" || wing.Official || wing.Forked {
 		t.Errorf("the operator's own type = %+v, want West Wing, not official, not forked", wing)
 	}
 }

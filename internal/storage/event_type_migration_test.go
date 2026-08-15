@@ -16,7 +16,7 @@ func TestEventTypeFamilyMigration(t *testing.T) {
 	conn := connectMigrated(t)
 
 	// The event_type registry exists and takes a row, keyed uniquely by name.
-	mustExec(t, conn, `insert into event_type (name, display_name) values ('call-started', 'Call started')`)
+	mustExec(t, conn, `insert into event_type (name, label) values ('call-started', 'Call started')`)
 	if _, err := conn.Exec(ctx, `insert into event_type (name) values ('call-started')`); err == nil {
 		t.Error("expected event_type.name unique to reject a duplicate")
 	}

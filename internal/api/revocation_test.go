@@ -140,7 +140,7 @@ func TestRevokeCutsScopeLiveSessionAPI(t *testing.T) {
 		{role: "viewer", scopeKind: "all"},
 		{role: "location-writer", scopeKind: "location", scopeID: rootID},
 	})
-	patch := map[string]any{"display_name": "x"}
+	patch := map[string]any{"label": "x"}
 
 	// The live token can write in scope.
 	if code, _ := c.send(subjTok, "PATCH", "/locations/az-child", patch); code != http.StatusOK {

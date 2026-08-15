@@ -7,7 +7,7 @@ property_types:
   - name: interface-reachable
     data_type: string
     validation: { enum: [up, down] }
-    display_name: Interface Reachable
+    label: Interface Reachable
     description: >-
       Per-interface reachability verdict, the AND of the interface's probe
       results (up = every applicable probe reached the target). A built-in state:
@@ -16,7 +16,7 @@ property_types:
   - name: health
     data_type: string
     validation: { enum: [healthy, degraded, outage] }
-    display_name: Health
+    label: Health
     description: >-
       The rolled-up health verdict for a component, system, or location, worst-wins
       over its inputs (a component's active alarms, a system's roles, the systems
@@ -25,7 +25,7 @@ property_types:
   - name: video-input
     data_type: string
     validation: { enum: [hdmi1, hdmi2, hdmi3, dp1, usbc] }
-    display_name: Video Input
+    label: Video Input
     description: >-
       The selected video input on a display or switcher. A settable state: the
       set-input command tells the device which input to select (opening an intended
@@ -33,18 +33,18 @@ property_types:
   # Declared attribute properties: the starter set a field draws from.
   - name: serial-number
     data_type: string
-    display_name: Serial number
+    label: Serial number
     description: The manufacturer serial number of the device.
   - name: mac-address
     data_type: string
     validation: { pattern: "^([0-9a-f]{2}:){5}[0-9a-f]{2}$" }
-    display_name: MAC address
+    label: MAC address
     description: The primary hardware (MAC) address, lowercase colon-separated.
   - name: firmware-version
     data_type: string
-    display_name: Firmware version
+    label: Firmware version
     description: The installed firmware or software version.
   - name: model-number
     data_type: string
-    display_name: Model number
+    label: Model number
     description: The manufacturer model number.

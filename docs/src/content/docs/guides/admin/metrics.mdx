@@ -24,20 +24,20 @@ The catalog is estate-wide reference data, not a scoped resource, so every metri
 every reader; the write gates decide who may change it.
 
 - The directory lists every metric sorted by name, each showing its **name** (the canonical
-  identifier, with its display name on the line above it), **type** (`int` or `float`),
+  identifier, with its label on the line above it), **type** (`int` or `float`),
   **unit**, and **origin** (**official** or **custom**). **name** filters by the
-  name or its display name; **type**, **unit**, and **official** narrow the list.
+  name or its label; **type**, **unit**, and **official** narrow the list.
 - **New metric** (with `metric_type:create`, granted to operators) opens a create **drawer**: give
   it a **name** (a single lowercase kebab segment, for example `icmp-rtt-avg` or `cpu-load`),
   choose its **data type** (`int` or `float`; a metric is always a number, a categorical signal is
-  a property), and optionally add a **display name**, a **description**, a **unit** (`ms`, `dB`,
+  a property), and optionally add a **label**, a **description**, a **unit** (`ms`, `dB`,
   `percent`), and a **precision** (the decimal places a rendered value keeps). An invalid name (an
   uppercase letter, an underscore, a leading hyphen, a dot) is refused with a message.
 - The unit is **canonical**: stored values are always in it, so every threshold and calculation
   compares like with like. A genuinely different measurement is a different metric; the unit names
   the scale, it never rides along per sample.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `metric_type:update`)
-  edits the display name, description, unit, and precision; the name and data type are fixed at
+  edits the label, description, unit, and precision; the name and data type are fixed at
   creation, since changing a series' value type under the rows that already use it is unsafe and a
   name is what every driver and contract maps onto. **Delete** (with `metric_type:delete`) removes
   a custom metric, behind a confirm. A verb you lack greys just that button, its hover reason

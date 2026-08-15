@@ -62,7 +62,7 @@ func (p *PG) loadPrincipals(ctx context.Context, prs []Principal) error {
 // path raises rather than silently returning a principal with a nil profile.
 func (p *PG) attachPrincipalProfiles(ctx context.Context, ids []string, at map[string]*Principal) error {
 	rows, err := p.pool.Query(ctx,
-		`select principal_id, 'human'::text as kind, username, coalesce(email, ''), coalesce(display_name, ''),
+		`select principal_id, 'human'::text as kind, username, coalesce(email, ''), label,
 		        must_change_password, avatar is not null, avatar_updated_at
 		   from human where principal_id = any($1::uuid[])
 		  union all
@@ -77,11 +77,11 @@ func (p *PG) attachPrincipalProfiles(ctx context.Context, ids []string, at map[s
 	defer rows.Close()
 	for rows.Next() {
 		var (
-			id, kind, ident, email, displayName string
-			mustChange, hasAvatar               bool
-			avatarAt                            *time.Time
+			id, kind, ident, email, label string
+			mustChange, hasAvatar         bool
+			avatarAt                      *time.Time
 		)
-		if err := rows.Scan(&id, &kind, &ident, &email, &displayName, &mustChange, &hasAvatar, &avatarAt); err != nil {
+		if err := rows.Scan(&id, &kind, &ident, &email, &label, &mustChange, &hasAvatar, &avatarAt); err != nil {
 			return fmt.Errorf("storage: scan principal profile: %w", err)
 		}
 		pr, ok := at[id]
@@ -91,7 +91,7 @@ func (p *PG) attachPrincipalProfiles(ctx context.Context, ids []string, at map[s
 		switch kind {
 		case "human":
 			pr.Human = &HumanProfile{
-				Username: ident, Email: email, DisplayName: displayName,
+				Username: ident, Email: email, Label: label,
 				MustChangePassword: mustChange, HasAvatar: hasAvatar, AvatarUpdatedAt: avatarAt,
 			}
 		case "service":
@@ -130,7 +130,7 @@ func (p *PG) attachPrincipalProfiles(ctx context.Context, ids []string, at map[s
 func (p *PG) attachPrincipalGrants(ctx context.Context, ids []string, at map[string]*Principal) error {
 	rows, err := p.pool.Query(ctx,
 		`select o.owner, g.id, (select name from role where id = g.role_id), g.scope_kind, g.scope_id, g.scope_op,
-		        g.group_id, coalesce(pg.display_name, pg.name)
+		        g.group_id, coalesce(pg.label, pg.name)
 		   from (select id as grant_id, principal_id as owner
 		           from principal_grant where principal_id = any($1::uuid[])
 		          union all
@@ -165,7 +165,7 @@ func (p *PG) attachPrincipalGrants(ctx context.Context, ids []string, at map[str
 // directory names beside a principal's inherited access.
 func (p *PG) attachPrincipalGroups(ctx context.Context, ids []string, at map[string]*Principal) error {
 	rows, err := p.pool.Query(ctx,
-		`select m.principal_id, g.id, coalesce(g.display_name, g.name)
+		`select m.principal_id, g.id, coalesce(g.label, g.name)
 		   from principal_group_member m join principal_group g on g.id = m.group_id
 		  where m.principal_id = any($1::uuid[])
 		  order by m.principal_id, g.name`, ids)

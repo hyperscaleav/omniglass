@@ -31,7 +31,7 @@ var ErrGroupExists = errors.New("storage: group name already exists")
 type Group struct {
 	ID          string
 	Name        string
-	DisplayName string
+	Label       string
 	Description string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -45,7 +45,7 @@ type Group struct {
 // GroupSpec is the input to create a group.
 type GroupSpec struct {
 	Name        string
-	DisplayName string
+	Label       string
 	Description string
 }
 
@@ -53,7 +53,7 @@ type GroupSpec struct {
 // Name: a rename is RenameGroup, its own act under its own permission, because it
 // breaks the references an operator stored outside this system.
 type GroupPatch struct {
-	DisplayName *string
+	Label       *string
 	Description *string
 }
 
@@ -62,27 +62,27 @@ type GroupPatch struct {
 //
 // Name is the principal's IDENTIFIER, whichever kind it is (a human's username,
 // a service account's name, a node's name), resolved by principalIdent.
-// DisplayName is the friendly string, which only a human has a column for and
+// Label is the friendly string, which only a human has a column for and
 // which is empty when nobody set one. The field that used to carry both is why
 // #563 renamed `service.label`.
 type GroupMember struct {
 	PrincipalID string
 	Kind        string
 	Name        string
-	DisplayName string
+	Label       string
 }
 
-const groupCols = `id, name, coalesce(display_name, ''), coalesce(description, ''), created_at, updated_at`
+const groupCols = `id, name, label, coalesce(description, ''), created_at, updated_at`
 
 // groupColsWithCounts adds the member and grant counts as correlated subqueries,
 // aliasing the table `g`, for the list and get reads that display a group's size.
-const groupColsWithCounts = `g.id, g.name, coalesce(g.display_name, ''), coalesce(g.description, ''), g.created_at, g.updated_at,
+const groupColsWithCounts = `g.id, g.name, coalesce(g.label, ''), coalesce(g.description, ''), g.created_at, g.updated_at,
 	(select count(*) from principal_group_member m where m.group_id = g.id),
 	(select count(*) from principal_grant pg where pg.group_id = g.id)`
 
 func scanGroupFull(row interface{ Scan(...any) error }) (*Group, error) {
 	var g Group
-	if err := row.Scan(&g.ID, &g.Name, &g.DisplayName, &g.Description, &g.CreatedAt, &g.UpdatedAt, &g.MemberCount, &g.GrantCount); err != nil {
+	if err := row.Scan(&g.ID, &g.Name, &g.Label, &g.Description, &g.CreatedAt, &g.UpdatedAt, &g.MemberCount, &g.GrantCount); err != nil {
 		return nil, err
 	}
 	return &g, nil
@@ -90,7 +90,7 @@ func scanGroupFull(row interface{ Scan(...any) error }) (*Group, error) {
 
 func scanGroup(row interface{ Scan(...any) error }) (*Group, error) {
 	var g Group
-	if err := row.Scan(&g.ID, &g.Name, &g.DisplayName, &g.Description, &g.CreatedAt, &g.UpdatedAt); err != nil {
+	if err := row.Scan(&g.ID, &g.Name, &g.Label, &g.Description, &g.CreatedAt, &g.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &g, nil
@@ -112,8 +112,8 @@ func (p *PG) CreateGroup(ctx context.Context, actorID string, spec GroupSpec, ac
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	g, err := scanGroup(tx.QueryRow(ctx,
-		`insert into principal_group (name, display_name, description) values ($1, $2, $3) returning `+groupCols,
-		spec.Name, nullize(spec.DisplayName), nullize(spec.Description)))
+		`insert into principal_group (name, label, description) values ($1, $2, $3) returning `+groupCols,
+		spec.Name, spec.Label, nullize(spec.Description)))
 	if err != nil {
 		return nil, mapGroupWriteErr(err)
 	}
@@ -176,16 +176,16 @@ func (p *PG) UpdateGroup(ctx context.Context, actorID, groupID string, patch Gro
 	if err != nil {
 		return nil, notFoundOr(err, ErrGroupNotFound)
 	}
-	display, desc := before.DisplayName, before.Description
-	if patch.DisplayName != nil {
-		display = *patch.DisplayName
+	display, desc := before.Label, before.Description
+	if patch.Label != nil {
+		display = *patch.Label
 	}
 	if patch.Description != nil {
 		desc = *patch.Description
 	}
 	after, err := scanGroup(tx.QueryRow(ctx,
-		`update principal_group set display_name = $2, description = $3, updated_at = now() where id = $1 returning `+groupCols,
-		groupID, nullize(display), nullize(desc)))
+		`update principal_group set label = $2, description = $3, updated_at = now() where id = $1 returning `+groupCols,
+		groupID, display, nullize(desc)))
 	if err != nil {
 		return nil, mapGroupWriteErr(err)
 	}
@@ -321,13 +321,13 @@ func (p *PG) ListGroupMembers(ctx context.Context, groupID string, read scope.Se
 	}
 	// A group can hold humans and service accounts, and a roster shows two
 	// different facts about each: its NAME, the identifier that says which
-	// principal this is, and its display name, the friendly string a human may
+	// principal this is, and its label, the friendly string a human may
 	// have been given and a service account has no column for.
 	//
-	// This read used to return one field for both, `coalesce(h.display_name,
+	// This read used to return one field for both, `coalesce(h.label,
 	// s.label, '')`, which crossed a friendly string and an identifier in one
 	// fallback chain and is the clearest illustration of why #563 renamed that
-	// column: written out after the rename it reads `coalesce(h.display_name,
+	// column: written out after the rename it reads `coalesce(h.label,
 	// s.name, '')`, and the mistake is on the page. The fix is not a better chain,
 	// it is two columns, each meaning one thing, with the renderer choosing.
 	//
@@ -335,7 +335,7 @@ func (p *PG) ListGroupMembers(ctx context.Context, groupID string, read scope.Se
 	// sub-selects cost 3011 buffer hits over 500 members where these joins cost
 	// 15 (principal_ident.go carries the measurement).
 	rows, err := p.pool.Query(ctx,
-		`select p.id, p.kind, `+principalIdentJoinedCols("pi")+`, coalesce(h.display_name, '')
+		`select p.id, p.kind, `+principalIdentJoinedCols("pi")+`, coalesce(h.label, '')
 		   from principal_group_member m
 		   join principal p on p.id = m.principal_id
 		   left join human h on h.principal_id = p.id`+principalIdentJoins("pi", "p.id")+`
@@ -349,7 +349,7 @@ func (p *PG) ListGroupMembers(ctx context.Context, groupID string, read scope.Se
 	for rows.Next() {
 		var m GroupMember
 		var username, serviceName, nodeName *string
-		if err := rows.Scan(&m.PrincipalID, &m.Kind, &username, &serviceName, &nodeName, &m.DisplayName); err != nil {
+		if err := rows.Scan(&m.PrincipalID, &m.Kind, &username, &serviceName, &nodeName, &m.Label); err != nil {
 			return nil, fmt.Errorf("storage: scan member: %w", err)
 		}
 		m.Name = principalIdent(username, serviceName, nodeName)
@@ -495,7 +495,7 @@ func (p *PG) ListGroupGrants(ctx context.Context, groupID string, read scope.Set
 }
 
 func groupColsPrefixed(a string) string {
-	return a + ".id, " + a + ".name, coalesce(" + a + ".display_name, ''), coalesce(" + a + ".description, ''), " + a + ".created_at, " + a + ".updated_at"
+	return a + ".id, " + a + ".name, coalesce(" + a + ".label, ''), coalesce(" + a + ".description, ''), " + a + ".created_at, " + a + ".updated_at"
 }
 
 // notFoundOr maps a no-rows result (or a malformed-uuid lookup, which identifies

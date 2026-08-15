@@ -101,7 +101,7 @@ const positionalType = "deck"
 func mustPositionalType(t *testing.T, gw storage.Gateway) {
 	t.Helper()
 	if _, err := gw.CreateLocationType(context.Background(), "", storage.LocationType{
-		Name: positionalType, DisplayName: "Deck", AllowedParentTypes: []string{"building", "campus"},
+		Name: positionalType, Label: "Deck", AllowedParentTypes: []string{"building", "campus"},
 		NameRule: &storage.NameRule{},
 	}); err != nil {
 		t.Fatalf("create the positional location type: %v", err)
@@ -234,13 +234,13 @@ func TestPositionalTypeAtRootAllocatesAcrossTheEstate(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{
-		Name: "pad", DisplayName: "Pad", AllowedParentTypes: []string{storage.RootPlacement, "campus"},
+		Name: "pad", Label: "Pad", AllowedParentTypes: []string{storage.RootPlacement, "campus"},
 		NameRule: &storage.NameRule{},
 	}); err != nil {
 		t.Fatalf("create the root-placeable positional type: %v", err)
 	}
 	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{
-		Name: "berth", DisplayName: "Berth", AllowedParentTypes: []string{storage.RootPlacement, "campus"},
+		Name: "berth", Label: "Berth", AllowedParentTypes: []string{storage.RootPlacement, "campus"},
 		NameRule: &storage.NameRule{},
 	}); err != nil {
 		t.Fatalf("create the second positional type: %v", err)
@@ -387,7 +387,7 @@ func TestLocationMoveReMintsInTheDestinationBucket(t *testing.T) {
 // review caught on the system tier one slice ago (ADR-0101), refused entry
 // here: the console sends location_type on EVERY save, so a guard on the field
 // being present rather than on the classification changing would re-mint a
-// display-name edit, and with a lower ordinal freed by an earlier rename that
+// label edit, and with a lower ordinal freed by an earlier rename that
 // re-mint MOVES the name under location:update.
 func TestLocationUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 	gw := storagetest.NewDB(t)
@@ -420,7 +420,7 @@ func TestLocationUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 	// and the type it already has.
 	same := positionalType
 	after, err := gw.UpdateLocation(ctx, "", second.ID, storage.LocationPatch{
-		DisplayName: strptr("Level Two"), LocationType: &same,
+		Label: strptr("Level Two"), LocationType: &same,
 	}, all, all)
 	if err != nil {
 		t.Fatalf("update: %v", err)
@@ -439,7 +439,7 @@ func TestLocationUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 	// string the caller happened to type.
 	byUUID := after.LocationTypeID
 	again, err := gw.UpdateLocation(ctx, "", second.ID, storage.LocationPatch{
-		DisplayName: strptr("Level Two"), LocationType: &byUUID,
+		Label: strptr("Level Two"), LocationType: &byUUID,
 	}, all, all)
 	if err != nil {
 		t.Fatalf("update by type uuid: %v", err)
@@ -456,7 +456,7 @@ func TestLocationUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 	}
 	// And into a type that CAN generate, it takes that type's shape.
 	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{
-		Name: "wing", DisplayName: "Wing", AllowedParentTypes: []string{"building"},
+		Name: "wing", Label: "Wing", AllowedParentTypes: []string{"building"},
 		NameRule: &storage.NameRule{Stem: "wing", BareFirst: true},
 	}); err != nil {
 		t.Fatalf("create the wing type: %v", err)
@@ -551,7 +551,7 @@ func TestNameRuleIsRefusedAtEditTime(t *testing.T) {
 	mustPositionalType(t, gw)
 
 	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{
-		Name: "wing", DisplayName: "Wing", NameRule: &storage.NameRule{Stem: "Wing"},
+		Name: "wing", Label: "Wing", NameRule: &storage.NameRule{Stem: "Wing"},
 	}); !errors.Is(err, storage.ErrInvalidNameRule) {
 		t.Fatalf("create a type with an upper-case stem = %v, want ErrInvalidNameRule", err)
 	}
@@ -599,7 +599,7 @@ func TestNameRuleRoundTripsThroughTheRegistry(t *testing.T) {
 	}
 	mustPositionalType(t, gw)
 	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{
-		Name: "wing", DisplayName: "Wing", NameRule: &storage.NameRule{Stem: "", BareFirst: true},
+		Name: "wing", Label: "Wing", NameRule: &storage.NameRule{Stem: "", BareFirst: true},
 	}); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -718,7 +718,7 @@ func TestAForkedNameRuleSurvivesTheAuthoritativeSeed(t *testing.T) {
 	// and clearing is spelled by naming the field in update_mask (#692, ADR-0091,
 	// driven on both type kinds by TestClearNameRuleOnBothTypeKinds).
 	if _, err := gw.UpdateLocationType(ctx, "", "floor", storage.LocationTypePatch{
-		DisplayName: strptr("Floor"),
+		Label: strptr("Floor"),
 	}); err != nil {
 		t.Fatalf("patch the floor type without a rule: %v", err)
 	}
@@ -755,7 +755,7 @@ func TestStoredLocationOrdinalsRecomputeToThemselves(t *testing.T) {
 	}
 	mustPositionalType(t, pg)
 	if _, err := pg.CreateLocationType(ctx, "", storage.LocationType{
-		Name: "wing", DisplayName: "Wing", AllowedParentTypes: []string{"building"},
+		Name: "wing", Label: "Wing", AllowedParentTypes: []string{"building"},
 		NameRule: &storage.NameRule{Stem: "wing", BareFirst: true},
 	}); err != nil {
 		t.Fatalf("create the wing type: %v", err)

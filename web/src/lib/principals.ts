@@ -22,7 +22,7 @@ export type Principal = {
   archived_at?: string;
   // has_avatar is a boolean flag (never the bytes): the image is fetched lazily via
   // principalAvatarUrl only when it is set, so the directory stays cheap to load.
-  human?: { username: string; email?: string; display_name?: string; has_avatar?: boolean };
+  human?: { username: string; email?: string; label?: string; has_avatar?: boolean };
   service?: { name: string };
   grants: Grant[];
   // The principal groups this principal belongs to; the grants they confer ride
@@ -71,7 +71,7 @@ export async function getPrincipal(id: string): Promise<Principal> {
 
 export type CreatePrincipal = {
   username: string;
-  display_name?: string;
+  label?: string;
   email?: string;
   password?: string;
 };
@@ -82,7 +82,7 @@ export async function createPrincipal(body: CreatePrincipal): Promise<Principal>
   return data as Principal;
 }
 
-export type UpdatePrincipal = { display_name?: string; email?: string; username?: string };
+export type UpdatePrincipal = { label?: string; email?: string; username?: string };
 
 export async function updatePrincipal(id: string, body: UpdatePrincipal): Promise<Principal> {
   const { data, error } = await api.PATCH("/principals/{id}", { params: { path: { id } }, body });
@@ -166,7 +166,7 @@ export type Role = {
   official: boolean;
   permissions: string[];
   inherits: string[];
-  display_name?: string;
+  label?: string;
   description?: string;
   // What the role actually confers, flattened by the server (inheritance, wildcard,
   // and the :read floor resolved). Present on GET /roles.
@@ -218,7 +218,7 @@ export const roleFilterKeys: FilterKey<Role>[] = [
   { key: "permission", type: "string", hint: "substring", get: (r) => effectivePerms(r).join(" "), values: (rows) => uniqSorted(rows.flatMap((r) => permResources(effectivePerms(r)))) },
 ];
 
-// The display name for a principal: a human's display name or username, a service
+// The label for a principal: a human's label or username, a service
 // account's name, else the bare kind.
 //
 // NOT entityLabel, and deliberately: a principal is addressed by uuid and each
@@ -232,13 +232,13 @@ export const roleFilterKeys: FilterKey<Role>[] = [
 // deeper and used to restate all four rungs by hand, which is the same drift
 // with a different subject.
 export type PrincipalIdentity = {
-  human?: { username: string; display_name?: string };
+  human?: { username: string; label?: string };
   service?: { name: string };
   kind: string;
 };
 
 export function principalName(p: Principal | PrincipalIdentity): string {
-  return p.human?.display_name || p.human?.username || p.service?.name || p.kind;
+  return p.human?.label || p.human?.username || p.service?.name || p.kind;
 }
 
 // Presentational helpers shared by the directory columns and the detail body, so a

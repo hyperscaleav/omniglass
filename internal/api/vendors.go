@@ -10,11 +10,11 @@ import (
 )
 
 // vendorBody is the wire shape of a vendor registry row. The registry lists
-// alphabetically by display_name, like the product catalog.
+// alphabetically by label, like the product catalog.
 type vendorBody struct {
 	ID           string `json:"id" doc:"The vendor's uuid, the stable handle that survives a rename"`
 	Name         string `json:"name" doc:"The name an operator reads and types; renameable"`
-	DisplayName  string `json:"display_name"`
+	Label        string `json:"label"`
 	Kind         string `json:"kind" enum:"manufacturer,integrator,developer"`
 	Icon         string `json:"icon,omitempty"`
 	SupportPhone string `json:"support_phone,omitempty"`
@@ -24,7 +24,7 @@ type vendorBody struct {
 
 func toVendorBody(m *storage.Vendor) vendorBody {
 	return vendorBody{
-		ID: m.ID, Name: m.Name, DisplayName: m.DisplayName, Kind: m.Kind, Icon: m.Icon,
+		ID: m.ID, Name: m.Name, Label: m.Label, Kind: m.Kind, Icon: m.Icon,
 		SupportPhone: m.SupportPhone, Website: m.Website, Official: m.Official,
 	}
 }
@@ -42,7 +42,7 @@ type vendorPathInput struct {
 type createVendorInput struct {
 	Body struct {
 		Name         string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name; renameable"`
-		DisplayName  string `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
+		Label        string `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		Kind         string `json:"kind,omitempty" enum:"manufacturer,integrator,developer" default:"manufacturer" doc:"The role the organization plays"`
 		Icon         string `json:"icon,omitempty" doc:"A glyph key, e.g. crestron-logo"`
 		SupportPhone string `json:"support_phone,omitempty" doc:"The vendor's support line"`
@@ -53,7 +53,7 @@ type createVendorInput struct {
 type updateVendorInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		DisplayName  *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		Label        *string `json:"label,omitempty" doc:"A new operator-facing label"`
 		Kind         *string `json:"kind,omitempty" enum:"manufacturer,integrator,developer" doc:"A new organization role"`
 		Icon         *string `json:"icon,omitempty" doc:"A new glyph key"`
 		SupportPhone *string `json:"support_phone,omitempty" doc:"A new support line"`
@@ -102,7 +102,7 @@ func registerVendorRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/vendors",
 		Summary:     "List vendors",
-		Description: "Lists the vendor registry, ordered alphabetically by display name. Populates the vendor picker on the product form. Gated by vendor:read.",
+		Description: "Lists the vendor registry, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.",
 	}, "vendor", "read"), func(ctx context.Context, _ *struct{}) (*listVendorsOutput, error) {
 		makes, err := gw.ListVendors(ctx)
 		if err != nil {
@@ -134,7 +134,7 @@ func registerVendorRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			return nil, huma.Error422UnprocessableEntity("website must be an http or https URL")
 		}
 		m, err := gw.CreateVendor(ctx, actorID(ctx), storage.Vendor{
-			Name: in.Body.Name, DisplayName: in.Body.DisplayName, Kind: in.Body.Kind, Icon: in.Body.Icon,
+			Name: in.Body.Name, Label: in.Body.Label, Kind: in.Body.Kind, Icon: in.Body.Icon,
 			SupportPhone: in.Body.SupportPhone, Website: in.Body.Website,
 		})
 		if err != nil {
@@ -162,7 +162,7 @@ func registerVendorRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPatch,
 		Path:        "/vendors/{id}",
 		Summary:     "Update a vendor",
-		Description: "Patches a custom vendor's display_name, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.",
+		Description: "Patches a custom vendor's label, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.",
 	}, "vendor", "update"), func(ctx context.Context, in *updateVendorInput) (*vendorOutput, error) {
 		if in.Body.Kind != nil && !validVendorKind(*in.Body.Kind) {
 			return nil, huma.Error422UnprocessableEntity("kind must be one of manufacturer, integrator, developer")
@@ -171,7 +171,7 @@ func registerVendorRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			return nil, huma.Error422UnprocessableEntity("website must be an http or https URL")
 		}
 		m, err := gw.UpdateVendor(ctx, actorID(ctx), in.ID, storage.VendorPatch{
-			DisplayName: in.Body.DisplayName, Kind: in.Body.Kind, Icon: in.Body.Icon,
+			Label: in.Body.Label, Kind: in.Body.Kind, Icon: in.Body.Icon,
 			SupportPhone: in.Body.SupportPhone, Website: in.Body.Website,
 		})
 		if err != nil {

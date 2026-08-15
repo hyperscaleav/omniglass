@@ -160,11 +160,11 @@ func buildBenchEstate(b *testing.B, size benchSize) *benchEstate {
 
 	// One standard carrying one role, so the systems below are classified and
 	// the health reads have something to resolve rather than an empty set.
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "bench-standard", DisplayName: "Bench Standard"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "bench-standard", Label: "Bench Standard"}); err != nil {
 		b.Fatalf("upsert standard: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "standard", "bench-standard", storage.SystemRoleSpec{
-		Name: "bench-role", DisplayName: "Bench Role", Quorum: 1,
+		Name: "bench-role", Label: "Bench Role", Quorum: 1,
 		AcceptedTypes: []string{"generic-device"}, Impact: "degraded",
 	}); err != nil {
 		b.Fatalf("declare role: %v", err)
@@ -443,7 +443,7 @@ func BenchmarkPathsOfComponents(b *testing.B) {
 // BenchmarkResolveTags: the tag cascade for ONE component, the most complex
 // single statement in the tree (three recursive chain walks unioned into one
 // owner set, a window function ranking per key, and three left joins for the
-// owners' display names).
+// owners' labels).
 //
 // This one should be FLAT across the two sizes, and that is the point of running
 // it at both. It walks one component's three ancestor chains, and neither chain

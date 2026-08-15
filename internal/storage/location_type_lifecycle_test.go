@@ -48,12 +48,12 @@ func TestShippedLocationTypeForksAndRestores(t *testing.T) {
 	}
 
 	label := "Site"
-	forked, err := gw.UpdateLocationType(ctx, "", "campus", storage.LocationTypePatch{DisplayName: &label})
+	forked, err := gw.UpdateLocationType(ctx, "", "campus", storage.LocationTypePatch{Label: &label})
 	if err != nil {
 		t.Fatalf("edit a shipped location type: %v (it must fork, not refuse)", err)
 	}
-	if forked.DisplayName != "Site" || !forked.Forked || !forked.Official {
-		t.Fatalf("the forked row = %+v, want display_name Site with official and forked both true", forked)
+	if forked.Label != "Site" || !forked.Forked || !forked.Official {
+		t.Fatalf("the forked row = %+v, want label Site with official and forked both true", forked)
 	}
 	if forked.ID != campus.ID {
 		t.Fatalf("the fork answered with id %q, the shipped row is %q: one logical row has one address", forked.ID, campus.ID)
@@ -63,7 +63,7 @@ func TestShippedLocationTypeForksAndRestores(t *testing.T) {
 	// what lets the next release improve or withdraw what it ships.
 	conn := connectDSN(t, dsn)
 	var stored string
-	if err := conn.QueryRow(ctx, `select display_name from location_type where name = 'campus'`).Scan(&stored); err != nil {
+	if err := conn.QueryRow(ctx, `select label from location_type where name = 'campus'`).Scan(&stored); err != nil {
 		t.Fatalf("read the official row: %v", err)
 	}
 	if stored != "Campus" {
@@ -75,8 +75,8 @@ func TestShippedLocationTypeForksAndRestores(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("re-seed: %v", err)
 	}
-	if got := locationTypeNamed(t, gw, "campus"); got.DisplayName != "Site" {
-		t.Fatalf("after a re-seed the type reads %q, want the operator's Site", got.DisplayName)
+	if got := locationTypeNamed(t, gw, "campus"); got.Label != "Site" {
+		t.Fatalf("after a re-seed the type reads %q, want the operator's Site", got.Label)
 	}
 
 	// The list resolves too, and reports one row rather than two.
@@ -88,7 +88,7 @@ func TestShippedLocationTypeForksAndRestores(t *testing.T) {
 	for _, lt := range types {
 		if lt.Name == "campus" {
 			seen++
-			if lt.DisplayName != "Site" || !lt.Forked {
+			if lt.Label != "Site" || !lt.Forked {
 				t.Errorf("the listed row = %+v, want the resolved Site marked forked", lt)
 			}
 		}
@@ -107,7 +107,7 @@ func TestShippedLocationTypeForksAndRestores(t *testing.T) {
 	if err != nil {
 		t.Fatalf("restore: %v", err)
 	}
-	if restored.DisplayName != "Campus" || restored.Forked {
+	if restored.Label != "Campus" || restored.Forked {
 		t.Fatalf("the restored row = %+v, want the shipped Campus with forked false", restored)
 	}
 	if _, err := gw.RestoreLocationType(ctx, "", "campus"); !errors.Is(err, storage.ErrTypeNotForked) {
@@ -133,11 +133,11 @@ func TestOperatorLocationTypeIsUntouchedByTheFork(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "wing", DisplayName: "Wing", Icon: "layers"}); err != nil {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "wing", Label: "Wing", Icon: "layers"}); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	label := "West Wing"
-	updated, err := gw.UpdateLocationType(ctx, "", "wing", storage.LocationTypePatch{DisplayName: &label})
+	updated, err := gw.UpdateLocationType(ctx, "", "wing", storage.LocationTypePatch{Label: &label})
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -161,8 +161,8 @@ func TestOperatorLocationTypeIsUntouchedByTheFork(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("re-seed: %v", err)
 	}
-	if got := locationTypeNamed(t, gw, "wing"); got.DisplayName != "West Wing" {
-		t.Fatalf("after a re-seed the operator's type reads %q, want West Wing", got.DisplayName)
+	if got := locationTypeNamed(t, gw, "wing"); got.Label != "West Wing" {
+		t.Fatalf("after a re-seed the operator's type reads %q, want West Wing", got.Label)
 	}
 }
 
@@ -228,7 +228,7 @@ func TestClearNameRuleOnBothTypeKinds(t *testing.T) {
 		t.Run(tc.kind, func(t *testing.T) {
 			if !tc.shipped {
 				if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{
-					Name: tc.typeName, DisplayName: "Deck", NameRule: &storage.NameRule{},
+					Name: tc.typeName, Label: "Deck", NameRule: &storage.NameRule{},
 				}); err != nil {
 					t.Fatalf("create: %v", err)
 				}
@@ -250,7 +250,7 @@ func TestClearNameRuleOnBothTypeKinds(t *testing.T) {
 
 			// An OMITTED rule is still unchanged: only the mask clears.
 			label := "Renamed"
-			if _, err := gw.UpdateLocationType(ctx, "", tc.typeName, storage.LocationTypePatch{DisplayName: &label}); err != nil {
+			if _, err := gw.UpdateLocationType(ctx, "", tc.typeName, storage.LocationTypePatch{Label: &label}); err != nil {
 				t.Fatalf("unrelated patch: %v", err)
 			}
 			if got := locationTypeNamed(t, gw, tc.typeName); got.NameRule == nil {

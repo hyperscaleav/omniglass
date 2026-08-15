@@ -22,17 +22,17 @@ import { NAME_MIN_W } from "../components/TreeList";
 // the pencil. Data is seeded into the query cache so no server is needed; `>` grants
 // every permission.
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const comp: Component = { id: uuidFor("c-1"), name: "mic-2", display_name: "Ceiling Mic 2", product_id: "shure-mxa920", system_count: 0, effective_tags: {} };
+const comp: Component = { id: uuidFor("c-1"), name: "mic-2", label: "Ceiling Mic 2", product_id: "shure-mxa920", system_count: 0, effective_tags: {} };
 
 // #614: every component is an instance of a product; the create form's
 // Product picker offers the real catalog plus the three generics that make
 // the classification floor total for anything not yet modeled more
 // specifically.
 const products: Product[] = [
-  { id: uuidFor("prod-shure"), name: "shure-mxa920", display_name: "Shure MXA920", kind: "device", component_type: "ceiling-mic", component_type_id: uuidFor("ct-ceiling-mic"), official: true },
-  { id: uuidFor("prod-generic-device"), name: "generic-device", display_name: "Generic Device", kind: "device", component_type: "generic-device", component_type_id: uuidFor("ct-generic-device"), official: true },
-  { id: uuidFor("prod-generic-app"), name: "generic-app", display_name: "Generic App", kind: "app", component_type: "generic-app", component_type_id: uuidFor("ct-generic-app"), official: true },
-  { id: uuidFor("prod-generic-service"), name: "generic-service", display_name: "Generic Service", kind: "service", component_type: "generic-service", component_type_id: uuidFor("ct-generic-service"), official: true },
+  { id: uuidFor("prod-shure"), name: "shure-mxa920", label: "Shure MXA920", kind: "device", component_type: "ceiling-mic", component_type_id: uuidFor("ct-ceiling-mic"), official: true },
+  { id: uuidFor("prod-generic-device"), name: "generic-device", label: "Generic Device", kind: "device", component_type: "generic-device", component_type_id: uuidFor("ct-generic-device"), official: true },
+  { id: uuidFor("prod-generic-app"), name: "generic-app", label: "Generic App", kind: "app", component_type: "generic-app", component_type_id: uuidFor("ct-generic-app"), official: true },
+  { id: uuidFor("prod-generic-service"), name: "generic-service", label: "Generic Service", kind: "service", component_type: "generic-service", component_type_id: uuidFor("ct-generic-service"), official: true },
 ];
 
 // The device-class registry the create form resolves a generated name's stem
@@ -40,19 +40,19 @@ const products: Product[] = [
 // preview that read the product's own type and stopped would answer nothing
 // where the server's inheriting walk answers "mic".
 const componentTypes: ComponentType[] = [
-  { id: uuidFor("ct-device"), name: "device", display_name: "Device", official: true, forked: false, stem: "device", default_tags: [] },
-  { id: uuidFor("ct-mic"), name: "mic", display_name: "Microphone", official: true, forked: false, parent: "device", stem: "mic", default_tags: [] },
-  { id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", display_name: "Ceiling Microphone", official: true, forked: false, parent: "mic", default_tags: [] },
-  { id: uuidFor("ct-generic-device"), name: "generic-device", display_name: "Generic Device", official: true, forked: false, stem: "device", default_tags: [] },
-  { id: uuidFor("ct-generic-app"), name: "generic-app", display_name: "Generic App", official: true, forked: false, stem: "app", default_tags: [] },
-  { id: uuidFor("ct-generic-service"), name: "generic-service", display_name: "Generic Service", official: true, forked: false, stem: "service", default_tags: [] },
+  { id: uuidFor("ct-device"), name: "device", label: "Device", official: true, forked: false, stem: "device", default_tags: [] },
+  { id: uuidFor("ct-mic"), name: "mic", label: "Microphone", official: true, forked: false, parent: "device", stem: "mic", default_tags: [] },
+  { id: uuidFor("ct-ceiling-mic"), name: "ceiling-mic", label: "Ceiling Microphone", official: true, forked: false, parent: "mic", default_tags: [] },
+  { id: uuidFor("ct-generic-device"), name: "generic-device", label: "Generic Device", official: true, forked: false, stem: "device", default_tags: [] },
+  { id: uuidFor("ct-generic-app"), name: "generic-app", label: "Generic App", official: true, forked: false, stem: "app", default_tags: [] },
+  { id: uuidFor("ct-generic-service"), name: "generic-service", label: "Generic Service", official: true, forked: false, stem: "service", default_tags: [] },
 ];
 
 // One room, so the create form's placement has both a parent candidate and a
 // location candidate: the bucket precedence (a parent wins) cannot be witnessed
 // with only one of the two set, and a page passing the two the wrong way round
 // is invisible to a unit test of the rule.
-const room: Location = { id: uuidFor("l-room"), name: "boardroom", display_name: "Boardroom", location_type: "room", effective_tags: {} };
+const room: Location = { id: uuidFor("l-room"), name: "boardroom", label: "Boardroom", location_type: "room", effective_tags: {} };
 
 // Two systems, told apart by their ACTIONS rather than by anything an operator
 // reads (#707 review). actions is the server's per-row answer computed from the
@@ -61,8 +61,8 @@ const room: Location = { id: uuidFor("l-room"), name: "boardroom", display_name:
 // update; annex is readable and not writable, which is what a location-scoped
 // deploy grant beside the viewer floor produces for every system in the estate.
 const systems: System[] = [
-  { id: uuidFor("s-board"), name: "board", display_name: "Boardroom AV", member_count: 0, actions: ["create", "update", "delete"] },
-  { id: uuidFor("s-annex"), name: "annex", display_name: "Annex AV", member_count: 0, actions: [] },
+  { id: uuidFor("s-board"), name: "board", label: "Boardroom AV", member_count: 0, actions: ["create", "update", "delete"] },
+  { id: uuidFor("s-annex"), name: "annex", label: "Annex AV", member_count: 0, actions: [] },
 ];
 
 function mount(path: string, who: Me = me, sys: System[] = systems, comps: Component[] = [comp]) {
@@ -95,7 +95,7 @@ function unlockName() {
   fireEvent.click(screen.getByRole("button", { name: "Override the name" }));
 }
 function unlockLabel() {
-  fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
+  fireEvent.click(screen.getByRole("button", { name: "Override the label" }));
 }
 
 // The server's draft answer, which is where the locked NAME comes from since
@@ -171,8 +171,8 @@ describe("Components create-as-route", () => {
   it("filters to a system's components from a ?system=<uuid> deep link, matching by id not name", async () => {
     const sysId = uuidFor("sys-boardroom");
     const otherSysId = uuidFor("sys-annex");
-    const inSystem: Component = { ...comp, id: uuidFor("c-in"), name: "mic-in", display_name: "In-room Mic", system: "boardroom", system_id: sysId, system_count: 1 };
-    const outOfSystem: Component = { ...comp, id: uuidFor("c-out"), name: "mic-out", display_name: "Annex Mic", system: "annex-room", system_id: otherSysId, system_count: 1 };
+    const inSystem: Component = { ...comp, id: uuidFor("c-in"), name: "mic-in", label: "In-room Mic", system: "boardroom", system_id: sysId, system_count: 1 };
+    const outOfSystem: Component = { ...comp, id: uuidFor("c-out"), name: "mic-out", label: "Annex Mic", system: "annex-room", system_id: otherSysId, system_count: 1 };
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...COMPONENTS_KEY], [inSystem, outOfSystem]);
     qc.setQueryData([...SYSTEMS_KEY], [
@@ -275,7 +275,7 @@ describe("Components create-as-route", () => {
     await waitFor(() => expect(screen.getByText("Create component")).toBeTruthy());
     const productSelect = (await screen.findByLabelText("Product")) as HTMLSelectElement;
     fireEvent.change(productSelect, { target: { value: "shure-mxa920" } });
-    // The display name is filled in (an operator label, independent of the
+    // The label is filled in (an operator label, independent of the
     // address); the name field is left untouched. createIdentity's old
     // derive-from-display coupling would have filled it anyway (#627 Task
     // 15d retires that path for this form specifically).
@@ -308,7 +308,7 @@ describe("Components create-as-route", () => {
     // platform. The name and not the ordinal, because the name is what the
     // operator was shown and it carries the stem as well as the number.
     expect(body.expected_name).toBe("mic-1");
-    expect(body.display_name).toBe("Ceiling Mic 9");
+    expect(body.label).toBe("Ceiling Mic 9");
   });
 
   it("shows an existing component read-only in view: no tag add control, an Edit affordance", async () => {
@@ -1107,7 +1107,7 @@ describe("Components create identity", () => {
     await waitFor(() => expect(bodies.some((b) => b.name === "front-mic")).toBe(true));
   });
 
-  it("never rewrites the key from the display name", async () => {
+  it("never rewrites the key from the label", async () => {
     const { display, key } = await fields();
     unlockLabel();
     fireEvent.input(display, { target: { value: "Front Ceiling Mic" } });
@@ -1271,7 +1271,7 @@ describe("Components list keeps a floor under the Name column (#690)", () => {
 describe("Components edit blade carries the label pen (#693)", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
-  const gen: Component = { ...comp, id: uuidFor("c-pen"), name: "mic-3", display_name: "Mic 3", display_name_generated: true, name_generated: true };
+  const gen: Component = { ...comp, id: uuidFor("c-pen"), name: "mic-3", label: "Mic 3", label_generated: true, name_generated: true };
 
   function patchBodies(): Record<string, unknown>[] {
     const bodies: Record<string, unknown>[] = [];
@@ -1296,7 +1296,7 @@ describe("Components edit blade carries the label pen (#693)", () => {
     // matches: a pen states itself beside its own field, on the blade.
     expect(screen.getByTitle(/generated this name/i)).toBeTruthy();
     fireEvent.click(screen.getByText("Edit"));
-    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
     expect(label.value).toBe("Mic 3");
     expect(label.readOnly).toBe(true);
     expect(screen.getByText(/Rendered from a label rule/)).toBeTruthy();
@@ -1307,10 +1307,10 @@ describe("Components edit blade carries the label pen (#693)", () => {
     mount(`/components/${gen.id}`, me, systems, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
-    await screen.findByLabelText("Display name");
+    await screen.findByLabelText("Label");
     fireEvent.click(screen.getByText("Save changes"));
     await waitFor(() => expect(bodies).toHaveLength(1));
-    expect(bodies[0].display_name).toBe("");
+    expect(bodies[0].label).toBe("");
   });
 
   it("posts the operator's words once they take the pen", async () => {
@@ -1318,11 +1318,11 @@ describe("Components edit blade carries the label pen (#693)", () => {
     mount(`/components/${gen.id}`, me, systems, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
-    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
-    fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
+    const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
+    fireEvent.click(screen.getByRole("button", { name: "Override the label" }));
     fireEvent.input(label, { target: { value: "Front Ceiling Mic" } });
     fireEvent.click(screen.getByText("Save changes"));
     await waitFor(() => expect(bodies).toHaveLength(1));
-    expect(bodies[0].display_name).toBe("Front Ceiling Mic");
+    expect(bodies[0].label).toBe("Front Ceiling Mic");
   });
 });

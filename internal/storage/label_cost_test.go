@@ -64,7 +64,7 @@ func TestTheBulkRecomputeCostIsFlatInEstateSize(t *testing.T) {
 	gw, counter, rooms := labelEstate(t, 4)
 	ctx := context.Background()
 	if _, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "my-mic", DisplayName: "My Mic", ComponentType: "mic",
+		Name: "my-mic", Label: "My Mic", ComponentType: "mic",
 	}); err != nil {
 		t.Fatalf("create product: %v", err)
 	}

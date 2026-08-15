@@ -12,35 +12,35 @@ import (
 
 // systemBody is the wire shape of a system.
 type systemBody struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name,omitempty"`
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Label string `json:"label,omitempty"`
 	// The NAME's pen (#686); read-only for the same reason the label's is: an
 	// operator claims it with :rename and returns it with :resetName, so there
 	// is exactly one way to say who owns the name.
 	NameGenerated bool `json:"name_generated" doc:"Whether the platform picked this name (from the system_type's stem) rather than an operator typing it."`
 	// The LABEL's pen (#682); see componentBody for why it is read-only.
-	DisplayNameGenerated bool              `json:"display_name_generated" doc:"Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."`
-	Standard             string            `json:"standard,omitempty" doc:"The standard's handle, for display; omitted for a one-off system"`
-	StandardID           string            `json:"standard_id,omitempty" doc:"The standard's uuid; the stable form of standard"`
-	SystemType           string            `json:"system_type,omitempty" doc:"The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the blueprint it is built to."`
-	SystemTypeID         string            `json:"system_type_id,omitempty" doc:"The system_type's uuid; the stable form of system_type"`
-	ParentID             *string           `json:"parent_id,omitempty" doc:"The parent system's id, the canonical handle"`
-	Parent               *string           `json:"parent,omitempty" doc:"The parent system's name, for display; absent for a root system"`
-	LocationID           *string           `json:"location_id,omitempty" doc:"The location's id, the canonical handle"`
-	Location             *string           `json:"location,omitempty" doc:"The location's name, for display"`
-	MemberCount          int               `json:"member_count" doc:"How many components are bound into this system"`
-	Path                 string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.$sys.av). Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it)."`
-	PathSegments         []string          `json:"path_segments,omitempty" doc:"path split on '.', accessors included, so the round trip through the resolver stays lossless."`
-	Renders              *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
-	Actions              []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
-	EffectiveTags        map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column."`
+	LabelGenerated bool              `json:"label_generated" doc:"Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back."`
+	Standard       string            `json:"standard,omitempty" doc:"The standard's handle, for display; omitted for a one-off system"`
+	StandardID     string            `json:"standard_id,omitempty" doc:"The standard's uuid; the stable form of standard"`
+	SystemType     string            `json:"system_type,omitempty" doc:"The system_type's name, for display: what kind of space this is (board, class, video-wall). Omitted for an unclassified system. Distinct from standard, which is the blueprint it is built to."`
+	SystemTypeID   string            `json:"system_type_id,omitempty" doc:"The system_type's uuid; the stable form of system_type"`
+	ParentID       *string           `json:"parent_id,omitempty" doc:"The parent system's id, the canonical handle"`
+	Parent         *string           `json:"parent,omitempty" doc:"The parent system's name, for display; absent for a root system"`
+	LocationID     *string           `json:"location_id,omitempty" doc:"The location's id, the canonical handle"`
+	Location       *string           `json:"location,omitempty" doc:"The location's name, for display"`
+	MemberCount    int               `json:"member_count" doc:"How many components are bound into this system"`
+	Path           string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.$sys.av). Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it)."`
+	PathSegments   []string          `json:"path_segments,omitempty" doc:"path split on '.', accessors included, so the round trip through the resolver stays lossless."`
+	Renders        *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
+	Actions        []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
+	EffectiveTags  map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column."`
 }
 
 func toSystemBody(s *storage.System) systemBody {
 	return systemBody{
-		ID: s.ID, Name: s.Name, DisplayName: s.DisplayName,
-		NameGenerated: s.NameGenerated, DisplayNameGenerated: s.DisplayNameGenerated,
+		ID: s.ID, Name: s.Name, Label: s.Label,
+		NameGenerated: s.NameGenerated, LabelGenerated: s.LabelGenerated,
 		Standard: derefStr(s.StandardName), StandardID: derefStr(s.StandardID),
 		SystemType: derefStr(s.SystemTypeName), SystemTypeID: derefStr(s.SystemTypeID),
 		ParentID: s.ParentID, Parent: s.ParentName, LocationID: s.LocationID, Location: s.LocationName,
@@ -61,11 +61,11 @@ type systemOutput struct {
 
 // standardBody is the wire shape of a standard: the blueprint a system conforms
 // to, the system-side counterpart of a product. The catalog lists alphabetically
-// by display_name.
+// by label.
 type standardBody struct {
 	ID               string `json:"id" doc:"The standard's uuid, the stable handle that survives a rename"`
 	Name             string `json:"name" doc:"The name an operator reads and types; renameable"`
-	DisplayName      string `json:"display_name"`
+	Label            string `json:"label"`
 	ParentStandard   string `json:"parent_standard,omitempty" doc:"The parent standard's handle"`
 	ParentStandardID string `json:"parent_standard_id,omitempty" doc:"The parent standard's uuid; the stable form of parent_standard"`
 	Official         bool   `json:"official"`
@@ -73,7 +73,7 @@ type standardBody struct {
 
 func toStandardBody(st *storage.Standard) standardBody {
 	return standardBody{
-		ID: st.ID, DisplayName: st.DisplayName,
+		ID: st.ID, Label: st.Label,
 		Name: st.Name, ParentStandard: derefStr(st.ParentStandardName), ParentStandardID: derefStr(st.ParentStandardID), Official: st.Official,
 	}
 }
@@ -91,7 +91,7 @@ type standardPathInput struct {
 type createStandardInput struct {
 	Body struct {
 		Name             string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name; renameable"`
-		DisplayName      string `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
+		Label            string `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		ParentStandardID string `json:"parent_standard_id,omitempty" doc:"A standard this one is a variant of, by handle or uuid"`
 	}
 }
@@ -99,7 +99,7 @@ type createStandardInput struct {
 type updateStandardInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		DisplayName      *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		Label            *string `json:"label,omitempty" doc:"A new operator-facing label"`
 		ParentStandardID *string `json:"parent_standard_id,omitempty" doc:"A new variant parent, by handle or uuid"`
 	}
 }
@@ -120,9 +120,9 @@ type createSystemInput struct {
 		// that stem in the bucket, and marks name_generated. Supplied, it is
 		// validated exactly as before. Omitting it without a system_type is a
 		// 422: the stem lives on that registry row.
-		Name        string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem."`
-		DisplayName string `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
-		StandardID  string `json:"standard_id,omitempty" doc:"The standard it conforms to, by handle or uuid; omit for a one-off system"`
+		Name       string `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem."`
+		Label      string `json:"label,omitempty" doc:"What an operator reads; the name is the address"`
+		StandardID string `json:"standard_id,omitempty" doc:"The standard it conforms to, by handle or uuid; omit for a one-off system"`
 		// Nullable for now: a floor on system_type_id waits until the shipped
 		// tree has proven out.
 		SystemTypeID string  `json:"system_type_id,omitempty" doc:"The system_type it is classified as (what kind of space it is), by name or uuid; omit to leave it unclassified"`
@@ -142,7 +142,7 @@ type createSystemInput struct {
 type updateSystemInput struct {
 	Name string `path:"name" doc:"The system's name, or a dotted address (e.g. boi.17c.$sys.av)"`
 	Body struct {
-		DisplayName  *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		Label        *string `json:"label,omitempty" doc:"A new operator-facing label"`
 		StandardID   *string `json:"standard_id,omitempty" doc:"A new standard, by handle or uuid; \"\" clears it (a one-off system)"`
 		SystemTypeID *string `json:"system_type_id,omitempty" doc:"A new system_type, by name or uuid; \"\" clears it (an unclassified system)"`
 	}
@@ -260,7 +260,7 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	}, "system", "create"), func(ctx context.Context, in *createSystemInput) (*systemOutput, error) {
 		s, err := gw.CreateSystem(ctx, actorID(ctx), storage.SystemSpec{
 			Name:         in.Body.Name,
-			DisplayName:  in.Body.DisplayName,
+			Label:        in.Body.Label,
 			StandardID:   ptrOrNil(in.Body.StandardID),
 			SystemTypeID: ptrOrNil(in.Body.SystemTypeID),
 			ParentName:   in.Body.Parent,
@@ -278,10 +278,10 @@ func registerSystemRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPatch,
 		Path:        "/systems/{name}",
 		Summary:     "Update a system",
-		Description: "Patches a system's display_name, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.",
 	}, "system", "update"), func(ctx context.Context, in *updateSystemInput) (*systemOutput, error) {
 		s, err := gw.UpdateSystem(ctx, actorID(ctx), in.Name, storage.SystemPatch{
-			DisplayName: in.Body.DisplayName,
+			Label: in.Body.Label,
 			// Deliberately NOT emptyPtrToNil: that collapses an explicit "" into
 			// "omitted", which would make clearing (declassify) impossible. The
 			// storage layer reads "" as clear. Same for SystemTypeID.
@@ -474,7 +474,7 @@ func registerStandardRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodGet,
 		Path:        "/standards",
 		Summary:     "List standards",
-		Description: "Lists the standard catalog, ordered alphabetically by display name. A standard is the blueprint a system conforms to. Gated by standard:read.",
+		Description: "Lists the standard catalog, ordered alphabetically by label. A standard is the blueprint a system conforms to. Gated by standard:read.",
 	}, "standard", "read"), func(ctx context.Context, _ *struct{}) (*listStandardsOutput, error) {
 		items, err := gw.ListStandards(ctx)
 		if err != nil {
@@ -497,7 +497,7 @@ func registerStandardRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Description:   "Creates a custom (non-official) standard, optionally as a variant of another. Gated by standard:create.",
 	}, "standard", "create"), func(ctx context.Context, in *createStandardInput) (*standardOutput, error) {
 		st, err := gw.CreateStandard(ctx, actorID(ctx), storage.Standard{
-			Name: in.Body.Name, DisplayName: in.Body.DisplayName,
+			Name: in.Body.Name, Label: in.Body.Label,
 			ParentStandardID: ptrOrNil(in.Body.ParentStandardID),
 		})
 		if err != nil {
@@ -525,10 +525,10 @@ func registerStandardRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/standards/{id}",
 		Summary:     "Update a standard",
-		Description: "Patches a custom standard's display_name or parent. Official standards are read-only (422). Gated by standard:update.",
+		Description: "Patches a custom standard's label or parent. Official standards are read-only (422). Gated by standard:update.",
 	}, "standard", "update"), func(ctx context.Context, in *updateStandardInput) (*standardOutput, error) {
 		st, err := gw.UpdateStandard(ctx, actorID(ctx), in.ID, storage.StandardPatch{
-			DisplayName:      in.Body.DisplayName,
+			Label:            in.Body.Label,
 			ParentStandardID: emptyPtrToNil(in.Body.ParentStandardID),
 		})
 		if err != nil {

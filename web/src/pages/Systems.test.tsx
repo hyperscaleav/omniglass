@@ -23,25 +23,25 @@ import { NAME_MIN_W } from "../components/TreeList";
 // detail's Properties panel resolves. Data is seeded into the query cache so no
 // server is needed; `>` grants every permission.
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const sys: System = { id: uuidFor("s-1"), name: "boardroom", display_name: "Boardroom", standard: "meeting-room", standard_id: uuidFor("std-meeting-room"), system_type: "class", system_type_id: uuidFor("st-class"), member_count: 2, effective_tags: {} };
+const sys: System = { id: uuidFor("s-1"), name: "boardroom", label: "Boardroom", standard: "meeting-room", standard_id: uuidFor("std-meeting-room"), system_type: "class", system_type_id: uuidFor("st-class"), member_count: 2, effective_tags: {} };
 // The coarse space taxonomy (ADR-0096), nested: the picker renders it as a
 // tree, not a flat list, so the fixture is two levels deep. Deliberately NOT
-// named "Boardroom": the system's own display name already is, and a collision
+// named "Boardroom": the system's own label already is, and a collision
 // would make the type assertions pass on the wrong element.
 const systemTypes: SystemType[] = [
-  { id: uuidFor("st-av"), name: "av", display_name: "AV", official: true, stem: "av", abbrev: "av", icon: "layers" },
-  { id: uuidFor("st-room"), name: "room", display_name: "Room", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "room", abbrev: "rm", icon: "door-open" },
-  { id: uuidFor("st-class"), name: "class", display_name: "Classroom", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "classroom", abbrev: "cls" },
+  { id: uuidFor("st-av"), name: "av", label: "AV", official: true, stem: "av", abbrev: "av", icon: "layers" },
+  { id: uuidFor("st-room"), name: "room", label: "Room", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "room", abbrev: "rm", icon: "door-open" },
+  { id: uuidFor("st-class"), name: "class", label: "Classroom", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "classroom", abbrev: "cls" },
 ];
 const standards: Standard[] = [
-  { id: uuidFor("meeting-room"), name: "meeting-room", display_name: "Meeting room", official: true },
-  { id: uuidFor("huddle-space"), name: "huddle-space", display_name: "Huddle space", official: false },
+  { id: uuidFor("meeting-room"), name: "meeting-room", label: "Meeting room", official: true },
+  { id: uuidFor("huddle-space"), name: "huddle-space", label: "Huddle space", official: false },
 ];
 // The standard's contract, resolved against the system: one inherited default and
 // one value the system sets directly with nothing declaring it.
 const properties: EffectiveProperty[] = [
-  { property_type_name: "seat_count", property_type_id: "seat_count-id", display_name: "Seat count", data_type: "int", required: false, is_set: false, from_contract: true, default_value: 12, value: 12 },
-  { property_type_name: "room.note", property_type_id: "room.note-id", display_name: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "corner room", value: "corner room", value_id: "v-note" },
+  { property_type_name: "seat_count", property_type_id: "seat_count-id", label: "Seat count", data_type: "int", required: false, is_set: false, from_contract: true, default_value: 12, value: 12 },
+  { property_type_name: "room.note", property_type_id: "room.note-id", label: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "corner room", value: "corner room", value_id: "v-note" },
 ];
 
 function mount(path: string, systems: System[] = [sys]) {
@@ -108,11 +108,11 @@ describe("Systems create-as-route", () => {
     expect(labels[3]).toBe("\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0Classroom");
   });
 
-  it("shows the system's type by display name beside its standard", async () => {
+  it("shows the system's type by label beside its standard", async () => {
     mount("/systems/boardroom");
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     expect(screen.getByText("Type")).toBeTruthy();
-    // The registry's display name, not the raw handle the row carries.
+    // The registry's label, not the raw handle the row carries.
     expect(screen.getAllByText("Classroom").length).toBeGreaterThan(0);
     expect(screen.queryByText("class")).toBeNull();
   });
@@ -175,7 +175,7 @@ describe("Systems create-as-route", () => {
     expect(screen.queryByLabelText("Check name")).toBeNull();
   });
 
-  it("shows the system's standard by display name, not its id", async () => {
+  it("shows the system's standard by label, not its id", async () => {
     mount("/systems/boardroom");
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     expect(screen.getAllByText("Meeting room").length).toBeGreaterThan(0);
@@ -403,7 +403,7 @@ describe("Systems list health column (#627 review round 3, regression 3; #653)",
     const many: System[] = Array.from({ length: 12 }, (_, i) => ({
       id: uuidFor(`bulk-${i}`),
       name: `room-${i}`,
-      display_name: `Room ${i}`,
+      label: `Room ${i}`,
       member_count: 0,
       effective_tags: {},
     }));
@@ -528,7 +528,7 @@ describe("Systems properties panel", () => {
 });
 
 // The create form asks WHAT and WHERE first, then shows what the platform will
-// name the row. This form derived the name from the display name until #688 and
+// name the row. This form derived the name from the label until #688 and
 // refused to submit without one, which together made the system-tier generator
 // (#686) unreachable from the console: every console-created system arrived with
 // an operator-owned name whether the operator meant that or not.
@@ -537,7 +537,7 @@ describe("Systems properties panel", () => {
 // The lock is a square icon button inside the field's join and carries no text
 // (#657), so it is addressed by its accessible name.
 function unlockLabel() {
-  fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
+  fireEvent.click(screen.getByRole("button", { name: "Override the label" }));
 }
 
 // The server's draft answer, which is where the locked NAME comes from since
@@ -595,13 +595,13 @@ describe("Systems create identity", () => {
     };
   };
 
-  it("never rewrites the key from the display name", async () => {
+  it("never rewrites the key from the label", async () => {
     const { display, key } = await fields();
     unlockLabel();
     fireEvent.input(display, { target: { value: "Executive Boardroom" } });
     await waitFor(() => expect(display.value).toBe("Executive Boardroom"));
     expect(key.value).toBe("");
-    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
+    expect(screen.queryByText(/Derived from the label/)).toBeNull();
   });
 
   it("locks the name field on the name the server drafted for the chosen type", async () => {
@@ -671,7 +671,7 @@ describe("Systems create identity", () => {
     expect("name" in captured!).toBe(false);
     // The NAME the locked field was showing goes back as the precondition.
     expect(captured!.expected_name).toBe("classroom");
-    expect(captured!.display_name).toBe("Lecture Hall");
+    expect(captured!.label).toBe("Lecture Hall");
   });
 });
 
@@ -705,7 +705,7 @@ describe("Systems edit blade carries the label pen (#693)", () => {
 
   // The estate's own shape after #693: a rule renders "Boardroom 2" and the
   // platform holds the pen on it.
-  const gen: System = { ...sys, id: uuidFor("s-gen"), name: "boardroom-2", display_name: "Boardroom 2", display_name_generated: true, member_count: 0 };
+  const gen: System = { ...sys, id: uuidFor("s-gen"), name: "boardroom-2", label: "Boardroom 2", label_generated: true, member_count: 0 };
 
   function patchBodies(): Record<string, unknown>[] {
     const bodies: Record<string, unknown>[] = [];
@@ -727,7 +727,7 @@ describe("Systems edit blade carries the label pen (#693)", () => {
     mount(`/systems/${gen.id}`, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
-    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
     expect(label.value).toBe("Boardroom 2");
     expect(label.readOnly).toBe(true);
     expect(label.disabled).toBe(false);
@@ -735,7 +735,7 @@ describe("Systems edit blade carries the label pen (#693)", () => {
   });
 
   // The defect the lock exists to fix. The blade seeded a plain signal from
-  // raw.display_name and posted `display() || undefined`, so opening the pencil
+  // raw.label and posted `display() || undefined`, so opening the pencil
   // on a platform-labelled system and changing its STANDARD posted the
   // platform's own rendering back as an override, taking the pen silently: the
   // row stopped following its rule and nothing on screen said so.
@@ -744,14 +744,14 @@ describe("Systems edit blade carries the label pen (#693)", () => {
     mount(`/systems/${gen.id}`, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
-    await screen.findByLabelText("Display name");
+    await screen.findByLabelText("Label");
     fireEvent.change(screen.getByLabelText("Standard") as HTMLSelectElement, { target: { value: "huddle-space" } });
     fireEvent.click(screen.getByText("Save changes"));
     await waitFor(() => expect(bodies).toHaveLength(1));
     expect(bodies[0].standard_id).toBe("huddle-space");
     // "" is the API's "the platform's" (labelPen, #682), so the row keeps
     // following its rule across an unrelated edit.
-    expect(bodies[0].display_name).toBe("");
+    expect(bodies[0].label).toBe("");
   });
 
   it("posts the operator's words once they take the pen, seeded with what was on screen", async () => {
@@ -759,15 +759,15 @@ describe("Systems edit blade carries the label pen (#693)", () => {
     mount(`/systems/${gen.id}`, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
-    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
-    fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
+    const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
+    fireEvent.click(screen.getByRole("button", { name: "Override the label" }));
     // Seeded rather than blanked: a blade has the label on screen already, so
     // taking the pen means amending it.
     expect(label.value).toBe("Boardroom 2");
     fireEvent.input(label, { target: { value: "Boardroom 2 (East)" } });
     fireEvent.click(screen.getByText("Save changes"));
     await waitFor(() => expect(bodies).toHaveLength(1));
-    expect(bodies[0].display_name).toBe("Boardroom 2 (East)");
+    expect(bodies[0].label).toBe("Boardroom 2 (East)");
   });
 
   it("opens editable on a row the operator labelled, and hands it back on restore", async () => {
@@ -775,16 +775,16 @@ describe("Systems edit blade carries the label pen (#693)", () => {
     mount(`/systems/${sys.id}`);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
-    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
     expect(label.value).toBe("Boardroom");
     expect(label.readOnly).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: "Restore the display name to default" }));
+    fireEvent.click(screen.getByRole("button", { name: "Restore the label to default" }));
     expect(label.readOnly).toBe(true);
     expect(screen.getByText(/Handed back, so the platform renders this/)).toBeTruthy();
     fireEvent.click(screen.getByText("Save changes"));
     await waitFor(() => expect(bodies).toHaveLength(1));
     // The only way back from the console. Before this the field posted
     // `display() || undefined`, so clearing it left the label exactly as it was.
-    expect(bodies[0].display_name).toBe("");
+    expect(bodies[0].label).toBe("");
   });
 });

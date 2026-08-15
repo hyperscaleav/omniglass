@@ -29,11 +29,11 @@ describe("KVStacked", () => {
     const { getByText } = render(() => (
       <>
         <KVStacked bind="name" value="crestron" />
-        <KVStacked bind="display_name" value="Crestron" />
+        <KVStacked bind="label" value="Crestron" />
       </>
     ));
     expect(getByText("Name")).toBeTruthy();
-    expect(getByText("Display name")).toBeTruthy();
+    expect(getByText("Label")).toBeTruthy();
   });
 
   it("renders the label even when no value is given", () => {

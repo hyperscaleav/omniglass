@@ -20,7 +20,7 @@ export type SecretType = {
   // The name, the operator-facing address (ADR-0062): pickers post and
   // look up by name, never the uuid.
   name: string;
-  display_name: string;
+  label: string;
   official: boolean;
   fields: SecretTypeField[];
 };
@@ -33,7 +33,7 @@ export async function listSecretTypes(): Promise<SecretType[]> {
   return (data?.secret_types ?? []).map((t) => ({
     id: t.id,
     name: t.name,
-    display_name: t.display_name,
+    label: t.label,
     official: t.official,
     fields: (t.fields ?? []) as SecretTypeField[],
   }));

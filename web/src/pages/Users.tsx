@@ -31,11 +31,11 @@ const filterKeys: FilterKey<Principal>[] = [
 
 // A principal wears the two operator-facing identities the console labels everything
 // by, under its own field names: the username stands in for the name (what the API,
-// the CLI, and the sign-in prompt address a human by) and the display name is the
-// display name. A service account carries only its name, so nothing sits beneath it.
+// the CLI, and the sign-in prompt address a human by) and the label is the
+// label. A service account carries only its name, so nothing sits beneath it.
 const principalIdentity = (p: Principal): Labelled => ({
   name: p.human?.username ?? p.service?.name ?? p.kind,
-  display_name: p.human?.display_name,
+  label: p.human?.label,
 });
 
 const identity = identityColumn<Labelled>();
@@ -123,12 +123,12 @@ export default function Users() {
   );
 }
 
-// CreateUserForm is the new-human form the create Drawer hosts: display name and
+// CreateUserForm is the new-human form the create Drawer hosts: label and
 // username (required), email, and an optional initial password (min 8) the user
 // changes after signing in. On success it invalidates the directory and hands the
 // created principal to onCreated, which opens its detail blade (closing this Drawer).
 //
-// The two identity fields are the shared coupling: the display name leads and the
+// The two identity fields are the shared coupling: the label leads and the
 // username derives from it, so an operator types "Jordan Rivera" without meeting the
 // handle character class, and the moment they edit the username it is theirs.
 function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) => void }) {
@@ -158,7 +158,7 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
     try {
       const created = await createPrincipal({
         username: username().trim(),
-        display_name: display().trim() || undefined,
+        label: display().trim() || undefined,
         email: email().trim() || undefined,
         password: password() || undefined,
       });
@@ -184,13 +184,13 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <div>
-        <label class="eyebrow mb-1.5 block" for="new-display">Display name</label>
+        <label class="eyebrow mb-1.5 block" for="new-display">Label</label>
         <input id="new-display" autocomplete="off" class="input input-bordered w-full" value={display()} placeholder="Jordan Rivera" onInput={(e) => setDisplay(e.currentTarget.value)} disabled={busy()} />
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-username">Username</label>
         <input id="new-username" autocomplete="off" class="input input-bordered w-full font-data" classList={{ "input-error": !!handleError(username()) }} value={username()} placeholder="jordan" onInput={(e) => setUsername(e.currentTarget.value)} disabled={busy()} aria-required="true" />
-        <Show when={handleError(username())} fallback={<p class="mt-1 text-[11px] text-base-content/40">{nameDerived() ? "Derived from the display name. Edit to set your own." : "What they sign in with."}</p>}>
+        <Show when={handleError(username())} fallback={<p class="mt-1 text-[11px] text-base-content/40">{nameDerived() ? "Derived from the label. Edit to set your own." : "What they sign in with."}</p>}>
           {(msg) => <p class="mt-1 text-[11px] text-error">{msg()}</p>}
         </Show>
       </div>

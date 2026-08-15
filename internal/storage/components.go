@@ -40,10 +40,10 @@ var (
 // belonging to a primary system and located at a location. Its shape (the
 // properties it declares) comes from the product it is an instance of.
 type Component struct {
-	ID          string
-	Name        string
-	DisplayName string
-	ParentID    *string
+	ID       string
+	Name     string
+	Label    string
+	ParentID *string
 	// PrimarySystem is the name of the component's default system, and SystemCount
 	// how many it belongs to in total. Both are derived from system_member rather
 	// than stored: a component can be in several systems, so there is no single
@@ -77,12 +77,12 @@ type Component struct {
 	// slice 2, a label rule's .Ordinal both read it server-side, and the
 	// console already learns who holds the pen from NameGenerated.
 	Ordinal *int
-	// DisplayNameGenerated is the LABEL's pen (#682), the same shape
+	// LabelGenerated is the LABEL's pen (#682), the same shape
 	// NameGenerated is for the name: true means the platform owns
-	// display_name and re-renders it from the resolved label rule on every
+	// label and re-renders it from the resolved label rule on every
 	// write that can change one of the rule's inputs. Setting the label by
 	// hand clears it; clearing the field returns it.
-	DisplayNameGenerated bool
+	LabelGenerated bool
 	// Path, PathSegments, and Renders are the dotted address and its two
 	// display-only compact forms (#627 Task 15), attached by attachComponentPaths
 	// after every GET or LIST fetch (see scopedConfig.attachPaths). Zero-value
@@ -103,7 +103,7 @@ type Component struct {
 // ProductName optionally names the product (catalog SKU) it is an instance of.
 type ComponentSpec struct {
 	Name         string
-	DisplayName  string
+	Label        string
 	ParentName   *string
 	SystemName   *string
 	LocationName *string
@@ -141,7 +141,7 @@ type ComponentSpec struct {
 // gated by component:move rather than component:update; see that function's
 // doc comment for why.
 type ComponentPatch struct {
-	DisplayName *string
+	Label       *string
 	ProductName *string
 }
 
@@ -159,7 +159,7 @@ type ComponentMove struct {
 
 // --- component CRUD (read/delete via the generic helpers) --------------------
 
-const componentCols = `id, name, coalesce(display_name, ''), parent_id,
+const componentCols = `id, name, label, parent_id,
 	-- The primary membership, both forms: the name for display and the id as the
 	-- canonical handle. The arc points at the primary key, so the join is by id.
 	(select s.name from system s join system_member m on m.system_id = s.id
@@ -172,13 +172,13 @@ const componentCols = `id, name, coalesce(display_name, ''), parent_id,
 	(select p.name from component p where p.id = component.parent_id) as parent_name,
 	(select l.name from location l where l.id = component.location_id) as location_name,
 	(select pr.name from product pr where pr.id = component.product_id) as product_handle,
-	name_generated, ordinal, display_name_generated,
+	name_generated, ordinal, label_generated,
 	created_at, updated_at`
 
 func scanComponent(row pgx.Row) (*Component, error) {
 	var c Component
-	if err := row.Scan(&c.ID, &c.Name, &c.DisplayName, &c.ParentID, &c.PrimarySystem, &c.PrimarySystemID, &c.SystemCount,
-		&c.LocationID, &c.ProductID, &c.ParentName, &c.LocationName, &c.ProductHandle, &c.NameGenerated, &c.Ordinal, &c.DisplayNameGenerated, &c.CreatedAt, &c.UpdatedAt); err != nil {
+	if err := row.Scan(&c.ID, &c.Name, &c.Label, &c.ParentID, &c.PrimarySystem, &c.PrimarySystemID, &c.SystemCount,
+		&c.LocationID, &c.ProductID, &c.ParentName, &c.LocationName, &c.ProductHandle, &c.NameGenerated, &c.Ordinal, &c.LabelGenerated, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &c, nil
@@ -471,15 +471,15 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 	// requires an explicit product on create (a stricter operator-facing
 	// gate naming the generics); this default only ever fires below it, for a
 	// caller that writes the gateway directly (seed, devseed, tests).
-	// An empty display_name is the operator handing the LABEL's pen to the
+	// An empty label is the operator handing the LABEL's pen to the
 	// platform, exactly as an empty name hands over the name's (#682). The row
 	// is inserted with no label and stamped below, once it exists and its
 	// classification is resolvable.
 	c, err := scanComponent(tx.QueryRow(ctx, `
-		insert into component (name, display_name, parent_id, location_id, product_id, name_generated, ordinal, display_name_generated)
+		insert into component (name, label, parent_id, location_id, product_id, name_generated, ordinal, label_generated)
 		values ($1, $2, $3, $4, coalesce($5::uuid, (select id from product where name = 'generic-device')), $6, $7, $8)
 		returning `+componentCols,
-		name, nullize(spec.DisplayName), parentID, locationID, productID, generated, ordinal, spec.DisplayName == ""))
+		name, spec.Label, parentID, locationID, productID, generated, ordinal, spec.Label == ""))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
@@ -624,17 +624,18 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 		update component set
 			name         = coalesce($5, name),
 			ordinal      = coalesce($6::integer, ordinal),
-			-- display_name is three-state like the placement fields, not a
-			-- coalesce: nil leaves it, a value is the operator typing a label
-			-- (and taking the pen, $7 below), and an explicit empty string
-			-- clears it and hands the pen back, which the stamp after this
-			-- statement then acts on (#682).
-			display_name = case
-				when $2::text is null then display_name
-				when $2 = '' then null
+			-- label is three-state like the placement fields, not a
+			-- coalesce: nil leaves it, and any value is the operator writing the
+			-- label, which is the empty string when they clear it and hand the
+			-- pen back ($7 below), acted on by the stamp after this statement
+			-- (#682). Two branches rather than three since #613: '' IS the
+			-- cleared state, and the null branch this used to carry would now be
+			-- a not-null violation (ADR-0118).
+			label = case
+				when $2::text is null then label
 				else $2::text
 			end,
-			display_name_generated = $7,
+			label_generated = $7,
 			-- product_id has no clear state: the floor makes it NOT NULL, so unlike
 			-- a three-state placement field there is no empty-string-means-null
 			-- branch here to attempt (that used to be the case before the #614
@@ -655,8 +656,8 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 			updated_at   = now()
 		where id = $1
 		returning `+componentCols,
-		before.ID, patch.DisplayName, patch.ProductName, patchProductID, namePatch, ordinalPatch,
-		labelPen(before.DisplayNameGenerated, patch.DisplayName)))
+		before.ID, patch.Label, patch.ProductName, patchProductID, namePatch, ordinalPatch,
+		labelPen(before.LabelGenerated, patch.Label)))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
@@ -689,7 +690,7 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 // same reason rename earned its own act: a placement change is an
 // authorization act, not a label edit, so it deserves its own grant
 // (component:move) and its own audit trail entry, not a side effect that
-// rides along with a display_name or product PATCH.
+// rides along with a label or product PATCH.
 //
 // The ADR this closes: a PATCH that cleared parent_id used to lift a row out
 // of every subtree scope with no check at all (UpdateComponent's old reparent

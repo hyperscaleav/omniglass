@@ -19,7 +19,7 @@ func declareTableMic(t *testing.T, ctx context.Context, gw storage.Gateway, all 
 	t.Helper()
 	typedSlotSystem(t, ctx, gw, all, system)
 	if _, err := gw.SetSystemRole(ctx, "", "system", system, storage.SystemRoleSpec{
-		Name: "table-mic", DisplayName: "Table Mic", Quorum: quorum, AcceptedTypes: []string{"video-bar"},
+		Name: "table-mic", Label: "Table Mic", Quorum: quorum, AcceptedTypes: []string{"video-bar"},
 	}); err != nil {
 		t.Fatalf("declare table-mic on %s: %v", system, err)
 	}
@@ -370,7 +370,7 @@ func TestAssignRefusesAtCapacity(t *testing.T) {
 	typedSlotSystem(t, ctx, gw, all, "capacity-full-sys")
 	cap2 := 2
 	if _, err := gw.SetSystemRole(ctx, "", "system", "capacity-full-sys", storage.SystemRoleSpec{
-		Name: "table-mic", DisplayName: "Table Mic", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Capacity: &cap2,
+		Name: "table-mic", Label: "Table Mic", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Capacity: &cap2,
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
@@ -454,7 +454,7 @@ func TestLoweringCapacityThenAssigningIsRefused(t *testing.T) {
 	// Lowering to 2 succeeds: two rows (one, three) fit a cap of two.
 	cap2 := 2
 	if _, err := gw.SetSystemRole(ctx, "", "system", "capacity-bypass-sys", storage.SystemRoleSpec{
-		Name: "table-mic", DisplayName: "Table Mic", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Capacity: &cap2,
+		Name: "table-mic", Label: "Table Mic", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Capacity: &cap2,
 	}); err != nil {
 		t.Fatalf("lower capacity to 2: %v, want success (2 rows fit a cap of 2)", err)
 	}

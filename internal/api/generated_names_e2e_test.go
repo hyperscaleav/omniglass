@@ -191,7 +191,7 @@ func TestLocationGeneratedNameAPI(t *testing.T) {
 
 	// The positional type an operator declares, since the seed ships none.
 	c.do(ownerTok, http.MethodPost, "/location-types", map[string]any{
-		"name": "deck", "display_name": "Deck", "allowed_parent_types": []string{"building", "campus"},
+		"name": "deck", "label": "Deck", "allowed_parent_types": []string{"building", "campus"},
 		"name_rule": map[string]any{"stem": ""},
 	}, http.StatusCreated)
 
@@ -272,9 +272,9 @@ func TestLocationGeneratedNameAPI(t *testing.T) {
 	}
 
 	c.do(ownerTok, http.MethodPost, "/location-types",
-		map[string]any{"name": "wing", "display_name": "Wing", "name_rule": map[string]any{"stem": "Wing"}}, http.StatusUnprocessableEntity)
+		map[string]any{"name": "wing", "label": "Wing", "name_rule": map[string]any{"stem": "Wing"}}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/location-types",
-		map[string]any{"name": "wing", "display_name": "Wing", "name_rule": map[string]any{"stem": "wing", "bare_first": true}}, http.StatusCreated)
+		map[string]any{"name": "wing", "label": "Wing", "name_rule": map[string]any{"stem": "wing", "bare_first": true}}, http.StatusCreated)
 }
 
 // A platform-named location cannot be reclassified to a type with no name rule,
@@ -307,7 +307,7 @@ func TestReclassifyingAPlatformNamedLocationNamesTheEscape(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	c.do(ownerTok, http.MethodPost, "/location-types", map[string]any{
-		"name": "deck", "display_name": "Deck", "allowed_parent_types": []string{"building", "campus"},
+		"name": "deck", "label": "Deck", "allowed_parent_types": []string{"building", "campus"},
 		"name_rule": map[string]any{"stem": ""},
 	}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "boi", "location_type": "campus"}, http.StatusCreated)

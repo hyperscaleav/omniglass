@@ -5,38 +5,38 @@ import BladeTitle from "./BladeTitle";
 import { type Labelled } from "../lib/entities";
 
 describe("BladeTitle", () => {
-  it("shows the display name of the row", () => {
+  it("shows the label of the row", () => {
     const { getByText } = render(() => (
-      <BladeTitle row={() => ({ name: "acme-av", display_name: "Acme AV" })} fallback="acme-av" />
+      <BladeTitle row={() => ({ name: "acme-av", label: "Acme AV" })} fallback="acme-av" />
     ));
     expect(getByText("Acme AV")).toBeTruthy();
   });
 
-  it("falls back to the identifier, in the data face, when there is no display name", () => {
+  it("falls back to the identifier, in the data face, when there is no label", () => {
     const { getByText } = render(() => (
-      <BladeTitle row={() => ({ name: "acme-av", display_name: "" })} fallback="acme-av" />
+      <BladeTitle row={() => ({ name: "acme-av", label: "" })} fallback="acme-av" />
     ));
     expect(getByText("acme-av").className).toContain("font-data");
   });
 
   // The face follows the label, not the pen (#683): a label a rule rendered is
   // prose, so it must not sit in the identifier face just because no operator
-  // typed it. The heading asked "is display_name blank" by hand, which was the
+  // typed it. The heading asked "is label blank" by hand, which was the
   // same question as "is this an identifier" only while every label was typed.
   it("shows a platform-rendered label in the prose face", () => {
     const { getByText } = render(() => (
-      <BladeTitle row={() => ({ name: "display-1", display_name: "Display 1", display_name_generated: true })} fallback="display-1" />
+      <BladeTitle row={() => ({ name: "display-1", label: "Display 1", label_generated: true })} fallback="display-1" />
     ));
     expect(getByText("Display 1").className).not.toContain("font-data");
   });
 
-  // The heading used to ask "is display_name blank", which said prose face for a
+  // The heading used to ask "is label blank", which said prose face for a
   // label that merely repeats the name. IdentityCell has always called that an
   // identifier and rendered it once, in the data face; the two surfaces now agree
   // because they ask the same primitive.
   it("keeps the data face when the label merely repeats the name", () => {
     const { getByText } = render(() => (
-      <BladeTitle row={() => ({ name: "codec-1", display_name: "codec-1" })} fallback="codec-1" />
+      <BladeTitle row={() => ({ name: "codec-1", label: "codec-1" })} fallback="codec-1" />
     ));
     expect(getByText("codec-1").className).toContain("font-data");
   });
@@ -45,7 +45,7 @@ describe("BladeTitle", () => {
   // (ADR-0098), so the heading is the name and belongs in the data face.
   it("keeps the data face when the platform holds the pen but rendered nothing", () => {
     const { getByText } = render(() => (
-      <BladeTitle row={() => ({ name: "codec-1", display_name: "", display_name_generated: true })} fallback="codec-1" />
+      <BladeTitle row={() => ({ name: "codec-1", label: "", label_generated: true })} fallback="codec-1" />
     ));
     expect(getByText("codec-1").className).toContain("font-data");
   });
@@ -58,12 +58,12 @@ describe("BladeTitle", () => {
   // #579. The heading read its accessor once in the component body, which in
   // Solid subscribes to nothing, so a rename reached the row and the body and
   // never the heading. This is that bug as a unit test.
-  it("follows its row when the display name changes", () => {
-    const [row, setRow] = createSignal<Labelled>({ name: "acme-av", display_name: "Acme AV" });
+  it("follows its row when the label changes", () => {
+    const [row, setRow] = createSignal<Labelled>({ name: "acme-av", label: "Acme AV" });
     const { getByText, queryByText } = render(() => <BladeTitle row={row} fallback="acme-av" />);
     expect(getByText("Acme AV")).toBeTruthy();
 
-    setRow({ name: "acme-av", display_name: "Acme Audio Visual" });
+    setRow({ name: "acme-av", label: "Acme Audio Visual" });
     expect(getByText("Acme Audio Visual")).toBeTruthy();
     expect(queryByText("Acme AV")).toBeNull();
   });
@@ -73,7 +73,7 @@ describe("BladeTitle", () => {
     const { getByText } = render(() => <BladeTitle row={row} fallback="acme-av" />);
     expect(getByText("acme-av").className).toContain("font-data");
 
-    setRow({ name: "acme-av", display_name: "Acme AV" });
+    setRow({ name: "acme-av", label: "Acme AV" });
     const resolved = getByText("Acme AV");
     expect(resolved.className).not.toContain("font-data");
   });

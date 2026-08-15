@@ -65,7 +65,7 @@ var labelRulesYAML []byte
 type rolesDoc struct {
 	Roles []struct {
 		ID          string   `yaml:"id"`
-		DisplayName string   `yaml:"display_name"`
+		Label       string   `yaml:"label"`
 		Description string   `yaml:"description"`
 		Permissions []string `yaml:"permissions"`
 		Inherits    []string `yaml:"inherits"`
@@ -82,7 +82,7 @@ type labelRulesDoc struct {
 type locationTypesDoc struct {
 	LocationTypes []struct {
 		ID                 string   `yaml:"id"`
-		DisplayName        string   `yaml:"display_name"`
+		Label              string   `yaml:"label"`
 		Icon               string   `yaml:"icon"`
 		AllowedParentTypes []string `yaml:"allowed_parent_types"`
 		// NameRule is the type's opt-in to generating the names of the
@@ -99,7 +99,7 @@ type locationTypesDoc struct {
 type standardsDoc struct {
 	Standards []struct {
 		ID               string `yaml:"id"`
-		DisplayName      string `yaml:"display_name"`
+		Label            string `yaml:"label"`
 		ParentStandardID string `yaml:"parent_standard_id"`
 		// Choices are exclusive-or groups a conforming system can satisfy
 		// through exactly one of their named alternates (#626): an
@@ -107,14 +107,14 @@ type standardsDoc struct {
 		// amp+mic. Seeded before Roles, since a role's Choice/Alternate
 		// fields point into one.
 		Choices []struct {
-			Name        string `yaml:"name"`
-			DisplayName string `yaml:"display_name"`
+			Name  string `yaml:"name"`
+			Label string `yaml:"label"`
 			// Alternates is in the order a tie between two
 			// equally-satisfied alternates breaks by
 			// (internal/health.Choice.Active).
 			Alternates []struct {
-				Name        string `yaml:"name"`
-				DisplayName string `yaml:"display_name"`
+				Name  string `yaml:"name"`
+				Label string `yaml:"label"`
 			} `yaml:"alternates"`
 		} `yaml:"choices"`
 		// The roles a conforming system needs filled, inherited live by every
@@ -125,7 +125,7 @@ type standardsDoc struct {
 		// at boot (see seedStandardRoles).
 		Roles []struct {
 			Name           string   `yaml:"name"`
-			DisplayName    string   `yaml:"display_name"`
+			Label          string   `yaml:"label"`
 			Quorum         int      `yaml:"quorum"`
 			AcceptedTypes  []string `yaml:"accepted_types"`
 			PinnedProducts []string `yaml:"pinned_products"`
@@ -140,7 +140,7 @@ type propertyTypesDoc struct {
 		Name        string         `yaml:"name"`
 		DataType    string         `yaml:"data_type"`
 		Validation  map[string]any `yaml:"validation"`
-		DisplayName string         `yaml:"display_name"`
+		Label       string         `yaml:"label"`
 		Description string         `yaml:"description"`
 	} `yaml:"property_types"`
 }
@@ -151,7 +151,7 @@ type metricTypesDoc struct {
 		DataType    string `yaml:"data_type"`
 		Unit        string `yaml:"unit"`
 		Precision   *int   `yaml:"precision"`
-		DisplayName string `yaml:"display_name"`
+		Label       string `yaml:"label"`
 		Description string `yaml:"description"`
 	} `yaml:"metric_types"`
 }
@@ -166,26 +166,26 @@ type interfaceTypesDoc struct {
 
 type vendorsDoc struct {
 	Vendors []struct {
-		ID          string `yaml:"id"`
-		DisplayName string `yaml:"display_name"`
-		Kind        string `yaml:"kind"`
-		Icon        string `yaml:"icon"`
-		Website     string `yaml:"website"`
+		ID      string `yaml:"id"`
+		Label   string `yaml:"label"`
+		Kind    string `yaml:"kind"`
+		Icon    string `yaml:"icon"`
+		Website string `yaml:"website"`
 	} `yaml:"vendors"`
 }
 
 type driversDoc struct {
 	Drivers []struct {
-		ID          string `yaml:"id"`
-		DisplayName string `yaml:"display_name"`
-		Version     string `yaml:"version"`
+		ID      string `yaml:"id"`
+		Label   string `yaml:"label"`
+		Version string `yaml:"version"`
 	} `yaml:"drivers"`
 }
 
 type componentTypesDoc struct {
 	ComponentTypes []struct {
 		ID          string   `yaml:"id"`
-		DisplayName string   `yaml:"display_name"`
+		Label       string   `yaml:"label"`
 		Stem        string   `yaml:"stem"`
 		Icon        string   `yaml:"icon"`
 		Abbrev      string   `yaml:"abbrev"`
@@ -196,19 +196,19 @@ type componentTypesDoc struct {
 
 type systemTypesDoc struct {
 	SystemTypes []struct {
-		ID          string `yaml:"id"`
-		DisplayName string `yaml:"display_name"`
-		Stem        string `yaml:"stem"`
-		Icon        string `yaml:"icon"`
-		Abbrev      string `yaml:"abbrev"`
-		ParentID    string `yaml:"parent_id"`
+		ID       string `yaml:"id"`
+		Label    string `yaml:"label"`
+		Stem     string `yaml:"stem"`
+		Icon     string `yaml:"icon"`
+		Abbrev   string `yaml:"abbrev"`
+		ParentID string `yaml:"parent_id"`
 	} `yaml:"system_types"`
 }
 
 type productsDoc struct {
 	Products []struct {
 		ID              string `yaml:"id"`
-		DisplayName     string `yaml:"display_name"`
+		Label           string `yaml:"label"`
 		VendorID        string `yaml:"vendor_id"`
 		DriverID        string `yaml:"driver_id"`
 		Kind            string `yaml:"kind"`
@@ -228,7 +228,7 @@ type productsDoc struct {
 type secretTypesDoc struct {
 	SecretTypes []struct {
 		ID                    string `yaml:"id"`
-		DisplayName           string `yaml:"display_name"`
+		Label                 string `yaml:"label"`
 		DefaultAdminSensitive bool   `yaml:"default_admin_sensitive"`
 		Fields                []struct {
 			Name   string `yaml:"name"`
@@ -354,7 +354,7 @@ func seedPropertyTypes(ctx context.Context, gw storage.Gateway) error {
 			validation = b
 		}
 		if err := gw.UpsertPropertyType(ctx, storage.PropertyType{
-			Name: p.Name, DisplayName: p.DisplayName, DataType: p.DataType,
+			Name: p.Name, Label: p.Label, DataType: p.DataType,
 			Validation: validation, Description: p.Description, Official: true,
 		}); err != nil {
 			return err
@@ -377,7 +377,7 @@ func seedMetricTypes(ctx context.Context, gw storage.Gateway) error {
 			unit = &u
 		}
 		if err := gw.UpsertMetricType(ctx, storage.MetricType{
-			Name: m.Name, DisplayName: m.DisplayName, DataType: m.DataType,
+			Name: m.Name, Label: m.Label, DataType: m.DataType,
 			Unit: unit, Precision: m.Precision, Description: m.Description, Official: true,
 		}); err != nil {
 			return err
@@ -392,7 +392,7 @@ func seedEventTypes(ctx context.Context, gw storage.Gateway) error {
 	var doc struct {
 		EventTypes []struct {
 			Name        string `yaml:"name"`
-			DisplayName string `yaml:"display_name"`
+			Label       string `yaml:"label"`
 			Description string `yaml:"description"`
 		} `yaml:"event_types"`
 	}
@@ -401,7 +401,7 @@ func seedEventTypes(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, e := range doc.EventTypes {
 		if err := gw.UpsertEventType(ctx, storage.EventType{
-			Name: e.Name, DisplayName: e.DisplayName, Description: e.Description, Official: true,
+			Name: e.Name, Label: e.Label, Description: e.Description, Official: true,
 		}); err != nil {
 			return err
 		}
@@ -418,7 +418,7 @@ func seedCommandTypes(ctx context.Context, gw storage.Gateway) error {
 	var doc struct {
 		CommandTypes []struct {
 			Name                string `yaml:"name"`
-			DisplayName         string `yaml:"display_name"`
+			Label               string `yaml:"label"`
 			Description         string `yaml:"description"`
 			TargetPropertyType  string `yaml:"target_property_type"`
 			TargetMetricType    string `yaml:"target_metric_type"`
@@ -430,7 +430,7 @@ func seedCommandTypes(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, c := range doc.CommandTypes {
 		if err := gw.UpsertCommandType(ctx, storage.CommandType{
-			Name: c.Name, DisplayName: c.DisplayName, Description: c.Description,
+			Name: c.Name, Label: c.Label, Description: c.Description,
 			TargetPropertyType: c.TargetPropertyType, TargetMetricType: c.TargetMetricType,
 			SettleWindowSeconds: c.SettleWindowSeconds, Official: true,
 		}); err != nil {
@@ -453,7 +453,7 @@ func seedSecretTypes(ctx context.Context, gw storage.Gateway) error {
 		if err := gw.UpsertSecretType(ctx, storage.SecretType{
 			Name:                  st.ID,
 			Official:              true,
-			DisplayName:           st.DisplayName,
+			Label:                 st.Label,
 			DefaultAdminSensitive: st.DefaultAdminSensitive,
 			Fields:                fields,
 		}); err != nil {
@@ -472,12 +472,12 @@ func seedVendors(ctx context.Context, gw storage.Gateway) error {
 		if err := gw.UpsertVendor(ctx, storage.Vendor{
 			// The seed ships name, never uuids: the row's id is the
 			// database's to mint and must survive a re-seed.
-			Name:        v.ID,
-			Official:    true,
-			DisplayName: v.DisplayName,
-			Kind:        v.Kind,
-			Icon:        v.Icon,
-			Website:     v.Website,
+			Name:     v.ID,
+			Official: true,
+			Label:    v.Label,
+			Kind:     v.Kind,
+			Icon:     v.Icon,
+			Website:  v.Website,
 		}); err != nil {
 			return err
 		}
@@ -492,7 +492,7 @@ func seedDrivers(ctx context.Context, gw storage.Gateway) error {
 	}
 	for _, d := range doc.Drivers {
 		if err := gw.UpsertDriver(ctx, storage.Driver{
-			Name: d.ID, Official: true, DisplayName: d.DisplayName, Version: d.Version,
+			Name: d.ID, Official: true, Label: d.Label, Version: d.Version,
 		}); err != nil {
 			return err
 		}
@@ -529,7 +529,7 @@ func seedComponentTypes(ctx context.Context, gw storage.Gateway) error {
 			parentID = &pid
 		}
 		if err := gw.UpsertComponentType(ctx, storage.ComponentType{
-			Name: ct.ID, Official: true, DisplayName: ct.DisplayName,
+			Name: ct.ID, Official: true, Label: ct.Label,
 			Stem: nz(ct.Stem), Icon: nz(ct.Icon), Abbrev: nz(ct.Abbrev),
 			DefaultTags: ct.DefaultTags, ParentID: parentID,
 		}); err != nil {
@@ -571,7 +571,7 @@ func seedSystemTypes(ctx context.Context, gw storage.Gateway) error {
 			parentID = &pid
 		}
 		if err := gw.UpsertSystemType(ctx, storage.SystemType{
-			Name: st.ID, Official: true, DisplayName: st.DisplayName,
+			Name: st.ID, Official: true, Label: st.Label,
 			Stem: nz(st.Stem), Icon: nz(st.Icon), Abbrev: nz(st.Abbrev), ParentID: parentID,
 		}); err != nil {
 			return fmt.Errorf("seed: system_type %s: %w", st.ID, err)
@@ -602,7 +602,7 @@ func seedProducts(ctx context.Context, gw storage.Gateway) error {
 			kind = "device"
 		}
 		if err := gw.UpsertProduct(ctx, storage.Product{
-			Name: p.ID, Official: true, DisplayName: p.DisplayName,
+			Name: p.ID, Official: true, Label: p.Label,
 			VendorID: nz(p.VendorID), DriverID: nz(p.DriverID),
 			ParentProductID: nz(p.ParentProductID), Kind: kind,
 			ComponentType: p.ComponentType, Icon: nz(p.Icon),
@@ -641,7 +641,7 @@ func seedStandards(ctx context.Context, gw storage.Gateway) error {
 		if err := gw.SeedStandard(ctx, storage.Standard{
 			Name:             st.ID,
 			Official:         false,
-			DisplayName:      st.DisplayName,
+			Label:            st.Label,
 			ParentStandardID: parent,
 		}); err != nil {
 			return err
@@ -670,9 +670,9 @@ func seedStandardChoices(ctx context.Context, gw storage.Gateway) (map[string]ma
 		}
 		alts := make(map[string]string)
 		for _, c := range st.Choices {
-			spec := storage.RoleChoiceSpec{Name: c.Name, DisplayName: c.DisplayName}
+			spec := storage.RoleChoiceSpec{Name: c.Name, Label: c.Label}
 			for _, a := range c.Alternates {
-				spec.Alternates = append(spec.Alternates, storage.AlternateSpec{Name: a.Name, DisplayName: a.DisplayName})
+				spec.Alternates = append(spec.Alternates, storage.AlternateSpec{Name: a.Name, Label: a.Label})
 			}
 			ids, err := gw.SeedRoleChoice(ctx, "standard", st.ID, spec)
 			if err != nil {
@@ -722,7 +722,7 @@ func seedStandardRoles(ctx context.Context, gw storage.Gateway, choiceAlts map[s
 			}
 			if err := gw.SeedSystemRole(ctx, "standard", st.ID, storage.SystemRoleSpec{
 				Name:           r.Name,
-				DisplayName:    r.DisplayName,
+				Label:          r.Label,
 				Quorum:         r.Quorum,
 				AcceptedTypes:  r.AcceptedTypes,
 				PinnedProducts: r.PinnedProducts,
@@ -770,7 +770,7 @@ func seedRoles(ctx context.Context, gw storage.Gateway) error {
 			Official:    true,
 			Permissions: r.Permissions,
 			Inherits:    r.Inherits,
-			DisplayName: r.DisplayName,
+			Label:       r.Label,
 			Description: r.Description,
 		}); err != nil {
 			return err
@@ -800,7 +800,7 @@ func seedLocationTypes(ctx context.Context, gw storage.Gateway) error {
 		if err := gw.UpsertLocationType(ctx, storage.LocationType{
 			Name:               lt.ID,
 			Official:           true,
-			DisplayName:        lt.DisplayName,
+			Label:              lt.Label,
 			Icon:               lt.Icon,
 			AllowedParentTypes: lt.AllowedParentTypes,
 			NameRule:           rule,

@@ -44,7 +44,7 @@ func TestEventTypeAPI(t *testing.T) {
 
 	// Register a custom event type.
 	created := c.do(ownerTok, http.MethodPost, "/event-types", map[string]any{
-		"name": "cable-unplugged", "display_name": "Cable unplugged",
+		"name": "cable-unplugged", "label": "Cable unplugged",
 		"payload_schema": map[string]any{"type": "object"},
 	}, http.StatusCreated)
 	var et struct {
@@ -75,7 +75,7 @@ func TestEventTypeAPI(t *testing.T) {
 	}
 
 	// Update a mutable field.
-	c.do(ownerTok, http.MethodPatch, "/event-types/cable-unplugged", map[string]any{"display_name": "Cable Unplugged"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/event-types/cable-unplugged", map[string]any{"label": "Cable Unplugged"}, http.StatusOK)
 
 	// A malformed name is a 422.
 	c.do(ownerTok, http.MethodPost, "/event-types", map[string]any{"name": "Bad-Name"}, http.StatusUnprocessableEntity)
@@ -84,7 +84,7 @@ func TestEventTypeAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/event-types", map[string]any{"name": "cable-unplugged"}, http.StatusConflict)
 
 	// An official (seeded) event type is read-only (409).
-	c.do(ownerTok, http.MethodPatch, "/event-types/call-started", map[string]any{"display_name": "x"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPatch, "/event-types/call-started", map[string]any{"label": "x"}, http.StatusConflict)
 	c.do(ownerTok, http.MethodDelete, "/event-types/call-started", nil, http.StatusConflict)
 
 	// An unknown event type is a 404.

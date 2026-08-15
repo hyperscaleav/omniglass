@@ -238,7 +238,7 @@ func TestCreateVariableDottedMissingOwnerMatchesBareNameForm(t *testing.T) {
 func TestRoleOwnerArgPassesThroughAnUnresolvableDottedSystemName(t *testing.T) {
 	gw, _ := newDuplicateNameFixture(t)
 	ctx := context.Background()
-	spec := storage.SystemRoleSpec{Name: "seat", DisplayName: "Seat", Quorum: 1}
+	spec := storage.SystemRoleSpec{Name: "seat", Label: "Seat", Quorum: 1}
 
 	if _, err := gw.SetSystemRole(ctx, "", "system", "ghost-bare-system", spec); !errors.Is(err, storage.ErrRoleRefNotFound) {
 		t.Fatalf("bare-name unresolvable system owner = %v, want ErrRoleRefNotFound", err)

@@ -14,31 +14,31 @@ import (
 // locationBody is the wire shape of a location: name-addressable, classified by
 // location_type, optionally nested under a parent (by id).
 type locationBody struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name,omitempty"`
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Label string `json:"label,omitempty"`
 	// The NAME's pen (#686); see systemBody for why it is read-only. True only
 	// where the location's type carries a name rule (#687), which no shipped
 	// place type does (ADR-0103): an operator declares a positional type to
 	// reach it.
 	NameGenerated bool `json:"name_generated" doc:"Whether the platform picked this name (from the location_type's name rule) rather than an operator typing it."`
 	// The LABEL's pen (#682); see componentBody for why it is read-only.
-	DisplayNameGenerated bool              `json:"display_name_generated" doc:"Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."`
-	LocationType         string            `json:"location_type" doc:"The location_type name"`
-	LocationTypeID       string            `json:"location_type_id" doc:"The location_type's uuid, the stable form of location_type"`
-	ParentID             *string           `json:"parent_id,omitempty" doc:"The parent location's id, the canonical handle"`
-	Parent               *string           `json:"parent,omitempty" doc:"The parent location's name, for display; absent for a site root"`
-	Path                 string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.415a); no accessor, since a location's own address IS its location-tree ancestor chain. Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it)."`
-	PathSegments         []string          `json:"path_segments,omitempty" doc:"path split on '.'."`
-	Renders              *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
-	Actions              []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
-	EffectiveTags        map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column."`
+	LabelGenerated bool              `json:"label_generated" doc:"Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back."`
+	LocationType   string            `json:"location_type" doc:"The location_type name"`
+	LocationTypeID string            `json:"location_type_id" doc:"The location_type's uuid, the stable form of location_type"`
+	ParentID       *string           `json:"parent_id,omitempty" doc:"The parent location's id, the canonical handle"`
+	Parent         *string           `json:"parent,omitempty" doc:"The parent location's name, for display; absent for a site root"`
+	Path           string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.415a); no accessor, since a location's own address IS its location-tree ancestor chain. Set on a GET or LIST response; empty on a create/update/move/rename response (refetch the row to see it)."`
+	PathSegments   []string          `json:"path_segments,omitempty" doc:"path split on '.'."`
+	Renders        *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
+	Actions        []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
+	EffectiveTags  map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column."`
 }
 
 func toLocationBody(l *storage.Location) locationBody {
 	return locationBody{
-		ID: l.ID, Name: l.Name, DisplayName: l.DisplayName,
-		NameGenerated: l.NameGenerated, DisplayNameGenerated: l.DisplayNameGenerated,
+		ID: l.ID, Name: l.Name, Label: l.Label,
+		NameGenerated: l.NameGenerated, LabelGenerated: l.LabelGenerated,
 		LocationType: l.LocationType, LocationTypeID: l.LocationTypeID, ParentID: l.ParentID, Parent: l.ParentName,
 		Path: l.Path, PathSegments: l.PathSegments, Renders: toRenderBody(l.Path, l.Renders),
 	}
@@ -51,15 +51,15 @@ type listLocationsOutput struct {
 }
 
 // locationTypeBody is the wire shape of a location_type registry row: the
-// stable id a location is classified by, its display_name, the icon the
+// stable id a location is classified by, its label, the icon the
 // console renders as each location's leading tree glyph, AllowedParentTypes
 // (the placement constraint: a set of location_type ids and/or the reserved
 // "root" sentinel; empty means unconstrained), and whether it ships with the
-// binary. The registry lists alphabetically by display_name.
+// binary. The registry lists alphabetically by label.
 type locationTypeBody struct {
 	ID                 string            `json:"id" doc:"The location type's uuid, the stable handle that survives a rename"`
 	Name               string            `json:"name" doc:"The name an operator reads and types; renameable"`
-	DisplayName        string            `json:"display_name"`
+	Label              string            `json:"label"`
 	Icon               string            `json:"icon"`
 	AllowedParentTypes []string          `json:"allowed_parent_types"`
 	LabelRule          string            `json:"label_rule,omitempty" doc:"The label template locations of this type get; empty falls back to the global rule for locations"`
@@ -105,7 +105,7 @@ type nameRuleReadBody struct {
 // is a field that reads back empty from whichever one was missed.
 func toLocationTypeBody(lt *storage.LocationType) locationTypeBody {
 	return locationTypeBody{
-		ID: lt.ID, Name: lt.Name, DisplayName: lt.DisplayName, Icon: lt.Icon,
+		ID: lt.ID, Name: lt.Name, Label: lt.Label, Icon: lt.Icon,
 		AllowedParentTypes: lt.AllowedParentTypes, LabelRule: derefStr(lt.LabelRule),
 		NameRule: toNameRuleBody(lt.NameRule), Official: lt.Official, Forked: lt.Forked,
 	}
@@ -138,7 +138,7 @@ type locationTypePathInput struct {
 type createLocationTypeInput struct {
 	Body struct {
 		Name               string   `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name (e.g. wing); \"root\" is reserved"`
-		DisplayName        string   `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
+		Label              string   `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		Icon               string   `json:"icon,omitempty" doc:"A glyph key; the console falls back to map-pin when empty"`
 		AllowedParentTypes []string `json:"allowed_parent_types,omitempty" doc:"location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained"`
 		LabelRule          string   `json:"label_rule,omitempty" doc:"The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile"`
@@ -158,7 +158,7 @@ type updateLocationTypeInput struct {
 		// so the body alone can never spell "clear". The mask carries the
 		// intent instead, which is the reason AIP-134 has one.
 		UpdateMask         []string      `json:"update_mask,omitempty" doc:"Which fields this write changes (AIP-134). Omit it and the fields present in the body change and nothing else; name a field here and it is written even when the body leaves it empty, which is how a field is CLEARED (name_rule back to operator-named); send [\"*\"] for full replacement. A field this resource does not patch is a 422 naming it"`
-		DisplayName        *string       `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		Label              *string       `json:"label,omitempty" doc:"A new operator-facing label"`
 		Icon               *string       `json:"icon,omitempty" doc:"A new glyph key; the console falls back to map-pin when empty"`
 		AllowedParentTypes *[]string     `json:"allowed_parent_types,omitempty" doc:"Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained"`
 		LabelRule          *string       `json:"label_rule,omitempty" doc:"A new label template for locations of this type; omit to leave unchanged, \"\" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels"`
@@ -186,7 +186,7 @@ type createLocationInput struct {
 		// before. Omitting it for a type carrying no rule is a 422: only some
 		// kinds of place have a name the platform can know.
 		Name         string  `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule."`
-		DisplayName  string  `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
+		Label        string  `json:"label,omitempty" doc:"What an operator reads; the name is the address"`
 		LocationType string  `json:"location_type" minLength:"1" doc:"The location_type, by name or uuid (campus, building, ...)"`
 		Parent       *string `json:"parent,omitempty" doc:"Parent location name; omit for a root location"`
 		// The create form's ordinal precondition (#702); see
@@ -203,7 +203,7 @@ type createLocationInput struct {
 type updateLocationInput struct {
 	Name string `path:"name" doc:"The location's name, or a dotted address (e.g. boi.17c.415a)"`
 	Body struct {
-		DisplayName  *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		Label        *string `json:"label,omitempty" doc:"A new operator-facing label"`
 		LocationType *string `json:"location_type,omitempty" doc:"Re-types the location: a location_type, by name or uuid"`
 	}
 }
@@ -276,7 +276,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodGet,
 		Path:        "/location-types",
 		Summary:     "List location types",
-		Description: "Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by location_type:read.",
+		Description: "Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.",
 	}, "location_type", "read"), func(ctx context.Context, _ *struct{}) (*listLocationTypesOutput, error) {
 		types, err := gw.ListLocationTypes(ctx)
 		if err != nil {
@@ -299,7 +299,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Description:   "Creates a custom (non-official) location_type, optionally with the label_rule locations of that type get. An unparseable rule is a 422. Gated by location_type:create.",
 	}, "location_type", "create"), func(ctx context.Context, in *createLocationTypeInput) (*locationTypeOutput, error) {
 		lt, err := gw.CreateLocationType(ctx, actorID(ctx), storage.LocationType{
-			Name: in.Body.Name, DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
+			Name: in.Body.Name, Label: in.Body.Label, Icon: in.Body.Icon,
 			AllowedParentTypes: in.Body.AllowedParentTypes, LabelRule: ptrOrNil(in.Body.LabelRule),
 			NameRule: toStorageNameRule(in.Body.NameRule),
 		})
@@ -314,10 +314,10 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/location-types/{id}",
 		Summary:     "Update a location type",
-		Description: "Patches a location_type's display_name, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update.",
+		Description: "Patches a location_type's label, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update.",
 	}, "location_type", "update"), func(ctx context.Context, in *updateLocationTypeInput) (*locationTypeOutput, error) {
 		patch := storage.LocationTypePatch{
-			DisplayName: in.Body.DisplayName, Icon: in.Body.Icon,
+			Label: in.Body.Label, Icon: in.Body.Icon,
 			AllowedParentTypes: in.Body.AllowedParentTypes, LabelRule: in.Body.LabelRule,
 			NameRule: toStorageNameRule(in.Body.NameRule),
 		}
@@ -389,7 +389,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 	}, "location", "create"), func(ctx context.Context, in *createLocationInput) (*locationOutput, error) {
 		l, err := gw.CreateLocation(ctx, actorID(ctx), storage.LocationSpec{
 			Name:         in.Body.Name,
-			DisplayName:  in.Body.DisplayName,
+			Label:        in.Body.Label,
 			LocationType: in.Body.LocationType,
 			ParentName:   in.Body.Parent,
 			ExpectedName: in.Body.ExpectedName,
@@ -405,10 +405,10 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPatch,
 		Path:        "/locations/{name}",
 		Summary:     "Update a location",
-		Description: "Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a location's label or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.",
 	}, "location", "update"), func(ctx context.Context, in *updateLocationInput) (*locationOutput, error) {
 		l, err := gw.UpdateLocation(ctx, actorID(ctx), in.Name, storage.LocationPatch{
-			DisplayName:  in.Body.DisplayName,
+			Label:        in.Body.Label,
 			LocationType: in.Body.LocationType,
 		}, a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "update"))
 		if err != nil {

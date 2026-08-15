@@ -53,7 +53,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 
 	// The four shipped location types seed alongside the roles, in alphabetical
-	// order by display_name, and idempotently (the second Run above must not have
+	// order by label, and idempotently (the second Run above must not have
 	// duplicated them). Every one is OFFICIAL, which is the inversion #703 made
 	// deliberately: this assertion used to read "want 0 (a shipped location type
 	// is operator-owned)" and now guards the opposite claim, that the platform
@@ -79,7 +79,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		t.Errorf("official location_types = %d, want 4 (the platform owns every location type it ships, #703)", officialTypes)
 	}
 	var topType string
-	if err := conn.QueryRow(ctx, `select name from location_type order by display_name, name limit 1`).Scan(&topType); err != nil {
+	if err := conn.QueryRow(ctx, `select name from location_type order by label, name limit 1`).Scan(&topType); err != nil {
 		t.Fatalf("read top location_type: %v", err)
 	}
 	if topType != "building" {
@@ -125,18 +125,18 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	// The property that makes them operator-owned: re-seeding must not reassert
 	// over an operator's edit. An authoritative upsert would silently revert this
 	// on the next boot.
-	if _, err := conn.Exec(ctx, `update standard set display_name = 'Our Huddle Room' where name = 'huddle-room'`); err != nil {
+	if _, err := conn.Exec(ctx, `update standard set label = 'Our Huddle Room' where name = 'huddle-room'`); err != nil {
 		t.Fatalf("edit seeded standard: %v", err)
 	}
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed re-run: %v", err)
 	}
 	var huddleName string
-	if err := conn.QueryRow(ctx, `select display_name from standard where name = 'huddle-room'`).Scan(&huddleName); err != nil {
+	if err := conn.QueryRow(ctx, `select label from standard where name = 'huddle-room'`).Scan(&huddleName); err != nil {
 		t.Fatalf("read huddle-room: %v", err)
 	}
 	if huddleName != "Our Huddle Room" {
-		t.Errorf("huddle-room display_name = %q after re-seed, want the operator's edit to survive", huddleName)
+		t.Errorf("huddle-room label = %q after re-seed, want the operator's edit to survive", huddleName)
 	}
 
 	// The shipped standards also declare the roles a conforming system needs
@@ -393,17 +393,17 @@ func TestSeedRoleChoicesIdempotent(t *testing.T) {
 
 	// An operator's edit to the choice survives the second seed run, the
 	// same seed-if-absent contract every other shipped declaration keeps.
-	if _, err := conn.Exec(ctx, `update role_choice set display_name = 'Our Conferencing' where name = 'conferencing'`); err != nil {
+	if _, err := conn.Exec(ctx, `update role_choice set label = 'Our Conferencing' where name = 'conferencing'`); err != nil {
 		t.Fatalf("edit seeded choice: %v", err)
 	}
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed re-run after edit: %v", err)
 	}
-	var displayName string
-	if err := conn.QueryRow(ctx, `select display_name from role_choice where name = 'conferencing'`).Scan(&displayName); err != nil {
+	var label string
+	if err := conn.QueryRow(ctx, `select label from role_choice where name = 'conferencing'`).Scan(&label); err != nil {
 		t.Fatalf("read edited choice: %v", err)
 	}
-	if displayName != "Our Conferencing" {
-		t.Errorf("choice display_name = %q after re-seed, want the operator's edit to survive", displayName)
+	if label != "Our Conferencing" {
+		t.Errorf("choice label = %q after re-seed, want the operator's edit to survive", label)
 	}
 }

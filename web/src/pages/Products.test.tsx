@@ -23,8 +23,8 @@ import { uuidFor } from "../lib/testids";
 // Wire truth (api/products.go): vendor/driver/parent arrive as BOTH the kebab
 // handle (vendor) and the uuid (vendor_id).
 const seed: Product[] = [
-  { id: uuidFor("prod-crestron-tsw-1070"), name: "crestron-tsw-1070", display_name: "Crestron TSW-1070", kind: "device", component_type: "touch-panel", component_type_id: uuidFor("ct-touch-panel"), vendor: "crestron", vendor_id: uuidFor("ven-crestron"), driver: "crestron-ct", driver_id: uuidFor("drv-crestron-ct"), official: true },
-  { id: uuidFor("prod-acme-panel"), name: "acme-panel", display_name: "Acme Panel", kind: "device", component_type: "display", component_type_id: uuidFor("ct-display"), vendor: "acme-av", vendor_id: uuidFor("ven-acme-av"), official: false },
+  { id: uuidFor("prod-crestron-tsw-1070"), name: "crestron-tsw-1070", label: "Crestron TSW-1070", kind: "device", component_type: "touch-panel", component_type_id: uuidFor("ct-touch-panel"), vendor: "crestron", vendor_id: uuidFor("ven-crestron"), driver: "crestron-ct", driver_id: uuidFor("drv-crestron-ct"), official: true },
+  { id: uuidFor("prod-acme-panel"), name: "acme-panel", label: "Acme Panel", kind: "device", component_type: "display", component_type_id: uuidFor("ct-display"), vendor: "acme-av", vendor_id: uuidFor("ven-acme-av"), official: false },
 ];
 
 // The seeded component_type tree this page's Type picker renders (a slice of
@@ -33,24 +33,24 @@ const seed: Product[] = [
 // resolved_icon is the server's answer per row (#695), which is what a product
 // with no override of its own now falls back to.
 const componentTypes: ComponentType[] = [
-  { id: uuidFor("ct-display"), name: "display", display_name: "Display", official: true, forked: false, stem: "display", abbrev: "fp", icon: "monitor", resolved_icon: "monitor", default_tags: [] },
-  { id: uuidFor("ct-interactive-display"), name: "interactive-display", display_name: "Interactive Display", official: true, forked: false, parent: "display", parent_id: uuidFor("ct-display"), resolved_icon: "monitor", default_tags: [] },
-  { id: uuidFor("ct-touch-panel"), name: "touch-panel", display_name: "Touch Panel", official: true, forked: false, stem: "panel", abbrev: "tp", icon: "touchpad", resolved_icon: "touchpad", default_tags: [] },
+  { id: uuidFor("ct-display"), name: "display", label: "Display", official: true, forked: false, stem: "display", abbrev: "fp", icon: "monitor", resolved_icon: "monitor", default_tags: [] },
+  { id: uuidFor("ct-interactive-display"), name: "interactive-display", label: "Interactive Display", official: true, forked: false, parent: "display", parent_id: uuidFor("ct-display"), resolved_icon: "monitor", default_tags: [] },
+  { id: uuidFor("ct-touch-panel"), name: "touch-panel", label: "Touch Panel", official: true, forked: false, stem: "panel", abbrev: "tp", icon: "touchpad", resolved_icon: "touchpad", default_tags: [] },
 ];
 
 const vendors: Vendor[] = [
-  { id: uuidFor("ven-crestron"), name: "crestron", display_name: "Crestron", kind: "manufacturer", official: true },
-  { id: uuidFor("ven-acme-av"), name: "acme-av", display_name: "Acme AV", kind: "integrator", official: false },
+  { id: uuidFor("ven-crestron"), name: "crestron", label: "Crestron", kind: "manufacturer", official: true },
+  { id: uuidFor("ven-acme-av"), name: "acme-av", label: "Acme AV", kind: "integrator", official: false },
 ];
-const drivers: Driver[] = [{ id: uuidFor("drv-crestron-ct"), name: "crestron-ct", display_name: "Crestron CT", official: true }];
+const drivers: Driver[] = [{ id: uuidFor("drv-crestron-ct"), name: "crestron-ct", label: "Crestron CT", official: true }];
 
 // The custom product's declared-property contract and the catalog its editor
 // joins each line to; the metric lane mounts beside it, kept inert with empty
 // seeds.
 const contract: ClassifierProperty[] = [{ property_type_name: "serial-number", property_type_id: "serial-number-id", required: true }];
 const propertyCatalog: PropertyRow[] = [
-  { name: "serial-number", data_type: "string", display_name: "Serial number", official: true },
-  { name: "port-count", data_type: "int", display_name: "Port count", official: true },
+  { name: "serial-number", data_type: "string", label: "Serial number", official: true },
+  { name: "port-count", data_type: "int", label: "Port count", official: true },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -99,7 +99,7 @@ describe("Products page", () => {
     expect(editBtn.closest(".tooltip")?.getAttribute("data-tip")).toBe("Official: ships with Omniglass and updates with it.");
 
     // create is available to an admin. The label match is anchored because the
-    // Name field's hint mentions the display name too.
+    // Name field's hint mentions the label too.
     fireEvent.click(screen.getByRole("button", { name: /new product/i }));
     expect(screen.getByLabelText(/^Name/)).toBeInTheDocument();
   });
@@ -207,7 +207,7 @@ describe("Products type picker (#614)", () => {
     expect(raw[2].startsWith(nbsp)).toBe(false);
   });
 
-  it("blocks Create product until a type is chosen, even with a display name and a kind", async () => {
+  it("blocks Create product until a type is chosen, even with a label and a kind", async () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /new product/i }));
     const display = screen.getByPlaceholderText("Crestron TSW-1070") as HTMLInputElement;
@@ -352,7 +352,7 @@ describe("Products identity column", () => {
   });
 });
 
-// The create form leads with the display name and derives the handle from it, so
+// The create form leads with the label and derives the handle from it, so
 // an operator types "Acme Panel Pro" and never has to invent `acme-panel-pro` or
 // think about the character class the API enforces. This proves the page is
 // WIRED to the primitive; lib/entities.test.ts proves the suppression rule
@@ -368,7 +368,7 @@ describe("Products create identity", () => {
     return { display, key };
   };
 
-  it("derives the handle as the display name is typed", async () => {
+  it("derives the handle as the label is typed", async () => {
     const { display, key } = await fields();
     fireEvent.input(display, { target: { value: "Acme Panel Pro" } });
     await waitFor(() => expect(key.value).toBe("acme-panel-pro"));
@@ -384,6 +384,6 @@ describe("Products create identity", () => {
 
     await waitFor(() => expect(display.value).toBe("Acme Panel Pro Mk2"));
     expect(screen.getByText(/Globally unique address/)).toBeTruthy();
-    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
+    expect(screen.queryByText(/Derived from the label/)).toBeNull();
   });
 });

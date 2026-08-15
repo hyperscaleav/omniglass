@@ -49,7 +49,7 @@ if (nested && tree.length !== rows.length) {
       {rows.map((r) => (
         <details>
           <summary>
-            <strong>{r.display_name}</strong> (<code>{r.id}</code>
+            <strong>{r.label}</strong> (<code>{r.id}</code>
             {r.inherits?.length ? <> inherits {r.inherits.join(', ')}</> : null}): {r.description}
           </summary>
           <p>Effective permissions ({r.effective.length}):</p>
@@ -63,7 +63,7 @@ if (nested && tree.length !== rows.length) {
       <tbody>
         {rows.map((s) => (
           <tr>
-            <td><code>{s.id}</code> ({s.display_name})</td>
+            <td><code>{s.id}</code> ({s.label})</td>
             <td>{s.fields.map((f) => (<span><code>{f.name}</code>{f.secret ? ' (secret)' : ''} </span>))}</td>
             <td>{s.default_admin_sensitive ? 'yes' : 'no'}</td>
           </tr>
@@ -76,7 +76,7 @@ if (nested && tree.length !== rows.length) {
       <tbody>
         {rows.map((s) => (
           <tr>
-            <td><code>{s.id}</code> ({s.display_name})</td>
+            <td><code>{s.id}</code> ({s.label})</td>
             <td>
               {(s.roles ?? []).map((r) => (
                 <span><code>{r.name}</code> (quorum {r.quorum}{r.accepted_types?.length ? `, accepts ${r.accepted_types.join(' + ')}` : ''}) </span>
@@ -92,7 +92,7 @@ if (nested && tree.length !== rows.length) {
       <tbody>
         {rows.map((lt) => (
           <tr>
-            <td><code>{lt.id}</code> ({lt.display_name})</td>
+            <td><code>{lt.id}</code> ({lt.label})</td>
             <td>{lt.allowed_parent_types?.length ? lt.allowed_parent_types.join(', ') : '(top level)'}</td>
             <td>{!lt.name_rule
               ? 'you name it'
@@ -112,7 +112,7 @@ if (nested && tree.length !== rows.length) {
         {tree.map((t) => (
           <tr>
             <td style={`padding-left: ${0.5 + t.depth * 1.25}rem`}>
-              <code>{t.id}</code> ({t.display_name})
+              <code>{t.id}</code> ({t.label})
             </td>
             <td>{t.stem ? <code>{t.stem}</code> : <em>inherits</em>}</td>
             <td>{t.abbrev ? <code>{t.abbrev}</code> : <em>inherits</em>}</td>
@@ -132,7 +132,7 @@ if (nested && tree.length !== rows.length) {
             <td>{p.kind ?? ''}</td>
             <td>{p.data_type}</td>
             <td>{p.unit ?? ''}</td>
-            <td>{p.description ?? p.display_name}</td>
+            <td>{p.description ?? p.label}</td>
           </tr>
         ))}
       </tbody>
@@ -144,7 +144,7 @@ if (nested && tree.length !== rows.length) {
         {rows.map((r) => (
           <tr>
             <td><code>{r.name ?? r.id}</code>{r.built === false ? ' (declared, not built)' : ''}</td>
-            <td>{r.description ?? r.display_name ?? ''}</td>
+            <td>{r.description ?? r.label ?? ''}</td>
           </tr>
         ))}
       </tbody>

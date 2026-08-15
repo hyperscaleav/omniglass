@@ -564,7 +564,7 @@ type meOutput struct {
 type humanBody struct {
 	Username           string `json:"username"`
 	Email              string `json:"email,omitempty"`
-	DisplayName        string `json:"display_name,omitempty"`
+	Label              string `json:"label,omitempty"`
 	MustChangePassword bool   `json:"must_change_password,omitempty" doc:"True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears."`
 	HasAvatar          bool   `json:"has_avatar,omitempty" doc:"True when the principal has a profile picture; fetch it from the avatar endpoint."`
 }
@@ -572,7 +572,7 @@ type humanBody struct {
 // svcBody is a service principal's profile on the wire. `name` is its
 // identifier, the username analogue for kind=service and unique like one
 // (#563); it was called `label` for as long as the column was, three lines from
-// the human body's display_name, which made two different concepts read as one.
+// the human body's label, which made two different concepts read as one.
 type svcBody struct {
 	Name string `json:"name" doc:"The service account's identifier, unique across service principals"`
 }
@@ -601,7 +601,7 @@ func meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
 		out.Body.Human = &humanBody{
 			Username:           pr.Human.Username,
 			Email:              pr.Human.Email,
-			DisplayName:        pr.Human.DisplayName,
+			Label:              pr.Human.Label,
 			MustChangePassword: pr.Human.MustChangePassword,
 			HasAvatar:          pr.Human.HasAvatar,
 		}
@@ -617,13 +617,13 @@ func meHandler(ctx context.Context, _ *struct{}) (*meOutput, error) {
 	return out, nil
 }
 
-// updateMeInput is the body of PATCH /api/v1/auth/me. Only the display name is
+// updateMeInput is the body of PATCH /api/v1/auth/me. Only the label is
 // self-editable; email is set by an administrator (a later slice), so it is not
 // on the self-service patch. The field is optional (a pointer): absent leaves it
 // unchanged, a provided empty string clears it.
 type updateMeInput struct {
 	Body struct {
-		DisplayName *string `json:"display_name,omitempty" maxLength:"200" doc:"Your display name; empty clears it"`
+		Label *string `json:"label,omitempty" maxLength:"200" doc:"Your label; empty clears it"`
 	}
 }
 
@@ -635,23 +635,23 @@ type profileOutput struct {
 // updateMeHandler updates the caller's own profile. Self-scoped: it edits the
 // principal resolved from the session, never another. Authentication is the only
 // gate (in the ungated allow-list, like GET /auth/me). Email is deliberately not
-// self-editable here; only the display name moves.
+// self-editable here; only the label moves.
 func (a *authenticator) updateMeHandler(ctx context.Context, in *updateMeInput) (*profileOutput, error) {
 	pr, ok := principalFrom(ctx)
 	if !ok || pr.Human == nil {
 		return nil, huma.Error401Unauthorized("unauthenticated")
 	}
-	patch := storage.HumanProfilePatch{DisplayName: in.Body.DisplayName}
+	patch := storage.HumanProfilePatch{Label: in.Body.Label}
 	if err := a.gw.UpdateHumanProfile(ctx, pr.ID, patch); err != nil {
 		return nil, huma.Error500InternalServerError("update profile")
 	}
 	// Return the merged result: exactly what was written (the session profile plus
 	// the applied field), so the client need not re-read.
 	h := *pr.Human
-	if in.Body.DisplayName != nil {
-		h.DisplayName = *in.Body.DisplayName
+	if in.Body.Label != nil {
+		h.Label = *in.Body.Label
 	}
-	return &profileOutput{Body: humanBody{Username: h.Username, Email: h.Email, DisplayName: h.DisplayName}}, nil
+	return &profileOutput{Body: humanBody{Username: h.Username, Email: h.Email, Label: h.Label}}, nil
 }
 
 // changePasswordInput is the body of POST /api/v1/auth/me:changePassword. The new
@@ -1009,7 +1009,7 @@ type rolesOutput struct {
 type roleBody struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
-	DisplayName string   `json:"display_name,omitempty"`
+	Label       string   `json:"label,omitempty"`
 	Description string   `json:"description,omitempty"`
 	Official    bool     `json:"official"`
 	Permissions []string `json:"permissions"`
@@ -1048,7 +1048,7 @@ func (a *authenticator) rolesHandler(gw storage.Gateway) func(context.Context, *
 				}
 			}
 			out.Body.Roles = append(out.Body.Roles, roleBody{
-				ID: r.ID, Name: r.Name, DisplayName: r.DisplayName, Description: r.Description,
+				ID: r.ID, Name: r.Name, Label: r.Label, Description: r.Description,
 				Official: r.Official, Permissions: r.Permissions, Inherits: r.Inherits,
 				EffectivePermissions: eff.Strings(),
 				Held:                 held,

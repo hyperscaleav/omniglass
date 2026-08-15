@@ -10,11 +10,11 @@ import { api } from "../api/client";
 export type Component = {
   id: string;
   name: string;
-  display_name?: string;
+  label?: string;
   // The LABEL's pen (#682/#683): true means the platform rendered this display
   // name from a label rule, false means an operator typed it. Read-only; the
   // console reads it through lib/entities so nothing branches on it by hand.
-  display_name_generated?: boolean;
+  label_generated?: boolean;
   location?: string;
   // location_id is the location's uuid, the stable handle the tree builder
   // keys and resolves on (#627: name uniqueness is scoped to placement, so
@@ -67,7 +67,7 @@ export type CreateComponent = {
   // type just follows the API contract, which the CLI and a direct API caller
   // can already leave blank.
   name?: string;
-  display_name?: string;
+  label?: string;
   parent?: string;
   system?: string;
   location?: string;
@@ -89,7 +89,7 @@ export async function createComponent(body: CreateComponent): Promise<Component>
 }
 
 export type UpdateComponent = {
-  display_name?: string;
+  label?: string;
 };
 
 export async function updateComponent(name: string, body: UpdateComponent): Promise<Component> {

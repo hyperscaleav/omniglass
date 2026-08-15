@@ -23,7 +23,7 @@ func nameRulePtr(stem string, bareFirst bool) *NameRule {
 // pointer in Go, so the body alone can never spell the difference.
 func TestApplyLocationTypePatchWriteSet(t *testing.T) {
 	base := LocationType{
-		Name: "floor", Official: true, DisplayName: "Floor", Icon: "layers",
+		Name: "floor", Official: true, Label: "Floor", Icon: "layers",
 		AllowedParentTypes: []string{"building", "campus"},
 		LabelRule:          strPtr("{{.TypeName}} {{.Name}}"),
 		NameRule:           nameRulePtr("", false),
@@ -43,17 +43,17 @@ func TestApplyLocationTypePatchWriteSet(t *testing.T) {
 		},
 		{
 			name:  "a populated field is written under the implied mask",
-			patch: LocationTypePatch{DisplayName: &label},
+			patch: LocationTypePatch{Label: &label},
 			want: func(lt LocationType) LocationType {
-				lt.DisplayName = "Level"
+				lt.Label = "Level"
 				return lt
 			},
 		},
 		{
 			name:  "an omitted name rule is left alone under the implied mask",
-			patch: LocationTypePatch{DisplayName: &label},
+			patch: LocationTypePatch{Label: &label},
 			want: func(lt LocationType) LocationType {
-				lt.DisplayName = "Level"
+				lt.Label = "Level"
 				return lt
 			},
 		},
@@ -68,8 +68,8 @@ func TestApplyLocationTypePatchWriteSet(t *testing.T) {
 		{
 			name: "a mask naming only the rule leaves every other field alone",
 			patch: LocationTypePatch{
-				DisplayName: &label,
-				Write:       updatemask.Of(LocationTypeFieldNameRule),
+				Label: &label,
+				Write: updatemask.Of(LocationTypeFieldNameRule),
 			},
 			want: func(lt LocationType) LocationType {
 				lt.NameRule = nil
@@ -89,7 +89,7 @@ func TestApplyLocationTypePatchWriteSet(t *testing.T) {
 		},
 		{
 			name:  "a non-nil EMPTY mask writes nothing, even a populated field",
-			patch: LocationTypePatch{DisplayName: &label, Write: updatemask.Fields{}},
+			patch: LocationTypePatch{Label: &label, Write: updatemask.Fields{}},
 			want:  func(lt LocationType) LocationType { return lt },
 		},
 		{
@@ -119,11 +119,11 @@ func TestApplyLocationTypePatchWriteSet(t *testing.T) {
 		{
 			name: "full replacement writes every field, clearing the ones the patch omits",
 			patch: LocationTypePatch{
-				DisplayName: &label,
-				Write:       updatemask.Of(LocationTypePatchFields...),
+				Label: &label,
+				Write: updatemask.Of(LocationTypePatchFields...),
 			},
 			want: func(lt LocationType) LocationType {
-				lt.DisplayName = "Level"
+				lt.Label = "Level"
 				lt.Icon = ""
 				lt.AllowedParentTypes = []string{}
 				lt.LabelRule = nil
@@ -143,7 +143,7 @@ func TestApplyLocationTypePatchWriteSet(t *testing.T) {
 			// keep reading it after the patch is applied (the fork records it
 			// as the audit's before-image), so an in-place edit here would make
 			// the trail claim nothing changed.
-			if base.DisplayName != "Floor" || base.NameRule == nil {
+			if base.Label != "Floor" || base.NameRule == nil {
 				t.Errorf("applyLocationTypePatch mutated its input: %+v", base)
 			}
 		})
@@ -161,7 +161,7 @@ func TestApplyLocationTypePatchWriteSet(t *testing.T) {
 // steps.
 func TestLocationTypeShadowRoundTrip(t *testing.T) {
 	official := LocationType{
-		Name: "floor", Official: true, DisplayName: "Floor", Icon: "layers",
+		Name: "floor", Official: true, Label: "Floor", Icon: "layers",
 		AllowedParentTypes: []string{"building", "campus"},
 		NameRule:           nameRulePtr("", false),
 	}
@@ -176,7 +176,7 @@ func TestLocationTypeShadowRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(image, &keys); err != nil {
 		t.Fatalf("decode image: %v", err)
 	}
-	for _, k := range []string{"display_name", "icon", "allowed_parent_types", "label_rule", "name_rule"} {
+	for _, k := range []string{"label", "icon", "allowed_parent_types", "label_rule", "name_rule"} {
 		if _, ok := keys[k]; !ok {
 			t.Errorf("the fork image drops %q; it must carry the whole mutable row", k)
 		}
@@ -209,9 +209,9 @@ func TestLocationTypeShadowRoundTrip(t *testing.T) {
 		},
 		{
 			name:  "an absent key falls back to the official value",
-			image: `{"display_name":"Level"}`,
+			image: `{"label":"Level"}`,
 			want: func(lt LocationType) LocationType {
-				lt.DisplayName = "Level"
+				lt.Label = "Level"
 				return lt
 			},
 		},
@@ -276,12 +276,12 @@ func TestLocationTypePopulatedIsThePointerSet(t *testing.T) {
 	empty := ""
 	set := []string{}
 	full := LocationTypePatch{
-		DisplayName: &empty, Icon: &empty, AllowedParentTypes: &set,
+		Label: &empty, Icon: &empty, AllowedParentTypes: &set,
 		LabelRule: &empty, NameRule: nameRulePtr("wing", false),
 	}
 	if got, want := full.Populated().Names(), []string{
-		LocationTypeFieldAllowedParentTypes, LocationTypeFieldDisplayName,
-		LocationTypeFieldIcon, LocationTypeFieldLabelRule, LocationTypeFieldNameRule,
+		LocationTypeFieldAllowedParentTypes, LocationTypeFieldIcon,
+		LocationTypeFieldLabel, LocationTypeFieldLabelRule, LocationTypeFieldNameRule,
 	}; !reflect.DeepEqual(got, want) {
 		t.Errorf("populated = %v, want %v (a pointer to a zero value is still the caller saying something)", got, want)
 	}

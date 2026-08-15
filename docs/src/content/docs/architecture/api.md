@@ -174,7 +174,7 @@ PATCH /location-types/{id}
 Sending the `null` is optional and reads well; the mask is what carries the intent. This is the
 convention for every nullable object field that follows, not a `name_rule` special case. The mask
 governs the **whole write**, so a caller changing other fields in the same request names those too
-(`["display_name", "icon", "allowed_parent_types", "name_rule"]`) rather than the cleared field
+(`["label", "icon", "allowed_parent_types", "name_rule"]`) rather than the cleared field
 alone, which would silently leave the rest unwritten. The console's location type blade does exactly
 that when an operator turns naming off while editing something else.
 
@@ -418,7 +418,7 @@ are official-vs-custom registries the inventory layer references, on the same pa
 ([core entities](/architecture/core-entities/#catalog-reference-data-system_type)). Each is its own
 resource with one shared CRUD shape: the list routes
 (`GET /vendors`, `/drivers`, `/component-types`, `/products`, `/standards`, `/system-types`) order
-alphabetically by display name, and each list and per-id `GET` sits on the viewer floor
+alphabetically by label, and each list and per-id `GET` sits on the viewer floor
 (`vendor:read` / `driver:read` / `component_type:read` / `product:read` / `standard:read` /
 `system_type:read`, which `*:read` carries); `POST` mints a custom
 row (201) and `PATCH` updates and `DELETE` removes (204), gated `<resource>:create` /
@@ -547,7 +547,7 @@ fills each role today), and **staffing** (assign and unassign). It is **not** th
 [IAM role](/architecture/identity-access/): `/roles` is the RBAC catalog, these routes are the estate model.
 
 A role is addressed **by name within its owner**, so every declaration is a `PATCH` that declares or
-revises in place. The body is `{update_mask?, display_name?, quorum?, capacity?, position_labels?,
+revises in place. The body is `{update_mask?, label?, quorum?, capacity?, position_labels?,
 accepted_types?, pinned_products?, impact?, alternate?}`, patched under the
 [write mask](#partial-responses-field-masks): the fields the body populates change and the rest of
 the declaration is left alone, and `update_mask` names the fields that change whether the body

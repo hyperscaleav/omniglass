@@ -45,7 +45,7 @@ func TestMetricTypeAPI(t *testing.T) {
 
 	// Register a custom metric type with its numeric facts.
 	created := c.do(ownerTok, http.MethodPost, "/metric-types", map[string]any{
-		"name": "fan-speed", "data_type": "int", "display_name": "Fan speed",
+		"name": "fan-speed", "data_type": "int", "label": "Fan speed",
 		"unit": "rpm", "precision": 0,
 	}, http.StatusCreated)
 	var mt struct {
@@ -79,7 +79,7 @@ func TestMetricTypeAPI(t *testing.T) {
 	}
 
 	// Update a mutable field.
-	c.do(ownerTok, http.MethodPatch, "/metric-types/fan-speed", map[string]any{"display_name": "Fan Speed (RPM)"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/metric-types/fan-speed", map[string]any{"label": "Fan Speed (RPM)"}, http.StatusOK)
 
 	// A malformed name is a 422, and so is a non-numeric data type (the enum).
 	c.do(ownerTok, http.MethodPost, "/metric-types", map[string]any{"name": "Bad-Name", "data_type": "int"}, http.StatusUnprocessableEntity)
@@ -89,7 +89,7 @@ func TestMetricTypeAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/metric-types", map[string]any{"name": "fan-speed", "data_type": "int"}, http.StatusConflict)
 
 	// An official (seeded) metric type is read-only (409).
-	c.do(ownerTok, http.MethodPatch, "/metric-types/tcp-open", map[string]any{"display_name": "x"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPatch, "/metric-types/tcp-open", map[string]any{"label": "x"}, http.StatusConflict)
 	c.do(ownerTok, http.MethodDelete, "/metric-types/tcp-open", nil, http.StatusConflict)
 
 	// An unknown metric type is a 404.

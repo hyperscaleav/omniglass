@@ -19,26 +19,26 @@ import (
 type groupBody struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
-	DisplayName string `json:"display_name,omitempty"`
+	Label       string `json:"label,omitempty"`
 	Description string `json:"description,omitempty"`
 	MemberCount int    `json:"member_count" doc:"How many principals belong to the group (populated on list and get; 0 from create/update)."`
 	GrantCount  int    `json:"grant_count" doc:"How many grants the group confers on its members."`
 }
 
 func toGroupBody(g *storage.Group) groupBody {
-	return groupBody{ID: g.ID, Name: g.Name, DisplayName: g.DisplayName, Description: g.Description, MemberCount: g.MemberCount, GrantCount: g.GrantCount}
+	return groupBody{ID: g.ID, Name: g.Name, Label: g.Label, Description: g.Description, MemberCount: g.MemberCount, GrantCount: g.GrantCount}
 }
 
 // memberBody is one principal on a group's roster. The two facts are kept
 // apart: `name` is the identifier, whichever kind the member is (a human's
-// username, a service account's name), and `display_name` is the friendly
+// username, a service account's name), and `label` is the friendly
 // string, present only where a human set one. It used to be one field carrying
 // either, which crossed an identifier with a label and is what #563 ended.
 type memberBody struct {
 	PrincipalID string `json:"principal_id"`
 	Kind        string `json:"kind"`
 	Name        string `json:"name,omitempty" doc:"The member's identifier: a human's username, or a service account's name"`
-	DisplayName string `json:"display_name,omitempty" doc:"The friendly string, where the member is a human who has one"`
+	Label       string `json:"label,omitempty" doc:"The friendly string, where the member is a human who has one"`
 }
 
 type groupPathInput struct {
@@ -55,7 +55,7 @@ type listGroupsOutput struct {
 type createGroupInput struct {
 	Body struct {
 		Name        string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Unique group name (lowercase letters, digits, and hyphens)"`
-		DisplayName string `json:"display_name,omitempty" maxLength:"200" doc:"What an operator reads in lists"`
+		Label       string `json:"label,omitempty" maxLength:"200" doc:"What an operator reads in lists"`
 		Description string `json:"description,omitempty" maxLength:"1000" doc:"Free-form notes on what the group is for"`
 	}
 }
@@ -65,7 +65,7 @@ type createGroupInput struct {
 type updateGroupInput struct {
 	ID   string `path:"id" doc:"The group's id (uuid)"`
 	Body struct {
-		DisplayName *string `json:"display_name,omitempty" maxLength:"200" doc:"Display name; empty clears it"`
+		Label       *string `json:"label,omitempty" maxLength:"200" doc:"Label; empty clears it"`
 		Description *string `json:"description,omitempty" maxLength:"1000" doc:"Description; empty clears it"`
 	}
 }
@@ -157,7 +157,7 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Description:   "Creates a principal group. Gated by principal_group:create (all-scope). A duplicate name is 409.",
 	}, "principal_group", "create"), func(ctx context.Context, in *createGroupInput) (*groupOutput, error) {
 		g, err := gw.CreateGroup(ctx, actorID(ctx), storage.GroupSpec{
-			Name: in.Body.Name, DisplayName: in.Body.DisplayName, Description: in.Body.Description,
+			Name: in.Body.Name, Label: in.Body.Label, Description: in.Body.Description,
 		}, a.scopeFor(ctx, "principal_group", "create"))
 		if err != nil {
 			return nil, mapPrincipalErr(err)
@@ -173,7 +173,7 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Description: "Updates a group's presentational fields. The name is not patchable: renaming is the :rename custom method. Gated by principal_group:update (all-scope).",
 	}, "principal_group", "update"), func(ctx context.Context, in *updateGroupInput) (*groupOutput, error) {
 		g, err := gw.UpdateGroup(ctx, actorID(ctx), in.ID, storage.GroupPatch{
-			DisplayName: in.Body.DisplayName, Description: in.Body.Description,
+			Label: in.Body.Label, Description: in.Body.Description,
 		}, a.scopeFor(ctx, "principal_group", "update"))
 		if err != nil {
 			return nil, mapPrincipalErr(err)
@@ -223,7 +223,7 @@ func registerPrincipalGroupRoutes(api huma.API, a *authenticator, gw storage.Gat
 		out := &listMembersOutput{}
 		out.Body.Members = make([]memberBody, 0, len(members))
 		for _, m := range members {
-			out.Body.Members = append(out.Body.Members, memberBody{PrincipalID: m.PrincipalID, Kind: m.Kind, Name: m.Name, DisplayName: m.DisplayName})
+			out.Body.Members = append(out.Body.Members, memberBody{PrincipalID: m.PrincipalID, Kind: m.Kind, Name: m.Name, Label: m.Label})
 		}
 		return out, nil
 	})

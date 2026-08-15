@@ -12,18 +12,18 @@ import (
 // These tests are the specification of AIP-134's mask rules, one test per rule,
 // written against the worked example the primitive was built for: a role
 // declaration whose patchable fields are these.
-var rolePatchable = []string{"display_name", "quorum", "capacity", "position_labels", "impact", "alternate"}
+var rolePatchable = []string{"label", "quorum", "capacity", "position_labels", "impact", "alternate"}
 
 // RULE: an absent mask is the implied mask of the populated fields. This is the
 // rule that keeps every route and every test that predates the mask valid, so
 // it is the one worth breaking first if you doubt the suite has teeth.
 func TestAbsentMaskIsTheImpliedMaskOfPopulatedFields(t *testing.T) {
-	populated := updatemask.Of("display_name", "quorum")
+	populated := updatemask.Of("label", "quorum")
 	got, err := updatemask.Resolve(nil, rolePatchable, populated)
 	if err != nil {
 		t.Fatalf("resolve an absent mask: %v, want the implied mask", err)
 	}
-	if want := []string{"display_name", "quorum"}; !reflect.DeepEqual(got.Names(), want) {
+	if want := []string{"label", "quorum"}; !reflect.DeepEqual(got.Names(), want) {
 		t.Fatalf("implied mask = %v, want exactly the populated fields %v", got.Names(), want)
 	}
 	if got.Has("capacity") {
@@ -35,13 +35,13 @@ func TestAbsentMaskIsTheImpliedMaskOfPopulatedFields(t *testing.T) {
 // RULE: the implied mask is a copy. A consumer that narrows the write set must
 // not reach back through it and narrow the body's populated set too.
 func TestTheImpliedMaskDoesNotAliasThePopulatedSet(t *testing.T) {
-	populated := updatemask.Of("display_name")
+	populated := updatemask.Of("label")
 	got, err := updatemask.Resolve(nil, rolePatchable, populated)
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	delete(got, "display_name")
-	if !populated.Has("display_name") {
+	delete(got, "label")
+	if !populated.Has("label") {
 		t.Fatalf("narrowing the resolved set emptied the caller's populated set too")
 	}
 }
@@ -49,7 +49,7 @@ func TestTheImpliedMaskDoesNotAliasThePopulatedSet(t *testing.T) {
 // RULE: a present mask writes exactly the fields it names, and nothing else,
 // however populated the rest of the body is.
 func TestAPresentMaskWritesOnlyTheFieldsItNames(t *testing.T) {
-	populated := updatemask.Of("display_name", "quorum", "impact")
+	populated := updatemask.Of("label", "quorum", "impact")
 	got, err := updatemask.Resolve([]string{"quorum"}, rolePatchable, populated)
 	if err != nil {
 		t.Fatalf("resolve an explicit mask: %v", err)
@@ -65,15 +65,15 @@ func TestAPresentMaskWritesOnlyTheFieldsItNames(t *testing.T) {
 // implied mask alone, "clear my capacity" and "leave my capacity alone" are the
 // same request.
 func TestAPresentMaskWritesAFieldTheBodyLeftEmpty(t *testing.T) {
-	got, err := updatemask.Resolve([]string{"capacity"}, rolePatchable, updatemask.Of("display_name"))
+	got, err := updatemask.Resolve([]string{"capacity"}, rolePatchable, updatemask.Of("label"))
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
 	if !got.Has("capacity") {
 		t.Fatalf("mask [capacity] over an empty capacity = %v, want capacity written (and so cleared)", got.Names())
 	}
-	if got.Has("display_name") {
-		t.Fatalf("mask [capacity] = %v, want the populated display_name left out: a present mask "+
+	if got.Has("label") {
+		t.Fatalf("mask [capacity] = %v, want the populated label left out: a present mask "+
 			"replaces the implied one, it does not add to it", got.Names())
 	}
 }
@@ -82,7 +82,7 @@ func TestAPresentMaskWritesAFieldTheBodyLeftEmpty(t *testing.T) {
 // is a caller stating "change none of it", which is different from omitting the
 // field, and Resolve must not collapse the two.
 func TestAPresentButEmptyMaskWritesNothing(t *testing.T) {
-	got, err := updatemask.Resolve([]string{}, rolePatchable, updatemask.Of("display_name", "quorum"))
+	got, err := updatemask.Resolve([]string{}, rolePatchable, updatemask.Of("label", "quorum"))
 	if err != nil {
 		t.Fatalf("resolve an empty mask: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestAPresentButEmptyMaskWritesNothing(t *testing.T) {
 // is written, including the ones the body never mentioned, which therefore
 // clear.
 func TestStarWritesEveryPatchableField(t *testing.T) {
-	got, err := updatemask.Resolve([]string{updatemask.Star}, rolePatchable, updatemask.Of("display_name"))
+	got, err := updatemask.Resolve([]string{updatemask.Star}, rolePatchable, updatemask.Of("label"))
 	if err != nil {
 		t.Fatalf("resolve a star mask: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestAnUnknownFieldIsRefusedByName(t *testing.T) {
 		t.Fatalf("error names %q, want the offending field colour", maskErr.Field)
 	}
 	msg := maskErr.Error()
-	for _, want := range []string{`"colour"`, "display_name", "capacity"} {
+	for _, want := range []string{`"colour"`, "label", "capacity"} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("refusal %q, want it to carry %q: the operator has to be able to act on it", msg, want)
 		}
@@ -141,7 +141,12 @@ func TestAnUnknownFieldIsRefusedByName(t *testing.T) {
 // A field name is not a value: the mask names the wire field, so a case or
 // spelling variant is a different field and is refused like any other unknown.
 func TestFieldNamesAreExactAndNotNormalized(t *testing.T) {
-	for _, name := range []string{"Quorum", "quorum ", "display-name", ""} {
+	// "position-labels" is the hyphenated variant of the real "position_labels".
+	// It used to be "display-name", the hyphenated variant of the field this
+	// slice renamed; `label` is now a patchable field in its own right and
+	// resolves, so keeping it here would have asserted the opposite of the rule
+	// (#613).
+	for _, name := range []string{"Quorum", "quorum ", "position-labels", ""} {
 		if _, err := updatemask.Resolve([]string{name}, rolePatchable, nil); err == nil {
 			t.Fatalf("resolve %q: err = nil, want it refused rather than silently matched", name)
 		}

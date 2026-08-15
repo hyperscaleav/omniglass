@@ -36,13 +36,13 @@ func TestClearingAnInheritedComponentFactResumesTheWalk(t *testing.T) {
 	}
 
 	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "cl-mic", DisplayName: "Mic", Stem: strp("mic"), Icon: strp("mic"), Abbrev: strp("mc"),
+		Name: "cl-mic", Label: "Mic", Stem: strp("mic"), Icon: strp("mic"), Abbrev: strp("mc"),
 	})
 	if err != nil {
 		t.Fatalf("create root: %v", err)
 	}
 	child, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "cl-wireless-mic", DisplayName: "Wireless Mic", ParentID: &root.ID,
+		Name: "cl-wireless-mic", Label: "Wireless Mic", ParentID: &root.ID,
 		Stem: strp("wmic"), Icon: strp("radio"), Abbrev: strp("wm"),
 	})
 	if err != nil {
@@ -85,13 +85,13 @@ func TestClearingOneComponentFactLeavesTheOthersAlone(t *testing.T) {
 	}
 
 	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "cl1-mic", DisplayName: "Mic", Stem: strp("mic"), Icon: strp("mic"), Abbrev: strp("mc"),
+		Name: "cl1-mic", Label: "Mic", Stem: strp("mic"), Icon: strp("mic"), Abbrev: strp("mc"),
 	})
 	if err != nil {
 		t.Fatalf("create root: %v", err)
 	}
 	child, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "cl1-boundary-mic", DisplayName: "Boundary Mic", ParentID: &root.ID,
+		Name: "cl1-boundary-mic", Label: "Boundary Mic", ParentID: &root.ID,
 		Stem: strp("bmic"), Icon: strp("radio"), Abbrev: strp("bm"),
 	})
 	if err != nil {
@@ -126,7 +126,7 @@ func TestClearingARootComponentTypesStemIsRefused(t *testing.T) {
 	}
 
 	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "cl2-root", DisplayName: "Root", Stem: strp("rootstem"),
+		Name: "cl2-root", Label: "Root", Stem: strp("rootstem"),
 	})
 	if err != nil {
 		t.Fatalf("create root: %v", err)
@@ -201,13 +201,13 @@ func TestClearingAnInheritedSystemFactResumesTheWalk(t *testing.T) {
 	}
 
 	root, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-		Name: "cl-space", DisplayName: "Space", Stem: strp("space"), Icon: strp("layers"), Abbrev: strp("sp"),
+		Name: "cl-space", Label: "Space", Stem: strp("space"), Icon: strp("layers"), Abbrev: strp("sp"),
 	})
 	if err != nil {
 		t.Fatalf("create root: %v", err)
 	}
 	child, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-		Name: "cl-huddle", DisplayName: "Huddle", ParentID: &root.ID,
+		Name: "cl-huddle", Label: "Huddle", ParentID: &root.ID,
 		Stem: strp("huddle"), Icon: strp("door-open"), Abbrev: strp("hd"),
 	})
 	if err != nil {
@@ -246,7 +246,7 @@ func TestClearingARootSystemTypesStemIsRefused(t *testing.T) {
 	}
 
 	root, err := gw.CreateSystemType(ctx, "", storage.SystemType{
-		Name: "cl2-space", DisplayName: "Space", Stem: strp("spacestem"),
+		Name: "cl2-space", Label: "Space", Stem: strp("spacestem"),
 	})
 	if err != nil {
 		t.Fatalf("create root: %v", err)

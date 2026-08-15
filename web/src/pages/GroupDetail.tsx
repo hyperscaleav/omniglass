@@ -24,7 +24,7 @@ import { describeError } from "../lib/format";
 // GroupDetail is a group's blade body under the read -> Edit -> Save contract. Read
 // mode shows the profile, members (a drill to the member's user blade when the
 // Groups page is the root), and inherited grants, all read-only. Edit mode (the
-// header pencil) turns display name / description into inputs, stages member add /
+// header pencil) turns label / description into inputs, stages member add /
 // remove, activates the grant builder, and reveals a red Delete in the footer;
 // Save commits the whole session, Cancel reverts. The group's own edits stay
 // staged locally until Save so the operator can check their work first.
@@ -49,7 +49,7 @@ export function GroupDetail(props: { id: string }) {
   // to remove. The list below always shows the effective post-save membership.
   const [pendAdd, setPendAdd] = createSignal<string[]>([]);
   const [pendRemove, setPendRemove] = createSignal<Set<string>>(new Set());
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [err, setErr] = createSignal<string | null>(null);
   let grantCommit: () => Promise<void> = async () => {};
@@ -59,7 +59,7 @@ export function GroupDetail(props: { id: string }) {
   // group data, so a background refetch does not clobber in-progress edits).
   createEffect(on(() => edit.editing(), (isEditing) => {
     if (isEditing) {
-      setDisplayName(group.data?.display_name ?? "");
+      setLabel(group.data?.label ?? "");
       setDescription(group.data?.description ?? "");
     }
   }));
@@ -97,8 +97,8 @@ export function GroupDetail(props: { id: string }) {
     save: async () => {
       setErr(null);
       try {
-        if (displayName() !== (group.data?.display_name ?? "") || description() !== (group.data?.description ?? "")) {
-          await updateGroup(props.id, { display_name: displayName().trim() || undefined, description: description().trim() || undefined });
+        if (label() !== (group.data?.label ?? "") || description() !== (group.data?.description ?? "")) {
+          await updateGroup(props.id, { label: label().trim() || undefined, description: description().trim() || undefined });
         }
         for (const id of pendRemove()) await removeGroupMember(props.id, id);
         for (const id of pendAdd()) await addGroupMember(props.id, id);
@@ -165,8 +165,8 @@ export function GroupDetail(props: { id: string }) {
       >
         <div class="flex flex-col gap-3">
           <label class="flex flex-col gap-1">
-            <span class="eyebrow">Display name</span>
-            <input class="input input-bordered w-full" value={displayName()} placeholder="Field Crew" onInput={(e) => setDisplayName(e.currentTarget.value)} />
+            <span class="eyebrow">Label</span>
+            <input class="input input-bordered w-full" value={label()} placeholder="Field Crew" onInput={(e) => setLabel(e.currentTarget.value)} />
           </label>
           <label class="flex flex-col gap-1">
             <span class="eyebrow">Description</span>

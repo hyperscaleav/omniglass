@@ -10,20 +10,20 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
 // The Nodes page is a config over the shared FlatList: a row per collection node,
-// each labelled by its display_name (the name/key is the subtitle), a row opening
+// each labelled by its label (the name/key is the subtitle), a row opening
 // the read-edit-save blade (facts, editable identity, the derived Tasks panel, and
 // Enroll / Re-enroll in the kebab), and a create Drawer. Data is seeded into the
 // query cache so no server is needed; the enroll / update fetches are faked where a
 // test drives them.
 const now = Date.now();
 const seed: Node[] = [
-  { name: "edge-hq", display_name: "HQ Edge Node", location: "hq", enrolled: true, description: "HQ closet", last_heartbeat_at: new Date(now).toISOString(), tags: { environment: "prod" } }, // up
-  { name: "edge-east", display_name: "East Edge", enrolled: true, last_heartbeat_at: new Date(now - 11 * 60_000).toISOString(), tags: {} }, // down (stale)
-  { name: "edge-new", enrolled: false, tags: {} }, // never checked in, no display_name -> labels by key
+  { name: "edge-hq", label: "HQ Edge Node", location: "hq", enrolled: true, description: "HQ closet", last_heartbeat_at: new Date(now).toISOString(), tags: { environment: "prod" } }, // up
+  { name: "edge-east", label: "East Edge", enrolled: true, last_heartbeat_at: new Date(now - 11 * 60_000).toISOString(), tags: {} }, // down (stale)
+  { name: "edge-new", enrolled: false, tags: {} }, // never checked in, no label -> labels by key
 ];
 const locSeed: Location[] = [
-  { name: "hq", display_name: "HQ", location_type: "campus" } as Location,
-  { name: "east", display_name: "East", location_type: "campus" } as Location,
+  { name: "hq", label: "HQ", location_type: "campus" } as Location,
+  { name: "east", label: "East", location_type: "campus" } as Location,
 ];
 const taskSeed: Task[] = [{ id: "t-hq", interface_id: uuidFor("if-hq"), mode: "poll", enabled: true, node: "edge-hq" }];
 const ifaceSeed: Interface[] = [{ id: uuidFor("if-hq"), name: "disp-1-tcp", interface_type: "tcp", component: "disp-1", node: "edge-hq" }];
@@ -52,12 +52,12 @@ function mount(me: Me) {
 describe("Nodes page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("labels each row by display_name (key as subtitle), falling back to the key, with the status pill", () => {
+  it("labels each row by its label (key as subtitle), falling back to the key, with the status pill", () => {
     const { getByText, getAllByText } = mount(owner);
-    expect(getByText("HQ Edge Node")).toBeTruthy(); // display_name label
+    expect(getByText("HQ Edge Node")).toBeTruthy(); // the row's label
     expect(getByText(/edge-hq/)).toBeTruthy(); // key + location in the subtitle
     expect(getByText("East Edge")).toBeTruthy();
-    // A node with no display_name falls back to its key, and the shared identity
+    // A node with no label falls back to its key, and the shared identity
     // cell suppresses the subtitle when the two are the same string, so the key
     // reads once rather than twice.
     expect(getAllByText("edge-new").length).toBe(1);
@@ -75,13 +75,13 @@ describe("Nodes page", () => {
     expect(screen.getByText("New node")).toBeTruthy();
   });
 
-  it("gives node:update an Edit action that edits display_name, location, and description", async () => {
+  it("gives node:update an Edit action that edits label, location, and description", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       const url = typeof input === "string" ? input : req.url;
       const method = typeof input === "string" ? "GET" : req.method;
       if (url.includes("/nodes/edge-hq") && method === "PATCH") {
-        return json({ name: "edge-hq", display_name: "HQ Prod", location: "east", enrolled: true });
+        return json({ name: "edge-hq", label: "HQ Prod", location: "east", enrolled: true });
       }
       return json({ nodes: seed });
     });
@@ -93,7 +93,7 @@ describe("Nodes page", () => {
     expect(within(blade).getByText("HQ closet")).toBeTruthy();
 
     fireEvent.click(within(blade).getByLabelText("Edit"));
-    // The display-name input carries the current value; the name is not editable.
+    // The label input carries the current value; the name is not editable.
     const nameField = within(blade).getByDisplayValue("HQ Edge Node");
     fireEvent.input(nameField, { target: { value: "HQ Prod" } });
     fireEvent.click(within(blade).getByText("Save"));
@@ -190,7 +190,7 @@ describe("Nodes page", () => {
     fireEvent.click(screen.getByText("New node"));
     const nameInput = (await screen.findByLabelText("Name")) as HTMLInputElement;
     fireEvent.input(nameInput, { target: { value: "edge-2" } });
-    // The create form also carries display_name + location (parity with components).
+    // The create form also carries label + location (parity with components).
     expect(screen.getByLabelText("Name")).toBeTruthy();
     expect(screen.getByLabelText("Location")).toBeTruthy();
     fireEvent.click(screen.getByText("Create node"));
@@ -202,10 +202,10 @@ describe("Nodes page", () => {
   // The create form's two identity fields are coupled by lib/entities: the operator
   // types the label, the address follows it, and hand-editing the address claims it
   // so a later relabel cannot rewrite what they typed.
-  it("derives the node name from the display name until the name is hand-edited", async () => {
+  it("derives the node name from the label until the name is hand-edited", async () => {
     mount(owner);
     fireEvent.click(screen.getByText("New node"));
-    const display = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    const display = (await screen.findByLabelText("Label")) as HTMLInputElement;
     const name = screen.getByLabelText("Name") as HTMLInputElement;
 
     fireEvent.input(display, { target: { value: "HQ Closet Node" } });

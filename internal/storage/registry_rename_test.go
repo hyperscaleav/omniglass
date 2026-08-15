@@ -37,19 +37,19 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	if _, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: "acme", DisplayName: "Acme", Kind: "manufacturer"}); err != nil {
+	if _, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: "acme", Label: "Acme", Kind: "manufacturer"}); err != nil {
 		t.Fatalf("vendor: %v", err)
 	}
 	// A product referencing that vendor, a sub-product referencing the product, a
 	// property contract on it, and a component instance of it: one of every
 	// inbound reference this slice converted.
 	if _, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "acme-bar", DisplayName: "Acme Bar", Kind: "device",
+		Name: "acme-bar", Label: "Acme Bar", Kind: "device",
 		VendorID: strptr("acme")}); err != nil {
 		t.Fatalf("product: %v", err)
 	}
 	if _, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "acme-bar-mini", DisplayName: "Acme Bar Mini", Kind: "device",
+		Name: "acme-bar-mini", Label: "Acme Bar Mini", Kind: "device",
 		ParentProductID: strptr("acme-bar")}); err != nil {
 		t.Fatalf("sub-product: %v", err)
 	}
@@ -108,11 +108,11 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	// Slice 2: a standard rename with its role's typed-slot requirement intact.
 	// The standard has a role accepting video-bar (the typed-slot guard, #626);
 	// renaming the standard must leave the role, and what it accepts, resolving.
-	if _, err := gw.CreateStandard(ctx, "", storage.Standard{Name: "huddle", DisplayName: "Huddle"}); err != nil {
+	if _, err := gw.CreateStandard(ctx, "", storage.Standard{Name: "huddle", Label: "Huddle"}); err != nil {
 		t.Fatalf("standard: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "standard", "huddle", storage.SystemRoleSpec{
-		Name: "mic", DisplayName: "Mic", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Impact: "degraded"}); err != nil {
+		Name: "mic", Label: "Mic", Quorum: 1, AcceptedTypes: []string{"video-bar"}, Impact: "degraded"}); err != nil {
 		t.Fatalf("role: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `update standard set name = 'huddle-space' where name = 'huddle'`); err != nil {
@@ -173,11 +173,11 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	// no foreign key anywhere points at a mutable string.
 
 	// driver: a product's driver arc follows the rename.
-	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "acme-ctl", DisplayName: "Acme Controller"}); err != nil {
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "acme-ctl", Label: "Acme Controller"}); err != nil {
 		t.Fatalf("driver: %v", err)
 	}
 	if _, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "acme-panel", DisplayName: "Acme Panel", Kind: "device", DriverID: strptr("acme-ctl")}); err != nil {
+		Name: "acme-panel", Label: "Acme Panel", Kind: "device", DriverID: strptr("acme-ctl")}); err != nil {
 		t.Fatalf("product with driver: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `update driver set name = 'acme-controller' where name = 'acme-ctl'`); err != nil {
@@ -194,7 +194,7 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	// location_type: a location's type arc AND a location_type_property contract
 	// both follow the rename (property serial_no exists from the slice-3 rename above).
 	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{
-		Name: "wing", DisplayName: "Wing", AllowedParentTypes: []string{storage.RootPlacement}}); err != nil {
+		Name: "wing", Label: "Wing", AllowedParentTypes: []string{storage.RootPlacement}}); err != nil {
 		t.Fatalf("location type: %v", err)
 	}
 	if _, err := gw.SetLocationTypeProperty(ctx, "", "wing", storage.LocationTypePropertySpec{

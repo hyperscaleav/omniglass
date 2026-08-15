@@ -45,7 +45,7 @@ export default function Drivers() {
   const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers }));
 
   const rows = createMemo(() =>
-    [...(drivers.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.name.localeCompare(b.name)),
+    [...(drivers.data ?? [])].sort((a, b) => a.label.localeCompare(b.label) || a.name.localeCompare(b.name)),
   );
 
   return (
@@ -98,13 +98,13 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
   const edit = useBladeEdit();
   const row = useDriverRow(p.id);
   const [err, setErr] = createSignal<string | null>(null);
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [version, setVersion] = createSignal("");
 
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const r = row();
-    setDisplayName(r?.display_name ?? "");
+    setLabel(r?.label ?? "");
     setVersion(r?.version ?? "");
     setErr(null);
   }));
@@ -129,7 +129,7 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
     setErr(null);
     try {
       await updateDriver(r.name, {
-        display_name: displayName(),
+        label: label(),
         version: version(),
       });
       await qc.invalidateQueries({ queryKey: DRIVERS_KEY });
@@ -162,10 +162,10 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <BladeField
-            bind="display_name"
-            value={() => r().display_name ?? ""}
-            draft={displayName}
-            onInput={setDisplayName}
+            bind="label"
+            value={() => r().label ?? ""}
+            draft={label}
+            onInput={setLabel}
           />
           <BladeField
             label="Version"
@@ -181,7 +181,7 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
   );
 }
 
-// CreateDriverForm: type the display name and the kebab name (the operator-facing
+// CreateDriverForm: type the label and the kebab name (the operator-facing
 // address; the uuid is the database's to mint) follows it, until the operator
 // takes the name over by hand. Version is optional.
 export function CreateDriverForm(p: { onCreated: (d: Driver) => void }): JSX.Element {
@@ -205,7 +205,7 @@ export function CreateDriverForm(p: { onCreated: (d: Driver) => void }): JSX.Ele
     try {
       const created = await createDriver({
         name: name().trim(),
-        display_name: display().trim(),
+        label: display().trim(),
         version: version().trim() || undefined,
       });
       await qc.invalidateQueries({ queryKey: DRIVERS_KEY });
@@ -222,10 +222,10 @@ export function CreateDriverForm(p: { onCreated: (d: Driver) => void }): JSX.Ele
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="display_name">
+      <FieldRow bind="label">
         <input class="input input-bordered w-full" value={display()} placeholder="Generic SNMP" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </FieldRow>
-      <FieldRow bind="name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. snmp-generic."}>
+      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "A kebab name, e.g. snmp-generic."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="snmp-generic" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Version" hint="A version string, e.g. 1.0.0. Optional.">

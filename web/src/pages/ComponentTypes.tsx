@@ -65,7 +65,7 @@ function NameCell(p: { row: ComponentType & { depth: number } }): JSX.Element {
   return (
     <span class="flex min-w-0 items-center gap-1.5 py-0.5" style={{ "padding-left": `${p.row.depth * 14}px` }}>
       <span class="flex min-w-0 flex-col gap-0.5">
-        <span class="truncate" style={{ "font-weight": 500 }}>{p.row.display_name}</span>
+        <span class="truncate" style={{ "font-weight": 500 }}>{p.row.label}</span>
         <span class="truncate font-data text-[11px] text-base-content/40">{p.row.name}</span>
       </span>
     </span>
@@ -173,7 +173,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
   const edit = useBladeEdit();
   const row = useComponentTypeRow(p.id);
   const [err, setErr] = createSignal<string | null>(null);
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [stem, setStem] = createSignal("");
   const [abbrev, setAbbrev] = createSignal("");
   const [icon, setIcon] = createSignal("");
@@ -185,7 +185,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
   // on holding the fork the operator just discarded (#741).
   function seedDrafts() {
     const r = row();
-    setDisplayName(r?.display_name ?? "");
+    setLabel(r?.label ?? "");
     setStem(r?.stem ?? "");
     setAbbrev(r?.abbrev ?? "");
     setIcon(r?.icon ?? "");
@@ -243,7 +243,7 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
       // Emptying a ROOT type's stem is refused (422), since a root has no
       // ancestor to inherit one from; the message lands in the blade's alert.
       await updateComponentType(r.id, {
-        display_name: displayName(),
+        label: label(),
         stem: stem().trim(),
         abbrev: abbrev().trim(),
         icon: icon().trim(),
@@ -294,10 +294,10 @@ function ComponentTypeBladeBody(p: { id: string }): JSX.Element {
             />
           </div>
           <BladeField
-            bind="display_name"
-            value={() => r().display_name ?? ""}
-            draft={displayName}
-            onInput={setDisplayName}
+            bind="label"
+            value={() => r().label ?? ""}
+            draft={label}
+            onInput={setLabel}
           />
           {/*
             The three inherited facts, each showing what it would inherit rather
@@ -367,7 +367,7 @@ export function CreateComponentTypeForm(p: { onCreated: (t: ComponentType) => vo
     try {
       const created = await createComponentType({
         name: name().trim(),
-        display_name: display().trim(),
+        label: display().trim(),
         parent_id: parentId() || undefined,
         stem: stem().trim() || undefined,
         abbrev: abbrev().trim() || undefined,
@@ -387,10 +387,10 @@ export function CreateComponentTypeForm(p: { onCreated: (t: ComponentType) => vo
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="display_name" hint="What an operator reads.">
+      <FieldRow bind="label" hint="What an operator reads.">
         <input class="input input-bordered w-full" value={display()} placeholder="Wireless Microphone" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </FieldRow>
-      <FieldRow bind="name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
+      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "Globally unique address, used by the API and CLI."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="wireless-mic" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Parent" hint={TYPE_PARENT_HINT}>

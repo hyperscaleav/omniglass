@@ -63,7 +63,7 @@ func TestPrincipalDirectory(t *testing.T) {
 		t.Fatalf("hash: %v", err)
 	}
 	alice, err := gw.CreateHumanPrincipal(ctx, owner.ID, storage.HumanSpec{
-		Username: "alice", Email: "alice@example.test", DisplayName: "Alice", PasswordHash: hash,
+		Username: "alice", Email: "alice@example.test", Label: "Alice", PasswordHash: hash,
 	}, all)
 	if err != nil {
 		t.Fatalf("create alice: %v", err)

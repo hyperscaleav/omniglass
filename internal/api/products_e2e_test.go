@@ -71,12 +71,12 @@ func TestProductsAPI(t *testing.T) {
 
 	// The viewer cannot create (403, capability fast-reject).
 	c.do(viewerTok, http.MethodPost, "/products",
-		map[string]any{"name": "nope", "display_name": "Nope"}, http.StatusForbidden)
+		map[string]any{"name": "nope", "label": "Nope"}, http.StatusForbidden)
 
 	// Admin (owner) creates a custom product with a vendor, driver, and kind.
 	var created productBodyWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/products", map[string]any{
-		"name": "acme-bar", "display_name": "Acme Bar",
+		"name": "acme-bar", "label": "Acme Bar",
 		"vendor_id": "cisco", "driver_id": "cisco-xapi", "kind": "device", "component_type": "video-bar",
 	}, http.StatusCreated), &created); err != nil {
 		t.Fatalf("decode create: %v", err)
@@ -98,19 +98,19 @@ func TestProductsAPI(t *testing.T) {
 
 	// Duplicate id is a 409 (shared mapTypeErr ErrTypeExists branch).
 	c.do(ownerTok, http.MethodPost, "/products",
-		map[string]any{"name": "acme-bar", "display_name": "Dup", "kind": "device", "component_type": "video-bar"}, http.StatusConflict)
+		map[string]any{"name": "acme-bar", "label": "Dup", "kind": "device", "component_type": "video-bar"}, http.StatusConflict)
 
 	// An unknown reference is a 422.
 	c.do(ownerTok, http.MethodPost, "/products",
-		map[string]any{"id": "bad-ref", "display_name": "Bad", "kind": "device", "component_type": "video-bar", "vendor_id": "no-such-vendor"}, http.StatusUnprocessableEntity)
+		map[string]any{"id": "bad-ref", "label": "Bad", "kind": "device", "component_type": "video-bar", "vendor_id": "no-such-vendor"}, http.StatusUnprocessableEntity)
 
 	// An out-of-set kind is a 422.
 	c.do(ownerTok, http.MethodPost, "/products",
-		map[string]any{"id": "bad-kind", "display_name": "Bad", "kind": "gizmo", "component_type": "video-bar"}, http.StatusUnprocessableEntity)
+		map[string]any{"id": "bad-kind", "label": "Bad", "kind": "gizmo", "component_type": "video-bar"}, http.StatusUnprocessableEntity)
 
 	// The custom row is mutable.
 	c.do(ownerTok, http.MethodPatch, "/products/acme-bar",
-		map[string]any{"display_name": "Acme Bar Pro", "kind": "app"}, http.StatusOK)
+		map[string]any{"label": "Acme Bar Pro", "kind": "app"}, http.StatusOK)
 	var reread productBodyWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/products/acme-bar", nil, http.StatusOK), &reread); err != nil {
 		t.Fatalf("decode get: %v", err)
@@ -135,7 +135,7 @@ func TestProductsAPI(t *testing.T) {
 
 	// The seeded official row (cisco-room-bar) is read-only: 422 on patch and delete.
 	c.do(ownerTok, http.MethodPatch, "/products/cisco-room-bar",
-		map[string]any{"display_name": "X"}, http.StatusUnprocessableEntity)
+		map[string]any{"label": "X"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodDelete, "/products/cisco-room-bar", nil, http.StatusUnprocessableEntity)
 
 	// Admin deletes the custom row.
@@ -169,15 +169,15 @@ func TestProductRequiresTypeAndKind(t *testing.T) {
 
 	// No kind: 422.
 	c.do(ownerTok, http.MethodPost, "/products",
-		map[string]any{"name": "no-kind", "display_name": "No Kind", "component_type": "video-bar"}, http.StatusUnprocessableEntity)
+		map[string]any{"name": "no-kind", "label": "No Kind", "component_type": "video-bar"}, http.StatusUnprocessableEntity)
 
 	// No component_type: 422.
 	c.do(ownerTok, http.MethodPost, "/products",
-		map[string]any{"name": "no-type", "display_name": "No Type", "kind": "device"}, http.StatusUnprocessableEntity)
+		map[string]any{"name": "no-type", "label": "No Type", "kind": "device"}, http.StatusUnprocessableEntity)
 
 	// kind vm is refused, and the refusal names the three surviving kinds.
 	status, body := c.send(ownerTok, http.MethodPost, "/products",
-		map[string]any{"name": "was-a-vm", "display_name": "Was A VM", "kind": "vm", "component_type": "generic-device"})
+		map[string]any{"name": "was-a-vm", "label": "Was A VM", "kind": "vm", "component_type": "generic-device"})
 	if status != http.StatusUnprocessableEntity {
 		t.Fatalf("kind=vm status = %d, want 422\nbody: %s", status, body)
 	}
@@ -189,5 +189,5 @@ func TestProductRequiresTypeAndKind(t *testing.T) {
 
 	// Both required fields present: 201.
 	c.do(ownerTok, http.MethodPost, "/products",
-		map[string]any{"name": "well-typed", "display_name": "Well Typed", "kind": "device", "component_type": "video-bar"}, http.StatusCreated)
+		map[string]any{"name": "well-typed", "label": "Well Typed", "kind": "device", "component_type": "video-bar"}, http.StatusCreated)
 }

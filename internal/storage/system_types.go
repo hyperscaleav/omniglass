@@ -33,7 +33,7 @@ const maxSystemTypeDepth = 32
 
 // SystemType is a registry row in the coarse taxonomy of what kind of space a
 // system is (a boardroom, a classroom, a video wall): a stable id, the official
-// flag, a display_name, and an optional parent for a tree of arbitrary depth.
+// flag, a label, and an optional parent for a tree of arbitrary depth.
 // It is the system-side counterpart of ComponentType, and it does NOT replace
 // standard: a standard is the blueprint a system conforms to, this is what kind
 // of space the system is.
@@ -41,19 +41,19 @@ const maxSystemTypeDepth = 32
 // Stem, Icon, and Abbrev are nullable: null means "inherit from parent",
 // resolved by ResolveSystemTypeFacts walking ParentID in Go (no DB logic) until
 // it finds the first non-null value. The registry lists alphabetically by
-// display_name; there is no ordering field.
+// label; there is no ordering field.
 //
 // No DefaultTags. ComponentType carries one because a product's instances start
 // from its type's tag set; a system's effective tags come from the platform,
 // its location, and its own system tree (the cascade), never from a classifier,
 // so the column would be a field with no reader.
 type SystemType struct {
-	ID          uuid.UUID
-	Name        string
-	DisplayName string
-	Stem        *string
-	Icon        *string
-	Abbrev      *string
+	ID     uuid.UUID
+	Name   string
+	Label  string
+	Stem   *string
+	Icon   *string
+	Abbrev *string
 	// LabelRule is this node's label template (#682), nullable on the same
 	// inherit-from-parent rule Stem/Icon/Abbrev follow: null defers to the
 	// nearest ancestor that sets one, and then to the global tier.
@@ -67,18 +67,18 @@ type SystemType struct {
 // placement in the tree is fixed at create, because a correct reparent needs a
 // cycle guard that has no consumer yet.
 type SystemTypePatch struct {
-	DisplayName *string
-	Stem        *string
-	Icon        *string
-	Abbrev      *string
-	LabelRule   *string
+	Label     *string
+	Stem      *string
+	Icon      *string
+	Abbrev    *string
+	LabelRule *string
 }
 
-const systemTypeCols = `id, name, display_name, stem, icon, abbrev, label_rule, official, parent_id`
+const systemTypeCols = `id, name, label, stem, icon, abbrev, label_rule, official, parent_id`
 
 func scanSystemType(row pgx.Row) (*SystemType, error) {
 	var st SystemType
-	if err := row.Scan(&st.ID, &st.Name, &st.DisplayName, &st.Stem, &st.Icon, &st.Abbrev, &st.LabelRule, &st.Official, &st.ParentID); err != nil {
+	if err := row.Scan(&st.ID, &st.Name, &st.Label, &st.Stem, &st.Icon, &st.Abbrev, &st.LabelRule, &st.Official, &st.ParentID); err != nil {
 		return nil, err
 	}
 	return &st, nil
@@ -108,10 +108,10 @@ func mapSystemTypeWriteErr(err error) error {
 // re-seeding the same name updates it in place, id stable.
 func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into system_type (name, display_name, stem, icon, abbrev, label_rule, official, parent_id)
+		insert into system_type (name, label, stem, icon, abbrev, label_rule, official, parent_id)
 		values ($1, $2, $3, $4, $5, $6, $7, $8)
 		on conflict (name) do update
-			set display_name = excluded.display_name,
+			set label = excluded.label,
 			    stem         = excluded.stem,
 			    icon         = excluded.icon,
 			    abbrev       = excluded.abbrev,
@@ -119,7 +119,7 @@ func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 			    official     = excluded.official,
 			    parent_id    = excluded.parent_id,
 			    updated_at   = now()`,
-		st.Name, st.DisplayName, st.Stem, st.Icon, st.Abbrev, nilIfEmpty(st.LabelRule), st.Official, st.ParentID)
+		st.Name, st.Label, st.Stem, st.Icon, st.Abbrev, nilIfEmpty(st.LabelRule), st.Official, st.ParentID)
 	if err != nil {
 		return fmt.Errorf("storage: upsert system_type %q: %w", st.Name, mapSystemTypeWriteErr(err))
 	}
@@ -127,10 +127,10 @@ func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 }
 
 // ListSystemTypes returns every system_type, ordered alphabetically by
-// display_name, with unlabelled rows last and the name breaking ties (#613; see
+// label, with unlabelled rows last and the name breaking ties (#613; see
 // ListVendors for why the ordering is spelled nullif(...) nulls last).
 func (p *PG) ListSystemTypes(ctx context.Context) ([]SystemType, error) {
-	rows, err := p.pool.Query(ctx, `select `+systemTypeCols+` from system_type order by nullif(display_name, '') nulls last, name`)
+	rows, err := p.pool.Query(ctx, `select `+systemTypeCols+` from system_type order by nullif(label, '') nulls last, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list system_types: %w", err)
 	}
@@ -193,10 +193,10 @@ func (p *PG) CreateSystemType(ctx context.Context, actorID string, st SystemType
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	created, err := scanSystemType(tx.QueryRow(ctx, `
-		insert into system_type (name, display_name, stem, icon, abbrev, label_rule, official, parent_id)
+		insert into system_type (name, label, stem, icon, abbrev, label_rule, official, parent_id)
 		values ($1, $2, $3, $4, $5, $6, false, $7)
 		returning `+systemTypeCols,
-		st.Name, st.DisplayName, st.Stem, st.Icon, st.Abbrev, nilIfEmpty(st.LabelRule), st.ParentID))
+		st.Name, st.Label, st.Stem, st.Icon, st.Abbrev, nilIfEmpty(st.LabelRule), st.ParentID))
 	if err != nil {
 		return nil, mapSystemTypeWriteErr(err)
 	}
@@ -210,7 +210,7 @@ func (p *PG) CreateSystemType(ctx context.Context, actorID string, st SystemType
 	return created, nil
 }
 
-// UpdateSystemType patches a custom system_type's display_name, stem, icon, or
+// UpdateSystemType patches a custom system_type's label, stem, icon, or
 // abbrev (nil fields unchanged) and audits it. Official rows are read-only
 // (ErrTypeOfficial); an unknown ref is ErrTypeNotFound. Stem is validated
 // exactly as CreateSystemType validates it: a bad stem is reachable from an
@@ -263,7 +263,7 @@ func (p *PG) UpdateSystemType(ctx context.Context, actorID, ref string, patch Sy
 	}
 	st, err := scanSystemType(tx.QueryRow(ctx, `
 		update system_type set
-			display_name = coalesce($2, display_name),
+			label = coalesce($2, label),
 			-- The four columns whose NULL MEANS "this node declares no fact of
 			-- its own, walk to the nearest ancestor that does", so each has a
 			-- CLEAR state coalesce cannot express: an omitted field is
@@ -277,7 +277,7 @@ func (p *PG) UpdateSystemType(ctx context.Context, actorID, ref string, patch Sy
 			updated_at   = now()
 		where `+registryRefCol(ref)+` = $1
 		returning `+systemTypeCols,
-		ref, patch.DisplayName, patch.Stem, patch.Icon, patch.Abbrev, patch.LabelRule))
+		ref, patch.Label, patch.Stem, patch.Icon, patch.Abbrev, patch.LabelRule))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound

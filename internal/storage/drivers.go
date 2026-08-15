@@ -11,33 +11,33 @@ import (
 
 // Driver is a registry row naming the implementation that gets/emits/sets a
 // product's signals (e.g. "Generic SNMP", "Cisco xAPI"): a stable id, the
-// official flag, a display_name, and a version string. It is a flat registry
+// official flag, a label, and a version string. It is a flat registry
 // like vendor: no tree, and no in-use delete guard in this slice (nothing
 // references a driver yet; product will). The registry lists alphabetically by
-// display_name; there is no ordering field.
+// label; there is no ordering field.
 type Driver struct {
 	// ID is the uuid primary key, Name the renameable slug handle (ADR-0062).
-	ID          string
-	Name        string
-	DisplayName string
-	Version     string
-	Official    bool
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID        string
+	Name      string
+	Label     string
+	Version   string
+	Official  bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // DriverPatch carries the mutable fields of a driver update; a nil field is
 // left unchanged.
 type DriverPatch struct {
-	DisplayName *string
-	Version     *string
+	Label   *string
+	Version *string
 }
 
-const driverCols = `id, name, display_name, version, official, created_at, updated_at`
+const driverCols = `id, name, label, version, official, created_at, updated_at`
 
 func scanDriver(row pgx.Row) (*Driver, error) {
 	var d Driver
-	if err := row.Scan(&d.ID, &d.Name, &d.DisplayName, &d.Version, &d.Official, &d.CreatedAt, &d.UpdatedAt); err != nil {
+	if err := row.Scan(&d.ID, &d.Name, &d.Label, &d.Version, &d.Official, &d.CreatedAt, &d.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &d, nil
@@ -47,25 +47,25 @@ func scanDriver(row pgx.Row) (*Driver, error) {
 // Idempotent: re-seeding the same id updates it in place.
 func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into driver (name, display_name, version, official)
+		insert into driver (name, label, version, official)
 		values ($1, $2, $3, $4)
 		on conflict (name) do update
-			set display_name = excluded.display_name,
+			set label = excluded.label,
 			    version      = excluded.version,
 			    official     = excluded.official,
 			    updated_at   = now()`,
-		d.Name, d.DisplayName, d.Version, d.Official)
+		d.Name, d.Label, d.Version, d.Official)
 	if err != nil {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
 	}
 	return nil
 }
 
-// ListDrivers returns every driver, ordered alphabetically by display_name, with
+// ListDrivers returns every driver, ordered alphabetically by label, with
 // unlabelled rows last and the name breaking ties (#613; see ListVendors for why
 // the ordering is spelled nullif(...) nulls last).
 func (p *PG) ListDrivers(ctx context.Context) ([]Driver, error) {
-	rows, err := p.pool.Query(ctx, `select `+driverCols+` from driver order by nullif(display_name, '') nulls last, name`)
+	rows, err := p.pool.Query(ctx, `select `+driverCols+` from driver order by nullif(label, '') nulls last, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list drivers: %w", err)
 	}
@@ -107,10 +107,10 @@ func (p *PG) CreateDriver(ctx context.Context, actorID string, d Driver) (*Drive
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := tx.QueryRow(ctx, `
-		insert into driver (name, display_name, version, official)
+		insert into driver (name, label, version, official)
 		values ($1, $2, $3, false)
 		returning id, created_at, updated_at`,
-		d.Name, d.DisplayName, d.Version).
+		d.Name, d.Label, d.Version).
 		Scan(&d.ID, &d.CreatedAt, &d.UpdatedAt); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
@@ -126,7 +126,7 @@ func (p *PG) CreateDriver(ctx context.Context, actorID string, d Driver) (*Drive
 	return &d, nil
 }
 
-// UpdateDriver patches a custom driver's display_name or version (nil fields
+// UpdateDriver patches a custom driver's label or version (nil fields
 // unchanged) and audits it. Official rows are read-only (ErrTypeOfficial); an
 // unknown id is ErrTypeNotFound.
 func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverPatch) (*Driver, error) {
@@ -148,12 +148,12 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 	}
 	d, err := scanDriver(tx.QueryRow(ctx, `
 		update driver set
-			display_name = coalesce($2, display_name),
+			label = coalesce($2, label),
 			version      = coalesce($3, version),
 			updated_at   = now()
 		where `+registryRefCol(id)+` = $1
 		returning `+driverCols,
-		id, patch.DisplayName, patch.Version))
+		id, patch.Label, patch.Version))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
