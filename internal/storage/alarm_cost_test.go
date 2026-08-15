@@ -86,11 +86,11 @@ func alarmProbe(t *testing.T, staffs, roomsN int) (storage.Gateway, *querycount.
 		}
 		roomNames = append(roomNames, n)
 	}
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "probe-std", DisplayName: "Probe"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "probe-std", Label: "Probe"}); err != nil {
 		t.Fatalf("upsert standard: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "standard", "probe-std", storage.SystemRoleSpec{
-		Name: "table-mic", DisplayName: "Table microphone", Quorum: 1,
+		Name: "table-mic", Label: "Table microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)

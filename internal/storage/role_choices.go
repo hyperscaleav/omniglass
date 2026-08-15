@@ -19,15 +19,15 @@ import (
 
 // AlternateSpec is one way to satisfy a choice, an ordered list of names.
 type AlternateSpec struct {
-	Name        string
-	DisplayName string
+	Name  string
+	Label string
 }
 
 // RoleChoiceSpec is the declaration input for one choice: an exclusive-or
 // group a system satisfies through exactly one of its named alternates.
 type RoleChoiceSpec struct {
-	Name        string
-	DisplayName string
+	Name  string
+	Label string
 	// Alternates is in the order a tie between two equally-satisfied
 	// alternates breaks by (internal/health.Choice.Active): position is
 	// assigned 1..n from this order.
@@ -172,11 +172,11 @@ func (p *PG) SeedRoleChoice(ctx context.Context, ownerKind, ownerID string, spec
 
 	var choiceID string
 	err = tx.QueryRow(ctx, fmt.Sprintf(`
-		insert into role_choice (owner_kind, %s, name, display_name)
+		insert into role_choice (owner_kind, %s, name, label)
 		values ($1, %s, $3, $4)
 		on conflict (owner_kind, owner_ref, name) do nothing
 		returning id`, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerArg, spec.Name, spec.DisplayName).Scan(&choiceID)
+		ownerKind, ownerArg, spec.Name, labelOrNull(spec.Label)).Scan(&choiceID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = tx.QueryRow(ctx, fmt.Sprintf(
 			`select id from role_choice where owner_kind = $1 and %s = %s and name = $3`,
@@ -247,12 +247,12 @@ func (p *PG) SeedRoleChoice(ctx context.Context, ownerKind, ownerID string, spec
 		}
 		var altID string
 		err := tx.QueryRow(ctx, `
-			insert into choice_alternate (choice_id, owner_kind, standard_id, system_id, name, display_name, position)
+			insert into choice_alternate (choice_id, owner_kind, standard_id, system_id, name, label, position)
 			select rc.id, rc.owner_kind, rc.standard_id, rc.system_id, $2, $3, $4
 			from role_choice rc where rc.id = $1
 			on conflict (choice_id, name) do update
 				set position = excluded.position
-			returning id`, choiceID, alt.Name, alt.DisplayName, i+1).Scan(&altID)
+			returning id`, choiceID, alt.Name, labelOrNull(alt.Label), i+1).Scan(&altID)
 		if err != nil {
 			return nil, mapRoleWriteErr(err)
 		}

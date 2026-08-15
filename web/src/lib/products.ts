@@ -21,7 +21,7 @@ export type ProductKind = "device" | "app" | "service";
 export type Product = {
   id: string;
   name: string;
-  display_name: string;
+  label: string;
   kind: ProductKind;
   component_type: string;
   component_type_id: string;
@@ -56,7 +56,7 @@ export async function listProducts(): Promise<Product[]> {
 export type CreateProduct = {
   // The name. The uuid is the database\'s to mint.
   name: string;
-  display_name: string;
+  label: string;
   kind: ProductKind;
   // The component_type this product is classified under, by name or uuid;
   // every product must belong to one of the tree's nodes (the generics fit
@@ -76,7 +76,7 @@ export async function createProduct(body: CreateProduct): Promise<Product> {
 }
 
 export type UpdateProduct = {
-  display_name?: string;
+  label?: string;
   kind?: ProductKind;
   // Reclassifies the product; required by the API once named, so this only
   // reclassifies, it never clears.

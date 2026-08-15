@@ -265,7 +265,7 @@ func (p *PG) ResolveVariables(ctx context.Context, componentID string, read scop
 // resolveVariablesSQL walks the three owner trees up from a component, tags each
 // owner with its cascade band and depth, joins the variables owned at those
 // scopes, and ranks per name (highest band, then nearest depth wins). It returns
-// the winner and every shadowed candidate, each with its owner's display name. The
+// the winner and every shadowed candidate, each with its owner's label. The
 // CYCLE guards protect against a corrupted parent edge.
 const resolveVariablesSQL = `
 with recursive

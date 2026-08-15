@@ -16,13 +16,13 @@ import (
 // the nearest ancestor that sets them (null in storage; rendered as "" here,
 // same as the other optional scalar fields). ParentID/Parent are the tree
 // link, absent for a root type. The registry lists alphabetically by
-// display_name.
+// label.
 type componentTypeBody struct {
-	ID          string `json:"id" doc:"The component_type's uuid, the stable handle that survives a rename"`
-	Name        string `json:"name" doc:"The name an operator reads and types; renameable"`
-	DisplayName string `json:"display_name"`
-	Stem        string `json:"stem,omitempty" doc:"The auto-generated component name's prefix; empty inherits the nearest ancestor's"`
-	Icon        string `json:"icon,omitempty" doc:"A glyph key; empty inherits the nearest ancestor's"`
+	ID    string `json:"id" doc:"The component_type's uuid, the stable handle that survives a rename"`
+	Name  string `json:"name" doc:"The name an operator reads and types; renameable"`
+	Label string `json:"label"`
+	Stem  string `json:"stem,omitempty" doc:"The auto-generated component name's prefix; empty inherits the nearest ancestor's"`
+	Icon  string `json:"icon,omitempty" doc:"A glyph key; empty inherits the nearest ancestor's"`
 	// ResolvedIcon is the glyph this type actually SHOWS: icon when the row
 	// states one, else the nearest ancestor's (#695). It is served because the
 	// console drew every registry row by climbing the chain in TypeScript
@@ -34,7 +34,7 @@ type componentTypeBody struct {
 	// so every ancestor is already in hand and the walk is free, while resolving
 	// one row costs a query per level for a value no caller reads.
 	ResolvedIcon string   `json:"resolved_icon,omitempty" doc:"The glyph this type shows: its own icon, else the nearest ancestor's. Served on the registry listing, where the whole chain is already in hand; a single-row write response does not carry it"`
-	Abbrev       string   `json:"abbrev,omitempty" doc:"A compact form of display_name; empty inherits the nearest ancestor's"`
+	Abbrev       string   `json:"abbrev,omitempty" doc:"A compact form of label; empty inherits the nearest ancestor's"`
 	LabelRule    string   `json:"label_rule,omitempty" doc:"The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components"`
 	DefaultTags  []string `json:"default_tags" doc:"Tags every instance of this type (or a descendant that does not override) starts with"`
 	Official     bool     `json:"official" doc:"True for a row this release ships. A shipped row is never written by an operator: an edit forks it"`
@@ -63,7 +63,7 @@ type componentTypeBody struct {
 
 func toComponentTypeBody(ct *storage.ComponentType, parentName *string) componentTypeBody {
 	b := componentTypeBody{
-		ID: ct.ID.String(), Name: ct.Name, DisplayName: ct.DisplayName,
+		ID: ct.ID.String(), Name: ct.Name, Label: ct.Label,
 		Stem: derefStr(ct.Stem), Icon: derefStr(ct.Icon), Abbrev: derefStr(ct.Abbrev), LabelRule: derefStr(ct.LabelRule),
 		DefaultTags: ct.DefaultTags, Official: ct.Official, Forked: ct.Forked,
 	}
@@ -87,14 +87,14 @@ type componentTypePathInput struct {
 
 type createComponentTypeInput struct {
 	Body struct {
-		Name        string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name"`
-		DisplayName string `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
+		Name  string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name"`
+		Label string `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		// A stem is a name prefix (#627 Task 14 mints it straight into
 		// "<stem>-<n>" component names), so it follows the same rule a name
 		// does.
 		Stem        string   `json:"stem,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The auto-generated component name's prefix; omit to inherit the parent's. Lowercase letters, digits, and hyphens."`
 		Icon        string   `json:"icon,omitempty" doc:"A glyph key; omit to inherit the parent's"`
-		Abbrev      string   `json:"abbrev,omitempty" doc:"A compact form of display_name; omit to inherit the parent's"`
+		Abbrev      string   `json:"abbrev,omitempty" doc:"A compact form of label; omit to inherit the parent's"`
 		LabelRule   string   `json:"label_rule,omitempty" doc:"A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422."`
 		DefaultTags []string `json:"default_tags,omitempty" doc:"Tags every instance of this type starts with"`
 		ParentID    string   `json:"parent_id,omitempty" doc:"The parent component_type, by name or uuid; omit for a root type"`
@@ -104,7 +104,7 @@ type createComponentTypeInput struct {
 type updateComponentTypeInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		Label *string `json:"label,omitempty" doc:"A new operator-facing label"`
 		// Create's rule with one alternation added, and that alternation is the
 		// whole of #716's wire change: a stem is inherited, so an operator has
 		// to be able to hand it back, and the house spelling of "clear a
@@ -169,7 +169,7 @@ func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodGet,
 		Path:        "/component-types",
 		Summary:     "List component types",
-		Description: "Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.",
+		Description: "Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.",
 	}, "component_type", "read"), func(ctx context.Context, _ *struct{}) (*listComponentTypesOutput, error) {
 		types, err := gw.ListComponentTypes(ctx)
 		if err != nil {
@@ -219,7 +219,7 @@ func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gate
 			parentName = &parent.Name
 		}
 		ct, err := gw.CreateComponentType(ctx, actorID(ctx), storage.ComponentType{
-			Name: in.Body.Name, DisplayName: in.Body.DisplayName,
+			Name: in.Body.Name, Label: in.Body.Label,
 			Stem: ptrOrNil(in.Body.Stem), Icon: ptrOrNil(in.Body.Icon), Abbrev: ptrOrNil(in.Body.Abbrev),
 			LabelRule:   ptrOrNil(in.Body.LabelRule),
 			DefaultTags: in.Body.DefaultTags, ParentID: parentID,
@@ -235,10 +235,10 @@ func registerComponentTypeRoutes(api huma.API, a *authenticator, gw storage.Gate
 		Method:      http.MethodPatch,
 		Path:        "/component-types/{id}",
 		Summary:     "Update a component type",
-		Description: "Patches a component_type's display_name, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.",
+		Description: "Patches a component_type's label, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.",
 	}, "component_type", "update"), func(ctx context.Context, in *updateComponentTypeInput) (*componentTypeOutput, error) {
 		ct, err := gw.UpdateComponentType(ctx, actorID(ctx), in.ID, storage.ComponentTypePatch{
-			DisplayName: in.Body.DisplayName, Stem: in.Body.Stem, Icon: in.Body.Icon, Abbrev: in.Body.Abbrev,
+			Label: in.Body.Label, Stem: in.Body.Stem, Icon: in.Body.Icon, Abbrev: in.Body.Abbrev,
 			LabelRule:   in.Body.LabelRule,
 			DefaultTags: in.Body.DefaultTags,
 		})

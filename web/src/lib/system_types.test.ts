@@ -23,7 +23,7 @@ describe("system_types data layer", () => {
   it("lists the registry off the typed literal path", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({
-        system_types: [{ id: uuidFor("st-room"), name: "room", display_name: "Room", official: true, stem: "room", icon: "door-open", abbrev: "rm" }],
+        system_types: [{ id: uuidFor("st-room"), name: "room", label: "Room", official: true, stem: "room", icon: "door-open", abbrev: "rm" }],
       }),
     );
     const rows = await listSystemTypes();
@@ -35,13 +35,13 @@ describe("system_types data layer", () => {
 
   it("creates a custom type under a parent", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ id: uuidFor("st-lab"), name: "lab", display_name: "Lab", official: false, parent: "room", parent_id: uuidFor("st-room") }, 201),
+      jsonResponse({ id: uuidFor("st-lab"), name: "lab", label: "Lab", official: false, parent: "room", parent_id: uuidFor("st-room") }, 201),
     );
-    await createSystemType({ name: "lab", display_name: "Lab", parent_id: "room", abbrev: "lab" });
+    await createSystemType({ name: "lab", label: "Lab", parent_id: "room", abbrev: "lab" });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("POST");
     expect(req.url).toContain("/api/v1/system-types");
-    expect(await req.json()).toMatchObject({ name: "lab", display_name: "Lab", parent_id: "room", abbrev: "lab" });
+    expect(await req.json()).toMatchObject({ name: "lab", label: "Lab", parent_id: "room", abbrev: "lab" });
   });
 
   it("updates a type's facts by id, never its parent", async () => {
@@ -62,13 +62,13 @@ describe("system_types data layer", () => {
 // where it has one, its nearest ancestor's where it does not. It is written out
 // per row here rather than computed, because computing it in the fixture would
 // reintroduce the very walk this stopped being the console's job.
-const av: SystemType = { id: uuidFor("st-av"), name: "av", display_name: "AV", official: true, stem: "av", abbrev: "av", icon: "layers", resolved_icon: "layers" };
-const room: SystemType = { id: uuidFor("st-room"), name: "room", display_name: "Room", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "room", abbrev: "rm", icon: "door-open", resolved_icon: "door-open" };
-const board: SystemType = { id: uuidFor("st-board"), name: "board", display_name: "Boardroom", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "boardroom", abbrev: "br", resolved_icon: "door-open" };
-const huddle: SystemType = { id: uuidFor("st-huddle"), name: "huddle", display_name: "Huddle Room", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "huddle", abbrev: "hud", resolved_icon: "door-open" };
-const sign: SystemType = { id: uuidFor("st-sign"), name: "sign", display_name: "Signage", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "signage", abbrev: "sgn", icon: "tv", resolved_icon: "tv" };
-const videoWall: SystemType = { id: uuidFor("st-video-wall"), name: "video-wall", display_name: "Video Wall", official: true, parent: "sign", parent_id: uuidFor("st-sign"), stem: "video-wall", abbrev: "vw", resolved_icon: "tv" };
-const interactiveSign: SystemType = { id: uuidFor("st-interactive-sign"), name: "interactive-sign", display_name: "Interactive Sign", official: true, parent: "sign", parent_id: uuidFor("st-sign"), stem: "interactive-sign", abbrev: "isgn", icon: "touchpad", resolved_icon: "touchpad" };
+const av: SystemType = { id: uuidFor("st-av"), name: "av", label: "AV", official: true, stem: "av", abbrev: "av", icon: "layers", resolved_icon: "layers" };
+const room: SystemType = { id: uuidFor("st-room"), name: "room", label: "Room", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "room", abbrev: "rm", icon: "door-open", resolved_icon: "door-open" };
+const board: SystemType = { id: uuidFor("st-board"), name: "board", label: "Boardroom", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "boardroom", abbrev: "br", resolved_icon: "door-open" };
+const huddle: SystemType = { id: uuidFor("st-huddle"), name: "huddle", label: "Huddle Room", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "huddle", abbrev: "hud", resolved_icon: "door-open" };
+const sign: SystemType = { id: uuidFor("st-sign"), name: "sign", label: "Signage", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "signage", abbrev: "sgn", icon: "tv", resolved_icon: "tv" };
+const videoWall: SystemType = { id: uuidFor("st-video-wall"), name: "video-wall", label: "Video Wall", official: true, parent: "sign", parent_id: uuidFor("st-sign"), stem: "video-wall", abbrev: "vw", resolved_icon: "tv" };
+const interactiveSign: SystemType = { id: uuidFor("st-interactive-sign"), name: "interactive-sign", label: "Interactive Sign", official: true, parent: "sign", parent_id: uuidFor("st-sign"), stem: "interactive-sign", abbrev: "isgn", icon: "touchpad", resolved_icon: "touchpad" };
 
 const shipped: SystemType[] = [av, room, board, huddle, sign, videoWall, interactiveSign];
 
@@ -115,11 +115,11 @@ describe("resolveSystemTypeIcon", () => {
 });
 
 describe("systemTypeTree / flattenSystemTypeTree", () => {
-  it("groups by parent_id, sorted by display name at each level", () => {
+  it("groups by parent_id, sorted by label at each level", () => {
     const roots = systemTypeTree(shipped);
     expect(roots.map((r) => r.name)).toEqual(["av"]);
     const avRoot = roots[0];
-    // Alphabetical by display name: Room, Signage.
+    // Alphabetical by label: Room, Signage.
     expect(avRoot.children.map((c) => c.name)).toEqual(["room", "sign"]);
     expect(avRoot.depth).toBe(0);
     expect(avRoot.children[0].depth).toBe(1);

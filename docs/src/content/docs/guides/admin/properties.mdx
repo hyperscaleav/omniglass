@@ -10,7 +10,7 @@ one of the estate's **two signal catalogs**: the **value lane**. A **property** 
 what something *is*, including a number used as a name (a serial number identifies a unit, it
 measures nothing); a numeric **quantity** you would average or graph is a
 [metric](/guides/admin/metrics/), the other lane, with its own catalog and its own page. Here, a
-property is a **name** plus a data type, with an optional display name and validation. The
+property is a **name** plus a data type, with an optional label and validation. The
 name is its canonical identifier, a single lowercase kebab segment, and the same
 property is the same concept wherever it appears,
 whether a device **reports** it (an observed value) or an operator **types** it (a declared value).
@@ -27,9 +27,9 @@ The catalog is estate-wide reference data, not a scoped resource, so every prope
 every reader; the write gates decide who may change it.
 
 - The directory lists every property sorted by name, each showing its **name** (the canonical
-  identifier, with its display name on the line above it), **type** (`string`, `bool`,
+  identifier, with its label on the line above it), **type** (`string`, `bool`,
   or `json`), and **origin** (**official** or **custom**). **name** filters by
-  the name or its display name; **type** and **official** narrow the list.
+  the name or its label; **type** and **official** narrow the list.
 - A property is a **value** (what something *is*: an input, a firmware version, a reachability
   verdict); a numeric **quantity** is a **metric**, its own catalog beside this one
   ([**Catalog, under Telemetry: Metrics**](/guides/admin/metrics/)), carrying the numeric facts (unit, precision).
@@ -37,11 +37,11 @@ every reader; the write gates decide who may change it.
   observes is simply declared-only, something an operator sets, like `serial-number`.
 - **New property** (with `property_type:create`, granted to operators) opens a create **drawer**: give
   it a **name** (a single lowercase kebab segment, for example `serial-number` or
-  `interface-reachable`), choose its **data type**, and optionally add a **display name** and
+  `interface-reachable`), choose its **data type**, and optionally add a **label** and
   **description**. An invalid name (an uppercase letter, an underscore, a leading hyphen, a dot) is
   refused with a message.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `property_type:update`) edits
-  the display name and description; the name and data type are fixed at creation, since
+  the label and description; the name and data type are fixed at creation, since
   changing a property's type under the values that already use it is unsafe and a name is what every
   driver and contract maps onto. **Delete** (with
   `property_type:delete`) removes a custom property, behind a confirm. A verb you lack greys just

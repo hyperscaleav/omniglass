@@ -63,7 +63,7 @@ func TestComponentScopeCRUD(t *testing.T) {
 	if _, err := gw.GetComponent(ctx, "cam", readDisp); !errors.Is(err, storage.ErrComponentNotFound) {
 		t.Errorf("get cam under disp-scope = %v, want ErrComponentNotFound", err)
 	}
-	if _, err := gw.UpdateComponent(ctx, "", "sub", storage.ComponentPatch{DisplayName: strptr("S")}, readDisp, scope.Set{}); !errors.Is(err, storage.ErrComponentForbidden) {
+	if _, err := gw.UpdateComponent(ctx, "", "sub", storage.ComponentPatch{Label: strptr("S")}, readDisp, scope.Set{}); !errors.Is(err, storage.ErrComponentForbidden) {
 		t.Errorf("update in-read not-action = %v, want ErrComponentForbidden", err)
 	}
 	if err := gw.DeleteComponent(ctx, "", "disp", all, all); !errors.Is(err, storage.ErrComponentOccupied) {

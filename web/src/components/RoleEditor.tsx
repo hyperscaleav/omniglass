@@ -2,6 +2,7 @@ import { For, Show, createEffect, createMemo, createSignal, useContext, type JSX
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import Button from "./Button";
 import { Check, Pencil, Plus, Trash, X } from "./icons";
+import { byLabel } from "../lib/entities";
 import { COMPONENT_TYPES_KEY, listComponentTypes } from "../lib/component_types";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import {
@@ -28,7 +29,7 @@ import { describeError } from "../lib/format";
 // an official classifier read-only) but not the row. A contract line picks an
 // existing catalog property by name and carries one typed default plus a required
 // flag; a role's name is operator-invented (no catalog to pick from), and it
-// carries a display name, an integer quorum, and TWO sets (accepted types,
+// carries a label, an integer quorum, and TWO sets (accepted types,
 // pinned products) rather than a single scalar. Parameterizing ContractEditor
 // over both would have meant swapping its picker, its draft shape, its
 // validation, and its whole row body, which is the component, so the honest
@@ -93,7 +94,7 @@ const IMPACT_OPTIONS: { value: Impact; label: string }[] = [
 // read (#640) but no control here, and naming it would clear a role's alternate
 // on an unrelated edit, which is the #626 defect this list exists to prevent.
 const EDITOR_FIELDS = [
-  "display_name",
+  "label",
   "quorum",
   "capacity",
   "position_labels",
@@ -120,7 +121,7 @@ export function buildSpec(draft: RoleDraft): RoleSpec | string {
   return {
     update_mask: [...EDITOR_FIELDS],
     quorum,
-    display_name: draft.display.trim() || undefined,
+    label: draft.display.trim() || undefined,
     accepted_types: draft.acceptedTypes,
     pinned_products: draft.pinnedProducts,
     impact: draft.impact,
@@ -182,7 +183,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
   function openEdit(r: DeclaredRole) {
     setEditing(r.name);
     setDraft({
-      display: r.display_name ?? "",
+      display: r.label ?? "",
       quorum: String(r.quorum),
       acceptedTypes: [...(r.accepted_types ?? [])],
       pinnedProducts: [...(r.pinned_products ?? [])],
@@ -249,7 +250,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
   // whole set, not a delta.
   function TokenSet(p: {
     picked: string[];
-    options: { name: string; display_name: string }[];
+    options: { name: string; label: string }[];
     placeholder: string;
     emptyLabel: string;
     removeLabel: (v: string) => string;
@@ -258,7 +259,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
     const left = createMemo(() =>
       [...p.options]
         .filter((o) => !p.picked.includes(o.name))
-        .sort((a, b) => a.display_name.localeCompare(b.display_name)),
+        .sort(byLabel),
     );
     return (
       <div class="flex flex-col gap-1.5">
@@ -289,7 +290,7 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
             onChange={(e) => { const v = e.currentTarget.value; if (v) p.onChange([...p.picked, v]); e.currentTarget.value = ""; }}
           >
             <option value="">{p.placeholder}</option>
-            <For each={left()}>{(o) => <option value={o.name}>{o.display_name} ({o.name})</option>}</For>
+            <For each={left()}>{(o) => <option value={o.name}>{o.label} ({o.name})</option>}</For>
           </select>
         </Show>
       </div>
@@ -376,8 +377,8 @@ export default function RoleEditor(props: { id: string; official: boolean }): JS
                 <div class="flex items-center gap-2">
                   <span class="min-w-0 flex-1 truncate">
                     <span class="font-data text-sm">{r.name}</span>
-                    <Show when={r.display_name && r.display_name !== r.name}>
-                      <span class="ml-2 text-[11px] text-base-content/50">{r.display_name}</span>
+                    <Show when={r.label && r.label !== r.name}>
+                      <span class="ml-2 text-[11px] text-base-content/50">{r.label}</span>
                     </Show>
                   </span>
                   <span class="badge badge-ghost badge-sm shrink-0 tnum">{r.quorum} wanted</span>

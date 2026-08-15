@@ -158,7 +158,7 @@ Three primitives cover every labelled thing on a detail surface, and nothing els
   `(i)` tooltip beside the label and a hint below. It generates the control's id and points
   `<label for>` at it, keeping the tooltip trigger outside the `<label>` so a labelable button
   never steals the control's accessible name.
-- **`BladeTitle`** is the **heading** of a blade: the row's display name, tracked reactively.
+- **`BladeTitle`** is the **heading** of a blade: the row's label, tracked reactively.
 - **`BladeField`** is a **blade field**: a fact when the blade is being read, a `FieldRow` when it
   is being edited, with the switch made once rather than per field. It takes the edit slot from
   `BladeEditContext`, or from an explicit `edit` prop for a detail body that also renders outside a
@@ -179,7 +179,7 @@ shipped values while the drafts still hold the fork, the fields show values the 
 and the next Save writes the discarded fork back over them. That body calls `edit.reseed()` and gets
 the same seeder. Binding is opt-in and a blade that seeds with its own effect is unaffected (#741).
 
-**`BladeTitle` is the heading.** The display name of the row the operator clicked, falling back to
+**`BladeTitle` is the heading.** The label of the row the operator clicked, falling back to
 the identifier in the data face. It reads its row accessor inside the JSX, which is the whole of the
 rule: eight pages wrote this heading by hand and all eight read the accessor once in the component
 body, where a Solid read subscribes to nothing, so the heading kept the old words after a rename
@@ -187,7 +187,7 @@ until the blade was closed and reopened. `identity-vocabulary-guard.test.ts` now
 through: a heading must resolve its row (it rendered the raw id), must not snapshot it (it went
 stale after a rename), and must render through `BladeTitle` or be named in the test's exception
 list with a reason (it resolved and tracked correctly and read the wrong field, the name where
-its list showed the display name). The exceptions are the entities that carry no display name at
+its list showed the label). The exceptions are the entities that carry no label at
 all, where the name is the only operator-facing string: a secret, a variable, a tag, an interface.
 
 **Free text declares itself.** `multiline` reads wrapped with its newlines preserved and edits in a
@@ -226,12 +226,12 @@ announces the field to a screen reader without claiming the browser will refuse 
 
 Every entity carries the same identity triad: an **id** (a uuid, immutable), a **name** (the
 renameable identifier an operator types and the API and CLI address the row by), and an optional
-**display name** (a friendly string a human reads). Two of the three are operator-facing.
+**label** (a friendly string a human reads). Two of the three are operator-facing.
 `IdentityCell` states the rule once, and `identityColumn` is the `FlatList` column every page uses:
 
-- the display name is the primary line;
+- the label is the primary line;
 - the name sits beneath it, in the data face;
-- the name is suppressed when it equals the display name, so the same string never renders twice;
+- the name is suppressed when it equals the label, so the same string never renders twice;
 - an id is never a list column.
 
 This is the same two-line treatment `TreeList` renders, so a tree and a flat list of the same entity
@@ -239,10 +239,10 @@ look like the same product. It replaced sixteen hand-written name columns writte
 incompatible idioms, which is why the header word for one fact used to be "Name" on one page and
 "Key" on another.
 
-**Who chose the label decides the second line.** On component, system and location a display name
+**Who chose the label decides the second line.** On component, system and location a label
 can be one the platform rendered from a **label rule**
 ([ADR-0098](/architecture/decisions/#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)),
-and the row says which through the pen `display_name_generated`. So the cell reads three states, not
+and the row says which through the pen `label_generated`. So the cell reads three states, not
 two: a row with no label shows its name once in the data face; a row an operator labelled shows the
 label with the name beneath it; a row the platform labelled shows the label alone, with no second
 line.
@@ -252,7 +252,7 @@ a `Generated` chip in the cell. It charged the Name column the width of the word
 platform-labelled row of every list, to say something an operator could not act on where they were
 reading it; and the estate-wide question it half-answered, which rows a rule edit would rewrite, is
 answered whole by `<entity> previewLabels` rather than one row at a time. The fact is now the
-**lock** on the display-name field of the edit blade (`components/LabelPenField.tsx`), the same
+**lock** on the label field of the edit blade (`components/LabelPenField.tsx`), the same
 affordance the create form carries (`components/PenToggle.tsx` is the one copy of the button, its
 icons and its words), beside the field and next to the act that changes it. That is where the NAME's
 own pen already stated itself, on the component blade.
@@ -322,28 +322,28 @@ deleting it: `InheritedField`'s two differed only by which side of one predicate
 removing both would have left the console with no way back to inheriting.
 
 The predicates live in `lib/entities` and nowhere else: `labelIsName` (which face) and
-`hasDisplayName` (did a human choose this). The second used to be the string comparison
+`hasLabel` (did a human choose this). The second used to be the string comparison
 `entityLabel(e) !== e.name`, and that was the same question only while a label was only ever
 operator-typed; unchanged, a generated label would have put a second identifier line under every row
 in the estate. A third, `labelGenerated`, retired with the chip that was its only caller: it asked
 "is there a rendered label here to mark", and a field asks "who holds the pen", which answers
 differently for a row whose rule rendered nothing and must still open locked.
 
-**One renderer, pinned by a source guard.** `entityLabel` is the only place `display_name || name` is
+**One renderer, pinned by a source guard.** `entityLabel` is the only place `label || name` is
 written. `one-label-renderer.test.ts` scans every non-test source file for a hand-rolled fallback and
 for the raw column interpolated into a string, and fails on either outside a short, line-precise
 allowlist of rules that are genuinely not this one (a principal's name, which has no `name` column;
 a picker that renders both facts as `name (Label)`). Both directions are asserted, so an allowlist
 entry that stops describing anything fails too. The scan catches what no page test can: a facet
-that spelled its haystack `` `${r.name} ${r.display_name}` `` searched the literal text "undefined"
+that spelled its haystack `` `${r.name} ${r.label}` `` searched the literal text "undefined"
 on every unlabelled row.
 
 **Three fields, no synonyms.** The identifier is the **Name**, on every column header and every
-form. The friendly string is the **Display name**. The id is never labelled because it is never
+form. The friendly string is the **Label**. The id is never labelled because it is never
 shown outside a drill-in. "Technical name" and "Segment" are retired as field labels, and
 `identity-vocabulary-guard.test.ts` fails the build on either appearing in label text. Neither of
 the two live words is typed on a page at all: a field or a fact that shows one of them says which
-fact it is bound to (`<BladeField bind="display_name">`) and takes its label from `IDENTITY_LABELS`
+fact it is bound to (`<BladeField bind="label">`) and takes its label from `IDENTITY_LABELS`
 in `lib/entities`, with `label` refused alongside `bind` at the type level. The pairing used to be
 checked by a regex over four call forms with an eight-line lookahead, after eleven blades shipped
 showing two fields both called "Name"; it is now a type, and what remains of that check is a
@@ -371,7 +371,7 @@ the same kebab name as every other table and head their column "Name" like every
 `identityColumn` therefore takes no `label` option at all, and the vocabulary guard scans the source
 for anyone passing one, which is the failure mode a per-page test cannot catch.
 
-The write side does differ, page by page. `createIdentity` derives the name from the display name as
+The write side does differ, page by page. `createIdentity` derives the name from the label as
 an operator types and stops the moment they edit the name by hand, and an edit form seeds it with
 the existing name so relabelling can never rewrite a live address. That path belongs to the
 registries, whose names have no generator and stay globally unique.

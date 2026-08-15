@@ -16,7 +16,7 @@ import (
 type eventTypeBody struct {
 	ID            string          `json:"id" doc:"The event type's uuid, the stable form of name"`
 	Name          string          `json:"name"`
-	DisplayName   string          `json:"display_name,omitempty"`
+	Label         string          `json:"label,omitempty"`
 	Description   string          `json:"description,omitempty"`
 	PayloadSchema json.RawMessage `json:"payload_schema,omitempty" doc:"A JSON Schema fragment for the occurrence payload"`
 	Official      bool            `json:"official"`
@@ -24,7 +24,7 @@ type eventTypeBody struct {
 
 func toEventTypeBody(et *storage.EventType) eventTypeBody {
 	b := eventTypeBody{
-		ID: et.ID, Name: et.Name, DisplayName: et.DisplayName, Description: et.Description, Official: et.Official,
+		ID: et.ID, Name: et.Name, Label: et.Label, Description: et.Description, Official: et.Official,
 	}
 	if len(et.PayloadSchema) > 0 {
 		b.PayloadSchema = json.RawMessage(et.PayloadSchema)
@@ -47,7 +47,7 @@ type eventTypeNameInput struct {
 type createEventTypeInput struct {
 	Body struct {
 		Name          string `json:"name" minLength:"1" doc:"The event type name (lowercase kebab)"`
-		DisplayName   string `json:"display_name,omitempty" doc:"A human label"`
+		Label         string `json:"label,omitempty" doc:"A human label"`
 		Description   string `json:"description,omitempty" doc:"What the occurrence means"`
 		PayloadSchema any    `json:"payload_schema,omitempty" doc:"A JSON Schema fragment for the payload"`
 	}
@@ -56,7 +56,7 @@ type createEventTypeInput struct {
 type updateEventTypeInput struct {
 	Name string `path:"name" doc:"The event type's name"`
 	Body struct {
-		DisplayName   *string `json:"display_name,omitempty" doc:"A human label"`
+		Label         *string `json:"label,omitempty" doc:"A human label"`
 		Description   *string `json:"description,omitempty" doc:"What the occurrence means"`
 		PayloadSchema any     `json:"payload_schema,omitempty" doc:"A JSON Schema fragment (replaces wholesale)"`
 	}
@@ -115,7 +115,7 @@ func registerEventTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		}
 		et, err := gw.CreateEventType(ctx, actorID(ctx), storage.EventTypeSpec{
 			Name:          in.Body.Name,
-			DisplayName:   in.Body.DisplayName,
+			Label:         in.Body.Label,
 			Description:   in.Body.Description,
 			PayloadSchema: schema,
 		})
@@ -137,7 +137,7 @@ func registerEventTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 			return nil, err
 		}
 		et, err := gw.UpdateEventType(ctx, actorID(ctx), in.Name, storage.EventTypePatch{
-			DisplayName:   in.Body.DisplayName,
+			Label:         in.Body.Label,
 			Description:   in.Body.Description,
 			PayloadSchema: schema,
 		})

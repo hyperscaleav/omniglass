@@ -66,7 +66,7 @@ func TestProvisionIsolatesWrites(t *testing.T) {
 	const probe = "isolation-probe-649"
 	firstConn := connect(t, ctx, first)
 	if _, err := firstConn.Exec(ctx,
-		`insert into location_type (name, display_name) values ($1, $1)`, probe); err != nil {
+		`insert into location_type (name, label) values ($1, $1)`, probe); err != nil {
 		t.Fatalf("insert probe row: %v", err)
 	}
 

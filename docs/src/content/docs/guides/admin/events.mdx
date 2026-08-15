@@ -11,7 +11,7 @@ An **event** is an **occurrence**, something that *happened* at a moment (a call
 came unplugged), not a value something holds; a **value** is a
 [property](/guides/admin/properties/) and a numeric **quantity** is a
 [metric](/guides/admin/metrics/), the two sample lanes with their own catalogs and their own
-pages. Here, an **event type** is a **name** plus an optional display name, description, and
+pages. Here, an **event type** is a **name** plus an optional label, description, and
 payload schema. The name is its canonical identifier, a single lowercase kebab segment, and the
 same event type is the same happening wherever it appears: registering `call-started` once means
 every endpoint's call, however it is detected, lands under one name.
@@ -28,16 +28,16 @@ The catalog is estate-wide reference data, not a scoped resource, so every event
 to every reader; the write gates decide who may change it.
 
 - The directory lists every event type sorted by name, each showing its **name** (the canonical
-  identifier, with its display name on the line above it) and **origin** (**official** or
-  **custom**). **name** filters by the name or its display name; **official**
+  identifier, with its label on the line above it) and **origin** (**official** or
+  **custom**). **name** filters by the name or its label; **official**
   narrows the list.
 - **New event type** (with `event_type:create`, granted to operators) opens a create **drawer**:
   give it a **name** (a single lowercase kebab segment, for example `call-started` or
-  `cable-unplugged`), and optionally add a **display name** and **description**. An invalid name
+  `cable-unplugged`), and optionally add a **label** and **description**. An invalid name
   (an uppercase letter, an underscore, a leading hyphen, a dot) is refused with a message. The
   drawer deliberately omits the payload schema; set it through the API for now.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `event_type:update`)
-  edits the display name and description; the name is fixed at creation, since it is what every
+  edits the label and description; the name is fixed at creation, since it is what every
   occurrence and every push is typed by. **Delete** (with `event_type:delete`) removes a custom
   event type, behind a confirm. A verb you lack greys just that button, its hover reason naming
   the permission (`Requires event_type:update`, `Requires event_type:delete`); the pair never

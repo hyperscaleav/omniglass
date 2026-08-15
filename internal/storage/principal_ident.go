@@ -69,7 +69,7 @@ import "strconv"
 // columns are. It is the only operator-visible handle the row has, it is unique
 // (`node_name_key`, beside `human_username_key` and `service_name_key`,
 // ADR-0111), and it is already the estate address and the NATS subject token, so
-// it is the string an operator would recognise in a trail. `display_name` is a
+// it is the string an operator would recognise in a trail. `label` is a
 // label and cannot be one: it is optional and it is not unique, and the audit
 // trail denormalizes this string as bare text where nothing survives beside it.
 //

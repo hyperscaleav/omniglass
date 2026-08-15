@@ -37,11 +37,11 @@ func TestSelfProfileAuditsRealActor(t *testing.T) {
 
 	name := func(s string) *string { return &s }
 	// A normal self-edit: audited with a null real actor.
-	if err := gw.UpdateHumanProfile(ctx, alice.ID, storage.HumanProfilePatch{DisplayName: name("Alice One")}); err != nil {
+	if err := gw.UpdateHumanProfile(ctx, alice.ID, storage.HumanProfilePatch{Label: name("Alice One")}); err != nil {
 		t.Fatalf("self edit: %v", err)
 	}
 	// The same edit while impersonated: the real actor rides the context.
-	if err := gw.UpdateHumanProfile(storage.WithRealActor(ctx, root.ID), alice.ID, storage.HumanProfilePatch{DisplayName: name("Alice Two")}); err != nil {
+	if err := gw.UpdateHumanProfile(storage.WithRealActor(ctx, root.ID), alice.ID, storage.HumanProfilePatch{Label: name("Alice Two")}); err != nil {
 		t.Fatalf("impersonated edit: %v", err)
 	}
 

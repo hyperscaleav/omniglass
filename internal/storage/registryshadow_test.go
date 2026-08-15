@@ -16,7 +16,7 @@ import (
 // operator cleared, or make a column added after the fork resolve to nothing.
 func TestShadowOverlayDistinguishesAbsentFromNull(t *testing.T) {
 	official := ComponentType{
-		Name: "mic", DisplayName: "Microphone",
+		Name: "mic", Label: "Microphone",
 		Stem: strPtr("mic"), Icon: strPtr("mic"), Abbrev: strPtr("mic"),
 		DefaultTags: []string{"audio"}, Official: true,
 	}
@@ -33,9 +33,9 @@ func TestShadowOverlayDistinguishesAbsentFromNull(t *testing.T) {
 		},
 		{
 			name:  "an absent key falls back to the official value",
-			image: `{"display_name":"Mikrofon"}`,
+			image: `{"label":"Mikrofon"}`,
 			want: func(ct ComponentType) ComponentType {
-				ct.DisplayName = "Mikrofon"
+				ct.Label = "Mikrofon"
 				return ct
 			},
 		},
@@ -114,7 +114,7 @@ func TestShadowOverlayRefusesAGarbledImage(t *testing.T) {
 // to an unedited column does not reach a forked row.
 func TestComponentTypeShadowImageIsWholeRow(t *testing.T) {
 	image, err := componentTypeShadowImage(ComponentType{
-		DisplayName: "Microphone", Stem: strPtr("mic"), Icon: nil, Abbrev: strPtr("mic"),
+		Label: "Microphone", Stem: strPtr("mic"), Icon: nil, Abbrev: strPtr("mic"),
 		DefaultTags: []string{"audio"},
 	})
 	if err != nil {
@@ -124,7 +124,7 @@ func TestComponentTypeShadowImageIsWholeRow(t *testing.T) {
 	if err := json.Unmarshal(image, &keys); err != nil {
 		t.Fatalf("decode image: %v", err)
 	}
-	for _, k := range []string{"display_name", "stem", "icon", "abbrev", "default_tags"} {
+	for _, k := range []string{"label", "stem", "icon", "abbrev", "default_tags"} {
 		if _, ok := keys[k]; !ok {
 			t.Errorf("image is missing mutable column %q; a fork captures the whole row", k)
 		}
@@ -145,7 +145,7 @@ func TestComponentTypeShadowImageIsWholeRow(t *testing.T) {
 func strPtr(s string) *string { return &s }
 
 func sameComponentType(a, b ComponentType) bool {
-	return a.ID == b.ID && a.Name == b.Name && a.DisplayName == b.DisplayName &&
+	return a.ID == b.ID && a.Name == b.Name && a.Label == b.Label &&
 		samePtr(a.Stem, b.Stem) && samePtr(a.Icon, b.Icon) && samePtr(a.Abbrev, b.Abbrev) &&
 		sameTags(a.DefaultTags, b.DefaultTags) && a.Official == b.Official && sameUUIDPtr(a.ParentID, b.ParentID)
 }
@@ -178,7 +178,7 @@ func sameTags(a, b []string) bool {
 
 func showComponentType(ct ComponentType) string {
 	b, _ := json.Marshal(map[string]any{
-		"display_name": ct.DisplayName, "stem": ct.Stem, "icon": ct.Icon,
+		"label": ct.Label, "stem": ct.Stem, "icon": ct.Icon,
 		"abbrev": ct.Abbrev, "default_tags": ct.DefaultTags, "name": ct.Name,
 	})
 	return string(b)

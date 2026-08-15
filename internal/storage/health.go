@@ -107,20 +107,20 @@ type HealthReport struct {
 // same report lists its unbuilt component-system alternate's roles as
 // impaired, with nothing to say those roles are not the reason.
 type HealthRole struct {
-	Name        string
-	DisplayName string
-	Impact      string
-	Quorum      int
-	Satisfying  int
-	Short       int // how many more occupants the role needs to reach quorum
-	Spare       int // how many occupants the role has beyond quorum
-	Impaired    bool
-	AssignedTo  []string
-	Down        []string // assigned components whose own verdict is outage
-	Alarms      []Alarm  // the active alarms on those down components
-	Choice      string   // the choice this role belongs to; empty when unconditional
-	Alternate   string   // the alternate within Choice; empty when unconditional
-	Active      bool     // true for an unconditional role, or a role in its choice's active alternate
+	Name       string
+	Label      string
+	Impact     string
+	Quorum     int
+	Satisfying int
+	Short      int // how many more occupants the role needs to reach quorum
+	Spare      int // how many occupants the role has beyond quorum
+	Impaired   bool
+	AssignedTo []string
+	Down       []string // assigned components whose own verdict is outage
+	Alarms     []Alarm  // the active alarms on those down components
+	Choice     string   // the choice this role belongs to; empty when unconditional
+	Alternate  string   // the alternate within Choice; empty when unconditional
+	Active     bool     // true for an unconditional role, or a role in its choice's active alternate
 }
 
 // HealthSystem is one system under a location, with its recorded verdict. It is
@@ -140,12 +140,12 @@ type HealthTransition struct {
 // resolvedRole is a system's role with everything both the verdict and the report
 // need: the declaration and who fills it, each with its own current verdict.
 type resolvedRole struct {
-	ID          string
-	Name        string
-	DisplayName string
-	Quorum      int
-	Impact      string
-	Assigned    []health.Component
+	ID       string
+	Name     string
+	Label    string
+	Quorum   int
+	Impact   string
+	Assigned []health.Component
 	// AssignedIDs is Assigned's own component id, index for index: the pure
 	// health.Component the rollup and the report both consume carries only a
 	// Name (display), so a caller that needs to look a specific assignee back
@@ -190,7 +190,7 @@ func (p *PG) RecomputeHealth(ctx context.Context, q txQuerier, componentRef stri
 // (resolving the id pulls the name along for free) except one that used to
 // pay for a lookup solely to populate it (systemConfig.afterDelete, since
 // fixed to leave it unset). Kept rather than dropped so a future health-report
-// read that wants a display name without a second lookup has it; if that
+// read that wants a label without a second lookup has it; if that
 // stays untrue, cut the field.
 type ownerRef struct {
 	ID   string
@@ -741,13 +741,13 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemID strin
 			select id, name, standard_id from system where id = $1::uuid
 		),
 		roles as (
-			select r.id, r.name, r.display_name, r.quorum, r.impact, r.alternate_id
+			select r.id, r.name, coalesce(r.label, '') as label, r.quorum, r.impact, r.alternate_id
 			from sys join system_role r on r.owner_kind = 'standard' and r.standard_id = sys.standard_id
 			union all
-			select r.id, r.name, r.display_name, r.quorum, r.impact, r.alternate_id
+			select r.id, r.name, coalesce(r.label, '') as label, r.quorum, r.impact, r.alternate_id
 			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.id
 		)
-		select roles.id, roles.name, roles.display_name, roles.quorum, roles.impact,
+		select roles.id, roles.name, roles.label, roles.quorum, roles.impact,
 		       -- names for display, ids to look an assignee's own verdict up
 		       -- unambiguously (#627): both come off the same
 		       -- ra.component_id = ac.id join, so carrying the id costs
@@ -782,7 +782,7 @@ func (p *PG) resolveHealthRoles(ctx context.Context, q txQuerier, systemID strin
 	var raw []rawRole
 	for rows.Next() {
 		var r rawRole
-		if err := rows.Scan(&r.ID, &r.Name, &r.DisplayName, &r.Quorum, &r.Impact,
+		if err := rows.Scan(&r.ID, &r.Name, &r.Label, &r.Quorum, &r.Impact,
 			&r.assignedTo, &r.assignedIDs, &r.AlternateID, &r.AlternateName, &r.AlternatePos, &r.ChoiceID, &r.ChoiceName); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("storage: scan health role %q: %w", systemID, err)
@@ -1031,20 +1031,20 @@ func (p *PG) explainRole(ctx context.Context, q txQuerier, r resolvedRole, activ
 		active = activeAlt[*r.ChoiceID] == altName
 	}
 	row := HealthRole{
-		Name:        r.Name,
-		DisplayName: r.DisplayName,
-		Impact:      r.Impact,
-		Quorum:      r.Quorum,
-		Satisfying:  role.Satisfying(),
-		Short:       role.Short(),
-		Spare:       role.Spare(),
-		Impaired:    role.Impaired(),
-		AssignedTo:  make([]string, 0, len(r.Assigned)),
-		Down:        []string{},
-		Alarms:      []Alarm{},
-		Choice:      choiceName,
-		Alternate:   altName,
-		Active:      active,
+		Name:       r.Name,
+		Label:      r.Label,
+		Impact:     r.Impact,
+		Quorum:     r.Quorum,
+		Satisfying: role.Satisfying(),
+		Short:      role.Short(),
+		Spare:      role.Spare(),
+		Impaired:   role.Impaired(),
+		AssignedTo: make([]string, 0, len(r.Assigned)),
+		Down:       []string{},
+		Alarms:     []Alarm{},
+		Choice:     choiceName,
+		Alternate:  altName,
+		Active:     active,
 	}
 	for _, c := range r.Assigned {
 		row.AssignedTo = append(row.AssignedTo, c.Name)

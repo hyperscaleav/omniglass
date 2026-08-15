@@ -18,7 +18,7 @@ import (
 type EventType struct {
 	ID            string
 	Name          string
-	DisplayName   string
+	Label         string
 	Description   string
 	PayloadSchema []byte
 	Official      bool
@@ -35,7 +35,7 @@ var (
 // EventTypeSpec is the create input for a custom event type.
 type EventTypeSpec struct {
 	Name          string
-	DisplayName   string
+	Label         string
 	Description   string
 	PayloadSchema []byte
 }
@@ -44,7 +44,7 @@ type EventTypeSpec struct {
 // unchanged. The name is fixed at create. PayloadSchema replaces wholesale when
 // non-nil.
 type EventTypePatch struct {
-	DisplayName   *string
+	Label         *string
 	Description   *string
 	PayloadSchema []byte
 }
@@ -61,12 +61,12 @@ func (p *PG) UpsertEventType(ctx context.Context, et EventType) error {
 		schema = string(et.PayloadSchema)
 	}
 	_, err := p.pool.Exec(ctx, `
-		insert into event_type (name, display_name, description, payload_schema, official)
+		insert into event_type (name, label, description, payload_schema, official)
 		values ($1, $2, $3, $4, $5)
 		on conflict (name) do update set
-			display_name = excluded.display_name, description = excluded.description,
+			label = excluded.label, description = excluded.description,
 			payload_schema = excluded.payload_schema, official = excluded.official`,
-		et.Name, et.DisplayName, et.Description, schema, et.Official)
+		et.Name, labelOrNull(et.Label), et.Description, schema, et.Official)
 	if err != nil {
 		return fmt.Errorf("storage: upsert event type %q: %w", et.Name, err)
 	}
@@ -76,7 +76,7 @@ func (p *PG) UpsertEventType(ctx context.Context, et EventType) error {
 // ListEventTypes returns every registered event type (official and custom). No
 // scope.Set: the registry is estate-wide reference data.
 func (p *PG) ListEventTypes(ctx context.Context) ([]EventType, error) {
-	rows, err := p.pool.Query(ctx, `select id, name, coalesce(display_name, ''), description, payload_schema, official from event_type`)
+	rows, err := p.pool.Query(ctx, `select id, name, coalesce(label, ''), description, payload_schema, official from event_type`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list event types: %w", err)
 	}
@@ -84,7 +84,7 @@ func (p *PG) ListEventTypes(ctx context.Context) ([]EventType, error) {
 	var out []EventType
 	for rows.Next() {
 		var et EventType
-		if err := rows.Scan(&et.ID, &et.Name, &et.DisplayName, &et.Description, &et.PayloadSchema, &et.Official); err != nil {
+		if err := rows.Scan(&et.ID, &et.Name, &et.Label, &et.Description, &et.PayloadSchema, &et.Official); err != nil {
 			return nil, fmt.Errorf("storage: scan event type: %w", err)
 		}
 		out = append(out, et)
@@ -99,8 +99,8 @@ func (p *PG) GetEventType(ctx context.Context, name string) (*EventType, error) 
 	}
 	var et EventType
 	err := p.pool.QueryRow(ctx,
-		`select id, name, coalesce(display_name, ''), description, payload_schema, official from event_type where name = $1`,
-		name).Scan(&et.ID, &et.Name, &et.DisplayName, &et.Description, &et.PayloadSchema, &et.Official)
+		`select id, name, coalesce(label, ''), description, payload_schema, official from event_type where name = $1`,
+		name).Scan(&et.ID, &et.Name, &et.Label, &et.Description, &et.PayloadSchema, &et.Official)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrEventTypeNotFound
 	}
@@ -191,10 +191,10 @@ func (p *PG) CreateEventType(ctx context.Context, actorID string, spec EventType
 	// key, which survives a later rename, rather than on the name.
 	var etID string
 	if err := tx.QueryRow(ctx,
-		`insert into event_type (name, display_name, description, payload_schema, official)
+		`insert into event_type (name, label, description, payload_schema, official)
 		 values ($1, $2, $3, $4, false)
 		 returning id`,
-		spec.Name, spec.DisplayName, spec.Description, schemaArg(spec.PayloadSchema)).Scan(&etID); err != nil {
+		spec.Name, labelOrNull(spec.Label), spec.Description, schemaArg(spec.PayloadSchema)).Scan(&etID); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrEventTypeExists
 		}
@@ -232,19 +232,20 @@ func (p *PG) UpdateEventType(ctx context.Context, actorID, name string, patch Ev
 		}
 		return nil, fmt.Errorf("storage: audit image event_type %q: %w", name, err)
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	if _, err := tx.Exec(ctx, `
 		update event_type set
-			display_name   = coalesce($2, display_name),
+			label   = case when $5::boolean then $2 else label end,
 			description    = coalesce($3, description),
 			payload_schema = coalesce($4, payload_schema)
 		where name = $1`,
-		name, patch.DisplayName, patch.Description, schemaArg(patch.PayloadSchema)); err != nil {
+		name, labelVal, patch.Description, schemaArg(patch.PayloadSchema), setLabel); err != nil {
 		return nil, fmt.Errorf("storage: update event type %q: %w", name, err)
 	}
 	var et EventType
 	if err := tx.QueryRow(ctx,
-		`select id, name, coalesce(display_name, ''), description, payload_schema, official from event_type where name = $1`,
-		name).Scan(&et.ID, &et.Name, &et.DisplayName, &et.Description, &et.PayloadSchema, &et.Official); err != nil {
+		`select id, name, coalesce(label, ''), description, payload_schema, official from event_type where name = $1`,
+		name).Scan(&et.ID, &et.Name, &et.Label, &et.Description, &et.PayloadSchema, &et.Official); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrEventTypeNotFound
 		}

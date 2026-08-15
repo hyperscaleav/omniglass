@@ -20,7 +20,7 @@ import (
 type effectiveMetricBody struct {
 	MetricTypeName string          `json:"metric_type_name" doc:"The catalog metric name"`
 	MetricTypeID   string          `json:"metric_type_id" doc:"The catalog metric's uuid, the stable form of metric_type_name"`
-	DisplayName    string          `json:"display_name,omitempty" doc:"The metric's human label; omitted when unset"`
+	Label          string          `json:"label,omitempty" doc:"The metric's human label; omitted when unset"`
 	DataType       string          `json:"data_type" doc:"The numeric value type, from the metric catalog"`
 	Required       bool            `json:"required" doc:"Whether the contract requires the metric; always false off-contract"`
 	IsSampled      bool            `json:"is_sampled" doc:"True when the series holds an observed or calculated sample"`
@@ -34,7 +34,7 @@ func toEffectiveMetricBody(e *storage.EffectiveMetric) effectiveMetricBody {
 	return effectiveMetricBody{
 		MetricTypeName: e.MetricTypeName,
 		MetricTypeID:   e.MetricTypeID,
-		DisplayName:    e.DisplayName,
+		Label:          e.Label,
 		DataType:       e.DataType,
 		Required:       e.Required,
 		IsSampled:      e.IsSampled,

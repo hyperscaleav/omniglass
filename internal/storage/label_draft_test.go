@@ -78,8 +78,8 @@ func TestTheDraftLabelIsTheLabelTheCreateStores(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if drafted.Label != c.DisplayName {
-		t.Errorf("drafted label %q, stored %q: the form promised a label the create did not write", drafted.Label, c.DisplayName)
+	if drafted.Label != c.Label {
+		t.Errorf("drafted label %q, stored %q: the form promised a label the create did not write", drafted.Label, c.Label)
 	}
 	if drafted.Label == "" {
 		t.Fatal("drafted label is empty, so the comparison above proves nothing")
@@ -117,8 +117,8 @@ func TestTheDraftIsTheIdentityTheCreateStampsForAGeneratedName(t *testing.T) {
 	if drafted.Ordinal != *c.Ordinal {
 		t.Errorf("drafted ordinal %d, allocated %d", drafted.Ordinal, *c.Ordinal)
 	}
-	if drafted.Label != c.DisplayName {
-		t.Errorf("drafted label %q, stored %q", drafted.Label, c.DisplayName)
+	if drafted.Label != c.Label {
+		t.Errorf("drafted label %q, stored %q", drafted.Label, c.Label)
 	}
 	// The guard: the fixture's rule reads .Ordinal, so a draft that had left the
 	// number out entirely would still pass the equality above if the create had
@@ -243,8 +243,8 @@ func TestTheDraftSystemLabelCarriesTheOrdinalItWillLandWith(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create system: %v", err)
 		}
-		if drafted.Label != s.DisplayName || drafted.Label == "" {
-			t.Errorf("drafted %q, stored %q", drafted.Label, s.DisplayName)
+		if drafted.Label != s.Label || drafted.Label == "" {
+			t.Errorf("drafted %q, stored %q", drafted.Label, s.Label)
 		}
 		if drafted.Label != want {
 			t.Errorf("drafted %q, want %q: the form must show the number the row lands with", drafted.Label, want)
@@ -282,8 +282,8 @@ func TestTheDraftedLocationLabelIsTheOneTheCreateStores(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create location: %v", err)
 	}
-	if l.DisplayName != drafted.Label {
-		t.Errorf("the form would have shown %q; the create stored %q", drafted.Label, l.DisplayName)
+	if l.Label != drafted.Label {
+		t.Errorf("the form would have shown %q; the create stored %q", drafted.Label, l.Label)
 	}
 }
 
@@ -317,8 +317,8 @@ func TestTheDraftLabelIsEmptyWhereNoRuleResolves(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create location: %v", err)
 	}
-	if l.DisplayName != "" {
-		t.Errorf("stored label %q, want none: the surface falls back to the name", l.DisplayName)
+	if l.Label != "" {
+		t.Errorf("stored label %q, want none: the surface falls back to the name", l.Label)
 	}
 }
 
@@ -372,12 +372,12 @@ func TestTheDraftLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
 func TestTheDraftLabelRefusesAComponentTypeChainWithNoStem(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	if err := gw.UpsertComponentType(ctx, storage.ComponentType{
-		Name: "stemless", DisplayName: "Stemless", Official: true,
+		Name: "stemless", Label: "Stemless", Official: true,
 	}); err != nil {
 		t.Fatalf("upsert stemless type: %v", err)
 	}
 	if _, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "stemless-thing", DisplayName: "Stemless Thing", ComponentType: "stemless",
+		Name: "stemless-thing", Label: "Stemless Thing", ComponentType: "stemless",
 	}); err != nil {
 		t.Fatalf("create product: %v", err)
 	}
@@ -559,7 +559,7 @@ func TestTheDraftRefusesTheParentlessBucketItCannotCreateIn(t *testing.T) {
 	// A location type that generates, so the location tier actually reaches the
 	// sibling read rather than refusing earlier for want of a rule.
 	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{
-		Name: "deck", DisplayName: "Deck", AllowedParentTypes: []string{"campus"},
+		Name: "deck", Label: "Deck", AllowedParentTypes: []string{"campus"},
 		NameRule: &storage.NameRule{Stem: "deck"},
 	}); err != nil {
 		t.Fatalf("create location type: %v", err)

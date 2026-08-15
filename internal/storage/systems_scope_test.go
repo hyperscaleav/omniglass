@@ -74,15 +74,15 @@ func TestSystemScopeCRUD(t *testing.T) {
 	}
 
 	// Three-way split: readable, no action scope = 403.
-	if _, err := gw.UpdateSystem(ctx, "", "av-sub", storage.SystemPatch{DisplayName: strptr("Sub")}, readAV, scope.Set{}); !errors.Is(err, storage.ErrSystemForbidden) {
+	if _, err := gw.UpdateSystem(ctx, "", "av-sub", storage.SystemPatch{Label: strptr("Sub")}, readAV, scope.Set{}); !errors.Is(err, storage.ErrSystemForbidden) {
 		t.Errorf("update in-read not-action = %v, want ErrSystemForbidden", err)
 	}
 	// Out of read scope = 404.
-	if _, err := gw.UpdateSystem(ctx, "", "lab", storage.SystemPatch{DisplayName: strptr("X")}, readAV, readAV); !errors.Is(err, storage.ErrSystemNotFound) {
+	if _, err := gw.UpdateSystem(ctx, "", "lab", storage.SystemPatch{Label: strptr("X")}, readAV, readAV); !errors.Is(err, storage.ErrSystemNotFound) {
 		t.Errorf("update out-of-read = %v, want ErrSystemNotFound", err)
 	}
 	// Fully scoped update succeeds.
-	if up, err := gw.UpdateSystem(ctx, "", "av-sub", storage.SystemPatch{DisplayName: strptr("Subsystem A")}, all, all); err != nil || up.DisplayName != "Subsystem A" {
+	if up, err := gw.UpdateSystem(ctx, "", "av-sub", storage.SystemPatch{Label: strptr("Subsystem A")}, all, all); err != nil || up.Label != "Subsystem A" {
 		t.Fatalf("scoped update = %+v, err %v", up, err)
 	}
 

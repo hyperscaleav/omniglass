@@ -57,7 +57,7 @@ import (
 //     system, one component's own membership): cascaded eagerly, inside the
 //     act's transaction, so the estate is never observably stale.
 //   - Bounded only by the estate (a rule at any tier, a component_type's or
-//     product's or vendor's display_name, the acronym list): left to the verb.
+//     product's or vendor's label, the acronym list): left to the verb.
 //     This is the epic's own argument, applied consistently: editing a shared
 //     classification must not silently rewrite 15,000 rows any more than
 //     editing a rule may.
@@ -158,7 +158,7 @@ func labelScanQuery(tbl scopeTable, cols string, read, action scope.Set, n label
 			select x.id from ` + t + ` x join asub on x.parent_id = asub.id
 		) cycle id set is_cycle using path
 		select ` + cols + ` from ` + t + `
-		where display_name_generated
+		where label_generated
 		  and ($5::boolean or id in (select id from rsub) or id = any($2::uuid[]))
 		  and ($6::boolean or id in (select id from asub) or id = any($4::uuid[]))`
 	next := func(v any) string {
@@ -262,8 +262,8 @@ func componentDrift(ctx context.Context, q querier, eng *label.Engine, n labelNa
 			chains[*c.ProductID] = in
 		}
 		to := renderLabel(eng, in.rule, componentLabelData(c, in, places[c.ID]))
-		if to != c.DisplayName {
-			out = append(out, LabelChange{Kind: "component", ID: c.ID, Name: c.Name, From: c.DisplayName, To: to})
+		if to != c.Label {
+			out = append(out, LabelChange{Kind: "component", ID: c.ID, Name: c.Name, From: c.Label, To: to})
 		}
 	}
 	return out, nil
@@ -316,8 +316,8 @@ func systemDrift(ctx context.Context, q querier, eng *label.Engine, n labelNarro
 			chains[key] = in
 		}
 		to := renderLabel(eng, in.rule, systemLabelData(s, in, places[s.ID]))
-		if to != s.DisplayName {
-			out = append(out, LabelChange{Kind: "system", ID: s.ID, Name: s.Name, From: s.DisplayName, To: to})
+		if to != s.Label {
+			out = append(out, LabelChange{Kind: "system", ID: s.ID, Name: s.Name, From: s.Label, To: to})
 		}
 	}
 	return out, nil
@@ -363,8 +363,8 @@ func locationDrift(ctx context.Context, q querier, eng *label.Engine, n labelNar
 			chains[l.LocationTypeID] = in
 		}
 		to := renderLabel(eng, in.rule, locationLabelData(l, in))
-		if to != l.DisplayName {
-			out = append(out, LabelChange{Kind: "location", ID: l.ID, Name: l.Name, From: l.DisplayName, To: to})
+		if to != l.Label {
+			out = append(out, LabelChange{Kind: "location", ID: l.ID, Name: l.Name, From: l.Label, To: to})
 		}
 	}
 	return out, nil
@@ -395,13 +395,15 @@ func writeLabelChanges(ctx context.Context, q txQuerier, tbl scopeTable, changes
 	labels := make([]*string, len(changes))
 	for i, ch := range changes {
 		ids[i] = ch.ID
-		if ch.To != "" {
-			to := ch.To
+		// Through the same rule every other write path uses, so a rule that
+		// renders nothing (or renders whitespace) writes SQL NULL here exactly
+		// as a create does (#613, ADR-0118).
+		if to, ok := labelOrNull(ch.To).(string); ok {
 			labels[i] = &to
 		}
 	}
 	if _, err := q.Exec(ctx, `
-		update `+string(tbl)+` set display_name = v.label, updated_at = now()
+		update `+string(tbl)+` set label = v.label, updated_at = now()
 		from (select * from unnest($1::uuid[], $2::text[]) as t(id, label)) v
 		where `+string(tbl)+`.id = v.id`, ids, labels); err != nil {
 		return fmt.Errorf("storage: write %d recomputed labels to %s: %w", len(changes), tbl, err)

@@ -7,7 +7,7 @@ import { api } from "../api/client";
 // TaskBody).
 export type Task = {
   id: string;
-  display_name?: string;
+  label?: string;
   interface_id: string;
   mode: string;
   enabled: boolean;

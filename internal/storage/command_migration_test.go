@@ -16,7 +16,7 @@ func TestCommandPillarMigration(t *testing.T) {
 	conn := connectMigrated(t)
 
 	// The command_type registry exists and is keyed uniquely by name.
-	mustExec(t, conn, `insert into command_type (name, display_name, settle_window_seconds) values ('set-input', 'Set input', 30)`)
+	mustExec(t, conn, `insert into command_type (name, label, settle_window_seconds) values ('set-input', 'Set input', 30)`)
 	if _, err := conn.Exec(ctx, `insert into command_type (name) values ('set-input')`); err == nil {
 		t.Error("expected command_type.name unique to reject a duplicate")
 	}

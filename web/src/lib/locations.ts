@@ -6,11 +6,11 @@ import { api } from "../api/client";
 export type Location = {
   id: string;
   name: string;
-  display_name?: string;
+  label?: string;
   // The LABEL's pen (#682/#683): true means the platform rendered this display
   // name from a label rule, false means an operator typed it. Read-only; the
   // console reads it through lib/entities so nothing branches on it by hand.
-  display_name_generated?: boolean;
+  label_generated?: boolean;
   location_type: string;
   parent?: string;
   // parent_id is the parent's uuid, the stable handle the tree builder keys
@@ -55,7 +55,7 @@ export type CreateLocation = {
   // fact rather than an invented stem.
   name?: string;
   location_type: string;
-  display_name?: string;
+  label?: string;
   parent?: string;
   // The create form's name precondition (#702, and its review): the NAME the
   // form previewed and locked its name field on. Omitted unless the platform is
@@ -74,7 +74,7 @@ export async function createLocation(body: CreateLocation): Promise<Location> {
 }
 
 export type UpdateLocation = {
-  display_name?: string;
+  label?: string;
   location_type?: string;
 };
 

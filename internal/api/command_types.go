@@ -20,7 +20,7 @@ import (
 type commandTypeBody struct {
 	ID                  string          `json:"id" doc:"The command type's uuid, the stable form of name"`
 	Name                string          `json:"name"`
-	DisplayName         string          `json:"display_name,omitempty"`
+	Label               string          `json:"label,omitempty"`
 	Description         string          `json:"description,omitempty"`
 	ParamsSchema        json.RawMessage `json:"params_schema,omitempty" doc:"A JSON Schema fragment for the invocation params"`
 	SettleWindowSeconds int             `json:"settle_window_seconds" doc:"How long the device is given to actuate before a mismatch is a failed command"`
@@ -31,7 +31,7 @@ type commandTypeBody struct {
 
 func toCommandTypeBody(ct *storage.CommandType) commandTypeBody {
 	b := commandTypeBody{
-		ID: ct.ID, Name: ct.Name, DisplayName: ct.DisplayName, Description: ct.Description,
+		ID: ct.ID, Name: ct.Name, Label: ct.Label, Description: ct.Description,
 		SettleWindowSeconds: ct.SettleWindowSeconds, TargetPropertyType: ct.TargetPropertyType,
 		TargetMetricType: ct.TargetMetricType, Official: ct.Official,
 	}
@@ -56,7 +56,7 @@ type commandTypeNameInput struct {
 type createCommandTypeInput struct {
 	Body struct {
 		Name                string `json:"name" minLength:"1" doc:"The command type name (lowercase kebab)"`
-		DisplayName         string `json:"display_name,omitempty" doc:"A human label"`
+		Label               string `json:"label,omitempty" doc:"A human label"`
 		Description         string `json:"description,omitempty" doc:"What the command does"`
 		ParamsSchema        any    `json:"params_schema,omitempty" doc:"A JSON Schema fragment for the params"`
 		SettleWindowSeconds int    `json:"settle_window_seconds,omitempty" minimum:"0" doc:"The actuation window in seconds: how long the device is given to actuate before a mismatch is a failed command. 0 means settle immediately (a fire-and-forget command, or a settleable one judged at the moment of issue). A duration has no negative, so the schema floors it at 0 rather than accepting a value that behaves as 0 with no refusal to say so."`
@@ -68,7 +68,7 @@ type createCommandTypeInput struct {
 type updateCommandTypeInput struct {
 	Name string `path:"name" doc:"The command type's name"`
 	Body struct {
-		DisplayName         *string `json:"display_name,omitempty" doc:"A human label"`
+		Label               *string `json:"label,omitempty" doc:"A human label"`
 		Description         *string `json:"description,omitempty" doc:"What the command does"`
 		ParamsSchema        any     `json:"params_schema,omitempty" doc:"A JSON Schema fragment (replaces wholesale)"`
 		SettleWindowSeconds *int    `json:"settle_window_seconds,omitempty" minimum:"0" doc:"The actuation window in seconds, floored at 0 (a duration has no negative; 0 means settle immediately)"`
@@ -129,7 +129,7 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 		}
 		ct, err := gw.CreateCommandType(ctx, actorID(ctx), storage.CommandTypeSpec{
 			Name:                in.Body.Name,
-			DisplayName:         in.Body.DisplayName,
+			Label:               in.Body.Label,
 			Description:         in.Body.Description,
 			ParamsSchema:        schema,
 			SettleWindowSeconds: in.Body.SettleWindowSeconds,
@@ -154,7 +154,7 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 			return nil, err
 		}
 		ct, err := gw.UpdateCommandType(ctx, actorID(ctx), in.Name, storage.CommandTypePatch{
-			DisplayName:         in.Body.DisplayName,
+			Label:               in.Body.Label,
 			Description:         in.Body.Description,
 			ParamsSchema:        schema,
 			SettleWindowSeconds: in.Body.SettleWindowSeconds,

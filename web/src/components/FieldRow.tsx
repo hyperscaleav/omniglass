@@ -50,7 +50,7 @@ type FieldRowBase = {
 
 // A field either names one of the identity facts, taking its label from
 // lib/entities, or carries a label of its own. The two are mutually exclusive,
-// so "Name" cannot be typed onto a display_name field: on a create form the two
+// so "Name" cannot be typed onto a label field: on a create form the two
 // sit adjacent, which is where they were swapped twice.
 export type FieldRowProps =
   | (FieldRowBase & { label: string; bind?: never })

@@ -87,7 +87,7 @@ type Gateway interface {
 	// when a hash is given) in one audited transaction. Requires an all-scope
 	// create; a duplicate username is ErrUsernameTaken.
 	CreateHumanPrincipal(ctx context.Context, actorID string, spec HumanSpec, create scope.Set) (*Principal, error)
-	// UpdatePrincipalHuman applies an admin profile update (display name, email,
+	// UpdatePrincipalHuman applies an admin profile update (label, email,
 	// username) to a human principal by id, audited. Requires an all-scope grant; a
 	// non-human target is ErrPrincipalNotHuman, an unknown id ErrPrincipalNotFound,
 	// a username clash ErrUsernameTaken.
@@ -196,7 +196,7 @@ type Gateway interface {
 	// it (#703); an operator's version of the row lives in registry_shadow and
 	// is resolved over it, never stomped by this.
 	UpsertLocationType(ctx context.Context, lt LocationType) error
-	// ListLocationTypes returns every location type, alphabetically by display_name,
+	// ListLocationTypes returns every location type, alphabetically by label,
 	// each resolved over its operator shadow. GetLocationType resolves one.
 	ListLocationTypes(ctx context.Context) ([]LocationType, error)
 	GetLocationType(ctx context.Context, ref string) (*LocationType, error)

@@ -92,11 +92,11 @@ func TestCLIEndToEnd(t *testing.T) {
 	}
 
 	// Self-service profile edit: the generated command updates the owner's own
-	// display name (email is admin-only), and auth me reflects it.
-	if out, code := cli("auth", "update-profile", "--display-name", "Root Admin"); code != 0 || !strings.Contains(out, `"display_name": "Root Admin"`) {
+	// label (email is admin-only), and auth me reflects it.
+	if out, code := cli("auth", "update-profile", "--label", "Root Admin"); code != 0 || !strings.Contains(out, `"label": "Root Admin"`) {
 		t.Fatalf("auth update-profile exit %d:\n%s", code, out)
 	}
-	if out, code := cli("auth", "me"); code != 0 || !strings.Contains(out, `"display_name": "Root Admin"`) {
+	if out, code := cli("auth", "me"); code != 0 || !strings.Contains(out, `"label": "Root Admin"`) {
 		t.Fatalf("auth me after update exit %d:\n%s", code, out)
 	}
 

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/db"
+	"github.com/hyperscaleav/omniglass/internal/migrate"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
@@ -36,6 +37,16 @@ func backfillUpSQL(t *testing.T) string {
 // change nothing.
 func TestBackfillIdempotent(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
+	// Stand the database just below #613's rename. The migration under test
+	// names `display_name`, which is what the column is called for every
+	// version from its own up to that one, so at HEAD its SQL text refers to a
+	// column that no longer exists and could not be re-run at all. Rolling back
+	// three migrations is the smallest state in which the property under test
+	// (this backfill is a no-op on an already-backfilled database, with the
+	// floor's NOT NULL and narrowed kind CHECK active) is still expressible.
+	if err := migrate.RollbackBelow(dsn, "20260814100000"); err != nil {
+		t.Fatalf("roll back below the label rename: %v", err)
+	}
 	ctx := context.Background()
 	conn := connectDSN(t, dsn)
 	up := backfillUpSQL(t)

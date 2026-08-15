@@ -184,7 +184,7 @@ func TestFixturesLetThePlatformNameTheEstate(t *testing.T) {
 }
 
 // TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint is the label half of the
-// same guard. A set display_name takes the pen from the platform (#682), so a
+// same guard. A set label takes the pen from the platform (#682), so a
 // fixture that sets one everywhere demonstrates the opposite of the label rules.
 // The survivors are pinned by key, each for a stated reason, so setting one on a
 // row that could render its own is a deliberate edit here rather than a quiet
@@ -200,9 +200,9 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 	// words are the only thing that says what the box is.
 	wantComponentLabels := map[string]bool{"power": true}
 	for _, c := range doc.Components {
-		if (c.DisplayName != "") != wantComponentLabels[c.Key] {
-			t.Errorf("component %q display_name = %q, want set = %v (everything else lets the shipped component rule render)",
-				c.Key, c.DisplayName, wantComponentLabels[c.Key])
+		if (c.Label != "") != wantComponentLabels[c.Key] {
+			t.Errorf("component %q label = %q, want set = %v (everything else lets the shipped component rule render)",
+				c.Key, c.Label, wantComponentLabels[c.Key])
 		}
 	}
 
@@ -215,8 +215,8 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 	// instead, in TestSeededLabelsRenderFromTheirRules: releasing a pin leaves
 	// nothing behind unless the rendered value is asserted in its place.
 	for _, s := range doc.Systems {
-		if s.DisplayName != "" {
-			t.Errorf("system %q display_name = %q, want none (the shipped system rule renders it, ordinal and all)", s.Key, s.DisplayName)
+		if s.Label != "" {
+			t.Errorf("system %q label = %q, want none (the shipped system rule renders it, ordinal and all)", s.Key, s.Label)
 		}
 	}
 
@@ -244,9 +244,9 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 		"huddle": true, "briefing": true, "hall": true,
 	}
 	for _, l := range doc.Locations {
-		if (l.DisplayName != "") != wantLocationLabels[l.Key] {
-			t.Errorf("location %q display_name = %q, want set = %v (everything else lets the shipped location rule render)",
-				l.Key, l.DisplayName, wantLocationLabels[l.Key])
+		if (l.Label != "") != wantLocationLabels[l.Key] {
+			t.Errorf("location %q label = %q, want set = %v (everything else lets the shipped location rule render)",
+				l.Key, l.Label, wantLocationLabels[l.Key])
 		}
 	}
 }
@@ -829,7 +829,7 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		}
 		var label string
 		var platform bool
-		err := conn.QueryRow(ctx, `select coalesce(display_name, ''), display_name_generated from `+tc.table+`
+		err := conn.QueryRow(ctx, `select label, label_generated from `+tc.table+`
 			where name = $1 and `+placeCol+` = (select id from location where name = $2)`,
 			tc.name, tc.place).Scan(&label, &platform)
 		if err != nil {
@@ -840,7 +840,7 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 			t.Errorf("%s %q under %q: label = %q, want %q", tc.table, tc.name, tc.place, label, tc.label)
 		}
 		if platform != tc.platform {
-			t.Errorf("%s %q under %q: display_name_generated = %v, want %v", tc.table, tc.name, tc.place, platform, tc.platform)
+			t.Errorf("%s %q under %q: label_generated = %v, want %v", tc.table, tc.name, tc.place, platform, tc.platform)
 		}
 	}
 
@@ -862,7 +862,7 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		var label string
 		var platform bool
 		if err := conn.QueryRow(ctx,
-			`select coalesce(display_name, ''), display_name_generated from location where name = $1`,
+			`select label, label_generated from location where name = $1`,
 			tc.name).Scan(&label, &platform); err != nil {
 			t.Errorf("no location named %q: %v", tc.name, err)
 			continue
@@ -960,7 +960,7 @@ func TestAFloorIsNamedForItsDesignation(t *testing.T) {
 	ctx, conn, _ := seededEstate(t)
 
 	rows, err := conn.Query(ctx, `
-		select p.name, f.name, coalesce(f.display_name, ''), f.name_generated, f.ordinal, f.display_name_generated
+		select p.name, f.name, coalesce(f.label, ''), f.name_generated, f.ordinal, f.label_generated
 		from location f join location p on p.id = f.parent_id
 		where f.location_type = (select id from location_type where name = 'floor')
 		order by p.name`)

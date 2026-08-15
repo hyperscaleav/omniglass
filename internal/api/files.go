@@ -46,7 +46,7 @@ type fileIDInput struct {
 
 type createFileInput struct {
 	Body struct {
-		Name        string `json:"name" minLength:"1" doc:"The file's display name (a label, no path separators)"`
+		Name        string `json:"name" minLength:"1" doc:"The file's filename, which is already the label an operator reads (no path separators)"`
 		ContentType string `json:"content_type" minLength:"1" doc:"The MIME type used to serve the file"`
 		Content     string `json:"content" doc:"The file bytes, base64-encoded"`
 		Sensitive   *bool  `json:"sensitive,omitempty" doc:"Admin-only visibility; defaults false. Setting true requires the admin tier"`

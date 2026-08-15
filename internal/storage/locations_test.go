@@ -11,25 +11,25 @@ import (
 // TestLocationTypeRegistry is the round-trip for the location_type registry: an
 // upsert installs a type, a second upsert by the same id updates it (idempotent,
 // the boot-seed contract), and ListLocationTypes returns them alphabetically by
-// display_name.
+// label.
 func TestLocationTypeRegistry(t *testing.T) {
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{
-		Name: "building", Official: true, DisplayName: "Building", Icon: "building",
+		Name: "building", Official: true, Label: "Building", Icon: "building",
 	}); err != nil {
 		t.Fatalf("upsert building: %v", err)
 	}
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{
-		Name: "campus", Official: true, DisplayName: "Campus", Icon: "landmark",
+		Name: "campus", Official: true, Label: "Campus", Icon: "landmark",
 	}); err != nil {
 		t.Fatalf("upsert campus: %v", err)
 	}
-	// Re-upsert building with a new display_name and icon: idempotent update, not
+	// Re-upsert building with a new label and icon: idempotent update, not
 	// a dup, and the icon is part of what the update carries.
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{
-		Name: "building", Official: true, DisplayName: "Bldg", Icon: "building-2",
+		Name: "building", Official: true, Label: "Bldg", Icon: "building-2",
 	}); err != nil {
 		t.Fatalf("re-upsert building: %v", err)
 	}
@@ -41,13 +41,13 @@ func TestLocationTypeRegistry(t *testing.T) {
 	if len(types) != 2 {
 		t.Fatalf("got %d types, want 2: %+v", len(types), types)
 	}
-	// Ordered alphabetically by display_name: "Bldg" (building) before "Campus"
+	// Ordered alphabetically by label: "Bldg" (building) before "Campus"
 	// (campus), not insertion order and not id order.
 	if types[0].Name != "building" || types[1].Name != "campus" {
 		t.Errorf("type order = %s,%s, want building,campus", types[0].Name, types[1].Name)
 	}
-	if types[0].DisplayName != "Bldg" {
-		t.Errorf("building display_name = %q, want Bldg (the update took)", types[0].DisplayName)
+	if types[0].Label != "Bldg" {
+		t.Errorf("building label = %q, want Bldg (the update took)", types[0].Label)
 	}
 	// The icon round-trips, and the re-upsert updated it in place.
 	if types[0].Icon != "building-2" {
@@ -60,12 +60,12 @@ func TestLocationTypeRegistry(t *testing.T) {
 	// allowed_parent_types round-trips: a bare upsert (no set given) defaults to
 	// an empty (non-nil) slice, not SQL null, and a populated set persists.
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{
-		Name: "wing", Official: true, DisplayName: "Wing", Icon: "layers",
+		Name: "wing", Official: true, Label: "Wing", Icon: "layers",
 	}); err != nil {
 		t.Fatalf("upsert wing (no allowed_parent_types): %v", err)
 	}
 	if err := gw.UpsertLocationType(ctx, storage.LocationType{
-		Name: "room", Official: true, DisplayName: "Room", Icon: "door-open",
+		Name: "room", Official: true, Label: "Room", Icon: "door-open",
 		AllowedParentTypes: []string{"wing", storage.RootPlacement},
 	}); err != nil {
 		t.Fatalf("upsert room (with allowed_parent_types): %v", err)

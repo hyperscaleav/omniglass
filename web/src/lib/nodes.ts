@@ -9,7 +9,7 @@ import type { FilterKey } from "./predicate";
 // token from :enroll, which is returned to the caller and never cached or logged.
 export type Node = {
   name: string;
-  display_name?: string;
+  label?: string;
   description?: string;
   location?: string;
   enrolled: boolean;
@@ -21,9 +21,9 @@ export type Node = {
   tags: Record<string, string>;
 };
 
-// nodeLabel is the node's human label: its display_name, falling back to the
+// nodeLabel is the node's human label: its label, falling back to the
 // name (the key/estate address) when unset. Used as the blade title and the list
-// row label, mirroring how component/system/location present name vs display_name.
+// row label, mirroring how component/system/location present name vs label.
 // nodeLabel is entityLabel, kept as a named export because the node columns and
 // blade title read better with it. The rule itself lives in one place.
 export function nodeLabel(n: Node): string {
@@ -49,7 +49,7 @@ export async function getNode(name: string): Promise<Node> {
   return { ...data, tags: data?.effective_tags ?? {} } as Node;
 }
 
-export type CreateNode = { name: string; display_name?: string; description?: string; location?: string };
+export type CreateNode = { name: string; label?: string; description?: string; location?: string };
 
 export async function createNode(body: CreateNode): Promise<Node> {
   const { data, error } = await api.POST("/nodes", { body });
@@ -59,7 +59,7 @@ export async function createNode(body: CreateNode): Promise<Node> {
 
 // The node update patch: only the mutable fields (name is the immutable key). A
 // field left undefined is unchanged; location set to "" clears the placement.
-export type NodePatch = { display_name?: string; description?: string; location?: string };
+export type NodePatch = { label?: string; description?: string; location?: string };
 
 export async function updateNode(name: string, body: NodePatch): Promise<Node> {
   const { data, error } = await api.PATCH("/nodes/{name}", { params: { path: { name } }, body });

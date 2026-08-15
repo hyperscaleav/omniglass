@@ -256,7 +256,7 @@ func TestGetNodeRefusesADottedAddress(t *testing.T) {
 	}
 }
 
-// TestNodeIdentityAndEdit covers the N1 identity fields (display_name, location)
+// TestNodeIdentityAndEdit covers the N1 identity fields (label, location)
 // and the UpdateNode patch path: nil-unchanged semantics, location set / change /
 // clear, an unknown location rejected, name immutability, and the location FK's
 // ON DELETE SET NULL. See .claude/superpowers/specs/2026-07-19-node-identity-and-edit-design.md.
@@ -285,25 +285,25 @@ func TestNodeIdentityAndEdit(t *testing.T) {
 		t.Fatalf("create other location: %v", err)
 	}
 
-	// Create carries display_name and location.
+	// Create carries label and location.
 	n, err := gw.CreateNode(ctx, "", storage.NodeSpec{
-		Name: "edge-hq", DisplayName: "HQ Closet Node", Description: "rack 3", LocationName: &closet.Name,
+		Name: "edge-hq", Label: "HQ Closet Node", Description: "rack 3", LocationName: &closet.Name,
 	}, all, all)
 	if err != nil {
 		t.Fatalf("create node: %v", err)
 	}
-	if n.DisplayName != "HQ Closet Node" || n.LocationName == nil || *n.LocationName != "hq-closet" {
-		t.Fatalf("fresh node identity: got display=%q location=%v", n.DisplayName, n.LocationName)
+	if n.Label != "HQ Closet Node" || n.LocationName == nil || *n.LocationName != "hq-closet" {
+		t.Fatalf("fresh node identity: got display=%q location=%v", n.Label, n.LocationName)
 	}
 
 	str := func(s string) *string { return &s }
 
-	// Patch display_name only: description and location are untouched (nil = unchanged).
-	up, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{DisplayName: str("HQ Node")}, all, all, all)
+	// Patch label only: description and location are untouched (nil = unchanged).
+	up, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{Label: str("HQ Node")}, all, all, all)
 	if err != nil {
-		t.Fatalf("update display_name: %v", err)
+		t.Fatalf("update label: %v", err)
 	}
-	if up.DisplayName != "HQ Node" || up.Description != "rack 3" || up.LocationName == nil || *up.LocationName != "hq-closet" {
+	if up.Label != "HQ Node" || up.Description != "rack 3" || up.LocationName == nil || *up.LocationName != "hq-closet" {
 		t.Fatalf("patch display only: got %+v", up)
 	}
 	if up.Name != "edge-hq" {
@@ -334,10 +334,10 @@ func TestNodeIdentityAndEdit(t *testing.T) {
 	}
 
 	// Estate-wide: an update without all-scope is forbidden; an unknown node is not found.
-	if _, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{DisplayName: str("x")}, scope.Set{}, scope.Set{}, all); !errors.Is(err, storage.ErrNodeForbidden) {
+	if _, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{Label: str("x")}, scope.Set{}, scope.Set{}, all); !errors.Is(err, storage.ErrNodeForbidden) {
 		t.Fatalf("update without all-scope: want ErrNodeForbidden, got %v", err)
 	}
-	if _, err := gw.UpdateNode(ctx, "", "ghost", storage.NodePatch{DisplayName: str("x")}, all, all, all); !errors.Is(err, storage.ErrNodeNotFound) {
+	if _, err := gw.UpdateNode(ctx, "", "ghost", storage.NodePatch{Label: str("x")}, all, all, all); !errors.Is(err, storage.ErrNodeNotFound) {
 		t.Fatalf("update unknown node: want ErrNodeNotFound, got %v", err)
 	}
 

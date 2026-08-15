@@ -320,7 +320,7 @@ function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
       <FieldRow label="Type">
         <select class="select select-bordered w-full" value={typeId()} onChange={(e) => { setTypeId(e.currentTarget.value); setFields({}); }}>
           <option value="" disabled>Choose a type…</option>
-          <For each={types.data}>{(t) => <option value={t.name}>{t.display_name}</option>}</For>
+          <For each={types.data}>{(t) => <option value={t.name}>{t.label}</option>}</For>
         </select>
       </FieldRow>
       <div class="grid grid-cols-2 gap-3">

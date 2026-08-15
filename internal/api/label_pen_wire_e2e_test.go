@@ -16,16 +16,16 @@ import (
 
 // The LABEL's pen on the wire (#683).
 //
-// Slice 2 (#682) stored display_name_generated and stamped it on every write,
+// Slice 2 (#682) stored label_generated and stamped it on every write,
 // but never put it on a read body, so nothing outside the database could tell a
 // label the platform rendered from one an operator typed. The console's
-// hasDisplayName is the reader that needs it: "the label differs from the name"
+// hasLabel is the reader that needs it: "the label differs from the name"
 // was the same question as "a human chose this" only while every label was
 // operator-typed, and it stopped being the same question the moment a rule could
 // render one.
 //
 // It is READ-ONLY on the wire, and deliberately: an operator claims the pen by
-// writing display_name and returns it by clearing display_name, never by
+// writing label and returns it by clearing label, never by
 // asserting the boolean. Two ways to say one thing is two ways for them to
 // disagree, which is the same reason name_generated is read-only beside
 // :rename.
@@ -33,9 +33,9 @@ import (
 // pen is the read shape shared by all three entity kinds: the label, and who
 // owns it.
 type pen struct {
-	Name                 string `json:"name"`
-	DisplayName          string `json:"display_name"`
-	DisplayNameGenerated bool   `json:"display_name_generated"`
+	Name           string `json:"name"`
+	Label          string `json:"label"`
+	LabelGenerated bool   `json:"label_generated"`
 }
 
 func penHarness(t *testing.T) (*apiClient, string, func()) {
@@ -93,7 +93,7 @@ func TestLabelPenOnTheWire(t *testing.T) {
 			kind:   "component",
 			path:   "/components",
 			blank:  map[string]any{"name": "pen-blank", "product": "samsung-qm55"},
-			typed:  map[string]any{"name": "pen-typed", "display_name": "Operator Typed", "product": "samsung-qm55"},
+			typed:  map[string]any{"name": "pen-typed", "label": "Operator Typed", "product": "samsung-qm55"},
 			addr:   "/components/pen-typed",
 			blankA: "/components/pen-blank",
 		},
@@ -101,7 +101,7 @@ func TestLabelPenOnTheWire(t *testing.T) {
 			kind:   "system",
 			path:   "/systems",
 			blank:  map[string]any{"name": "pen-blank-sys"},
-			typed:  map[string]any{"name": "pen-typed-sys", "display_name": "Operator Typed"},
+			typed:  map[string]any{"name": "pen-typed-sys", "label": "Operator Typed"},
 			addr:   "/systems/pen-typed-sys",
 			blankA: "/systems/pen-blank-sys",
 		},
@@ -109,7 +109,7 @@ func TestLabelPenOnTheWire(t *testing.T) {
 			kind:   "location",
 			path:   "/locations",
 			blank:  map[string]any{"name": "pen-blank-loc", "location_type": "campus"},
-			typed:  map[string]any{"name": "pen-typed-loc", "location_type": "campus", "display_name": "Operator Typed"},
+			typed:  map[string]any{"name": "pen-typed-loc", "location_type": "campus", "label": "Operator Typed"},
 			addr:   "/locations/pen-typed-loc",
 			blankA: "/locations/pen-blank-loc",
 		},
@@ -119,32 +119,32 @@ func TestLabelPenOnTheWire(t *testing.T) {
 		t.Run(tc.kind, func(t *testing.T) {
 			// Created with no label: the platform holds the pen, and says so.
 			blank := decodePen(t, tc.kind+" create blank", c.do(tok, http.MethodPost, tc.path, tc.blank, http.StatusCreated))
-			if !blank.DisplayNameGenerated {
-				t.Fatalf("%s created with no label = %+v, want display_name_generated=true", tc.kind, blank)
+			if !blank.LabelGenerated {
+				t.Fatalf("%s created with no label = %+v, want label_generated=true", tc.kind, blank)
 			}
 
 			// Created with a label an operator typed: the operator holds it.
 			typed := decodePen(t, tc.kind+" create typed", c.do(tok, http.MethodPost, tc.path, tc.typed, http.StatusCreated))
-			if typed.DisplayNameGenerated {
-				t.Fatalf("%s created with a typed label = %+v, want display_name_generated=false", tc.kind, typed)
+			if typed.LabelGenerated {
+				t.Fatalf("%s created with a typed label = %+v, want label_generated=false", tc.kind, typed)
 			}
 
 			// The read side reports the same, so it survives a round trip
 			// through the API rather than only riding the create response.
 			got := decodePen(t, tc.kind+" get", c.do(tok, http.MethodGet, tc.addr, nil, http.StatusOK))
-			if got.DisplayNameGenerated {
-				t.Fatalf("GET %s = %+v, want display_name_generated=false on the read side too", tc.addr, got)
+			if got.LabelGenerated {
+				t.Fatalf("GET %s = %+v, want label_generated=false on the read side too", tc.addr, got)
 			}
 			back := decodePen(t, tc.kind+" get blank", c.do(tok, http.MethodGet, tc.blankA, nil, http.StatusOK))
-			if !back.DisplayNameGenerated {
-				t.Fatalf("GET %s = %+v, want display_name_generated=true on the read side too", tc.blankA, back)
+			if !back.LabelGenerated {
+				t.Fatalf("GET %s = %+v, want label_generated=true on the read side too", tc.blankA, back)
 			}
 
 			// Clearing the field hands the pen back, which is the whole reason
 			// the console must read the pen rather than compare two strings.
-			cleared := decodePen(t, tc.kind+" clear", c.do(tok, http.MethodPatch, tc.addr, map[string]any{"display_name": ""}, http.StatusOK))
-			if !cleared.DisplayNameGenerated {
-				t.Fatalf("%s after clearing the label = %+v, want display_name_generated=true", tc.kind, cleared)
+			cleared := decodePen(t, tc.kind+" clear", c.do(tok, http.MethodPatch, tc.addr, map[string]any{"label": ""}, http.StatusOK))
+			if !cleared.LabelGenerated {
+				t.Fatalf("%s after clearing the label = %+v, want label_generated=true", tc.kind, cleared)
 			}
 		})
 	}
@@ -159,5 +159,5 @@ func TestLabelPenIsNotWritable(t *testing.T) {
 
 	c.do(tok, http.MethodPost, "/components", map[string]any{"name": "pen-ro", "product": "samsung-qm55"}, http.StatusCreated)
 	c.do(tok, http.MethodPatch, "/components/pen-ro",
-		map[string]any{"display_name_generated": false}, http.StatusUnprocessableEntity)
+		map[string]any{"label_generated": false}, http.StatusUnprocessableEntity)
 }

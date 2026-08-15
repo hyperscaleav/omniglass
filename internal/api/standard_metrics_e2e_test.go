@@ -53,7 +53,7 @@ func TestStandardMetricsAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	c.do(ownerTok, http.MethodPost, "/standards", map[string]any{
-		"name": "acme-room", "display_name": "Acme Room",
+		"name": "acme-room", "label": "Acme Room",
 	}, http.StatusCreated)
 
 	// PUT declares the line. The metric must already exist in the catalog

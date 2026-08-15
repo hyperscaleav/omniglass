@@ -11,20 +11,20 @@ import { ME_KEY, type Me } from "../lib/auth";
 // Official types are read-only; a custom type is writable only when the caller holds
 // command_type:create / command_type:update. Data is seeded into the query cache.
 const seed: CommandTypeRow[] = [
-  { name: "set-input", display_name: "Set input", target_property_type: "video-input", settle_window_seconds: 15, official: true },
-  { name: "reboot", display_name: "Reboot", settle_window_seconds: 0, official: true },
-  { name: "set-volume", display_name: "Set volume", target_property_type: "audio-level", settle_window_seconds: 5, official: false },
+  { name: "set-input", label: "Set input", target_property_type: "video-input", settle_window_seconds: 15, official: true },
+  { name: "reboot", label: "Reboot", settle_window_seconds: 0, official: true },
+  { name: "set-volume", label: "Set volume", target_property_type: "audio-level", settle_window_seconds: 5, official: false },
   // The other arm of the exclusive arc (#596): a metric-targeted type.
-  { name: "set-gain", display_name: "Set gain", target_metric_type: "mic-gain", settle_window_seconds: 5, official: false },
+  { name: "set-gain", label: "Set gain", target_metric_type: "mic-gain", settle_window_seconds: 5, official: false },
 ];
 
 // The target picker draws its menu from both classifier catalogs.
 const properties: PropertyRow[] = [
-  { name: "video-input", data_type: "string", display_name: "Video input", official: true },
-  { name: "audio-level", data_type: "string", display_name: "Audio level", official: false },
+  { name: "video-input", data_type: "string", label: "Video input", official: true },
+  { name: "audio-level", data_type: "string", label: "Audio level", official: false },
 ];
 const metrics: MetricRow[] = [
-  { name: "mic-gain", data_type: "float", display_name: "Mic gain", official: false },
+  { name: "mic-gain", data_type: "float", label: "Mic gain", official: false },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -60,7 +60,7 @@ describe("Command Types page", () => {
   // One identity column carries both operator-facing identities, so the separate
   // label column is gone. The header is the one word every list uses, even though
   // this catalog's names may be dotted (set-input, icmp-rtt-avg) rather than kebab.
-  it("carries the display name and the name in a single Name column", () => {
+  it("carries the label and the name in a single Name column", () => {
     mount();
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent?.trim());
     expect(headers).toContain("Name");

@@ -102,7 +102,7 @@ test.describe("operator console", () => {
     // "device-n" here and the row then landed "device-1".
     expect(drafted).not.toContain("-n");
 
-    const labelField = page.getByLabel("Display name", { exact: true });
+    const labelField = page.getByLabel("Label", { exact: true });
     await expect(labelField).not.toBeEditable();
     await expect(labelField).toBeEnabled();
     await expect(labelField).not.toHaveValue("");
@@ -112,7 +112,7 @@ test.describe("operator console", () => {
     // never hover-only, and focusing a locked field does not claim its pen: both
     // fields are still locked on the platform's answer after the focus above.
     await expect(page.getByRole("button", { name: "Override the name" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Override the display name" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Override the label" })).toBeVisible();
     await expect(nameField).toHaveValue(drafted);
 
     await page.getByRole("button", { name: /create component/i }).click();

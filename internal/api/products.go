@@ -13,11 +13,11 @@ import (
 // classification catalogs together: a vendor (who makes it), a driver (what
 // talks to it), a kind, the component_type it is classified under (the
 // taxonomy above product), an optional icon override, and an optional parent
-// product. The registry lists alphabetically by display_name.
+// product. The registry lists alphabetically by label.
 type productBody struct {
 	ID              string `json:"id" doc:"The product's uuid, the stable handle that survives a rename"`
 	Name            string `json:"name" doc:"The name an operator reads and types; renameable"`
-	DisplayName     string `json:"display_name"`
+	Label           string `json:"label"`
 	Vendor          string `json:"vendor,omitempty" doc:"The vendor's handle"`
 	VendorID        string `json:"vendor_id,omitempty" doc:"The vendor's uuid; the stable form of vendor"`
 	Driver          string `json:"driver,omitempty" doc:"The driver's handle"`
@@ -64,7 +64,7 @@ func emptyPtrToNil(p *string) *string {
 
 func toProductBody(m *storage.Product) productBody {
 	return productBody{
-		ID: m.ID, Name: m.Name, DisplayName: m.DisplayName,
+		ID: m.ID, Name: m.Name, Label: m.Label,
 		Vendor: derefStr(m.VendorName), VendorID: derefStr(m.VendorID),
 		Driver: derefStr(m.DriverName), DriverID: derefStr(m.DriverID),
 		Kind:            m.Kind,
@@ -90,7 +90,7 @@ type productPathInput struct {
 type createProductInput struct {
 	Body struct {
 		Name            string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name; renameable"`
-		DisplayName     string `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
+		Label           string `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
 		VendorID        string `json:"vendor_id,omitempty" doc:"The vendor, by handle or uuid"`
 		DriverID        string `json:"driver_id,omitempty" doc:"The driver that talks to it, by handle or uuid"`
 		Kind            string `json:"kind" enum:"device,app,service" doc:"What class of thing the product is. vm is retired (folded into app); required, no default, so every product states its class explicitly."`
@@ -104,7 +104,7 @@ type createProductInput struct {
 type updateProductInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		DisplayName     *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		Label           *string `json:"label,omitempty" doc:"A new operator-facing label"`
 		VendorID        *string `json:"vendor_id,omitempty" doc:"A new vendor, by handle or uuid"`
 		DriverID        *string `json:"driver_id,omitempty" doc:"A new driver, by handle or uuid"`
 		Kind            *string `json:"kind,omitempty" enum:"device,app,service" doc:"A new product class"`
@@ -155,7 +155,7 @@ func registerProductRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/products",
 		Summary:     "List products",
-		Description: "Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
+		Description: "Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.",
 	}, "product", "read"), func(ctx context.Context, _ *struct{}) (*listProductsOutput, error) {
 		items, err := gw.ListProducts(ctx)
 		if err != nil {
@@ -181,7 +181,7 @@ func registerProductRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 			return nil, huma.Error422UnprocessableEntity("kind must be one of device, app, service")
 		}
 		m, err := gw.CreateProduct(ctx, actorID(ctx), storage.Product{
-			Name: in.Body.Name, DisplayName: in.Body.DisplayName,
+			Name: in.Body.Name, Label: in.Body.Label,
 			VendorID: ptrOrNil(in.Body.VendorID), DriverID: ptrOrNil(in.Body.DriverID),
 			Kind: in.Body.Kind, ComponentType: in.Body.ComponentType, Icon: ptrOrNil(in.Body.Icon),
 			LabelRule:       ptrOrNil(in.Body.LabelRule),
@@ -212,14 +212,14 @@ func registerProductRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPatch,
 		Path:        "/products/{id}",
 		Summary:     "Update a product",
-		Description: "Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.",
+		Description: "Patches a custom product's label, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.",
 	}, "product", "update"), func(ctx context.Context, in *updateProductInput) (*productOutput, error) {
 		if in.Body.Kind != nil && !validProductKind(*in.Body.Kind) {
 			return nil, huma.Error422UnprocessableEntity("kind must be one of device, app, service")
 		}
 		m, err := gw.UpdateProduct(ctx, actorID(ctx), in.ID, storage.ProductPatch{
-			DisplayName: in.Body.DisplayName,
-			VendorID:    emptyPtrToNil(in.Body.VendorID), DriverID: emptyPtrToNil(in.Body.DriverID),
+			Label:    in.Body.Label,
+			VendorID: emptyPtrToNil(in.Body.VendorID), DriverID: emptyPtrToNil(in.Body.DriverID),
 			Kind: in.Body.Kind, ComponentType: in.Body.ComponentType, Icon: in.Body.Icon,
 			LabelRule:       in.Body.LabelRule,
 			ParentProductID: emptyPtrToNil(in.Body.ParentProductID),

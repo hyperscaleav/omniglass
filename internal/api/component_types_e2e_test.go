@@ -18,7 +18,7 @@ import (
 type componentTypeWire struct {
 	ID                    string   `json:"id"`
 	Name                  string   `json:"name"`
-	DisplayName           string   `json:"display_name"`
+	Label                 string   `json:"label"`
 	Stem                  string   `json:"stem"`
 	Icon                  string   `json:"icon"`
 	ResolvedIcon          string   `json:"resolved_icon"`
@@ -87,7 +87,7 @@ func TestComponentTypesAPI(t *testing.T) {
 	}
 
 	// A root type carries no parent link; a child carries both forms (the
-	// stable id and the display name), and it is official (seeded reference
+	// stable id and the label), and it is official (seeded reference
 	// data, unlike location_type's editable example content).
 	mic := find(rows, "mic")
 	if mic.ParentID != "" || mic.Parent != "" {
@@ -118,12 +118,12 @@ func TestComponentTypesAPI(t *testing.T) {
 
 	// The viewer cannot create (403, capability fast-reject).
 	c.do(viewerTok, http.MethodPost, "/component-types",
-		map[string]any{"name": "nope", "display_name": "Nope"}, http.StatusForbidden)
+		map[string]any{"name": "nope", "label": "Nope"}, http.StatusForbidden)
 
 	// Admin (owner) creates a custom child under mic.
 	var created componentTypeWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/component-types", map[string]any{
-		"name": "custom-mic", "display_name": "Custom Mic", "parent_id": "mic",
+		"name": "custom-mic", "label": "Custom Mic", "parent_id": "mic",
 	}, http.StatusCreated), &created); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
@@ -141,11 +141,11 @@ func TestComponentTypesAPI(t *testing.T) {
 
 	// An unknown parent is a 422.
 	c.do(ownerTok, http.MethodPost, "/component-types",
-		map[string]any{"name": "orphan", "display_name": "Orphan", "parent_id": "no-such-type"}, http.StatusUnprocessableEntity)
+		map[string]any{"name": "orphan", "label": "Orphan", "parent_id": "no-such-type"}, http.StatusUnprocessableEntity)
 
 	// The custom row is mutable.
 	c.do(ownerTok, http.MethodPatch, "/component-types/custom-mic",
-		map[string]any{"display_name": "Custom Mic Pro"}, http.StatusOK)
+		map[string]any{"label": "Custom Mic Pro"}, http.StatusOK)
 
 	// The seeded official row (mic) is not writable but is no longer a dead
 	// end: a patch forks it (#655, ADR-0095), covered end to end by
@@ -183,13 +183,13 @@ func TestComponentTypeStemRejectsBadNames(t *testing.T) {
 
 	// A stem with a space and an uppercase letter is refused on create.
 	c.do(ownerTok, http.MethodPost, "/component-types",
-		map[string]any{"name": "stem-bad-create", "display_name": "Stem Bad Create", "stem": "Bad Stem"},
+		map[string]any{"name": "stem-bad-create", "label": "Stem Bad Create", "stem": "Bad Stem"},
 		http.StatusUnprocessableEntity)
 
 	// A valid stem still works.
 	var created componentTypeWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/component-types", map[string]any{
-		"name": "stem-ok", "display_name": "Stem OK", "stem": "good-stem",
+		"name": "stem-ok", "label": "Stem OK", "stem": "good-stem",
 	}, http.StatusCreated), &created); err != nil {
 		t.Fatalf("decode create with a valid stem: %v", err)
 	}
@@ -253,9 +253,9 @@ func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
 	// a row they could not have written either.
 	viewerTok := principalWithGrants(t, ctx, dsn, "fork-viewer", []grant{{role: "viewer", scopeKind: "all"}})
 	c.do(viewerTok, http.MethodPatch, "/component-types/mic",
-		map[string]any{"display_name": "Viewer Mic"}, http.StatusForbidden)
+		map[string]any{"label": "Viewer Mic"}, http.StatusForbidden)
 	c.do(viewerTok, http.MethodPost, "/component-types/mic:restore", nil, http.StatusForbidden)
-	if again := find(ownerTok, "mic"); again.Forked || again.DisplayName != shipped.DisplayName {
+	if again := find(ownerTok, "mic"); again.Forked || again.Label != shipped.Label {
 		t.Fatalf("mic = %+v after the refused viewer patch, want untouched", again)
 	}
 
@@ -263,7 +263,7 @@ func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
 	// forked=true beside a still-true official.
 	var forked componentTypeWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPatch, "/component-types/mic",
-		map[string]any{"display_name": "House Microphone", "abbrev": "hm"}, http.StatusOK), &forked); err != nil {
+		map[string]any{"label": "House Microphone", "abbrev": "hm"}, http.StatusOK), &forked); err != nil {
 		t.Fatalf("decode fork: %v", err)
 	}
 	if forked.ID != shipped.ID {
@@ -272,10 +272,10 @@ func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
 	if !forked.Official || !forked.Forked {
 		t.Fatalf("forked = official:%v forked:%v, want both true (yours, overriding shipped)", forked.Official, forked.Forked)
 	}
-	if forked.DisplayName != "House Microphone" || forked.Abbrev != "hm" {
-		t.Fatalf("forked = %+v, want the operator's display_name and abbrev", forked)
+	if forked.Label != "House Microphone" || forked.Abbrev != "hm" {
+		t.Fatalf("forked = %+v, want the operator's label and abbrev", forked)
 	}
-	if listed := find(ownerTok, "mic"); listed.DisplayName != "House Microphone" || !listed.Forked {
+	if listed := find(ownerTok, "mic"); listed.Label != "House Microphone" || !listed.Forked {
 		t.Fatalf("relisted mic = %+v, want the forked values", listed)
 	}
 
@@ -286,7 +286,7 @@ func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
 		map[string]any{"icon": "mic-house"}, http.StatusOK), &byUUID); err != nil {
 		t.Fatalf("decode fork by uuid: %v", err)
 	}
-	if byUUID.ID != shipped.ID || byUUID.DisplayName != "House Microphone" || byUUID.Icon != "mic-house" {
+	if byUUID.ID != shipped.ID || byUUID.Label != "House Microphone" || byUUID.Icon != "mic-house" {
 		t.Fatalf("patch by uuid = %+v, want the same row carrying both edits", byUUID)
 	}
 
@@ -298,10 +298,10 @@ func TestComponentTypeForkAndRestoreAPI(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/component-types/mic:restore", nil, http.StatusOK), &restored); err != nil {
 		t.Fatalf("decode restore: %v", err)
 	}
-	if restored.Forked || restored.DisplayName != shipped.DisplayName || restored.Abbrev != shipped.Abbrev || restored.Icon != shipped.Icon {
+	if restored.Forked || restored.Label != shipped.Label || restored.Abbrev != shipped.Abbrev || restored.Icon != shipped.Icon {
 		t.Fatalf("restored = %+v, want the shipped row %+v unforked", restored, shipped)
 	}
-	if listed := find(ownerTok, "mic"); listed.Forked || listed.DisplayName != shipped.DisplayName {
+	if listed := find(ownerTok, "mic"); listed.Forked || listed.Label != shipped.Label {
 		t.Fatalf("relisted mic after restore = %+v, want the shipped values", listed)
 	}
 

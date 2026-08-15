@@ -61,7 +61,7 @@ func TestSystemAPI(t *testing.T) {
 		}
 		return s.Standard
 	}
-	c.do(ownerTok, http.MethodPatch, "/systems/av", map[string]any{"display_name": "AV"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/systems/av", map[string]any{"label": "AV"}, http.StatusOK)
 	if got := standardOf("av"); got != "meeting-room" {
 		t.Fatalf("omitted standard = %q, want meeting-room kept", got)
 	}
@@ -98,10 +98,10 @@ func TestSystemAPI(t *testing.T) {
 	}
 	c.do(viewerTok, http.MethodGet, "/systems/lab", nil, http.StatusNotFound)
 	c.do(viewerTok, http.MethodGet, "/systems/av-sub", nil, http.StatusOK)
-	c.do(viewerTok, http.MethodPatch, "/systems/av-sub", map[string]any{"display_name": "nope"}, http.StatusForbidden)
+	c.do(viewerTok, http.MethodPatch, "/systems/av-sub", map[string]any{"label": "nope"}, http.StatusForbidden)
 
 	// Owner CRUD: patch, delete-occupied 409, leaf delete, then 404.
-	c.do(ownerTok, http.MethodPatch, "/systems/av-sub", map[string]any{"display_name": "Subsystem"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/systems/av-sub", map[string]any{"label": "Subsystem"}, http.StatusOK)
 	c.do(ownerTok, http.MethodDelete, "/systems/av", nil, http.StatusConflict)
 	c.do(ownerTok, http.MethodDelete, "/systems/av-sub", nil, http.StatusNoContent)
 	c.do(ownerTok, http.MethodGet, "/systems/av-sub", nil, http.StatusNotFound)

@@ -26,7 +26,7 @@ func TestProductPropertyCRUD(t *testing.T) {
 	}
 
 	// A custom (official=false) product owns a mutable contract.
-	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "acme-widget", DisplayName: "Acme Widget", Kind: "device"}); err != nil {
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "acme-widget", Label: "Acme Widget", Kind: "device"}); err != nil {
 		t.Fatalf("create product: %v", err)
 	}
 

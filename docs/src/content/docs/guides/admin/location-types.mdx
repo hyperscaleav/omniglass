@@ -16,22 +16,22 @@ bare label registry was never what they were: a **component**'s shape comes from
 [standard](/guides/admin/standards/) it conforms to.
 
 The page is that registry's directory: a table of its rows, sorted alphabetically by display
-name, each showing the **name** (for example `wing`), **display name**, an **icon** glyph key,
+name, each showing the **name** (for example `wing`), **label**, an **icon** glyph key,
 and its **origin** (**official**, **custom**, or **overridden**). A type also carries an `id`, a
 uuid minted by the database, the internal address the handle resolves to
 ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
 
-- **name** matches a name or display name, and **official** narrows the list to **shipped**,
+- **name** matches a name or label, and **official** narrows the list to **shipped**,
   **yours**, or **overridden** rows.
 - **New location type** (with `location_type:create`, an admin permission) opens a create
-  **drawer**: give it a **name** (unique within the registry, e.g. `wing`), a **display name**,
+  **drawer**: give it a **name** (unique within the registry, e.g. `wing`), a **label**,
   an **icon** glyph key (defaults to `map-pin`), and its **allowed parents**: a checkbox list of
   the other location types plus a **Root** option, the set of parent types (or the top of the
   tree) a location of this type may be placed under. Leave every box unchecked for
   **unconstrained** (any parent, or root), the default; `root` is a reserved **name** no real
   type may take.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with
-  `location_type:update`) edits the display name, the icon, the allowed parents, and the naming
+  `location_type:update`) edits the label, the icon, the allowed parents, and the naming
   rule; the
   **name** is fixed, since a catalog row carries no rename (`:rename` is a component, system,
   location, and principal group affordance). **Delete** (with `location_type:delete`) removes
@@ -89,7 +89,7 @@ uuid minted by the database, the internal address the handle resolves to
   The same rule, from the CLI:
 
   ```sh
-  omniglass location-type create --name deck --display-name "Deck" --name-rule '{"stem":""}'
+  omniglass location-type create --name deck --label "Deck" --name-rule '{"stem":""}'
   ```
 
   **Editing a rule renames nothing.** Every location that already exists keeps its name; the new

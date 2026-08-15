@@ -20,7 +20,7 @@ import (
 
 type factsRole struct {
 	ID          string   `json:"id"`
-	DisplayName string   `json:"display_name"`
+	Label       string   `json:"label"`
 	Description string   `json:"description,omitempty"`
 	Inherits    []string `json:"inherits,omitempty"`
 	Declared    []string `json:"declared"`
@@ -30,7 +30,7 @@ type factsRole struct {
 type factsProperty struct {
 	Name        string `json:"name"`
 	DataType    string `json:"data_type"`
-	DisplayName string `json:"display_name"`
+	Label       string `json:"label"`
 	Description string `json:"description,omitempty"`
 }
 
@@ -39,13 +39,13 @@ type factsMetricType struct {
 	DataType    string `json:"data_type"`
 	Unit        string `json:"unit,omitempty"`
 	Precision   *int   `json:"precision,omitempty"`
-	DisplayName string `json:"display_name"`
+	Label       string `json:"label"`
 	Description string `json:"description,omitempty"`
 }
 
 type factsNamed struct {
 	Name        string `json:"name"`
-	DisplayName string `json:"display_name,omitempty"`
+	Label       string `json:"label,omitempty"`
 	Description string `json:"description,omitempty"`
 }
 
@@ -65,7 +65,7 @@ type factsLabelRule struct {
 
 type factsLocationType struct {
 	ID                 string         `json:"id"`
-	DisplayName        string         `json:"display_name"`
+	Label              string         `json:"label"`
 	Icon               string         `json:"icon,omitempty"`
 	AllowedParentTypes []string       `json:"allowed_parent_types,omitempty"`
 	NameRule           *factsNameRule `json:"name_rule,omitempty"`
@@ -88,7 +88,7 @@ type factsNameRule struct {
 // node states everything, which is the opposite of the rule the page teaches.
 type factsTypeNode struct {
 	ID          string   `json:"id"`
-	DisplayName string   `json:"display_name"`
+	Label       string   `json:"label"`
 	ParentID    string   `json:"parent_id,omitempty"`
 	Stem        string   `json:"stem,omitempty"`
 	Abbrev      string   `json:"abbrev,omitempty"`
@@ -98,7 +98,7 @@ type factsTypeNode struct {
 
 type factsStandardRole struct {
 	Name           string   `json:"name"`
-	DisplayName    string   `json:"display_name,omitempty"`
+	Label          string   `json:"label,omitempty"`
 	Quorum         int      `json:"quorum"`
 	AcceptedTypes  []string `json:"accepted_types,omitempty"`
 	PinnedProducts []string `json:"pinned_products,omitempty"`
@@ -106,22 +106,22 @@ type factsStandardRole struct {
 
 type factsStandard struct {
 	ID               string              `json:"id"`
-	DisplayName      string              `json:"display_name"`
+	Label            string              `json:"label"`
 	ParentStandardID string              `json:"parent_standard_id,omitempty"`
 	Roles            []factsStandardRole `json:"roles,omitempty"`
 }
 
 type factsVendor struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
-	Kind        string `json:"kind,omitempty"`
-	Website     string `json:"website,omitempty"`
+	ID      string `json:"id"`
+	Label   string `json:"label"`
+	Kind    string `json:"kind,omitempty"`
+	Website string `json:"website,omitempty"`
 }
 
 type factsDriver struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
-	Version     string `json:"version,omitempty"`
+	ID      string `json:"id"`
+	Label   string `json:"label"`
+	Version string `json:"version,omitempty"`
 }
 
 type factsProductProperty struct {
@@ -132,7 +132,7 @@ type factsProductProperty struct {
 
 type factsProduct struct {
 	ID              string                 `json:"id"`
-	DisplayName     string                 `json:"display_name"`
+	Label           string                 `json:"label"`
 	VendorID        string                 `json:"vendor_id,omitempty"`
 	DriverID        string                 `json:"driver_id,omitempty"`
 	Kind            string                 `json:"kind,omitempty"`
@@ -149,7 +149,7 @@ type factsSecretTypeField struct {
 
 type factsSecretType struct {
 	ID                    string                 `json:"id"`
-	DisplayName           string                 `json:"display_name"`
+	Label                 string                 `json:"label"`
 	DefaultAdminSensitive bool                   `json:"default_admin_sensitive"`
 	Fields                []factsSecretTypeField `json:"fields"`
 }
@@ -179,12 +179,12 @@ type seedFactsDoc struct {
 type eventCommandDoc struct {
 	EventTypes []struct {
 		Name        string `yaml:"name"`
-		DisplayName string `yaml:"display_name"`
+		Label       string `yaml:"label"`
 		Description string `yaml:"description"`
 	} `yaml:"event_types"`
 	CommandTypes []struct {
 		Name        string `yaml:"name"`
-		DisplayName string `yaml:"display_name"`
+		Label       string `yaml:"label"`
 		Description string `yaml:"description"`
 	} `yaml:"command_types"`
 }
@@ -207,7 +207,7 @@ func FactsJSON() ([]byte, error) {
 	idx := rbac.NewRoleIndex(rbacRoles)
 	for _, r := range roles.Roles {
 		doc.Roles = append(doc.Roles, factsRole{
-			ID: r.ID, DisplayName: r.DisplayName, Description: r.Description,
+			ID: r.ID, Label: r.Label, Description: r.Description,
 			Inherits: r.Inherits, Declared: r.Permissions,
 			Effective: idx.Flatten([]string{r.ID}).Strings(),
 		})
@@ -228,7 +228,7 @@ func FactsJSON() ([]byte, error) {
 	for _, p := range props.PropertyTypes {
 		doc.PropertyTypes = append(doc.PropertyTypes, factsProperty{
 			Name: p.Name, DataType: p.DataType,
-			DisplayName: p.DisplayName, Description: p.Description,
+			Label: p.Label, Description: p.Description,
 		})
 	}
 
@@ -239,7 +239,7 @@ func FactsJSON() ([]byte, error) {
 	for _, m := range mts.MetricTypes {
 		doc.MetricTypes = append(doc.MetricTypes, factsMetricType{
 			Name: m.Name, DataType: m.DataType, Unit: m.Unit, Precision: m.Precision,
-			DisplayName: m.DisplayName, Description: m.Description,
+			Label: m.Label, Description: m.Description,
 		})
 	}
 
@@ -248,14 +248,14 @@ func FactsJSON() ([]byte, error) {
 		return nil, fmt.Errorf("seed facts: event types: %w", err)
 	}
 	for _, e := range evcmd.EventTypes {
-		doc.EventTypes = append(doc.EventTypes, factsNamed{Name: e.Name, DisplayName: e.DisplayName, Description: e.Description})
+		doc.EventTypes = append(doc.EventTypes, factsNamed{Name: e.Name, Label: e.Label, Description: e.Description})
 	}
 	evcmd = eventCommandDoc{}
 	if err := yaml.Unmarshal(commandTypesYAML, &evcmd); err != nil {
 		return nil, fmt.Errorf("seed facts: command types: %w", err)
 	}
 	for _, c := range evcmd.CommandTypes {
-		doc.CommandTypes = append(doc.CommandTypes, factsNamed{Name: c.Name, DisplayName: c.DisplayName, Description: c.Description})
+		doc.CommandTypes = append(doc.CommandTypes, factsNamed{Name: c.Name, Label: c.Label, Description: c.Description})
 	}
 
 	var secrets secretTypesDoc
@@ -263,7 +263,7 @@ func FactsJSON() ([]byte, error) {
 		return nil, fmt.Errorf("seed facts: secret types: %w", err)
 	}
 	for _, s := range secrets.SecretTypes {
-		st := factsSecretType{ID: s.ID, DisplayName: s.DisplayName, DefaultAdminSensitive: s.DefaultAdminSensitive}
+		st := factsSecretType{ID: s.ID, Label: s.Label, DefaultAdminSensitive: s.DefaultAdminSensitive}
 		for _, f := range s.Fields {
 			st.Fields = append(st.Fields, factsSecretTypeField{Name: f.Name, Type: f.Type, Secret: f.Secret, Origin: f.Origin})
 		}
@@ -288,7 +288,7 @@ func FactsJSON() ([]byte, error) {
 			rule = &factsNameRule{Stem: lt.NameRule.Stem, BareFirst: lt.NameRule.BareFirst}
 		}
 		doc.LocationTypes = append(doc.LocationTypes, factsLocationType{
-			ID: lt.ID, DisplayName: lt.DisplayName, Icon: lt.Icon, AllowedParentTypes: lt.AllowedParentTypes,
+			ID: lt.ID, Label: lt.Label, Icon: lt.Icon, AllowedParentTypes: lt.AllowedParentTypes,
 			NameRule: rule,
 		})
 	}
@@ -299,7 +299,7 @@ func FactsJSON() ([]byte, error) {
 	}
 	for _, ct := range cts.ComponentTypes {
 		doc.ComponentTypes = append(doc.ComponentTypes, factsTypeNode{
-			ID: ct.ID, DisplayName: ct.DisplayName, ParentID: ct.ParentID,
+			ID: ct.ID, Label: ct.Label, ParentID: ct.ParentID,
 			Stem: ct.Stem, Abbrev: ct.Abbrev, Icon: ct.Icon, DefaultTags: ct.DefaultTags,
 		})
 	}
@@ -310,7 +310,7 @@ func FactsJSON() ([]byte, error) {
 	}
 	for _, st := range sts.SystemTypes {
 		doc.SystemTypes = append(doc.SystemTypes, factsTypeNode{
-			ID: st.ID, DisplayName: st.DisplayName, ParentID: st.ParentID,
+			ID: st.ID, Label: st.Label, ParentID: st.ParentID,
 			Stem: st.Stem, Abbrev: st.Abbrev, Icon: st.Icon,
 		})
 	}
@@ -320,10 +320,10 @@ func FactsJSON() ([]byte, error) {
 		return nil, fmt.Errorf("seed facts: standards: %w", err)
 	}
 	for _, s := range stds.Standards {
-		fs := factsStandard{ID: s.ID, DisplayName: s.DisplayName, ParentStandardID: s.ParentStandardID}
+		fs := factsStandard{ID: s.ID, Label: s.Label, ParentStandardID: s.ParentStandardID}
 		for _, r := range s.Roles {
 			fs.Roles = append(fs.Roles, factsStandardRole{
-				Name: r.Name, DisplayName: r.DisplayName, Quorum: r.Quorum,
+				Name: r.Name, Label: r.Label, Quorum: r.Quorum,
 				AcceptedTypes: r.AcceptedTypes, PinnedProducts: r.PinnedProducts,
 			})
 		}
@@ -335,7 +335,7 @@ func FactsJSON() ([]byte, error) {
 		return nil, fmt.Errorf("seed facts: vendors: %w", err)
 	}
 	for _, v := range vs.Vendors {
-		doc.Vendors = append(doc.Vendors, factsVendor{ID: v.ID, DisplayName: v.DisplayName, Kind: v.Kind, Website: v.Website})
+		doc.Vendors = append(doc.Vendors, factsVendor{ID: v.ID, Label: v.Label, Kind: v.Kind, Website: v.Website})
 	}
 
 	var ds driversDoc
@@ -343,7 +343,7 @@ func FactsJSON() ([]byte, error) {
 		return nil, fmt.Errorf("seed facts: drivers: %w", err)
 	}
 	for _, d := range ds.Drivers {
-		doc.Drivers = append(doc.Drivers, factsDriver{ID: d.ID, DisplayName: d.DisplayName, Version: d.Version})
+		doc.Drivers = append(doc.Drivers, factsDriver{ID: d.ID, Label: d.Label, Version: d.Version})
 	}
 
 	var ps productsDoc
@@ -352,7 +352,7 @@ func FactsJSON() ([]byte, error) {
 	}
 	for _, p := range ps.Products {
 		fp := factsProduct{
-			ID: p.ID, DisplayName: p.DisplayName, VendorID: p.VendorID, DriverID: p.DriverID,
+			ID: p.ID, Label: p.Label, VendorID: p.VendorID, DriverID: p.DriverID,
 			Kind: p.Kind, ParentProductID: p.ParentProductID,
 		}
 		for _, pp := range p.Properties {

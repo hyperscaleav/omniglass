@@ -86,7 +86,7 @@ func TestRuleChangePreviewsThenAppliesOverHTTP(t *testing.T) {
 	}
 	// One label the operator typed, which no recompute may touch.
 	c.do(tok, http.MethodPost, "/components",
-		map[string]any{"name": "hand-named", "product": "samsung-qm55", "location": "room-a", "display_name": "The Operator's Own"}, http.StatusCreated)
+		map[string]any{"name": "hand-named", "product": "samsung-qm55", "location": "room-a", "label": "The Operator's Own"}, http.StatusCreated)
 
 	// The rule edit itself is a component_type edit, the tier an operator
 	// actually reaches: it forks the shipped row rather than writing it.
@@ -95,8 +95,8 @@ func TestRuleChangePreviewsThenAppliesOverHTTP(t *testing.T) {
 
 	// Nothing has moved yet: editing a rule does not silently rewrite the estate.
 	before := decodePen(t, "before", c.do(tok, http.MethodGet, "/components/display-1", nil, http.StatusOK))
-	if before.DisplayName != "Display 1" {
-		t.Fatalf("a rule edit rewrote a label on its own: %q", before.DisplayName)
+	if before.Label != "Display 1" {
+		t.Fatalf("a rule edit rewrote a label on its own: %q", before.Label)
 	}
 
 	preview := decodeRecompute(t, "preview", c.do(tok, http.MethodPost, "/components:previewLabels", nil, http.StatusOK))
@@ -114,8 +114,8 @@ func TestRuleChangePreviewsThenAppliesOverHTTP(t *testing.T) {
 
 	// A preview writes nothing.
 	still := decodePen(t, "after preview", c.do(tok, http.MethodGet, "/components/display-1", nil, http.StatusOK))
-	if still.DisplayName != before.DisplayName {
-		t.Fatalf("the preview changed a label: %q became %q", before.DisplayName, still.DisplayName)
+	if still.Label != before.Label {
+		t.Fatalf("the preview changed a label: %q became %q", before.Label, still.Label)
 	}
 
 	applied := decodeRecompute(t, "apply", c.do(tok, http.MethodPost, "/components:recomputeLabels", nil, http.StatusOK))
@@ -123,14 +123,14 @@ func TestRuleChangePreviewsThenAppliesOverHTTP(t *testing.T) {
 		t.Fatalf("the apply changed %d rows and the preview promised %d", applied.Count, preview.Count)
 	}
 	got := decodePen(t, "after apply", c.do(tok, http.MethodGet, "/components/display-1", nil, http.StatusOK))
-	if got.DisplayName != "Room A Display 1" {
-		t.Fatalf("after the apply = %q, want %q", got.DisplayName, "Room A Display 1")
+	if got.Label != "Room A Display 1" {
+		t.Fatalf("after the apply = %q, want %q", got.Label, "Room A Display 1")
 	}
-	if !got.DisplayNameGenerated {
+	if !got.LabelGenerated {
 		t.Fatalf("the recompute took the pen: %+v", got)
 	}
 	owned := decodePen(t, "the operator's own", c.do(tok, http.MethodGet, "/components/hand-named", nil, http.StatusOK))
-	if owned.DisplayName != "The Operator's Own" || owned.DisplayNameGenerated {
+	if owned.Label != "The Operator's Own" || owned.LabelGenerated {
 		t.Fatalf("the operator's label was rewritten: %+v", owned)
 	}
 
@@ -181,8 +181,8 @@ func TestALocationRecomputeReportsWhatItStales(t *testing.T) {
 		t.Fatalf("apply changed %d rows and the preview promised %d", applied.Count, preview.Count)
 	}
 	got := decodePen(t, "the component below", c.do(tok, http.MethodGet, "/components/display-1", nil, http.StatusOK))
-	if got.DisplayName != "Room room-a Display" {
-		t.Fatalf("the component reads %q, want %q: its location's new label", got.DisplayName, "Room room-a Display")
+	if got.Label != "Room room-a Display" {
+		t.Fatalf("the component reads %q, want %q: its location's new label", got.Label, "Room room-a Display")
 	}
 }
 
@@ -266,12 +266,12 @@ func TestAPreviewIsBoundedByTheUpdateScopeJustAsTheApplyIs(t *testing.T) {
 	// Both were hand-named, so neither carries an ordinal and the shipped rule
 	// labelled them "Display". The one outside the update scope still does.
 	after := decodePen(t, "theirs after", c.do(tok, http.MethodGet, "/components/theirs", nil, http.StatusOK))
-	if after.DisplayName != "Display" {
-		t.Fatalf("a component outside the caller's update scope was restamped to %q", after.DisplayName)
+	if after.Label != "Display" {
+		t.Fatalf("a component outside the caller's update scope was restamped to %q", after.Label)
 	}
 	mineAfter := decodePen(t, "mine after", c.do(tok, http.MethodGet, "/components/mine", nil, http.StatusOK))
-	if mineAfter.DisplayName != "Room A Display" {
-		t.Fatalf("the component inside the update scope reads %q, want %q: the apply must have done something, or the assertion above passes for the wrong reason", mineAfter.DisplayName, "Room A Display")
+	if mineAfter.Label != "Room A Display" {
+		t.Fatalf("the component inside the update scope reads %q, want %q: the apply must have done something, or the assertion above passes for the wrong reason", mineAfter.Label, "Room A Display")
 	}
 	_ = mine
 }

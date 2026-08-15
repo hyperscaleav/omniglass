@@ -52,7 +52,7 @@ func newHealthFixture(t *testing.T) *healthFixture {
 	f.mustLocation(t, ctx, "hq-b1", "building", ptrStr("hq"))
 	f.mustLocation(t, ctx, "hq-r1", "room", ptrStr("hq-b1"))
 
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "health-huddle", DisplayName: "Health Huddle"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "health-huddle", Label: "Health Huddle"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	std, room := "health-huddle", "hq-r1"
@@ -63,7 +63,7 @@ func newHealthFixture(t *testing.T) *healthFixture {
 	}
 	// One table mic, quorum 1, an impaired one degrades its system.
 	if _, err := gw.SetSystemRole(ctx, "", "standard", "health-huddle", storage.SystemRoleSpec{
-		Name: "table-mic", DisplayName: "Table microphone", Quorum: 1,
+		Name: "table-mic", Label: "Table microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
@@ -335,7 +335,7 @@ func TestHealthImpactAndQuorum(t *testing.T) {
 	// Re-declaring the role with impact outage escalates the same broken component:
 	// the slot it was filling is what decides, not the component.
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-huddle", storage.SystemRoleSpec{
-		Name: "table-mic", DisplayName: "Table microphone", Quorum: 1,
+		Name: "table-mic", Label: "Table microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "outage",
 	}); err != nil {
 		t.Fatalf("re-declare role as outage: %v", err)
@@ -350,7 +350,7 @@ func TestHealthImpactAndQuorum(t *testing.T) {
 	// impact none: the role is still impaired, but its failure is declared not to
 	// matter, so the system reads healthy again.
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-huddle", storage.SystemRoleSpec{
-		Name: "table-mic", DisplayName: "Table microphone", Quorum: 1,
+		Name: "table-mic", Label: "Table microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "none",
 	}); err != nil {
 		t.Fatalf("re-declare role as none: %v", err)
@@ -504,11 +504,11 @@ func TestHealthReportOfAFreshSystem(t *testing.T) {
 
 	// The standard and its role exist BEFORE the system does, which is the ordering
 	// that used to leave nothing recorded for the system at read time.
-	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: "health-podium", DisplayName: "Health Podium"}); err != nil {
+	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: "health-podium", Label: "Health Podium"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-podium", storage.SystemRoleSpec{
-		Name: "mic", DisplayName: "Microphone", Quorum: 1,
+		Name: "mic", Label: "Microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "outage",
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
@@ -592,7 +592,7 @@ func TestHealthMovesOnStandardChange(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
-	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: "health-podium", DisplayName: "Health Podium"}); err != nil {
+	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: "health-podium", Label: "Health Podium"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	if _, err := f.gw.SetSystemRole(ctx, "", "standard", "health-podium", storage.SystemRoleSpec{
@@ -602,7 +602,7 @@ func TestHealthMovesOnStandardChange(t *testing.T) {
 	}
 	// A second standard that claims nothing at all: conforming to it is what makes
 	// the system healthy again.
-	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: "health-plain", DisplayName: "Health Plain"}); err != nil {
+	if err := f.gw.UpsertStandard(ctx, storage.Standard{Name: "health-plain", Label: "Health Plain"}); err != nil {
 		t.Fatalf("create plain standard: %v", err)
 	}
 	std, room := "health-podium", "hq-r1"

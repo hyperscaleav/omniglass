@@ -26,9 +26,9 @@ const contract: ClassifierProperty[] = [
 ];
 
 const catalog: PropertyRow[] = [
-  { name: "seat_count", data_type: "int", display_name: "Seat count", official: true },
-  { name: "display_count", data_type: "int", display_name: "Display count", official: true },
-  { name: "has_camera", data_type: "bool", display_name: "Has camera", official: true },
+  { name: "seat_count", data_type: "int", label: "Seat count", official: true },
+  { name: "display_count", data_type: "int", label: "Display count", official: true },
+  { name: "has_camera", data_type: "bool", label: "Has camera", official: true },
 ];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
@@ -225,9 +225,9 @@ const metricContract: ClassifierMetric[] = [
 ];
 
 const metricCatalog: MetricRow[] = [
-  { name: "icmp-rtt-avg", data_type: "float", display_name: "ICMP RTT (avg)", official: true },
-  { name: "tcp-open", data_type: "int", display_name: "TCP Port Open", official: true },
-  { name: "tcp-connect-time", data_type: "float", display_name: "TCP Connect Time", official: true },
+  { name: "icmp-rtt-avg", data_type: "float", label: "ICMP RTT (avg)", official: true },
+  { name: "tcp-open", data_type: "int", label: "TCP Port Open", official: true },
+  { name: "tcp-connect-time", data_type: "float", label: "TCP Connect Time", official: true },
 ];
 
 function mountMetric(kind: ClassifierKind, opts: { me?: Me; official?: boolean; lines?: ClassifierMetric[]; editing?: boolean } = {}) {

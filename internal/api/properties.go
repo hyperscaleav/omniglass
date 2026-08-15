@@ -18,7 +18,7 @@ type propertyBody struct {
 	ID          string          `json:"id" doc:"The property's uuid, the stable form the contract and telemetry keys store"`
 	Name        string          `json:"name"`
 	DataType    string          `json:"data_type"`
-	DisplayName string          `json:"display_name,omitempty"`
+	Label       string          `json:"label,omitempty"`
 	Description string          `json:"description,omitempty"`
 	Validation  json.RawMessage `json:"validation,omitempty" doc:"A JSON Schema fragment constraining the value"`
 	Official    bool            `json:"official"`
@@ -26,7 +26,7 @@ type propertyBody struct {
 
 func toPropertyBody(p *storage.PropertyType) propertyBody {
 	b := propertyBody{
-		ID: p.ID, Name: p.Name, DataType: p.DataType, DisplayName: p.DisplayName,
+		ID: p.ID, Name: p.Name, DataType: p.DataType, Label: p.Label,
 		Description: p.Description, Official: p.Official,
 	}
 	if len(p.Validation) > 0 {
@@ -49,7 +49,7 @@ type createPropertyInput struct {
 	Body struct {
 		Name        string `json:"name" minLength:"1" doc:"The property name (lowercase kebab)"`
 		DataType    string `json:"data_type" enum:"string,bool,json" doc:"The value type; a numeric signal is a metric type"`
-		DisplayName string `json:"display_name,omitempty" doc:"A human label"`
+		Label       string `json:"label,omitempty" doc:"A human label"`
 		Description string `json:"description,omitempty" doc:"What the property means"`
 		Validation  any    `json:"validation,omitempty" doc:"A JSON Schema fragment constraining the value"`
 	}
@@ -62,7 +62,7 @@ type propertyNameInput struct {
 type updatePropertyInput struct {
 	Name string `path:"name" doc:"The property's name"`
 	Body struct {
-		DisplayName *string `json:"display_name,omitempty" doc:"A human label"`
+		Label       *string `json:"label,omitempty" doc:"A human label"`
 		Description *string `json:"description,omitempty" doc:"What the property means"`
 		Validation  any     `json:"validation,omitempty" doc:"A JSON Schema fragment (replaces wholesale)"`
 	}
@@ -121,7 +121,7 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		p, err := gw.CreatePropertyType(ctx, actorID(ctx), storage.PropertyTypeSpec{
 			Name:        in.Body.Name,
 			DataType:    in.Body.DataType,
-			DisplayName: in.Body.DisplayName,
+			Label:       in.Body.Label,
 			Description: in.Body.Description,
 			Validation:  validation,
 		})
@@ -143,7 +143,7 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			return nil, err
 		}
 		p, err := gw.UpdatePropertyType(ctx, actorID(ctx), in.Name, storage.PropertyTypePatch{
-			DisplayName: in.Body.DisplayName,
+			Label:       in.Body.Label,
 			Description: in.Body.Description,
 			Validation:  validation,
 		})

@@ -108,7 +108,7 @@ type contractLine = {
 
 // catalogRow is the lane-neutral shape of one catalog entry; PropertyRow and
 // MetricRow both satisfy it.
-type catalogRow = { name: string; data_type: string; display_name?: string };
+type catalogRow = { name: string; data_type: string; label?: string };
 
 // laneConfig is everything that differs between the two lanes: the data layer,
 // the catalog the picker offers, the copy, and the add-row labels.
@@ -165,7 +165,7 @@ const LANES: Record<ContractLane, laneConfig> = {
 };
 
 // contractRow is one line of the contract joined to its catalog entry, so the
-// row can show the display name and data type alongside the declared default.
+// row can show the label and data type alongside the declared default.
 type ContractRow = { name: string; line: contractLine; meta?: catalogRow };
 
 // dataTypeOf falls back to string for an entry that is not in the catalog read
@@ -347,8 +347,8 @@ export default function ContractEditor(props: {
                 <div class="flex items-center gap-2">
                   <span class="min-w-0 flex-1 truncate">
                     <span class="font-data text-sm">{r.name}</span>
-                    <Show when={r.meta?.display_name}>
-                      <span class="ml-2 text-[11px] text-base-content/50">{r.meta?.display_name}</span>
+                    <Show when={r.meta?.label}>
+                      <span class="ml-2 text-[11px] text-base-content/50">{r.meta?.label}</span>
                     </Show>
                   </span>
                   <span class="badge badge-ghost badge-sm shrink-0 font-data">{r.meta?.data_type ?? "string"}</span>
@@ -440,7 +440,7 @@ export default function ContractEditor(props: {
             >
               <option value="">{lane().pickerPrompt}</option>
               <For each={declarable()}>
-                {(p) => <option value={p.name}>{p.display_name ? `${p.name} (${p.display_name})` : p.name}</option>}
+                {(p) => <option value={p.name}>{p.label ? `${p.name} (${p.label})` : p.name}</option>}
               </For>
             </select>
             <Show when={addName()}>

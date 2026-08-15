@@ -39,11 +39,11 @@ type healthAlarmBody struct {
 }
 
 type healthRoleBody struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name"`
-	Impact      string `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
-	Quorum      int    `json:"quorum"`
-	Satisfying  int    `json:"satisfying" doc:"How many assigned components currently occupy the role (their own verdict is not outage; a degraded component still occupies)"`
+	Name       string `json:"name"`
+	Label      string `json:"label"`
+	Impact     string `json:"impact" doc:"What an impaired role means for its system: outage, degraded, or none"`
+	Quorum     int    `json:"quorum"`
+	Satisfying int    `json:"satisfying" doc:"How many assigned components currently occupy the role (their own verdict is not outage; a degraded component still occupies)"`
 	// Short and Spare are occupancy-aware, unlike the roles read's
 	// understaffed (Quorum minus len(assigned_to), health-blind): a role can
 	// report understaffed 0 here and still be short if an assigned
@@ -114,20 +114,20 @@ func toHealthOutput(rep *storage.HealthReport) *estateHealthOutput {
 
 func toHealthRoleBody(r *storage.HealthRole) healthRoleBody {
 	body := healthRoleBody{
-		Name:        r.Name,
-		DisplayName: r.DisplayName,
-		Impact:      r.Impact,
-		Quorum:      r.Quorum,
-		Satisfying:  r.Satisfying,
-		Short:       r.Short,
-		Spare:       r.Spare,
-		Impaired:    r.Impaired,
-		AssignedTo:  nonNil(r.AssignedTo),
-		Down:        nonNil(r.Down),
-		Alarms:      make([]healthAlarmBody, 0, len(r.Alarms)),
-		Choice:      r.Choice,
-		Alternate:   r.Alternate,
-		Active:      r.Active,
+		Name:       r.Name,
+		Label:      r.Label,
+		Impact:     r.Impact,
+		Quorum:     r.Quorum,
+		Satisfying: r.Satisfying,
+		Short:      r.Short,
+		Spare:      r.Spare,
+		Impaired:   r.Impaired,
+		AssignedTo: nonNil(r.AssignedTo),
+		Down:       nonNil(r.Down),
+		Alarms:     make([]healthAlarmBody, 0, len(r.Alarms)),
+		Choice:     r.Choice,
+		Alternate:  r.Alternate,
+		Active:     r.Active,
 	}
 	for i := range r.Alarms {
 		a := &r.Alarms[i]

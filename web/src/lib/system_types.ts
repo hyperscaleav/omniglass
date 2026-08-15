@@ -1,5 +1,6 @@
 import { api } from "../api/client";
 import { pickInheritedFacts, type InheritedFacts } from "./catalog";
+import { byLabel } from "./entities";
 
 // The system_type registry data layer: the coarse taxonomy of what kind of
 // space a system is (ADR-0096), a boardroom, a classroom, a video wall. It is
@@ -13,7 +14,7 @@ import { pickInheritedFacts, type InheritedFacts } from "./catalog";
 export type SystemType = {
   id: string;
   name: string;
-  display_name: string;
+  label: string;
   official: boolean;
   // The parent's name (for display) and id (the canonical handle); both absent
   // for a root type.
@@ -33,13 +34,13 @@ export type SystemType = {
 export const SYSTEM_TYPES_KEY = ["system_types"] as const;
 
 function toSystemType(t: {
-  id: string; name: string; display_name: string; official: boolean;
+  id: string; name: string; label: string; official: boolean;
   parent?: string; parent_id?: string; stem?: string; icon?: string; resolved_icon?: string; abbrev?: string;
 } & InheritedFacts): SystemType {
   return {
     id: t.id,
     name: t.name,
-    display_name: t.display_name,
+    label: t.label,
     official: t.official,
     parent: t.parent,
     parent_id: t.parent_id,
@@ -62,7 +63,7 @@ export async function listSystemTypes(): Promise<SystemType[]> {
 
 export type CreateSystemType = {
   name: string;
-  display_name: string;
+  label: string;
   // The parent system_type, by name or uuid; omit for a root type (which then
   // needs a stem of its own: there is no ancestor to inherit one from).
   parent_id?: string;
@@ -81,7 +82,7 @@ export async function createSystemType(body: CreateSystemType): Promise<SystemTy
 // guard analogous to location's), so a custom type's placement in the tree is
 // fixed at create, exactly as component_type's is.
 export type UpdateSystemType = {
-  display_name?: string;
+  label?: string;
   stem?: string;
   icon?: string;
   abbrev?: string;
@@ -118,7 +119,7 @@ export function resolveSystemTypeIcon(typeName: string | undefined, byName: Map<
 export type SystemTypeNode = SystemType & { children: SystemTypeNode[]; depth: number };
 
 // systemTypeTree groups the flat registry into a forest by parent_id, each
-// level sorted by display name, for the admin page's rows and the
+// level sorted by label, for the admin page's rows and the
 // classification picker's indented option list.
 export function systemTypeTree(types: SystemType[]): SystemTypeNode[] {
   const byId = new Map<string, SystemTypeNode>(types.map((t) => [t.id, { ...t, children: [], depth: 0 }] as const));
@@ -130,7 +131,7 @@ export function systemTypeTree(types: SystemType[]): SystemTypeNode[] {
     else roots.push(node);
   }
   const sortLevel = (nodes: SystemTypeNode[], depth: number) => {
-    nodes.sort((a, b) => a.display_name.localeCompare(b.display_name));
+    nodes.sort(byLabel);
     for (const n of nodes) {
       n.depth = depth;
       sortLevel(n.children, depth + 1);

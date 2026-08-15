@@ -37,12 +37,12 @@ const maxComponentTypeDepth = 32
 
 // ComponentType is a registry row in the hierarchical taxonomy a product is
 // classified by (mic, camera, wireless-mic under mic): a stable id, the
-// official flag, a display_name, and an optional parent for a tree of
+// official flag, a label, and an optional parent for a tree of
 // arbitrary depth. Stem, Icon, and Abbrev are nullable: null means "inherit
 // from parent," resolved by ResolveTypeFacts walking ParentID in Go (no DB
 // logic) until it finds the first non-null value. DefaultTags follows the
 // same first-non-empty-wins rule. The registry lists alphabetically by
-// display_name; there is no ordering field.
+// label; there is no ordering field.
 //
 // Official and Forked are the two halves of the origin an operator reads
 // (#655, ADR-0095): official alone is "shipped", neither is "yours", and both
@@ -51,7 +51,7 @@ const maxComponentTypeDepth = 32
 type ComponentType struct {
 	ID          uuid.UUID
 	Name        string
-	DisplayName string
+	Label       string
 	Stem        *string
 	Icon        *string
 	Abbrev      *string
@@ -68,7 +68,7 @@ type ComponentType struct {
 // ComponentTypePatch carries the mutable fields of a component_type update; a
 // nil field is left unchanged.
 type ComponentTypePatch struct {
-	DisplayName *string
+	Label       *string
 	Stem        *string
 	Icon        *string
 	Abbrev      *string
@@ -76,7 +76,7 @@ type ComponentTypePatch struct {
 	DefaultTags *[]string
 }
 
-const componentTypeCols = `id, name, display_name, stem, icon, abbrev, label_rule, default_tags, official, parent_id`
+const componentTypeCols = `id, name, coalesce(label, ''), stem, icon, abbrev, label_rule, default_tags, official, parent_id`
 
 // componentTypeRegistry is this registry's key in registry_shadow, the first
 // adopter of the fork primitive (registryshadow.go).
@@ -87,13 +87,13 @@ const componentTypeRegistry = "component_type"
 // left join on the row's own uuid, so an unforked row reads exactly as before
 // and a forked one carries the image scanComponentTypeResolved overlays.
 const componentTypeResolved = `
-	select ct.id, ct.name, ct.display_name, ct.stem, ct.icon, ct.abbrev, ct.label_rule, ct.default_tags, ct.official, ct.parent_id, s.image
+	select ct.id, ct.name, coalesce(ct.label, ''), ct.stem, ct.icon, ct.abbrev, ct.label_rule, ct.default_tags, ct.official, ct.parent_id, s.image
 	from component_type ct
 	left join registry_shadow s on s.registry = '` + componentTypeRegistry + `' and s.row_id = ct.id`
 
 func scanComponentType(row pgx.Row) (*ComponentType, error) {
 	var ct ComponentType
-	if err := row.Scan(&ct.ID, &ct.Name, &ct.DisplayName, &ct.Stem, &ct.Icon, &ct.Abbrev, &ct.LabelRule, &ct.DefaultTags, &ct.Official, &ct.ParentID); err != nil {
+	if err := row.Scan(&ct.ID, &ct.Name, &ct.Label, &ct.Stem, &ct.Icon, &ct.Abbrev, &ct.LabelRule, &ct.DefaultTags, &ct.Official, &ct.ParentID); err != nil {
 		return nil, err
 	}
 	return &ct, nil
@@ -105,7 +105,7 @@ func scanComponentType(row pgx.Row) (*ComponentType, error) {
 func scanComponentTypeResolved(row pgx.Row) (*ComponentType, error) {
 	var ct ComponentType
 	var image []byte
-	if err := row.Scan(&ct.ID, &ct.Name, &ct.DisplayName, &ct.Stem, &ct.Icon, &ct.Abbrev, &ct.LabelRule, &ct.DefaultTags, &ct.Official, &ct.ParentID, &image); err != nil {
+	if err := row.Scan(&ct.ID, &ct.Name, &ct.Label, &ct.Stem, &ct.Icon, &ct.Abbrev, &ct.LabelRule, &ct.DefaultTags, &ct.Official, &ct.ParentID, &image); err != nil {
 		return nil, err
 	}
 	resolved, err := applyComponentTypeImage(ct, image)
@@ -128,7 +128,7 @@ func scanComponentTypeResolved(row pgx.Row) (*ComponentType, error) {
 // omission is what makes the inheritance walk resolvable per node.
 func componentTypeShadowImage(ct ComponentType) ([]byte, error) {
 	image, err := json.Marshal(map[string]any{
-		"display_name": ct.DisplayName,
+		"label":        labelOrNull(ct.Label),
 		"stem":         ct.Stem,
 		"icon":         ct.Icon,
 		"abbrev":       ct.Abbrev,
@@ -155,10 +155,10 @@ func applyComponentTypeImage(ct ComponentType, image []byte) (ComponentType, err
 	if fields == nil {
 		return ct, nil
 	}
-	if v, ok, err := shadowValue[string](fields, "display_name"); err != nil {
+	if v, ok, err := shadowValue[string](fields, "label"); err != nil {
 		return ct, err
 	} else if ok {
-		ct.DisplayName = v
+		ct.Label = v
 	}
 	if v, ok, err := shadowValue[*string](fields, "stem"); err != nil {
 		return ct, err
@@ -219,10 +219,10 @@ func mapComponentTypeWriteErr(err error) error {
 // place, id stable.
 func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into component_type (name, display_name, stem, icon, abbrev, label_rule, default_tags, official, parent_id)
+		insert into component_type (name, label, stem, icon, abbrev, label_rule, default_tags, official, parent_id)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		on conflict (name) do update
-			set display_name = excluded.display_name,
+			set label = excluded.label,
 			    stem         = excluded.stem,
 			    icon         = excluded.icon,
 			    abbrev       = excluded.abbrev,
@@ -231,7 +231,7 @@ func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) error {
 			    official     = excluded.official,
 			    parent_id    = excluded.parent_id,
 			    updated_at   = now()`,
-		ct.Name, ct.DisplayName, ct.Stem, ct.Icon, ct.Abbrev, nilIfEmpty(ct.LabelRule), normalizeComponentTypeTags(ct.DefaultTags), ct.Official, ct.ParentID)
+		ct.Name, labelOrNull(ct.Label), ct.Stem, ct.Icon, ct.Abbrev, nilIfEmpty(ct.LabelRule), normalizeComponentTypeTags(ct.DefaultTags), ct.Official, ct.ParentID)
 	if err != nil {
 		return fmt.Errorf("storage: upsert component_type %q: %w", ct.Name, mapComponentTypeWriteErr(err))
 	}
@@ -239,17 +239,23 @@ func (p *PG) UpsertComponentType(ctx context.Context, ct ComponentType) error {
 }
 
 // ListComponentTypes returns every component_type, ordered alphabetically by
-// display_name then name, each row resolved over its operator shadow. A forked
+// label then name, each row resolved over its operator shadow. A forked
 // row is one row here, not two: the shadow is an overlay on the row it names,
 // never a second entry in the registry.
 //
-// The ORDER BY reads the resolved display_name (the shadow's when there is
+// The ORDER BY reads the resolved label (the shadow's when there is
 // one) so a rename through a fork sorts where an operator expects it, and it
 // stays in SQL rather than moving to a Go sort so the collation the registry
 // has always ordered by is the collation it still orders by.
+//
+// The ORDER BY resolves the shadow the way applyComponentTypeImage does, on the
+// PRESENCE of the key rather than on a coalesce: a fork that CLEARED its label
+// carries the key holding JSON null, and a coalesce would silently sort it under
+// the official row's label instead of at the end with the other unlabelled rows
+// (#613).
 func (p *PG) ListComponentTypes(ctx context.Context) ([]ComponentType, error) {
 	rows, err := p.pool.Query(ctx, componentTypeResolved+`
-		order by coalesce(s.image->>'display_name', ct.display_name), ct.name`)
+		order by case when s.image ? 'label' then s.image->>'label' else ct.label end nulls last, ct.name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list component_types: %w", err)
 	}
@@ -328,10 +334,10 @@ func (p *PG) CreateComponentType(ctx context.Context, actorID string, ct Compone
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	created, err := scanComponentType(tx.QueryRow(ctx, `
-		insert into component_type (name, display_name, stem, icon, abbrev, label_rule, default_tags, official, parent_id)
+		insert into component_type (name, label, stem, icon, abbrev, label_rule, default_tags, official, parent_id)
 		values ($1, $2, $3, $4, $5, $6, $7, false, $8)
 		returning `+componentTypeCols,
-		ct.Name, ct.DisplayName, ct.Stem, ct.Icon, ct.Abbrev, nilIfEmpty(ct.LabelRule), normalizeComponentTypeTags(ct.DefaultTags), ct.ParentID))
+		ct.Name, labelOrNull(ct.Label), ct.Stem, ct.Icon, ct.Abbrev, nilIfEmpty(ct.LabelRule), normalizeComponentTypeTags(ct.DefaultTags), ct.ParentID))
 	if err != nil {
 		return nil, mapComponentTypeWriteErr(err)
 	}
@@ -345,7 +351,7 @@ func (p *PG) CreateComponentType(ctx context.Context, actorID string, ct Compone
 	return created, nil
 }
 
-// UpdateComponentType patches a component_type's display_name, stem, icon,
+// UpdateComponentType patches a component_type's label, stem, icon,
 // abbrev, or default_tags (nil fields unchanged) and audits it. An unknown ref
 // is ErrTypeNotFound.
 //
@@ -425,9 +431,10 @@ func (p *PG) UpdateComponentType(ctx context.Context, actorID, ref string, patch
 	if patch.DefaultTags != nil {
 		tags = normalizeComponentTypeTags(*patch.DefaultTags)
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	ct, err := scanComponentType(tx.QueryRow(ctx, `
 		update component_type set
-			display_name = coalesce($2, display_name),
+			label = case when $8::boolean then $2 else label end,
 			-- These four are the columns whose NULL MEANS something: "this node
 			-- declares no fact of its own, walk to the nearest ancestor that
 			-- does". So each has a CLEAR state, which coalesce cannot express,
@@ -445,7 +452,7 @@ func (p *PG) UpdateComponentType(ctx context.Context, actorID, ref string, patch
 			updated_at   = now()
 		where `+registryRefCol(ref)+` = $1
 		returning `+componentTypeCols,
-		ref, patch.DisplayName, patch.Stem, patch.Icon, patch.Abbrev, patch.LabelRule, tags))
+		ref, labelVal, patch.Stem, patch.Icon, patch.Abbrev, patch.LabelRule, tags, setLabel))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -483,8 +490,8 @@ func (p *PG) forkComponentType(ctx context.Context, tx pgx.Tx, actorID string, c
 		return nil, err
 	}
 	forked := current
-	if patch.DisplayName != nil {
-		forked.DisplayName = *patch.DisplayName
+	if patch.Label != nil {
+		forked.Label = *patch.Label
 	}
 	// nilIfEmpty on all four, because the shadow image is READ BACK as the row
 	// (applyComponentTypeImage), so a shadow holding "" would stop the

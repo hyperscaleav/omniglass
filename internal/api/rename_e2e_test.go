@@ -19,7 +19,7 @@ import (
 // Renaming an entity breaks every reference an operator stored outside the system:
 // a bookmark, a runbook step, a dashboard filter, an integration's config. That is
 // worth being able to withhold on its own, which a field on a PATCH body cannot
-// express: anyone who may edit a display name could rename. So each of the four
+// express: anyone who may edit a label could rename. So each of the four
 // name-bearing entities carries a :rename custom method gated by
 // <resource>:rename, and the PATCH body no longer takes a name at all.
 

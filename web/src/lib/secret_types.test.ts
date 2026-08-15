@@ -20,7 +20,7 @@ describe("secret_types data layer", () => {
           {
             id: uuidFor("st-snmp-community"),
             name: "snmp-community",
-            display_name: "SNMP Community",
+            label: "SNMP Community",
             official: true,
             fields: [{ name: "community", type: "string", secret: true, origin: "operator" }],
           },
@@ -37,7 +37,7 @@ describe("secret_types data layer", () => {
 
   it("normalizes a missing fields list to empty", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ secret_types: [{ id: uuidFor("st-bare"), name: "bare", display_name: "Bare", official: true }] }),
+      jsonResponse({ secret_types: [{ id: uuidFor("st-bare"), name: "bare", label: "Bare", official: true }] }),
     );
     const rows = await listSecretTypes();
     expect(rows[0].fields).toEqual([]);

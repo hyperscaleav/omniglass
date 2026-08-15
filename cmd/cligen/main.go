@@ -609,7 +609,7 @@ func singular(s string) string {
 }
 
 // goIdent turns a snake_case field into an exported-ish camel suffix for a Go
-// variable name (display_name -> DisplayName).
+// variable name (label -> Label).
 func goIdent(s string) string {
 	parts := strings.Split(s, "_")
 	for i, p := range parts {

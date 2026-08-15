@@ -10,7 +10,7 @@ import { api } from "../api/client";
 export type Driver = {
   id: string;
   name: string;
-  display_name: string;
+  label: string;
   official: boolean;
   version?: string;
 };
@@ -26,7 +26,7 @@ export async function listDrivers(): Promise<Driver[]> {
 export type CreateDriver = {
   // The name. The uuid is the database's to mint.
   name: string;
-  display_name: string;
+  label: string;
   version?: string;
 };
 
@@ -37,7 +37,7 @@ export async function createDriver(body: CreateDriver): Promise<Driver> {
 }
 
 export type UpdateDriver = {
-  display_name?: string;
+  label?: string;
   version?: string;
 };
 

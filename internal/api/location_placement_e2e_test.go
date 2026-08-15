@@ -77,12 +77,12 @@ func TestLocationPlacementAPI(t *testing.T) {
 
 	// Grandfathered: an unrelated field update on hq-r1 (a room, already
 	// placed) succeeds untouched.
-	body = c.do(ownerTok, http.MethodPatch, "/locations/hq-r1", map[string]any{"display_name": "Room 1"}, http.StatusOK)
+	body = c.do(ownerTok, http.MethodPatch, "/locations/hq-r1", map[string]any{"label": "Room 1"}, http.StatusOK)
 	var renamed locResp
 	if err := json.Unmarshal(body, &renamed); err != nil {
 		t.Fatalf("decode renamed location: %v", err)
 	}
-	if renamed.DisplayName != "Room 1" {
-		t.Errorf("renamed display_name = %q, want Room 1", renamed.DisplayName)
+	if renamed.Label != "Room 1" {
+		t.Errorf("renamed label = %q, want Room 1", renamed.Label)
 	}
 }

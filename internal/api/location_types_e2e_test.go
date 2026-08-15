@@ -14,9 +14,9 @@ import (
 )
 
 // TestLocationTypesAPI drives the location_type registry read endpoint: an owner
-// lists the seeded official types in alphabetical order (by display_name), each
-// with its display_name, so a form can populate a type picker (value = id, label
-// = display_name). The 403 for a principal without location_type:read is covered
+// lists the seeded official types in alphabetical order (by label), each
+// with its label, so a form can populate a type picker (value = id, label
+// = label). The 403 for a principal without location_type:read is covered
 // generically by TestEveryRouteIsGated.
 func TestLocationTypesAPI(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
@@ -40,7 +40,7 @@ func TestLocationTypesAPI(t *testing.T) {
 		LocationTypes []struct {
 			ID                 string   `json:"id"`
 			Name               string   `json:"name"`
-			DisplayName        string   `json:"display_name"`
+			Label              string   `json:"label"`
 			Icon               string   `json:"icon"`
 			Official           bool     `json:"official"`
 			AllowedParentTypes []string `json:"allowed_parent_types"`
@@ -50,7 +50,7 @@ func TestLocationTypesAPI(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 
-	// The four seeded official types, in alphabetical order by display_name
+	// The four seeded official types, in alphabetical order by label
 	// (Building, Campus, Floor, Room), each labelled and official.
 	want := []string{"building", "campus", "floor", "room"}
 	gotIDs := make([]string, len(body.LocationTypes))
@@ -70,8 +70,8 @@ func TestLocationTypesAPI(t *testing.T) {
 	// edit of one forks rather than writing it. This assertion is the inverted
 	// twin of the one it replaced ("want non-empty label + operator-owned").
 	for _, lt := range body.LocationTypes {
-		if lt.DisplayName == "" || !lt.Official {
-			t.Errorf("type %q: display_name=%q official=%v, want non-empty label + platform-owned", lt.Name, lt.DisplayName, lt.Official)
+		if lt.Label == "" || !lt.Official {
+			t.Errorf("type %q: label=%q official=%v, want non-empty label + platform-owned", lt.Name, lt.Label, lt.Official)
 		}
 	}
 	// The icon travels the wire so the console can render each type's leading tree
@@ -121,25 +121,25 @@ func TestLocationTypeCRUDAPI(t *testing.T) {
 
 	// Create a custom type (201), then it appears in the list.
 	c.do(ownerTok, http.MethodPost, "/location-types",
-		map[string]any{"name": "wing", "display_name": "Wing", "icon": "layers"}, http.StatusCreated)
+		map[string]any{"name": "wing", "label": "Wing", "icon": "layers"}, http.StatusCreated)
 
 	// Update it (200).
 	c.do(ownerTok, http.MethodPatch, "/location-types/wing",
-		map[string]any{"display_name": "West Wing"}, http.StatusOK)
+		map[string]any{"label": "West Wing"}, http.StatusOK)
 
 	// A shipped type is editable: the estate shapes its own place vocabulary,
 	// through a fork since #703. TestLocationTypeForkAndClearAPI holds what the
 	// fork does on the wire.
 	c.do(ownerTok, http.MethodPatch, "/location-types/campus",
-		map[string]any{"display_name": "Campus"}, http.StatusOK)
+		map[string]any{"label": "Campus"}, http.StatusOK)
 
 	// "root" is reserved: creating a type with that id is refused (422).
 	c.do(ownerTok, http.MethodPost, "/location-types",
-		map[string]any{"name": "root", "display_name": "Root"}, http.StatusUnprocessableEntity)
+		map[string]any{"name": "root", "label": "Root"}, http.StatusUnprocessableEntity)
 
 	// allowed_parent_types round-trips through create and update.
 	c.do(ownerTok, http.MethodPost, "/location-types",
-		map[string]any{"name": "annex", "display_name": "Annex", "allowed_parent_types": []string{"wing", "root"}}, http.StatusCreated)
+		map[string]any{"name": "annex", "label": "Annex", "allowed_parent_types": []string{"wing", "root"}}, http.StatusCreated)
 	out := c.do(ownerTok, http.MethodGet, "/location-types", nil, http.StatusOK)
 	var listBody struct {
 		LocationTypes []struct {
@@ -199,12 +199,12 @@ func TestLocationTypeForkAndClearAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	type typeBody struct {
-		ID          string `json:"id"`
-		Name        string `json:"name"`
-		DisplayName string `json:"display_name"`
-		Official    bool   `json:"official"`
-		Forked      bool   `json:"forked"`
-		NameRule    *struct {
+		ID       string `json:"id"`
+		Name     string `json:"name"`
+		Label    string `json:"label"`
+		Official bool   `json:"official"`
+		Forked   bool   `json:"forked"`
+		NameRule *struct {
 			Stem      string `json:"stem"`
 			BareFirst bool   `json:"bare_first"`
 		} `json:"name_rule"`
@@ -221,8 +221,8 @@ func TestLocationTypeForkAndClearAPI(t *testing.T) {
 	// Editing a shipped type answers 200 with the SAME id, marked forked: the
 	// namespace never reaches the URL or the response.
 	shipped := decode(c.do(ownerTok, http.MethodPatch, "/location-types/campus",
-		map[string]any{"display_name": "Site", "name_rule": map[string]any{"stem": "site"}}, http.StatusOK))
-	if shipped.DisplayName != "Site" || !shipped.Official || !shipped.Forked {
+		map[string]any{"label": "Site", "name_rule": map[string]any{"stem": "site"}}, http.StatusOK))
+	if shipped.Label != "Site" || !shipped.Official || !shipped.Forked {
 		t.Fatalf("the forked shipped type = %+v, want Site with official and forked both true", shipped)
 	}
 	if shipped.NameRule == nil || shipped.NameRule.Stem != "site" {
@@ -231,7 +231,7 @@ func TestLocationTypeForkAndClearAPI(t *testing.T) {
 
 	// An omitted key is still unchanged: only the mask clears.
 	kept := decode(c.do(ownerTok, http.MethodPatch, "/location-types/campus",
-		map[string]any{"display_name": "Site 2"}, http.StatusOK))
+		map[string]any{"label": "Site 2"}, http.StatusOK))
 	if kept.NameRule == nil {
 		t.Fatal("an unrelated patch cleared the rule; an omitted key means unchanged")
 	}
@@ -242,8 +242,8 @@ func TestLocationTypeForkAndClearAPI(t *testing.T) {
 	if cleared.NameRule != nil {
 		t.Fatalf("the rule after a masked clear = %+v, want absent (operator-named)", cleared.NameRule)
 	}
-	if cleared.DisplayName != "Site 2" {
-		t.Fatalf("the masked clear also wrote display_name (%q); a mask writes exactly what it names", cleared.DisplayName)
+	if cleared.Label != "Site 2" {
+		t.Fatalf("the masked clear also wrote label (%q); a mask writes exactly what it names", cleared.Label)
 	}
 
 	// A mask naming a field this resource does not patch is a 422 naming it,
@@ -253,7 +253,7 @@ func TestLocationTypeForkAndClearAPI(t *testing.T) {
 
 	// :restore discards the whole fork, rule included.
 	restored := decode(c.do(ownerTok, http.MethodPost, "/location-types/campus:restore", nil, http.StatusOK))
-	if restored.DisplayName != "Campus" || restored.Forked || restored.ID != shipped.ID {
+	if restored.Label != "Campus" || restored.Forked || restored.ID != shipped.ID {
 		t.Fatalf("the restored type = %+v, want the shipped Campus under the same id, unforked", restored)
 	}
 	// Nothing left to discard is a 409 rather than a silent success.
@@ -263,7 +263,7 @@ func TestLocationTypeForkAndClearAPI(t *testing.T) {
 	// The same clear on an operator's OWN type is a plain write of null, and
 	// reads the same from here: two paths, one operator-visible behavior.
 	c.do(ownerTok, http.MethodPost, "/location-types",
-		map[string]any{"name": "deck", "display_name": "Deck", "name_rule": map[string]any{"stem": ""}}, http.StatusCreated)
+		map[string]any{"name": "deck", "label": "Deck", "name_rule": map[string]any{"stem": ""}}, http.StatusCreated)
 	own := decode(c.do(ownerTok, http.MethodPatch, "/location-types/deck",
 		map[string]any{"update_mask": []string{"name_rule"}}, http.StatusOK))
 	if own.NameRule != nil || own.Official || own.Forked {

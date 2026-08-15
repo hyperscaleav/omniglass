@@ -31,6 +31,10 @@ func TestNamePenSpreadsWithoutClaimingExistingRows(t *testing.T) {
 
 	// The registries are seeded by the boot phase rather than by a migration, so
 	// this fixture writes the one row a location needs to exist at all.
+	// The column is `display_name` at this point in the chain: #613's rename
+	// (20260814100000_label_is_the_column.sql) is above the version this test
+	// stands the database at, so writing `label` here would fail on a column
+	// that does not exist yet.
 	mustExec(t, conn, `insert into location_type (name, display_name) values ('room', 'Room')`)
 	mustExec(t, conn, `insert into system (name, display_name_generated) values ($1, false)`, "legacy-av")
 	mustExec(t, conn, `insert into location (name, display_name_generated, location_type)

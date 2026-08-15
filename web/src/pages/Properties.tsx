@@ -70,7 +70,7 @@ export default function Properties(): JSX.Element {
             { key: "type", type: "string", hint: "exact", get: (r) => r.data_type, values: () => PROPERTY_DATA_TYPES },
             { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
           ],
-          filterPlaceholder: "filter properties by name, display name…",
+          filterPlaceholder: "filter properties by name, label…",
           columns,
           empty: "No properties.",
           rowId: (r) => r.name,
@@ -85,14 +85,14 @@ export default function Properties(): JSX.Element {
 }
 
 // propertyBlade renders one property on the shared blade stack. The title is what the
-// list shows, the display name, falling back to the name; official properties are
+// list shows, the label, falling back to the name; official properties are
 // read-only (the Edit / Delete pair greys).
 export const propertyBlade: BladeDef = {
   Title: (p) => <PropertyBladeTitle name={p.id} />,
   Body: (p) => <PropertyBladeBody name={p.id} />,
 };
 
-// The blade heading is the display name, falling back to the name, so opening a row
+// The blade heading is the label, falling back to the name, so opening a row
 // lands on the same words the row showed. It rendered the bare name before, so
 // clicking "ICMP RTT (avg)" opened a panel headed icmp.rtt-avg.
 function PropertyBladeTitle(p: { name: string }): JSX.Element {
@@ -111,13 +111,13 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
   const edit = useBladeEdit();
   const row = usePropertyRow(p.name);
   const [err, setErr] = createSignal<string | null>(null);
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
 
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const r = row();
-    setDisplayName(r?.display_name ?? "");
+    setLabel(r?.label ?? "");
     setDescription(r?.description ?? "");
     setErr(null);
   }));
@@ -141,7 +141,7 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateProperty(r.name, { display_name: displayName(), description: description() });
+      await updateProperty(r.name, { label: label(), description: description() });
       await qc.invalidateQueries({ queryKey: PROPERTIES_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -172,10 +172,10 @@ function PropertyBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
           <BladeField
-            bind="display_name"
-            value={() => r().display_name ?? ""}
-            draft={displayName}
-            onInput={setDisplayName}
+            bind="label"
+            value={() => r().label ?? ""}
+            draft={label}
+            onInput={setLabel}
           />
           <BladeField
             label="Description"
@@ -203,7 +203,7 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
   const qc = useQueryClient();
   const [name, setName] = createSignal("");
   const [dataType, setDataType] = createSignal<PropertyDataType>("string");
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const [formErr, setFormErr] = createSignal<string | null>(null);
@@ -223,7 +223,7 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
       const created = await createProperty({
         name: name().trim(),
         data_type: dataType(),
-        display_name: displayName().trim() || undefined,
+        label: label().trim() || undefined,
         description: description().trim() || undefined,
       });
       await qc.invalidateQueries({ queryKey: PROPERTIES_KEY });
@@ -248,8 +248,8 @@ export function CreatePropertyForm(p: { onCreated: (r: PropertyRow) => void }): 
           <For each={PROPERTY_DATA_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
         </select>
       </FieldRow>
-      <FieldRow bind="display_name">
-        <input class="input input-bordered w-full" value={displayName()} placeholder="Serial number" onInput={(e) => setDisplayName(e.currentTarget.value)} />
+      <FieldRow bind="label">
+        <input class="input input-bordered w-full" value={label()} placeholder="Serial number" onInput={(e) => setLabel(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Description">
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />

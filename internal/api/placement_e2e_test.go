@@ -35,7 +35,7 @@ func TestComponentPlacementAPI(t *testing.T) {
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "loc-x", LocationType: "campus"}, scope.Set{All: true}); err != nil {
 		t.Fatalf("seed location: %v", err)
 	}
-	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "prod-x", DisplayName: "Prod X", Kind: "device"}); err != nil {
+	if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: "prod-x", Label: "Prod X", Kind: "device"}); err != nil {
 		t.Fatalf("seed product: %v", err)
 	}
 

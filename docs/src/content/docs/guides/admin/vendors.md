@@ -1,13 +1,13 @@
 ---
 title: Vendors
-description: "The Vendors catalog: the organizations behind products (name, display name, kind of manufacturer/integrator/developer, icon, support phone, website), official rows read-only, admin-gated custom ones."
+description: "The Vendors catalog: the organizations behind products (name, label, kind of manufacturer/integrator/developer, icon, support phone, website), official rows read-only, admin-gated custom ones."
 ---
 
 **Catalog, under Components: Vendors** (`/vendors`, with `vendor:read`, covered by every viewer's `*:read`
 floor) is the directory of **vendors**: the organizations behind the products in the estate, on
 the same flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
 A vendor is not a device; it is the company a device comes from. Each row shows the **name**
-(for example `crestron`), the **display name**, its **kind**
+(for example `crestron`), the **label**, its **kind**
 (**manufacturer**, **integrator**, or **developer**), an optional **icon** glyph key, and its
 **origin** (**official** or **custom**). A vendor also carries an `id`, a uuid
 minted by the database, the internal address the handle resolves to
@@ -24,11 +24,11 @@ model, and [Drivers](/guides/admin/drivers/) for the other leaf catalog beside i
   assembles and installs systems, a **developer** ships software. It defaults to **manufacturer**
   and is a closed set; a value outside it is refused (422).
 - **New vendor** (with `vendor:create`, an admin permission) opens a create drawer: give it a
-  **name** (unique tenant-wide, e.g. `crestron`) and a **display name**;
+  **name** (unique tenant-wide, e.g. `crestron`) and a **label**;
   choose its **kind** (defaults to manufacturer); **icon** (a glyph key), **support phone**, and
   **website** are optional.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `vendor:update`) edits
-  the display name, kind, icon, support phone, and website; the **name** is fixed, since a catalog
+  the label, kind, icon, support phone, and website; the **name** is fixed, since a catalog
   row carries no rename. **Delete** (with `vendor:delete`) removes the row, behind a confirm. A
   verb you lack greys just that button, its hover reason naming the permission
   (`Requires vendor:update`, `Requires vendor:delete`); the pair never disappears.

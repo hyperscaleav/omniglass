@@ -36,7 +36,7 @@ func newMemberFixture(t *testing.T, ctx context.Context) *memberFixture {
 	f := &memberFixture{gw: gw, all: scope.Set{All: true}}
 
 	for _, id := range []string{"member-standard"} {
-		if err := gw.UpsertStandard(ctx, storage.Standard{Name: id, DisplayName: "Member Standard"}); err != nil {
+		if err := gw.UpsertStandard(ctx, storage.Standard{Name: id, Label: "Member Standard"}); err != nil {
 			t.Fatalf("standard: %v", err)
 		}
 	}
@@ -204,7 +204,7 @@ func TestAssignRoleCreatesTheMembership(t *testing.T) {
 	f := newMemberFixture(t, ctx)
 
 	if _, err := f.gw.SetSystemRole(ctx, "", "system", "room-a", storage.SystemRoleSpec{
-		Name: "mic", DisplayName: "Mic", Quorum: 1, Impact: "degraded",
+		Name: "mic", Label: "Mic", Quorum: 1, Impact: "degraded",
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestRemoveMemberRefusedWhileStaffingARole(t *testing.T) {
 	f := newMemberFixture(t, ctx)
 
 	if _, err := f.gw.SetSystemRole(ctx, "", "system", "room-a", storage.SystemRoleSpec{
-		Name: "mic", DisplayName: "Mic", Quorum: 1, Impact: "degraded",
+		Name: "mic", Label: "Mic", Quorum: 1, Impact: "degraded",
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
@@ -284,7 +284,7 @@ func TestMembershipCascadesFromBothEnds(t *testing.T) {
 	// Staffing a role is what makes it undeletable, and that is system_role_assignment's
 	// guard, unchanged by this slice.
 	if _, err := f.gw.SetSystemRole(ctx, "", "system", "room-b", storage.SystemRoleSpec{
-		Name: "mic", DisplayName: "Mic", Quorum: 1, Impact: "degraded",
+		Name: "mic", Label: "Mic", Quorum: 1, Impact: "degraded",
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}

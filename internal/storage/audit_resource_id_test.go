@@ -38,7 +38,7 @@ func auditedRenames() []auditedRename {
 		{
 			resource: "driver",
 			create: func(ctx context.Context, gw *storage.PG, name string) (string, error) {
-				d, err := gw.CreateDriver(ctx, "", storage.Driver{Name: name, DisplayName: "X"})
+				d, err := gw.CreateDriver(ctx, "", storage.Driver{Name: name, Label: "X"})
 				if err != nil {
 					return "", err
 				}
@@ -46,14 +46,14 @@ func auditedRenames() []auditedRename {
 			},
 			update: func(ctx context.Context, gw *storage.PG, ref string) error {
 				n := "Y"
-				_, err := gw.UpdateDriver(ctx, "", ref, storage.DriverPatch{DisplayName: &n})
+				_, err := gw.UpdateDriver(ctx, "", ref, storage.DriverPatch{Label: &n})
 				return err
 			},
 		},
 		{
 			resource: "vendor",
 			create: func(ctx context.Context, gw *storage.PG, name string) (string, error) {
-				v, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: name, DisplayName: "X", Kind: "manufacturer"})
+				v, err := gw.CreateVendor(ctx, "", storage.Vendor{Name: name, Label: "X", Kind: "manufacturer"})
 				if err != nil {
 					return "", err
 				}
@@ -61,14 +61,14 @@ func auditedRenames() []auditedRename {
 			},
 			update: func(ctx context.Context, gw *storage.PG, ref string) error {
 				d := "Y"
-				_, err := gw.UpdateVendor(ctx, "", ref, storage.VendorPatch{DisplayName: &d})
+				_, err := gw.UpdateVendor(ctx, "", ref, storage.VendorPatch{Label: &d})
 				return err
 			},
 		},
 		{
 			resource: "product",
 			create: func(ctx context.Context, gw *storage.PG, name string) (string, error) {
-				m, err := gw.CreateProduct(ctx, "", storage.Product{Name: name, DisplayName: "X"})
+				m, err := gw.CreateProduct(ctx, "", storage.Product{Name: name, Label: "X"})
 				if err != nil {
 					return "", err
 				}
@@ -76,7 +76,7 @@ func auditedRenames() []auditedRename {
 			},
 			update: func(ctx context.Context, gw *storage.PG, ref string) error {
 				d := "Y"
-				_, err := gw.UpdateProduct(ctx, "", ref, storage.ProductPatch{DisplayName: &d})
+				_, err := gw.UpdateProduct(ctx, "", ref, storage.ProductPatch{Label: &d})
 				return err
 			},
 		},
@@ -113,12 +113,12 @@ func TestAuditResourceIDOnANameAddressedRegistry(t *testing.T) {
 
 	const name = "audit-key-property"
 	created, err := gw.CreatePropertyType(ctx, "", storage.PropertyTypeSpec{
-		Name: name, DisplayName: "X", DataType: "string"})
+		Name: name, Label: "X", DataType: "string"})
 	if err != nil {
 		t.Fatalf("create property type: %v", err)
 	}
 	display := "Y"
-	if _, err := gw.UpdatePropertyType(ctx, "", name, storage.PropertyTypePatch{DisplayName: &display}); err != nil {
+	if _, err := gw.UpdatePropertyType(ctx, "", name, storage.PropertyTypePatch{Label: &display}); err != nil {
 		t.Fatalf("update property type: %v", err)
 	}
 	if err := gw.DeletePropertyType(ctx, "", name); err != nil {

@@ -14,7 +14,7 @@ export const PROPERTY_DATA_TYPES: PropertyDataType[] = ["string", "bool", "json"
 export type PropertyRow = {
   name: string;
   data_type: string;
-  display_name?: string;
+  label?: string;
   description?: string;
   validation?: unknown;
   official: boolean;
@@ -31,7 +31,7 @@ export async function listProperties(): Promise<PropertyRow[]> {
 export type CreateProperty = {
   name: string;
   data_type: PropertyDataType;
-  display_name?: string;
+  label?: string;
   description?: string;
   validation?: unknown;
 };
@@ -43,7 +43,7 @@ export async function createProperty(body: CreateProperty): Promise<PropertyRow>
 }
 
 export type UpdateProperty = {
-  display_name?: string;
+  label?: string;
   description?: string;
   validation?: unknown;
 };

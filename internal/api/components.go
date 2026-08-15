@@ -13,7 +13,7 @@ import (
 type componentBody struct {
 	ID            string  `json:"id"`
 	Name          string  `json:"name"`
-	DisplayName   string  `json:"display_name,omitempty"`
+	Label         string  `json:"label,omitempty"`
 	ParentID      *string `json:"parent_id,omitempty" doc:"The parent component's id, the canonical handle"`
 	Parent        *string `json:"parent,omitempty" doc:"The parent component's name, for display; absent for a root component"`
 	SystemID      *string `json:"system_id,omitempty" doc:"The primary system's id, the canonical handle"`
@@ -25,21 +25,21 @@ type componentBody struct {
 	Product       *string `json:"product,omitempty" doc:"The product's name, for display; the form a body round-trips."`
 	NameGenerated bool    `json:"name_generated" doc:"Whether the platform picked this name (a server-side generator) rather than an operator typing it."`
 	// The LABEL's pen (#682), read-only for the same reason name_generated is:
-	// an operator claims it by writing display_name and returns it by clearing
-	// display_name, so there is exactly one way to say who owns the label.
-	DisplayNameGenerated bool              `json:"display_name_generated" doc:"Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back."`
-	Path                 string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.415a.$comp.display-1): derived from the component's own placement, never from a system it belongs to. Set on a GET or LIST response; empty on a create/update/move/rename/resetName response (refetch the row to see it)."`
-	PathSegments         []string          `json:"path_segments,omitempty" doc:"path split on '.', accessors included, so the round trip through the resolver stays lossless."`
-	Renders              *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
-	Actions              []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
-	EffectiveTags        map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view."`
+	// an operator claims it by writing label and returns it by clearing
+	// label, so there is exactly one way to say who owns the label.
+	LabelGenerated bool              `json:"label_generated" doc:"Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back."`
+	Path           string            `json:"path,omitempty" doc:"The dotted address (e.g. boi.17c.415a.$comp.display-1): derived from the component's own placement, never from a system it belongs to. Set on a GET or LIST response; empty on a create/update/move/rename/resetName response (refetch the row to see it)."`
+	PathSegments   []string          `json:"path_segments,omitempty" doc:"path split on '.', accessors included, so the round trip through the resolver stays lossless."`
+	Renders        *renderBody       `json:"renders,omitempty" doc:"Two display-only compact forms of path, dash and bare. Neither is accepted back by the resolver: stripping/compacting is lossy."`
+	Actions        []string          `json:"actions,omitempty" doc:"The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces."`
+	EffectiveTags  map[string]string `json:"effective_tags,omitempty" doc:"The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view."`
 }
 
 func toComponentBody(c *storage.Component) componentBody {
 	return componentBody{
-		ID: c.ID, Name: c.Name, DisplayName: c.DisplayName,
+		ID: c.ID, Name: c.Name, Label: c.Label,
 		ParentID: c.ParentID, Parent: c.ParentName, SystemID: c.PrimarySystemID, System: c.PrimarySystem, SystemCount: c.SystemCount, LocationID: c.LocationID, Location: c.LocationName, ProductID: c.ProductID, Product: c.ProductHandle,
-		NameGenerated: c.NameGenerated, DisplayNameGenerated: c.DisplayNameGenerated,
+		NameGenerated: c.NameGenerated, LabelGenerated: c.LabelGenerated,
 		Path: c.Path, PathSegments: c.PathSegments, Renders: toRenderBody(c.Path, c.Renders),
 	}
 }
@@ -63,11 +63,11 @@ type createComponentInput struct {
 		// Name is optional (#627 Task 14): omit it and the platform mints
 		// "<stem>-<n>" from the classified product's component_type, marking
 		// name_generated. Supplied, it is validated exactly as before.
-		Name        string  `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type."`
-		DisplayName string  `json:"display_name,omitempty" doc:"What an operator reads; the name is the address"`
-		Parent      *string `json:"parent,omitempty" doc:"Parent component name; omit for a root component"`
-		System      *string `json:"system,omitempty" doc:"Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone."`
-		Location    *string `json:"location,omitempty" doc:"Location name this component is placed at"`
+		Name     string  `json:"name,omitempty" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type."`
+		Label    string  `json:"label,omitempty" doc:"What an operator reads; the name is the address"`
+		Parent   *string `json:"parent,omitempty" doc:"Parent component name; omit for a root component"`
+		System   *string `json:"system,omitempty" doc:"Primary system name this component belongs to. Naming one writes that system's membership, so it costs the system:update permission and resolves in that scope; omitted, the create costs component:create alone."`
+		Location *string `json:"location,omitempty" doc:"Location name this component is placed at"`
 		// Product is required: every component is an instance of a product (the
 		// classification floor). It stays a pointer rather than a plain
 		// required string so the handler can report a specific, actionable
@@ -95,7 +95,7 @@ type createComponentInput struct {
 type updateComponentInput struct {
 	Name string `path:"name" doc:"The component's name, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
 	Body struct {
-		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
+		Label *string `json:"label,omitempty" doc:"A new operator-facing label"`
 		// Product does NOT follow the house three-state convention: it is
 		// required (the classification floor, every component is an instance
 		// of a product), so it has no clear state. An omitted field is
@@ -243,7 +243,7 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		}
 		c, err := gw.CreateComponent(ctx, actorID(ctx), storage.ComponentSpec{
 			Name:         in.Body.Name,
-			DisplayName:  in.Body.DisplayName,
+			Label:        in.Body.Label,
 			ParentName:   in.Body.Parent,
 			SystemName:   in.Body.System,
 			LocationName: in.Body.Location,
@@ -262,13 +262,13 @@ func registerComponentRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodPatch,
 		Path:        "/components/{name}",
 		Summary:     "Update a component",
-		Description: "Patches a component's display_name or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
+		Description: "Patches a component's label or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.",
 	}, "component", "update"), func(ctx context.Context, in *updateComponentInput) (*componentOutput, error) {
 		if in.Body.Product != nil && *in.Body.Product == "" {
 			return nil, huma.Error422UnprocessableEntity("product cannot be cleared; a component must always be an instance of a product")
 		}
 		c, err := gw.UpdateComponent(ctx, actorID(ctx), in.Name, storage.ComponentPatch{
-			DisplayName: in.Body.DisplayName,
+			Label:       in.Body.Label,
 			ProductName: in.Body.Product,
 		}, a.scopeFor(ctx, "component", "read"), a.scopeFor(ctx, "component", "update"))
 		if err != nil {

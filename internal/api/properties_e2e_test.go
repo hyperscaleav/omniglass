@@ -45,7 +45,7 @@ func TestPropertyAPI(t *testing.T) {
 	// Register a custom property. Numbers are the metric lane (#587), so the
 	// property fixture is a string.
 	created := c.do(ownerTok, http.MethodPost, "/property-types", map[string]any{
-		"name": "rack-unit", "data_type": "string", "display_name": "Rack unit",
+		"name": "rack-unit", "data_type": "string", "label": "Rack unit",
 		"validation": map[string]any{"pattern": "^u[0-9]+$"},
 	}, http.StatusCreated)
 	var p struct {
@@ -83,7 +83,7 @@ func TestPropertyAPI(t *testing.T) {
 	}
 
 	// Update a mutable field.
-	c.do(ownerTok, http.MethodPatch, "/property-types/rack-unit", map[string]any{"display_name": "Rack Unit (U)"}, http.StatusOK)
+	c.do(ownerTok, http.MethodPatch, "/property-types/rack-unit", map[string]any{"label": "Rack Unit (U)"}, http.StatusOK)
 
 	// A malformed name is a 422.
 	c.do(ownerTok, http.MethodPost, "/property-types", map[string]any{"name": "Bad-Name", "data_type": "string"}, http.StatusUnprocessableEntity)
@@ -92,7 +92,7 @@ func TestPropertyAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/property-types", map[string]any{"name": "rack-unit", "data_type": "string"}, http.StatusConflict)
 
 	// An official (seeded) property is read-only (409).
-	c.do(ownerTok, http.MethodPatch, "/property-types/serial-number", map[string]any{"display_name": "x"}, http.StatusConflict)
+	c.do(ownerTok, http.MethodPatch, "/property-types/serial-number", map[string]any{"label": "x"}, http.StatusConflict)
 	c.do(ownerTok, http.MethodDelete, "/property-types/serial-number", nil, http.StatusConflict)
 
 	// An unknown property is a 404.

@@ -72,7 +72,7 @@ instead, to avoid concurrent migrators.
 | `ingress.host` | empty | required when `ingress.enabled`; the public host |
 | `bootstrap.enabled` | `true` | auto-create an owner (previews) |
 | `bootstrap.username` | `preview` | owner username |
-| `bootstrap.email` / `bootstrap.displayName` | empty / `Preview Owner` | optional owner fields |
+| `bootstrap.email` / `bootstrap.label` | empty / `Preview Owner` | optional owner fields |
 | `postgres.enabled` | `true` | bundle an ephemeral Postgres |
 | `postgres.image` / `user` / `password` / `database` | `postgres:18` / `omniglass` x3 | bundled Postgres settings |
 | `postgres.resources` | small requests/limits | bound the throwaway DB |

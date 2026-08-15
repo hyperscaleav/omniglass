@@ -31,11 +31,11 @@ func validVendorKind(s string) bool {
 }
 
 // Vendor is a registry row naming an organization in the estate model (e.g.
-// "Cisco", "Crestron"): a stable id, the official flag, a display_name, a kind
+// "Cisco", "Crestron"): a stable id, the official flag, a label, a kind
 // (manufacturer/integrator/developer), and optional contact metadata (icon,
 // support phone, website). It is a flat registry like component_type: no tree,
 // and no in-use delete guard in this slice (product will reference it). The
-// registry lists alphabetically by display_name; there is no ordering field.
+// registry lists alphabetically by label; there is no ordering field.
 type Vendor struct {
 	// ID is the uuid primary key and Name the renameable name, the shape
 	// tag has and every estate entity has after ADR-0056. A vendor is addressable
@@ -44,7 +44,7 @@ type Vendor struct {
 	ID           string
 	Name         string
 	Official     bool
-	DisplayName  string
+	Label        string
 	Kind         string
 	Icon         string
 	SupportPhone string
@@ -56,18 +56,18 @@ type Vendor struct {
 // VendorPatch carries the mutable fields of a vendor update; a nil field is
 // left unchanged.
 type VendorPatch struct {
-	DisplayName  *string
+	Label        *string
 	Kind         *string
 	Icon         *string
 	SupportPhone *string
 	Website      *string
 }
 
-const vendorCols = `id, name, official, display_name, kind, icon, support_phone, website, created_at, updated_at`
+const vendorCols = `id, name, official, coalesce(label, ''), kind, icon, support_phone, website, created_at, updated_at`
 
 func scanVendor(row pgx.Row) (*Vendor, error) {
 	var m Vendor
-	if err := row.Scan(&m.ID, &m.Name, &m.Official, &m.DisplayName, &m.Kind, &m.Icon, &m.SupportPhone, &m.Website, &m.CreatedAt, &m.UpdatedAt); err != nil {
+	if err := row.Scan(&m.ID, &m.Name, &m.Official, &m.Label, &m.Kind, &m.Icon, &m.SupportPhone, &m.Website, &m.CreatedAt, &m.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &m, nil
@@ -78,27 +78,35 @@ func scanVendor(row pgx.Row) (*Vendor, error) {
 // handle: re-seeding `crestron` updates that row in place and its id never moves.
 func (p *PG) UpsertVendor(ctx context.Context, m Vendor) error {
 	_, err := p.pool.Exec(ctx, `
-		insert into vendor (name, official, display_name, kind, icon, support_phone, website)
+		insert into vendor (name, official, label, kind, icon, support_phone, website)
 		values ($1, $2, $3, $4, $5, $6, $7)
 		on conflict (name) do update
 			set official      = excluded.official,
-			    display_name  = excluded.display_name,
+			    label  = excluded.label,
 			    kind          = excluded.kind,
 			    icon          = excluded.icon,
 			    support_phone = excluded.support_phone,
 			    website       = excluded.website,
 			    updated_at    = now()`,
-		m.Name, m.Official, m.DisplayName, m.Kind, m.Icon, m.SupportPhone, m.Website)
+		m.Name, m.Official, labelOrNull(m.Label), m.Kind, m.Icon, m.SupportPhone, m.Website)
 	if err != nil {
 		return fmt.Errorf("storage: upsert vendor %q: %w", m.Name, err)
 	}
 	return nil
 }
 
-// ListVendors returns every vendor, ordered alphabetically by display_name then
-// id.
+// ListVendors returns every vendor, ordered alphabetically by label, with
+// UNLABELLED rows last and the name breaking ties.
+//
+// `nulls last` is redundant on an ASC sort and written anyway, because it is the
+// half of this ordering that is a DECISION rather than a default: unlabelled
+// rows belong at the end, and spelling it means a later DESC or a later
+// nullability change cannot silently move them to the top. What makes it work
+// at all is that unset is SQL NULL and never the empty string, which
+// labelOrNull (label_unset.go) enforces on the write side and
+// registry_ordering_test.go pins on all seven registries (#613, ADR-0118).
 func (p *PG) ListVendors(ctx context.Context) ([]Vendor, error) {
-	rows, err := p.pool.Query(ctx, `select `+vendorCols+` from vendor order by display_name, name`)
+	rows, err := p.pool.Query(ctx, `select `+vendorCols+` from vendor order by label nulls last, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list vendors: %w", err)
 	}
@@ -140,10 +148,10 @@ func (p *PG) CreateVendor(ctx context.Context, actorID string, m Vendor) (*Vendo
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := tx.QueryRow(ctx, `
-		insert into vendor (name, official, display_name, kind, icon, support_phone, website)
+		insert into vendor (name, official, label, kind, icon, support_phone, website)
 		values ($1, false, $2, $3, $4, $5, $6)
 		returning id, created_at, updated_at`,
-		m.Name, m.DisplayName, m.Kind, m.Icon, m.SupportPhone, m.Website).
+		m.Name, labelOrNull(m.Label), m.Kind, m.Icon, m.SupportPhone, m.Website).
 		Scan(&m.ID, &m.CreatedAt, &m.UpdatedAt); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
@@ -159,7 +167,7 @@ func (p *PG) CreateVendor(ctx context.Context, actorID string, m Vendor) (*Vendo
 	return &m, nil
 }
 
-// UpdateVendor patches a custom vendor's display_name, kind, icon,
+// UpdateVendor patches a custom vendor's label, kind, icon,
 // support_phone, or website (nil fields unchanged) and audits it. Official rows
 // are read-only (ErrTypeOfficial); an unknown id is ErrTypeNotFound.
 func (p *PG) UpdateVendor(ctx context.Context, actorID, id string, patch VendorPatch) (*Vendor, error) {
@@ -179,9 +187,10 @@ func (p *PG) UpdateVendor(ctx context.Context, actorID, id string, patch VendorP
 		}
 		return nil, fmt.Errorf("storage: audit image vendor %q: %w", id, err)
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	m, err := scanVendor(tx.QueryRow(ctx, `
 		update vendor set
-			display_name  = coalesce($2, display_name),
+			label  = case when $7::boolean then $2 else label end,
 			kind          = coalesce($3, kind),
 			icon          = coalesce($4, icon),
 			support_phone = coalesce($5, support_phone),
@@ -189,7 +198,7 @@ func (p *PG) UpdateVendor(ctx context.Context, actorID, id string, patch VendorP
 			updated_at    = now()
 		where `+registryRefCol(id)+` = $1
 		returning `+vendorCols,
-		id, patch.DisplayName, patch.Kind, patch.Icon, patch.SupportPhone, patch.Website))
+		id, labelVal, patch.Kind, patch.Icon, patch.SupportPhone, patch.Website, setLabel))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound

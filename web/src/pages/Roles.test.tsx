@@ -15,10 +15,10 @@ import { uuidFor } from "../lib/testids";
 // must render it like any other capability.
 const UNIVERSE = ["audit:read:admin", "component:create", "component:delete", "component:read", "platform:update", "system:read"];
 const seed: Role[] = [
-  { id: uuidFor("owner"), name: "owner", official: true, display_name: "Owner", description: "Full control, break-glass.", permissions: [">"], inherits: [], effective_permissions: [">"], permission_universe: UNIVERSE, held: UNIVERSE },
-  { id: uuidFor("admin"), name: "admin", official: true, display_name: "Administrator", description: "Manage the estate.", permissions: ["audit:read:admin"], inherits: ["operator"], effective_permissions: ["*:read", "principal:*", "audit:read:admin"], permission_universe: UNIVERSE, held: UNIVERSE },
-  { id: uuidFor("operator"), name: "operator", official: true, display_name: "Operator", description: "Day-to-day ops.", permissions: ["component:create"], inherits: ["viewer"], effective_permissions: ["*:read", "component:create"], permission_universe: UNIVERSE, held: ["component:create", "component:read", "system:read"] },
-  { id: uuidFor("viewer"), name: "viewer", official: true, display_name: "Viewer", description: "Read only.", permissions: ["*:read"], inherits: [], effective_permissions: ["*:read"], permission_universe: UNIVERSE, held: ["component:read", "system:read"] },
+  { id: uuidFor("owner"), name: "owner", official: true, label: "Owner", description: "Full control, break-glass.", permissions: [">"], inherits: [], effective_permissions: [">"], permission_universe: UNIVERSE, held: UNIVERSE },
+  { id: uuidFor("admin"), name: "admin", official: true, label: "Administrator", description: "Manage the estate.", permissions: ["audit:read:admin"], inherits: ["operator"], effective_permissions: ["*:read", "principal:*", "audit:read:admin"], permission_universe: UNIVERSE, held: UNIVERSE },
+  { id: uuidFor("operator"), name: "operator", official: true, label: "Operator", description: "Day-to-day ops.", permissions: ["component:create"], inherits: ["viewer"], effective_permissions: ["*:read", "component:create"], permission_universe: UNIVERSE, held: ["component:create", "component:read", "system:read"] },
+  { id: uuidFor("viewer"), name: "viewer", official: true, label: "Viewer", description: "Read only.", permissions: ["*:read"], inherits: [], effective_permissions: ["*:read"], permission_universe: UNIVERSE, held: ["component:read", "system:read"] },
 ];
 
 function mount() {
@@ -105,11 +105,11 @@ describe("Roles page", () => {
     expect(await screen.findByText("platform:update")).toBeTruthy();
   });
 
-  it("renders the display name over the name in one Name column", () => {
+  it("renders the label over the name in one Name column", () => {
     mount();
-    // The shared identity cell puts the display name on the primary line and the
+    // The shared identity cell puts the label on the primary line and the
     // name beneath it, so the name stays readable and selectable for a CLI call.
-    // It is no longer a badge crowded onto the display name's line.
+    // It is no longer a badge crowded onto the label's line.
     const cell = screen.getByText("Administrator").closest("td");
     expect(cell?.textContent).toContain("admin");
     expect(cell?.querySelector(".badge")).toBeNull();

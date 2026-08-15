@@ -14,19 +14,19 @@ the node ships back. This page walks the console surfaces; the model behind them
 
 **Inventory > Nodes** (with `node:read`, which must be **all-scope**, since a node is
 estate-wide, so a location-scoped operator cannot list nodes) is the collection-daemon
-inventory. Each row reads the way every list in the console reads: the node's **display name** on the
+inventory. Each row reads the way every list in the console reads: the node's **label** on the
 first line and its **name** beneath it (shown only when the two differ), then a **liveness pill** (up,
 down, or never, derived from its last heartbeat against the server's down window), the relative
 last-heartbeat time, and its tags. A row opens the node's detail.
 
 - With `node:create` and `node:enroll`, **New node** registers a node (the name is its
   estate address) and mints its **enrollment token**. The form also takes an optional
-  **display name** and **location**. The token is a secret shown **once**, in a
+  **label** and **location**. The token is a secret shown **once**, in a
   copy-to-clipboard field with a "shown once, cannot be retrieved again" warning. Copy it now
   and hand it to the node deployment; the node presents it to claim its NATS credential. The
   server stores only a hash of the token and never logs it.
 - The detail is **read-edit-save**, like a component or location. With `node:update`, **Edit**
-  changes the node's **display name**, **description**, and **location** (a descriptive
+  changes the node's **label**, **description**, and **location** (a descriptive
   placement picked from the estate's locations, not a scope); the **name is immutable** (it is
   the estate address and enrollment identity). The location clears if that location is deleted.
 - The detail carries a **Tags** panel: with `node:update`, edit mode adds and removes governed

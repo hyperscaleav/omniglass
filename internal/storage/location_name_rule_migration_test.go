@@ -33,6 +33,10 @@ func TestLocationNameRuleArrivesClaimingNothing(t *testing.T) {
 
 	// The registries are seeded by the boot phase rather than by a migration,
 	// so this fixture writes the rows an upgraded estate would already hold.
+	// The column is `display_name` at this point in the chain: #613's rename
+	// (20260814100000_label_is_the_column.sql) is above the version this test
+	// stands the database at, so writing `label` here would fail on a column
+	// that does not exist yet.
 	mustExec(t, conn, `insert into location_type (name, display_name) values ('floor', 'Floor')`)
 	mustExec(t, conn, `insert into location (name, display_name_generated, location_type)
 	                   values ($1, false, (select id from location_type where name = 'floor'))`, "ground")

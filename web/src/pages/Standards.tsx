@@ -20,7 +20,7 @@ import {
 } from "../lib/standards";
 import { useMe, can } from "../lib/auth";
 import { registryLock } from "../lib/catalog";
-import { createIdentity, entityLabel } from "../lib/entities";
+import { byLabel, createIdentity, entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
@@ -58,7 +58,7 @@ export default function Standards() {
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
 
   const rows = createMemo(() =>
-    [...(standards.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name) || a.name.localeCompare(b.name)),
+    [...(standards.data ?? [])].sort(byLabel),
   );
 
   return (
@@ -112,13 +112,13 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
   const edit = useBladeEdit();
   const row = useStandardRow(p.id);
   const [err, setErr] = createSignal<string | null>(null);
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [parentId, setParentId] = createSignal("");
 
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const r = row();
-    setDisplayName(r?.display_name ?? "");
+    setLabel(r?.label ?? "");
     setParentId(r?.parent_standard ?? "");
     setErr(null);
   }));
@@ -142,7 +142,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
     if (!r) return;
     setErr(null);
     try {
-      await updateStandard(r.name, { display_name: displayName(), parent_standard_id: parentId() || undefined });
+      await updateStandard(r.name, { label: label(), parent_standard_id: parentId() || undefined });
       await qc.invalidateQueries({ queryKey: STANDARDS_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -173,10 +173,10 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
             <KVStacked label="Id" value={<span class="font-data text-xs text-base-content/60">{r().id}</span>} />
           </div>
           <BladeField
-            bind="display_name"
-            value={() => r().display_name ?? ""}
-            draft={displayName}
-            onInput={setDisplayName}
+            bind="label"
+            value={() => r().label ?? ""}
+            draft={label}
+            onInput={setLabel}
           />
           <BladeField
             label="Variant of"
@@ -200,7 +200,7 @@ function StandardBladeBody(p: { id: string }): JSX.Element {
 // the parent standard is optional (a variant of an existing one).
 export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX.Element {
   const qc = useQueryClient();
-  // Display name leads and the handle follows it, stopping the moment the
+  // Label leads and the handle follows it, stopping the moment the
   // operator edits the handle by hand (lib/entities).
   const { display, setDisplay, name, setName, nameDerived } = createIdentity();
   const [parentId, setParentId] = createSignal("");
@@ -221,7 +221,7 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
     try {
       const created = await createStandard({
         name: name().trim(),
-        display_name: display().trim(),
+        label: display().trim(),
         parent_standard_id: parentId() || undefined,
       });
       await qc.invalidateQueries({ queryKey: STANDARDS_KEY });
@@ -238,10 +238,10 @@ export function CreateStandardForm(p: { onCreated: (s: Standard) => void }): JSX
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="display_name" hint="What an operator reads.">
+      <FieldRow bind="label" hint="What an operator reads.">
         <input class="input input-bordered w-full" value={display()} placeholder="Meeting room" onInput={(e) => setDisplay(e.currentTarget.value)} />
       </FieldRow>
-      <FieldRow bind="name" hint={nameDerived() ? "Derived from the display name. Edit to set your own." : "A kebab name, e.g. meeting-room."}>
+      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "A kebab name, e.g. meeting-room."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="meeting-room" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Variant of" hint="A standard this one specializes. Optional.">
@@ -259,12 +259,12 @@ function ParentStandardSelect(p: { value: string; exclude?: string; onChange: (v
   const options = createMemo(() =>
     [...(standards.data ?? [])]
       .filter((s) => s.name !== p.exclude)
-      .sort((a, b) => a.display_name.localeCompare(b.display_name)),
+      .sort(byLabel),
   );
   return (
     <select class="select select-bordered w-full" aria-label="Variant of" value={p.value} onChange={(e) => p.onChange(e.currentTarget.value)}>
       <option value="">None</option>
-      <For each={options()}>{(s) => <option value={s.name}>{s.display_name}</option>}</For>
+      <For each={options()}>{(s) => <option value={s.name}>{s.label}</option>}</For>
     </select>
   );
 }

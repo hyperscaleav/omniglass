@@ -27,7 +27,7 @@ var ErrUnknownRoleOwner = errors.New("storage: unknown role owner_kind")
 // this list: omitting it left the audit trail blind to exactly the field
 // this fix round made deliberately writable, so a role moving between
 // alternates left no evidence.
-var systemRoleCols = `id, owner_kind, name, display_name, quorum, capacity, position_labels, impact, alternate_id, ` +
+var systemRoleCols = `id, owner_kind, name, coalesce(label, ''), quorum, capacity, position_labels, impact, alternate_id, ` +
 	alternateRefExpr("system_role") + `, created_at, updated_at`
 
 // alternateRefExpr renders a role's alternate membership as the address the
@@ -100,7 +100,7 @@ func roleOwnerColumn(ownerKind string) (string, error) {
 
 func scanSystemRole(row pgx.Row) (*SystemRole, error) {
 	var r SystemRole
-	if err := row.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Capacity, &r.PositionLabels,
+	if err := row.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.Label, &r.Quorum, &r.Capacity, &r.PositionLabels,
 		&r.Impact, &r.AlternateID, &r.Alternate, &r.CreatedAt, &r.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -121,9 +121,9 @@ func normalizePositionLabels(s []string) []string {
 // field an update_mask names it by. The pair is what lets the UPDATE branch be
 // built from the write set rather than hand-maintained per field.
 var (
-	roleWriteColumns = []string{"display_name", "quorum", "capacity", "position_labels", "impact", "alternate_id"}
+	roleWriteColumns = []string{"label", "quorum", "capacity", "position_labels", "impact", "alternate_id"}
 	roleColumnFields = map[string]string{
-		"display_name":    RoleFieldDisplayName,
+		"label":           RoleFieldLabel,
 		"quorum":          RoleFieldQuorum,
 		"capacity":        RoleFieldCapacity,
 		"position_labels": RoleFieldPositionLabels,
@@ -167,7 +167,7 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	// The columns are spelled out rather than reusing systemRoleCols: the join
 	// needs them qualified by the role alias.
 	q := fmt.Sprintf(`
-		select r.id, r.owner_kind, r.name, r.display_name, r.quorum, r.capacity, r.position_labels, r.impact,
+		select r.id, r.owner_kind, r.name, coalesce(r.label, ''), r.quorum, r.capacity, r.position_labels, r.impact,
 		       `+alternateRefExpr("r")+` as alternate, r.created_at, r.updated_at,
 		       coalesce(array_agg(distinct ct.name order by ct.name) filter (where ct.name is not null), '{}') as types,
 		       coalesce(array_agg(distinct pr.name order by pr.name) filter (where pr.name is not null), '{}') as products
@@ -189,7 +189,7 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	out := []SystemRole{}
 	for rows.Next() {
 		var r SystemRole
-		if err := rows.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.DisplayName, &r.Quorum, &r.Capacity, &r.PositionLabels,
+		if err := rows.Scan(&r.ID, &r.OwnerKind, &r.Name, &r.Label, &r.Quorum, &r.Capacity, &r.PositionLabels,
 			&r.Impact, &r.Alternate, &r.CreatedAt, &r.UpdatedAt, &r.AcceptedTypes, &r.PinnedProducts); err != nil {
 			return nil, fmt.Errorf("storage: scan role: %w", err)
 		}
@@ -227,15 +227,15 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	// defaulted: a field the write does not write contributes its default to
 	// the INSERT branch (a create has nothing to preserve) and is discarded
 	// by the UPDATE branch, which reads the stored column instead.
-	display := spec.DisplayName
-	if !write.Has(RoleFieldDisplayName) {
+	display := spec.Label
+	if !write.Has(RoleFieldLabel) {
 		display = ""
 	}
 	if display == "" {
 		// A minimal write still reads properly on a surface. The default
 		// lives here rather than in the API layer so it applies to the
 		// value, not to the decision to write one: the API's body is what
-		// says whether display_name is being written at all.
+		// says whether label is being written at all.
 		display = spec.Name
 	}
 	quorum := spec.Quorum
@@ -319,7 +319,7 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 		case err != nil:
 			return nil, fmt.Errorf("storage: capacity precheck %s: %w", prior.ID, err)
 		default:
-			return nil, &CapacityShortfall{Role: prior.DisplayName, System: sysName, Have: have, Want: *capacity}
+			return nil, &CapacityShortfall{Role: prior.Label, System: sysName, Have: have, Want: *capacity}
 		}
 	}
 
@@ -349,12 +349,12 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 	sets = append(sets, "updated_at = now()")
 
 	r, err := scanSystemRole(tx.QueryRow(ctx, fmt.Sprintf(`
-		insert into system_role (owner_kind, %s, name, display_name, quorum, capacity, position_labels, impact, alternate_id)
+		insert into system_role (owner_kind, %s, name, label, quorum, capacity, position_labels, impact, alternate_id)
 		values ($1, %s, $3, $4, $5, $6, $7, $8, nullif($9, '')::uuid)
 		on conflict (owner_kind, standard_id, system_id, name) do update
 			set %s
 		returning `+systemRoleCols, col, roleOwnerExpr(ownerKind), strings.Join(sets, ",\n\t\t\t    ")),
-		ownerKind, ownerArg, spec.Name, display, quorum, capacity, positionLabels, impact, alternateID))
+		ownerKind, ownerArg, spec.Name, labelOrNull(display), quorum, capacity, positionLabels, impact, alternateID))
 	if err != nil {
 		return nil, mapRoleWriteErr(err)
 	}
@@ -516,11 +516,11 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 	}
 	var id string
 	err = p.pool.QueryRow(ctx, fmt.Sprintf(`
-		insert into system_role (owner_kind, %s, name, display_name, quorum, capacity, position_labels, impact, alternate_id)
+		insert into system_role (owner_kind, %s, name, label, quorum, capacity, position_labels, impact, alternate_id)
 		values ($1, %s, $3, $4, $5, $6, $7, $8, nullif($9, '')::uuid)
 		on conflict (owner_kind, standard_id, system_id, name) do nothing
 		returning id`, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerArg, spec.Name, spec.DisplayName, max(spec.Quorum, 1), spec.Capacity, positionLabels, impact, spec.AlternateID).Scan(&id)
+		ownerKind, ownerArg, spec.Name, labelOrNull(spec.Label), max(spec.Quorum, 1), spec.Capacity, positionLabels, impact, spec.AlternateID).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // already there, and the operator owns it now
 	}

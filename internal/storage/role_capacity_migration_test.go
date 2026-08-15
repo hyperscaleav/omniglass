@@ -32,6 +32,9 @@ func TestDuplicateStaffingPreflightRaises(t *testing.T) {
 	).Scan(&compID); err != nil {
 		t.Fatalf("component: %v", err)
 	}
+	// The column is `display_name` at this point in the chain: #613's rename
+	// (20260814100000_label_is_the_column.sql) is above the version this test
+	// stands the database at.
 	if err := conn.QueryRow(ctx,
 		`insert into system_role (owner_kind, system_id, name, display_name) values ('system', $1, 'role-a', 'Role A') returning id`,
 		sysID).Scan(&roleAID); err != nil {
@@ -92,6 +95,9 @@ func TestPositionBackfillIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `insert into system (name) values ('backfill-sys') returning id`).Scan(&sysID); err != nil {
 		t.Fatalf("system: %v", err)
 	}
+	// The column is `display_name` at this point in the chain: #613's rename
+	// (20260814100000_label_is_the_column.sql) is above the version this test
+	// stands the database at.
 	if err := conn.QueryRow(ctx,
 		`insert into system_role (owner_kind, system_id, name, display_name) values ('system', $1, 'table-mic', 'Table Mic') returning id`,
 		sysID).Scan(&roleID); err != nil {

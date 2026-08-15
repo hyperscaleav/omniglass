@@ -26,13 +26,13 @@ func TestComponentTypeRoundTrip(t *testing.T) {
 	}
 
 	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "rt-mic", DisplayName: "Mic", Stem: strp("mic"), Icon: strp("mic"), Abbrev: strp("mc"),
+		Name: "rt-mic", Label: "Mic", Stem: strp("mic"), Icon: strp("mic"), Abbrev: strp("mc"),
 	})
 	if err != nil {
 		t.Fatalf("create root: %v", err)
 	}
-	if root.Name != "rt-mic" || root.DisplayName != "Mic" {
-		t.Fatalf("root = %+v, want name rt-mic display_name Mic", root)
+	if root.Name != "rt-mic" || root.Label != "Mic" {
+		t.Fatalf("root = %+v, want name rt-mic label Mic", root)
 	}
 	if root.Official {
 		t.Fatalf("new component_type official=true, want false")
@@ -42,7 +42,7 @@ func TestComponentTypeRoundTrip(t *testing.T) {
 	}
 
 	child, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "rt-wireless-mic", DisplayName: "Wireless Mic", ParentID: &root.ID,
+		Name: "rt-wireless-mic", Label: "Wireless Mic", ParentID: &root.ID,
 	})
 	if err != nil {
 		t.Fatalf("create child: %v", err)
@@ -85,17 +85,17 @@ func TestComponentTypeRoundTrip(t *testing.T) {
 	}
 
 	dn := "Wireless Microphone"
-	upd, err := gw.UpdateComponentType(ctx, "", "rt-wireless-mic", storage.ComponentTypePatch{DisplayName: &dn})
+	upd, err := gw.UpdateComponentType(ctx, "", "rt-wireless-mic", storage.ComponentTypePatch{Label: &dn})
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if upd.DisplayName != dn {
-		t.Fatalf("update display_name = %q, want %q", upd.DisplayName, dn)
+	if upd.Label != dn {
+		t.Fatalf("update label = %q, want %q", upd.Label, dn)
 	}
 
 	// Duplicate name is ErrTypeExists. Stem set (a root needs one) so the
 	// write reaches the unique-name check this asserts, not the stem guard.
-	if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "rt-mic", DisplayName: "Dup", Stem: strp("dup")}); !errors.Is(err, storage.ErrTypeExists) {
+	if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "rt-mic", Label: "Dup", Stem: strp("dup")}); !errors.Is(err, storage.ErrTypeExists) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
@@ -132,7 +132,7 @@ func TestComponentTypeUpdateTagsPatch(t *testing.T) {
 	}
 
 	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "tp-mic", DisplayName: "Mic", Stem: strp("mic"), DefaultTags: []string{"audio", "av"},
+		Name: "tp-mic", Label: "Mic", Stem: strp("mic"), DefaultTags: []string{"audio", "av"},
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -143,19 +143,19 @@ func TestComponentTypeUpdateTagsPatch(t *testing.T) {
 
 	// Leg 1: a patch that does not touch DefaultTags leaves it unchanged.
 	dn := "Microphone"
-	upd, err := gw.UpdateComponentType(ctx, "", "tp-mic", storage.ComponentTypePatch{DisplayName: &dn})
+	upd, err := gw.UpdateComponentType(ctx, "", "tp-mic", storage.ComponentTypePatch{Label: &dn})
 	if err != nil {
-		t.Fatalf("update display_name only: %v", err)
+		t.Fatalf("update label only: %v", err)
 	}
 	if len(upd.DefaultTags) != 2 || upd.DefaultTags[0] != "audio" || upd.DefaultTags[1] != "av" {
 		t.Fatalf("update (no tags patch) DefaultTags = %v, want unchanged [audio av]", upd.DefaultTags)
 	}
 	got, err := gw.GetComponentType(ctx, "tp-mic")
 	if err != nil {
-		t.Fatalf("get after display_name patch: %v", err)
+		t.Fatalf("get after label patch: %v", err)
 	}
 	if len(got.DefaultTags) != 2 || got.DefaultTags[0] != "audio" || got.DefaultTags[1] != "av" {
-		t.Fatalf("get after display_name patch DefaultTags = %v, want unchanged [audio av]", got.DefaultTags)
+		t.Fatalf("get after label patch DefaultTags = %v, want unchanged [audio av]", got.DefaultTags)
 	}
 
 	// Leg 2: a patch that sets DefaultTags replaces the stored array, and the
@@ -175,9 +175,9 @@ func TestComponentTypeUpdateTagsPatch(t *testing.T) {
 	if len(got2.DefaultTags) != 1 || got2.DefaultTags[0] != "wireless" {
 		t.Fatalf("get after tags patch DefaultTags = %v, want [wireless]", got2.DefaultTags)
 	}
-	// display_name from the first patch survived the second, untouched patch.
-	if got2.DisplayName != dn {
-		t.Fatalf("get after tags patch DisplayName = %q, want %q (unaffected by the tags-only patch)", got2.DisplayName, dn)
+	// label from the first patch survived the second, untouched patch.
+	if got2.Label != dn {
+		t.Fatalf("get after tags patch Label = %q, want %q (unaffected by the tags-only patch)", got2.Label, dn)
 	}
 
 	// An explicit empty slice is a legal replacement (clears back to no tags),
@@ -214,7 +214,7 @@ func TestComponentTypeFactsInherit(t *testing.T) {
 	}
 
 	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "fi-mic", DisplayName: "Mic", Stem: strp("mic"), Icon: strp("mic"), Abbrev: strp("mc"),
+		Name: "fi-mic", Label: "Mic", Stem: strp("mic"), Icon: strp("mic"), Abbrev: strp("mc"),
 		DefaultTags: []string{"audio"},
 	})
 	if err != nil {
@@ -222,7 +222,7 @@ func TestComponentTypeFactsInherit(t *testing.T) {
 	}
 
 	child, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "fi-wireless-mic", DisplayName: "Wireless Mic", ParentID: &root.ID,
+		Name: "fi-wireless-mic", Label: "Wireless Mic", ParentID: &root.ID,
 		Abbrev: strp("wm"), // override; stem, icon, tags null/empty so they inherit
 	})
 	if err != nil {
@@ -269,12 +269,12 @@ func TestComponentTypeDeleteRestricted(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "dr-mic", DisplayName: "Mic", Stem: strp("mic")})
+	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "dr-mic", Label: "Mic", Stem: strp("mic")})
 	if err != nil {
 		t.Fatalf("create root: %v", err)
 	}
 	if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "dr-wireless-mic", DisplayName: "Wireless Mic", ParentID: &root.ID,
+		Name: "dr-wireless-mic", Label: "Wireless Mic", ParentID: &root.ID,
 	}); err != nil {
 		t.Fatalf("create child: %v", err)
 	}
@@ -301,17 +301,17 @@ func TestComponentTypeSubtree(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "st-mic", DisplayName: "Mic", Stem: strp("mic")})
+	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "st-mic", Label: "Mic", Stem: strp("mic")})
 	if err != nil {
 		t.Fatalf("create root: %v", err)
 	}
 	child, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "st-wireless-mic", DisplayName: "Wireless Mic", ParentID: &root.ID,
+		Name: "st-wireless-mic", Label: "Wireless Mic", ParentID: &root.ID,
 	})
 	if err != nil {
 		t.Fatalf("create child: %v", err)
 	}
-	sibling, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "st-camera", DisplayName: "Camera", Stem: strp("camera")})
+	sibling, err := gw.CreateComponentType(ctx, "", storage.ComponentType{Name: "st-camera", Label: "Camera", Stem: strp("camera")})
 	if err != nil {
 		t.Fatalf("create sibling root: %v", err)
 	}
@@ -421,13 +421,13 @@ func TestComponentTypeStemMustBeAValidName(t *testing.T) {
 	}
 
 	if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "stem-guard-create", DisplayName: "Stem Guard Create", Stem: strp("Bad Stem"),
+		Name: "stem-guard-create", Label: "Stem Guard Create", Stem: strp("Bad Stem"),
 	}); !errors.Is(err, storage.ErrInvalidEntityName) {
 		t.Fatalf("create with stem %q err = %v, want ErrInvalidEntityName", "Bad Stem", err)
 	}
 
 	ct, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "stem-guard-ok", DisplayName: "Stem Guard OK", Stem: strp("good-stem"),
+		Name: "stem-guard-ok", Label: "Stem Guard OK", Stem: strp("good-stem"),
 	})
 	if err != nil {
 		t.Fatalf("create with a valid stem: %v", err)
@@ -438,7 +438,7 @@ func TestComponentTypeStemMustBeAValidName(t *testing.T) {
 
 	// A nil stem (inherit) is unaffected by the guard: nothing to validate.
 	if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "stem-guard-nil", DisplayName: "Stem Guard Nil", ParentID: &ct.ID,
+		Name: "stem-guard-nil", Label: "Stem Guard Nil", ParentID: &ct.ID,
 	}); err != nil {
 		t.Fatalf("create with a nil (inherited) stem: %v", err)
 	}
@@ -471,7 +471,7 @@ func TestBadStemNeverProducesAnInvalidComponentName(t *testing.T) {
 	}
 
 	ct, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "bad-stem-type", DisplayName: "Bad Stem Type", Stem: strp("Bad Stem"),
+		Name: "bad-stem-type", Label: "Bad Stem Type", Stem: strp("Bad Stem"),
 	})
 	if err != nil {
 		if !errors.Is(err, storage.ErrInvalidEntityName) {
@@ -481,7 +481,7 @@ func TestBadStemNeverProducesAnInvalidComponentName(t *testing.T) {
 	}
 
 	prod, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "bad-stem-product", DisplayName: "Bad Stem Product", Kind: "device", ComponentType: ct.Name,
+		Name: "bad-stem-product", Label: "Bad Stem Product", Kind: "device", ComponentType: ct.Name,
 	})
 	if err != nil {
 		t.Fatalf("create product under the unrefused bad-stem type: %v", err)
@@ -520,12 +520,12 @@ func TestEmptyStemRefusesGeneration(t *testing.T) {
 	}
 
 	if err := gw.UpsertComponentType(ctx, storage.ComponentType{
-		Name: "stemless-root", DisplayName: "Stemless Root", Official: true,
+		Name: "stemless-root", Label: "Stemless Root", Official: true,
 	}); err != nil {
 		t.Fatalf("upsert a stemless root type: %v", err)
 	}
 	prod, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "stemless-product", DisplayName: "Stemless Product", Kind: "device", ComponentType: "stemless-root",
+		Name: "stemless-product", Label: "Stemless Product", Kind: "device", ComponentType: "stemless-root",
 	})
 	if err != nil {
 		t.Fatalf("create product under the stemless type: %v", err)
@@ -551,20 +551,20 @@ func TestRootComponentTypeRequiresStem(t *testing.T) {
 	}
 
 	if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "root-no-stem", DisplayName: "Root No Stem",
+		Name: "root-no-stem", Label: "Root No Stem",
 	}); !errors.Is(err, storage.ErrRootComponentTypeNeedsStem) {
 		t.Fatalf("create root with no stem err = %v, want ErrRootComponentTypeNeedsStem", err)
 	}
 
 	root, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "root-with-stem", DisplayName: "Root With Stem", Stem: strp("rootstem"),
+		Name: "root-with-stem", Label: "Root With Stem", Stem: strp("rootstem"),
 	})
 	if err != nil {
 		t.Fatalf("create root with a stem: %v", err)
 	}
 	// A child with no stem is unaffected: it has an ancestor to inherit from.
 	if _, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "child-no-stem", DisplayName: "Child No Stem", ParentID: &root.ID,
+		Name: "child-no-stem", Label: "Child No Stem", ParentID: &root.ID,
 	}); err != nil {
 		t.Fatalf("create child with no stem under a stemmed root: %v", err)
 	}

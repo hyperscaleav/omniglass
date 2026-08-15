@@ -230,7 +230,7 @@ export default function PropertiesPanel(
   const propRow = (p: EffectiveProperty, first: () => boolean) => (
     <>
       <FieldControl
-        label={entityLabel({ name: p.property_type_name, display_name: p.display_name })}
+        label={entityLabel({ name: p.property_type_name, label: p.label })}
         dataType={p.data_type as ValueType}
         resolved={resolvedStr(p)}
         isSet={p.is_set}
@@ -289,7 +289,7 @@ export default function PropertiesPanel(
 // The blade id encodes the owner (kind and name) and the property name, so the
 // blade body can re-resolve the property from the id alone (blades carry only
 // { kind, id }). The property name is the catalog key, which the drill-in surfaces
-// (the row shows the display name); no owner kind, owner name, or property name
+// (the row shows the label); no owner kind, owner name, or property name
 // contains a space.
 export const ownerPropertyBladeId = (owner: PropertyOwner, property: string): string =>
   `${owner.kind} ${owner.name} ${property}`;
@@ -335,7 +335,7 @@ function PropertyBladeTitle(p: { id: string }): JSX.Element {
   // heading rule. Falls back to the raw key until it resolves (or if it is gone).
   const row = () => {
     const r = property();
-    return r ? { name: r.property_type_name, display_name: r.display_name } : undefined;
+    return r ? { name: r.property_type_name, label: r.label } : undefined;
   };
   return <BladeTitle row={row} fallback={key()} />;
 }

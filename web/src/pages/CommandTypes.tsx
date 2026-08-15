@@ -121,10 +121,16 @@ function SettleWindowField(p: {
 function TargetSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const properties = useQuery(() => ({ queryKey: PROPERTIES_KEY, queryFn: listProperties }));
   const metrics = useQuery(() => ({ queryKey: METRICS_KEY, queryFn: listMetricTypes }));
-  const byLabel = (a: { display_name?: string; name: string }, b: { display_name?: string; name: string }) =>
+  // The RENDERED label, not the raw column, so this is deliberately NOT
+  // lib/entities' byLabel: entityLabel falls back to the name, so an unlabelled
+  // catalog row sorts among the labelled ones under its own name rather than at
+  // the end of the list. Both rules are defensible on a picker of estate-wide
+  // vocabulary, where nearly every row is labelled; what is not defensible is
+  // two different things called byLabel, so this one says which label it means.
+  const byRenderedLabel = (a: { label?: string; name: string }, b: { label?: string; name: string }) =>
     entityLabel(a).localeCompare(entityLabel(b));
-  const propertyOptions = createMemo(() => [...(properties.data ?? [])].sort(byLabel) as PropertyRow[]);
-  const metricOptions = createMemo(() => [...(metrics.data ?? [])].sort(byLabel) as MetricRow[]);
+  const propertyOptions = createMemo(() => [...(properties.data ?? [])].sort(byRenderedLabel) as PropertyRow[]);
+  const metricOptions = createMemo(() => [...(metrics.data ?? [])].sort(byRenderedLabel) as MetricRow[]);
   return (
     <select class="select select-bordered w-full" value={p.value} onChange={(e) => p.onChange(e.currentTarget.value)}>
       <option value="">None (fire-and-forget)</option>
@@ -169,7 +175,7 @@ export default function CommandTypes(): JSX.Element {
             { key: "name", type: "string", hint: "substring", get: (r) => `${entityLabel(r)} ${r.name}`, values: () => [] },
             { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
           ],
-          filterPlaceholder: "filter command types by name, display name…",
+          filterPlaceholder: "filter command types by name, label…",
           columns,
           empty: "No command types.",
           rowId: (r) => r.name,
@@ -188,7 +194,7 @@ export const commandTypeBlade: BladeDef = {
   Body: (p) => <CommandTypeBladeBody name={p.id} />,
 };
 
-// The blade heading is the display name, falling back to the name, so opening a row
+// The blade heading is the label, falling back to the name, so opening a row
 // lands on the same words the row showed. It rendered the bare name before, so
 // clicking "ICMP RTT (avg)" opened a panel headed icmp.rtt-avg.
 function CommandTypeBladeTitle(p: { name: string }): JSX.Element {
@@ -207,7 +213,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
   const edit = useBladeEdit();
   const row = useCommandTypeRow(p.name);
   const [err, setErr] = createSignal<string | null>(null);
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [settle, setSettle] = createSignal("0");
   const [target, setTarget] = createSignal("");
@@ -220,7 +226,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const r = row();
-    setDisplayName(r?.display_name ?? "");
+    setLabel(r?.label ?? "");
     setDescription(r?.description ?? "");
     setSettle(String(r?.settle_window_seconds ?? 0));
     setTarget(joinTarget(r));
@@ -257,7 +263,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
       // explicitly cleared, so a PATCH can change or clear the target wholesale.
       // An unstated window sends no window at all, leaving the row's own.
       await updateCommandType(r.name, {
-        display_name: displayName(), description: description(),
+        label: label(), description: description(),
         settle_window_seconds: w.seconds,
         ...splitTarget(target()),
       });
@@ -295,10 +301,10 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
           <BladeField
-            bind="display_name"
-            value={() => r().display_name ?? ""}
-            draft={displayName}
-            onInput={setDisplayName}
+            bind="label"
+            value={() => r().label ?? ""}
+            draft={label}
+            onInput={setLabel}
           />
           <BladeField
             label="Description"
@@ -328,7 +334,7 @@ function CommandTypeBladeBody(p: { name: string }): JSX.Element {
 export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => void }): JSX.Element {
   const qc = useQueryClient();
   const [name, setName] = createSignal("");
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [target, setTarget] = createSignal("");
   const [settle, setSettle] = createSignal("");
@@ -355,7 +361,7 @@ export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => voi
       const arms = splitTarget(target());
       const created = await createCommandType({
         name: name().trim(),
-        display_name: displayName().trim() || undefined,
+        label: label().trim() || undefined,
         description: description().trim() || undefined,
         target_property_type: arms.target_property_type || undefined,
         target_metric_type: arms.target_metric_type || undefined,
@@ -378,8 +384,8 @@ export function CreateCommandTypeForm(p: { onCreated: (r: CommandTypeRow) => voi
       <FieldRow bind="name" hint="A lowercase kebab name, e.g. set-input or reboot.">
         <input class="input input-bordered w-full font-data" value={name()} placeholder="set-input" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
-      <FieldRow bind="display_name">
-        <input class="input input-bordered w-full" value={displayName()} placeholder="Set input" onInput={(e) => setDisplayName(e.currentTarget.value)} />
+      <FieldRow bind="label">
+        <input class="input input-bordered w-full" value={label()} placeholder="Set input" onInput={(e) => setLabel(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Description">
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />

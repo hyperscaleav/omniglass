@@ -42,19 +42,19 @@ func TestRegistryAuditImages(t *testing.T) {
 	}
 
 	// Driver: create, update, delete through its own gateway methods.
-	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "acme-x", DisplayName: "Acme X"}); err != nil {
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "acme-x", Label: "Acme X"}); err != nil {
 		t.Fatalf("create driver: %v", err)
 	}
 	newDisplay := "Acme X2"
-	if _, err := gw.UpdateDriver(ctx, "", "acme-x", storage.DriverPatch{DisplayName: &newDisplay}); err != nil {
+	if _, err := gw.UpdateDriver(ctx, "", "acme-x", storage.DriverPatch{Label: &newDisplay}); err != nil {
 		t.Fatalf("update driver: %v", err)
 	}
 	up := find("driver", "update")
 	oldImg, newImg := img(up.Old), img(up.New)
-	if oldImg == nil || oldImg["display_name"] != "Acme X" {
+	if oldImg == nil || oldImg["label"] != "Acme X" {
 		t.Errorf("driver update old image missing or wrong: %v", oldImg)
 	}
-	if newImg == nil || newImg["display_name"] != "Acme X2" {
+	if newImg == nil || newImg["label"] != "Acme X2" {
 		t.Errorf("driver update new image missing or wrong: %v", newImg)
 	}
 	if oldImg["name"] != "acme-x" {
@@ -66,12 +66,12 @@ func TestRegistryAuditImages(t *testing.T) {
 	}
 	del := find("driver", "delete")
 	delOld := img(del.Old)
-	if delOld == nil || delOld["name"] != "acme-x" || delOld["display_name"] != "Acme X2" {
+	if delOld == nil || delOld["name"] != "acme-x" || delOld["label"] != "Acme X2" {
 		t.Errorf("driver delete must record the whole row, got %v", delOld)
 	}
 
 	// location_type: delete goes through the shared deleteTypeRow helper.
-	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "annex", DisplayName: "Annex", Icon: "map-pin"}); err != nil {
+	if _, err := gw.CreateLocationType(ctx, "", storage.LocationType{Name: "annex", Label: "Annex", Icon: "map-pin"}); err != nil {
 		t.Fatalf("create location_type: %v", err)
 	}
 	if err := gw.DeleteLocationType(ctx, "", "annex"); err != nil {
@@ -79,7 +79,7 @@ func TestRegistryAuditImages(t *testing.T) {
 	}
 	ltDel := find("location_type", "delete")
 	ltOld := img(ltDel.Old)
-	if ltOld == nil || ltOld["name"] != "annex" || ltOld["display_name"] != "Annex" {
+	if ltOld == nil || ltOld["name"] != "annex" || ltOld["label"] != "Annex" {
 		t.Errorf("location_type delete must record the whole row, got %v", ltOld)
 	}
 }

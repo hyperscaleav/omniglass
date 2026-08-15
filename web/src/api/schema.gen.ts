@@ -83,7 +83,7 @@ export interface paths {
         head?: never;
         /**
          * Update your own profile
-         * @description Updates the caller's own display name (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).
+         * @description Updates the caller's own label (email is administrator-set). Requires authentication; self-scoped (edits only your own principal).
          */
         patch: operations["update-auth-me"];
         trace?: never;
@@ -349,7 +349,7 @@ export interface paths {
         };
         /**
          * List component types
-         * @description Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
+         * @description Lists the component_type registry (the taxonomy a product is classified under: mic, camera, wireless-mic under mic), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Gated by component_type:read.
          */
         get: operations["list-component-types"];
         put?: never;
@@ -383,7 +383,7 @@ export interface paths {
         head?: never;
         /**
          * Update a component type
-         * @description Patches a component_type's display_name, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.
+         * @description Patches a component_type's label, stem, icon, abbrev, label_rule, or default_tags. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by component_type:update.
          */
         patch: operations["update-component-type"];
         trace?: never;
@@ -455,7 +455,7 @@ export interface paths {
         head?: never;
         /**
          * Update a component
-         * @description Patches a component's display_name or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a component's label or product. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Product is required, so it is unchanged when omitted and reclassified when named, but an explicit empty string is refused (422), not a clear. Gated by component:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-component"];
         trace?: never;
@@ -977,7 +977,7 @@ export interface paths {
         };
         /**
          * List drivers
-         * @description Lists the driver registry, ordered alphabetically by display name. Populates the driver picker on the product form. Gated by driver:read.
+         * @description Lists the driver registry, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.
          */
         get: operations["list-drivers"];
         put?: never;
@@ -1015,7 +1015,7 @@ export interface paths {
         head?: never;
         /**
          * Update a driver
-         * @description Patches a custom driver's display_name or version. Official drivers are read-only (422). Gated by driver:update.
+         * @description Patches a custom driver's label or version. Official drivers are read-only (422). Gated by driver:update.
          */
         patch: operations["update-driver"];
         trace?: never;
@@ -1221,7 +1221,7 @@ export interface paths {
         };
         /**
          * List location types
-         * @description Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by display name. Populates the type picker on the location form. Gated by location_type:read.
+         * @description Lists the location_type registry (the shape-definers a location is classified by), ordered alphabetically by label. Populates the type picker on the location form. Gated by location_type:read.
          */
         get: operations["list-location-types"];
         put?: never;
@@ -1255,7 +1255,7 @@ export interface paths {
         head?: never;
         /**
          * Update a location type
-         * @description Patches a location_type's display_name, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update.
+         * @description Patches a location_type's label, icon, allowed parents, label_rule or name_rule. An unparseable label_rule (or a name_rule that cannot mint a legal name) is a 422 at rule-edit time, never a broken row at create time, and setting a label rule restamps nothing on its own: apply it with /locations:recomputeLabels after seeing the blast radius with :previewLabels. A shipped (official) row is never written: the patch FORKS it, storing your version over the shipped one, and the response comes back with forked=true under the same id. `:restore` discards the fork. Gated by location_type:update.
          */
         patch: operations["update-location-type"];
         trace?: never;
@@ -1415,7 +1415,7 @@ export interface paths {
         head?: never;
         /**
          * Update a location
-         * @description Patches a location's display_name or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
+         * @description Patches a location's label or location_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. Changing the location_type of a location the PLATFORM named re-mints the name from the new type's name rule, and is refused (422) when the new type carries none, which is every shipped type: :rename the location first to claim its name, then reclassify it. A location an operator named is never renamed by a reclassify. Gated by location:update; the read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-location"];
         trace?: never;
@@ -1803,7 +1803,7 @@ export interface paths {
         head?: never;
         /**
          * Update a node
-         * @description Patches a node's display name, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.
+         * @description Patches a node's label, description, and location (a nil field is unchanged; a location of "" clears it). The name is immutable. Requires an all-scope action. Gated by node:update.
          */
         patch: operations["update-node"];
         trace?: never;
@@ -2131,7 +2131,7 @@ export interface paths {
         head?: never;
         /**
          * Update a principal
-         * @description Updates a human principal's display name, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.
+         * @description Updates a human principal's label, email, and username. Gated by principal:update (all-scope). A username is not an entity name and is patchable here rather than through a :rename method: it is the sign-in identifier, on its own rule, and nothing keys on it.
          */
         patch: operations["update-principal"];
         trace?: never;
@@ -2445,7 +2445,7 @@ export interface paths {
         };
         /**
          * List products
-         * @description Lists the product registry, ordered alphabetically by display name. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
+         * @description Lists the product registry, ordered alphabetically by label. Each product carries its vendor, driver, kind, and component_type. Gated by product:read.
          */
         get: operations["list-products"];
         put?: never;
@@ -2483,7 +2483,7 @@ export interface paths {
         head?: never;
         /**
          * Update a product
-         * @description Patches a custom product's display_name, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
+         * @description Patches a custom product's label, vendor, driver, kind, component_type, icon, or parent. component_type is required, so an empty string on it is a 422 (a reclassify names a real type; it never clears). Official products are read-only (422). Gated by product:update.
          */
         patch: operations["update-product"];
         trace?: never;
@@ -2849,7 +2849,7 @@ export interface paths {
         };
         /**
          * List standards
-         * @description Lists the standard catalog, ordered alphabetically by display name. A standard is the blueprint a system conforms to. Gated by standard:read.
+         * @description Lists the standard catalog, ordered alphabetically by label. A standard is the blueprint a system conforms to. Gated by standard:read.
          */
         get: operations["list-standards"];
         put?: never;
@@ -2887,7 +2887,7 @@ export interface paths {
         head?: never;
         /**
          * Update a standard
-         * @description Patches a custom standard's display_name or parent. Official standards are read-only (422). Gated by standard:update.
+         * @description Patches a custom standard's label or parent. Official standards are read-only (422). Gated by standard:update.
          */
         patch: operations["update-standard"];
         trace?: never;
@@ -3033,7 +3033,7 @@ export interface paths {
         };
         /**
          * List system types
-         * @description Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by display name. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.
+         * @description Lists the system_type registry (the coarse taxonomy of what kind of space a system is: a boardroom, a classroom, a video wall), ordered alphabetically by label. Each row carries its parent link, so the console reconstructs the tree client-side. Distinct from standard, which is the blueprint a system conforms to. Gated by system_type:read.
          */
         get: operations["list-system-types"];
         put?: never;
@@ -3067,7 +3067,7 @@ export interface paths {
         head?: never;
         /**
          * Update a system type
-         * @description Patches a custom system_type's display_name, stem, icon, abbrev, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /systems:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by system_type:update.
+         * @description Patches a custom system_type's label, stem, icon, abbrev, or label_rule. An unparseable label_rule is a 422 at rule-edit time, never a broken row at create time, and setting one restamps nothing on its own: apply it with /systems:recomputeLabels after seeing the blast radius with :previewLabels. Official types are read-only (422). Gated by system_type:update.
          */
         patch: operations["update-system-type"];
         trace?: never;
@@ -3119,7 +3119,7 @@ export interface paths {
         head?: never;
         /**
          * Update a system
-         * @description Patches a system's display_name, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.
+         * @description Patches a system's label, standard, or system_type. The name is not patchable: renaming is the :rename custom method. Placement is not patchable either: relocating or re-parenting is the :move custom method, gated separately, because a placement change is an authorization act. The standard and system_type fields both follow the three-state convention: an omitted field is unchanged, an explicit empty string clears (a one-off system, an unclassified system), a name sets. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         patch: operations["update-system"];
         trace?: never;
@@ -3805,7 +3805,7 @@ export interface paths {
         };
         /**
          * List vendors
-         * @description Lists the vendor registry, ordered alphabetically by display name. Populates the vendor picker on the product form. Gated by vendor:read.
+         * @description Lists the vendor registry, ordered alphabetically by label. Populates the vendor picker on the product form. Gated by vendor:read.
          */
         get: operations["list-vendors"];
         put?: never;
@@ -3843,7 +3843,7 @@ export interface paths {
         head?: never;
         /**
          * Update a vendor
-         * @description Patches a custom vendor's display_name, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.
+         * @description Patches a custom vendor's label, kind, icon, support_phone, or website. Official vendors are read-only (422). Gated by vendor:update.
          */
         patch: operations["update-vendor"];
         trace?: never;
@@ -4042,9 +4042,9 @@ export interface components {
              */
             readonly $schema?: string;
             description?: string;
-            display_name?: string;
             /** @description The command type's uuid, the stable form of name */
             id: string;
+            label?: string;
             name: string;
             official: boolean;
             /** @description A JSON Schema fragment for the invocation params */
@@ -4068,14 +4068,14 @@ export interface components {
             readonly $schema?: string;
             /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
             actions?: string[] | null;
-            display_name?: string;
-            /** @description Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back. */
-            display_name_generated: boolean;
             /** @description The resolved effective tags (key -> winning value) that cascade onto this component; for the Tags column. Provenance is in the effective-tags detail view. */
             effective_tags?: {
                 [key: string]: string;
             };
             id: string;
+            label?: string;
+            /** @description Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back. */
+            label_generated: boolean;
             /** @description The location's name, for display */
             location?: string;
             /** @description The location's id, the canonical handle */
@@ -4150,11 +4150,10 @@ export interface components {
              * @example /api/v1/schemas/ComponentTypeBody.json
              */
             readonly $schema?: string;
-            /** @description A compact form of display_name; empty inherits the nearest ancestor's */
+            /** @description A compact form of label; empty inherits the nearest ancestor's */
             abbrev?: string;
             /** @description Tags every instance of this type (or a descendant that does not override) starts with */
             default_tags: string[] | null;
-            display_name: string;
             /** @description True when this shipped row carries changes of yours overriding it. Restore discards them */
             forked: boolean;
             /** @description A glyph key; empty inherits the nearest ancestor's */
@@ -4173,6 +4172,7 @@ export interface components {
             inherited_stem?: string;
             /** @description The name of the ancestor component_type inherited_stem comes from, which may be further up the chain than the parent */
             inherited_stem_source?: string;
+            label: string;
             /** @description The label template instances of this type get; empty inherits the nearest ancestor's, then the global rule for components */
             label_rule?: string;
             /** @description The name an operator reads and types; renameable */
@@ -4198,7 +4198,7 @@ export interface components {
             /** @description What the command does */
             description?: string;
             /** @description A human label */
-            display_name?: string;
+            label?: string;
             /** @description The command type name (lowercase kebab) */
             name: string;
             /** @description A JSON Schema fragment for the params */
@@ -4220,10 +4220,10 @@ export interface components {
              * @example /api/v1/schemas/CreateComponentInputBody.json
              */
             readonly $schema?: string;
-            /** @description What an operator reads; the name is the address */
-            display_name?: string;
             /** @description The name a create form previewed (POST /components:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422. */
             expected_name?: string;
+            /** @description What an operator reads; the name is the address */
+            label?: string;
             /** @description Location name this component is placed at */
             location?: string;
             /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the product's type. */
@@ -4242,14 +4242,14 @@ export interface components {
              * @example /api/v1/schemas/CreateComponentTypeInputBody.json
              */
             readonly $schema?: string;
-            /** @description A compact form of display_name; omit to inherit the parent's */
+            /** @description A compact form of label; omit to inherit the parent's */
             abbrev?: string;
             /** @description Tags every instance of this type starts with */
             default_tags?: string[] | null;
-            /** @description What an operator reads in pickers and lists */
-            display_name: string;
             /** @description A glyph key; omit to inherit the parent's */
             icon?: string;
+            /** @description What an operator reads in pickers and lists */
+            label: string;
             /** @description A Go text/template rendering the label of every instance of this type, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the parent's, then the global component rule. A template that does not parse is refused here, 422. */
             label_rule?: string;
             /** @description The globally unique name */
@@ -4267,7 +4267,7 @@ export interface components {
              */
             readonly $schema?: string;
             /** @description What an operator reads in pickers and lists */
-            display_name: string;
+            label: string;
             /** @description The globally unique name; renameable */
             name: string;
             /** @description A free-form version string, e.g. 1.0.0 */
@@ -4283,7 +4283,7 @@ export interface components {
             /** @description What the occurrence means */
             description?: string;
             /** @description A human label */
-            display_name?: string;
+            label?: string;
             /** @description The event type name (lowercase kebab) */
             name: string;
             /** @description A JSON Schema fragment for the payload */
@@ -4300,7 +4300,7 @@ export interface components {
             content: string;
             /** @description The MIME type used to serve the file */
             content_type: string;
-            /** @description The file's display name (a label, no path separators) */
+            /** @description The file's filename, which is already the label an operator reads (no path separators) */
             name: string;
             /** @description Admin-only visibility; defaults false. Setting true requires the admin tier */
             sensitive?: boolean;
@@ -4359,7 +4359,7 @@ export interface components {
             /** @description Free-form notes on what the group is for */
             description?: string;
             /** @description What an operator reads in lists */
-            display_name?: string;
+            label?: string;
             /** @description Unique group name (lowercase letters, digits, and hyphens) */
             name: string;
         };
@@ -4386,10 +4386,10 @@ export interface components {
              * @example /api/v1/schemas/CreateLocationInputBody.json
              */
             readonly $schema?: string;
-            /** @description What an operator reads; the name is the address */
-            display_name?: string;
             /** @description The name a create form previewed (POST /locations:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the location_type's name rule moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422. */
             expected_name?: string;
+            /** @description What an operator reads; the name is the address */
+            label?: string;
             /** @description The location_type, by name or uuid (campus, building, ...) */
             location_type: string;
             /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the location_type's name rule. */
@@ -4406,10 +4406,10 @@ export interface components {
             readonly $schema?: string;
             /** @description location_type names and/or the reserved root sentinel this type may be placed under; empty means unconstrained */
             allowed_parent_types?: string[] | null;
-            /** @description What an operator reads in pickers and lists */
-            display_name: string;
             /** @description A glyph key; the console falls back to map-pin when empty */
             icon?: string;
+            /** @description What an operator reads in pickers and lists */
+            label: string;
             /** @description The label template locations of this type get, a Go text/template over the location data map; omit to fall back to the global rule. Refused (422) if it does not compile */
             label_rule?: string;
             /** @description The globally unique name (e.g. wing); "root" is reserved */
@@ -4463,7 +4463,7 @@ export interface components {
             /** @description What the series measures */
             description?: string;
             /** @description A human label */
-            display_name?: string;
+            label?: string;
             /** @description The metric type name (lowercase kebab) */
             name: string;
             /**
@@ -4484,7 +4484,7 @@ export interface components {
             /** @description Free-form operator notes about the node */
             description?: string;
             /** @description Operator label; falls back to the name when empty */
-            display_name?: string;
+            label?: string;
             /** @description Optional location the node sits in, by name or id (descriptive placement, not scope) */
             location?: string;
             /** @description Globally unique node name (lowercase letters, digits, and hyphens); it is also the node's NATS subject token, which is why the rule forbids a dot */
@@ -4497,13 +4497,13 @@ export interface components {
              * @example /api/v1/schemas/CreatePrincipalInputBody.json
              */
             readonly $schema?: string;
-            /** @description What an operator reads in lists; falls back to the username */
-            display_name?: string;
             /**
              * Format: email
              * @description Contact email for the account
              */
             email?: string;
+            /** @description What an operator reads in lists; falls back to the username */
+            label?: string;
             /** @description Optional initial password (at least 12 characters, not a common password, not containing the username); the user changes it after signing in */
             password?: string;
             /** @description Unique sign-in name (lowercase letters, digits, and . _ -) */
@@ -4518,8 +4518,6 @@ export interface components {
             readonly $schema?: string;
             /** @description The component_type this product is classified under (mic, camera, ...), by name or uuid; every product must belong to one of the tree's nodes. The generics (generic-device, generic-app, generic-service) fit anything not yet modeled more specifically. */
             component_type: string;
-            /** @description What an operator reads in pickers and lists */
-            display_name: string;
             /** @description The driver that talks to it, by handle or uuid */
             driver_id?: string;
             /** @description A product-level icon override; unset inherits the component_type's icon */
@@ -4529,6 +4527,8 @@ export interface components {
              * @enum {string}
              */
             kind: "device" | "app" | "service";
+            /** @description What an operator reads in pickers and lists */
+            label: string;
             /** @description A Go text/template rendering the label of every component of this product, over a closed map of that component's facts (Name, Ordinal, TypeName, TypeAbbrev, Stem, ProductName, VendorName, LocationLabel, SystemTypeLabel) and the functions title, upper, lower, slug and words (words turns a kebab or snake name into the words in it, so {{title (words .Name)}} reads north-wing as North Wing). Omit to inherit the component_type chain's rule, then the global component rule. A template that does not parse is refused here, 422. */
             label_rule?: string;
             /** @description The globally unique name; renameable */
@@ -4553,7 +4553,7 @@ export interface components {
             /** @description What the property means */
             description?: string;
             /** @description A human label */
-            display_name?: string;
+            label?: string;
             /** @description The property name (lowercase kebab) */
             name: string;
             /** @description A JSON Schema fragment constraining the value */
@@ -4592,7 +4592,7 @@ export interface components {
              */
             readonly $schema?: string;
             /** @description What an operator reads in pickers and lists */
-            display_name: string;
+            label: string;
             /** @description The globally unique name; renameable */
             name: string;
             /** @description A standard this one is a variant of, by handle or uuid */
@@ -4605,10 +4605,10 @@ export interface components {
              * @example /api/v1/schemas/CreateSystemInputBody.json
              */
             readonly $schema?: string;
-            /** @description What an operator reads; the name is the address */
-            display_name?: string;
             /** @description The name a create form previewed (POST /systems:renderLabel returns it). The create is refused with a 409 naming what it would produce instead, rather than silently landing a different name, if the number was taken or the system_type's stem moved while the form was open. It does not name the row (the platform still does, and the row is still name_generated): it only asserts what that name will be. Applies only when the platform names the row: sending it beside a name is a 422. */
             expected_name?: string;
+            /** @description What an operator reads; the name is the address */
+            label?: string;
             /** @description Location name this system is placed at */
             location?: string;
             /** @description Name, unique within its placement (the address; lowercase letters, digits, hyphens). Omit to have the platform generate one from the system_type's stem. */
@@ -4627,12 +4627,12 @@ export interface components {
              * @example /api/v1/schemas/CreateSystemTypeInputBody.json
              */
             readonly $schema?: string;
-            /** @description A compact form of display_name; omit to inherit the parent's */
+            /** @description A compact form of label; omit to inherit the parent's */
             abbrev?: string;
-            /** @description What an operator reads in pickers and lists */
-            display_name: string;
             /** @description A glyph key; omit to inherit the parent's */
             icon?: string;
+            /** @description What an operator reads in pickers and lists */
+            label: string;
             /** @description The label template systems of this type get, a Go text/template over the system data map; omit to inherit the nearest ancestor's. Refused (422) if it does not compile */
             label_rule?: string;
             /** @description The globally unique name */
@@ -4689,8 +4689,6 @@ export interface components {
              * @example /api/v1/schemas/CreateVendorInputBody.json
              */
             readonly $schema?: string;
-            /** @description What an operator reads in pickers and lists */
-            display_name: string;
             /** @description A glyph key, e.g. crestron-logo */
             icon?: string;
             /**
@@ -4699,6 +4697,8 @@ export interface components {
              * @enum {string}
              */
             kind: "manufacturer" | "integrator" | "developer";
+            /** @description What an operator reads in pickers and lists */
+            label: string;
             /** @description The globally unique name; renameable */
             name: string;
             /** @description The vendor's support line */
@@ -4744,9 +4744,9 @@ export interface components {
              * @example /api/v1/schemas/DriverBody.json
              */
             readonly $schema?: string;
-            display_name: string;
             /** @description The driver's uuid, the stable handle that survives a rename */
             id: string;
+            label: string;
             /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
@@ -4757,12 +4757,12 @@ export interface components {
             data_type: string;
             /** @description The contract default; omitted when the contract sets none */
             default_value?: unknown;
-            /** @description The metric's human label; omitted when unset */
-            display_name?: string;
             /** @description True when the owner's classifier declares the metric; false for a series landing directly on the owner */
             from_contract: boolean;
             /** @description True when the series holds an observed or calculated sample */
             is_sampled: boolean;
+            /** @description The metric's human label; omitted when unset */
+            label?: string;
             /** @description The catalog metric's uuid, the stable form of metric_type_name */
             metric_type_id: string;
             /** @description The catalog metric name */
@@ -4779,12 +4779,12 @@ export interface components {
             data_type: string;
             /** @description The contract default; omitted when the contract sets none */
             default_value?: unknown;
-            /** @description The property's human label; omitted when unset */
-            display_name?: string;
             /** @description True when the component's product declares the property; false for one set directly on the component */
             from_contract: boolean;
             /** @description True when the component overrides the contract default */
             is_set: boolean;
+            /** @description The property's human label; omitted when unset */
+            label?: string;
             /** @description The catalog property's uuid, the stable form of property_type_name */
             property_type_id: string;
             /** @description The catalog property name */
@@ -4815,11 +4815,11 @@ export interface components {
              * @description The most components the role will accept; null means no upper bound beyond quorum
              */
             capacity?: number;
-            display_name: string;
             /** @description True when the role is inherited from the system's standard; false when declared on the system */
             from_standard: boolean;
             /** @description What an impaired role means for its system: outage, degraded, or none */
             impact: string;
+            label: string;
             name: string;
             /** @description If set, a filling component's product must be one of these; empty accepts any product of an accepted type */
             pinned_products: string[] | null;
@@ -5000,9 +5000,9 @@ export interface components {
              */
             readonly $schema?: string;
             description?: string;
-            display_name?: string;
             /** @description The event type's uuid, the stable form of name */
             id: string;
+            label?: string;
             name: string;
             official: boolean;
             /** @description A JSON Schema fragment for the occurrence payload */
@@ -5065,13 +5065,13 @@ export interface components {
              */
             readonly $schema?: string;
             description?: string;
-            display_name?: string;
             /**
              * Format: int64
              * @description How many grants the group confers on its members.
              */
             grant_count: number;
             id: string;
+            label?: string;
             /**
              * Format: int64
              * @description How many principals belong to the group (populated on list and get; 0 from create/update).
@@ -5109,13 +5109,13 @@ export interface components {
             assigned_to: string[] | null;
             /** @description The choice this role belongs to; absent when the role is unconditional */
             choice?: string;
-            display_name: string;
             /** @description The assigned components whose own verdict is outage; empty when the role is merely short-staffed or only degraded */
             down: string[] | null;
             /** @description What an impaired role means for its system: outage, degraded, or none */
             impact: string;
             /** @description True when satisfying is below quorum */
             impaired: boolean;
+            label: string;
             name: string;
             /** Format: int64 */
             quorum: number;
@@ -5151,10 +5151,10 @@ export interface components {
              * @example /api/v1/schemas/HumanBody.json
              */
             readonly $schema?: string;
-            display_name?: string;
             email?: string;
             /** @description True when the principal has a profile picture; fetch it from the avatar endpoint. */
             has_avatar?: boolean;
+            label?: string;
             /** @description True when an admin reset the password and the user must change it before doing anything else; the console gates every route to the change-password form until it clears. */
             must_change_password?: boolean;
             username: string;
@@ -5683,14 +5683,14 @@ export interface components {
             readonly $schema?: string;
             /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
             actions?: string[] | null;
-            display_name?: string;
-            /** @description Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back. */
-            display_name_generated: boolean;
             /** @description The resolved effective tags (key -> winning value) that cascade onto this location (platform and its location tree); for the Tags column. */
             effective_tags?: {
                 [key: string]: string;
             };
             id: string;
+            label?: string;
+            /** @description Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back. */
+            label_generated: boolean;
             /** @description The location_type name */
             location_type: string;
             /** @description The location_type's uuid, the stable form of location_type */
@@ -5753,12 +5753,12 @@ export interface components {
              */
             readonly $schema?: string;
             allowed_parent_types: string[] | null;
-            display_name: string;
             /** @description True when this shipped row carries changes of yours overriding it. Restore discards them */
             forked: boolean;
             icon: string;
             /** @description The location type's uuid, the stable handle that survives a rename */
             id: string;
+            label: string;
             /** @description The label template locations of this type get; empty falls back to the global rule for locations */
             label_rule?: string;
             /** @description The name an operator reads and types; renameable */
@@ -5859,9 +5859,9 @@ export interface components {
             service?: components["schemas"]["SvcBody"];
         };
         MemberBody: {
-            /** @description The friendly string, where the member is a human who has one */
-            display_name?: string;
             kind: string;
+            /** @description The friendly string, where the member is a human who has one */
+            label?: string;
             /** @description The member's identifier: a human's username, or a service account's name */
             name?: string;
             principal_id: string;
@@ -5875,9 +5875,9 @@ export interface components {
             readonly $schema?: string;
             data_type: string;
             description?: string;
-            display_name?: string;
             /** @description The metric type's uuid, the stable form the contract and telemetry keys store */
             id: string;
+            label?: string;
             name: string;
             official: boolean;
             /**
@@ -5944,7 +5944,6 @@ export interface components {
              */
             readonly $schema?: string;
             description?: string;
-            display_name?: string;
             /** @description The resolved effective tags (key -> winning value) on this node: its direct bindings plus propagating platform tags. For the Tags column and the blade pills. */
             effective_tags?: {
                 [key: string]: string;
@@ -5952,6 +5951,7 @@ export interface components {
             enrolled: boolean;
             /** Format: date-time */
             enrolled_at?: string;
+            label?: string;
             /** Format: date-time */
             last_heartbeat_at?: string;
             /** @description The location the node sits in (descriptive placement, not scope) */
@@ -6028,7 +6028,6 @@ export interface components {
             component_type: string;
             /** @description The component_type's uuid; the stable form of component_type */
             component_type_id: string;
-            display_name: string;
             /** @description The driver's handle */
             driver?: string;
             /** @description The driver's uuid; the stable form of driver */
@@ -6039,6 +6038,7 @@ export interface components {
             id: string;
             /** @enum {string} */
             kind: "device" | "app" | "service";
+            label: string;
             /** @description The label template instances of this product get, the most specific tier; unset falls back to the component_type chain, then the global component rule */
             label_rule?: string;
             /** @description The name an operator reads and types; renameable */
@@ -6094,9 +6094,9 @@ export interface components {
             readonly $schema?: string;
             data_type: string;
             description?: string;
-            display_name?: string;
             /** @description The property's uuid, the stable form the contract and telemetry keys store */
             id: string;
+            label?: string;
             name: string;
             official: boolean;
             /** @description A JSON Schema fragment constraining the value */
@@ -6540,11 +6540,11 @@ export interface components {
         };
         RoleBody: {
             description?: string;
-            display_name?: string;
             effective_permissions: string[] | null;
             held: string[] | null;
             id: string;
             inherits: string[] | null;
+            label?: string;
             name: string;
             official: boolean;
             permissions: string[] | null;
@@ -6565,13 +6565,13 @@ export interface components {
              * @description The most components the role will accept; must be at least quorum, and unbounded on first declare. Name capacity in update_mask with no value here to clear it back to unbounded
              */
             capacity?: number;
-            /** @description The role's human label; defaults to the role name on first declare */
-            display_name?: string;
             /**
              * @description What an impaired role means for its system; degraded on first declare. The same broken component matters differently depending on the slot it was filling: a dead confidence monitor is not a dead main display
              * @enum {string}
              */
             impact?: "outage" | "degraded" | "none";
+            /** @description The role's human label; defaults to the role name on first declare */
+            label?: string;
             /** @description If set, a filling component's product must be one of these; replaces the pinned set wholesale when written, and an empty set accepts any product of an accepted type. Clearing it means naming pinned_products in update_mask */
             pinned_products?: string[] | null;
             /** @description Human labels for each position within the role, by index; replaces the label set wholesale when written. An empty list is not a populated field, so clearing the labels means naming position_labels in update_mask */
@@ -6624,10 +6624,10 @@ export interface components {
         SecretTypeBody: {
             /** @description The admin_sensitive value the create form seeds for this type */
             default_admin_sensitive: boolean;
-            display_name: string;
             fields: components["schemas"]["SecretTypeFieldBody"][] | null;
             /** @description The secret type's uuid, the stable handle that survives a rename */
             id: string;
+            label: string;
             /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
@@ -6823,9 +6823,9 @@ export interface components {
              * @example /api/v1/schemas/StandardBody.json
              */
             readonly $schema?: string;
-            display_name: string;
             /** @description The standard's uuid, the stable handle that survives a rename */
             id: string;
+            label: string;
             /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
@@ -6897,14 +6897,14 @@ export interface components {
             readonly $schema?: string;
             /** @description The scope-aware actions the caller may perform on this row (create a child, update, delete); a UI hint, the server still enforces. */
             actions?: string[] | null;
-            display_name?: string;
-            /** @description Whether the platform rendered this display name from a label rule rather than an operator typing it. Read-only: write display_name to claim it, write an empty display_name to hand it back. */
-            display_name_generated: boolean;
             /** @description The resolved effective tags (key -> winning value) that cascade onto this system (platform, its location, its system tree); for the Tags column. */
             effective_tags?: {
                 [key: string]: string;
             };
             id: string;
+            label?: string;
+            /** @description Whether the platform rendered this label from a label rule rather than an operator typing it. Read-only: write label to claim it, write an empty label to hand it back. */
+            label_generated: boolean;
             /** @description The location's name, for display */
             location?: string;
             /** @description The location's id, the canonical handle */
@@ -7001,10 +7001,10 @@ export interface components {
              * @description The most components the role will accept; null means no upper bound beyond quorum
              */
             capacity?: number;
-            /** @description The role's human label */
-            display_name: string;
             /** @description What an impaired role means for its system: outage, degraded, or none */
             impact: string;
+            /** @description The role's human label */
+            label: string;
             /** @description The role's name within its owner (the address) */
             name: string;
             /** @description If set, a filling component's product must be one of these; empty accepts any product of an accepted type */
@@ -7024,9 +7024,8 @@ export interface components {
              * @example /api/v1/schemas/SystemTypeBody.json
              */
             readonly $schema?: string;
-            /** @description A compact form of display_name; empty inherits the nearest ancestor's */
+            /** @description A compact form of label; empty inherits the nearest ancestor's */
             abbrev?: string;
-            display_name: string;
             /** @description A glyph key; empty inherits the nearest ancestor's */
             icon?: string;
             /** @description The system_type's uuid, the stable handle that survives a rename */
@@ -7043,6 +7042,7 @@ export interface components {
             inherited_stem?: string;
             /** @description The name of the ancestor system_type inherited_stem comes from, which may be further up the chain than the parent */
             inherited_stem_source?: string;
+            label: string;
             /** @description The label template systems of this type get; empty inherits the nearest ancestor's, then the global rule for systems */
             label_rule?: string;
             /** @description The name an operator reads and types; renameable */
@@ -7119,11 +7119,11 @@ export interface components {
              * @example /api/v1/schemas/TaskBody.json
              */
             readonly $schema?: string;
-            display_name?: string;
             enabled: boolean;
             id: string;
             /** @description The interface's surrogate id this task runs over */
             interface_id: string;
+            label?: string;
             mode: string;
             /** @description The node placement name, projected from the interface */
             node?: string;
@@ -7155,7 +7155,7 @@ export interface components {
             /** @description What the command does */
             description?: string;
             /** @description A human label */
-            display_name?: string;
+            label?: string;
             /** @description A JSON Schema fragment (replaces wholesale) */
             params_schema?: unknown;
             /**
@@ -7176,7 +7176,7 @@ export interface components {
              */
             readonly $schema?: string;
             /** @description A new operator-facing label */
-            display_name?: string;
+            label?: string;
             /** @description Re-classifies the component to this product (catalog SKU), by name or uuid. Required once set: an empty string is refused (422), not a clear. Explicitly-set property values persist; the new product's contract defaults follow. */
             product?: string;
         };
@@ -7191,10 +7191,10 @@ export interface components {
             abbrev?: string;
             /** @description Replaces the default-tag set; omit to leave unchanged */
             default_tags?: string[];
-            /** @description A new operator-facing label */
-            display_name?: string;
             /** @description A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again */
             icon?: string;
+            /** @description A new operator-facing label */
+            label?: string;
             /** @description A new label template; an empty string clears it, so instances fall back to the nearest ancestor's rule and then the global component rule. Refused with 422 if it does not parse. */
             label_rule?: string;
             /** @description A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422). */
@@ -7208,7 +7208,7 @@ export interface components {
              */
             readonly $schema?: string;
             /** @description A new operator-facing label */
-            display_name?: string;
+            label?: string;
             /** @description A new version string, e.g. 1.0.1 */
             version?: string;
         };
@@ -7222,7 +7222,7 @@ export interface components {
             /** @description What the occurrence means */
             description?: string;
             /** @description A human label */
-            display_name?: string;
+            label?: string;
             /** @description A JSON Schema fragment (replaces wholesale) */
             payload_schema?: unknown;
         };
@@ -7235,8 +7235,8 @@ export interface components {
             readonly $schema?: string;
             /** @description Description; empty clears it */
             description?: string;
-            /** @description Display name; empty clears it */
-            display_name?: string;
+            /** @description Label; empty clears it */
+            label?: string;
         };
         UpdateInterfaceInputBody: {
             /**
@@ -7258,7 +7258,7 @@ export interface components {
              */
             readonly $schema?: string;
             /** @description A new operator-facing label */
-            display_name?: string;
+            label?: string;
             /** @description Re-types the location: a location_type, by name or uuid */
             location_type?: string;
         };
@@ -7271,10 +7271,10 @@ export interface components {
             readonly $schema?: string;
             /** @description Replaces the allowed-parent set; omit to leave unchanged, [] to clear back to unconstrained */
             allowed_parent_types?: string[];
-            /** @description A new operator-facing label */
-            display_name?: string;
             /** @description A new glyph key; the console falls back to map-pin when empty */
             icon?: string;
+            /** @description A new operator-facing label */
+            label?: string;
             /** @description A new label template for locations of this type; omit to leave unchanged, "" to clear back to the global rule. Refused (422) if it does not compile. Editing it does not restamp anything: apply it with /locations:recomputeLabels, having seen the blast radius with :previewLabels */
             label_rule?: string;
             /** @description A new name rule for locations of this type; omit to leave unchanged, or name name_rule in update_mask with no rule here to CLEAR it back to operator-named. Refused (422) if it cannot mint a legal name. Setting it renames nothing that already exists: it decides how the NEXT nameless create, :resetName, move or reclassify names a row */
@@ -7289,8 +7289,8 @@ export interface components {
              * @example /api/v1/schemas/UpdateMeInputBody.json
              */
             readonly $schema?: string;
-            /** @description Your display name; empty clears it */
-            display_name?: string;
+            /** @description Your label; empty clears it */
+            label?: string;
         };
         UpdateMetricTypeInputBody: {
             /**
@@ -7302,7 +7302,7 @@ export interface components {
             /** @description What the series measures */
             description?: string;
             /** @description A human label */
-            display_name?: string;
+            label?: string;
             /**
              * Format: int64
              * @description Decimal places a rendered value keeps
@@ -7321,7 +7321,7 @@ export interface components {
             /** @description New free-form operator notes */
             description?: string;
             /** @description A new operator-facing label */
-            display_name?: string;
+            label?: string;
             /** @description Set the node's location by name or id, or "" to clear it */
             location?: string;
         };
@@ -7332,10 +7332,10 @@ export interface components {
              * @example /api/v1/schemas/UpdatePrincipalInputBody.json
              */
             readonly $schema?: string;
-            /** @description Display name; empty clears it */
-            display_name?: string;
             /** @description Email; empty clears it */
             email?: string;
+            /** @description Label; empty clears it */
+            label?: string;
             /** @description Sign-in name (lowercase letters, digits, and . _ -); renaming is safe */
             username?: string;
         };
@@ -7348,8 +7348,6 @@ export interface components {
             readonly $schema?: string;
             /** @description Reclassifies the product to this component_type, by name or uuid; component_type is required, so this only reclassifies, it never clears */
             component_type?: string;
-            /** @description A new operator-facing label */
-            display_name?: string;
             /** @description A new driver, by handle or uuid */
             driver_id?: string;
             /** @description A new icon override */
@@ -7359,6 +7357,8 @@ export interface components {
              * @enum {string}
              */
             kind?: "device" | "app" | "service";
+            /** @description A new operator-facing label */
+            label?: string;
             /** @description A new label template; an empty string clears it, so components fall back to the component_type chain and then the global component rule. Refused with 422 if it does not parse. */
             label_rule?: string;
             /** @description A new parent product, by handle or uuid */
@@ -7376,7 +7376,7 @@ export interface components {
             /** @description What the property means */
             description?: string;
             /** @description A human label */
-            display_name?: string;
+            label?: string;
             /** @description A JSON Schema fragment (replaces wholesale) */
             validation?: unknown;
         };
@@ -7400,7 +7400,7 @@ export interface components {
              */
             readonly $schema?: string;
             /** @description A new operator-facing label */
-            display_name?: string;
+            label?: string;
             /** @description A new variant parent, by handle or uuid */
             parent_standard_id?: string;
         };
@@ -7412,7 +7412,7 @@ export interface components {
              */
             readonly $schema?: string;
             /** @description A new operator-facing label */
-            display_name?: string;
+            label?: string;
             /** @description A new standard, by handle or uuid; "" clears it (a one-off system) */
             standard_id?: string;
             /** @description A new system_type, by name or uuid; "" clears it (an unclassified system) */
@@ -7427,10 +7427,10 @@ export interface components {
             readonly $schema?: string;
             /** @description A new compact form; an empty string clears it, so this type inherits the nearest ancestor's again */
             abbrev?: string;
-            /** @description A new operator-facing label */
-            display_name?: string;
             /** @description A new glyph key; an empty string clears it, so this type inherits the nearest ancestor's again */
             icon?: string;
+            /** @description A new operator-facing label */
+            label?: string;
             /** @description A new label template for systems of this type; omit to leave unchanged, "" to clear back to the inherited one. Refused (422) if it does not compile. Editing it restamps nothing on its own: apply it with /systems:recomputeLabels, having seen the blast radius with :previewLabels */
             label_rule?: string;
             /** @description A new name prefix (lowercase letters, digits, and hyphens); an empty string CLEARS it, so this type inherits the nearest ancestor's again. A root type has no ancestor to inherit from and is refused (422). */
@@ -7467,8 +7467,6 @@ export interface components {
              * @example /api/v1/schemas/UpdateVendorInputBody.json
              */
             readonly $schema?: string;
-            /** @description A new operator-facing label */
-            display_name?: string;
             /** @description A new glyph key */
             icon?: string;
             /**
@@ -7476,6 +7474,8 @@ export interface components {
              * @enum {string}
              */
             kind?: "manufacturer" | "integrator" | "developer";
+            /** @description A new operator-facing label */
+            label?: string;
             /** @description A new support line */
             support_phone?: string;
             /** @description A new website (http or https) */
@@ -7505,12 +7505,12 @@ export interface components {
              * @example /api/v1/schemas/VendorBody.json
              */
             readonly $schema?: string;
-            display_name: string;
             icon?: string;
             /** @description The vendor's uuid, the stable handle that survives a rename */
             id: string;
             /** @enum {string} */
             kind: "manufacturer" | "integrator" | "developer";
+            label: string;
             /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;

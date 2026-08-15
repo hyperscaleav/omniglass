@@ -70,9 +70,9 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
 
   Identity is two fields you may fill and one you never see: the **name** is the identifier the API,
   the CLI, and the URL carry (`display-1`, lowercase letters, digits, and hyphens, unique within its
-  placement, changeable later, see Edit), the **display name** is the friendly string a human reads
+  placement, changeable later, see Edit), the **label** is the friendly string a human reads
   ("HQ Boardroom DSP"), and the `id` is a uuid the platform mints and keeps internally. Typing a
-  display name never fills the name in for you here; those two fields are independent, because a blank
+  label never fills the name in for you here; those two fields are independent, because a blank
   name is a **request** rather than an omission.
 
   **Both identity fields arrive locked, already filled in with what the platform will use.** That is
@@ -103,7 +103,7 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   are never quietly given a different name from the one you were shown, which is the whole point of a
   field that arrives filled in.
 
-  The locked **display name** is the real label, rendered by the same rule engine that will stamp it,
+  The locked **label** is the real label, rendered by the same rule engine that will stamp it,
   against the classification and placement you have just chosen, and against that same number. The form
   also names the **rule** that produced it, so the value is traceable rather than arriving from nowhere.
   Nothing is created to work either of them out: it is a render, not a draft row
@@ -129,7 +129,7 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   with no lock to close: a system with no type (or a type whose chain sets no stem), a location whose
   type carries no name rule, a product whose type chain carries no stem. The form names the missing
   fact rather than just refusing. Elsewhere (the catalog and admin pages, whose names have no
-  generator and are unique estate-wide) the name still fills itself in from the display name until you
+  generator and are unique estate-wide) the name still fills itself in from the label until you
   edit it.
 
   A location's type is required, since for a location the type is the only shape-definer; on a
@@ -146,8 +146,8 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
   proposed name is valid and still free before you save. **Save** commits the changes, **Cancel**
   discards them. In **view** the detail is read-only, so tags and other bindings are shown but not
   editable until you enter edit.
-- **A display name the platform wrote opens locked, and taking it is a deliberate act.** On a
-  component, a system, and a location the **Display name** can be one a
+- **A label the platform wrote opens locked, and taking it is a deliberate act.** On a
+  component, a system, and a location the **Label** can be one a
   [label rule](/architecture/core-entities/) rendered. Where it is, edit mode shows it in a locked
   field saying so, exactly as the create form does, and it stays the platform's across every other
   edit you make: changing a type, a standard, or a tag no longer quietly claims the label. The lock

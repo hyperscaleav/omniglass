@@ -14,7 +14,7 @@ export const METRIC_DATA_TYPES: MetricDataType[] = ["int", "float"];
 export type MetricRow = {
   name: string;
   data_type: string;
-  display_name?: string;
+  label?: string;
   description?: string;
   unit?: string;
   precision?: number;
@@ -32,7 +32,7 @@ export async function listMetricTypes(): Promise<MetricRow[]> {
 export type CreateMetricType = {
   name: string;
   data_type: MetricDataType;
-  display_name?: string;
+  label?: string;
   description?: string;
   unit?: string;
   precision?: number;
@@ -49,7 +49,7 @@ export async function createMetricType(body: CreateMetricType): Promise<MetricRo
 // clearing a set value is an API operation for now, like a property's
 // validation schema.
 export type UpdateMetricType = {
-  display_name?: string;
+  label?: string;
   description?: string;
   unit?: string;
   precision?: number;

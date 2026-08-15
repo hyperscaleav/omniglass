@@ -23,10 +23,10 @@ const members: Member[] = [
 ];
 
 const components: Comp[] = [
-  { id: uuidFor("c-1"), name: "boardroom-a-bar", display_name: "Boardroom A Bar" },
-  { id: uuidFor("c-2"), name: "shared-bar", display_name: "Shared Room Bar" },
-  { id: uuidFor("c-3"), name: "boardroom-power", display_name: "Power Conditioner" },
-  { id: uuidFor("c-4"), name: "spare-panel", display_name: "Spare Panel" },
+  { id: uuidFor("c-1"), name: "boardroom-a-bar", label: "Boardroom A Bar" },
+  { id: uuidFor("c-2"), name: "shared-bar", label: "Shared Room Bar" },
+  { id: uuidFor("c-3"), name: "boardroom-power", label: "Power Conditioner" },
+  { id: uuidFor("c-4"), name: "spare-panel", label: "Spare Panel" },
 ] as Comp[];
 
 // The by-role read for the same system: boardroom-a-bar fills a role,
@@ -34,7 +34,7 @@ const components: Comp[] = [
 // pivot needs to prove (a role shown, and its absence said plainly).
 const roles: EffectiveRole[] = [
   {
-    name: "video-bar", display_name: "Video bar", quorum: 1, impact: "outage",
+    name: "video-bar", label: "Video bar", quorum: 1, impact: "outage",
     accepted_types: [], pinned_products: [], position_labels: [], from_standard: true,
     assigned_to: ["boardroom-a-bar"], positions: [1], assigned: 1, understaffed: 0,
   },

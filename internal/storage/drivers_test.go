@@ -23,7 +23,7 @@ func TestDriverCRUD(t *testing.T) {
 
 	// Create a custom driver; it is official=false.
 	d, err := gw.CreateDriver(ctx, "", storage.Driver{
-		Name: "acme-agent", DisplayName: "Acme Agent", Version: "2.0.0",
+		Name: "acme-agent", Label: "Acme Agent", Version: "2.0.0",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -36,7 +36,7 @@ func TestDriverCRUD(t *testing.T) {
 	}
 
 	// Duplicate id is ErrTypeExists.
-	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "acme-agent", DisplayName: "Dup"}); !errors.Is(err, storage.ErrTypeExists) {
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "acme-agent", Label: "Dup"}); !errors.Is(err, storage.ErrTypeExists) {
 		t.Fatalf("dup create err = %v, want ErrTypeExists", err)
 	}
 
@@ -45,8 +45,8 @@ func TestDriverCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if got.DisplayName != "Acme Agent" {
-		t.Fatalf("get display_name = %q, want Acme Agent", got.DisplayName)
+	if got.Label != "Acme Agent" {
+		t.Fatalf("get label = %q, want Acme Agent", got.Label)
 	}
 	all, err := gw.ListDrivers(ctx)
 	if err != nil {
@@ -62,31 +62,31 @@ func TestDriverCRUD(t *testing.T) {
 	if found == nil {
 		t.Fatalf("list does not contain acme-agent; got %d rows", len(all))
 	}
-	if found.DisplayName != "Acme Agent" {
-		t.Fatalf("list acme-agent display_name = %q, want Acme Agent", found.DisplayName)
+	if found.Label != "Acme Agent" {
+		t.Fatalf("list acme-agent label = %q, want Acme Agent", found.Label)
 	}
 	if found.Official {
 		t.Fatalf("list acme-agent official=true, want false")
 	}
 
-	// Update patch (display name); version unchanged when omitted.
+	// Update patch (label); version unchanged when omitted.
 	dn := "Acme Agent Pro"
-	upd, err := gw.UpdateDriver(ctx, "", "acme-agent", storage.DriverPatch{DisplayName: &dn})
+	upd, err := gw.UpdateDriver(ctx, "", "acme-agent", storage.DriverPatch{Label: &dn})
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if upd.DisplayName != "Acme Agent Pro" {
-		t.Fatalf("update display_name = %q, want Acme Agent Pro", upd.DisplayName)
+	if upd.Label != "Acme Agent Pro" {
+		t.Fatalf("update label = %q, want Acme Agent Pro", upd.Label)
 	}
 	if upd.Version != "2.0.0" {
 		t.Fatalf("update version = %q, want unchanged 2.0.0", upd.Version)
 	}
 
 	// Official rows are read-only.
-	if err := gw.UpsertDriver(ctx, storage.Driver{Name: "official-driver", DisplayName: "Official Driver", Official: true}); err != nil {
+	if err := gw.UpsertDriver(ctx, storage.Driver{Name: "official-driver", Label: "Official Driver", Official: true}); err != nil {
 		t.Fatalf("upsert official: %v", err)
 	}
-	if _, err := gw.UpdateDriver(ctx, "", "official-driver", storage.DriverPatch{DisplayName: &dn}); !errors.Is(err, storage.ErrTypeOfficial) {
+	if _, err := gw.UpdateDriver(ctx, "", "official-driver", storage.DriverPatch{Label: &dn}); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("update official err = %v, want ErrTypeOfficial", err)
 	}
 	if err := gw.DeleteDriver(ctx, "", "official-driver"); !errors.Is(err, storage.ErrTypeOfficial) {

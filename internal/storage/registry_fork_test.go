@@ -15,7 +15,7 @@ import (
 // straight from Postgres so a test can assert the platform's copy is untouched
 // without going through the resolve that would hide a fork.
 type officialRow struct {
-	displayName        string
+	label              string
 	stem, icon, abbrev *string
 	tags               []string
 }
@@ -29,21 +29,21 @@ func readOfficialRow(t *testing.T, ctx context.Context, dsn, name string) offici
 	defer func() { _ = conn.Close(ctx) }()
 	var row officialRow
 	if err := conn.QueryRow(ctx,
-		`select display_name, stem, icon, abbrev, default_tags from component_type where name = $1`, name).
-		Scan(&row.displayName, &row.stem, &row.icon, &row.abbrev, &row.tags); err != nil {
+		`select label, stem, icon, abbrev, default_tags from component_type where name = $1`, name).
+		Scan(&row.label, &row.stem, &row.icon, &row.abbrev, &row.tags); err != nil {
 		t.Fatalf("read official %s: %v", name, err)
 	}
 	return row
 }
 
-func setOfficialDisplayName(t *testing.T, ctx context.Context, dsn, name, displayName string) {
+func setOfficialLabel(t *testing.T, ctx context.Context, dsn, name, label string) {
 	t.Helper()
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
 	defer func() { _ = conn.Close(ctx) }()
-	tag, err := conn.Exec(ctx, `update component_type set display_name = $2 where name = $1`, name, displayName)
+	tag, err := conn.Exec(ctx, `update component_type set label = $2 where name = $1`, name, label)
 	if err != nil {
 		t.Fatalf("scuff official %s: %v", name, err)
 	}
@@ -93,13 +93,13 @@ func TestForkLeavesTheShippedRowPristine(t *testing.T) {
 	}
 
 	forked, err := gw.UpdateComponentType(ctx, "", "mic", storage.ComponentTypePatch{
-		DisplayName: str("House Microphone"), Stem: str("housemic"),
+		Label: str("House Microphone"), Stem: str("housemic"),
 	})
 	if err != nil {
 		t.Fatalf("patch shipped mic: %v", err)
 	}
-	if forked.DisplayName != "House Microphone" || forked.Stem == nil || *forked.Stem != "housemic" {
-		t.Fatalf("forked mic = %+v, want the operator's display_name and stem", forked)
+	if forked.Label != "House Microphone" || forked.Stem == nil || *forked.Stem != "housemic" {
+		t.Fatalf("forked mic = %+v, want the operator's label and stem", forked)
 	}
 	if !forked.Forked {
 		t.Error("forked mic Forked = false, want true (the console shows yours-overriding-shipped)")
@@ -113,8 +113,8 @@ func TestForkLeavesTheShippedRowPristine(t *testing.T) {
 
 	// The official row underneath is byte-identical.
 	after := readOfficialRow(t, ctx, dsn, "mic")
-	if after.displayName != before.displayName {
-		t.Errorf("official display_name = %q, want %q untouched", after.displayName, before.displayName)
+	if after.label != before.label {
+		t.Errorf("official label = %q, want %q untouched", after.label, before.label)
 	}
 	if after.stem == nil || before.stem == nil || *after.stem != *before.stem {
 		t.Errorf("official stem = %v, want %v untouched", after.stem, before.stem)
@@ -127,7 +127,7 @@ func TestForkLeavesTheShippedRowPristine(t *testing.T) {
 		if err != nil {
 			t.Fatalf("get %q: %v", ref, err)
 		}
-		if got.DisplayName != "House Microphone" || got.ID != shipped.ID || !got.Forked {
+		if got.Label != "House Microphone" || got.ID != shipped.ID || !got.Forked {
 			t.Errorf("get %q = %+v, want the forked row under the shipped id", ref, got)
 		}
 	}
@@ -139,7 +139,7 @@ func TestForkLeavesTheShippedRowPristine(t *testing.T) {
 	for _, ct := range listed {
 		if ct.Name == "mic" {
 			seen++
-			if ct.DisplayName != "House Microphone" || !ct.Forked {
+			if ct.Label != "House Microphone" || !ct.Forked {
 				t.Errorf("listed mic = %+v, want the forked row", ct)
 			}
 		}
@@ -167,7 +167,7 @@ func TestRestoreDiscardsTheShadow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get shipped mic: %v", err)
 	}
-	if _, err := gw.UpdateComponentType(ctx, "", "mic", storage.ComponentTypePatch{DisplayName: str("House Microphone")}); err != nil {
+	if _, err := gw.UpdateComponentType(ctx, "", "mic", storage.ComponentTypePatch{Label: str("House Microphone")}); err != nil {
 		t.Fatalf("fork mic: %v", err)
 	}
 	if n := countShadows(t, ctx, dsn); n != 1 {
@@ -178,8 +178,8 @@ func TestRestoreDiscardsTheShadow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("restore mic: %v", err)
 	}
-	if restored.DisplayName != shipped.DisplayName || restored.Forked {
-		t.Fatalf("restored mic = %+v, want the shipped display_name %q and forked=false", restored, shipped.DisplayName)
+	if restored.Label != shipped.Label || restored.Forked {
+		t.Fatalf("restored mic = %+v, want the shipped label %q and forked=false", restored, shipped.Label)
 	}
 	if n := countShadows(t, ctx, dsn); n != 0 {
 		t.Fatalf("shadow rows after restore = %d, want 0 (restore IS the shadow delete)", n)
@@ -188,8 +188,8 @@ func TestRestoreDiscardsTheShadow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get mic after restore: %v", err)
 	}
-	if again.DisplayName != shipped.DisplayName {
-		t.Errorf("mic display_name after restore = %q, want the shipped %q", again.DisplayName, shipped.DisplayName)
+	if again.Label != shipped.Label {
+		t.Errorf("mic label after restore = %q, want the shipped %q", again.Label, shipped.Label)
 	}
 
 	// Restoring a row that was never forked is refused rather than silently
@@ -206,7 +206,7 @@ func TestRestoreDiscardsTheShadow(t *testing.T) {
 // a fork and of a restore.
 //
 // The fixture makes the seed's ON CONFLICT branch actually fire on the row
-// under test: before each re-seed it scuffs the official row's display_name
+// under test: before each re-seed it scuffs the official row's label
 // directly in SQL, and asserts afterwards that the seed put the shipped value
 // back. Without that, "the fork survived the re-seed" would pass even if the
 // seed had skipped the row entirely, which is the vacuous version of this test.
@@ -227,27 +227,27 @@ func TestReseedNeitherClobbersNorResurrectsAShadow(t *testing.T) {
 	}
 
 	if _, err := gw.UpdateComponentType(ctx, "", "mic", storage.ComponentTypePatch{
-		DisplayName: str("House Microphone"), Abbrev: str("hm"),
+		Label: str("House Microphone"), Abbrev: str("hm"),
 	}); err != nil {
 		t.Fatalf("fork mic: %v", err)
 	}
 
-	setOfficialDisplayName(t, ctx, dsn, "mic", "scuffed-before-reseed")
+	setOfficialLabel(t, ctx, dsn, "mic", "scuffed-before-reseed")
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("second seed: %v", err)
 	}
 	// The conflict fired on this row: the seed wrote the shipped value back
 	// over the scuff.
-	if raw := readOfficialRow(t, ctx, dsn, "mic"); raw.displayName != shipped.DisplayName {
-		t.Fatalf("official display_name after re-seed = %q, want the seeded %q; the seed did not touch this row, so the rest of this test proves nothing",
-			raw.displayName, shipped.DisplayName)
+	if raw := readOfficialRow(t, ctx, dsn, "mic"); raw.label != shipped.Label {
+		t.Fatalf("official label after re-seed = %q, want the seeded %q; the seed did not touch this row, so the rest of this test proves nothing",
+			raw.label, shipped.Label)
 	}
 	// And the fork rode over it untouched.
 	forked, err := gw.GetComponentType(ctx, "mic")
 	if err != nil {
 		t.Fatalf("get mic after re-seed: %v", err)
 	}
-	if forked.DisplayName != "House Microphone" || forked.Abbrev == nil || *forked.Abbrev != "hm" || !forked.Forked {
+	if forked.Label != "House Microphone" || forked.Abbrev == nil || *forked.Abbrev != "hm" || !forked.Forked {
 		t.Fatalf("mic after re-seed = %+v, want the operator's fork intact", forked)
 	}
 	if n := countShadows(t, ctx, dsn); n != 1 {
@@ -258,12 +258,12 @@ func TestReseedNeitherClobbersNorResurrectsAShadow(t *testing.T) {
 	if _, err := gw.RestoreComponentType(ctx, "", "mic"); err != nil {
 		t.Fatalf("restore mic: %v", err)
 	}
-	setOfficialDisplayName(t, ctx, dsn, "mic", "scuffed-before-third-seed")
+	setOfficialLabel(t, ctx, dsn, "mic", "scuffed-before-third-seed")
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("third seed: %v", err)
 	}
-	if raw := readOfficialRow(t, ctx, dsn, "mic"); raw.displayName != shipped.DisplayName {
-		t.Fatalf("official display_name after third seed = %q, want the seeded %q", raw.displayName, shipped.DisplayName)
+	if raw := readOfficialRow(t, ctx, dsn, "mic"); raw.label != shipped.Label {
+		t.Fatalf("official label after third seed = %q, want the seeded %q", raw.label, shipped.Label)
 	}
 	if n := countShadows(t, ctx, dsn); n != 0 {
 		t.Fatalf("shadow rows after the third seed = %d, want 0 (a restored fork stays restored)", n)
@@ -272,7 +272,7 @@ func TestReseedNeitherClobbersNorResurrectsAShadow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get mic after third seed: %v", err)
 	}
-	if after.DisplayName != shipped.DisplayName || after.Forked {
+	if after.Label != shipped.Label || after.Forked {
 		t.Fatalf("mic after the third seed = %+v, want the shipped row, unforked", after)
 	}
 }
@@ -397,7 +397,7 @@ func TestForkDoesNotOpenTheOfficialRowToDelete(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	if _, err := gw.UpdateComponentType(ctx, "", "camera", storage.ComponentTypePatch{DisplayName: str("Cam")}); err != nil {
+	if _, err := gw.UpdateComponentType(ctx, "", "camera", storage.ComponentTypePatch{Label: str("Cam")}); err != nil {
 		t.Fatalf("fork camera: %v", err)
 	}
 	if err := gw.DeleteComponentType(ctx, "", "camera"); !errors.Is(err, storage.ErrTypeOfficial) {
@@ -406,12 +406,12 @@ func TestForkDoesNotOpenTheOfficialRowToDelete(t *testing.T) {
 
 	// A custom row is not a fork: it patches in place and grows no shadow.
 	custom, err := gw.CreateComponentType(ctx, "", storage.ComponentType{
-		Name: "fk-custom", DisplayName: "Custom", Stem: str("custom"),
+		Name: "fk-custom", Label: "Custom", Stem: str("custom"),
 	})
 	if err != nil {
 		t.Fatalf("create custom: %v", err)
 	}
-	updated, err := gw.UpdateComponentType(ctx, "", "fk-custom", storage.ComponentTypePatch{DisplayName: str("Custom Two")})
+	updated, err := gw.UpdateComponentType(ctx, "", "fk-custom", storage.ComponentTypePatch{Label: str("Custom Two")})
 	if err != nil {
 		t.Fatalf("patch custom: %v", err)
 	}
@@ -421,8 +421,8 @@ func TestForkDoesNotOpenTheOfficialRowToDelete(t *testing.T) {
 	if n := countShadows(t, ctx, dsn); n != 1 {
 		t.Errorf("shadow rows = %d, want 1 (only the camera fork; a custom row writes itself)", n)
 	}
-	if raw := readOfficialRow(t, ctx, dsn, "fk-custom"); raw.displayName != "Custom Two" {
-		t.Errorf("custom row display_name in the table = %q, want %q written in place", raw.displayName, "Custom Two")
+	if raw := readOfficialRow(t, ctx, dsn, "fk-custom"); raw.label != "Custom Two" {
+		t.Errorf("custom row label in the table = %q, want %q written in place", raw.label, "Custom Two")
 	}
 	if err := gw.DeleteComponentType(ctx, "", custom.Name); err != nil {
 		t.Fatalf("delete custom: %v", err)
@@ -447,7 +447,7 @@ func TestForkAuditsAgainstTheShippedRowsID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get mic: %v", err)
 	}
-	if _, err := gw.UpdateComponentType(ctx, "", "mic", storage.ComponentTypePatch{DisplayName: str("House Microphone")}); err != nil {
+	if _, err := gw.UpdateComponentType(ctx, "", "mic", storage.ComponentTypePatch{Label: str("House Microphone")}); err != nil {
 		t.Fatalf("fork mic: %v", err)
 	}
 	if _, err := gw.RestoreComponentType(ctx, "", "mic"); err != nil {

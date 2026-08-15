@@ -30,7 +30,7 @@ var (
 type Node struct {
 	PrincipalID     string
 	Name            string
-	DisplayName     string
+	Label           string
 	Description     string
 	LocationName    *string
 	LocationID      *string
@@ -41,11 +41,11 @@ type Node struct {
 	UpdatedAt       time.Time
 }
 
-// NodeSpec is the create input. DisplayName is the operator label (empty falls
+// NodeSpec is the create input. Label is the operator label (empty falls
 // back to the name on read); LocationName is an optional descriptive placement.
 type NodeSpec struct {
 	Name         string
-	DisplayName  string
+	Label        string
 	Description  string
 	LocationName *string
 }
@@ -54,7 +54,7 @@ type NodeSpec struct {
 // patchable (it is the immutable estate address and enrollment identity). A
 // LocationName pointing at "" clears the placement.
 type NodePatch struct {
-	DisplayName  *string
+	Label        *string
 	Description  *string
 	LocationName *string
 }
@@ -84,13 +84,13 @@ type Worklist struct {
 // scalar subquery: the id is what the row points at, the name is what an operator
 // reads and types. The subquery form works in a plain select and in a RETURNING
 // list alike, so the insert and update paths need no join.
-const nodeCols = `principal_id, name, coalesce(display_name, ''), description,
+const nodeCols = `principal_id, name, coalesce(label, ''), description,
 	(select l.name from location l where l.id = node.location_id) as location_name, location_id,
 	last_heartbeat_at, enrolled_at, created_at, updated_at`
 
 func scanNode(row pgx.Row) (*Node, error) {
 	var n Node
-	if err := row.Scan(&n.PrincipalID, &n.Name, &n.DisplayName, &n.Description, &n.LocationName, &n.LocationID, &n.LastHeartbeatAt, &n.EnrolledAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
+	if err := row.Scan(&n.PrincipalID, &n.Name, &n.Label, &n.Description, &n.LocationName, &n.LocationID, &n.LastHeartbeatAt, &n.EnrolledAt, &n.CreatedAt, &n.UpdatedAt); err != nil {
 		return nil, err
 	}
 	n.Enrolled = n.EnrolledAt != nil
@@ -123,9 +123,9 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 		return nil, fmt.Errorf("storage: create node principal: %w", err)
 	}
 	n, err := scanNode(tx.QueryRow(ctx, `
-		insert into node (principal_id, name, display_name, description, location_id)
-		values ($1, $2, nullif($3, ''), $4, $5)
-		returning `+nodeCols, pid, spec.Name, spec.DisplayName, spec.Description, locationID))
+		insert into node (principal_id, name, label, description, location_id)
+		values ($1, $2, $3, $4, $5)
+		returning `+nodeCols, pid, spec.Name, labelOrNull(spec.Label), spec.Description, locationID))
 	if err != nil {
 		return nil, mapNodeWriteErr(err)
 	}
@@ -138,7 +138,7 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 	return n, nil
 }
 
-// UpdateNode patches a node's display_name, description, and location (a nil
+// UpdateNode patches a node's label, description, and location (a nil
 // field is left unchanged; a LocationName of "" clears the placement). name is
 // not patched: it is the immutable estate address and enrollment identity. A
 // node is estate-wide, so the update requires an all scope, like create. An
@@ -166,15 +166,16 @@ func (p *PG) UpdateNode(ctx context.Context, actorID, name string, patch NodePat
 	if err != nil {
 		return nil, err
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	after, err := scanNode(tx.QueryRow(ctx, `
 		update node set
-			display_name  = coalesce($2, display_name),
+			label  = case when $6::boolean then $2 else label end,
 			description   = coalesce($3, description),
 			location_id   = case when $4 then $5 else location_id end,
 			updated_at    = now()
 		where name = $1
 		returning `+nodeCols,
-		name, patch.DisplayName, patch.Description, patch.LocationName != nil, locationID))
+		name, labelVal, patch.Description, patch.LocationName != nil, locationID, setLabel))
 	if err != nil {
 		return nil, mapNodeWriteErr(err)
 	}

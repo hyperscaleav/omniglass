@@ -204,7 +204,7 @@ A handful of patterns hold everywhere:
 
 - **Identity is three columns**: an immutable uuid **`id`** every foreign key stores, a renameable
   operator-typed **`name`** that URLs, CLI arguments, and topics carry, and an optional
-  **`display_name`** a human reads. A rename is a custom method (`POST /components/{name}:rename`
+  **`label`** a human reads. A rename is a custom method (`POST /components/{name}:rename`
   and its siblings) gated on its own, so it moves one column and nothing else
   ([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
 - **Exclusive-arc ownership**: every sample, event, and alarm names exactly one owner (component,

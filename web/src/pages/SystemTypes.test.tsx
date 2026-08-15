@@ -15,11 +15,11 @@ import { uuidFor } from "../lib/testids";
 // overrides it, and there is no reparent leg, so a custom type's placement is
 // fixed at create.
 const seed: SystemType[] = [
-  { id: uuidFor("st-av"), name: "av", display_name: "AV", official: true, stem: "av", abbrev: "av", icon: "layers", resolved_icon: "layers" },
-  { id: uuidFor("st-room"), name: "room", display_name: "Room", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "room", abbrev: "rm", icon: "door-open", resolved_icon: "door-open" },
-  { id: uuidFor("st-board"), name: "board", display_name: "Boardroom", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "boardroom", abbrev: "br", resolved_icon: "door-open" },
+  { id: uuidFor("st-av"), name: "av", label: "AV", official: true, stem: "av", abbrev: "av", icon: "layers", resolved_icon: "layers" },
+  { id: uuidFor("st-room"), name: "room", label: "Room", official: true, parent: "av", parent_id: uuidFor("st-av"), stem: "room", abbrev: "rm", icon: "door-open", resolved_icon: "door-open" },
+  { id: uuidFor("st-board"), name: "board", label: "Boardroom", official: true, parent: "room", parent_id: uuidFor("st-room"), stem: "boardroom", abbrev: "br", resolved_icon: "door-open" },
   {
-    id: uuidFor("st-lab"), name: "lab", display_name: "Lab", official: false,
+    id: uuidFor("st-lab"), name: "lab", label: "Lab", official: false,
     parent: "room", parent_id: uuidFor("st-room"), stem: "lab", abbrev: "lab", resolved_icon: "door-open",
     // The SERVER's answer to "clear this box and you get what?" (#716), seeded
     // with strings no client-side climb could produce: `av`, two levels up,
@@ -34,7 +34,7 @@ const seed: SystemType[] = [
   // the server says it SHOWS, which on a row stating no icon is the value it
   // takes.
   {
-    id: uuidFor("st-studio"), name: "studio", display_name: "Studio", official: false,
+    id: uuidFor("st-studio"), name: "studio", label: "Studio", official: false,
     parent: "room", parent_id: uuidFor("st-room"), resolved_icon: "icon-from-the-server",
     inherited_stem: "stem-from-the-server", inherited_stem_source: "room",
     inherited_abbrev: "abbrev-from-the-server", inherited_abbrev_source: "av",
@@ -179,7 +179,7 @@ describe("SystemTypes page", () => {
       const req = input as Request;
       if (req.method === "POST" && req.url.endsWith("/system-types")) {
         sent = JSON.parse(await req.clone().text());
-        return new Response(JSON.stringify({ id: uuidFor("st-lecture"), name: "lecture", display_name: "Lecture Hall", official: false, parent: "room", parent_id: uuidFor("st-room") }), { status: 201, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ id: uuidFor("st-lecture"), name: "lecture", label: "Lecture Hall", official: false, parent: "room", parent_id: uuidFor("st-room") }), { status: 201, headers: { "Content-Type": "application/json" } });
       }
       return new Response(JSON.stringify({ system_types: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
@@ -189,7 +189,7 @@ describe("SystemTypes page", () => {
     fireEvent.change(screen.getByLabelText("Parent"), { target: { value: "room" } });
     fireEvent.click(screen.getByRole("button", { name: /create system type/i }));
     await waitFor(() => expect(sent).toBeTruthy());
-    expect(sent).toMatchObject({ name: "lecture-hall", display_name: "Lecture Hall", parent_id: "room" });
+    expect(sent).toMatchObject({ name: "lecture-hall", label: "Lecture Hall", parent_id: "room" });
   });
 
   // The create form's twin of the component registry's, and it carries one

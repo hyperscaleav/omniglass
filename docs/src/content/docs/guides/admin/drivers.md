@@ -1,6 +1,6 @@
 ---
 title: Drivers
-description: "The Drivers catalog: the implementations that get, emit, and set a product's signals (name, display name, version), official rows read-only, admin-gated custom ones."
+description: "The Drivers catalog: the implementations that get, emit, and set a product's signals (name, label, version), official rows read-only, admin-gated custom ones."
 ---
 
 **Catalog, under Components: Drivers** (`/drivers`, with `driver:read`, covered by every viewer's `*:read` floor)
@@ -8,7 +8,7 @@ is the directory of **drivers**: the implementation that gets, emits, and sets a
 on the same flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
 Where a [vendor](/guides/admin/vendors/) names who a device comes from, a driver names how it is
 talked to (for example `Generic SNMP` or `Cisco xAPI`). Each row shows the **name** (the
-operator-facing name, for example `snmp-generic`), the **display name**, an optional
+operator-facing name, for example `snmp-generic`), the **label**, an optional
 **version**, and its **origin** (**official** or **custom**). A driver also carries
 an `id`, a uuid minted by the database, the internal address the handle resolves to
 ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
@@ -20,10 +20,10 @@ driver this way. It is a leaf catalog beside the vendor registry. See
 [core entities](/architecture/core-entities/) for where it sits in the estate model.
 
 - **New driver** (with `driver:create`, an admin permission) opens a create drawer: give it a
-  **name** (unique tenant-wide, e.g. `snmp-generic`), a **display name**, and,
+  **name** (unique tenant-wide, e.g. `snmp-generic`), a **label**, and,
   optionally, a **version**.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `driver:update`) edits
-  the display name and version; the **name** is fixed, since a catalog row carries no rename
+  the label and version; the **name** is fixed, since a catalog row carries no rename
   (`:rename` is a component, system, location, and principal group affordance). **Delete**
   (with `driver:delete`) removes the row, behind a confirm. A verb you lack greys just that
   button, its hover reason naming the permission (`Requires driver:update`, `Requires driver:delete`);

@@ -68,11 +68,11 @@ var Banned = []BannedTerm{
 		// reference alone, from a Huma doc: tag. A third word for the identifier is
 		// exactly what the triad exists to stop (ADR-0076).
 		Pattern:     regexp.MustCompile(`(?i)\btechnical names?\b|\bkebab handles?\b`),
-		Replacement: "name (the identifier), or display name (the friendly string)",
+		Replacement: "name (the identifier), or label (the friendly string)",
 		Origin:      "ADR-0076",
 	},
 	{
-		// The identity triad settled on id / name / display_name (ADR-0076). These
+		// The identity triad settled on id / name / label (ADR-0076). These
 		// two validators were the platform's other name rules and are DELETED, not
 		// renamed: ValidateName picks the rule from the table's declared identity
 		// shape, so a page naming either one is telling a contributor to call
@@ -111,6 +111,19 @@ var Banned = []BannedTerm{
 		Pattern:     regexp.MustCompile(`\bservice\.label\b|\bsvcBody\.Label\b`),
 		Replacement: "service.name, a service account's identifier",
 		Origin:      "ADR-0111",
+	},
+	{
+		// The other end of that sweep, and the reason ADR-0111 ran first: the
+		// friendly string an operator reads is `label` on all twenty-three tables
+		// that carry one, and the pen beside it is `label_generated` (ADR-0118).
+		// Three spellings are banned together because a page can reach for any of
+		// them: the column, the CLI flag, and the two-word noun the docs used for
+		// the concept. The noun matters most, since it is the one nothing else
+		// catches: a symbol lint sees `display_name` in a code fence, and no
+		// compiler sees "the display name" in a sentence.
+		Pattern:     regexp.MustCompile(`\bdisplay_names?\b|\bdisplay_name_generated\b|--display-name\b|(?i)\bdisplay names?\b`),
+		Replacement: "label (the friendly string), or label_generated (the pen that says the platform rendered it)",
+		Origin:      "ADR-0118",
 	},
 	{
 		// The stored function that resolved a principal to its identifier, dropped

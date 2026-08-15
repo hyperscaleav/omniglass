@@ -43,8 +43,8 @@ func TestAMoveThatRestatesItsPlacementKeepsTheName(t *testing.T) {
 	if first.Name != "display-1" || second.Name != "display-2" {
 		t.Fatalf("precondition names = %q, %q, want display-1, display-2", first.Name, second.Name)
 	}
-	if second.DisplayName != "Display 2" {
-		t.Fatalf("precondition label = %q, want %q", second.DisplayName, "Display 2")
+	if second.Label != "Display 2" {
+		t.Fatalf("precondition label = %q, want %q", second.Label, "Display 2")
 	}
 	// An operator claims the first one's name, which frees ordinal 1 in this
 	// bucket. Nothing about the second component changed.
@@ -62,8 +62,8 @@ func TestAMoveThatRestatesItsPlacementKeepsTheName(t *testing.T) {
 	if moved.Ordinal == nil || *moved.Ordinal != 2 {
 		t.Fatalf("ordinal after the restated :move = %v, want unchanged 2", ordstr(moved.Ordinal))
 	}
-	if moved.DisplayName != "Display 2" {
-		t.Fatalf("label after the restated :move = %q, want unchanged %q (the label reads the ordinal, so it moves exactly when the name does)", moved.DisplayName, "Display 2")
+	if moved.Label != "Display 2" {
+		t.Fatalf("label after the restated :move = %q, want unchanged %q (the label reads the ordinal, so it moves exactly when the name does)", moved.Label, "Display 2")
 	}
 }
 
@@ -138,8 +138,8 @@ func TestAMoveBetweenBucketsStillReMints(t *testing.T) {
 	if moved.Ordinal == nil || *moved.Ordinal != 2 {
 		t.Fatalf("ordinal after a real relocate = %v, want 2", ordstr(moved.Ordinal))
 	}
-	if moved.DisplayName != "Display 2" {
-		t.Fatalf("label after a real relocate = %q, want %q (the label follows the name where the name legitimately moves)", moved.DisplayName, "Display 2")
+	if moved.Label != "Display 2" {
+		t.Fatalf("label after a real relocate = %q, want %q (the label follows the name where the name legitimately moves)", moved.Label, "Display 2")
 	}
 
 	// Unplaced is a bucket like any other: clearing the location changes it.
@@ -150,8 +150,8 @@ func TestAMoveBetweenBucketsStillReMints(t *testing.T) {
 	if orphaned.Name != "display-1" {
 		t.Fatalf("name after clearing the location = %q, want display-1 (the unplaced bucket is empty)", orphaned.Name)
 	}
-	if orphaned.DisplayName != "Display 1" {
-		t.Fatalf("label after clearing the location = %q, want %q", orphaned.DisplayName, "Display 1")
+	if orphaned.Label != "Display 1" {
+		t.Fatalf("label after clearing the location = %q, want %q", orphaned.Label, "Display 1")
 	}
 }
 
@@ -188,8 +188,8 @@ func TestAReclassifyToTheSameProductKeepsTheName(t *testing.T) {
 	if after.Ordinal == nil || *after.Ordinal != 2 {
 		t.Fatalf("ordinal after the restated save = %v, want unchanged 2", ordstr(after.Ordinal))
 	}
-	if after.DisplayName != "Display 2" {
-		t.Fatalf("label after the restated save = %q, want unchanged %q", after.DisplayName, "Display 2")
+	if after.Label != "Display 2" {
+		t.Fatalf("label after the restated save = %q, want unchanged %q", after.Label, "Display 2")
 	}
 }
 
@@ -202,7 +202,7 @@ func TestAReclassifyWithinOneStemKeepsTheName(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	for _, name := range []string{"stem-twin-a", "stem-twin-b"} {
 		if _, err := gw.CreateProduct(ctx, "", storage.Product{
-			Name: name, DisplayName: name, Kind: "device", ComponentType: "display",
+			Name: name, Label: name, Kind: "device", ComponentType: "display",
 		}); err != nil {
 			t.Fatalf("create product %s: %v", name, err)
 		}
@@ -255,8 +255,8 @@ func TestARealReclassifyStillReMintsAndTheLabelFollows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create the display: %v", err)
 	}
-	if c.Name != "display-1" || c.DisplayName != "Display 1" {
-		t.Fatalf("precondition = %q / %q, want display-1 / Display 1", c.Name, c.DisplayName)
+	if c.Name != "display-1" || c.Label != "Display 1" {
+		t.Fatalf("precondition = %q / %q, want display-1 / Display 1", c.Name, c.Label)
 	}
 
 	after, err := gw.UpdateComponent(ctx, "", c.ID, storage.ComponentPatch{ProductName: strptr(ceilingMic)}, all, all)
@@ -269,7 +269,7 @@ func TestARealReclassifyStillReMintsAndTheLabelFollows(t *testing.T) {
 	if after.Ordinal == nil || *after.Ordinal != 2 {
 		t.Fatalf("ordinal after a real reclassify = %v, want 2", ordstr(after.Ordinal))
 	}
-	if after.DisplayName != "Ceiling Microphone 2" {
-		t.Fatalf("label after a real reclassify = %q, want %q (the label follows the name and the type)", after.DisplayName, "Ceiling Microphone 2")
+	if after.Label != "Ceiling Microphone 2" {
+		t.Fatalf("label after a real reclassify = %q, want %q (the label follows the name and the type)", after.Label, "Ceiling Microphone 2")
 	}
 }

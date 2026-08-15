@@ -109,7 +109,7 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
   const [busy, setBusy] = createSignal(false);
 
   // Every component staffed anywhere in THIS system, by the role it holds
-  // (display name, for the disabled-option reason). A component fills at
+  // (label, for the disabled-option reason). A component fills at
   // most one role per system, so this is a safe 1:1 lookup once assigned_to
   // is unioned across every role.
   const staffedHere = createMemo(() => {

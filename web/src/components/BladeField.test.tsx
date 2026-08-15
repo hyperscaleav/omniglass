@@ -134,14 +134,14 @@ describe("BladeField", () => {
 
   describe("the identity pairing", () => {
     // The rule that used to be a regex over source with an eight-line lookahead:
-    // a field bound to display_name reads "Display name", one bound to name reads
+    // a field bound to label reads "Label", one bound to name reads
     // "Name". It is now derived from the binding, so a caller cannot pair them
     // wrongly (and `label` is not accepted alongside `bind` at the type level).
-    it("labels a display_name field 'Display name'", () => {
+    it("labels a label field 'Label'", () => {
       const { getByText } = render(() => (
-        <BladeField bind="display_name" value={() => "Crestron"} onInput={() => {}} />
+        <BladeField bind="label" value={() => "Crestron"} onInput={() => {}} />
       ));
-      expect(getByText("Display name")).toBeTruthy();
+      expect(getByText("Label")).toBeTruthy();
     });
 
     it("labels a name field 'Name'", () => {
@@ -202,7 +202,7 @@ describe("BladeField", () => {
       // blade (in a provider) and on the full page (outside one). Outside, there
       // is nothing to edit with, and read-only is the correct answer.
       const { container, getByText } = render(() => (
-        <BladeField bind="display_name" value={() => "Executive Boardroom"} onInput={() => {}} />
+        <BladeField bind="label" value={() => "Executive Boardroom"} onInput={() => {}} />
       ));
       expect(getByText("Executive Boardroom")).toBeTruthy();
       expect(container.querySelector("input")).toBeNull();
@@ -211,7 +211,7 @@ describe("BladeField", () => {
     it("takes an explicit edit slot in preference to the context", () => {
       const slot = editingSlot();
       const { container } = render(() => (
-        <BladeField bind="display_name" edit={slot} value={() => "Executive Boardroom"} onInput={() => {}} />
+        <BladeField bind="label" edit={slot} value={() => "Executive Boardroom"} onInput={() => {}} />
       ));
       expect(container.querySelector("input")).toBeTruthy();
     });

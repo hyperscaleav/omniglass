@@ -66,7 +66,7 @@ func TestTheRenderedLabelIsTheLabelTheCreateStoresAPI(t *testing.T) {
 	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "hq", "location_type": "building"}, http.StatusCreated)
-	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "room-204b", "location_type": "room", "parent": "hq", "display_name": "204B"}, http.StatusCreated)
+	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "room-204b", "location_type": "room", "parent": "hq", "label": "204B"}, http.StatusCreated)
 
 	// A system, whose label the shipped rule renders from its type alone, so
 	// this half is an EXACT comparison even though the platform mints the name.
@@ -75,20 +75,20 @@ func TestTheRenderedLabelIsTheLabelTheCreateStoresAPI(t *testing.T) {
 	created := c.do(owner, http.MethodPost, "/systems", sysDraft, http.StatusCreated)
 	var sys struct {
 		Name          string `json:"name"`
-		DisplayName   string `json:"display_name"`
+		Label         string `json:"label"`
 		NameGenerated bool   `json:"name_generated"`
-		LabelGen      bool   `json:"display_name_generated"`
+		LabelGen      bool   `json:"label_generated"`
 	}
 	if err := json.Unmarshal(created, &sys); err != nil {
 		t.Fatalf("parse system: %v", err)
 	}
-	if drafted.Label == "" || drafted.Label != sys.DisplayName {
-		t.Errorf("the form would have shown %q; the create stored %q", drafted.Label, sys.DisplayName)
+	if drafted.Label == "" || drafted.Label != sys.Label {
+		t.Errorf("the form would have shown %q; the create stored %q", drafted.Label, sys.Label)
 	}
 	// The locked pair really is locked: neither field was posted, so both pens
 	// came back with the platform.
 	if !sys.NameGenerated || !sys.LabelGen {
-		t.Errorf("name_generated=%v display_name_generated=%v, want both true for a body that posted neither", sys.NameGenerated, sys.LabelGen)
+		t.Errorf("name_generated=%v label_generated=%v, want both true for a body that posted neither", sys.NameGenerated, sys.LabelGen)
 	}
 
 	// A component with an operator-typed name, which is the case with no
@@ -98,17 +98,17 @@ func TestTheRenderedLabelIsTheLabelTheCreateStoresAPI(t *testing.T) {
 	drafted = renderLabelAt(t, c, owner, "/components:renderLabel", compDraft, http.StatusOK)
 	created = c.do(owner, http.MethodPost, "/components", compDraft, http.StatusCreated)
 	var comp struct {
-		DisplayName string `json:"display_name"`
-		LabelGen    bool   `json:"display_name_generated"`
+		Label    string `json:"label"`
+		LabelGen bool   `json:"label_generated"`
 	}
 	if err := json.Unmarshal(created, &comp); err != nil {
 		t.Fatalf("parse component: %v", err)
 	}
-	if drafted.Label == "" || drafted.Label != comp.DisplayName {
-		t.Errorf("the form would have shown %q; the create stored %q", drafted.Label, comp.DisplayName)
+	if drafted.Label == "" || drafted.Label != comp.Label {
+		t.Errorf("the form would have shown %q; the create stored %q", drafted.Label, comp.Label)
 	}
 	if !comp.LabelGen {
-		t.Error("a body posting no display_name leaves the label pen with the platform")
+		t.Error("a body posting no label leaves the label pen with the platform")
 	}
 	if drafted.Rule == "" {
 		t.Error("the answer names no rule, so the form cannot say where the label came from")
@@ -325,8 +325,8 @@ func TestTheRenderedLabelStopsAtTheCallersReadScope(t *testing.T) {
 		t.Fatalf("set the component rule: %v", err)
 	}
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "hq", "location_type": "campus"}, http.StatusCreated)
-	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "wing-a", "location_type": "building", "parent": "hq", "display_name": "Wing A"}, http.StatusCreated)
-	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "wing-b", "location_type": "building", "parent": "hq", "display_name": "Secret Wing"}, http.StatusCreated)
+	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "wing-a", "location_type": "building", "parent": "hq", "label": "Wing A"}, http.StatusCreated)
+	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "wing-b", "location_type": "building", "parent": "hq", "label": "Secret Wing"}, http.StatusCreated)
 
 	wingA := entityID(t, c, owner, "/locations", "wing-a")
 	// A rack for the narrow principal to draft UNDER. Every body below names it,
@@ -431,7 +431,7 @@ func TestTheRenderedLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
 	// the route keeps the arm the shipped vocabulary no longer reaches: its
 	// drafted name is the ordinal token alone.
 	c.do(owner, http.MethodPost, "/location-types", map[string]any{
-		"name": "deck", "display_name": "Deck", "name_rule": map[string]any{"stem": ""},
+		"name": "deck", "label": "Deck", "name_rule": map[string]any{"stem": ""},
 	}, http.StatusCreated)
 	c.do(owner, http.MethodPost, "/locations:renderLabel", map[string]any{"location_type": "deck"}, http.StatusOK)
 }
@@ -465,13 +465,13 @@ func TestTheRenderedLocationLabelIsTheShippedRulesInAShippedEstate(t *testing.T)
 	created := c.do(owner, http.MethodPost, "/locations",
 		map[string]any{"location_type": "building", "name": "north-wing"}, http.StatusCreated)
 	var loc struct {
-		DisplayName string `json:"display_name"`
+		Label string `json:"label"`
 	}
 	if err := json.Unmarshal(created, &loc); err != nil {
 		t.Fatalf("parse location: %v", err)
 	}
-	if loc.DisplayName != got.Label {
-		t.Errorf("the form would have shown %q; the create stored %q", got.Label, loc.DisplayName)
+	if loc.Label != got.Label {
+		t.Errorf("the form would have shown %q; the create stored %q", got.Label, loc.Label)
 	}
 }
 
@@ -491,7 +491,7 @@ func TestTheDraftRefusesTheRootBucketItCannotCreateIn(t *testing.T) {
 	// A generating type, declared the way an operator reaches one today: no
 	// shipped location type carries a name rule (ADR-0103).
 	f.c.do(f.owner, http.MethodPost, "/location-types", map[string]any{
-		"name": "region", "display_name": "Region", "allowed_parent_types": []string{},
+		"name": "region", "label": "Region", "allowed_parent_types": []string{},
 		"name_rule": map[string]any{"stem": "secret-region"},
 	}, http.StatusCreated)
 	// A root location occupying the first name that rule mints, so the probe has

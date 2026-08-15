@@ -12,9 +12,9 @@ import { ME_KEY, type Me } from "../lib/auth";
 // resource the API stamps. Data is seeded into the query cache so no server is
 // needed.
 const seed: PropertyRow[] = [
-  { name: "serial-number", data_type: "string", display_name: "Serial number", official: true },
-  { name: "interface-reachable", data_type: "string", display_name: "Interface Reachable", official: true },
-  { name: "rack-unit", data_type: "string", display_name: "Rack unit", official: false },
+  { name: "serial-number", data_type: "string", label: "Serial number", official: true },
+  { name: "interface-reachable", data_type: "string", label: "Interface Reachable", official: true },
+  { name: "rack-unit", data_type: "string", label: "Rack unit", official: false },
 ];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
@@ -53,11 +53,11 @@ describe("Properties page", () => {
     expect(screen.getByText("rack-unit")).toBeTruthy();
   });
 
-  it("renders the display name and the name in one identity cell, not two columns", () => {
+  it("renders the label and the name in one identity cell, not two columns", () => {
     mount();
     // A dotted keyspace name is validated differently from a kebab one, not a
     // different concept, so the header is the one word every list uses; what changes
-    // is that the display name now sits above the name in the same cell.
+    // is that the label now sits above the name in the same cell.
     const cell = screen.getByText("serial-number").closest("td");
     expect(cell?.textContent).toContain("Serial number");
     expect(screen.getByRole("columnheader", { name: "Name" })).toBeTruthy();

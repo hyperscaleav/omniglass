@@ -34,7 +34,7 @@ users. Because a principal is not part of any location or system tree, that gran
   error and blocks the submit before the round-trip (the same rules the server enforces). The
   same handle rule and inline check apply when you rename a user in edit mode. The new user's blade
   opens **directly in edit mode**, so you assign its roles right away and one **Save** commits them.
-- With `principal:update`, the footer **Edit** opens edit mode, where you change a user's display name,
+- With `principal:update`, the footer **Edit** opens edit mode, where you change a user's label,
   email, and **username**, or adjust its grants, and **Save** commits the lot; **Disable / Enable** sits in the
   footer's left slot, available without entering edit.
   Renaming is safe: their credentials and grants follow the account (they key on an internal id,

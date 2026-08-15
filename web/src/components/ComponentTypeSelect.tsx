@@ -32,7 +32,7 @@ export default function ComponentTypeSelect(p: {
         <option value="">{p.emptyLabel}</option>
       </Show>
       <For each={rows()}>
-        {(t) => <option value={t.name}>{indent(t.depth)}{t.display_name}</option>}
+        {(t) => <option value={t.name}>{indent(t.depth)}{t.label}</option>}
       </For>
     </select>
   );

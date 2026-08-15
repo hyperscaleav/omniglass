@@ -65,7 +65,7 @@ func TestConcurrentComponentTypeForksKeepBothEdits(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			_, errs[0] = gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{DisplayName: &name})
+			_, errs[0] = gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{Label: &name})
 		}()
 		go func() {
 			defer wg.Done()
@@ -87,9 +87,9 @@ func TestConcurrentComponentTypeForksKeepBothEdits(t *testing.T) {
 		if ct.Icon != nil {
 			gotIcon = *ct.Icon
 		}
-		if ct.DisplayName != name || gotIcon != icon {
-			t.Fatalf("round %d: after two concurrent forks the row is display_name=%q icon=%q, want %q and %q: one edit was overwritten by the other's stale image",
-				round, ct.DisplayName, gotIcon, name, icon)
+		if ct.Label != name || gotIcon != icon {
+			t.Fatalf("round %d: after two concurrent forks the row is label=%q icon=%q, want %q and %q: one edit was overwritten by the other's stale image",
+				round, ct.Label, gotIcon, name, icon)
 		}
 	}
 }
@@ -108,7 +108,7 @@ func TestConcurrentLocationTypeForksKeepBothEdits(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			_, errs[0] = gw.UpdateLocationType(ctx, "", "campus", storage.LocationTypePatch{DisplayName: &name})
+			_, errs[0] = gw.UpdateLocationType(ctx, "", "campus", storage.LocationTypePatch{Label: &name})
 		}()
 		go func() {
 			defer wg.Done()
@@ -126,9 +126,9 @@ func TestConcurrentLocationTypeForksKeepBothEdits(t *testing.T) {
 		if err != nil {
 			t.Fatalf("round %d: read back: %v", round, err)
 		}
-		if lt.DisplayName != name || lt.Icon != icon {
-			t.Fatalf("round %d: after two concurrent forks the row is display_name=%q icon=%q, want %q and %q: one edit was overwritten by the other's stale image",
-				round, lt.DisplayName, lt.Icon, name, icon)
+		if lt.Label != name || lt.Icon != icon {
+			t.Fatalf("round %d: after two concurrent forks the row is label=%q icon=%q, want %q and %q: one edit was overwritten by the other's stale image",
+				round, lt.Label, lt.Icon, name, icon)
 		}
 	}
 }
@@ -184,7 +184,7 @@ func TestConcurrentForkAndRestoreSeeEachOther(t *testing.T) {
 		edit := fmt.Sprintf("Edit %d", round)
 
 		if _, err := gw.UpdateComponentType(ctx, "", "display",
-			storage.ComponentTypePatch{DisplayName: &base, Icon: &baseIcon}); err != nil {
+			storage.ComponentTypePatch{Label: &base, Icon: &baseIcon}); err != nil {
 			t.Fatalf("round %d: stage the base fork: %v", round, err)
 		}
 
@@ -195,7 +195,7 @@ func TestConcurrentForkAndRestoreSeeEachOther(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			_, forkErr = gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{DisplayName: &edit})
+			_, forkErr = gw.UpdateComponentType(ctx, "", "display", storage.ComponentTypePatch{Label: &edit})
 		}()
 		go func() {
 			defer wg.Done()
@@ -219,16 +219,16 @@ func TestConcurrentForkAndRestoreSeeEachOther(t *testing.T) {
 		if ct.Forked {
 			// The restore ran first: it discarded the base fork, and the edit
 			// then forked the SHIPPED row.
-			if got["display_name"] != base {
-				t.Fatalf("round %d: the restore ran first and audited display_name=%v, want %q", round, got["display_name"], base)
+			if got["label"] != base {
+				t.Fatalf("round %d: the restore ran first and audited label=%v, want %q", round, got["label"], base)
 			}
 			icon := ""
 			if ct.Icon != nil {
 				icon = *ct.Icon
 			}
-			if ct.DisplayName != edit || icon != shippedIcon {
-				t.Fatalf("round %d: the restore ran first, so the surviving fork is display_name=%q icon=%q, want %q over the shipped icon %q: the edit was computed from an image the restore had already discarded",
-					round, ct.DisplayName, icon, edit, shippedIcon)
+			if ct.Label != edit || icon != shippedIcon {
+				t.Fatalf("round %d: the restore ran first, so the surviving fork is label=%q icon=%q, want %q over the shipped icon %q: the edit was computed from an image the restore had already discarded",
+					round, ct.Label, icon, edit, shippedIcon)
 			}
 			// Leave the next round a clean slate.
 			if _, err := gw.RestoreComponentType(ctx, "", "display"); err != nil {
@@ -237,9 +237,9 @@ func TestConcurrentForkAndRestoreSeeEachOther(t *testing.T) {
 			continue
 		}
 		// The restore ran second: it discarded the EDIT, and must say so.
-		if got["display_name"] != edit {
-			t.Fatalf("round %d: the restore ran second and audited display_name=%v, want %q: it recorded an image that was already replaced",
-				round, got["display_name"], edit)
+		if got["label"] != edit {
+			t.Fatalf("round %d: the restore ran second and audited label=%v, want %q: it recorded an image that was already replaced",
+				round, got["label"], edit)
 		}
 	}
 }

@@ -18,13 +18,13 @@ const seed: SecretType[] = [
   {
     id: uuidFor("st-snmp-community"),
     name: "snmp-community",
-    display_name: "SNMP Community",
+    label: "SNMP Community",
     official: true,
     fields: [
       { name: "community", type: "string", secret: true, origin: "operator" },
     ],
   },
-  { id: uuidFor("st-basic-auth"), name: "basic-auth", display_name: "Basic Auth", official: true, fields: [] },
+  { id: uuidFor("st-basic-auth"), name: "basic-auth", label: "Basic Auth", official: true, fields: [] },
 ];
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
@@ -46,7 +46,7 @@ function mount(me: Me = admin) {
 describe("SecretTypes page", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("lists the registry rows with name and display name in one column", () => {
+  it("lists the registry rows with name and label in one column", () => {
     mount();
     expect(screen.getByText("snmp-community")).toBeTruthy();
     expect(screen.getByText("basic-auth")).toBeTruthy();

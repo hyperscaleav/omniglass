@@ -21,7 +21,7 @@ Built and tested today: the `principal` (+ per-kind `human` / `service`) and `cr
 **session management** (`GET /principals/{id}/sessions`,
 `POST /principals/{id}/sessions/{sid}:revoke`, gated `principal:revoke-session`), the admin
 **principal directory** (`GET /principals`, `GET /principals/{id}`), human **create**
-(`POST /principals`) and **update** (`PATCH /principals/{id}`: display name, email, username), the
+(`POST /principals`) and **update** (`PATCH /principals/{id}`: label, email, username), the
 admin **password reset** (`POST /principals/{id}:resetPassword`, gated `principal:reset-password`:
 policy-enforced, no current password, audited as the admin, refused on self, behind the **takeover
 guard**; **force-logout** revokes every target **session** while API **tokens** survive (a token is
@@ -163,7 +163,7 @@ A role is a **capability set**: permissions per `(resource, action)`, in a `role
 
 ### The five official roles
 
-Each role carries a `display_name` and a `description` (surfaced in the Roles view and grant-builder tooltips). Inheritance is transitive and composes by union ([below](#permission-format)). The set, its inheritance and its **effective** permissions are rendered here from `internal/seed/roles.yaml` itself, with inheritance, wildcards and the read floor resolved by the same `rbac` path the authorizer runs, so what this page says a role holds is what the authorizer will let it do ([#722](https://github.com/hyperscaleav/omniglass/issues/722)):
+Each role carries a `label` and a `description` (surfaced in the Roles view and grant-builder tooltips). Inheritance is transitive and composes by union ([below](#permission-format)). The set, its inheritance and its **effective** permissions are rendered here from `internal/seed/roles.yaml` itself, with inheritance, wildcards and the read floor resolved by the same `rbac` path the authorizer runs, so what this page says a role holds is what the authorizer will let it do ([#722](https://github.com/hyperscaleav/omniglass/issues/722)):
 
 <SeededSet kind="roles" />
 
@@ -177,7 +177,7 @@ What the permission strings above do not say, per role:
 - **`admin`** adds `platform:*`, the install-wide authority a write at the cascade's `platform` tier needs ([below](#install-wide-authority-is-not-estate-scope)); `operator` and `deploy` hold no `platform` capability, so an all-scoped operator runs every site without being able to change the install-wide value under them. It holds `secret:>` and `file:>` (the tail wildcard, not the two-token `*`), which is what reaches the admin-sensitive tiers a two-token wildcard cannot. IAM management is meaningful only from an `@ all` grant: a scoped `admin @ subtree` keeps the operator powers within its subtree and gets no IAM. Registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. It is deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles.
 - **`owner`** is break-glass and unkillable: at least one active `owner@all` grant must exist at all times (enforced by DB trigger), an owner account cannot be impersonated, and the bootstrap creates the first one.
 
-The console **Roles view** (`GET /roles`, gated `role:read:admin`) lists these read-only with display name, description, inheritance, and **effective permissions**. The role blade renders a **net** view: the **permission universe** ([below](#the-permission-universe-published-per-route)) plus, per role, the **held** subset (resolved server-side by the same `rbac.Set.Allows` matcher), one-per-line, lexicographically, with a `Held / Missing / All` toggle. Custom-role editing is a later slice.
+The console **Roles view** (`GET /roles`, gated `role:read:admin`) lists these read-only with label, description, inheritance, and **effective permissions**. The role blade renders a **net** view: the **permission universe** ([below](#the-permission-universe-published-per-route)) plus, per role, the **held** subset (resolved server-side by the same `rbac.Set.Allows` matcher), one-per-line, lexicographically, with a `Held / Missing / All` toggle. Custom-role editing is a later slice.
 
 :::design[Custom-role management, tracked in #527]
 ### Custom roles
@@ -583,7 +583,7 @@ The web app (and any CLI client) gets the principal + their effective permission
 GET /api/v1/auth/me
 {
   "principal": { "id": "...", "kind": "human" },
-  "human":     { "username": "jordan", "email": "jordan@example.com", "display_name": "Jordan Rivera", ... },
+  "human":     { "username": "jordan", "email": "jordan@example.com", "label": "Jordan Rivera", ... },
   "permissions": [
     "component:read", "component:create", "component:update",
     "alarm:acknowledge",
@@ -596,7 +596,7 @@ GET /api/v1/auth/me
 }
 ```
 
-The `/auth/me` family also manages **the caller's own** identity: `PATCH /api/v1/auth/me` edits the caller's `display_name` (email is administrator-set), and `POST /api/v1/auth/me:changePassword` verifies the current password and installs a new one. Both are **authn-only and self-scoped**: they resolve the target from the session, never a path id, so they need no capability and join the route-gating allow-list; acting on **another** principal is the admin surface and does carry capabilities. The same family manages **its own sessions**: `GET /api/v1/auth/me/sessions` lists the caller's **live** bearer credentials (told apart by `credential.purpose`; the request's own credential flagged `current`, expired rows omitted by the same filter `AuthenticateBearer` uses), returning only non-secret metadata (the `sha256(token)` is compared in-query and never leaves the database). `POST /api/v1/auth/me/sessions/{id}:revoke` deletes one, **bounded to the caller's own principal** (another principal's credential id is a non-disclosing 404); revoking the current credential signs that session out. The **bulk** `POST /api/v1/auth/me/sessions:revokeAll` with a `{ purpose }` body (`session` or `token`) ends all of one kind, **always keeping the credential that made the request**, and returns the count (reusing `RevokeBearersByPurposeExcept`, the change-password force-logout primitive). `POST /api/v1/auth/me/tokens` mints the caller's own API token (a **required** description, an optional `ttl_days`, default 90, capped at 365), returning the secret **once**. Every bearer credential carries **identifying metadata**: the token's description (empty on an auto-created session), the **user-agent** and **client-ip** that created it (captured by middleware before Huma), and a **`last_used_at`** bumped on authentication (throttled to once a minute). GeoIP is **deferred**. The console splits the list into **Sessions** and **API tokens** sections, each with a **Revoke all**, plus a **Create token** action.
+The `/auth/me` family also manages **the caller's own** identity: `PATCH /api/v1/auth/me` edits the caller's `label` (email is administrator-set), and `POST /api/v1/auth/me:changePassword` verifies the current password and installs a new one. Both are **authn-only and self-scoped**: they resolve the target from the session, never a path id, so they need no capability and join the route-gating allow-list; acting on **another** principal is the admin surface and does carry capabilities. The same family manages **its own sessions**: `GET /api/v1/auth/me/sessions` lists the caller's **live** bearer credentials (told apart by `credential.purpose`; the request's own credential flagged `current`, expired rows omitted by the same filter `AuthenticateBearer` uses), returning only non-secret metadata (the `sha256(token)` is compared in-query and never leaves the database). `POST /api/v1/auth/me/sessions/{id}:revoke` deletes one, **bounded to the caller's own principal** (another principal's credential id is a non-disclosing 404); revoking the current credential signs that session out. The **bulk** `POST /api/v1/auth/me/sessions:revokeAll` with a `{ purpose }` body (`session` or `token`) ends all of one kind, **always keeping the credential that made the request**, and returns the count (reusing `RevokeBearersByPurposeExcept`, the change-password force-logout primitive). `POST /api/v1/auth/me/tokens` mints the caller's own API token (a **required** description, an optional `ttl_days`, default 90, capped at 365), returning the secret **once**. Every bearer credential carries **identifying metadata**: the token's description (empty on an auto-created session), the **user-agent** and **client-ip** that created it (captured by middleware before Huma), and a **`last_used_at`** bumped on authentication (throttled to once a minute). GeoIP is **deferred**. The console splits the list into **Sessions** and **API tokens** sections, each with a **Revoke all**, plus a **Create token** action.
 
 The **admin** counterpart ends **another** principal's sessions, so a lost laptop or a leaked API token can be cut off without resetting the account. `GET /api/v1/principals/{id}/sessions` lists the target's active bearer credentials in the same non-secret shape, with `current` **always false** (a nil `currentHash`); `POST /api/v1/principals/{id}/sessions/{sid}:revoke` ends one (204). Both gate on **`principal:revoke-session`**, a normal two-token permission held by `admin` and `owner` through `principal:*` / `>`, kept separable for a future help-desk role. The revoke reuses the same principal-scoped delete as the self-service one (a `sid` that is not the target's is a non-disclosing 404) and sits behind the same **takeover guard** as impersonation and the password reset: an **owner's sessions cannot be revoked by anyone**, nor can a caller revoke a principal whose capabilities exceed its own. It is **audited with the acting admin as the actor** (`verb = revoke_session`; the real actor rides context when impersonating). The list is read-only and carries no takeover guard, so an admin can *see* an owner's sessions even where it cannot end them. The **bulk** `POST /api/v1/principals/{id}/sessions:revokeAll` (`{ purpose }`) ends **all** of one kind (a purpose-filtered `RevokeBearersByPurpose`, so revoking sessions never touches tokens) and returns the count, with the same gate, guard, and audit.
 
@@ -654,7 +654,7 @@ Every API operation records the resolved **actor** (the principal id) in `audit_
 
 ## Bootstrap
 
-The first install runs `omniglass bootstrap <username>` with optional `--password <pw>`, `--email <email>`, and `--display-name <name>` flags: one transaction creating the first operator as a `human` principal with an `owner @ all` grant and a bearer credential; `--password` also installs a password credential for the web console. There is no implicit default principal; the bootstrap is the only path to the first owner.
+The first install runs `omniglass bootstrap <username>` with optional `--password <pw>`, `--email <email>`, and `--label <name>` flags: one transaction creating the first operator as a `human` principal with an `owner @ all` grant and a bearer credential; `--password` also installs a password credential for the web console. There is no implicit default principal; the bootstrap is the only path to the first owner.
 
 ## Worked example
 
@@ -668,7 +668,7 @@ The SCIM mapping detail: which IdP attributes drive `principal_group` membership
 
 The IAM subjects and their grants; the physical layout lives on [storage](/architecture/storage/). Each
 kind carries its own identifier and, where it has one, a label: `human.username` plus email and the
-optional `display_name`, `service.name`, and `node.name` with its own `display_name` (whose full
+optional `label`, `service.name`, and `node.name` with its own `label` (whose full
 table renders on [core entities](/architecture/core-entities/)). A service account has an identifier
 and no label at all: the console shows its name, and there is nowhere else to put words.
 
@@ -677,7 +677,7 @@ and no label at all: the console shows its name, and there is nowhere else to pu
 <SchemaTable
   table="human"
   notes={{
-    display_name: 'The person&#39;s real name, the operator-facing label',
+    label: 'The person&#39;s real name, the operator-facing label',
   }}
 />
 

@@ -29,7 +29,7 @@ func TestUpdateHumanProfile(t *testing.T) {
 	// owner and hands back the principal id the profile write needs.
 	zeros := make([]byte, 32)
 	created, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{
-		Username: "ops", Email: "ops@old.example", DisplayName: "Old Name",
+		Username: "ops", Email: "ops@old.example", Label: "Old Name",
 		SecretHash: zeros, Prefix: "abcd1234",
 	})
 	if err != nil || !created {
@@ -50,23 +50,23 @@ func TestUpdateHumanProfile(t *testing.T) {
 		return p.Human
 	}
 
-	// Update only the display name: email is left untouched.
+	// Update only the label: email is left untouched.
 	newName := "New Name"
-	if err := gw.UpdateHumanProfile(ctx, pid, storage.HumanProfilePatch{DisplayName: &newName}); err != nil {
-		t.Fatalf("update display name: %v", err)
+	if err := gw.UpdateHumanProfile(ctx, pid, storage.HumanProfilePatch{Label: &newName}); err != nil {
+		t.Fatalf("update label: %v", err)
 	}
-	if h := reload(); h.DisplayName != "New Name" || h.Email != "ops@old.example" {
-		t.Fatalf("after name update: got display=%q email=%q", h.DisplayName, h.Email)
+	if h := reload(); h.Label != "New Name" || h.Email != "ops@old.example" {
+		t.Fatalf("after name update: got display=%q email=%q", h.Label, h.Email)
 	}
 
-	// Update the email and explicitly clear the display name (empty -> NULL).
+	// Update the email and explicitly clear the label (empty -> NULL).
 	empty := ""
 	newEmail := "new@example.test"
-	if err := gw.UpdateHumanProfile(ctx, pid, storage.HumanProfilePatch{Email: &newEmail, DisplayName: &empty}); err != nil {
+	if err := gw.UpdateHumanProfile(ctx, pid, storage.HumanProfilePatch{Email: &newEmail, Label: &empty}); err != nil {
 		t.Fatalf("update email + clear name: %v", err)
 	}
-	if h := reload(); h.Email != "new@example.test" || h.DisplayName != "" {
-		t.Fatalf("after email update: got display=%q email=%q", h.DisplayName, h.Email)
+	if h := reload(); h.Email != "new@example.test" || h.Label != "" {
+		t.Fatalf("after email update: got display=%q email=%q", h.Label, h.Email)
 	}
 
 	// An empty patch is a no-op that changes nothing.

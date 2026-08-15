@@ -29,7 +29,7 @@ type secretTypeFieldBody struct {
 type secretTypeBody struct {
 	ID                    string                `json:"id" doc:"The secret type's uuid, the stable handle that survives a rename"`
 	Name                  string                `json:"name" doc:"The name an operator reads and types; renameable"`
-	DisplayName           string                `json:"display_name"`
+	Label                 string                `json:"label"`
 	Official              bool                  `json:"official"`
 	DefaultAdminSensitive bool                  `json:"default_admin_sensitive" doc:"The admin_sensitive value the create form seeds for this type"`
 	Fields                []secretTypeFieldBody `json:"fields"`
@@ -197,7 +197,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		out := &listSecretTypesOutput{}
 		out.Body.SecretTypes = make([]secretTypeBody, 0, len(types))
 		for _, st := range types {
-			b := secretTypeBody{ID: st.ID, Name: st.Name, DisplayName: st.DisplayName, Official: st.Official, DefaultAdminSensitive: st.DefaultAdminSensitive}
+			b := secretTypeBody{ID: st.ID, Name: st.Name, Label: st.Label, Official: st.Official, DefaultAdminSensitive: st.DefaultAdminSensitive}
 			for _, f := range st.Fields {
 				b.Fields = append(b.Fields, secretTypeFieldBody{Name: f.Name, Type: f.Type, Secret: f.Secret, Origin: string(f.Origin)})
 			}

@@ -161,11 +161,11 @@ member data, fires a system-owned alarm).
 
 Severity is a **registry of named levels**, not a bare integer. It takes the ordinary identity
 triad, so it adds no fourth vocabulary: a **`name`** on the entity name rule, an optional
-**`display_name`**, and its uuid **`id`** like any other row, plus a **`color`** and an integer
+**`label`**, and its uuid **`id`** like any other row, plus a **`color`** and an integer
 **`order`** used only for comparison. Rules reference a level **by name**; official defaults ship
 **spaced**, so a new level inserts between two others without renumbering:
 
-| name | display_name | color | order |
+| name | label | color | order |
 |---|---|---|---|
 | info | Info | gray | 10 |
 | warning | Warning | yellow | 20 |
@@ -176,10 +176,10 @@ triad, so it adds no fourth vocabulary: a **`name`** on the entity name rule, an
 Severity is **distinct from health** ([health](/architecture/health/)); higher order is more severe.
 The set is **operator-customizable** (relabel to P1/P2/P3, recolor, insert, three levels or seven),
 all config. Predicates compare **by level** through the order (`alarm.severity >= "high"` matches
-`high` and `disaster`); the UI renders the display name and color.
+`high` and `disaster`); the UI renders the label and color.
 
 :::caution[Open question]
-Whether a severity level is purely a display name, color, and order, or also carries policy such as a
+Whether a severity level is purely a label, color, and order, or also carries policy such as a
 default ack-timeout per level.
 :::
 

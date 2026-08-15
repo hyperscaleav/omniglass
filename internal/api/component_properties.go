@@ -25,7 +25,7 @@ const componentPropertyInstance = ""
 type effectivePropertyBody struct {
 	PropertyTypeName string          `json:"property_type_name" doc:"The catalog property name"`
 	PropertyTypeID   string          `json:"property_type_id" doc:"The catalog property's uuid, the stable form of property_type_name"`
-	DisplayName      string          `json:"display_name,omitempty" doc:"The property's human label; omitted when unset"`
+	Label            string          `json:"label,omitempty" doc:"The property's human label; omitted when unset"`
 	DataType         string          `json:"data_type" doc:"The declared value type, from the property catalog"`
 	Required         bool            `json:"required" doc:"Whether the product contract requires a value; always false off-contract"`
 	IsSet            bool            `json:"is_set" doc:"True when the component overrides the contract default"`
@@ -40,7 +40,7 @@ func toEffectivePropertyBody(e *storage.EffectiveProperty) effectivePropertyBody
 	return effectivePropertyBody{
 		PropertyTypeName: e.PropertyTypeName,
 		PropertyTypeID:   e.PropertyTypeID,
-		DisplayName:      e.DisplayName,
+		Label:            e.Label,
 		DataType:         e.DataType,
 		Required:         e.Required,
 		IsSet:            e.IsSet,

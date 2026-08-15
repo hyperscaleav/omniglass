@@ -48,7 +48,7 @@ func principalBatchPool(t *testing.T) *pgxpool.Pool {
 //     with both, and one with neither, because the effective-grant read is a
 //     union of two disjoint sources and the ORDER within a principal (direct
 //     first, then each group's, oldest first) is part of the answer;
-//   - two groups, one with a display_name and one without, because the label is
+//   - two groups, one with a label and one without, because the label is
 //     a coalesce and only a null one proves which arm ran;
 //   - an archived principal, which the directory hides by default but GetPrincipal
 //     still loads.
@@ -74,7 +74,7 @@ func principalBatchFixture(t *testing.T, pool *pgxpool.Pool) []Principal {
 
 	var withLabel, bare string
 	if err := pool.QueryRow(ctx,
-		`insert into principal_group (name, display_name) values ('alpha', 'Alpha Team') returning id`).Scan(&withLabel); err != nil {
+		`insert into principal_group (name, label) values ('alpha', 'Alpha Team') returning id`).Scan(&withLabel); err != nil {
 		t.Fatalf("insert group alpha: %v", err)
 	}
 	if err := pool.QueryRow(ctx,
@@ -99,7 +99,7 @@ func principalBatchFixture(t *testing.T, pool *pgxpool.Pool) []Principal {
 			av = &s
 		}
 		if _, err := pool.Exec(ctx,
-			`insert into human (principal_id, username, email, display_name, must_change_password, avatar, avatar_updated_at)
+			`insert into human (principal_id, username, email, label, must_change_password, avatar, avatar_updated_at)
 			 values ($1, $2, $3, $4, $5, $6::text, case when $6::text is null then null else now() end)`,
 			id, username, email, display, mustChange, av); err != nil {
 			t.Fatalf("insert human %s: %v", username, err)

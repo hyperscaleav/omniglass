@@ -18,19 +18,19 @@ import { uuidFor } from "../lib/testids";
 // edit-state affordances (#621), so the default mount enters edit mode;
 // `editing: false` witnesses the read state.
 const declared: DeclaredRole[] = [
-  { name: "table-mic", display_name: "Table microphone", quorum: 2, accepted_types: ["video-bar"], pinned_products: [], position_labels: [], impact: "degraded" },
-  { name: "main-display", display_name: "Main display", quorum: 1, accepted_types: ["display"], pinned_products: ["samsung-qm55"], position_labels: [], impact: "outage" },
+  { name: "table-mic", label: "Table microphone", quorum: 2, accepted_types: ["video-bar"], pinned_products: [], position_labels: [], impact: "degraded" },
+  { name: "main-display", label: "Main display", quorum: 1, accepted_types: ["display"], pinned_products: ["samsung-qm55"], position_labels: [], impact: "outage" },
 ];
 
 const typeCatalog: ComponentType[] = [
-  { id: uuidFor("t-video-bar"), name: "video-bar", display_name: "Video Bar", official: true, forked: false, default_tags: [] },
-  { id: uuidFor("t-display"), name: "display", display_name: "Display", official: true, forked: false, default_tags: [] },
-  { id: uuidFor("t-mic"), name: "mic", display_name: "Mic", official: true, forked: false, default_tags: [] },
+  { id: uuidFor("t-video-bar"), name: "video-bar", label: "Video Bar", official: true, forked: false, default_tags: [] },
+  { id: uuidFor("t-display"), name: "display", label: "Display", official: true, forked: false, default_tags: [] },
+  { id: uuidFor("t-mic"), name: "mic", label: "Mic", official: true, forked: false, default_tags: [] },
 ];
 
 const productCatalog: Product[] = [
-  { id: uuidFor("p-qm55"), name: "samsung-qm55", display_name: "Samsung QM55", kind: "device", component_type: "display", component_type_id: uuidFor("t-display"), official: true },
-  { id: uuidFor("p-bar"), name: "cisco-room-bar", display_name: "Cisco Room Bar", kind: "device", component_type: "video-bar", component_type_id: uuidFor("t-video-bar"), official: true },
+  { id: uuidFor("p-qm55"), name: "samsung-qm55", label: "Samsung QM55", kind: "device", component_type: "display", component_type_id: uuidFor("t-display"), official: true },
+  { id: uuidFor("p-bar"), name: "cisco-room-bar", label: "Cisco Room Bar", kind: "device", component_type: "video-bar", component_type_id: uuidFor("t-video-bar"), official: true },
 ];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
@@ -87,7 +87,7 @@ describe("RoleEditor on a standard", () => {
       const req = input as Request;
       if (req.method === "PATCH") {
         patch = req.clone();
-        return json({ name: "main-display", display_name: "Main display", quorum: 1 });
+        return json({ name: "main-display", label: "Main display", quorum: 1 });
       }
       return json({ roles: declared });
     });
@@ -102,7 +102,7 @@ describe("RoleEditor on a standard", () => {
     await waitFor(() => expect(patch).toBeTruthy());
     const body = await patch!.json();
     expect([...body.update_mask].sort()).toEqual([
-      "accepted_types", "capacity", "display_name", "impact", "pinned_products", "position_labels", "quorum",
+      "accepted_types", "capacity", "impact", "label", "pinned_products", "position_labels", "quorum",
     ]);
     expect(body.pinned_products).toEqual([]);
   });
@@ -113,7 +113,7 @@ describe("RoleEditor on a standard", () => {
       const req = input as Request;
       if (req.method === "PATCH") {
         put = req.clone();
-        return json({ name: "camera", display_name: "Room camera", quorum: 1, accepted_types: ["video-bar"] });
+        return json({ name: "camera", label: "Room camera", quorum: 1, accepted_types: ["video-bar"] });
       }
       return json({ roles: declared });
     });
@@ -130,9 +130,9 @@ describe("RoleEditor on a standard", () => {
     await waitFor(() => expect(put).toBeTruthy());
     expect(put!.url).toContain("/standards/meeting-room/roles/camera");
     expect(await put!.json()).toEqual({
-      update_mask: ["display_name", "quorum", "capacity", "position_labels", "accepted_types", "pinned_products", "impact"],
+      update_mask: ["label", "quorum", "capacity", "position_labels", "accepted_types", "pinned_products", "impact"],
       quorum: 3,
-      display_name: "Room camera",
+      label: "Room camera",
       accepted_types: ["video-bar"],
       pinned_products: [],
       impact: "degraded",
@@ -146,7 +146,7 @@ describe("RoleEditor on a standard", () => {
       const req = input as Request;
       if (req.method === "PATCH") {
         put = req.clone();
-        return json({ name: "main-display", display_name: "Main display", quorum: 2, accepted_types: ["display"] });
+        return json({ name: "main-display", label: "Main display", quorum: 2, accepted_types: ["display"] });
       }
       return json({ roles: declared });
     });
@@ -163,9 +163,9 @@ describe("RoleEditor on a standard", () => {
     await waitFor(() => expect(put).toBeTruthy());
     expect(put!.url).toContain("/standards/meeting-room/roles/main-display");
     expect(await put!.json()).toEqual({
-      update_mask: ["display_name", "quorum", "capacity", "position_labels", "accepted_types", "pinned_products", "impact"],
+      update_mask: ["label", "quorum", "capacity", "position_labels", "accepted_types", "pinned_products", "impact"],
       quorum: 2,
-      display_name: "Main display",
+      label: "Main display",
       accepted_types: ["display"],
       pinned_products: [],
       impact: "outage", // main-display's declared impact, preserved
@@ -183,7 +183,7 @@ describe("RoleEditor on a standard", () => {
       const req = input as Request;
       if (req.method === "PATCH") {
         put = req.clone();
-        return json({ name: "main-display", display_name: "Main display", quorum: 2, accepted_types: ["display"], impact: "outage" });
+        return json({ name: "main-display", label: "Main display", quorum: 2, accepted_types: ["display"], impact: "outage" });
       }
       return json({ roles: declared });
     });

@@ -57,7 +57,7 @@ func TestSelfScopeAPI(t *testing.T) {
 	// tiers, read via the viewer floor, but only the one row.
 	selfTok := principalWithGrants(t, ctx, dsn, "single-node",
 		[]grant{{role: "deploy", scopeKind: "location", scopeID: roomID, scopeOp: "self"}})
-	patch := map[string]any{"display_name": "x"}
+	patch := map[string]any{"label": "x"}
 
 	// The self row is fully reachable: read and update the room itself. This is the
 	// difference from subtree_excl_root, which would 403 the root on update.

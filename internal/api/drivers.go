@@ -9,18 +9,18 @@ import (
 )
 
 // driverBody is the wire shape of a driver registry row. The registry lists
-// alphabetically by display_name, like vendor.
+// alphabetically by label, like vendor.
 type driverBody struct {
-	ID          string `json:"id" doc:"The driver's uuid, the stable handle that survives a rename"`
-	Name        string `json:"name" doc:"The name an operator reads and types; renameable"`
-	DisplayName string `json:"display_name"`
-	Version     string `json:"version,omitempty"`
-	Official    bool   `json:"official"`
+	ID       string `json:"id" doc:"The driver's uuid, the stable handle that survives a rename"`
+	Name     string `json:"name" doc:"The name an operator reads and types; renameable"`
+	Label    string `json:"label"`
+	Version  string `json:"version,omitempty"`
+	Official bool   `json:"official"`
 }
 
 func toDriverBody(d *storage.Driver) driverBody {
 	return driverBody{
-		ID: d.ID, Name: d.Name, DisplayName: d.DisplayName, Version: d.Version, Official: d.Official,
+		ID: d.ID, Name: d.Name, Label: d.Label, Version: d.Version, Official: d.Official,
 	}
 }
 
@@ -36,17 +36,17 @@ type driverPathInput struct {
 
 type createDriverInput struct {
 	Body struct {
-		Name        string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name; renameable"`
-		DisplayName string `json:"display_name" minLength:"1" doc:"What an operator reads in pickers and lists"`
-		Version     string `json:"version,omitempty" doc:"A free-form version string, e.g. 1.0.0"`
+		Name    string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name; renameable"`
+		Label   string `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
+		Version string `json:"version,omitempty" doc:"A free-form version string, e.g. 1.0.0"`
 	}
 }
 
 type updateDriverInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		DisplayName *string `json:"display_name,omitempty" doc:"A new operator-facing label"`
-		Version     *string `json:"version,omitempty" doc:"A new version string, e.g. 1.0.1"`
+		Label   *string `json:"label,omitempty" doc:"A new operator-facing label"`
+		Version *string `json:"version,omitempty" doc:"A new version string, e.g. 1.0.1"`
 	}
 }
 
@@ -64,7 +64,7 @@ func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/drivers",
 		Summary:     "List drivers",
-		Description: "Lists the driver registry, ordered alphabetically by display name. Populates the driver picker on the product form. Gated by driver:read.",
+		Description: "Lists the driver registry, ordered alphabetically by label. Populates the driver picker on the product form. Gated by driver:read.",
 	}, "driver", "read"), func(ctx context.Context, _ *struct{}) (*listDriversOutput, error) {
 		drivers, err := gw.ListDrivers(ctx)
 		if err != nil {
@@ -87,7 +87,7 @@ func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Description:   "Creates a custom (non-official) driver. Gated by driver:create.",
 	}, "driver", "create"), func(ctx context.Context, in *createDriverInput) (*driverOutput, error) {
 		d, err := gw.CreateDriver(ctx, actorID(ctx), storage.Driver{
-			Name: in.Body.Name, DisplayName: in.Body.DisplayName, Version: in.Body.Version,
+			Name: in.Body.Name, Label: in.Body.Label, Version: in.Body.Version,
 		})
 		if err != nil {
 			return nil, mapTypeErr(err, "driver")
@@ -114,10 +114,10 @@ func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPatch,
 		Path:        "/drivers/{id}",
 		Summary:     "Update a driver",
-		Description: "Patches a custom driver's display_name or version. Official drivers are read-only (422). Gated by driver:update.",
+		Description: "Patches a custom driver's label or version. Official drivers are read-only (422). Gated by driver:update.",
 	}, "driver", "update"), func(ctx context.Context, in *updateDriverInput) (*driverOutput, error) {
 		d, err := gw.UpdateDriver(ctx, actorID(ctx), in.ID, storage.DriverPatch{
-			DisplayName: in.Body.DisplayName, Version: in.Body.Version,
+			Label: in.Body.Label, Version: in.Body.Version,
 		})
 		if err != nil {
 			return nil, mapTypeErr(err, "driver")

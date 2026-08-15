@@ -1,22 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { createIdentity, deriveName, entityLabel, hasDisplayName, labelIsName } from "./entities";
+import { byLabel, createIdentity, deriveName, entityLabel, hasLabel, labelIsName } from "./entities";
 import { createPen } from "./namegen";
 import { seedLabelPen } from "../components/LabelPenField";
 
 describe("entityLabel", () => {
-  it("prefers the display name", () => {
-    expect(entityLabel({ name: "hq-boardroom-dsp", display_name: "HQ Boardroom DSP" })).toBe("HQ Boardroom DSP");
+  it("prefers the label", () => {
+    expect(entityLabel({ name: "hq-boardroom-dsp", label: "HQ Boardroom DSP" })).toBe("HQ Boardroom DSP");
   });
 
-  // The API stores "" rather than null for an unset display name, and a value of
+  // The API stores "" rather than null for an unset label, and a value of
   // whitespace would render as a blank row, so both fall back to the name.
   it.each([
     ["absent", undefined],
     ["null", null],
     ["empty", ""],
     ["whitespace", "   "],
-  ])("falls back to the name when the display name is %s", (_label, dn) => {
-    expect(entityLabel({ name: "hq-boardroom-dsp", display_name: dn })).toBe("hq-boardroom-dsp");
+  ])("falls back to the name when the label is %s", (_label, dn) => {
+    expect(entityLabel({ name: "hq-boardroom-dsp", label: dn })).toBe("hq-boardroom-dsp");
   });
 
   // Nothing is derived. An acronym-heavy name sentence-cased reads as a typo, so
@@ -26,7 +26,7 @@ describe("entityLabel", () => {
   });
 
   it("does not trim the name itself, which is stored normalized", () => {
-    expect(entityLabel({ name: "codec-1", display_name: "  Codec One  " })).toBe("Codec One");
+    expect(entityLabel({ name: "codec-1", label: "  Codec One  " })).toBe("Codec One");
   });
 });
 
@@ -37,26 +37,26 @@ describe("entityLabel", () => {
 describe("labelIsName", () => {
   it("is true exactly when the label an operator reads is the identifier", () => {
     expect(labelIsName({ name: "codec-1" })).toBe(true);
-    expect(labelIsName({ name: "codec-1", display_name: "" })).toBe(true);
-    expect(labelIsName({ name: "codec-1", display_name: "  " })).toBe(true);
-    expect(labelIsName({ name: "codec-1", display_name: "codec-1" })).toBe(true);
-    expect(labelIsName({ name: "codec-1", display_name: "Codec One" })).toBe(false);
+    expect(labelIsName({ name: "codec-1", label: "" })).toBe(true);
+    expect(labelIsName({ name: "codec-1", label: "  " })).toBe(true);
+    expect(labelIsName({ name: "codec-1", label: "codec-1" })).toBe(true);
+    expect(labelIsName({ name: "codec-1", label: "Codec One" })).toBe(false);
   });
 
   it("does not consult the pen: a rendered label is prose whoever owns it", () => {
-    expect(labelIsName({ name: "display-1", display_name: "Display 1", display_name_generated: true })).toBe(false);
-    expect(labelIsName({ name: "display-1", display_name: "", display_name_generated: true })).toBe(true);
+    expect(labelIsName({ name: "display-1", label: "Display 1", label_generated: true })).toBe(false);
+    expect(labelIsName({ name: "display-1", label: "", label_generated: true })).toBe(true);
   });
 });
 
-// hasDisplayName answers "did a HUMAN choose this label", which decides whether a
+// hasLabel answers "did a HUMAN choose this label", which decides whether a
 // surface shows the name on a second line of its own.
 //
 // It used to answer that by comparing two strings, and that was the same question
 // only while every label was operator-typed. #682 made a label something a rule
 // can render, and a rendered label differs from the name just as an operator's
 // does, so the string comparison would have grown a second identifier line under
-// every row in the estate. The pen (display_name_generated) is the fact that was
+// every row in the estate. The pen (label_generated) is the fact that was
 // missing, and #683 put it on the wire.
 //
 // The string comparison survives as the second half of a conjunction rather than
@@ -64,38 +64,38 @@ describe("labelIsName", () => {
 // that renders nothing stores NULL and KEEPS the pen, ADR-0098), and an entity
 // with no pen at all (every catalog registry row: a product, a vendor, a role)
 // is unchanged by this slice.
-describe("hasDisplayName", () => {
-  it("is true only when the display name says something the name does not", () => {
-    expect(hasDisplayName({ name: "codec-1", display_name: "Codec One" })).toBe(true);
-    expect(hasDisplayName({ name: "codec-1", display_name: "" })).toBe(false);
-    expect(hasDisplayName({ name: "codec-1" })).toBe(false);
+describe("hasLabel", () => {
+  it("is true only when the label says something the name does not", () => {
+    expect(hasLabel({ name: "codec-1", label: "Codec One" })).toBe(true);
+    expect(hasLabel({ name: "codec-1", label: "" })).toBe(false);
+    expect(hasLabel({ name: "codec-1" })).toBe(false);
   });
 
-  // A display name set to exactly the name is not a second thing to show.
-  it("is false when the display name merely repeats the name", () => {
-    expect(hasDisplayName({ name: "codec-1", display_name: "codec-1" })).toBe(false);
+  // A label set to exactly the name is not a second thing to show.
+  it("is false when the label merely repeats the name", () => {
+    expect(hasLabel({ name: "codec-1", label: "codec-1" })).toBe(false);
   });
 
   // The redefinition. Same label, same name, opposite answer, and the pen is the
   // only thing that differs.
   it("is false for a label the platform rendered, however unlike the name it is", () => {
-    expect(hasDisplayName({ name: "display-1", display_name: "Display 1", display_name_generated: true })).toBe(false);
+    expect(hasLabel({ name: "display-1", label: "Display 1", label_generated: true })).toBe(false);
   });
 
   it("is true for a label an operator typed, which is what the pen being false means", () => {
-    expect(hasDisplayName({ name: "display-1", display_name: "Display 1", display_name_generated: false })).toBe(true);
+    expect(hasLabel({ name: "display-1", label: "Display 1", label_generated: false })).toBe(true);
   });
 
   // A registry row carries no pen at all, so undefined must read as "the operator
   // owns it": every catalog page would otherwise lose its identifier line.
   it("treats an absent pen as operator-owned", () => {
-    expect(hasDisplayName({ name: "shure-mxa920", display_name: "Shure MXA920" })).toBe(true);
+    expect(hasLabel({ name: "shure-mxa920", label: "Shure MXA920" })).toBe(true);
   });
 
   // A rule with nothing to say about a row stores NULL and keeps the pen
   // (ADR-0098), so the row reads as its own name and has no second line to show.
   it("is false when the platform holds the pen but rendered nothing", () => {
-    expect(hasDisplayName({ name: "codec-1", display_name: "", display_name_generated: true })).toBe(false);
+    expect(hasLabel({ name: "codec-1", label: "", label_generated: true })).toBe(false);
   });
 });
 
@@ -115,20 +115,20 @@ describe("hasDisplayName", () => {
 // predicate that existed only to badge it.
 describe("the pen, on the surfaces that ask about it", () => {
   it.each([
-    ["operator label", { name: "n-1", display_name: "Label", display_name_generated: false }, true, false],
-    ["platform label", { name: "n-1", display_name: "Label", display_name_generated: true }, false, true],
+    ["operator label", { name: "n-1", label: "Label", label_generated: false }, true, false],
+    ["platform label", { name: "n-1", label: "Label", label_generated: true }, false, true],
     // Held the pen, rendered nothing. The list shows the name and no second
     // line; the blade still opens LOCKED, which is the case the retired
     // predicate answered "false" for and the blade answers "true".
-    ["no label", { name: "n-1", display_name: "", display_name_generated: true }, false, true],
-    ["blank label", { name: "n-1", display_name: "   ", display_name_generated: true }, false, true],
+    ["no label", { name: "n-1", label: "", label_generated: true }, false, true],
+    ["blank label", { name: "n-1", label: "   ", label_generated: true }, false, true],
     // A rule that renders exactly the name: one line in the list, and a locked
     // blade field, for the same reason.
-    ["label equals name", { name: "n-1", display_name: "n-1", display_name_generated: true }, false, true],
+    ["label equals name", { name: "n-1", label: "n-1", label_generated: true }, false, true],
     ["no pen, no label", { name: "n-1" }, false, false],
   ])("reads %s the same way in the list and on the blade", (_case, entity, secondLine, locked) => {
     // What the LIST does with it: show the identifier on a second line, or not.
-    expect(hasDisplayName(entity)).toBe(secondLine);
+    expect(hasLabel(entity)).toBe(secondLine);
     // What the BLADE does with it: open the label field locked, or editable.
     const pen = createPen();
     seedLabelPen(pen, entity);
@@ -179,7 +179,7 @@ describe("deriveName", () => {
 });
 
 describe("createIdentity", () => {
-  it("derives the name from the display name as it is typed", () => {
+  it("derives the name from the label as it is typed", () => {
     const id = createIdentity();
     id.setDisplay("HQ Boardroom");
     expect(id.name()).toBe("hq-boardroom");
@@ -189,7 +189,7 @@ describe("createIdentity", () => {
   });
 
   // The rule that makes the pattern usable rather than infuriating: once the
-  // operator has taken the name, more typing in the display name must not take it
+  // operator has taken the name, more typing in the label must not take it
   // back. This is the assertion the whole primitive exists for.
   it("stops following once the operator edits the name by hand", () => {
     const id = createIdentity();
@@ -213,9 +213,54 @@ describe("createIdentity", () => {
     expect(id.name()).toBe("boardroom-a");
   });
 
-  it("leaves the name empty when the display name derives to nothing", () => {
+  it("leaves the name empty when the label derives to nothing", () => {
     const id = createIdentity();
     id.setDisplay("---");
     expect(id.name()).toBe("");
+  });
+});
+
+// The console re-sorts every registry list client-side, so the ordering rule
+// lives in two places and has to say the same thing in both. The SQL half is
+// `order by nullif(label, '') nulls last, name` (#613); this is its twin.
+//
+// The failure it exists for is silent: `"".localeCompare("Biamp")` is negative,
+// so a plain sort by label puts every UNLABELLED row at the TOP of the picker,
+// which is where a `zz-unlabelled-vendor` landed on the live console with the
+// server ordering already fixed.
+describe("byLabel", () => {
+  const rows = [
+    { name: "zz-unlabelled-vendor", label: "" },
+    { name: "biamp", label: "Biamp" },
+    { name: "crestron", label: "Crestron" },
+    { name: "aaa-also-unlabelled", label: "" },
+  ];
+
+  it("sorts labelled rows alphabetically and unlabelled rows last", () => {
+    expect([...rows].sort(byLabel).map((r) => r.name)).toEqual([
+      "biamp",
+      "crestron",
+      "aaa-also-unlabelled",
+      "zz-unlabelled-vendor",
+    ]);
+  });
+
+  it("breaks a tie on the name, so the order is total", () => {
+    const tied = [
+      { name: "b-one", label: "Same" },
+      { name: "a-two", label: "Same" },
+    ];
+    expect([...tied].sort(byLabel).map((r) => r.name)).toEqual(["a-two", "b-one"]);
+  });
+
+  it("treats whitespace and an absent label as unset, the same way entityLabel does", () => {
+    const ws = [
+      { name: "spaces", label: "   " },
+      { name: "absent" },
+      { name: "labelled", label: "Alpha" },
+    ];
+    const got = [...ws].sort(byLabel).map((r) => r.name);
+    expect(got[0]).toBe("labelled");
+    expect(got.slice(1).sort()).toEqual(["absent", "spaces"]);
   });
 });

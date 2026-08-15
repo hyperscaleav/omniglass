@@ -72,10 +72,10 @@ timeseries/graph/board shaped and each needs its own primitive. Do not bend `Lis
 ## Invariants and gotchas
 
 - **`node.id` is the entity address (name), globally unique.** `/<entity>/:name` focuses it.
-- **Facet on a stable unique key, not a display name.** Display names collide; a facet/cross-nav
+- **Facet on a stable unique key, not a label.** Labels collide; a facet/cross-nav
   keyed on them is ambiguous. Facet on the address (`get` returns it), and set `valueLabel` to the
-  display name for the suggestion.
-- **Edit form sends only the API-mutable fields** (the PATCH body: usually `display_name` +
+  label for the suggestion.
+- **Edit form sends only the API-mutable fields** (the PATCH body: usually `label` +
   `*_type`). `name`, `parent`, and placement are create-only; show them read-only when editing.
 - **Parent `<select>` excludes the node itself and its descendants** (cycle prevention).
 - **Authorization** is a UI hint over the server: `ListView` gates create/update/delete by

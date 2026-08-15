@@ -364,7 +364,7 @@ func TestComponentProductSwapKeepsSetValues(t *testing.T) {
 	// Two products declaring firmware-version with different defaults; prod-b also
 	// declares serial-number, which prod-a does not.
 	for _, p := range []struct{ name, def string }{{"prod-a", `"A-default"`}, {"prod-b", `"B-default"`}} {
-		if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: p.name, DisplayName: p.name, Kind: "device"}); err != nil {
+		if _, err := gw.CreateProduct(ctx, "", storage.Product{Name: p.name, Label: p.name, Kind: "device"}); err != nil {
 			t.Fatalf("create %s: %v", p.name, err)
 		}
 		if _, err := gw.SetProductProperty(ctx, "", p.name, storage.ProductPropertySpec{

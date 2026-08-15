@@ -15,8 +15,8 @@ func TestPlatformTierRename(t *testing.T) {
 	ctx := context.Background()
 	conn := connectMigrated(t)
 
-	mustExec(t, conn, `insert into location_type (name, display_name) values ('site', 'Site') on conflict do nothing`)
-	mustExec(t, conn, `insert into secret_type (name, display_name) values ('password', 'Password') on conflict do nothing`)
+	mustExec(t, conn, `insert into location_type (name, label) values ('site', 'Site') on conflict do nothing`)
+	mustExec(t, conn, `insert into secret_type (name, label) values ('password', 'Password') on conflict do nothing`)
 	mustExec(t, conn, `insert into tag (name) values ('environment')`)
 
 	// The renamed value is accepted on every table that carries the tier.

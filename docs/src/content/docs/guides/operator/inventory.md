@@ -40,15 +40,15 @@ sections ([getting around](/guides/operator/#getting-around)).
   list, with each row's place in the tree shown above its name.
 - The default list order is the **tree compressed to a flat list** (nesting preserved); click
   a column header to sort by it instead.
-- The **Name** column carries both halves of an entity's identity: the **display name** it goes by on
+- The **Name** column carries both halves of an entity's identity: the **label** it goes by on
   the first line, and beneath it, in the data face, the **name** the API, the CLI, and the URL address
-  it by. An entity with no display name shows its name alone, in the data face, so an absence reads as
+  it by. An entity with no label shows its name alone, in the data face, so an absence reads as
   an absence rather than a typo. That second line is what you copy into an `omniglass` command. The
   column is headed **Name** on every page and sorts on the line you are reading down. It keeps a
   minimum width on a narrow screen: on a 1366x768 laptop the list scrolls sideways rather than
   squeezing the identifier out, and hiding a column you are not using (the **Tags** column is the
   widest) is what removes the sideways scroll.
-- **Who wrote a display name is shown where you can change it, not in the list.** A label the platform
+- **Who wrote a label is shown where you can change it, not in the list.** A label the platform
   rendered from a [label rule](/architecture/core-entities/) opens **locked** in the row's edit blade,
   with the rule stated under the field; the lock beside it hands you the pen, and the restore arrow
   hands it back. A list shows no mark either way, so the Name column spends its width on the name.

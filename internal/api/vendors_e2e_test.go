@@ -55,7 +55,7 @@ func TestVendorsAPI(t *testing.T) {
 
 	// The viewer cannot create (403, capability fast-reject).
 	c.do(viewerTok, http.MethodPost, "/vendors",
-		map[string]any{"name": "nope", "display_name": "Nope"}, http.StatusForbidden)
+		map[string]any{"name": "nope", "label": "Nope"}, http.StatusForbidden)
 
 	// Admin (owner) creates a custom make.
 	var created struct {
@@ -64,7 +64,7 @@ func TestVendorsAPI(t *testing.T) {
 		Official bool   `json:"official"`
 	}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/vendors",
-		map[string]any{"name": "acme", "display_name": "Acme"}, http.StatusCreated), &created); err != nil {
+		map[string]any{"name": "acme", "label": "Acme"}, http.StatusCreated), &created); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
 	// The body carries BOTH: the uuid that survives a rename and the handle an
@@ -78,11 +78,11 @@ func TestVendorsAPI(t *testing.T) {
 
 	// Duplicate id is a 409, exercising the shared mapTypeErr ErrTypeExists branch.
 	c.do(ownerTok, http.MethodPost, "/vendors",
-		map[string]any{"name": "acme", "display_name": "Dup"}, http.StatusConflict)
+		map[string]any{"name": "acme", "label": "Dup"}, http.StatusConflict)
 
 	// The custom row is fully mutable.
 	c.do(ownerTok, http.MethodPatch, "/vendors/acme",
-		map[string]any{"display_name": "Acme Corp"}, http.StatusOK)
+		map[string]any{"label": "Acme Corp"}, http.StatusOK)
 	c.do(ownerTok, http.MethodGet, "/vendors/acme", nil, http.StatusOK)
 
 	// A non-http(s) website scheme is refused server-side (defense-in-depth
@@ -90,9 +90,9 @@ func TestVendorsAPI(t *testing.T) {
 	// that bypasses the client's own scheme check), on both create and update.
 	// A normal https:// website succeeds.
 	c.do(ownerTok, http.MethodPost, "/vendors",
-		map[string]any{"name": "evil", "display_name": "Evil", "website": "javascript:alert(1)"}, http.StatusUnprocessableEntity)
+		map[string]any{"name": "evil", "label": "Evil", "website": "javascript:alert(1)"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPost, "/vendors",
-		map[string]any{"name": "acme2", "display_name": "Acme 2", "website": "https://acme.example"}, http.StatusCreated)
+		map[string]any{"name": "acme2", "label": "Acme 2", "website": "https://acme.example"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPatch, "/vendors/acme",
 		map[string]any{"website": "javascript:alert(1)"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodPatch, "/vendors/acme",
@@ -101,7 +101,7 @@ func TestVendorsAPI(t *testing.T) {
 
 	// The seeded official row (crestron) is read-only: 422 on patch and delete.
 	c.do(ownerTok, http.MethodPatch, "/vendors/crestron",
-		map[string]any{"display_name": "X"}, http.StatusUnprocessableEntity)
+		map[string]any{"label": "X"}, http.StatusUnprocessableEntity)
 	c.do(ownerTok, http.MethodDelete, "/vendors/crestron", nil, http.StatusUnprocessableEntity)
 
 	// Admin deletes the custom row.

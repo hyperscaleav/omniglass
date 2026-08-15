@@ -430,14 +430,14 @@ func (c *capped) Write(p []byte) (int, error) {
 // only: everything between words (spaces, hyphens, parentheses, slashes) is
 // separator and is preserved untouched. Preserved, not replaced: turning a
 // name's hyphens into spaces is [words], and keeping the two apart is what lets
-// a rule title a display name without rewriting the punctuation in it.
+// a rule title a label without rewriting the punctuation in it.
 var wordRe = regexp.MustCompile(`[\p{L}\p{N}]+`)
 
 // titleWords upper-cases each word's first letter and LEAVES THE REST ALONE.
 //
 // Lower-casing the remainder is what strings.Title did and what most
 // implementations do, and it is wrong for this input. The strings a label rule
-// titles are display names out of the catalog, so flattening the tail turns
+// titles are labels out of the catalog, so flattening the tail turns
 // "Shure MXA920" into "Shure Mxa920": a correct product name rendered as a
 // misspelling of one. Casing that is already deliberate is left deliberate, and
 // the acronym dictionary is how a word gets a case the operator did not type.
@@ -455,7 +455,7 @@ func titleWords(s string, acronyms map[string]string) string {
 // sepRe matches a run of the separators a NAME is built from. Exactly two, and
 // not the general "anything that is not a letter or a digit" [wordRe] uses:
 // words runs over facts that are already prose as well as over names, and a
-// display name's parentheses, slashes and periods are punctuation somebody
+// label's parentheses, slashes and periods are punctuation somebody
 // chose rather than separators to spend.
 var sepRe = regexp.MustCompile(`[-_]+`)
 

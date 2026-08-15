@@ -87,7 +87,7 @@ func TestImpersonationAPI(t *testing.T) {
 	targetTok := principalWithGrants(t, ctx, dsn, "scoped-writer", []grant{{role: "loc-writer", scopeKind: "location", scopeID: rootID}})
 	targetID := meID(t, c, targetTok)
 	adminTok := principalWithGrants(t, ctx, dsn, "an-admin", []grant{{role: "admin", scopeKind: "all"}})
-	patch := map[string]any{"display_name": "x"}
+	patch := map[string]any{"label": "x"}
 
 	// --- ACT-AS: owner acts as the scoped writer ---
 	begin := func(id, mode string, want int) string {
@@ -146,7 +146,7 @@ func TestImpersonationAPI(t *testing.T) {
 	// The read-only guarantee holds even on the SELF-SCOPED routes that skip the
 	// capability middleware (the bypass a require()-only enforcement would miss):
 	// a view-as session cannot edit the target's profile or change its password.
-	if code, _ := c.send(viewTok, http.MethodPatch, "/auth/me", map[string]any{"display_name": "hijacked"}); code != http.StatusForbidden {
+	if code, _ := c.send(viewTok, http.MethodPatch, "/auth/me", map[string]any{"label": "hijacked"}); code != http.StatusForbidden {
 		t.Fatalf("view-as self-profile update: want 403, got %d", code)
 	}
 	if code, _ := c.send(viewTok, http.MethodPost, "/auth/me:changePassword", map[string]any{"current_password": "x", "new_password": "yyyyyyyyyyyy"}); code != http.StatusForbidden {

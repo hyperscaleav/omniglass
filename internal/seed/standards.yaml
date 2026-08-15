@@ -3,10 +3,10 @@
 # A standard is the blueprint a system conforms to, the system-side counterpart of
 # a product. These stand in until standards are created by forking an in-code
 # template (#317); they are illustrative, not authoritative. The catalog lists
-# alphabetically by display_name; variants hang off parent_standard_id.
+# alphabetically by label; variants hang off parent_standard_id.
 standards:
   - id: meeting-room
-    display_name: Meeting Room
+    label: Meeting Room
     # The roles a conforming system needs filled. A component may fill one only
     # when its product's component_type falls within one of the accepted types
     # (self or a descendant): the #626 typed-slot guard, and these double as its
@@ -19,14 +19,14 @@ standards:
     # retunes them keeps the edit.
     roles:
       - name: room-mic
-        display_name: Room Microphone
+        label: Room Microphone
         quorum: 2
         accepted_types: [video-bar]
       - name: main-display
-        display_name: Main Display
+        label: Main Display
         accepted_types: [display]
   - id: huddle-room
-    display_name: Huddle Room
+    label: Huddle Room
     # A huddle room can be built either of two ways, and only one has to be
     # true (#626): an all-in-one video bar, or a component build of a codec
     # driving a separate camera, dsp, amplifier and mic. Staffing either
@@ -35,49 +35,49 @@ standards:
     # internal/health.Choice.Active and the storage-layer split exist for.
     choices:
       - name: conferencing
-        display_name: Conferencing
+        label: Conferencing
         alternates:
           - name: all-in-one
-            display_name: All-in-one
+            label: All-in-one
           - name: component-system
-            display_name: Component System
+            label: Component System
     roles:
       - name: conf-bar
-        display_name: Conferencing Bar
+        label: Conferencing Bar
         quorum: 1
         accepted_types: [video-bar]
         choice: conferencing
         alternate: all-in-one
       - name: conf-codec
-        display_name: Codec
+        label: Codec
         accepted_types: [codec]
         choice: conferencing
         alternate: component-system
       - name: conf-camera
-        display_name: Camera
+        label: Camera
         accepted_types: [camera]
         choice: conferencing
         alternate: component-system
       - name: conf-dsp
-        display_name: DSP
+        label: DSP
         accepted_types: [dsp]
         choice: conferencing
         alternate: component-system
       - name: conf-amp
-        display_name: Amplifier
+        label: Amplifier
         accepted_types: [amplifier]
         choice: conferencing
         alternate: component-system
       - name: conf-mic
-        display_name: Microphone
+        label: Microphone
         accepted_types: [mic]
         choice: conferencing
         alternate: component-system
   - id: classroom
-    display_name: Classroom
+    label: Classroom
   - id: auditorium
-    display_name: Auditorium
+    label: Auditorium
   - id: signage
-    display_name: Digital Signage
+    label: Digital Signage
   - id: control-room
-    display_name: Control Room
+    label: Control Room

@@ -54,7 +54,7 @@ func TestLocationTypeMetricsAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	c.do(ownerTok, http.MethodPost, "/location-types", map[string]any{
-		"name": "annex", "display_name": "Annex", "allowed_parent_types": []string{"campus"},
+		"name": "annex", "label": "Annex", "allowed_parent_types": []string{"campus"},
 	}, http.StatusCreated)
 
 	// PUT declares the line. The metric must already exist in the catalog

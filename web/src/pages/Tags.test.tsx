@@ -49,7 +49,7 @@ describe("Tags page", () => {
     expect(head[0]).toContain("Name");
   });
 
-  // A tag has no display name, so the identity cell collapses to one line. Two
+  // A tag has no label, so the identity cell collapses to one line. Two
   // copies of the same string in one row reads as a bug.
   it("renders each name exactly once", () => {
     mount();

@@ -33,6 +33,10 @@ func TestLabelPenBackfill(t *testing.T) {
 
 	// A location_type to hang a location on: the seeded ones are boot-seed
 	// content, and no seed has run against this database.
+	// The column is `display_name` at this point in the chain: #613's rename
+	// (20260814100000_label_is_the_column.sql) is above the version this test
+	// stands the database at, so writing `label` here would fail on a column
+	// that does not exist yet.
 	mustExec(t, conn, `insert into location_type (name, official, display_name, icon, allowed_parent_types)
 	                   values ('room', false, 'Room', 'door-open', '{root}')`)
 
@@ -66,9 +70,12 @@ func TestLabelPenBackfill(t *testing.T) {
 	if err := migrate.Run(dsn); err != nil {
 		t.Fatalf("migrate forward over the pre-pen rows: %v", err)
 	}
+	// `label_generated` and not `display_name_generated`: the read happens AFTER
+	// the migrate-forward above, which carries #613's rename with it. The writes
+	// before it use the old name because they run at the older version.
 	penOf := func(table, name string) bool {
 		var pen bool
-		if err := conn.QueryRow(ctx, `select display_name_generated from `+table+` where name = $1`, name).Scan(&pen); err != nil {
+		if err := conn.QueryRow(ctx, `select label_generated from `+table+` where name = $1`, name).Scan(&pen); err != nil {
 			t.Fatalf("read pen of %s %q: %v", table, name, err)
 		}
 		return pen

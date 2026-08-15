@@ -16,8 +16,8 @@ import (
 //
 // # The ladder
 //
-// A labelled entity carries a stored pair, display_name and the pen
-// display_name_generated, exactly the shape name/name_generated already has.
+// A labelled entity carries a stored pair, label and the pen
+// label_generated, exactly the shape name/name_generated already has.
 // Reading it is three rungs: the label an operator typed, else the one the rule
 // produced, else the entity's name. The first two rungs are the same column,
 // told apart by the pen, and the third is the read-side fallback the console
@@ -92,7 +92,7 @@ import (
 //     reclassify (its member components), and every act that moves a
 //     component's primary membership.
 //   - Bounded only by the estate, so left to the preview-then-apply verb: a
-//     rule changing at any tier, a classification row's display_name, stem or
+//     rule changing at any tier, a classification row's label, stem or
 //     abbrev changing, and the acronym list changing. Rewriting 15,000 rows as
 //     a side effect of one catalog edit is exactly what the epic refuses to do
 //     silently.
@@ -399,7 +399,7 @@ type componentLabelInputs struct {
 }
 
 // componentLabelChain resolves the rule and the classification facts for one
-// product: the product's own row and its component_type's display_name in a
+// product: the product's own row and its component_type's label in a
 // single query (shadow-resolved, so an operator's fork of a shipped type is
 // what a rule sees), then the inherited facts up the type chain, then the
 // global tier.
@@ -417,8 +417,8 @@ func componentLabelChain(ctx context.Context, q querier, productID string) (comp
 	// and the estate this epic exists for has 15,000 components in it.
 	var global string
 	err := q.QueryRow(ctx, `
-		select p.display_name, coalesce(v.display_name, ''), p.label_rule, p.component_type_id,
-		       coalesce(s.image->>'display_name', ct.display_name),
+		select p.label, coalesce(v.label, ''), p.label_rule, p.component_type_id,
+		       coalesce(s.image->>'label', ct.label),
 		       coalesce(lr.template, lr.default_template, '')
 		from product p
 		join component_type ct on ct.id = p.component_type_id
@@ -477,7 +477,7 @@ type systemPlacement struct {
 // The third rung, a label the platform generated, is the same column as the
 // first: the pen tells them apart and a rule does not care which of the two it
 // is reading, only that it is what an operator sees.
-const locationReadLadder = `coalesce(nullif(l.display_name, ''), l.name, '')`
+const locationReadLadder = `coalesce(l.label, l.name, '')`
 
 // locationReadLabel is locationReadLadder in Go, for the write paths that have
 // the row in hand and need to know whether what a rule reads about this
@@ -486,8 +486,8 @@ const locationReadLadder = `coalesce(nullif(l.display_name, ''), l.name, '')`
 // that matters most, an operator clearing a typed label so the name shows
 // through.
 func locationReadLabel(l *Location) string {
-	if l.DisplayName != "" {
-		return l.DisplayName
+	if l.Label != "" {
+		return l.Label
 	}
 	return l.Name
 }
@@ -508,7 +508,7 @@ func componentPlacements(ctx context.Context, q querier, ids []string) (map[stri
 		return out, nil
 	}
 	rows, err := q.Query(ctx, `
-		select c.id, `+locationReadLadder+`, coalesce(st.display_name, '')
+		select c.id, `+locationReadLadder+`, coalesce(st.label, '')
 		from component c
 		left join location l on l.id = c.location_id
 		left join system_member m on m.component_id = c.id and m.is_primary
@@ -587,7 +587,7 @@ func renderComponentLabel(ctx context.Context, q querier, eng *label.Engine, c *
 // rule once rendered empty would never be reconsidered by the recompute that
 // exists to fix exactly that.
 func (p *PG) stampComponentLabel(ctx context.Context, tx pgx.Tx, c *Component) (*Component, error) {
-	if !c.DisplayNameGenerated {
+	if !c.LabelGenerated {
 		return c, nil
 	}
 	eng, err := p.labelEngine(ctx, tx)
@@ -598,12 +598,12 @@ func (p *PG) stampComponentLabel(ctx context.Context, tx pgx.Tx, c *Component) (
 	if err != nil {
 		return nil, err
 	}
-	if rendered == c.DisplayName {
+	if rendered == c.Label {
 		return c, nil
 	}
 	stamped, err := scanComponent(tx.QueryRow(ctx,
-		`update component set display_name = $2, updated_at = now() where id = $1 returning `+componentCols,
-		c.ID, nullize(rendered)))
+		`update component set label = $2, updated_at = now() where id = $1 returning `+componentCols,
+		c.ID, labelOrNull(rendered)))
 	if err != nil {
 		return nil, fmt.Errorf("storage: stamp component label: %w", err)
 	}
@@ -644,7 +644,7 @@ func systemLabelChainWith(ctx context.Context, q querier, standardID, systemType
 	var standardRule, typeRule string
 	if standardID != nil {
 		var rule *string
-		if err := q.QueryRow(ctx, `select display_name, label_rule from standard where id = $1`, *standardID).
+		if err := q.QueryRow(ctx, `select coalesce(label, ''), label_rule from standard where id = $1`, *standardID).
 			Scan(&in.standardName, &rule); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return in, fmt.Errorf("storage: resolve label facts for standard %q: %w", *standardID, err)
 		}
@@ -655,7 +655,7 @@ func systemLabelChainWith(ctx context.Context, q querier, standardID, systemType
 		if err != nil {
 			return in, fmt.Errorf("storage: system_type id %q is not a uuid: %w", *systemTypeID, err)
 		}
-		if err := q.QueryRow(ctx, `select display_name from system_type where id = $1`, typeID).Scan(&in.typeName); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		if err := q.QueryRow(ctx, `select coalesce(label, '') from system_type where id = $1`, typeID).Scan(&in.typeName); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return in, fmt.Errorf("storage: resolve label facts for system_type %q: %w", typeID, err)
 		}
 		stem, _, abbrev, chainRule, err := resolveSystemTypeFacts(ctx, q, typeID)
@@ -697,7 +697,7 @@ func renderSystemLabel(ctx context.Context, q querier, eng *label.Engine, s *Sys
 // stampSystemLabel is stampComponentLabel on the system tier; see that function
 // for the pen and empty-render reasoning.
 func (p *PG) stampSystemLabel(ctx context.Context, tx pgx.Tx, s *System) (*System, error) {
-	if !s.DisplayNameGenerated {
+	if !s.LabelGenerated {
 		return s, nil
 	}
 	eng, err := p.labelEngine(ctx, tx)
@@ -708,12 +708,12 @@ func (p *PG) stampSystemLabel(ctx context.Context, tx pgx.Tx, s *System) (*Syste
 	if err != nil {
 		return nil, err
 	}
-	if rendered == s.DisplayName {
+	if rendered == s.Label {
 		return s, nil
 	}
 	stamped, err := scanSystem(tx.QueryRow(ctx,
-		`update system set display_name = $2, updated_at = now() where id = $1 returning `+systemCols,
-		s.ID, nullize(rendered)))
+		`update system set label = $2, updated_at = now() where id = $1 returning `+systemCols,
+		s.ID, labelOrNull(rendered)))
 	if err != nil {
 		return nil, fmt.Errorf("storage: stamp system label: %w", err)
 	}
@@ -745,14 +745,14 @@ func locationLabelChain(ctx context.Context, q querier, l *Location) (locationLa
 func locationLabelChainWith(ctx context.Context, q querier, locationTypeID, global string) (locationLabelInputs, error) {
 	var in locationLabelInputs
 	// Resolved over the operator's shadow (#703): a forked shipped type's
-	// display_name and label_rule are the ones its locations are labelled by,
+	// label and label_rule are the ones its locations are labelled by,
 	// or the fork would be invisible on the surface it exists to change.
 	lt, err := scanLocationTypeResolved(q.QueryRow(ctx, locationTypeResolved+` where lt.id = $1`, locationTypeID))
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return in, fmt.Errorf("storage: resolve label facts for location_type %q: %w", locationTypeID, err)
 	}
 	if lt != nil {
-		in.typeName = lt.DisplayName
+		in.typeName = lt.Label
 		in.rule = firstRule(derefRule(lt.LabelRule), global)
 		return in, nil
 	}
@@ -791,7 +791,7 @@ func renderLocationLabel(ctx context.Context, q querier, eng *label.Engine, l *L
 // stampLocationLabel is stampComponentLabel on the location tier; see that
 // function for the pen and empty-render reasoning.
 func (p *PG) stampLocationLabel(ctx context.Context, tx pgx.Tx, l *Location) (*Location, error) {
-	if !l.DisplayNameGenerated {
+	if !l.LabelGenerated {
 		return l, nil
 	}
 	eng, err := p.labelEngine(ctx, tx)
@@ -802,12 +802,12 @@ func (p *PG) stampLocationLabel(ctx context.Context, tx pgx.Tx, l *Location) (*L
 	if err != nil {
 		return nil, err
 	}
-	if rendered == l.DisplayName {
+	if rendered == l.Label {
 		return l, nil
 	}
 	stamped, err := scanLocation(tx.QueryRow(ctx,
-		`update location set display_name = $2, updated_at = now() where id = $1 returning `+locationCols,
-		l.ID, nullize(rendered)))
+		`update location set label = $2, updated_at = now() where id = $1 returning `+locationCols,
+		l.ID, labelOrNull(rendered)))
 	if err != nil {
 		return nil, fmt.Errorf("storage: stamp location label: %w", err)
 	}
@@ -854,7 +854,7 @@ func mintedOrdinalText(m nameMint, n *int) string {
 	return fmt.Sprintf("%d", *n)
 }
 
-// labelPen decides who owns the label after a write that carried a display_name
+// labelPen decides who owns the label after a write that carried a label
 // field, the same three-state every patch field uses. A nil field leaves the
 // pen where it is; a value claims it for the operator; an explicit empty string
 // hands it back to the platform, and the caller then stamps.

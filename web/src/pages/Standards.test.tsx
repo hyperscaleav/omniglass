@@ -20,22 +20,22 @@ import { uuidFor } from "../lib/testids";
 // and a writable declared-property contract on its detail blade. Data is seeded
 // into the query cache so no server is needed.
 const seed: Standard[] = [
-  { id: uuidFor("std-meeting-room"), name: "meeting-room", display_name: "Meeting room", official: true },
-  { id: uuidFor("std-huddle-space"), name: "huddle-space", display_name: "Huddle space", official: false, parent_standard: "meeting-room", parent_standard_id: uuidFor("std-meeting-room") },
+  { id: uuidFor("std-meeting-room"), name: "meeting-room", label: "Meeting room", official: true },
+  { id: uuidFor("std-huddle-space"), name: "huddle-space", label: "Huddle space", official: false, parent_standard: "meeting-room", parent_standard_id: uuidFor("std-meeting-room") },
 ];
 
 const contract: ClassifierProperty[] = [{ property_type_name: "seat_count", property_type_id: "seat_count-id", default_value: 8, required: true }];
 const catalog: PropertyRow[] = [
-  { name: "seat_count", data_type: "int", display_name: "Seat count", official: true },
-  { name: "has_camera", data_type: "bool", display_name: "Has camera", official: true },
+  { name: "seat_count", data_type: "int", label: "Seat count", official: true },
+  { name: "has_camera", data_type: "bool", label: "Has camera", official: true },
 ];
 
 // The roles the custom standard declares (RoleEditor keys the query on the
 // standard's uuid, which is what the page passes it), plus the component_type
 // and product registries its typed-slot pickers read (#626).
-const roles: DeclaredRole[] = [{ name: "table-mic", display_name: "Table microphone", quorum: 2, accepted_types: ["video-bar"], pinned_products: [], position_labels: [], impact: "degraded" }];
-const componentTypes: ComponentType[] = [{ id: uuidFor("ct-video-bar"), name: "video-bar", display_name: "Video Bar", official: true, forked: false, default_tags: [] }];
-const products: Product[] = [{ id: uuidFor("prod-cisco-room-bar"), name: "cisco-room-bar", display_name: "Cisco Room Bar", kind: "device", component_type: "video-bar", component_type_id: uuidFor("ct-video-bar"), official: true }];
+const roles: DeclaredRole[] = [{ name: "table-mic", label: "Table microphone", quorum: 2, accepted_types: ["video-bar"], pinned_products: [], position_labels: [], impact: "degraded" }];
+const componentTypes: ComponentType[] = [{ id: uuidFor("ct-video-bar"), name: "video-bar", label: "Video Bar", official: true, forked: false, default_tags: [] }];
+const products: Product[] = [{ id: uuidFor("prod-cisco-room-bar"), name: "cisco-room-bar", label: "Cisco Room Bar", kind: "device", component_type: "video-bar", component_type_id: uuidFor("ct-video-bar"), official: true }];
 
 const admin: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["*:read"], grants: [] };
@@ -169,13 +169,13 @@ describe("Standards page", () => {
     expect(within(blade).queryByLabelText("Withdraw seat_count")).not.toBeInTheDocument();
   });
 
-  it("patches display name and variant parent on save", async () => {
+  it("patches label and variant parent on save", async () => {
     let sent: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const req = input as Request;
       if (req.method === "PATCH") {
         sent = JSON.parse(await req.clone().text());
-        return new Response(JSON.stringify({ ...seed[1], display_name: "Huddle" }), { status: 200, headers: { "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ ...seed[1], label: "Huddle" }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       return new Response(JSON.stringify({ standards: seed }), { status: 200, headers: { "Content-Type": "application/json" } });
     });
@@ -189,7 +189,7 @@ describe("Standards page", () => {
 
     await waitFor(() => expect(sent).toBeTruthy());
     // Clearing the picker drops the parent from the patch (a standalone standard).
-    expect(sent).toEqual({ display_name: "Huddle" });
+    expect(sent).toEqual({ label: "Huddle" });
   });
 
   it("hides New standard from a caller without standard:create", () => {
@@ -216,10 +216,10 @@ describe("Standards page", () => {
     expect(within(cell).getByText("huddle-space")).toBeInTheDocument();
   });
 
-  // The handle follows the display name until the operator claims it, so a
+  // The handle follows the label until the operator claims it, so a
   // standard gets a valid kebab address without anyone thinking about the
   // character class (lib/entities).
-  it("derives the handle from the display name until the operator edits it", async () => {
+  it("derives the handle from the label until the operator edits it", async () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /new standard/i }));
     const display = (await screen.findByPlaceholderText("Meeting room")) as HTMLInputElement;

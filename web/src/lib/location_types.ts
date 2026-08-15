@@ -59,7 +59,7 @@ export type LocationType = {
   // allowed_parent_types members are names and joins go through name.
   id: string;
   name: string;
-  display_name: string;
+  label: string;
   // official and forked are the two halves of the origin an operator reads
   // (#703, ADR-0095): official alone is "shipped", neither is "yours", and both
   // together is "yours, overriding shipped". Every shipped location type is
@@ -89,7 +89,7 @@ export async function listLocationTypes(): Promise<LocationType[]> {
   return (data?.location_types ?? []).map((t) => ({
     id: t.id,
     name: t.name,
-    display_name: t.display_name,
+    label: t.label,
     official: t.official,
     forked: t.forked,
     icon: t.icon,
@@ -101,7 +101,7 @@ export async function listLocationTypes(): Promise<LocationType[]> {
 export type CreateLocationType = {
   // The name. The uuid is the database's to mint.
   name: string;
-  display_name: string;
+  label: string;
   icon?: string;
   allowed_parent_types?: string[];
 };
@@ -110,7 +110,7 @@ export async function createLocationType(body: CreateLocationType): Promise<Loca
   const { data, error } = await api.POST("/location-types", { body });
   if (error) throw error;
   const t = data!;
-  return { id: t.id, name: t.name, display_name: t.display_name, official: t.official, forked: t.forked, icon: t.icon, allowed_parent_types: t.allowed_parent_types ?? [] };
+  return { id: t.id, name: t.name, label: t.label, official: t.official, forked: t.forked, icon: t.icon, allowed_parent_types: t.allowed_parent_types ?? [] };
 }
 
 export type UpdateLocationType = {
@@ -120,7 +120,7 @@ export type UpdateLocationType = {
   // to clear a nullable object: an omitted key and an explicit null are the
   // same absent value on the wire.
   update_mask?: string[];
-  display_name?: string;
+  label?: string;
   icon?: string;
   allowed_parent_types?: string[];
   name_rule?: NameRule;
@@ -130,9 +130,9 @@ export type UpdateLocationType = {
 // server lists them (storage.LocationTypePatchFields, minus label_rule, which
 // this surface does not edit). The blade names all of them in update_mask on the
 // one write that CLEARS the rule: the mask governs the whole write, so a mask
-// naming name_rule alone would silently drop the display name and icon edited
+// naming name_rule alone would silently drop the label and icon edited
 // beside it.
-export const LOCATION_TYPE_PATCH_FIELDS = ["display_name", "icon", "allowed_parent_types", "name_rule"] as const;
+export const LOCATION_TYPE_PATCH_FIELDS = ["label", "icon", "allowed_parent_types", "name_rule"] as const;
 
 export async function updateLocationType(id: string, body: UpdateLocationType): Promise<void> {
   const { error } = await api.PATCH("/location-types/{id}", { params: { path: { id } }, body });

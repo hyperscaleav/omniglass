@@ -51,7 +51,7 @@ func TestGroupGrantInheritanceAPI(t *testing.T) {
 	var grp struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/principal-groups", map[string]any{"name": "crew", "display_name": "Crew"}, http.StatusCreated), &grp); err != nil || grp.ID == "" {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/principal-groups", map[string]any{"name": "crew", "label": "Crew"}, http.StatusCreated), &grp); err != nil || grp.ID == "" {
 		t.Fatalf("create group: %v (id %q)", err, grp.ID)
 	}
 	// A duplicate name is refused.
@@ -75,23 +75,23 @@ func TestGroupGrantInheritanceAPI(t *testing.T) {
 	// The group's members list shows bob; his membership drives the inheritance.
 	//
 	// bob is a SERVICE principal (principalWithGrants inserts one), so "bob" is
-	// his NAME and not a display name. The roster used to hand it back in
-	// display_name, through a coalesce that fell from a human's friendly string to
+	// his NAME and not a label. The roster used to hand it back in
+	// label, through a coalesce that fell from a human's friendly string to
 	// a service account's identifier, and this assertion is what that looked like
 	// from the wire: an identifier read out of a field named for a label (#563).
 	var members struct {
 		Members []struct {
 			PrincipalID string `json:"principal_id"`
 			Name        string `json:"name"`
-			DisplayName string `json:"display_name"`
+			Label       string `json:"label"`
 		} `json:"members"`
 	}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/principal-groups/"+grp.ID+"/members", nil, http.StatusOK), &members); err != nil || len(members.Members) != 1 || members.Members[0].PrincipalID != bobID || members.Members[0].Name != "bob" {
 		t.Fatalf("members = %+v err %v, want [bob]", members, err)
 	}
-	if members.Members[0].DisplayName != "" {
-		t.Errorf("the roster gave a service account the display name %q; it has no column for one, and the field that used to carry its identifier is now `name`",
-			members.Members[0].DisplayName)
+	if members.Members[0].Label != "" {
+		t.Errorf("the roster gave a service account the label %q; it has no column for one, and the field that used to carry its identifier is now `name`",
+			members.Members[0].Label)
 	}
 
 	// Removing bob from the group drops the inherited read.

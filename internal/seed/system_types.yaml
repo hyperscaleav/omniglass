@@ -18,59 +18,59 @@
 # this list.
 system_types:
   - id: av
-    display_name: AV
+    label: AV
     stem: av
     abbrev: av
     icon: layers
   - id: room
-    display_name: Room
+    label: Room
     parent_id: av
     stem: room
     abbrev: rm
     icon: door-open
   - id: board
-    display_name: Boardroom
+    label: Boardroom
     parent_id: room
     stem: boardroom
     abbrev: br
   - id: class
-    display_name: Classroom
+    label: Classroom
     parent_id: room
     stem: classroom
     abbrev: cls
   - id: meeting
-    display_name: Meeting Room
+    label: Meeting Room
     parent_id: room
     stem: meeting
     abbrev: mtg
   - id: training
-    display_name: Training Room
+    label: Training Room
     parent_id: room
     stem: training
     abbrev: trn
   - id: conference
-    display_name: Conference Room
+    label: Conference Room
     parent_id: room
     stem: conference
     abbrev: conf
   - id: huddle
-    display_name: Huddle Room
+    label: Huddle Room
     parent_id: room
     stem: huddle
     abbrev: hud
   - id: sign
-    display_name: Signage
+    label: Signage
     parent_id: av
     stem: signage
     abbrev: sgn
     icon: tv
   - id: video-wall
-    display_name: Video Wall
+    label: Video Wall
     parent_id: sign
     stem: video-wall
     abbrev: vw
   - id: interactive-sign
-    display_name: Interactive Sign
+    label: Interactive Sign
     parent_id: sign
     stem: interactive-sign
     abbrev: isgn

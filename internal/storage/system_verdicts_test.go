@@ -36,11 +36,11 @@ func verdictEstate(t *testing.T, gw storage.Gateway, systems int) {
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq-r1", LocationType: "room", ParentName: strptr("hq")}, sc); err != nil {
 		t.Fatalf("create room: %v", err)
 	}
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "verdict-std", DisplayName: "Verdict"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "verdict-std", Label: "Verdict"}); err != nil {
 		t.Fatalf("upsert standard: %v", err)
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "standard", "verdict-std", storage.SystemRoleSpec{
-		Name: "table-mic", DisplayName: "Table microphone", Quorum: 1,
+		Name: "table-mic", Label: "Table microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)

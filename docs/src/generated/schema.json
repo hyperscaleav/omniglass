@@ -85,10 +85,9 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false,
-      "default": "''::text"
+      "nullable": true
      },
      {
       "name": "stem",
@@ -157,9 +156,9 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false
+      "nullable": true
      },
      {
       "name": "version",
@@ -208,9 +207,9 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false
+      "nullable": true
      },
      {
       "name": "kind",
@@ -449,9 +448,9 @@
       "default": "false"
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false
+      "nullable": true
      },
      {
       "name": "created_at",
@@ -615,10 +614,9 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false,
-      "default": "''::text"
+      "nullable": true
      },
      {
       "name": "stem",
@@ -681,9 +679,9 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false
+      "nullable": true
      },
      {
       "name": "icon",
@@ -800,7 +798,7 @@
       "default": "now()"
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": true
      },
@@ -893,10 +891,9 @@
       "pk": true
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false,
-      "default": "''::text"
+      "nullable": true
      },
      {
       "name": "mode",
@@ -1183,9 +1180,9 @@
       "default": "false"
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false
+      "nullable": true
      },
      {
       "name": "schema",
@@ -1625,7 +1622,7 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": true
      },
@@ -1674,7 +1671,7 @@
       "nullable": true
      },
      {
-      "name": "display_name_generated",
+      "name": "label_generated",
       "type": "boolean",
       "nullable": false,
       "default": "false"
@@ -1823,7 +1820,7 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": true
      },
@@ -1854,7 +1851,7 @@
       "fk_target": "location_type.id"
      },
      {
-      "name": "display_name_generated",
+      "name": "label_generated",
       "type": "boolean",
       "nullable": false,
       "default": "false"
@@ -1902,9 +1899,9 @@
       "default": "false"
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false
+      "nullable": true
      },
      {
       "name": "created_at",
@@ -2078,7 +2075,7 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": true
      },
@@ -2123,7 +2120,7 @@
       "fk_target": "system_type.id"
      },
      {
-      "name": "display_name_generated",
+      "name": "label_generated",
       "type": "boolean",
       "nullable": false,
       "default": "false"
@@ -2262,10 +2259,9 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false,
-      "default": "''::text"
+      "nullable": true
      },
      {
       "name": "position",
@@ -2309,7 +2305,7 @@
       "nullable": true
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": true
      },
@@ -2543,7 +2539,7 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": true
      },
@@ -2630,7 +2626,7 @@
       "default": "now()"
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": true
      },
@@ -2693,10 +2689,9 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false,
-      "default": "''::text"
+      "nullable": true
      },
      {
       "name": "created_at",
@@ -2777,9 +2772,9 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
-      "nullable": false
+      "nullable": true
      },
      {
       "name": "quorum",
@@ -3183,7 +3178,7 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": true
      },
@@ -3402,7 +3397,7 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": true
      },
@@ -3631,7 +3626,7 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": true
      },
@@ -3823,7 +3818,7 @@
       "nullable": false
      },
      {
-      "name": "display_name",
+      "name": "label",
       "type": "text",
       "nullable": true
      },

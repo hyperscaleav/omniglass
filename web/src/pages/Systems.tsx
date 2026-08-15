@@ -1,4 +1,4 @@
-import { entityLabel } from "../lib/entities";
+import { byLabel, entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams } from "@solidjs/router";
@@ -85,10 +85,10 @@ export default function Systems() {
   const verdicts = useQuery(() => ({ queryKey: SYSTEM_VERDICTS_KEY, queryFn: systemVerdicts, staleTime: 30_000 }));
 
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
-  // The standard picker's options, and the id -> display-name lookup the tree and
+  // The standard picker's options, and the id -> label lookup the tree and
   // detail read a conforming system's standard through.
   const standardOptions = createMemo(() =>
-    [...(standards.data ?? [])].sort((a, b) => a.display_name.localeCompare(b.display_name)),
+    [...(standards.data ?? [])].sort(byLabel),
   );
   const standardLabel = (handle?: string) => {
     if (!handle) return "";
@@ -136,7 +136,7 @@ export default function Systems() {
         id: s.id,
         addr: s.name,
         display: entityLabel(s),
-        generated: s.display_name_generated,
+        generated: s.label_generated,
         // See Components.tsx's own nodes memo for why this beats the
         // page's tree-local pathOf walk for a system with no system parent.
         pathRender: s.renders?.dash,
@@ -175,7 +175,7 @@ export default function Systems() {
   }
 
   // SystemDetail: the entity accordion, read-only in view, editable in edit. Own
-  // fields (display name, type) are editable; placement is fixed at creation. The
+  // fields (label, type) are editable; placement is fixed at creation. The
   // Tags section is the shared TagAdder, whose write controls appear only in edit
   // (canUpdate gates them), so view carries no mutation. The full page renders its
   // own Save/Cancel/Edit footer from ctx.edit; a blade gets those from BladeStack.
@@ -228,7 +228,7 @@ export default function Systems() {
             // platform's" (labelPen, #682). Omitting the key would leave the pen
             // alone, which is the same outcome here and NOT the same on the
             // hand-back, so one expression covers both (#693).
-            display_name: displayPen.value(),
+            label: displayPen.value(),
             // Send the empty string rather than dropping the key: the API reads ""
             // as "clear", which is how the operator converts this system back to a
             // one-off. Omitting it would silently leave the old standard in place.
@@ -244,7 +244,7 @@ export default function Systems() {
           //
           // The invalidation is in a finally for the same reason. It used to sit
           // after the rename, so a 409 skipped it and the list went on rendering the
-          // display name the server had already accepted: the operator saw a total
+          // label the server had already accepted: the operator saw a total
           // failure for a half-committed save, and Cancel re-seeded the inputs from
           // that stale cache.
           // No hand-off navigate after a rename (#627 Task 15c): see
@@ -322,7 +322,7 @@ export default function Systems() {
               >
                 <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>
                   <option value="">None (a one-off system)</option>
-                  <For each={standardOptions()}>{(s) => <option value={s.name}>{s.display_name}</option>}</For>
+                  <For each={standardOptions()}>{(s) => <option value={s.name}>{s.label}</option>}</For>
                 </select>
               </FieldRow>
               <FieldRow
@@ -537,7 +537,7 @@ export default function Systems() {
         // An empty name is OMITTED rather than posted as "": omitted is
         // "generate one", where "" is a name of nothing the API refuses
         // against the entity-name pattern.
-        const created = await createSystem({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, standard_id: standard() || undefined, system_type_id: systemType() || undefined, display_name: displayPen.value().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
+        const created = await createSystem({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, standard_id: standard() || undefined, system_type_id: systemType() || undefined, label: displayPen.value().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
         openInEdit(created.id);
         navigate(`/systems/${encodeURIComponent(created.id)}`);
@@ -576,7 +576,7 @@ export default function Systems() {
             >
               <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>
                 <option value="">None (a one-off system)</option>
-                <For each={standardOptions()}>{(s) => <option value={s.name}>{s.display_name}</option>}</For>
+                <For each={standardOptions()}>{(s) => <option value={s.name}>{s.label}</option>}</For>
               </select>
             </FieldRow>
           </div>
@@ -633,7 +633,7 @@ export default function Systems() {
     filterPlaceholder: "Filter by name, standard, location…",
     nameWeight: () => 500,
     // Every system wears a colour of its own, derived from its uuid (never a
-    // display name, which is optional), so the same system reads consistently
+    // label, which is optional), so the same system reads consistently
     // here, on a component's system column, and in the location health rollup.
     leadIcon: (n) => <span class="og-system-dot" style={{ "--sys-h": String(hueFor(n.raw.id)) }} title={n.display} />,
     cellFor: (key, n) => {

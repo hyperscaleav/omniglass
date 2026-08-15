@@ -15,7 +15,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// TestRolesViewAPI drives GET /roles: each official role carries its display name
+// TestRolesViewAPI drives GET /roles: each official role carries its label
 // and description, and its effective (flattened) permissions resolve inheritance,
 // wildcards, and the :read floor. The owner effective set is the global wildcard;
 // admin's is broad but does NOT include *:* (the capability firewall that makes it
@@ -40,7 +40,7 @@ func TestRolesViewAPI(t *testing.T) {
 		Roles []struct {
 			ID                   string   `json:"id"`
 			Name                 string   `json:"name"`
-			DisplayName          string   `json:"display_name"`
+			Label                string   `json:"label"`
 			Description          string   `json:"description"`
 			Official             bool     `json:"official"`
 			EffectivePermissions []string `json:"effective_permissions"`
@@ -57,7 +57,7 @@ func TestRolesViewAPI(t *testing.T) {
 		byID[r.Name] = struct {
 			display, desc string
 			eff           []string
-		}{r.DisplayName, r.Description, r.EffectivePermissions}
+		}{r.Label, r.Description, r.EffectivePermissions}
 	}
 
 	owner, ok := byID["owner"]

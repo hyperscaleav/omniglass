@@ -88,7 +88,7 @@ var componentLabelKeys = []labelKey[componentFacts]{
 	},
 	{
 		Name: "TypeName",
-		Summary: "The display name of the component_type the product classifies it as, resolved over an " +
+		Summary: "The label of the component_type the product classifies it as, resolved over an " +
 			"operator's fork of a shipped row.",
 		value: func(f componentFacts) string { return f.in.typeName },
 	},
@@ -104,12 +104,12 @@ var componentLabelKeys = []labelKey[componentFacts]{
 	},
 	{
 		Name:    "ProductName",
-		Summary: "The product's display name.",
+		Summary: "The product's label.",
 		value:   func(f componentFacts) string { return f.in.productName },
 	},
 	{
 		Name:    "VendorName",
-		Summary: "The vendor's display name, empty when the product names no vendor.",
+		Summary: "The vendor's label, empty when the product names no vendor.",
 		value:   func(f componentFacts) string { return f.in.vendorName },
 	},
 	{
@@ -122,7 +122,7 @@ var componentLabelKeys = []labelKey[componentFacts]{
 	},
 	{
 		Name: "SystemTypeLabel",
-		Summary: "The display name of the type of the system this component is a PRIMARY member of, " +
+		Summary: "The label of the type of the system this component is a PRIMARY member of, " +
 			"empty when it is a member of none.",
 		value: func(f componentFacts) string { return f.pl.systemTypeLabel },
 	},
@@ -144,7 +144,7 @@ var systemLabelKeys = []labelKey[systemFacts]{
 	},
 	{
 		Name:    "TypeName",
-		Summary: "The display name of the system_type it is classified as.",
+		Summary: "The label of the system_type it is classified as.",
 		value:   func(f systemFacts) string { return f.in.typeName },
 	},
 	{
@@ -159,7 +159,7 @@ var systemLabelKeys = []labelKey[systemFacts]{
 	},
 	{
 		Name:    "StandardName",
-		Summary: "The display name of the standard it conforms to, empty when it conforms to none.",
+		Summary: "The label of the standard it conforms to, empty when it conforms to none.",
 		value:   func(f systemFacts) string { return f.in.standardName },
 	},
 	{
@@ -185,7 +185,7 @@ var locationLabelKeys = []labelKey[locationFacts]{
 	},
 	{
 		Name:    "TypeName",
-		Summary: "The display name of the location_type it is classified as, resolved over an operator's fork.",
+		Summary: "The label of the location_type it is classified as, resolved over an operator's fork.",
 		value:   func(f locationFacts) string { return f.in.typeName },
 	},
 }

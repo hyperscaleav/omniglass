@@ -32,7 +32,7 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
   const ident = () => {
     const m = me.data;
     if (!m) return { name: "—", role: "" };
-    // The one principal rule (lib/principals), so setting a display name updates
+    // The one principal rule (lib/principals), so setting a label updates
     // the label here, the initials avatar below, and the admin directory alike.
     const name = principalName({ human: m.human, service: m.service, kind: m.principal.kind });
     return { name, role: m.grants[0]?.role ?? m.principal.kind };

@@ -69,7 +69,7 @@ export default function Metrics(): JSX.Element {
             { key: "unit", type: "string", hint: "exact", get: (r) => r.unit ?? "", values: (rs) => [...new Set(rs.map((r) => r.unit ?? "").filter(Boolean))].sort() },
             { key: "official", type: "string", hint: "exact", get: (r) => (r.official ? "official" : "custom"), values: () => ["official", "custom"] },
           ],
-          filterPlaceholder: "filter metrics by name, display name…",
+          filterPlaceholder: "filter metrics by name, label…",
           columns,
           empty: "No metrics.",
           rowId: (r) => r.name,
@@ -84,7 +84,7 @@ export default function Metrics(): JSX.Element {
 }
 
 // metricBlade renders one metric type on the shared blade stack. The title is
-// what the list shows, the display name, falling back to the name; official
+// what the list shows, the label, falling back to the name; official
 // metric types are read-only (the Edit / Delete pair greys).
 export const metricBlade: BladeDef = {
   Title: (p) => <MetricBladeTitle name={p.id} />,
@@ -117,7 +117,7 @@ function MetricBladeBody(p: { name: string }): JSX.Element {
   const edit = useBladeEdit();
   const row = useMetricRow(p.name);
   const [err, setErr] = createSignal<string | null>(null);
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [unit, setUnit] = createSignal("");
   const [precision, setPrecision] = createSignal("");
@@ -125,7 +125,7 @@ function MetricBladeBody(p: { name: string }): JSX.Element {
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const r = row();
-    setDisplayName(r?.display_name ?? "");
+    setLabel(r?.label ?? "");
     setDescription(r?.description ?? "");
     setUnit(r?.unit ?? "");
     setPrecision(r?.precision != null ? String(r.precision) : "");
@@ -157,7 +157,7 @@ function MetricBladeBody(p: { name: string }): JSX.Element {
     }
     try {
       await updateMetricType(r.name, {
-        display_name: displayName(),
+        label: label(),
         description: description(),
         unit: unit().trim() || undefined,
         precision: prec.value,
@@ -192,10 +192,10 @@ function MetricBladeBody(p: { name: string }): JSX.Element {
             <KVStacked label="Origin" value={originBadge(r().official)} />
           </div>
           <BladeField
-            bind="display_name"
-            value={() => r().display_name ?? ""}
-            draft={displayName}
-            onInput={setDisplayName}
+            bind="label"
+            value={() => r().label ?? ""}
+            draft={label}
+            onInput={setLabel}
           />
           <BladeField
             label="Description"
@@ -234,7 +234,7 @@ export function CreateMetricForm(p: { onCreated: (r: MetricRow) => void }): JSX.
   const qc = useQueryClient();
   const [name, setName] = createSignal("");
   const [dataType, setDataType] = createSignal<MetricDataType>("float");
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [unit, setUnit] = createSignal("");
   const [precision, setPrecision] = createSignal("");
@@ -261,7 +261,7 @@ export function CreateMetricForm(p: { onCreated: (r: MetricRow) => void }): JSX.
       const created = await createMetricType({
         name: name().trim(),
         data_type: dataType(),
-        display_name: displayName().trim() || undefined,
+        label: label().trim() || undefined,
         description: description().trim() || undefined,
         unit: unit().trim() || undefined,
         precision: prec.value,
@@ -288,8 +288,8 @@ export function CreateMetricForm(p: { onCreated: (r: MetricRow) => void }): JSX.
           <For each={METRIC_DATA_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
         </select>
       </FieldRow>
-      <FieldRow bind="display_name">
-        <input class="input input-bordered w-full" value={displayName()} placeholder="ICMP RTT (avg)" onInput={(e) => setDisplayName(e.currentTarget.value)} />
+      <FieldRow bind="label">
+        <input class="input input-bordered w-full" value={label()} placeholder="ICMP RTT (avg)" onInput={(e) => setLabel(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Description">
         <input class="input input-bordered w-full" value={description()} onInput={(e) => setDescription(e.currentTarget.value)} />

@@ -155,6 +155,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0115](#adr-0115-an-inherited-fact-is-served-with-the-value-it-inherits-and-the-ancestor-it-came-from) | 2026-08-14 | Accepted | A type registry's LISTING serves `inherited_stem`, `inherited_icon` and `inherited_abbrev` beside the raw fields, each with the **name of the ancestor it came from**, because `resolved_icon` ([ADR-0104](#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)'s #695 amendment) answers what a row SHOWS and an edit blade's placeholder asks what it would show if it stated nothing, which is a different string on every row that states its own: using the shown value would print the string an operator had just deleted back at them as the thing they were about to inherit. The console renders it as the placeholder carrying the VALUE (a placeholder natively means "leave this blank and you get this") and a mark naming the ancestor, read from the data rather than written as "its parent" because a fact can come from any distance up the chain. The **lock is not borrowed**: ADR-0104 gives it one meaning, the platform owns this value, and an inherited fact is one an operator MAY set. The source is per FACT, since one type can take its stem from a grandparent and its abbrev from its parent. **Amended in the same wave (#716):** "no new glyph" is reversed and the read state's `inherited from <ancestor>` sentence is REPLACED by one teal **provenance dot beside the field's LABEL**, present when the value comes from somewhere that is not this row and absent when the row states it, because the sentence was the third telling of one fact on a line with no room for it and could not appear in the edit state at all, where a grey placeholder in a box that looks empty is the state that needed it; the label is the only placement that holds in both states (beside the VALUE, trailing is right in read and lands 380px from a 407px box's placeholder in edit, leading is right in edit and reads as a bullet in read), the mark encodes no distance (a segment-per-rung version swung 8px to 28px on estate shape and never lined up across three labels), it carries the whole fact in its accessible name as a focusable tab stop rather than in a hover no keyboard reaches, it agrees with the hint by construction (one predicate over the text the field is showing, so a keystroke moves both), and it is threaded as a NAME rather than as an element, since a `JSX.Element` prop is a getter that rebuilds the mark under the pointer on every refetch. **Amended again in the same wave (#742):** the hint's `Inherited from <ancestor>.` comes out, since the mark states that in the same field at the same moment, and its conditional twin `Empty inherits from <ancestor>.` STAYS, since it shows only while the box holds a value, where there is no mark and no visible placeholder and it is therefore the only thing telling an operator how to return the field to inheriting; the two take turns off the one predicate, and the CREATE forms keep their own `Leave blank to inherit` hints because neither the mark nor `InheritedField` reaches a row that does not exist yet. Cost measured rather than carried over from #695: the registry read is one statement for a registry twenty levels deeper, so the walk is a pass over rows already in hand. `location_type` is flat and takes none of it. The blade's discard action reads **Restore default** rather than Restore shipped, matching Settings' own restore-to-default vocabulary. **Amended a third time (#743):** the registry LIST renders the value a row TAKES instead of an em dash, and the provenance mark stays a BLADE and detail affordance: no mark belongs in a table row, because a table is for scanning values and the blade is where a value's origin is explained, so a reader running down the Stem column is answering "what is this type's stem" and a per-row attribution charges them for a question they did not ask. The Stem and Abbrev cells had gone on rendering an em dash on exactly the rows whose blade showed the value they inherit, so the two surfaces contradicted each other about one fact two clicks apart; both registries now render those cells through one `InheritedCell` primitive off the `inherited_*` fields the listing already carries, at no new query. A stated value and an inherited one render IDENTICALLY, which is the treatment rather than a consequence and is asserted as such, and it settles the dimming question with it (every value in these columns is `text-base-content/60` already). The **Icon** cell, which has shown `resolved_icon` undifferentiated since #695, is the PRECEDENT the other two match rather than the odd column out, and the em dash keeps its one meaning for a row that states nothing with nothing above it. The tab-stop and duplicate-accessible-name questions a list mark would have raised do not arise, there being no mark in a row |
 | [ADR-0116](#adr-0116-a-refusal-picks-its-status-from-the-difference-between-two-scopes) | 2026-08-14 | Accepted | A refusal on a targeted mutation picks its status from the **difference between the read scope and the action scope**, not from one set: outside `visible_set(P, read)` stays the non-disclosing **404**, and inside the read scope but outside `visible_set(P, action)` is a **403** that names the missing authority. Acknowledging existence to a caller who can already `GET` the row discloses nothing it does not have, and the 404 it replaces was a statement about existence that the caller could see was false. The **condition** that makes it safe is that the read set is the caller's own `<resource>:read` and never a wider convenient one; a route checking a wider set would hand the existence of a row to somebody with no grant to see it, which is the leak the 404 exists to prevent. This was already the contract for the three tree entities' own CRUD; #736 is its adoption by the **seventeen routes that hang off a tree entity** (property set/clear on all three tiers, system membership and role writes, component alarm writes), through the existing `resolveScoped` rather than a second refusal helper, plus one owner-generic seam (`ResolveActionTarget`) for the routes whose write takes no scope of its own. Two carve-outs hold: `resolvePlacementRef`'s CROSS-TIER reference keeps its non-disclosing not-found ([ADR-0107](#adr-0107-a-component-creates-system-bind-is-a-system-write)), and the estate-wide resources (principal, group, tag registry, node) are all-or-nothing and already 403. The **conformance matrix** asserts all three branches per ROUTE, each entity declaring the routes that hang off it, because those routes are not uniform across the registry |
 | [ADR-0117](#adr-0117-an-actuation-is-fenced-by-the-permission-that-authorizes-it) | 2026-08-14 | Accepted | `POST /components/{name}/commands:issue` fences its write with `visible_set(P, command, issue)` against the caller's own `component:read`, through ADR-0116's split. It used to resolve all three of its gateway calls with `component:read`, so a principal holding `viewer @ all` beside a room-scoped operator grant could command **every component in the estate**: not a wrong refusal but a wrong REQUEST, since a command records an intent a driver acts on. The load-bearing half is that **`command` becomes a component-tier resource**: it was absent from `applicableKinds`, where every scoped grant resolves to the empty set, so fencing on that set without registering it would have denied every scoped issuer instead of fencing them. The **component tier alone**, not the arc the command table's owner columns allow, because the only route that issues addresses a component and a location- or system-tier root can never match a component's ancestor chain. A `command:issue` grant at those tiers now reaches nothing, the same tier rule `alarm:acknowledge` lives under ([ADR-0109](#adr-0109-an-alarm-carries-an-acknowledgement-and-not-a-snooze-or-a-resolve), #714), and the anomaly was that it ever commanded. The target is resolved **once and bound by id**, so `IssueCommand` and `CommandSettlement` take no scope: a split cannot be applied from one parameter, and two of the route's three name resolves go with it |
+| [ADR-0118](#adr-0118-the-friendly-string-an-operator-reads-is-a-label-and-unset-is-sql-null) | 2026-08-14 | Accepted | `display_name` becomes **`label`** on all twenty-three tables that carry it, and `display_name_generated` becomes **`label_generated`** on the three that carry a pen. The rename **finishes a word rather than introducing one**: `internal/label/` is the rule engine, `label_rule` is a column on five tables plus a table of its own, and the API already says `:renderLabel` / `:previewLabels` / `:recomputeLabels`, so until now a route called `:recomputeLabels` wrote a column called `display_name`. The column is **nullable** and unset is **SQL NULL and nothing else**, normalized in **Go at the gateway write path** (`labelOrNull` / `labelPatch`) rather than by a constraint. This slice first shipped the opposite, `NOT NULL DEFAULT ''`, and **reversed it before merge on the strength of its own diff**: the floor forced all seven registry orderings to be spelled `order by nullif(label, '') nulls last`, and a read that has to convert the stored representation back is the schema saying which value it should have stored. The argument for the floor had a hole worth recording: it claimed collapsing unset on a nullable column needs a `CHECK`, but this repo puts that class of rule in Go (ADR-0110 had just moved `principal_label` out of the database), and a Go rule maps empty to NULL as cheaply as to `''`. The migration is the smaller half; what makes NULL the ONLY spelling is the Go normalization, proved by a sweep that drives every write path with a WHITESPACE label and reads the raw column, complete by construction (it caught `CreateStandard` still binding raw). A PATCH carries a **set flag beside the value**, since clear and leave-alone both arrive as NULL. Reads coalesce, so the wire keeps a plain string and no generated artifact moves but the schema facts. Orderings are `order by label nulls last, name`; the two shadow-resolved registries resolve on jsonb **key presence**, so a fork that cleared its label sorts at the end rather than under the official one. `stem` and `abbrev` are NOT swept (their NULL means inherit-from-ancestor). `registry_shadow.image` is the one place the old word survived as DATA; `audit_log`'s images are left as the record they are |
 
 ## Entries
 
@@ -5650,3 +5651,98 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
 - **Proved in the conformance matrix, not beside it**, so the `mixed` principal (readable, outside
   the action scope) drives the route automatically. The RED was not a wrong status: it was a **200
   with a recorded invocation** on a component outside the caller's issue scope.
+
+### ADR-0118: The friendly string an operator reads is a `label`, and unset is SQL NULL
+
+- **Date:** 2026-08-14 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [storage](/architecture/storage/), [the API](/architecture/api/), [identity and access](/architecture/identity-access/), [glossary](/architecture/glossary/), [design system](/contributing/design-system/)
+- **Decision:** `display_name` becomes **`label`** on all twenty-three tables that carry it, and the
+  pen beside it becomes **`label_generated`** on the three that carry one. The column is
+  **nullable**, and unset is **SQL NULL and nothing else**, enforced in Go at the gateway write
+  path rather than by a constraint. Breaking wire change: the JSON field, the CLI flag
+  (`--display-name` becomes `--label`), and the console's field label move with it. The wire itself
+  keeps a plain string, because every read projection coalesces.
+- **The rename finishes a word rather than introducing one.** When it was first proposed, "label"
+  was a candidate. It is now the system's vocabulary everywhere except the column it named:
+  `internal/label/` is the rule engine ([ADR-0098](#adr-0098-a-label-is-rendered-from-a-rule-and-a-name-is-not)),
+  `label_rule` is a column on five tables plus a table of its own, the API says `:renderLabel`,
+  `:previewLabels` and `:recomputeLabels`, and forty console files say `entityLabel`, `labelPen` or
+  `labelGenerated`. Until this decision a route called `:recomputeLabels` wrote a column called
+  `display_name`, and the console's `labelGenerated` read `display_name_generated`.
+- **The pen renames in the same sweep or not at all.** `display_name_generated`
+  ([#657](https://github.com/hyperscaleav/omniglass/issues/657)) is what answers "did an operator
+  type this, or did the platform render it from a rule". Slice 2 of that epic deferred its naming
+  here on exactly these grounds. It stays `NOT NULL DEFAULT false`: it answers a different question,
+  and there is no third state for it to hold.
+- **Nullable, and the argument is the useful part.** This slice first shipped the opposite,
+  `NOT NULL DEFAULT ''`, and reversed it **before merge on the strength of its own diff**. The
+  evidence was in the code the floor forced: every one of the seven registry orderings had to be
+  spelled `order by nullif(label, '') nulls last, name`. A `nullif` in a read is the read path
+  converting the stored representation back into the one it wanted, and seven of them in a single
+  slice is not a coincidence, it is the schema telling you which value it should have stored.
+  Postgres already has a value for "there is nothing here", `nulls last` is already the default for
+  an ASC sort, and the orderings collapse to `order by label nulls last, name` the moment the column
+  can hold it. The same test that made the ordering hazard visible stayed red through the reversal
+  and green after it, against the new spelling, rather than being assumed equivalent.
+- **The argument FOR the floor had a hole, and it is worth recording because it is the kind that
+  recurs.** It ran: collapsing "unset" on a nullable column needs a `CHECK`, and
+  [#570](https://github.com/hyperscaleav/omniglass/issues/570) is already filed against that
+  pattern, therefore the empty string. But this repository puts that class of rule **in Go at the
+  gateway write path**, which is exactly where [ADR-0110](#adr-0110-a-principals-identifier-is-the-gateways-answer-not-a-stored-functions)
+  had just moved `principal_label` out of the database. Once the normalization is in Go it can map
+  empty to NULL as cheaply as to `''`, so the choice was never "a CHECK or the empty string": the
+  premise smuggled in the assumption that the rule had to live in the schema.
+- **What makes NULL the ONLY spelling is the Go half, not the migration.** The migration drops the
+  defaults and converts the rows that exist; on its own that trades one two-state mess for another
+  the first time a write binds `""`. `labelOrNull` and `labelPatch`
+  (`internal/storage/label_unset.go`) are the one place the decision is applied: they trim, and an
+  empty result is NULL. Every write path binds through them, and a behavioural sweep drives each of
+  those paths with a **whitespace-only** label and reads the RAW column back, because every
+  projection coalesces and would report NULL and `''` as identical. It is complete by construction:
+  a labelled table with neither a prover nor a declared reason fails the suite. That completeness
+  is not decoration. It caught `CreateStandard` still binding its label raw after every other path
+  had been converted, and it caught it as an ordering failure two registries away from the defect.
+- **A PATCH needs two parameters, and that is where the empty string still means something.**
+  Clearing a label and leaving it alone are different instructions that both arrive as SQL NULL, so
+  `coalesce($n, label)` cannot express them. Each statement now carries a **set flag beside the
+  value**, appended to the parameter list so no existing placeholder is renumbered. The empty string
+  keeps its wire meaning ("clear it", the house convention
+  [ADR-0114](#adr-0114-an-inherited-registry-fact-clears-with-the-empty-string-and-the-pattern-is-what-admits-it)
+  settled for every other nullable string); what changed is that it is translated in Go rather than
+  stored.
+- **The read side keeps a plain Go string.** Every read struct's `Label` is a `string` and every
+  patch struct's is a `*string`, checked by enumerating the declarations rather than assumed, so
+  every read projection is `coalesce(label, '')` and nothing above the gateway learns that the
+  column is nullable. That is why this reversal moves no generated artifact except the schema facts:
+  the OpenAPI, the typed client and the CLI are unchanged. One trap in doing it: a `coalesce` inside
+  a **CTE** drops the output column's NAME, so the two that feed a named reference downstream are
+  spelled `coalesce(r.label, '') as label`.
+- **The load-bearing consequence is still the ORDERING, and it was already broken before either
+  spelling.** All seven registry orderings read this column, and all seven of those tables were
+  storing `''` for unset, so all seven already floated unlabelled rows to the TOP of the picker.
+  They are `order by label nulls last, name` now. `nulls last` is redundant on an ASC sort and
+  written anyway, because it is the half that is a decision rather than a default. The two
+  shadow-resolved registries resolve on the **presence of the jsonb key** rather than with a
+  coalesce, so a fork that CLEARED its label sorts at the end with the other unlabelled rows instead
+  of under the official row's label. The console re-sorts every registry list client-side, so the
+  rule is written twice and both halves are pinned: `byLabel` in `web/src/lib/entities.ts`.
+- **`stem` and `abbrev` are deliberately NOT swept.** Their `NULL` means *inherit from the nearest
+  ancestor that sets one* ([ADR-0114](#adr-0114-an-inherited-registry-fact-clears-with-the-empty-string-and-the-pattern-is-what-admits-it)),
+  a third state with real content, and it is a different question from whether a row has a label.
+- **One place the old word survived as DATA rather than as an identifier.** `registry_shadow.image`
+  is an operator's forked copy of a shipped registry row, stored as jsonb keyed by column name, and
+  a column rename cannot reach inside a jsonb value. An operator who had relabelled a forked
+  `component_type` or `location_type` would have had that relabelling silently ignored the moment
+  the gateway started asking for `image->>'label'`. A cleared label survives there as a PRESENT key
+  holding JSON null, never as a dropped key: dropping it would re-inherit the official row's label,
+  which is the opposite of what an operator who cleared it asked for. `audit_log.old` /
+  `audit_log.new` are deliberately left alone: they record what a row looked like under the field
+  names it had at the time, and rewriting them would falsify the record.
+- **The word now collides with the console's own `label`, and two source guards were re-anchored
+  rather than suppressed.** `label` was already the name of the prop a Button, an InfoTip, an
+  InlineActions row, a nav item and a facet chip take, so the one-renderer guard's patterns matched
+  eleven pieces of ordinary UI chrome the day the column moved. The fallback pattern now excludes
+  the exact read `props.label` and nothing wider (a component handed an entity reads
+  `props.entity.label`, which still matches), and the interpolation pattern is anchored to an
+  identifier read on the same line, which is the shape of the search-haystack bug it exists for.
+  "Display name" joins "Technical name" and "Segment" on the console's retired-word list, and
+  `display_name`, `--display-name` and the two-word noun join the docs denylist.

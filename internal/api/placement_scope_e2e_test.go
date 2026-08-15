@@ -81,10 +81,10 @@ func newPlacementFixture(t *testing.T) *placementFixture {
 
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "hq", "location_type": "campus"}, http.StatusCreated)
 	c.do(owner, http.MethodPost, "/locations", map[string]any{
-		"name": "wing-a", "location_type": "building", "parent": "hq", "display_name": "Wing A",
+		"name": "wing-a", "location_type": "building", "parent": "hq", "label": "Wing A",
 	}, http.StatusCreated)
 	c.do(owner, http.MethodPost, "/locations", map[string]any{
-		"name": "wing-b", "location_type": "building", "parent": "hq", "display_name": "Secret Wing",
+		"name": "wing-b", "location_type": "building", "parent": "hq", "label": "Secret Wing",
 	}, http.StatusCreated)
 
 	// A root component and a root system both need an all-scoped grant, so the
@@ -121,16 +121,16 @@ func newPlacementFixture(t *testing.T) *placementFixture {
 	}
 }
 
-// label reads display_name off a create or move response.
+// label reads label off a create or move response.
 func label(t *testing.T, raw []byte) string {
 	t.Helper()
 	var body struct {
-		DisplayName string `json:"display_name"`
+		Label string `json:"label"`
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
 		t.Fatalf("parse entity: %v", err)
 	}
-	return body.DisplayName
+	return body.Label
 }
 
 // TestAComponentCreateRefusesAPlacementTheCallerCannotRead is the defect this

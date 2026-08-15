@@ -10,7 +10,7 @@ import (
 //	id            a uuid. immutable, the primary key and every foreign key target.
 //	name          the human-readable machine identifier an operator types and an
 //	              address carries: the `rm215a` in `boi.17c.rm215a`. renameable.
-//	display_name  an optional friendly string a human reads ("HQ Boardroom DSP").
+//	label  an optional friendly string a human reads ("HQ Boardroom DSP").
 //
 // A rename moves the name and never the id, which is why every reference stores the
 // id and why an audit row keys on it.

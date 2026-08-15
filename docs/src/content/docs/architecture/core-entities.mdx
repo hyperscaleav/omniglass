@@ -189,7 +189,7 @@ catalogs, operator-graftable at any node
 It classifies the **product** (`product.component_type_id`, required), not the component directly, so
 a component inherits its type through the product it is. The row carries the identity facts that
 genuinely span products, **inheriting down the tree with override at any node**: the naming **`stem`**
-(the auto-generated component name's prefix, e.g. `display-1`), **`display_name`**, **`icon`** (the
+(the auto-generated component name's prefix, e.g. `display-1`), **`label`**, **`icon`** (the
 console glyph), **`abbrev`** (the two-to-three character hostname stem: `fp`, `cam`, `dsp`, `cp`), and
 **`default_tags`**. A blank fact on a child means "inherit the nearest ancestor's", and a node that
 states one of its own can be put back to inheriting: the patch reads an explicit `""` on `stem`,
@@ -233,7 +233,7 @@ deliberately different, **above the product** rather than beside the component.
 ### Catalog reference data: `product`
 
 A **`product`** (Cisco Room Bar, Samsung QM55, ...) is the concrete **SKU**: a stable `id` and
-`display_name`, a **`kind`** (`device` / `app` / `service`, no default, required at create so a
+`label`, a **`kind`** (`device` / `app` / `service`, no default, required at create so a
 mislabeled cloud service can never read as correct through a silent fallback;
 [ADR-0086](/architecture/decisions/#adr-0086-the-product-classification-floor-and-the-kind-split)
 retired `vm`, folded into `app`, since nothing forked on it that did not fork the same way on `app`), a
@@ -265,7 +265,7 @@ cell is a fact the row genuinely inherits rather than one somebody forgot to cop
 
 The row carries the identity facts that span every space of that kind, **inheriting down the tree
 with override at any node**: the naming **`stem`** (the prefix a generated system name is built from,
-e.g. `boardroom-2`), **`display_name`**, **`icon`** (the console glyph), and **`abbrev`** (the compact
+e.g. `boardroom-2`), **`label`**, **`icon`** (the console glyph), and **`abbrev`** (the compact
 label form: `br`, `cls`, `vw`). A blank fact on a child means "inherit the nearest ancestor's", so
 `board` states its own stem and abbrev while taking its icon from `room`, which overrides `av`'s. A
 node that states a fact of its own goes back to inheriting by patching that field to `""`, the same
@@ -291,7 +291,7 @@ room) is the wrong axis for this question.
 ### Catalog reference data: `standard`
 
 A **`standard`** (Huddle Room, Classroom, ...) is the **blueprint a system conforms to**: a stable
-`id` and `display_name`, an optional **`parent_standard_id`** (a variant points at its base), and
+`id` and `label`, an optional **`parent_standard_id`** (a variant points at its base), and
 the `official` boolean; the promotion of the former `system_type` label registry
 ([ADR-0048](/architecture/decisions/#adr-0048-the-standard-blueprint-and-the-template-fork-seed-model)).
 
@@ -469,7 +469,7 @@ forks.
 #### An operator forks a shipped row instead of the platform writing it
 
 A shipped `official: true` row was flatly read-only, which is correct as far as it goes and left an
-operator with nowhere to go: they could neither correct a display name nor change an icon on a row
+operator with nowhere to go: they could neither correct a label nor change an icon on a row
 the release owns. They now **fork** it
 ([ADR-0095](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it),
 [#655](https://github.com/hyperscaleav/omniglass/issues/655)):
@@ -672,8 +672,16 @@ Three things, and no fourth:
 - **name**, the renameable machine identifier an operator types and a URL, a CLI argument, and an
   address carry (the `rm215a` in `boi.17c.rm215a`). Renameable is the point: `cisco-room-bar` is a
   typo or a rebrand away from being wrong forever if it cannot change.
-- **display_name**, an optional friendly string a human reads ("HQ Boardroom DSP"). Absent is normal:
-  `crestron` needs no label, and a tag never has one.
+- **label**, an optional friendly string a human reads ("HQ Boardroom DSP"). Absent is normal:
+  `crestron` needs no label, and a tag never has one. Absent has exactly one spelling, **SQL NULL**:
+  the column is nullable, and the rule that keeps the empty string out of it lives in Go at the
+  gateway write path, where every other rule of its kind lives
+  ([ADR-0118](/architecture/decisions/#adr-0118-the-friendly-string-an-operator-reads-is-a-label-and-unset-is-sql-null)).
+  A read projects `coalesce(label, '')`, so nothing above the Storage Gateway has to know. A surface
+  with no label renders the name **verbatim**, never re-cased or prettified. The one spelling is
+  what lets a registry list say `order by label nulls last, name` and mean it: Postgres sorts NULL
+  last already, and an ordering that had to say `nullif(label, '')` would be a read undoing the way
+  the value was stored.
 
 Because the id is what everything stores, `audit_log.resource_id` included, a rename moves exactly
 one column and the history of the row survives it intact. Changing a name is therefore its own act
@@ -693,7 +701,7 @@ is estate-wide vocabulary a telemetry record is typed by, where an entity name a
 under a parent. The dotted path rule and its 128-character ceiling retired with the one-name-rule collapse
 (#586): `storage.ValidateName` applies the one rule to every declared name-bearing table, so a call
 site cannot skip validation or invent a second rule. The console labels the identifier **Name** and
-the friendly string **Display name** under both shapes.
+the friendly string **Label** under both shapes.
 
 <IdentityShapes shape="keyspace" />
 
@@ -875,7 +883,7 @@ generator on purpose: a location an operator named then is already frozen now.
 
 **A label generates itself too, from a rule an operator can change**
 ([ADR-0098](/architecture/decisions/#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)).
-`display_name` gains the same stored pair the name has: `display_name_generated` is the pen, true
+`label` gains the same stored pair the name has: `label_generated` is the pen, true
 meaning the platform owns the field. Reading a label is three rungs, the one an operator typed, else
 the one the rule produced, else the entity's name; the first two are the same column, told apart by
 the pen. Typing a label clears the pen, clearing the field returns it and the rule renders again, and
@@ -938,7 +946,7 @@ rename sees the labels that follow from it: a location's rename or relabel resta
 at it, a system's reclassify restamps its member components, and any act that moves a component's
 primary membership restamps that component. Bounded only by the estate, nothing is restamped at all
 and the operator applies it: editing a rule at any tier, or a `component_type`'s or `product`'s
-`display_name`, or the acronym list, leaves the estate exactly as it was until
+`label`, or the acronym list, leaves the estate exactly as it was until
 `:previewLabels` shows the blast radius and `:recomputeLabels` applies it. A preview lists exactly
 the rows the apply then changes, including the components and systems a location recompute stales,
 and both are gated by the entity's own `:update`.
@@ -1003,7 +1011,7 @@ The engine follows the list without a restart: the dictionary is resolved when a
 and the compiled engine is cached against the list itself, so an edit reaches the next write.
 
 The dictionary matters **less** than it looks, and the honest limit is worth stating rather than
-discovering. A type's `display_name` already holds correctly-cased English out of the catalog ("DSP",
+discovering. A type's `label` already holds correctly-cased English out of the catalog ("DSP",
 "Video Bar"), and the shipped rules render that, so the list only bites where a rule title-cases a
 name the operator typed: mostly systems and locations. Product model numbers (`qm55` wanting `QM55`)
 are unbounded and vendor-supplied, so a dictionary can never be complete, and a missing one degrades

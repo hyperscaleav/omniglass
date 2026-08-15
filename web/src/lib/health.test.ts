@@ -16,7 +16,7 @@ import {
 
 const role = (over: Partial<HealthRole>): HealthRole => ({
   name: "main-display",
-  display_name: "Main display",
+  label: "Main display",
   impact: "outage",
   impaired: true,
   quorum: 2,
@@ -63,9 +63,9 @@ describe("impairedRoles", () => {
   const h = {
     verdict: "outage",
     roles: [
-      role({ name: "mic", display_name: "Table mic", impaired: true, impact: "degraded" }),
-      role({ name: "display", display_name: "Main display", impaired: true, impact: "outage" }),
-      role({ name: "panel", display_name: "Touch panel", impaired: false, impact: "none" }),
+      role({ name: "mic", label: "Table mic", impaired: true, impact: "degraded" }),
+      role({ name: "display", label: "Main display", impaired: true, impact: "outage" }),
+      role({ name: "panel", label: "Touch panel", impaired: false, impact: "none" }),
     ],
   } as unknown as EstateHealth;
 
@@ -92,9 +92,9 @@ describe("impairedRoles", () => {
   const withInactiveChoice = {
     verdict: "healthy",
     roles: [
-      role({ name: "video-bar", display_name: "Video bar", impaired: false, impact: "outage", active: true, choice: "conferencing", alternate: "all-in-one" }),
-      role({ name: "codec", display_name: "Codec", impaired: true, impact: "outage", active: false, choice: "conferencing", alternate: "component-built" }),
-      role({ name: "camera", display_name: "Camera", impaired: true, impact: "outage", active: false, choice: "conferencing", alternate: "component-built" }),
+      role({ name: "video-bar", label: "Video bar", impaired: false, impact: "outage", active: true, choice: "conferencing", alternate: "all-in-one" }),
+      role({ name: "codec", label: "Codec", impaired: true, impact: "outage", active: false, choice: "conferencing", alternate: "component-built" }),
+      role({ name: "camera", label: "Camera", impaired: true, impact: "outage", active: false, choice: "conferencing", alternate: "component-built" }),
     ],
   } as unknown as EstateHealth;
 

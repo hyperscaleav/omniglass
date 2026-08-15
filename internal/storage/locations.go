@@ -146,9 +146,9 @@ func (p *PG) locationIsDescendant(ctx context.Context, q querier, targetID, cand
 // Location is a place in the estate tree: name-addressable (name is globally
 // unique), classified by location_type, and nested under an optional parent.
 type Location struct {
-	ID          string
-	Name        string
-	DisplayName string
+	ID    string
+	Name  string
+	Label string
 	// NameGenerated is the NAME's pen (#686); see System's own field for the
 	// polarity. True only when the row's location_type carried a name rule at
 	// the moment the platform minted the name (#687). Every location that
@@ -161,12 +161,12 @@ type Location struct {
 	// location's name IS its ordinal, and a stemmed one with a suppressed first
 	// ordinal ("wing", ordinal 1) has no digits in its name at all.
 	Ordinal *int
-	// DisplayNameGenerated is the label's pen (#682); see System's own field
+	// LabelGenerated is the label's pen (#682); see System's own field
 	// for the polarity and what a write does with it.
-	DisplayNameGenerated bool
-	LocationType         string
-	LocationTypeID       string
-	ParentID             *string
+	LabelGenerated bool
+	LocationType   string
+	LocationTypeID string
+	ParentID       *string
 	// The name the API addresses the parent by; ParentID above is internal.
 	ParentName *string
 	// Path, PathSegments, and Renders are the dotted address (no accessor: a
@@ -190,7 +190,7 @@ type Location struct {
 // name for a place whose real one an operator holds.
 type LocationSpec struct {
 	Name         string
-	DisplayName  string
+	Label        string
 	LocationType string
 	ParentName   *string
 	// ExpectedName is the create form's precondition (#702): the name the form
@@ -208,7 +208,7 @@ type LocationSpec struct {
 // reparent is its own act, MoveLocation, gated by location:move rather than
 // location:update; see that function's doc comment for why.
 type LocationPatch struct {
-	DisplayName  *string
+	Label        *string
 	LocationType *string
 }
 
@@ -228,12 +228,12 @@ type LocationMove struct {
 }
 
 // LocationType is a registry row classifying a location: a stable id, the
-// official flag, a display_name, an icon (a glyph key the console renders as
+// official flag, a label, an icon (a glyph key the console renders as
 // the leading glyph on every location of this type), and AllowedParentTypes,
 // the placement constraint: a set of location_type ids and/or RootPlacement
 // this type may be placed under. An empty set is unconstrained. It is the
 // only shape-definer for a location, which has no template. The registry
-// lists alphabetically by display_name; there is no ordering field.
+// lists alphabetically by label; there is no ordering field.
 type LocationType struct {
 	// ID is the uuid primary key, Name the renameable slug handle (ADR-0062). The
 	// allowed_parent_types array still holds slugs, a within-registry reference by
@@ -241,7 +241,7 @@ type LocationType struct {
 	ID                 string
 	Name               string
 	Official           bool
-	DisplayName        string
+	Label              string
 	Icon               string
 	AllowedParentTypes []string
 	// LabelRule is this type's label template (#682), nullable: null defers to
@@ -271,7 +271,7 @@ const locationTypeRegistry = "location_type"
 // left join on the row's own uuid, so an unforked row reads exactly as before
 // and a forked one carries the image scanLocationTypeResolved overlays.
 const locationTypeResolved = `
-	select lt.id, lt.name, lt.official, lt.display_name, lt.icon, lt.allowed_parent_types, lt.label_rule, lt.name_rule, s.image
+	select lt.id, lt.name, lt.official, coalesce(lt.label, ''), lt.icon, lt.allowed_parent_types, lt.label_rule, lt.name_rule, s.image
 	from location_type lt
 	left join registry_shadow s on s.registry = '` + locationTypeRegistry + `' and s.row_id = lt.id`
 
@@ -292,16 +292,16 @@ func (p *PG) UpsertLocationType(ctx context.Context, lt LocationType) error {
 		return fmt.Errorf("storage: upsert location_type %q: %w", lt.Name, err)
 	}
 	if _, err := p.pool.Exec(ctx, `
-		insert into location_type (name, official, display_name, icon, allowed_parent_types, label_rule, name_rule)
+		insert into location_type (name, official, label, icon, allowed_parent_types, label_rule, name_rule)
 		values ($1, $2, $3, $4, $5, $6, $7)
 		on conflict (name) do update
 			set official             = excluded.official,
-			    display_name         = excluded.display_name,
+			    label         = excluded.label,
 			    icon                 = excluded.icon,
 			    allowed_parent_types = excluded.allowed_parent_types,
 			    label_rule           = excluded.label_rule,
 			    name_rule            = excluded.name_rule`,
-		lt.Name, lt.Official, lt.DisplayName, lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes), nilIfEmpty(lt.LabelRule), rule); err != nil {
+		lt.Name, lt.Official, labelOrNull(lt.Label), lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes), nilIfEmpty(lt.LabelRule), rule); err != nil {
 		return fmt.Errorf("storage: upsert location_type %q: %w", lt.Name, err)
 	}
 	return nil
@@ -339,17 +339,22 @@ func normalizeAllowedParentTypes(s []string) []string {
 }
 
 // ListLocationTypes returns every location type, ordered alphabetically by
-// display_name then name, each row resolved over its operator shadow. A forked
+// label then name, each row resolved over its operator shadow. A forked
 // row is one row here, not two: the shadow is an overlay on the row it names,
 // never a second entry in the registry.
 //
-// The ORDER BY reads the resolved display_name (the shadow's when there is one)
+// The ORDER BY reads the resolved label (the shadow's when there is one)
 // so a relabelling fork sorts where an operator expects it, and it stays in SQL
 // so the collation the registry has always ordered by is the one it still
 // orders by.
+//
+// The ORDER BY resolves the shadow on the PRESENCE of the key rather than with a
+// coalesce, for the reason ListComponentTypes gives: a fork that cleared its
+// label holds the key as JSON null, and a coalesce would sort it under the
+// official label rather than at the end (#613).
 func (p *PG) ListLocationTypes(ctx context.Context) ([]LocationType, error) {
 	rows, err := p.pool.Query(ctx, locationTypeResolved+`
-		order by coalesce(s.image->>'display_name', lt.display_name), lt.name`)
+		order by case when s.image ? 'label' then s.image->>'label' else lt.label end nulls last, lt.name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list location_types: %w", err)
 	}
@@ -389,12 +394,12 @@ func (p *PG) GetLocationType(ctx context.Context, ref string) (*LocationType, er
 // first being allowed_parent_types' nil-to-empty normalization), and two call
 // sites decoding jsonb by hand is how a list and a write path start disagreeing
 // about what an absent rule reads as.
-const locationTypeCols = `id, name, official, display_name, icon, allowed_parent_types, label_rule, name_rule`
+const locationTypeCols = `id, name, official, coalesce(label, ''), icon, allowed_parent_types, label_rule, name_rule`
 
 func scanLocationType(row pgx.Row) (*LocationType, error) {
 	var lt LocationType
 	var rule []byte
-	if err := row.Scan(&lt.ID, &lt.Name, &lt.Official, &lt.DisplayName, &lt.Icon, &lt.AllowedParentTypes, &lt.LabelRule, &rule); err != nil {
+	if err := row.Scan(&lt.ID, &lt.Name, &lt.Official, &lt.Label, &lt.Icon, &lt.AllowedParentTypes, &lt.LabelRule, &rule); err != nil {
 		return nil, err
 	}
 	lt.AllowedParentTypes = normalizeAllowedParentTypes(lt.AllowedParentTypes)
@@ -415,7 +420,7 @@ func scanLocationType(row pgx.Row) (*LocationType, error) {
 func scanLocationTypeResolved(row pgx.Row) (*LocationType, error) {
 	var lt LocationType
 	var rule, image []byte
-	if err := row.Scan(&lt.ID, &lt.Name, &lt.Official, &lt.DisplayName, &lt.Icon, &lt.AllowedParentTypes, &lt.LabelRule, &rule, &image); err != nil {
+	if err := row.Scan(&lt.ID, &lt.Name, &lt.Official, &lt.Label, &lt.Icon, &lt.AllowedParentTypes, &lt.LabelRule, &rule, &image); err != nil {
 		return nil, err
 	}
 	lt.AllowedParentTypes = normalizeAllowedParentTypes(lt.AllowedParentTypes)
@@ -451,7 +456,7 @@ func locationTypeShadowImage(lt LocationType) ([]byte, error) {
 		rule = &n
 	}
 	image, err := json.Marshal(map[string]any{
-		"display_name":         lt.DisplayName,
+		"label":                labelOrNull(lt.Label),
 		"icon":                 lt.Icon,
 		"allowed_parent_types": normalizeAllowedParentTypes(lt.AllowedParentTypes),
 		"label_rule":           lt.LabelRule,
@@ -477,10 +482,10 @@ func applyLocationTypeImage(lt LocationType, image []byte) (LocationType, error)
 	if fields == nil {
 		return lt, nil
 	}
-	if v, ok, err := shadowValue[string](fields, "display_name"); err != nil {
+	if v, ok, err := shadowValue[string](fields, "label"); err != nil {
 		return lt, err
 	} else if ok {
-		lt.DisplayName = v
+		lt.Label = v
 	}
 	if v, ok, err := shadowValue[string](fields, "icon"); err != nil {
 		return lt, err
@@ -512,7 +517,7 @@ func applyLocationTypeImage(lt LocationType, image []byte) (LocationType, error)
 // The location_type fields a PATCH can write, spelled as the wire body spells
 // them, because an update_mask names wire fields (ADR-0091).
 const (
-	LocationTypeFieldDisplayName        = "display_name"
+	LocationTypeFieldLabel              = "label"
 	LocationTypeFieldIcon               = "icon"
 	LocationTypeFieldAllowedParentTypes = "allowed_parent_types"
 	LocationTypeFieldLabelRule          = "label_rule"
@@ -522,7 +527,7 @@ const (
 // LocationTypePatchFields is every field a location_type PATCH lets a write
 // set, in the order a refusal lists them.
 var LocationTypePatchFields = []string{
-	LocationTypeFieldDisplayName, LocationTypeFieldIcon, LocationTypeFieldAllowedParentTypes,
+	LocationTypeFieldLabel, LocationTypeFieldIcon, LocationTypeFieldAllowedParentTypes,
 	LocationTypeFieldLabelRule, LocationTypeFieldNameRule,
 }
 
@@ -532,7 +537,7 @@ var LocationTypePatchFields = []string{
 // (a non-nil slice, including an empty one, which clears it back to
 // unconstrained).
 type LocationTypePatch struct {
-	DisplayName        *string
+	Label              *string
 	Icon               *string
 	AllowedParentTypes *[]string
 	LabelRule          *string
@@ -565,7 +570,7 @@ func (p LocationTypePatch) Populated() updatemask.Fields {
 			f[name] = true
 		}
 	}
-	set(LocationTypeFieldDisplayName, p.DisplayName != nil)
+	set(LocationTypeFieldLabel, p.Label != nil)
 	set(LocationTypeFieldIcon, p.Icon != nil)
 	set(LocationTypeFieldAllowedParentTypes, p.AllowedParentTypes != nil)
 	set(LocationTypeFieldLabelRule, p.LabelRule != nil)
@@ -595,8 +600,8 @@ func (p LocationTypePatch) writeFields() updatemask.Fields {
 // operator-named (#692).
 func applyLocationTypePatch(lt LocationType, patch LocationTypePatch) LocationType {
 	w := patch.writeFields()
-	if w.Has(LocationTypeFieldDisplayName) {
-		lt.DisplayName = derefStrOr(patch.DisplayName, "")
+	if w.Has(LocationTypeFieldLabel) {
+		lt.Label = derefStrOr(patch.Label, "")
 	}
 	if w.Has(LocationTypeFieldIcon) {
 		lt.Icon = derefStrOr(patch.Icon, "")
@@ -669,10 +674,10 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	// the same statement finally doing so, and it is also what makes the
 	// normalized name_rule come back from the column rather than from the input.
 	created, err := scanLocationType(tx.QueryRow(ctx,
-		`insert into location_type (name, official, display_name, icon, allowed_parent_types, label_rule, name_rule)
+		`insert into location_type (name, official, label, icon, allowed_parent_types, label_rule, name_rule)
 		 values ($1, false, $2, $3, $4, $5, $6)
 		 returning `+locationTypeCols,
-		lt.Name, lt.DisplayName, lt.Icon, lt.AllowedParentTypes, lt.LabelRule, rule))
+		lt.Name, labelOrNull(lt.Label), lt.Icon, lt.AllowedParentTypes, lt.LabelRule, rule))
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
@@ -688,7 +693,7 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 	return created, nil
 }
 
-// UpdateLocationType patches a location_type's display_name, icon,
+// UpdateLocationType patches a location_type's label, icon,
 // allowed_parent_types, label_rule or name_rule and audits it. An unknown ref
 // is ErrTypeNotFound.
 //
@@ -759,14 +764,14 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, ref string, patch 
 	}
 	lt, err := scanLocationType(tx.QueryRow(ctx, `
 		update location_type set
-			display_name         = $2,
+			label         = $2,
 			icon                 = $3,
 			allowed_parent_types = $4,
 			label_rule           = $5,
 			name_rule            = $6::jsonb
 		where id = $1
 		returning `+locationTypeCols,
-		current.ID, updated.DisplayName, updated.Icon, updated.AllowedParentTypes, updated.LabelRule, rule))
+		current.ID, labelOrNull(updated.Label), updated.Icon, updated.AllowedParentTypes, updated.LabelRule, rule))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -891,14 +896,14 @@ func (p *PG) DeleteLocationType(ctx context.Context, actorID, id string) error {
 }
 
 // locationCols is the column list every location read scans, in struct order.
-const locationCols = `id, name, coalesce(display_name, ''), name_generated, ordinal, display_name_generated,
+const locationCols = `id, name, coalesce(label, ''), name_generated, ordinal, label_generated,
 	(select t.name from location_type t where t.id = location.location_type) as location_type, location.location_type as location_type_id, parent_id,
 	(select p.name from location p where p.id = location.parent_id) as parent_name,
 	created_at, updated_at`
 
 func scanLocation(row pgx.Row) (*Location, error) {
 	var l Location
-	if err := row.Scan(&l.ID, &l.Name, &l.DisplayName, &l.NameGenerated, &l.Ordinal, &l.DisplayNameGenerated, &l.LocationType, &l.LocationTypeID, &l.ParentID, &l.ParentName,
+	if err := row.Scan(&l.ID, &l.Name, &l.Label, &l.NameGenerated, &l.Ordinal, &l.LabelGenerated, &l.LocationType, &l.LocationTypeID, &l.ParentID, &l.ParentName,
 		&l.CreatedAt, &l.UpdatedAt); err != nil {
 		return nil, err
 	}
@@ -1032,13 +1037,13 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 		return nil, err
 	}
 
-	// An empty display_name hands the LABEL's pen to the platform (#682); the
+	// An empty label hands the LABEL's pen to the platform (#682); the
 	// row is inserted with no label and stamped below.
 	l, err := scanLocation(tx.QueryRow(ctx, `
-		insert into location (name, display_name, location_type, parent_id, name_generated, ordinal, display_name_generated)
+		insert into location (name, label, location_type, parent_id, name_generated, ordinal, label_generated)
 		values ($1, $2, (select id from location_type where `+registryRefCol(spec.LocationType)+` = $3), $4, $5, $6, $7)
 		returning `+locationCols,
-		name, nullize(spec.DisplayName), spec.LocationType, parentID, generated, ordinal, spec.DisplayName == ""))
+		name, labelOrNull(spec.Label), spec.LocationType, parentID, generated, ordinal, strings.TrimSpace(spec.Label) == ""))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
 	}
@@ -1088,7 +1093,7 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 	// The guard is the classification CHANGING, not the field being present,
 	// and that distinction is load-bearing rather than tidy: the console sends
 	// location_type on every save (web/src/pages/Locations.tsx), so a presence
-	// test would re-mint on an edit to the display name alone, and with a lower
+	// test would re-mint on an edit to the label alone, and with a lower
 	// ordinal freed in the meantime by a rename that re-mint MOVES the name
 	// under location:update with no rename asked for. That is the defect review
 	// caught on the system tier one slice ago (ADR-0101); it is not repeated
@@ -1115,25 +1120,23 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 		}
 		namePatch, ordinalPatch = &newName, &newOrdinal
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	after, err := scanLocation(tx.QueryRow(ctx, `
 		update location set
 			name    = coalesce($5, name),
 			ordinal = coalesce($6::integer, ordinal),
-			-- Three-state, not a coalesce: a value is the operator typing a
-			-- label and taking the pen ($4), an explicit empty string clears it
-			-- and hands the pen back (#682).
-			display_name  = case
-				when $2::text is null then display_name
-				when $2 = '' then null
-				else $2::text
-			end,
-			display_name_generated = $4,
+			-- Two parameters rather than one overloaded: $7 says whether the
+			-- caller named the field, $2 is the value, and an empty or
+			-- whitespace-only value is already SQL NULL by the time it gets here
+			-- (labelOrNull, ADR-0118). Clearing it hands the pen back ($4, #682).
+			label  = case when $7::boolean then $2 else label end,
+			label_generated = $4,
 			location_type = coalesce((select id from location_type where `+typeRefCol+` = $3), location_type),
 			updated_at    = now()
 		where id = $1
 		returning `+locationCols,
-		before.ID, patch.DisplayName, patch.LocationType,
-		labelPen(before.DisplayNameGenerated, patch.DisplayName), namePatch, ordinalPatch))
+		before.ID, labelVal, patch.LocationType,
+		labelPen(before.LabelGenerated, patch.Label), namePatch, ordinalPatch, setLabel))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
 	}

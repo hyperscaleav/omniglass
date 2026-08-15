@@ -19,29 +19,29 @@ import { NAME_MIN_W } from "../components/TreeList";
 // Data is seeded into the query cache so no server is needed; `>` grants every
 // permission.
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const hq: Location = { id: uuidFor("l-hq"), name: "hq", display_name: "HQ", location_type: "campus", effective_tags: {} };
-const lab: Location = { id: uuidFor("l-lab"), name: "lab", display_name: "Lab", location_type: "campus", effective_tags: {} };
-const hqB1: Location = { id: uuidFor("l-b1"), name: "hq-b1", display_name: "HQ B1", location_type: "building", parent: "hq", parent_id: hq.id, effective_tags: {} };
+const hq: Location = { id: uuidFor("l-hq"), name: "hq", label: "HQ", location_type: "campus", effective_tags: {} };
+const lab: Location = { id: uuidFor("l-lab"), name: "lab", label: "Lab", location_type: "campus", effective_tags: {} };
+const hqB1: Location = { id: uuidFor("l-b1"), name: "hq-b1", label: "HQ B1", location_type: "building", parent: "hq", parent_id: hq.id, effective_tags: {} };
 // Registry rows carry a uuid id and the name in name (ADR-0062); the
 // server stores and compares the handle everywhere a location references its
 // type, so a fixture with the handle in the id slot would hide a uuid-vs-name
 // join bug (that is how #466 shipped).
 const types: LocationType[] = [
-  { id: uuidFor("lt-campus"), name: "campus", display_name: "Campus", icon: "landmark", official: true, forked: false, allowed_parent_types: ["root"] },
-  { id: uuidFor("lt-building"), name: "building", display_name: "Building", icon: "building", official: true, forked: false, allowed_parent_types: ["root", "campus"] },
+  { id: uuidFor("lt-campus"), name: "campus", label: "Campus", icon: "landmark", official: true, forked: false, allowed_parent_types: ["root"] },
+  { id: uuidFor("lt-building"), name: "building", label: "Building", icon: "building", official: true, forked: false, allowed_parent_types: ["root", "campus"] },
   // Unconstrained: any parent. Exists so the self-exclusion test below cannot
   // lean on the allowed-parents filter to hide the node's own subtree.
-  { id: uuidFor("lt-area"), name: "area", display_name: "Area", icon: "map-pin", official: false, forked: false, allowed_parent_types: [] },
+  { id: uuidFor("lt-area"), name: "area", label: "Area", icon: "map-pin", official: false, forked: false, allowed_parent_types: [] },
   // The one type here that NAMES its own rows (#687): its rule is what the
   // create form previews, and its absence on the three above is what makes them
   // the operator-named case in the same fixture.
-  { id: uuidFor("lt-room"), name: "room", display_name: "Room", icon: "door-open", official: false, forked: false, allowed_parent_types: [], name_rule: { stem: "room", bare_first: true, examples: ["room", "room-2"] } },
+  { id: uuidFor("lt-room"), name: "room", label: "Room", icon: "door-open", official: false, forked: false, allowed_parent_types: [], name_rule: { stem: "room", bare_first: true, examples: ["room", "room-2"] } },
 ];
 // The campus type's contract, resolved against hq: one inherited default, plus one
 // value hq sets that no contract declares.
 const hqProperties: EffectiveProperty[] = [
-  { property_type_name: "site.timezone", property_type_id: "site.timezone-id", display_name: "Time zone", data_type: "string", required: false, is_set: false, from_contract: true, default_value: "UTC", value: "UTC" },
-  { property_type_name: "site.note", property_type_id: "site.note-id", display_name: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "leased", value: "leased", value_id: "v-note" },
+  { property_type_name: "site.timezone", property_type_id: "site.timezone-id", label: "Time zone", data_type: "string", required: false, is_set: false, from_contract: true, default_value: "UTC", value: "UTC" },
+  { property_type_name: "site.note", property_type_id: "site.note-id", label: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "leased", value: "leased", value_id: "v-note" },
 ];
 
 function mount(path: string, extraLocations: Location[] = []) {
@@ -181,7 +181,7 @@ describe("Locations create-as-route", () => {
     // is [root, campus], so the real campus HQ must be offered as a candidate even
     // though b2 is currently root, not filtered out just because there is no current
     // parent to compare against.
-    const b2: Location = { id: uuidFor("l-b2"), name: "b2", display_name: "B2", location_type: "building", effective_tags: {} };
+    const b2: Location = { id: uuidFor("l-b2"), name: "b2", label: "B2", location_type: "building", effective_tags: {} };
     mount("/locations/b2", [b2]);
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
@@ -246,8 +246,8 @@ describe("Locations create-as-route", () => {
     // now keyed by uuid, not name (#627: two locations can share a name), and
     // excludeSubtreeOf passes the location's uuid to match, so the exclusion
     // still keeps the node and its own subtree out.
-    const area1: Location = { id: uuidFor("l-area1"), name: "area1", display_name: "Area 1", location_type: "area", effective_tags: {} };
-    const area2: Location = { id: uuidFor("l-area2"), name: "area2", display_name: "Area 2", location_type: "area", parent: "area1", parent_id: area1.id, effective_tags: {} };
+    const area1: Location = { id: uuidFor("l-area1"), name: "area1", label: "Area 1", location_type: "area", effective_tags: {} };
+    const area2: Location = { id: uuidFor("l-area2"), name: "area2", label: "Area 2", location_type: "area", parent: "area1", parent_id: area1.id, effective_tags: {} };
     mount("/locations/area1", [area1, area2]);
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
@@ -264,8 +264,8 @@ describe("Locations create-as-route", () => {
     // "annex" could never say which one was meant, and posting it would name
     // an ambiguous ref the API refuses. Keyed by uuid, both render and each
     // is selectable on its own.
-    const annexA: Location = { id: uuidFor("l-annex-a"), name: "annex", display_name: "Annex", location_type: "campus", effective_tags: {} };
-    const annexB: Location = { id: uuidFor("l-annex-b"), name: "annex", display_name: "Annex", location_type: "campus", effective_tags: {} };
+    const annexA: Location = { id: uuidFor("l-annex-a"), name: "annex", label: "Annex", location_type: "campus", effective_tags: {} };
+    const annexB: Location = { id: uuidFor("l-annex-b"), name: "annex", label: "Annex", location_type: "campus", effective_tags: {} };
     mount("/locations/hq-b1", [annexA, annexB]);
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
@@ -294,7 +294,7 @@ describe("Locations create-as-route", () => {
     fireEvent.input(screen.getByPlaceholderText("Conf Room 301"), { target: { value: "Annex" } });
     // Typed, not derived (#688): campus carries no name rule, so nothing will
     // mint a name here and the operator supplies one. Before this slice the
-    // display name above filled this field in on its own.
+    // label above filled this field in on its own.
     fireEvent.input(screen.getByPlaceholderText("boardroom"), { target: { value: "annex" } });
     const typeSelect = screen.getByText("Select a type…").closest("select") as HTMLSelectElement;
     // Pick the first real option (index 0 is the disabled placeholder); the
@@ -578,7 +578,7 @@ describe("Locations list survives duplicate names across placements (#627)", () 
   });
 });
 
-// The list row carries BOTH identities: the display name an operator reads, and
+// The list row carries BOTH identities: the label an operator reads, and
 // the key the API and CLI address the row by. The key is what somebody types into
 // `omniglass location get <key>`, so it is on the row rather than behind a hover:
 // hover does not exist on touch, is not discoverable, and cannot be selected to
@@ -589,7 +589,7 @@ describe("Locations list survives duplicate names across placements (#627)", () 
 describe("Locations list identity", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
-  it("shows the display name with the key beneath it", async () => {
+  it("shows the label with the key beneath it", async () => {
     mount("/locations");
     await waitFor(() => expect(screen.getByText("HQ")).toBeTruthy());
     // Both, on the same row, not one standing in for the other.
@@ -597,7 +597,7 @@ describe("Locations list identity", () => {
     expect(within(row).getByText("hq")).toBeTruthy();
   });
 
-  it("shows the key once when the entity has no display name", async () => {
+  it("shows the key once when the entity has no label", async () => {
     const bare: Location = { id: uuidFor("l-bare"), name: "hq-boardroom-nvx-tx", location_type: "campus", effective_tags: {} };
     mount("/locations", [bare]);
     await waitFor(() => expect(screen.getByText("hq-boardroom-nvx-tx")).toBeTruthy());
@@ -614,8 +614,8 @@ describe("Locations list identity", () => {
   // surface that renders most of the estate.
   it("does not repeat the key beneath a label the platform rendered", async () => {
     const generated: Location = {
-      id: uuidFor("l-gen"), name: "level-1", display_name: "Level 1",
-      display_name_generated: true, location_type: "campus", effective_tags: {},
+      id: uuidFor("l-gen"), name: "level-1", label: "Level 1",
+      label_generated: true, location_type: "campus", effective_tags: {},
     };
     mount("/locations", [generated]);
     await waitFor(() => expect(screen.getByText("Level 1")).toBeTruthy());
@@ -627,11 +627,11 @@ describe("Locations list identity", () => {
   // same reason (#693): a full-text mark on every platform-labelled row cost the
   // Name column the width of the word, on the surface that renders most of the
   // estate, to state a fact an operator could not act on from a list. It is now
-  // the lock on the display-name field of the edit blade.
+  // the lock on the label field of the edit blade.
   it("renders no pen chip in the tree, whoever holds the pen", async () => {
     const generated: Location = {
-      id: uuidFor("l-gen"), name: "level-1", display_name: "Level 1",
-      display_name_generated: true, location_type: "campus", effective_tags: {},
+      id: uuidFor("l-gen"), name: "level-1", label: "Level 1",
+      label_generated: true, location_type: "campus", effective_tags: {},
     };
     mount("/locations", [generated]);
     await waitFor(() => expect(screen.getByText("Level 1")).toBeTruthy());
@@ -644,7 +644,7 @@ describe("Locations list identity", () => {
 });
 
 // The create form asks WHAT and WHERE first, then shows what the platform will
-// name the row. The derivation this block used to pin (type a display name, watch
+// name the row. The derivation this block used to pin (type a label, watch
 // the key fill itself in) was removed in #688: a blank name is now the REQUEST to
 // generate one from the location_type's name rule, so deriving one claimed the
 // platform's pen the moment an operator typed a label, and the always-required
@@ -666,7 +666,7 @@ function unlockName() {
   fireEvent.click(screen.getByRole("button", { name: "Override the name" }));
 }
 function unlockLabel() {
-  fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
+  fireEvent.click(screen.getByRole("button", { name: "Override the label" }));
 }
 
 describe("Locations create identity", () => {
@@ -682,14 +682,14 @@ describe("Locations create identity", () => {
     return { display, key, typeSelect, submit };
   };
 
-  it("never rewrites the key from the display name", async () => {
+  it("never rewrites the key from the label", async () => {
     const { display, key } = await fields();
     unlockLabel();
     fireEvent.input(display, { target: { value: "Conf Room 301" } });
     // The old behaviour filled this in with "conf-room-301".
     await waitFor(() => expect(display.value).toBe("Conf Room 301"));
     expect(key.value).toBe("");
-    expect(screen.queryByText(/Derived from the display name/)).toBeNull();
+    expect(screen.queryByText(/Derived from the label/)).toBeNull();
   });
 
   it("shows what the platform will name it once a generating type is chosen", async () => {
@@ -798,7 +798,7 @@ describe("Locations create identity", () => {
     // The NAME the locked field was showing goes back as the precondition,
     // which is the one thing a locked field DOES post (#702).
     expect(captured!.expected_name).toBe("room");
-    expect(captured!.display_name).toBe("Conf Room 301");
+    expect(captured!.label).toBe("Conf Room 301");
   });
 
   it("sends an override verbatim and leaves the label alone", async () => {
@@ -825,7 +825,7 @@ describe("Locations create identity", () => {
     // And no precondition beside it: an operator-typed name allocates no
     // ordinal, so posting one would be a claim nothing can check (a 422).
     expect("expected_name" in captured!).toBe(false);
-    expect(captured!.display_name).toBe("War Room");
+    expect(captured!.label).toBe("War Room");
   });
 });
 
@@ -857,8 +857,8 @@ describe("Locations list keeps a floor under the Name column (#690)", () => {
 // Save actually posts.
 describe("Locations edit blade carries the label pen (#693)", () => {
   const gen: Location = {
-    id: uuidFor("l-pen"), name: "level-1", display_name: "Level 1",
-    display_name_generated: true, location_type: "campus", effective_tags: {},
+    id: uuidFor("l-pen"), name: "level-1", label: "Level 1",
+    label_generated: true, location_type: "campus", effective_tags: {},
   };
 
   function patchBodies(): { bodies: Record<string, unknown>[] } {
@@ -878,14 +878,14 @@ describe("Locations edit blade carries the label pen (#693)", () => {
     mount(`/locations/${gen.id}`, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
-    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
     expect(label.value).toBe("Level 1");
     expect(label.readOnly).toBe(true);
     expect(screen.getByText(/Rendered from a label rule/)).toBeTruthy();
   });
 
   // The defect the lock exists to fix, and the one worth breaking a build over.
-  // Every blade seeded a plain signal from raw.display_name and posted
+  // Every blade seeded a plain signal from raw.label and posted
   // `display() || undefined`, so opening the pencil on a platform-labelled row
   // and saving ANYTHING (a type, a tag, a parent) posted the platform's own
   // rendering straight back as an override and took the pen, silently. A locked
@@ -895,10 +895,10 @@ describe("Locations edit blade carries the label pen (#693)", () => {
     mount(`/locations/${gen.id}`, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
-    await screen.findByLabelText("Display name");
+    await screen.findByLabelText("Label");
     fireEvent.click(screen.getByText("Save changes"));
     await waitFor(() => expect(bodies).toHaveLength(1));
-    expect(bodies[0].display_name).toBe("");
+    expect(bodies[0].label).toBe("");
   });
 
   it("posts the operator's words once they take the pen", async () => {
@@ -906,12 +906,12 @@ describe("Locations edit blade carries the label pen (#693)", () => {
     mount(`/locations/${gen.id}`, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
-    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
-    fireEvent.click(screen.getByRole("button", { name: "Override the display name" }));
+    const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
+    fireEvent.click(screen.getByRole("button", { name: "Override the label" }));
     fireEvent.input(label, { target: { value: "Ground Floor" } });
     fireEvent.click(screen.getByText("Save changes"));
     await waitFor(() => expect(bodies).toHaveLength(1));
-    expect(bodies[0].display_name).toBe("Ground Floor");
+    expect(bodies[0].label).toBe("Ground Floor");
   });
 
   it("opens editable, and hands the label back on restore, for a row the operator labelled", async () => {
@@ -919,16 +919,16 @@ describe("Locations edit blade carries the label pen (#693)", () => {
     mount(`/locations/${hq.id}`);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
-    const label = (await screen.findByLabelText("Display name")) as HTMLInputElement;
+    const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
     expect(label.value).toBe("HQ");
     expect(label.readOnly).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: "Restore the display name to default" }));
+    fireEvent.click(screen.getByRole("button", { name: "Restore the label to default" }));
     expect(label.readOnly).toBe(true);
     fireEvent.click(screen.getByText("Save changes"));
     await waitFor(() => expect(bodies).toHaveLength(1));
     // "" is the API's hand-back (labelPen, #682), which is the ONLY way back
     // from the console: before this the field posted `display() || undefined`,
     // so clearing it left the operator's label exactly where it was.
-    expect(bodies[0].display_name).toBe("");
+    expect(bodies[0].label).toBe("");
   });
 });

@@ -10,7 +10,7 @@ import {
 } from "../lib/listmodel";
 import ListShell from "./ListShell";
 import Drawer from "./Drawer";
-import { hasDisplayName, labelIsName, type Labelled } from "../lib/entities";
+import { hasLabel, labelIsName, type Labelled } from "../lib/entities";
 import ColumnMenu from "./ColumnMenu";
 import {
   ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash,
@@ -76,8 +76,8 @@ export interface ListNode {
 // of the rule inside the row.
 export const identityOf = (n: ListNode): Labelled => ({
   name: n.addr ?? n.id,
-  display_name: n.display,
-  display_name_generated: n.generated,
+  label: n.display,
+  label_generated: n.generated,
 });
 
 export type FormState<N> = { mode: "create"; parent: N | null } | { mode: "edit"; node: N };
@@ -629,7 +629,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                   already unique and addressable (addr unset) reads the same
                   as before.
 
-                  When the entity has no display name the label IS the key, so
+                  When the entity has no label the label IS the key, so
                   it is rendered once, in the data face, which marks it as an
                   identifier rather than a friendly string somebody chose.
 
@@ -643,7 +643,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                   key under every platform-labelled row in the estate. */}
               {/* No pen chip here since #693: see IdentityCell's own comment for
                   why the label pen's badge left every list and became the lock on
-                  the display-name field of the edit blade. hasDisplayName below
+                  the label field of the edit blade. hasLabel below
                   still reads the pen, which is the half that stayed. */}
               <span class="flex min-w-0 items-baseline">
                 <span
@@ -654,7 +654,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                   {n.display}
                 </span>
               </span>
-              <Show when={hasDisplayName(identityOf(n))}>
+              <Show when={hasLabel(identityOf(n))}>
                 <span class="truncate font-data text-[11px] text-base-content/40">{n.addr ?? n.id}</span>
               </Show>
             </span>

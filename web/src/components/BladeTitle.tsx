@@ -1,9 +1,9 @@
 import { createMemo, type JSX } from "solid-js";
 import { entityLabel, labelIsName, type Labelled } from "../lib/entities";
 
-// BladeTitle is the console's one blade heading: the display name of the row the
+// BladeTitle is the console's one blade heading: the label of the row the
 // operator clicked, falling back to the identifier when the row carries no
-// display name (or has not resolved yet), with the identifier rendered in the
+// label (or has not resolved yet), with the identifier rendered in the
 // data face because it is an identifier.
 //
 // It exists for the same reason BladeField does. Eight pages wrote this rule out
@@ -28,7 +28,7 @@ export default function BladeTitle(p: {
 }): JSX.Element {
   const row = createMemo(() => p.row());
   // The face follows the LABEL, through the primitive, not a second reading of
-  // display_name here. The two agreed while every label was operator-typed and
+  // label here. The two agreed while every label was operator-typed and
   // would have parted the moment one of them learned about the pen (#683).
   const dataFace = () => {
     const r = row();

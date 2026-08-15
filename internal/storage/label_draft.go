@@ -435,7 +435,7 @@ func registryID(ctx context.Context, q querier, table, ref string, notFound erro
 }
 
 // systemTypeLabelOf reads what SystemTypeLabel means for one system: its type's
-// display name, absent for an unclassified one. It is the single-row twin of
+// label, absent for an unclassified one. It is the single-row twin of
 // the join componentPlacements does for a page, and the acceptance test (a
 // drafted label compared with the one the create then stores, with a rule
 // reading both placement facts) is what holds the two to the same answer.
@@ -444,7 +444,7 @@ func systemTypeLabelOf(ctx context.Context, q querier, systemTypeID *string) (st
 		return "", nil
 	}
 	var name string
-	err := q.QueryRow(ctx, `select coalesce(display_name, '') from system_type where id = $1`, *systemTypeID).Scan(&name)
+	err := q.QueryRow(ctx, `select coalesce(label, '') from system_type where id = $1`, *systemTypeID).Scan(&name)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}

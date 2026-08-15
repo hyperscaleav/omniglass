@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 //   id            a uuid, immutable, and never operator-facing.
 //   name          the renameable identifier an operator types, what a URL, a CLI
 //                 argument, and a topic carry.
-//   display_name  an optional friendly string a human reads.
+//   label         an optional friendly string a human reads.
 //
 // The console used to say four things. A list column header said "Name" for the
 // identifier on some pages and for the friendly string on others. A blade said
@@ -15,20 +15,27 @@ import { describe, expect, it } from "vitest";
 // two words rather than settling them, so the identifier answered to "Key". The
 // same fact answering to three words, and the same word meaning two facts, is the
 // confusion the identity work exists to end. The words are now "Name" and
-// "Display name", matching the columns.
+// "Label", matching the columns.
 //
-// "Name" and "Segment" stay retired as field labels. A segment is one
+// "Technical name" and "Segment" stay retired as field labels. A segment is one
 // dot-separated component of a name (internal/key fixes that meaning), so it names
 // a position in a path and never the value at one. That makes it a fine word in
-// prose about topics and a wrong one on a form. Both are allowed in a comment
-// (IdentityCell's header names the words it replaced, because that comment IS the
-// history) but not in anything an operator reads.
+// prose about topics and a wrong one on a form.
+//
+// "Display name" joins them with #613 (ADR-0118). It was the right word for the
+// whole time the column was called display_name, and it is now a fourth word for
+// a fact that has three already: the column is `label`, the rule that renders it
+// is a `label_rule`, and the pen that says who owns it is `label_generated`.
+//
+// All three are allowed in a comment (IdentityCell's header names the words it
+// replaced, because that comment IS the history) but not in anything an operator
+// reads.
 //
 // This is a source guard rather than a rendering test on purpose. The failure mode
 // is a NEW page reaching for a retired word, and no per-page test catches that,
 // because the page nobody wrote a test for is the page that drifts.
 const SRC = join(__dirname);
-const RETIRED = ["Technical name", "Segment"];
+const RETIRED = ["Technical name", "Segment", "Display name"];
 
 function walk(dir: string, opts: { tests: boolean }, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -105,8 +112,8 @@ describe("identity vocabulary", () => {
     expect(
       offenders,
       `\nThese carry a retired word in operator-visible text:\n  ${offenders.join("\n  ")}\n\n` +
-        `The identifier is "Name". The friendly string is "Display name".\n` +
-        `"Technical name" and "Segment" are retired as labels.\n`,
+        `The identifier is "Name". The friendly string is "Label".\n` +
+        `"Technical name", "Segment" and "Display name" are retired as labels.\n`,
     ).toEqual([]);
   });
 
@@ -138,8 +145,8 @@ describe("identity vocabulary", () => {
 // A field or a fact that shows one of the two identity words takes its label from
 // `IDENTITY_LABELS` in lib/entities, by naming the fact it is bound to:
 //
-//   <BladeField bind="display_name" .../>   labels itself "Display name"
-//   <KVStacked  bind="name" .../>           labels itself "Name"
+//   <BladeField bind="label" .../>  labels itself "Label"
+//   <KVStacked  bind="name" .../>   labels itself "Name"
 //
 // `label` and `bind` are mutually exclusive on all three components, so there is
 // no prop through which a caller can pair the wrong word with a binding. That
@@ -154,7 +161,7 @@ describe("identity vocabulary", () => {
 // every call form (an eyebrow span, a `label=` prop, and the positional
 // `field(...)` / `fact(...)` helpers), an eight-line lookahead window to find the
 // binding, a second terminator so the window would not run into the next field,
-// and a `display()` / `setDisplay(` heuristic to recognise the display-name
+// and a `display()` / `setDisplay(` heuristic to recognise the label
 // signal. All of that existed only because a label and its binding were paired by
 // hand at 74 sites. Its first version knew only two of the four forms and was
 // therefore vacuous on the four biggest pages, which is the shape of the bug it
@@ -163,7 +170,7 @@ describe("the identity words are written in exactly one place", () => {
   // The components that render a labelled field or fact. A `label` prop carrying
   // an identity word on any of them means the caller went around `bind`.
   const LABELLED = ["BladeField", "FieldRow", "KVStacked"];
-  const IDENTITY_WORDS = ["Name", "Display name"];
+  const IDENTITY_WORDS = ["Name", "Label"];
 
   // The opening tag of every `<Component ...>` in a file, attributes included.
   // Angle brackets are balanced by hand rather than matched with a regex, so a
@@ -203,7 +210,7 @@ describe("the identity words are written in exactly one place", () => {
     expect(
       offenders,
       `\nThese label a field or fact with an identity word by hand:\n  ${offenders.join("\n  ")}\n\n` +
-        `Say which fact it is bound to instead: bind="name" or bind="display_name".\n` +
+        `Say which fact it is bound to instead: bind="name" or bind="label".\n` +
         `The label then comes from IDENTITY_LABELS in lib/entities, which is the only\n` +
         `place either word is written, so the two cannot be swapped again.\n`,
     ).toEqual([]);
@@ -215,7 +222,7 @@ describe("the identity words are written in exactly one place", () => {
     // and the guard keeps passing while the single source is gone.
     const entities = readFileSync(join(SRC, "lib", "entities.ts"), "utf8");
     expect(entities).toContain('name: "Name"');
-    expect(entities).toContain('display_name: "Display name"');
+    expect(entities).toContain('label: "Label"');
     for (const component of ["BladeField", "FieldRow", "KVStacked"]) {
       const src = readFileSync(join(SRC, "components", `${component}.tsx`), "utf8");
       expect(src, `${component} should take the words from IDENTITY_LABELS`).toContain("IDENTITY_LABELS");
@@ -223,9 +230,9 @@ describe("the identity words are written in exactly one place", () => {
   });
 });
 
-// A blade's heading must resolve the display name, not render the raw blade id.
+// A blade's heading must resolve the label, not render the raw blade id.
 //
-// A blade is opened from a row, and the row shows the display name over the name.
+// A blade is opened from a row, and the row shows the label over the name.
 // If the heading renders the id, clicking "ICMP RTT (avg)" opens a panel headed
 // `icmp-rtt-avg`, so the operator cannot tell they opened the thing they clicked.
 // Three pages did exactly that while 813 tests were green, because no test reads a
@@ -234,7 +241,7 @@ describe("the identity words are written in exactly one place", () => {
 //
 // The rule is about resolution, not about text: a Title that renders `p.id` straight
 // through has not looked the row up, whatever it wraps it in.
-describe("a blade heading resolves the display name", () => {
+describe("a blade heading resolves the label", () => {
   it("never renders the blade id as the whole heading", () => {
     const bare = /Title:\s*\(p\)\s*=>\s*(?:<[^>]*>)?\{p\.id\}(?:<\/[^>]*>)?,/;
     for (const file of walk(SRC, { tests: false })) {
@@ -308,18 +315,18 @@ describe("a blade heading tracks its row", () => {
 // the raw id). The second checks it TRACKS its row (#579, eight headings
 // snapshotted the accessor). Both passed while a heading read the WRONG FIELD off
 // a correctly resolved, correctly tracked row: Types rendered the name where its
-// list rendered the display name, so clicking "Machine hall" opened a blade
+// list rendered the label, so clicking "Machine hall" opened a blade
 // headed `server-room` (#581).
 //
 // No regex catches "wrong field", so the check is membership instead: a blade
 // title either delegates to BladeTitle, which owns the rule, or is named here
 // with a reason. An exception list rots only when it is anonymous; each of these
-// names the entity and the reason, so the next entity that gains a display name
+// names the entity and the reason, so the next entity that gains a label
 // has an obvious place to be removed from.
 describe("a blade heading renders through the primitive", () => {
-  // Entities with NO display_name: the name is the only operator-facing string,
+  // Entities with NO label: the name is the only operator-facing string,
   // so the heading renders it in the data face and BladeTitle would render the
-  // same thing. Remove the entry when the entity gains a display name.
+  // same thing. Remove the entry when the entity gains a label.
   const NO_DISPLAY_NAME = ["SecretBladeTitle", "VariableBladeTitle", "TagBladeTitle", "InterfaceBladeTitle"];
   // Principals and roles label through their own helpers (principalName,
   // groupName), which resolve a username or a group name rather than the estate

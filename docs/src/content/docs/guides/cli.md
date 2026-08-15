@@ -74,7 +74,7 @@ express neither an array member nor `null`, which is the value that clears a fie
 `update_mask` ([ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask)):
 
 ```sh
-omniglass location-type create --name wing --display-name Wing \
+omniglass location-type create --name wing --label Wing \
   --name-rule '{"stem":"wing","bare_first":true}'   # an object, as JSON
 omniglass location-type update wing --update-mask name_rule --name-rule null   # clears it
 omniglass tag create --name rack-position --applies-to '["location"]'          # an array, as JSON
@@ -105,7 +105,7 @@ no running server needed):
 # credential (argon2id) so the owner can sign in to the console. This is a trusted direct-DB
 # lane, so it is exempt from the password policy (unlike the console/API paths). The bootstrap
 # token expires after --ttl (default 90 days, hard maximum 365 days).
-omniglass bootstrap ops --password 'set-a-strong-one' --email ops@example.com --display-name "Ops Lead"
+omniglass bootstrap ops --password 'set-a-strong-one' --email ops@example.com --label "Ops Lead"
 
 # Mint a fresh bearer token for an existing user (direct-DB, owner lane). A --description
 # (required) names what the token is for. Every credential is time-bounded: the token expires
@@ -129,7 +129,7 @@ generated self-scoped commands (each edits only the caller's own profile):
 
 ```sh
 omniglass auth me                                    # your principal, permissions, and grants
-omniglass auth update-profile --display-name "Ops Lead"
+omniglass auth update-profile --label "Ops Lead"
 omniglass auth change-password --current-password 'orange-boat-42x' --new-password 'purple-canyon-7'
 omniglass auth set-avatar --image-base64 "$(base64 -w0 me.jpg)"   # set your profile picture
 omniglass auth remove-avatar                            # clear it, falling back to initials
@@ -156,9 +156,9 @@ Register and enroll an edge node (the day-one handshake):
 
 ```sh
 omniglass node list
-omniglass node create --name edge-hq --display-name "HQ Edge Node" --location hq-west --description "HQ network closet"   # needs node:create (all-scope)
+omniglass node create --name edge-hq --label "HQ Edge Node" --location hq-west --description "HQ network closet"   # needs node:create (all-scope)
 omniglass node get edge-hq
-omniglass node update edge-hq --display-name "HQ Edge" --location hq-west   # needs node:update; the name is immutable
+omniglass node update edge-hq --label "HQ Edge" --location hq-west   # needs node:update; the name is immutable
 omniglass node delete edge-hq   # needs node:delete; decommissions the node (cascades its interfaces, tasks, and enrollment)
 ```
 
@@ -332,7 +332,7 @@ A **vendor** names an organization, carrying a `--kind` of `manufacturer`, `inte
 
 ```sh
 omniglass vendor list                                               # the vendor registry
-omniglass vendor create --name barco --display-name Barco --kind manufacturer \
+omniglass vendor create --name barco --label Barco --kind manufacturer \
   --icon monitor --support-phone "+1-555-0100" --website https://www.barco.com
 omniglass vendor get barco
 omniglass vendor update barco --support-phone "+1-555-0199"
@@ -344,7 +344,7 @@ A **driver** names the implementation that gets, emits, or sets a product's sign
 
 ```sh
 omniglass driver list                                               # the driver registry
-omniglass driver create --name barco-snmp --display-name "Barco SNMP" --version 1.0.0
+omniglass driver create --name barco-snmp --label "Barco SNMP" --version 1.0.0
 omniglass driver update barco-snmp --version 1.1.0
 omniglass driver delete barco-snmp                                  # refused (422) if official
 ```
@@ -366,10 +366,10 @@ A product names its **kind** (`device`, `app`, `service`, or `vm`, default `devi
 
 ```sh
 omniglass product list                                              # the product registry
-omniglass product create --name barco-ub12 --display-name "Barco UB12" --kind device \
+omniglass product create --name barco-ub12 --label "Barco UB12" --kind device \
   --component-type projector --vendor-id barco --driver-id barco-snmp
 omniglass product get barco-ub12
-omniglass product update barco-ub12 --display-name "Barco UB12 Pro"
+omniglass product update barco-ub12 --label "Barco UB12 Pro"
 omniglass product delete barco-ub12                                 # 422 if official, 409 if a component points at it
 ```
 
@@ -385,7 +385,7 @@ viewer floor; `standard:create`, `standard:update`, and `standard:delete` are ad
 
 ```sh
 omniglass standard list                                             # the standard catalog
-omniglass standard create --name lecture-hall --display-name "Lecture Hall" \
+omniglass standard create --name lecture-hall --label "Lecture Hall" \
   --parent-standard-id classroom                                    # a variant of an existing standard
 omniglass standard get lecture-hall
 omniglass standard delete lecture-hall                              # 409 if a system still conforms to it
@@ -405,7 +405,7 @@ the twin of the property catalog: the discrete happenings an event is typed by (
 
 ```sh
 omniglass event-type list                                           # the event type catalog
-omniglass event-type create --name cable-unplugged --display-name "Cable unplugged"
+omniglass event-type create --name cable-unplugged --label "Cable unplugged"
 omniglass event-type get call-started
 omniglass event-type delete cable-unplugged                        # 409 on an official type
 ```

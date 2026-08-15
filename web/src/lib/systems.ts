@@ -16,11 +16,11 @@ import { api } from "../api/client";
 export type System = {
   id: string;
   name: string;
-  display_name?: string;
+  label?: string;
   // The LABEL's pen (#682/#683): true means the platform rendered this display
   // name from a label rule, false means an operator typed it. Read-only; the
   // console reads it through lib/entities so nothing branches on it by hand.
-  display_name_generated?: boolean;
+  label_generated?: boolean;
   // The standard it conforms to, in both forms (api/systems.go): standard is
   // the name an operator reads, standard_id the uuid it resolves to.
   standard?: string;
@@ -75,7 +75,7 @@ export type CreateSystem = {
   standard_id?: string;
   // Omit to leave the system unclassified.
   system_type_id?: string;
-  display_name?: string;
+  label?: string;
   parent?: string;
   location?: string;
   // The create form's name precondition (#702, and its review): the NAME the
@@ -97,7 +97,7 @@ export async function createSystem(body: CreateSystem): Promise<System> {
 // Both classifier fields follow the API's three-state convention: omitted
 // leaves the field alone, "" clears it, a name sets it.
 export type UpdateSystem = {
-  display_name?: string;
+  label?: string;
   standard_id?: string;
   system_type_id?: string;
 };

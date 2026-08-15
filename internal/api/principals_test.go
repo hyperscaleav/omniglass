@@ -48,7 +48,7 @@ func TestPrincipalDirectoryAPI(t *testing.T) {
 
 	// Owner creates a human with an initial password. The response carries no secret.
 	created := c.do(ownerTok, "POST", "/principals", map[string]string{
-		"username": "alice", "password": "orange-boat-42x", "email": "alice@example.test", "display_name": "Alice",
+		"username": "alice", "password": "orange-boat-42x", "email": "alice@example.test", "label": "Alice",
 	}, http.StatusCreated)
 	if !bytes.Contains(created, []byte(`"username":"alice"`)) {
 		t.Fatalf("create body missing username: %s", created)
@@ -111,7 +111,7 @@ func TestPrincipalDirectoryAPI(t *testing.T) {
 }
 
 // TestUpdatePrincipalAPI drives the admin update against the real binary: an
-// all-scope admin edits a human's display name, email, and username; the rename
+// all-scope admin edits a human's label, email, and username; the rename
 // re-homes the login (new username works, old fails); a location-scoped admin is
 // refused; a clash is 409, an unknown id 404, and a non-human target 422. Skipped
 // under -short.
@@ -134,7 +134,7 @@ func TestUpdatePrincipalAPI(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
 	// Create a human with a password, capture its id.
-	created := c.do(ownerTok, "POST", "/principals", map[string]string{"username": "alice", "password": "orange-boat-42x", "display_name": "Alice"}, http.StatusCreated)
+	created := c.do(ownerTok, "POST", "/principals", map[string]string{"username": "alice", "password": "orange-boat-42x", "label": "Alice"}, http.StatusCreated)
 	var made struct {
 		ID string `json:"id"`
 	}
@@ -142,9 +142,9 @@ func TestUpdatePrincipalAPI(t *testing.T) {
 
 	// Update all three admin-owned fields, including a rename.
 	upd := c.do(ownerTok, "PATCH", "/principals/"+made.ID, map[string]string{
-		"display_name": "Alice Cooper", "email": "ac@example.test", "username": "alice-2",
+		"label": "Alice Cooper", "email": "ac@example.test", "username": "alice-2",
 	}, http.StatusOK)
-	if !bytes.Contains(upd, []byte(`"username":"alice-2"`)) || !bytes.Contains(upd, []byte(`"display_name":"Alice Cooper"`)) {
+	if !bytes.Contains(upd, []byte(`"username":"alice-2"`)) || !bytes.Contains(upd, []byte(`"label":"Alice Cooper"`)) {
 		t.Fatalf("update body: %s", upd)
 	}
 
@@ -166,10 +166,10 @@ func TestUpdatePrincipalAPI(t *testing.T) {
 	}
 
 	// A location-scoped admin is refused, an unknown id is 404.
-	if code, _ := c.send(scopedTok, "PATCH", "/principals/"+made.ID, map[string]string{"display_name": "no"}); code != http.StatusForbidden {
+	if code, _ := c.send(scopedTok, "PATCH", "/principals/"+made.ID, map[string]string{"label": "no"}); code != http.StatusForbidden {
 		t.Fatalf("scoped update: want 403, got %d", code)
 	}
-	if code, _ := c.send(ownerTok, "PATCH", "/principals/00000000-0000-0000-0000-000000000000", map[string]string{"display_name": "no"}); code != http.StatusNotFound {
+	if code, _ := c.send(ownerTok, "PATCH", "/principals/00000000-0000-0000-0000-000000000000", map[string]string{"label": "no"}); code != http.StatusNotFound {
 		t.Fatalf("unknown update: want 404, got %d", code)
 	}
 
@@ -195,7 +195,7 @@ func TestUpdatePrincipalAPI(t *testing.T) {
 	if svcID == "" {
 		t.Fatal("expected a service principal in the directory")
 	}
-	if code, _ := c.send(ownerTok, "PATCH", "/principals/"+svcID, map[string]string{"display_name": "no"}); code != http.StatusUnprocessableEntity {
+	if code, _ := c.send(ownerTok, "PATCH", "/principals/"+svcID, map[string]string{"label": "no"}); code != http.StatusUnprocessableEntity {
 		t.Fatalf("non-human update: want 422, got %d", code)
 	}
 }

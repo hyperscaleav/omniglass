@@ -109,7 +109,7 @@ export function UserDetail(props: { id: string }) {
   const canDrillGroups = () => blades.stack()[0]?.kind === "user";
 
   const [username, setUsername] = createSignal("");
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [email, setEmail] = createSignal("");
   let grantCommit: () => Promise<void> = async () => {};
   let grantCancel: () => void = () => {};
@@ -119,7 +119,7 @@ export function UserDetail(props: { id: string }) {
     if (isEditing) {
       const h = p()?.human;
       setUsername(h?.username ?? "");
-      setDisplayName(h?.display_name ?? "");
+      setLabel(h?.label ?? "");
       setEmail(h?.email ?? "");
     }
   }));
@@ -176,7 +176,7 @@ export function UserDetail(props: { id: string }) {
         if (h) {
           const patch: UpdatePrincipal = {};
           if (username().trim() !== h.username) patch.username = username().trim();
-          if (displayName().trim() !== (h.display_name ?? "")) patch.display_name = displayName().trim();
+          if (label().trim() !== (h.label ?? "")) patch.label = label().trim();
           if (email().trim() !== (h.email ?? "")) patch.email = email().trim();
           if (Object.keys(patch).length) await updatePrincipal(props.id, patch);
         }
@@ -410,7 +410,7 @@ export function UserDetail(props: { id: string }) {
               </div>
               <div>
                 <label class="eyebrow mb-1.5 block" for="edit-display">Name</label>
-                <input id="edit-display" autocomplete="off" class="input input-bordered w-full" value={displayName()} placeholder="Jordan Rivera" onInput={(e) => setDisplayName(e.currentTarget.value)} />
+                <input id="edit-display" autocomplete="off" class="input input-bordered w-full" value={label()} placeholder="Jordan Rivera" onInput={(e) => setLabel(e.currentTarget.value)} />
               </div>
               <div>
                 <label class="eyebrow mb-1.5 block" for="edit-email">Email</label>

@@ -46,7 +46,7 @@ func TestCommandIssueAPI(t *testing.T) {
 	}
 	// A settleable command with a zero window, so settlement is immediate.
 	if _, err := gw.CreateCommandType(ctx, "", storage.CommandTypeSpec{
-		Name: "set-input-now", DisplayName: "Set input (now)", TargetPropertyType: "video-input", SettleWindowSeconds: 0,
+		Name: "set-input-now", Label: "Set input (now)", TargetPropertyType: "video-input", SettleWindowSeconds: 0,
 	}); err != nil {
 		t.Fatalf("create command type: %v", err)
 	}

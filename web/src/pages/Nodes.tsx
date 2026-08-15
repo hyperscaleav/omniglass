@@ -177,17 +177,17 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
     }
   }
 
-  // The editable identity fields (display_name, description, location), the same
+  // The editable identity fields (label, description, location), the same
   // read-edit-save shape the component/location blades use. The location options
   // are the estate's locations (a descriptive placement, not scope). The signals
   // re-sync from the live node whenever it changes or edit mode toggles, so Cancel
   // reverts and a Save reflects.
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: () => listLocations() }));
-  const [displayName, setDisplayName] = createSignal("");
+  const [label, setLabel] = createSignal("");
   const [description, setDescription] = createSignal("");
   const [location, setLocation] = createSignal("");
   createEffect(on([n, () => edit.editing()] as const, ([node]) => {
-    setDisplayName(node?.display_name ?? "");
+    setLabel(node?.label ?? "");
     setDescription(node?.description ?? "");
     setLocation(node?.location ?? "");
     setErr(null);
@@ -198,7 +198,7 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
     if (!node) return;
     setErr(null);
     try {
-      await updateNode(node.name, { display_name: displayName().trim(), description: description().trim(), location: location() });
+      await updateNode(node.name, { label: label().trim(), description: description().trim(), location: location() });
       await qc.invalidateQueries({ queryKey: NODES_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -269,14 +269,14 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
           </div>
 
           <BladeField
-            bind="display_name"
+            bind="label"
             placeholder={node().name}
-            value={() => node().display_name ?? ""}
-            draft={displayName}
-            onInput={setDisplayName}
+            value={() => node().label ?? ""}
+            draft={label}
+            onInput={setLabel}
             read={
-              <Show when={node().display_name} fallback={<span class="text-base-content/40">{node().name}</span>}>
-                {node().display_name}
+              <Show when={node().label} fallback={<span class="text-base-content/40">{node().name}</span>}>
+                {node().label}
               </Show>
             }
           />
@@ -352,7 +352,7 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
   );
 }
 
-// CreateNodeForm is the new-node form the create Drawer hosts: the display name
+// CreateNodeForm is the new-node form the create Drawer hosts: the label
 // leads, the name (the node's address, required) follows it, plus an optional
 // location and description. Day one, a node is created then enrolled immediately,
 // so on success it invalidates the list and hands the minted token to onEnrolled,
@@ -361,7 +361,7 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
 function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutput) => void }) {
   const qc = useQueryClient();
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: () => listLocations() }));
-  // Display name leads and the address follows it, stopping the moment the
+  // Label leads and the address follows it, stopping the moment the
   // operator edits the address by hand (lib/entities).
   const { display, setDisplay, name, setName, nameDerived } = createIdentity();
   const [location, setLocation] = createSignal("");
@@ -384,7 +384,7 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
     try {
       const created = await createNode({
         name: name().trim(),
-        display_name: display().trim() || undefined,
+        label: display().trim() || undefined,
         description: description().trim() || undefined,
         location: location() || undefined,
       });
@@ -407,13 +407,13 @@ function CreateNodeForm(props: { close: () => void; onEnrolled: (out: EnrollOutp
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
       <div>
-        <label class="eyebrow mb-1.5 block" for="new-node-display">Display name</label>
+        <label class="eyebrow mb-1.5 block" for="new-node-display">Label</label>
         <input id="new-node-display" autocomplete="off" class="input input-bordered w-full" value={display()} placeholder="HQ Closet Node" onInput={(e) => setDisplay(e.currentTarget.value)} disabled={busy()} />
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-node-name">Name</label>
         <input id="new-node-name" autocomplete="off" class="input input-bordered w-full font-data" value={name()} placeholder="edge-hq-1" onInput={(e) => setName(e.currentTarget.value)} disabled={busy()} aria-required="true" />
-        <p class="mt-1 text-xs text-base-content/50">{nameDerived() ? "Derived from the display name. Edit to set your own." : "The node's address, used by the API and CLI."}</p>
+        <p class="mt-1 text-xs text-base-content/50">{nameDerived() ? "Derived from the label. Edit to set your own." : "The node's address, used by the API and CLI."}</p>
       </div>
       <div>
         <label class="eyebrow mb-1.5 block" for="new-node-location">Location</label>
