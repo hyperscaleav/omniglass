@@ -8,9 +8,26 @@ screenshots:
     steps:
       - action: click
         selector: "text=East Campus"
+    # The health panel the seeded fleet gave this blade renders two regions no
+    # clock or seed can pin: the relative durations beside the recorded edges
+    # ("16s ago", "16s and counting", "held 0s"), which move with capture
+    # timing, and the per-system identity bullets, whose hues derive from
+    # uuids minted fresh by every capture's seed (same class as the fleet
+    # canvas mask). The durations mask their enclosing row so a 9s-vs-16s
+    # width change cannot move the box.
+    mask:
+      - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
+      - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
+      - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
+      - ".og-system-dot"
   - id: entity-edit-face
     path: /web/locations/east?edit=1
     alt: "A location's full detail page lands directly in edit mode from an ?edit=1 deep link."
+    mask:
+      - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
+      - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
+      - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
+      - ".og-system-dot"
 ---
 
 Once you have [found an entity](/guides/operator/inventory/), you open it, read it, and change
