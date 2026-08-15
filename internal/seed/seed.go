@@ -781,7 +781,7 @@ func seedRoles(ctx context.Context, gw storage.Gateway) error {
 
 // seedLocationTypes writes the shipped location types AUTHORITATIVELY, as
 // official rows the platform owns (#703). It was insert-if-absent, on the
-// argument that an fleet shapes its own place vocabulary, and that argument
+// argument that a fleet shapes its own place vocabulary, and that argument
 // is now carried by the fork instead: an operator's edit of a shipped type
 // lives in registry_shadow and is resolved over the row, so the seed can
 // rewrite the row on every boot without reaching anything they own. What that

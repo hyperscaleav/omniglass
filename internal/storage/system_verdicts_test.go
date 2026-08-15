@@ -85,7 +85,7 @@ func verdictFleet(t *testing.T, gw storage.Gateway, systems int) {
 // read the badge used to make per row, and it computes its verdict live from the
 // roles; SystemVerdicts reads the recorded series and defaults what it does not
 // find. Those are two different mechanisms answering one question, so the
-// agreement is asserted rather than assumed, over an fleet deliberately holding
+// agreement is asserted rather than assumed, over a fleet deliberately holding
 // all three verdicts AND a system nothing has ever recomputed.
 func TestSystemVerdictsAgreeWithTheReport(t *testing.T) {
 	gw := storagetest.NewDB(t)

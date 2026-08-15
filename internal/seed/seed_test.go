@@ -91,7 +91,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	// now the upsert asserting it rather than nothing touching it, which is the
 	// distinction #657 learned the hard way in the other direction: under
 	// insert-if-absent a value REMOVED from the shipped YAML was never withdrawn
-	// from an fleet that already seeded it, because no update carried the
+	// from a fleet that already seeded it, because no update carried the
 	// removal.
 	for name, wantIcon := range map[string]string{
 		"campus": "landmark", "building": "building", "floor": "layers", "room": "door-open",

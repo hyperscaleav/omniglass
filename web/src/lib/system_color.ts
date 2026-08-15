@@ -17,7 +17,7 @@
 //
 // tagcolor.ts's curated TAG_HUES ramp is deliberately not reused here: it has
 // only 12 entries, five of which fall inside the reserved bands below,
-// leaving too few for an fleet-sized set of systems to stay distinguishable.
+// leaving too few for a fleet-sized set of systems to stay distinguishable.
 // A system walks the full 0-359 wheel instead, stepping past any band it
 // lands in.
 //

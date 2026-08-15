@@ -140,7 +140,7 @@ Two defaults are deliberate safety calls pointing in **opposite** directions:
 
 - An **unrecognized impact reads `degraded`**, never `healthy`: a bad value must not make an impaired
   role silently harmless.
-- An **unrecognized recorded value reads `healthy`**: one stray row must not paint an fleet broken.
+- An **unrecognized recorded value reads `healthy`**: one stray row must not paint a fleet broken.
 
 The rule behind both: **fail loud about a judgement, fail quiet about a record.** Two more defaults
 follow: a **system with no roles is `healthy`** (nothing claimed about it), and a **quorum below

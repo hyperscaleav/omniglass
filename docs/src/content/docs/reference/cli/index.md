@@ -5035,7 +5035,7 @@ Read the fleet as the canvas draws it
 omniglass view fleet list
 ```
 
-The whole in-scope fleet in one read: every location flat with its parent and verdict, every system with its location and verdict, and one dot per component in each system. A dot carries an id, a verdict, and the primary/shared flags, never a component row: the canvas paints a square per component across the fleet, and an fleet-sized component list to draw squares is the cost this read exists to avoid. Each tier is scoped on its own read permission, so a principal who may read the place tree but not its components gets the shape of their fleet with no contents, and one with no fleet scope at all gets an empty canvas rather than a refusal. Gated by location:read.
+The whole in-scope fleet in one read: every location flat with its parent and verdict, every system with its location and verdict, and one dot per component in each system. A dot carries an id, a verdict, and the primary/shared flags, never a component row: the canvas paints a square per component across the fleet, and a fleet-sized component list to draw squares is the cost this read exists to avoid. Each tier is scoped on its own read permission, so a principal who may read the place tree but not its components gets the shape of their fleet with no contents, and one with no fleet scope at all gets an empty canvas rather than a refusal. Gated by location:read.
 
 Example:
 

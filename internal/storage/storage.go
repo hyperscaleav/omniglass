@@ -192,7 +192,7 @@ type Gateway interface {
 	WriteAuthEvent(ctx context.Context, actorID, verb string) error
 	// UpsertLocationType installs or updates a shipped (official) location type
 	// by name, the boot-seed phase's write. Idempotent and AUTHORITATIVE, so a
-	// value a release withdraws is withdrawn from an fleet that already seeded
+	// value a release withdraws is withdrawn from a fleet that already seeded
 	// it (#703); an operator's version of the row lives in registry_shadow and
 	// is resolved over it, never stomped by this.
 	UpsertLocationType(ctx context.Context, lt LocationType) error

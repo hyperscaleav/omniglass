@@ -84,7 +84,7 @@ export default function LabelPenField(props: {
   // "locked" and "posts nothing" cannot disagree.
   const state = () => penState(true, props.pen);
   // What the rule rendered, which is empty when no rule resolved at any tier: a
-  // real state (every location in an fleet that predates a location name rule),
+  // real state (every location in a fleet that predates a location name rule),
   // and the read ladder's answer for it is the row's own name.
   const rendered = () => props.entity().label?.trim() ?? "";
   const available = () => rendered() !== "";

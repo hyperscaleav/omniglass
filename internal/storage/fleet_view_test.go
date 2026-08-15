@@ -164,7 +164,7 @@ func TestFleetProjectionCarriesTheWholeInScopeTree(t *testing.T) {
 }
 
 // The whole point of a projection: dots, not rows. A regression here is silent
-// (the canvas still draws) and expensive (an fleet-sized component list on
+// (the canvas still draws) and expensive (a fleet-sized component list on
 // every paint), so the shape is pinned rather than trusted.
 func TestFleetProjectionCarriesDotsNotComponentRows(t *testing.T) {
 	f := newFleetFixture(t)

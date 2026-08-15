@@ -278,7 +278,7 @@ const locationTypeResolved = `
 // UpsertLocationType installs or updates a location type by name, the boot-seed
 // phase's write and the authoritative one: ON CONFLICT DO UPDATE, so a value a
 // release WITHDRAWS (a rule removed from location_types.yaml) is actually gone
-// from an fleet that already seeded it, rather than frozen at whatever the
+// from a fleet that already seeded it, rather than frozen at whatever the
 // first boot wrote (#703).
 //
 // It stomps nothing an operator owns, because an operator does not own these

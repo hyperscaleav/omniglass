@@ -11,7 +11,7 @@ import { api } from "../api/client";
 //
 // It is separately classified by a SYSTEM_TYPE: what kind of space it is (a
 // boardroom, a classroom, a video wall). The two answer different questions,
-// and an fleet can hold many standards under one coarse type. Also optional
+// and a fleet can hold many standards under one coarse type. Also optional
 // while the column is nullable.
 export type System = {
   id: string;

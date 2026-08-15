@@ -180,7 +180,7 @@ export default function MembersPanel(props: {
             {/* The uuid, not the name (#627 review, the pre-existing
                 surface): addMember resolves the component fleet-wide via
                 scopedByName (internal/api/members.go), which dual-accepts a
-                uuid unambiguously (ADR-0062) but 409s an fleet-wide-
+                uuid unambiguously (ADR-0062) but 409s a fleet-wide-
                 ambiguous name regardless of this system's own scope. */}
             <For each={addable()}>{(c) => <option value={c.id}>{c.name}</option>}</For>
           </select>

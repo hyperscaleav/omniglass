@@ -460,7 +460,7 @@ Shipped content is two kinds, never conflated:
   never written by an operator. The classification catalogs (`vendor`, `driver`, `component_type`,
   `product`) ride that path today, and `location_type` joined them in
   [ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask):
-  an fleet still shapes its own place vocabulary, through the
+  a fleet still shapes its own place vocabulary, through the
   [registry fork](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)
   rather than by owning the row, which is what lets a release WITHDRAW a shipped value.
 
@@ -991,7 +991,7 @@ unchanged and still **verbatim**: a row with no stored label renders its `name` 
 prettified version. The difference is that a rule renders a label and STORES it.
 
 Because a rule change's blast radius is the whole fleet, **shipping this rule restamps nothing on its
-own**. A new fleet gets a rendered label when each location is created; an fleet that already exists
+own**. A new fleet gets a rendered label when each location is created; a fleet that already exists
 keeps its raw kebab locations until an operator runs `:previewLabels` and `:recomputeLabels` on
 locations. The upgrade is an operator's act, not a release's.
 
@@ -1011,7 +1011,7 @@ tier. Reading the type alone was not enough for the case AV
 fleets are full of: a divisible boardroom is two `board` systems in one room, and both rendered
 "Boardroom", so the platform could tell them apart (`boardroom` and `boardroom-2`) and an operator
 reading the console could not. They now read "Boardroom" and "Boardroom 2". The same
-restamps-nothing rule applies as for locations: an fleet that already exists keeps both halves
+restamps-nothing rule applies as for locations: a fleet that already exists keeps both halves
 reading "Boardroom" until an operator runs `:previewLabels` and `:recomputeLabels` on systems.
 
 **`title` reads an acronym dictionary an operator owns.** Title-casing a word by upper-casing its

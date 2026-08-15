@@ -701,7 +701,7 @@ func TestResolveTagsSystemBandSurvivesScopedCaller(t *testing.T) {
 // scopedByName-plus-withoutCandidates call), which is why a prior round
 // drove it through the same fleet-wide-ambiguous fixture below and got the
 // same ErrAmbiguousName. It now resolves the component within THIS role's
-// current occupants instead, so an fleet-wide-ambiguous name that occupies
+// current occupants instead, so a fleet-wide-ambiguous name that occupies
 // nothing here is ErrAssignmentMissing, a cleaner and more honest answer
 // than a 409 over a component that was never actually a candidate for this
 // call. TestUnassignRoleResolvesFleetWideDuplicateWithinOccupancy and

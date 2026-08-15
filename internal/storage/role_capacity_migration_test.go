@@ -11,7 +11,7 @@ import (
 
 // TestDuplicateStaffingPreflightRaises proves the #626 one-role-per-component
 // migration (20260807140000_role_capacity_and_positions.sql) refuses to
-// upgrade an fleet that already has a component filling two roles in one
+// upgrade a fleet that already has a component filling two roles in one
 // system, rather than aborting mid-migration on an unnamed 23505: stand the
 // database at the schema immediately before that migration, write the
 // violating pair directly, and migrate forward over it.

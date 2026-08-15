@@ -69,7 +69,7 @@ import (
 // LocationLabel is the location's READ LADDER, the label an operator typed or
 // the platform rendered, else the location's own name, not the raw column. A
 // location rule ships now (#657), so most rows carry a label; the ladder is
-// still what a rule reads, because an fleet that predates the rule and has not
+// still what a rule reads, because a fleet that predates the rule and has not
 // run :recomputeLabels has none, and reading the column alone would render
 // placement as blank for every row in it.
 //

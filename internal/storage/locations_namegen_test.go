@@ -625,7 +625,7 @@ func TestNameRuleRoundTripsThroughTheRegistry(t *testing.T) {
 	}
 }
 
-// TestAForkedNameRuleSurvivesTheAuthoritativeSeed holds what an fleet keeps
+// TestAForkedNameRuleSurvivesTheAuthoritativeSeed holds what a fleet keeps
 // when a release withdraws a shipped name rule and the operator had set one of
 // their own: their rule, still generating names, after a boot that rewrote the
 // row underneath it.

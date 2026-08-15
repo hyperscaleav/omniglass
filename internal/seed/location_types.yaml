@@ -1,11 +1,11 @@
 # The shipped location types, written AUTHORITATIVELY on every boot
-# (ON CONFLICT DO UPDATE) as official rows the platform owns (#703). An fleet
+# (ON CONFLICT DO UPDATE) as official rows the platform owns (#703). A fleet
 # still shapes its own place vocabulary: an operator's edit of one of these
 # FORKS it into registry_shadow and every read resolves the fork over the row
 # (ADR-0095), so re-seeding never reverts an edit, and `:restore` hands the row
 # back. What the authoritative write buys is the other direction, which
 # insert-if-absent could not do at all: a value REMOVED from this file is
-# actually withdrawn from an fleet that already seeded it.
+# actually withdrawn from a fleet that already seeded it.
 #
 # The registry lists alphabetically by label; that ordering does NOT
 # constrain nesting. allowed_parent_types is what does: a set of

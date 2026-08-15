@@ -85,7 +85,7 @@ locations:
     parent: west
   # Boardroom A and B are the two halves of a divisible space, and they are two
   # ROOMS, not two systems sharing one. An air wall splits a room into rooms;
-  # nothing in an fleet has two boardrooms inside one boardroom. The shared bar
+  # nothing in a fleet has two boardrooms inside one boardroom. The shared bar
   # lives physically in A and serves both (components, below), which is what
   # actually happens when the wall opens, and it is why membership has to be
   # many-valued.
@@ -176,7 +176,7 @@ locations:
   # building at the root with rooms hanging straight off it, no campus above and
   # no floor between, which the seeded type registry allows and the model has
   # never required. Three tops shaped campus -> building -> floor -> room taught
-  # a fixed ladder that does not exist, and an fleet canvas read against only
+  # a fixed ladder that does not exist, and a fleet canvas read against only
   # that shape would let a fixed-ladder assumption ship green (#630).
   #
   # Pinned: the rule renders "Depot", and "Service Depot" is what the site is
@@ -201,7 +201,7 @@ locations:
 
 users:
   # Username convention: a user limited to a region carries that region in its name
-  # (viewer-hq, tech-east); an fleet-wide user carries none (operator). No `-dev`
+  # (viewer-hq, tech-east); a fleet-wide user carries none (operator). No `-dev`
   # suffix, since this fixture only ever seeds a dev environment. All share the
   # password `dev`.
 

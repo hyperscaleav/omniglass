@@ -26,7 +26,7 @@ func locationTypeNamed(t *testing.T, gw storage.Gateway, name string) *storage.L
 //
 // The mechanism changed, not the capability. Before, the row itself was
 // operator-owned (official=false), which is precisely why the seed could not
-// rewrite it and why a withdrawn value could never leave an fleet.
+// rewrite it and why a withdrawn value could never leave a fleet.
 func TestShippedLocationTypeForksAndRestores(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -174,7 +174,7 @@ func TestOperatorLocationTypeIsUntouchedByTheFork(t *testing.T) {
 // the gateway's own upsert: the seed write is the thing under test, and a setup
 // that goes through it would report a broken seed as a broken setup instead of
 // as the missed withdrawal. What the raw statement leaves behind is exactly what
-// an fleet that booted the release carrying floor's rule holds today.
+// a fleet that booted the release carrying floor's rule holds today.
 func TestWithdrawnShippedValueLeavesTheFleet(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -285,7 +285,7 @@ func TestClearNameRuleOnBothTypeKinds(t *testing.T) {
 // the registry row the fork covers, and nothing seeds one: every line is an
 // operator's. The official read-only guard was dormant on this registry (no row
 // was official), and activating it would have taken the contract editor away
-// for the four types an fleet actually uses.
+// for the four types a fleet actually uses.
 func TestShippedLocationTypeContractStaysWritable(t *testing.T) {
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()

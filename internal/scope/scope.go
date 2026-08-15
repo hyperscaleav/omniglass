@@ -208,7 +208,7 @@ func applicableKinds(resource string) map[string]bool {
 		// tiers can contain the owner: the gateway's inScopeTree walk resolves
 		// the specific owner within it.
 		//
-		// Pushed telemetry is the same shape: a batch is owned by an fleet entity
+		// Pushed telemetry is the same shape: a batch is owned by a fleet entity
 		// on that arc, so a grant at any arc tier can contain its owner. This is
 		// what fences POST /telemetry:push, and it matters that the fence resolves
 		// from telemetry:push rather than component:read, since a principal often

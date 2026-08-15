@@ -941,7 +941,7 @@ func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
 		built = append(built, c.ID)
 	}
 	// Put every write path through its paces on real rows, so the invariant is
-	// checked against an fleet that has been edited rather than only created.
+	// checked against a fleet that has been edited rather than only created.
 	if _, err := gw.RenameComponent(ctx, "", built[0], "kept-by-hand", all, all); err != nil {
 		t.Fatalf("rename: %v", err)
 	}

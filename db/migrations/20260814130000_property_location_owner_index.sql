@@ -10,7 +10,7 @@
 -- (location_id, id desc), exactly the ORDER BY, so the scan needs no sort.
 -- Nothing indexed `location_id` at all, so the per-location verdict subquery
 -- planned as a sequential scan of the telemetry lane, the largest table in the
--- system: an fleet of a few hundred locations scanned it a few hundred times
+-- system: a fleet of a few hundred locations scanned it a few hundred times
 -- per canvas paint. That is precisely the cost the projection exists to avoid,
 -- so the projection was reintroducing it.
 --

@@ -1,6 +1,6 @@
 import { createSignal } from "solid-js";
 
-// How an fleet entity is labelled, in one place.
+// How a fleet entity is labelled, in one place.
 //
 // The identity triad is `id` (a uuid, immutable), `name` (the renameable kebab
 // identifier an operator types and the API and CLI address the row by), and
@@ -39,7 +39,7 @@ export type IdentityBinding = keyof typeof IDENTITY_LABELS;
 // Labelled is the shape of anything the console labels: the name, plus the
 // optional label and the pen that says who owns it. It is deliberately
 // structural rather than a union of entity types, so a generated body satisfies
-// it without a cast, and so a row that is not an fleet entity at all (a
+// it without a cast, and so a row that is not a fleet entity at all (a
 // property, whose identifier column is named something else) can be adapted to
 // it in one expression rather than growing a seventh copy of the rule.
 //

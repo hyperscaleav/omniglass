@@ -100,7 +100,7 @@ type benchFleet struct {
 //
 // Correctness does not depend on this (ResetTimer already excludes the build
 // from the timing); the run's length does. Every benchmark in this file reads
-// the same two fleets, and `make bench` passes -count=5, so an fleet built
+// the same two fleets, and `make bench` passes -count=5, so a fleet built
 // inside the benchmark function would be provisioned dozens of times per run for
 // no measurable difference in the answer. Built once here, each size is
 // provisioned exactly once.
@@ -497,7 +497,7 @@ func BenchmarkEffectiveTags(b *testing.B) {
 //
 // The correlated subquery is the reason this is here rather than assumed cheap:
 // it is a per-system lookup into the property table, ordered and limited, and
-// property is the table that grows without bound as an fleet runs. It issues
+// property is the table that grows without bound as a fleet runs. It issues
 // one statement however many systems it covers, so counting sees a flat 3 and
 // always will; the cost lives entirely inside the plan.
 func BenchmarkLocationHealth(b *testing.B) {

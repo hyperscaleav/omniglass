@@ -94,7 +94,7 @@ Each is a gate; a red one blocks the ship.
    Adding a new one is a frontmatter entry plus a `::screenshot{#id}` directive in the prose,
    not a code change.
 10. **Audit coverage.** Every privileged **mutation** and every **auth event** the slice adds
-   writes an `audit_log` row: an fleet or IAM mutation through `writeAuditRes` **in the same
+   writes an `audit_log` row: a fleet or IAM mutation through `writeAuditRes` **in the same
    transaction** as the change (a committed change without its audit row is a red gate), and an
    auth event (login, logout, a denied sign-in) through `WriteAuthEvent` on the read/no-tx path.
    Grep the diff for new gateway writes and new handlers; each names an actor (and, under

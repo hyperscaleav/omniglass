@@ -57,7 +57,7 @@ A log line is **not** a third sample lane: it is untyped raw arrival on its own 
 
 ### Ownership: the exclusive-arc
 
-The owner is the **exclusive-arc**: an `owner_kind` enum (`component` / `system` / `location` / `node`) plus the matching typed FK, a CHECK enforcing exactly one set. No platform or fleet-root arm (an fleet-wide series is a design question). The same arc owns `event` and `command` rows and is the design for `alarm` (component-local today). System-, location-, and node-level samples are first-class ([health](/architecture/health/) is a `property` owned by a component, system, or location today), fixing Zabbix's inability to put a verdict on a group of hosts. See Ownership on the spine and the storage DDL.
+The owner is the **exclusive-arc**: an `owner_kind` enum (`component` / `system` / `location` / `node`) plus the matching typed FK, a CHECK enforcing exactly one set. No platform or fleet-root arm (a fleet-wide series is a design question). The same arc owns `event` and `command` rows and is the design for `alarm` (component-local today). System-, location-, and node-level samples are first-class ([health](/architecture/health/) is a `property` owned by a component, system, or location today), fixing Zabbix's inability to put a verdict on a group of hosts. See Ownership on the spine and the storage DDL.
 
 ### The instance dimension: many values of one name on one owner
 

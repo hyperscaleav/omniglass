@@ -48,7 +48,7 @@ import (
 // was about to change, so both could conclude they were recording an edge (two
 // consecutive identical rows, which is not an edge) or neither could (a real
 // transition, silently missing). Two alarms in one room is an ordinary minute in
-// an fleet, so this is not a corner. Every recompute therefore takes a
+// a fleet, so this is not a corner. Every recompute therefore takes a
 // transaction-scoped advisory lock on the owner BEFORE it resolves that owner's
 // inputs, and holds it to commit: the whole resolve-compare-write sequence is
 // serialized per owner, and the loser recomputes over the winner's committed
@@ -673,7 +673,7 @@ type SystemVerdict struct {
 // scope is an empty answer rather than a refusal.
 //
 // The shape is locationVerdict's, one `distinct on` pass over the series rather
-// than a correlated latest-row subquery per system, so an fleet of fifteen
+// than a correlated latest-row subquery per system, so a fleet of fifteen
 // thousand systems reads the property series once and not once per row.
 //
 // A system with nothing recorded is reported HEALTHY rather than omitted, and

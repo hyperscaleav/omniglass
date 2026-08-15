@@ -443,7 +443,7 @@ func runTogether(t *testing.T, writes ...func() error) {
 // the live database holds.
 //
 // Nothing about the sequence is exotic: two alarms on two components in one room
-// is a normal minute in an fleet, and a console that saves a panel fires its
+// is a normal minute in a fleet, and a console that saves a panel fires its
 // writes together. The locations above the rooms make the same point harder,
 // since every one of these writes rolls up through the same three of them.
 func TestHealthConcurrentWritesRecordOneEdge(t *testing.T) {

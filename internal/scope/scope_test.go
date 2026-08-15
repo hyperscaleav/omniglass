@@ -332,7 +332,7 @@ func TestResolveAlarmResolvesOnTheComponentTierFromItsOwnAction(t *testing.T) {
 	idx := rbac.NewRoleIndex([]rbac.Role{
 		// A responder may acknowledge and read, and may not touch the component.
 		{ID: "responder", Permissions: []string{"alarm:acknowledge"}},
-		// An fleet-wide reader may see everything and acknowledge nothing.
+		// A fleet-wide reader may see everything and acknowledge nothing.
 		{ID: "viewer", Permissions: []string{"*:read"}},
 	})
 
@@ -379,7 +379,7 @@ func TestResolveCommandResolvesOnTheComponentTierFromItsOwnAction(t *testing.T) 
 	idx := rbac.NewRoleIndex([]rbac.Role{
 		// An issuer may command and read, and may not edit the component.
 		{ID: "issuer", Permissions: []string{"command:issue"}},
-		// An fleet-wide reader may see everything and command nothing.
+		// A fleet-wide reader may see everything and command nothing.
 		{ID: "viewer", Permissions: []string{"*:read"}},
 	})
 

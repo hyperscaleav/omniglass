@@ -646,7 +646,7 @@ caused are never separately visible, and the recorded edge carries the time the 
 
 The permission is its own because recording that somebody looked is not editing the component, and a
 role may hold one without the other. Its scope resolves on the **component tier from
-`alarm:acknowledge` itself**, so an fleet-wide read never widens what may be acknowledged and a
+`alarm:acknowledge` itself**, so a fleet-wide read never widens what may be acknowledged and a
 narrow component write never narrows it; a component outside that scope is a non-disclosing **404**.
 Acknowledgement is **orthogonal to cleared** in both directions: an alarm can be acknowledged and
 still raised, raised and unacknowledged, or cleared having never been acknowledged, and a cleared
@@ -685,7 +685,7 @@ earns its own tier only when composing the entity reads in the browser would be 
   with its `parent` and `verdict`, every system with its `location` and `verdict`, and one **dot**
   per component in each system. A dot is `{component, name, verdict, primary, shared}` and nothing
   else. The canvas paints a square per component across the whole fleet, so a component **row** per
-  square is an fleet-sized payload on every paint; the projection is the shape that avoids it, and
+  square is a fleet-sized payload on every paint; the projection is the shape that avoids it, and
   the wire is pinned by test against being widened back into a component list.
 
 Two properties are worth stating because they are easy to lose:

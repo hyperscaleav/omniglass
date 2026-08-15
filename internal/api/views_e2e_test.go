@@ -39,7 +39,7 @@ type fleetViewWire struct {
 // TestFleetViewAPI drives the fleet projection over HTTP as the canvas will.
 // Two claims are worth driving end to end rather than at the gateway: that the
 // wire carries dots and not component rows (a regression there is invisible on
-// screen and costs an fleet-sized payload per paint), and that an alarm moves
+// screen and costs a fleet-sized payload per paint), and that an alarm moves
 // the dot, so the canvas is reading the same rollup the detail page reads
 // rather than a second opinion.
 func TestFleetViewAPI(t *testing.T) {

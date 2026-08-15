@@ -1,4 +1,4 @@
-// Package health computes an fleet's health verdict from resolved inputs. The
+// Package health computes a fleet's health verdict from resolved inputs. The
 // rollup is a pure function on purpose: the subtle cases (quorum boundaries, a
 // role nobody staffed, a component an alarm has taken down) are where this
 // gets quietly wrong, and they are far easier to pin down in a unit test than
@@ -42,7 +42,7 @@ func (v Verdict) String() string {
 }
 
 // ParseVerdict reads a recorded verdict back. An unrecognized value is Healthy,
-// so a stray row cannot make an fleet look broken.
+// so a stray row cannot make a fleet look broken.
 func ParseVerdict(s string) Verdict {
 	switch s {
 	case "outage":

@@ -13,7 +13,7 @@ import { uuidFor } from "../lib/testids";
 
 // A secret at the `platform` tier is install-wide, so the server gates the write on
 // `platform:<action>` on top of `secret:<action>`. The console must gate the same
-// way: an fleet writer (every secret action, at the all scope) holds full fleet
+// way: a fleet writer (every secret action, at the all scope) holds full fleet
 // reach and no install-wide authority, so it must not be offered the Platform scope
 // on the create form nor Edit / Delete on a tier row, and it should read which
 // capability it is missing rather than earn a 403. Same treatment as the Settings
@@ -94,7 +94,7 @@ describe("Secrets page platform-tier authority", () => {
     expect((screen.getByLabelText("Scope") as HTMLSelectElement).value).toBe("platform");
   });
 
-  it("withholds the Platform scope from an fleet writer and names the missing capability", async () => {
+  it("withholds the Platform scope from a fleet writer and names the missing capability", async () => {
     mount(fleetWriter);
     expect(await screen.findByText("poll_community")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /new secret/i }));
@@ -103,7 +103,7 @@ describe("Secrets page platform-tier authority", () => {
     expect(screen.getByText(/platform:create/)).toBeInTheDocument();
   });
 
-  it("hides Edit and Delete on a platform-tier row from an fleet writer and says why", async () => {
+  it("hides Edit and Delete on a platform-tier row from a fleet writer and says why", async () => {
     mount(fleetWriter);
     expect(await screen.findByText("poll_community")).toBeInTheDocument();
     const blade = await openBlade("poll_community");

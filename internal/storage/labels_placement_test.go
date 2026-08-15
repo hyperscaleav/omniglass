@@ -131,7 +131,7 @@ func TestThePlacementKeysAreExactlyTwoOnComponentAndOneOnSystem(t *testing.T) {
 // The last rung is what this pins, and it is exactly what #657 did NOT change.
 // A location rule ships now, so a location created here carries a rendered
 // label and the rung is not reached by default; the shipped default is
-// therefore blanked first, which is also the state of an fleet that upgraded
+// therefore blanked first, which is also the state of a fleet that upgraded
 // into that rule and has not run /locations:recomputeLabels yet. That fleet
 // reads raw kebab names, and it has to read them EXACTLY, never a prettified
 // version invented on the read path.
@@ -764,7 +764,7 @@ func assertNoLabelDrift(t *testing.T, gw *storage.PG, ctx context.Context) {
 
 // --- the invariant ------------------------------------------------------
 
-// The recompute-and-compare invariant, over an fleet that has been PUT
+// The recompute-and-compare invariant, over a fleet that has been PUT
 // THROUGH every act this slice knows of, on all three tiers, with rules that
 // read placement on two of them.
 //

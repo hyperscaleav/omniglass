@@ -326,7 +326,7 @@ func TestSystemVerdictWithChoices(t *testing.T) {
 }
 
 // The recorded string round-trips, since the transition log stores it as text and
-// a misread would silently change an fleet's history.
+// a misread would silently change a fleet's history.
 func TestVerdictRoundTrip(t *testing.T) {
 	for _, v := range []health.Verdict{health.Healthy, health.Degraded, health.Outage} {
 		if got := health.ParseVerdict(v.String()); got != v {
@@ -334,7 +334,7 @@ func TestVerdictRoundTrip(t *testing.T) {
 		}
 	}
 	if got := health.ParseVerdict("garbage"); got != health.Healthy {
-		t.Fatalf("unrecognized recorded value = %v, want healthy (a stray row cannot break an fleet)", got)
+		t.Fatalf("unrecognized recorded value = %v, want healthy (a stray row cannot break a fleet)", got)
 	}
 }
 
