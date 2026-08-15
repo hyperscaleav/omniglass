@@ -5431,3 +5431,23 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   silently; `DOCS_SHOTS_PROXY` retires with the dependency it worked around. The ten shots recapture
   byte-identical, which is the proof the vendored files are the same faces the browser was fetching
   (ADR-0121, #775).
+
+- **A select takes its value when its options land.** A native `<select>` holds no memory of a value
+  it has no `<option>` for: assign one and the control keeps nothing, and when the options arrive the
+  browser selects the first one instead. Every blade that deep-links into edit has the ingredients,
+  because the stored value is known as soon as the entity resolves while the options come from a
+  query that answers when it answers, so it presented as a flake and an operator who saved in that
+  window saved the fallback. A `value=` binding cannot answer it: Solid re-runs that when the VALUE
+  changes and in the losing order the value never changes, the options do.
+  `bindSelectValue(value, ...options)` (`web/src/lib/selectvalue.ts`) is the one primitive, used as
+  the control's `ref`: an effect that reads every option source and then assigns the value, owned by
+  the ref's owner so it dies with the edit face, running after the `<For>` that fills the control.
+  Eleven controls convert, eight of them shared pickers that carry the fix to every consumer
+  (`TreeSelect` across five pages, the two type-tree pickers, the node, vendor, driver and
+  parent-standard pickers, and the command-type target picker over both its catalogs); three are
+  page-local edit faces (location type, system standard, node placement). Twenty-six of the
+  thirty-seven select sites are deliberately untouched, and the classification is the point: a
+  hard-coded or generated option list has no async gap, and a control whose value starts empty and
+  only moves because the operator moved it has nothing stored to lose. Every test drives the gap by
+  hand, delivering the collection between two assertions rather than sleeping on a race
+  (ADR-0122, #398, #772).
