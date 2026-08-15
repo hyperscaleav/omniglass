@@ -29,6 +29,7 @@ primitive-first. The first consumers are the ⌘K command palette and the form/d
 | Components / theme | daisyUI 5 on Tailwind CSS v4 (the `omniglass-dark` / `omniglass-light` themes) |
 | Interactive primitives | Kobalte (`Dialog` for the palette and Drawer; daisyUI `dropdown` for menus), styled by daisyUI |
 | Data fetching | `@tanstack/solid-query` over a typed `openapi-fetch` client |
+| Typefaces | IBM Plex Sans (UI) and JetBrains Mono (data), both OFL 1.1, **vendored and served by the binary** |
 | Build / test | Vite, Vitest, `@solidjs/testing-library` |
 | Flow / graph viz (future) | for the learning + explore surfaces; not built yet |
 | Dashboards (future) | a widget grid for the dashboards surface; not built yet |
@@ -395,6 +396,39 @@ custom method goes last, because the rename is separately gated by `<resource>:r
 one call that can be refused on its own. Last means a refusal leaves the rest of the edit saved and
 the name unchanged, rather than the reverse. On success the page navigates to the entity's new
 address, since the old one no longer resolves ([ADR-0076](/architecture/decisions/)).
+
+## Typefaces
+
+Two families: **IBM Plex Sans** for UI text and **JetBrains Mono** for data, IDs, and counts, named
+by `--og-font-ui` and `--og-font-data` in `web/src/app.css`. Both are **self-hosted**. The console
+loads no stylesheet and preconnects to no host off its own origin, because a console that needs a
+third party to render is a console that renders wrong on the closed campus and AV networks this
+product is deployed into ([ADR-0121](/architecture/decisions/)).
+
+The files are vendored under `web/public/fonts/`, which Vite copies verbatim into the build that
+`internal/webui/spa_embed.go` compiles into the binary, so the faces ship inside the one artifact and
+are served from it (`font/woff2` stated by the handler, since the runtime images carry no mime
+database). `web/src/fonts.css` declares them and is **generated**, never hand-edited:
+
+```bash
+node web/scripts/vendor-fonts.mjs   # re-vendor after changing a weight or a family
+```
+
+Three properties are load-bearing, and each is pinned by a test
+(`web/src/font-hosting-guard.test.ts`, `web/src/fontguard.test.ts`):
+
+- **Every script Google served is vendored** (latin, latin-ext, cyrillic, cyrillic-ext, greek,
+  vietnamese: 54 files, 1,005,028 bytes), so an operator-supplied string in any of them renders
+  exactly as it did before. `unicode-range` keeps the split, so a latin page still fetches only the
+  latin file. A codepoint no block covers (CJK, Arabic, Hebrew) falls through to the next family in
+  the stack and renders in the platform UI face, which is what already happened: these families carry
+  no such glyphs at any source.
+- **`font-display: block`, not `swap`.** Same-origin and embedded, so the block period costs nothing
+  measurable, and block is the only value that cannot paint fallback metrics. `optional` would be
+  worse than the bug it fixes: it may keep the fallback for the life of the page.
+- **The docs capture refuses to photograph the wrong face.** `web/e2e/fontguard.mjs` asserts, per
+  shot, that every declared face exists and that both families actually rendered from their own
+  files, and aborts the capture otherwise.
 
 ## Build and embed
 
