@@ -138,8 +138,8 @@ func TestARuleRenderingNothingLeavesTheLabelUnsetRatherThanBlank(t *testing.T) {
 	if !c.LabelGenerated {
 		t.Fatal("an empty render took the pen away from the platform")
 	}
-	if raw := rawLabel(t, ctx, dsn, c.ID); raw == nil || *raw != "" {
-		t.Fatalf("on create the stored label is %v, want the empty string, the one spelling of unset (#613)", raw)
+	if raw := rawLabel(t, ctx, dsn, c.ID); raw != nil {
+		t.Fatalf("on create the stored label is %q, want SQL NULL, the one spelling of unset (#613)", *raw)
 	}
 
 	// Then the case that actually WRITES the empty value, which is the one a
@@ -170,8 +170,8 @@ func TestARuleRenderingNothingLeavesTheLabelUnsetRatherThanBlank(t *testing.T) {
 	if !emptied.LabelGenerated {
 		t.Fatal("an empty re-render took the pen away from the platform")
 	}
-	if raw := rawLabel(t, ctx, dsn, c.ID); raw == nil || *raw != "" {
-		t.Fatalf("after an empty re-render the stored label is %v, want the empty string (#613)", raw)
+	if raw := rawLabel(t, ctx, dsn, c.ID); raw != nil {
+		t.Fatalf("after an empty re-render the stored label is %q, want SQL NULL (#613)", *raw)
 	}
 }
 

@@ -27,7 +27,7 @@ var ErrUnknownRoleOwner = errors.New("storage: unknown role owner_kind")
 // this list: omitting it left the audit trail blind to exactly the field
 // this fix round made deliberately writable, so a role moving between
 // alternates left no evidence.
-var systemRoleCols = `id, owner_kind, name, label, quorum, capacity, position_labels, impact, alternate_id, ` +
+var systemRoleCols = `id, owner_kind, name, coalesce(label, ''), quorum, capacity, position_labels, impact, alternate_id, ` +
 	alternateRefExpr("system_role") + `, created_at, updated_at`
 
 // alternateRefExpr renders a role's alternate membership as the address the
@@ -167,7 +167,7 @@ func (p *PG) ListSystemRoles(ctx context.Context, ownerKind, ownerID string) ([]
 	// The columns are spelled out rather than reusing systemRoleCols: the join
 	// needs them qualified by the role alias.
 	q := fmt.Sprintf(`
-		select r.id, r.owner_kind, r.name, r.label, r.quorum, r.capacity, r.position_labels, r.impact,
+		select r.id, r.owner_kind, r.name, coalesce(r.label, ''), r.quorum, r.capacity, r.position_labels, r.impact,
 		       `+alternateRefExpr("r")+` as alternate, r.created_at, r.updated_at,
 		       coalesce(array_agg(distinct ct.name order by ct.name) filter (where ct.name is not null), '{}') as types,
 		       coalesce(array_agg(distinct pr.name order by pr.name) filter (where pr.name is not null), '{}') as products
@@ -354,7 +354,7 @@ func (p *PG) SetSystemRole(ctx context.Context, actorID, ownerKind, ownerID stri
 		on conflict (owner_kind, standard_id, system_id, name) do update
 			set %s
 		returning `+systemRoleCols, col, roleOwnerExpr(ownerKind), strings.Join(sets, ",\n\t\t\t    ")),
-		ownerKind, ownerArg, spec.Name, display, quorum, capacity, positionLabels, impact, alternateID))
+		ownerKind, ownerArg, spec.Name, labelOrNull(display), quorum, capacity, positionLabels, impact, alternateID))
 	if err != nil {
 		return nil, mapRoleWriteErr(err)
 	}
@@ -520,7 +520,7 @@ func (p *PG) SeedSystemRole(ctx context.Context, ownerKind, ownerID string, spec
 		values ($1, %s, $3, $4, $5, $6, $7, $8, nullif($9, '')::uuid)
 		on conflict (owner_kind, standard_id, system_id, name) do nothing
 		returning id`, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerArg, spec.Name, spec.Label, max(spec.Quorum, 1), spec.Capacity, positionLabels, impact, spec.AlternateID).Scan(&id)
+		ownerKind, ownerArg, spec.Name, labelOrNull(spec.Label), max(spec.Quorum, 1), spec.Capacity, positionLabels, impact, spec.AlternateID).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil // already there, and the operator owns it now
 	}

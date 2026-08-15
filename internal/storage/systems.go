@@ -193,7 +193,7 @@ type SystemMove struct {
 
 // parent_standard_id stores a uuid; the parent's handle is projected beside it,
 // as the estate arcs do.
-const standardCols = `id, name, official, label, parent_standard_id,
+const standardCols = `id, name, official, coalesce(label, ''), parent_standard_id,
 	(select p.name from standard p where p.id = standard.parent_standard_id) as parent_handle, label_rule`
 
 func scanStandard(row pgx.Row) (*Standard, error) {
@@ -233,7 +233,7 @@ func (p *PG) SeedStandard(ctx context.Context, st Standard) error {
 		insert into standard (name, official, label, parent_standard_id, label_rule)
 		values ($1, $2, $3, (select id from standard where name = nullif($4, '')), $5)
 		on conflict (name) do nothing`,
-		st.Name, st.Official, st.Label, st.ParentStandardID, nilIfEmpty(st.LabelRule))
+		st.Name, st.Official, labelOrNull(st.Label), st.ParentStandardID, nilIfEmpty(st.LabelRule))
 	if err != nil {
 		return fmt.Errorf("storage: seed standard %q: %w", st.Name, err)
 	}
@@ -250,7 +250,7 @@ func (p *PG) UpsertStandard(ctx context.Context, st Standard) error {
 			    parent_standard_id = excluded.parent_standard_id,
 			    label_rule         = excluded.label_rule,
 			    updated_at         = now()`,
-		st.Name, st.Official, st.Label, st.ParentStandardID, nilIfEmpty(st.LabelRule))
+		st.Name, st.Official, labelOrNull(st.Label), st.ParentStandardID, nilIfEmpty(st.LabelRule))
 	if err != nil {
 		return fmt.Errorf("storage: upsert standard %q: %w", st.ID, err)
 	}
@@ -259,9 +259,9 @@ func (p *PG) UpsertStandard(ctx context.Context, st Standard) error {
 
 // ListStandards returns every standard, ordered alphabetically by label,
 // with unlabelled rows last and the name breaking ties (#613; see ListVendors for
-// why the ordering is spelled nullif(...) nulls last).
+// why `nulls last` is written out).
 func (p *PG) ListStandards(ctx context.Context) ([]Standard, error) {
-	rows, err := p.pool.Query(ctx, `select `+standardCols+` from standard order by nullif(label, '') nulls last, name`)
+	rows, err := p.pool.Query(ctx, `select `+standardCols+` from standard order by label nulls last, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list standards: %w", err)
 	}
@@ -323,7 +323,7 @@ func (p *PG) CreateStandard(ctx context.Context, actorID string, st Standard) (*
 		insert into standard (name, official, label, parent_standard_id, label_rule)
 		values ($1, false, $2, (select id from standard where name = $3 or id::text = $3), $4)
 		returning `+standardCols,
-		st.Name, st.Label, st.ParentStandardID, nilIfEmpty(st.LabelRule)))
+		st.Name, labelOrNull(st.Label), st.ParentStandardID, nilIfEmpty(st.LabelRule)))
 	if err != nil {
 		return nil, mapStandardWriteErr(err)
 	}
@@ -359,9 +359,10 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 		}
 		return nil, fmt.Errorf("storage: audit image standard %q: %w", id, err)
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	st, err := scanStandard(tx.QueryRow(ctx, `
 		update standard set
-			label       = coalesce($2, label),
+			label       = case when $5::boolean then $2 else label end,
 			parent_standard_id = coalesce((select id from standard where name = $3 or id::text = $3), parent_standard_id),
 			-- An explicit empty string CLEARS the rule; see UpdateComponentType's
 			-- own label_rule CASE for why this is not a coalesce.
@@ -373,7 +374,7 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 			updated_at         = now()
 		where `+registryRefCol(id)+` = $1
 		returning `+standardCols,
-		id, patch.Label, patch.ParentStandardID, patch.LabelRule))
+		id, labelVal, patch.ParentStandardID, patch.LabelRule, setLabel))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -405,7 +406,7 @@ func (p *PG) DeleteStandard(ctx context.Context, actorID, id string) error {
 // The system_type handle is a live subselect, not a stored copy: the row is
 // pinned by uuid, so renaming the registry row moves the projected name with it
 // and can never orphan the classification.
-const systemCols = `id, name, label, name_generated, ordinal, label_generated, standard_id,
+const systemCols = `id, name, coalesce(label, ''), name_generated, ordinal, label_generated, standard_id,
 	(select st.name from standard st where st.id = system.standard_id) as standard_handle,
 	system_type_id,
 	(select ty.name from system_type ty where ty.id = system.system_type_id) as system_type_handle,
@@ -640,7 +641,7 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 		insert into system (name, label, standard_id, system_type_id, parent_id, location_id, name_generated, ordinal, label_generated)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		returning `+systemCols,
-		name, spec.Label, standardID, systemTypeID, parentID, locationID, generated, ordinal, spec.Label == ""))
+		name, labelOrNull(spec.Label), standardID, systemTypeID, parentID, locationID, generated, ordinal, strings.TrimSpace(spec.Label) == ""))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}
@@ -772,19 +773,17 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 			namePatch, ordinalPatch = &newName, &newOrdinal
 		}
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	after, err := scanSystem(tx.QueryRow(ctx, `
 		update system set
 			name    = coalesce($8, name),
 			ordinal = coalesce($9::integer, ordinal),
-			-- Three-state like the fields below it, not a coalesce: a value is
-			-- the operator typing a label and taking the pen ($7), and the empty
-			-- string is how they clear it and hand the pen back (#682). Two
-			-- branches, not three: since #613 '' IS the cleared state and a null
-			-- would violate the column (ADR-0118).
-			label = case
-				when $2::text is null then label
-				else $2::text
-			end,
+			-- Two parameters rather than one overloaded: $10 says whether the
+			-- caller named the field, $2 is the value, and an empty or
+			-- whitespace-only value is already SQL NULL by the time it gets here
+			-- (labelOrNull, ADR-0118). Typing a label takes the pen ($7),
+			-- clearing it hands the pen back (#682).
+			label = case when $10::boolean then $2 else label end,
 			label_generated = $7,
 			-- standard_id follows the house patch convention: a nil field is left
 			-- unchanged, and a provided empty string CLEARS the column, which is how a
@@ -806,8 +805,8 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 			updated_at   = now()
 		where id = $1
 		returning `+systemCols,
-		before.ID, patch.Label, patch.StandardID, standardPatchID, patch.SystemTypeID, systemTypePatchID,
-		labelPen(before.LabelGenerated, patch.Label), namePatch, ordinalPatch))
+		before.ID, labelVal, patch.StandardID, standardPatchID, patch.SystemTypeID, systemTypePatchID,
+		labelPen(before.LabelGenerated, patch.Label), namePatch, ordinalPatch, setLabel))
 	if err != nil {
 		return nil, mapSystemWriteErr(err)
 	}

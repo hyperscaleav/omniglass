@@ -42,7 +42,7 @@ var (
 
 // commandTypeCols selects a command type with each target arm resolved to a name
 // (the both-forms handle), NULL rendered as the empty string.
-const commandTypeCols = `id, name, label, description, params_schema, settle_window_seconds,
+const commandTypeCols = `id, name, coalesce(label, ''), description, params_schema, settle_window_seconds,
 	coalesce((select pt.name from property_type pt where pt.id = command_type.target_property_type_id), '') as target,
 	coalesce((select mt.name from metric_type mt where mt.id = command_type.target_metric_type_id), '') as metric_target, official`
 
@@ -83,7 +83,7 @@ func (p *PG) UpsertCommandType(ctx context.Context, ct CommandType) error {
 			params_schema = excluded.params_schema, settle_window_seconds = excluded.settle_window_seconds,
 			target_property_type_id = excluded.target_property_type_id,
 			target_metric_type_id = excluded.target_metric_type_id, official = excluded.official`,
-		ct.Name, ct.Label, ct.Description, schemaArg(ct.ParamsSchema), ct.SettleWindowSeconds, propID, metricID, ct.Official)
+		ct.Name, labelOrNull(ct.Label), ct.Description, schemaArg(ct.ParamsSchema), ct.SettleWindowSeconds, propID, metricID, ct.Official)
 	if err != nil {
 		return fmt.Errorf("storage: upsert command type %q: %w", ct.Name, err)
 	}
@@ -257,7 +257,7 @@ func (p *PG) CreateCommandType(ctx context.Context, actorID string, spec Command
 		`insert into command_type (name, label, description, params_schema, settle_window_seconds, target_property_type_id, target_metric_type_id, official)
 		 values ($1, $2, $3, $4, $5, $6, $7, false)
 		 returning id`,
-		spec.Name, spec.Label, spec.Description, schemaArg(spec.ParamsSchema), spec.SettleWindowSeconds, propTarget, metricTarget).Scan(&ctID); err != nil {
+		spec.Name, labelOrNull(spec.Label), spec.Description, schemaArg(spec.ParamsSchema), spec.SettleWindowSeconds, propTarget, metricTarget).Scan(&ctID); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrCommandTypeExists
 		}
@@ -319,9 +319,10 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 	}
 	// The target is one fact with two forms: writing a non-empty arm clears the
 	// other, so the arc CHECK can never trip on a patch that names one target.
+	setLabel, labelVal := labelPatch(patch.Label)
 	if _, err := tx.Exec(ctx, `
 		update command_type set
-			label          = coalesce($2, label),
+			label          = case when $10::boolean then $2 else label end,
 			description           = coalesce($3, description),
 			params_schema         = coalesce($4, params_schema),
 			settle_window_seconds = coalesce($5, settle_window_seconds),
@@ -334,8 +335,8 @@ func (p *PG) UpdateCommandType(ctx context.Context, actorID, name string, patch 
 				when $6::boolean and $7::uuid is not null then null
 				else target_metric_type_id end
 		where name = $1`,
-		name, patch.Label, patch.Description, schemaArg(patch.ParamsSchema), patch.SettleWindowSeconds,
-		patch.TargetPropertyType != nil, propTarget, patch.TargetMetricType != nil, metricTarget); err != nil {
+		name, labelVal, patch.Description, schemaArg(patch.ParamsSchema), patch.SettleWindowSeconds,
+		patch.TargetPropertyType != nil, propTarget, patch.TargetMetricType != nil, metricTarget, setLabel); err != nil {
 		return nil, fmt.Errorf("storage: update command type %q: %w", name, err)
 	}
 	ct, err := scanCommandType(tx.QueryRow(ctx, `select `+commandTypeCols+` from command_type where name = $1`, name))

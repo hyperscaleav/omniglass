@@ -84,7 +84,7 @@ type Worklist struct {
 // scalar subquery: the id is what the row points at, the name is what an operator
 // reads and types. The subquery form works in a plain select and in a RETURNING
 // list alike, so the insert and update paths need no join.
-const nodeCols = `principal_id, name, label, description,
+const nodeCols = `principal_id, name, coalesce(label, ''), description,
 	(select l.name from location l where l.id = node.location_id) as location_name, location_id,
 	last_heartbeat_at, enrolled_at, created_at, updated_at`
 
@@ -125,7 +125,7 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 	n, err := scanNode(tx.QueryRow(ctx, `
 		insert into node (principal_id, name, label, description, location_id)
 		values ($1, $2, $3, $4, $5)
-		returning `+nodeCols, pid, spec.Name, spec.Label, spec.Description, locationID))
+		returning `+nodeCols, pid, spec.Name, labelOrNull(spec.Label), spec.Description, locationID))
 	if err != nil {
 		return nil, mapNodeWriteErr(err)
 	}
@@ -166,15 +166,16 @@ func (p *PG) UpdateNode(ctx context.Context, actorID, name string, patch NodePat
 	if err != nil {
 		return nil, err
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	after, err := scanNode(tx.QueryRow(ctx, `
 		update node set
-			label  = coalesce($2, label),
+			label  = case when $6::boolean then $2 else label end,
 			description   = coalesce($3, description),
 			location_id   = case when $4 then $5 else location_id end,
 			updated_at    = now()
 		where name = $1
 		returning `+nodeCols,
-		name, patch.Label, patch.Description, patch.LocationName != nil, locationID))
+		name, labelVal, patch.Description, patch.LocationName != nil, locationID, setLabel))
 	if err != nil {
 		return nil, mapNodeWriteErr(err)
 	}

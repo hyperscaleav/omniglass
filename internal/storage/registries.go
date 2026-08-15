@@ -49,7 +49,7 @@ func (p *PG) UpsertPropertyType(ctx context.Context, prop PropertyType) error {
 			label = excluded.label, data_type = excluded.data_type,
 			validation = excluded.validation, fusion_policy = excluded.fusion_policy,
 			description = excluded.description, official = excluded.official`,
-		prop.Name, prop.Label, prop.DataType, prop.Validation, prop.FusionPolicy, prop.Description, prop.Official)
+		prop.Name, labelOrNull(prop.Label), prop.DataType, prop.Validation, prop.FusionPolicy, prop.Description, prop.Official)
 	if err != nil {
 		return fmt.Errorf("storage: upsert property %q: %w", prop.Name, err)
 	}

@@ -61,7 +61,7 @@ func taskID(interfaceID, mode string, spec []byte) string {
 // to resolve placement. The interface arc stores node.principal_id, so the
 // projection resolves it to the node's name, which is what Task.Node carries.
 // Callers always join `interface i on i.id = t.interface_id`.
-const taskSelectJoin = `t.id, t.label, t.mode, t.interface_id,
+const taskSelectJoin = `t.id, coalesce(t.label, ''), t.mode, t.interface_id,
 	(select n.name from node n where n.principal_id = i.node_name) as node_name, i.node_name,
 	t.spec, t.enabled, t.created_at, t.updated_at`
 

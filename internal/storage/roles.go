@@ -345,7 +345,7 @@ func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.S
 			select r.*, false as from_standard
 			from sys join system_role r on r.owner_kind = 'system' and r.system_id = sys.id
 		)
-		select roles.id, roles.name, roles.label, roles.quorum, roles.capacity, roles.position_labels,
+		select roles.id, roles.name, coalesce(roles.label, ''), roles.quorum, roles.capacity, roles.position_labels,
 		       roles.impact, `+alternateRefExpr("roles")+` as alternate,
 		       roles.from_standard, roles.created_at, roles.updated_at,
 		       coalesce((select array_agg(ct.name order by ct.name)
@@ -484,7 +484,7 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	// role a component already holds stays idempotent.
 	var heldRole string
 	err = tx.QueryRow(ctx, `
-		select r.label from system_role_assignment ra
+		select coalesce(r.label, '') from system_role_assignment ra
 		join system_role r on r.id = ra.role_id
 		where ra.system_id = $1::uuid
 		  and ra.component_id = $2::uuid
@@ -793,7 +793,7 @@ func roleRefNames(refs []roleRef) []string {
 func (p *PG) resolveRole(ctx context.Context, q txQuerier, systemID, roleName string) (id, label string, acceptedTypes, pinnedProducts []roleRef, err error) {
 	err = q.QueryRow(ctx, `
 		with sys as (select id, name, standard_id from system where id = $1::uuid)
-		select r.id, r.label
+		select r.id, coalesce(r.label, '')
 		from sys
 		join system_role r
 		     on (r.owner_kind = 'system' and r.system_id = sys.id)

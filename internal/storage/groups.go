@@ -72,7 +72,7 @@ type GroupMember struct {
 	Label       string
 }
 
-const groupCols = `id, name, label, coalesce(description, ''), created_at, updated_at`
+const groupCols = `id, name, coalesce(label, ''), coalesce(description, ''), created_at, updated_at`
 
 // groupColsWithCounts adds the member and grant counts as correlated subqueries,
 // aliasing the table `g`, for the list and get reads that display a group's size.
@@ -113,7 +113,7 @@ func (p *PG) CreateGroup(ctx context.Context, actorID string, spec GroupSpec, ac
 
 	g, err := scanGroup(tx.QueryRow(ctx,
 		`insert into principal_group (name, label, description) values ($1, $2, $3) returning `+groupCols,
-		spec.Name, spec.Label, nullize(spec.Description)))
+		spec.Name, labelOrNull(spec.Label), nullize(spec.Description)))
 	if err != nil {
 		return nil, mapGroupWriteErr(err)
 	}
@@ -185,7 +185,7 @@ func (p *PG) UpdateGroup(ctx context.Context, actorID, groupID string, patch Gro
 	}
 	after, err := scanGroup(tx.QueryRow(ctx,
 		`update principal_group set label = $2, description = $3, updated_at = now() where id = $1 returning `+groupCols,
-		groupID, display, nullize(desc)))
+		groupID, labelOrNull(display), nullize(desc)))
 	if err != nil {
 		return nil, mapGroupWriteErr(err)
 	}

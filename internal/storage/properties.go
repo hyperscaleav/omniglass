@@ -34,7 +34,7 @@ type PropertyTypePatch struct {
 	Validation  []byte
 }
 
-const propertyCols = `id, name, label, data_type, validation, fusion_policy, description, official`
+const propertyCols = `id, name, coalesce(label, ''), data_type, validation, fusion_policy, description, official`
 
 func scanPropertyType(row pgx.Row) (*PropertyType, error) {
 	var prop PropertyType
@@ -117,7 +117,7 @@ func (p *PG) CreatePropertyType(ctx context.Context, actorID string, spec Proper
 		`insert into property_type (name, label, data_type, validation, description, official)
 		 values ($1, $2, $3, $4, $5, false)
 		 returning id`,
-		spec.Name, spec.Label, spec.DataType, spec.Validation, spec.Description).Scan(&ptID); err != nil {
+		spec.Name, labelOrNull(spec.Label), spec.DataType, spec.Validation, spec.Description).Scan(&ptID); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrPropertyTypeExists
 		}
@@ -154,13 +154,14 @@ func (p *PG) UpdatePropertyType(ctx context.Context, actorID, name string, patch
 		}
 		return nil, fmt.Errorf("storage: audit image property_type %q: %w", name, err)
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	if _, err := tx.Exec(ctx, `
 		update property_type set
-			label = coalesce($2, label),
+			label = case when $5::boolean then $2 else label end,
 			description  = coalesce($3, description),
 			validation   = coalesce($4, validation)
 		where name = $1`,
-		name, patch.Label, patch.Description, patch.Validation); err != nil {
+		name, labelVal, patch.Description, patch.Validation, setLabel); err != nil {
 		return nil, fmt.Errorf("storage: update property %q: %w", name, err)
 	}
 	prop, err := scanPropertyType(tx.QueryRow(ctx, `select `+propertyCols+` from property_type where name = $1`, name))

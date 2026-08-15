@@ -63,7 +63,7 @@ type VendorPatch struct {
 	Website      *string
 }
 
-const vendorCols = `id, name, official, label, kind, icon, support_phone, website, created_at, updated_at`
+const vendorCols = `id, name, official, coalesce(label, ''), kind, icon, support_phone, website, created_at, updated_at`
 
 func scanVendor(row pgx.Row) (*Vendor, error) {
 	var m Vendor
@@ -88,7 +88,7 @@ func (p *PG) UpsertVendor(ctx context.Context, m Vendor) error {
 			    support_phone = excluded.support_phone,
 			    website       = excluded.website,
 			    updated_at    = now()`,
-		m.Name, m.Official, m.Label, m.Kind, m.Icon, m.SupportPhone, m.Website)
+		m.Name, m.Official, labelOrNull(m.Label), m.Kind, m.Icon, m.SupportPhone, m.Website)
 	if err != nil {
 		return fmt.Errorf("storage: upsert vendor %q: %w", m.Name, err)
 	}
@@ -96,12 +96,17 @@ func (p *PG) UpsertVendor(ctx context.Context, m Vendor) error {
 }
 
 // ListVendors returns every vendor, ordered alphabetically by label, with
-// UNLABELLED rows last and the name breaking ties. nullif(...) nulls last rather
-// than a bare column because Postgres sorts NULL last and the empty string
-// FIRST, so a bare ordering flips the whole tail of the registry to the head
-// the moment the column stops being nullable (#613, registry_ordering_test.go).
+// UNLABELLED rows last and the name breaking ties.
+//
+// `nulls last` is redundant on an ASC sort and written anyway, because it is the
+// half of this ordering that is a DECISION rather than a default: unlabelled
+// rows belong at the end, and spelling it means a later DESC or a later
+// nullability change cannot silently move them to the top. What makes it work
+// at all is that unset is SQL NULL and never the empty string, which
+// labelOrNull (label_unset.go) enforces on the write side and
+// registry_ordering_test.go pins on all seven registries (#613, ADR-0118).
 func (p *PG) ListVendors(ctx context.Context) ([]Vendor, error) {
-	rows, err := p.pool.Query(ctx, `select `+vendorCols+` from vendor order by nullif(label, '') nulls last, name`)
+	rows, err := p.pool.Query(ctx, `select `+vendorCols+` from vendor order by label nulls last, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list vendors: %w", err)
 	}
@@ -146,7 +151,7 @@ func (p *PG) CreateVendor(ctx context.Context, actorID string, m Vendor) (*Vendo
 		insert into vendor (name, official, label, kind, icon, support_phone, website)
 		values ($1, false, $2, $3, $4, $5, $6)
 		returning id, created_at, updated_at`,
-		m.Name, m.Label, m.Kind, m.Icon, m.SupportPhone, m.Website).
+		m.Name, labelOrNull(m.Label), m.Kind, m.Icon, m.SupportPhone, m.Website).
 		Scan(&m.ID, &m.CreatedAt, &m.UpdatedAt); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
@@ -182,9 +187,10 @@ func (p *PG) UpdateVendor(ctx context.Context, actorID, id string, patch VendorP
 		}
 		return nil, fmt.Errorf("storage: audit image vendor %q: %w", id, err)
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	m, err := scanVendor(tx.QueryRow(ctx, `
 		update vendor set
-			label  = coalesce($2, label),
+			label  = case when $7::boolean then $2 else label end,
 			kind          = coalesce($3, kind),
 			icon          = coalesce($4, icon),
 			support_phone = coalesce($5, support_phone),
@@ -192,7 +198,7 @@ func (p *PG) UpdateVendor(ctx context.Context, actorID, id string, patch VendorP
 			updated_at    = now()
 		where `+registryRefCol(id)+` = $1
 		returning `+vendorCols,
-		id, patch.Label, patch.Kind, patch.Icon, patch.SupportPhone, patch.Website))
+		id, labelVal, patch.Kind, patch.Icon, patch.SupportPhone, patch.Website, setLabel))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound

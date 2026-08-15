@@ -62,7 +62,7 @@ func (p *PG) loadPrincipals(ctx context.Context, prs []Principal) error {
 // path raises rather than silently returning a principal with a nil profile.
 func (p *PG) attachPrincipalProfiles(ctx context.Context, ids []string, at map[string]*Principal) error {
 	rows, err := p.pool.Query(ctx,
-		`select principal_id, 'human'::text as kind, username, coalesce(email, ''), label,
+		`select principal_id, 'human'::text as kind, username, coalesce(email, ''), coalesce(label, ''),
 		        must_change_password, avatar is not null, avatar_updated_at
 		   from human where principal_id = any($1::uuid[])
 		  union all

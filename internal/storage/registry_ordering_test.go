@@ -15,19 +15,17 @@ import (
 // This is the one behaviour in the display_name-to-label sweep that a rename
 // cannot carry across on its own, because it is a property of the VALUE and not
 // of the column name. Postgres sorts NULL last under a default ASC and the empty
-// string FIRST, so a list ordered by a bare `order by label, name` puts
-// unlabelled rows at the bottom while the column is nullable and at the top the
-// moment it is not. Two registries (component_type, system_type) had already
-// crossed that line before this test was written: both are NOT NULL with an
-// empty-string default today, so both already float their unlabelled rows to
-// the top of the picker. Normalizing the other eighteen tables to the same shape
-// would have moved every remaining registry the same way, silently, with no test
-// failing.
+// string FIRST, so an `order by label, name` puts unlabelled rows at the bottom
+// when unset is NULL and at the top when it is the empty string. All seven
+// registries were storing the empty string when this test was written, so all
+// seven already floated their unlabelled rows to the top of the picker.
 //
-// The fix is to spell the ordering so it does not care which of the two spellings
-// of "unset" the column happens to use: a nullif over the empty string, ordered
-// nulls last. It reads the same on a nullable column, on a NOT NULL one, and on
-// the mix that exists mid-migration.
+// What it guards NOW is the write side, not the SQL. `nulls last` is the default
+// for an ASC sort, so the ordering is correct exactly as long as unset really is
+// NULL, which is labelOrNull's job (label_unset.go, ADR-0118). Break that helper
+// or forget to call it on one create path and this test goes red on that
+// registry: it is how CreateStandard was caught still binding its label raw
+// after every other path had been converted.
 //
 // This is deliberately NOT D4 (ordering by the RENDERED label, falling back to
 // the name). That is ruled and belongs to the slice that gives tag, variable,

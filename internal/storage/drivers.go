@@ -33,7 +33,7 @@ type DriverPatch struct {
 	Version *string
 }
 
-const driverCols = `id, name, label, version, official, created_at, updated_at`
+const driverCols = `id, name, coalesce(label, ''), version, official, created_at, updated_at`
 
 func scanDriver(row pgx.Row) (*Driver, error) {
 	var d Driver
@@ -54,7 +54,7 @@ func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 			    version      = excluded.version,
 			    official     = excluded.official,
 			    updated_at   = now()`,
-		d.Name, d.Label, d.Version, d.Official)
+		d.Name, labelOrNull(d.Label), d.Version, d.Official)
 	if err != nil {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
 	}
@@ -63,9 +63,9 @@ func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
 
 // ListDrivers returns every driver, ordered alphabetically by label, with
 // unlabelled rows last and the name breaking ties (#613; see ListVendors for why
-// the ordering is spelled nullif(...) nulls last).
+// `nulls last` is written out).
 func (p *PG) ListDrivers(ctx context.Context) ([]Driver, error) {
-	rows, err := p.pool.Query(ctx, `select `+driverCols+` from driver order by nullif(label, '') nulls last, name`)
+	rows, err := p.pool.Query(ctx, `select `+driverCols+` from driver order by label nulls last, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list drivers: %w", err)
 	}
@@ -110,7 +110,7 @@ func (p *PG) CreateDriver(ctx context.Context, actorID string, d Driver) (*Drive
 		insert into driver (name, label, version, official)
 		values ($1, $2, $3, false)
 		returning id, created_at, updated_at`,
-		d.Name, d.Label, d.Version).
+		d.Name, labelOrNull(d.Label), d.Version).
 		Scan(&d.ID, &d.CreatedAt, &d.UpdatedAt); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
@@ -146,14 +146,15 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 		}
 		return nil, fmt.Errorf("storage: audit image driver %q: %w", id, err)
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	d, err := scanDriver(tx.QueryRow(ctx, `
 		update driver set
-			label = coalesce($2, label),
+			label = case when $4::boolean then $2 else label end,
 			version      = coalesce($3, version),
 			updated_at   = now()
 		where `+registryRefCol(id)+` = $1
 		returning `+driverCols,
-		id, patch.Label, patch.Version))
+		id, labelVal, patch.Version, setLabel))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound

@@ -477,7 +477,7 @@ type systemPlacement struct {
 // The third rung, a label the platform generated, is the same column as the
 // first: the pen tells them apart and a rule does not care which of the two it
 // is reading, only that it is what an operator sees.
-const locationReadLadder = `coalesce(nullif(l.label, ''), l.name, '')`
+const locationReadLadder = `coalesce(l.label, l.name, '')`
 
 // locationReadLabel is locationReadLadder in Go, for the write paths that have
 // the row in hand and need to know whether what a rule reads about this
@@ -603,7 +603,7 @@ func (p *PG) stampComponentLabel(ctx context.Context, tx pgx.Tx, c *Component) (
 	}
 	stamped, err := scanComponent(tx.QueryRow(ctx,
 		`update component set label = $2, updated_at = now() where id = $1 returning `+componentCols,
-		c.ID, rendered))
+		c.ID, labelOrNull(rendered)))
 	if err != nil {
 		return nil, fmt.Errorf("storage: stamp component label: %w", err)
 	}
@@ -644,7 +644,7 @@ func systemLabelChainWith(ctx context.Context, q querier, standardID, systemType
 	var standardRule, typeRule string
 	if standardID != nil {
 		var rule *string
-		if err := q.QueryRow(ctx, `select label, label_rule from standard where id = $1`, *standardID).
+		if err := q.QueryRow(ctx, `select coalesce(label, ''), label_rule from standard where id = $1`, *standardID).
 			Scan(&in.standardName, &rule); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return in, fmt.Errorf("storage: resolve label facts for standard %q: %w", *standardID, err)
 		}
@@ -655,7 +655,7 @@ func systemLabelChainWith(ctx context.Context, q querier, standardID, systemType
 		if err != nil {
 			return in, fmt.Errorf("storage: system_type id %q is not a uuid: %w", *systemTypeID, err)
 		}
-		if err := q.QueryRow(ctx, `select label from system_type where id = $1`, typeID).Scan(&in.typeName); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		if err := q.QueryRow(ctx, `select coalesce(label, '') from system_type where id = $1`, typeID).Scan(&in.typeName); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return in, fmt.Errorf("storage: resolve label facts for system_type %q: %w", typeID, err)
 		}
 		stem, _, abbrev, chainRule, err := resolveSystemTypeFacts(ctx, q, typeID)
@@ -713,7 +713,7 @@ func (p *PG) stampSystemLabel(ctx context.Context, tx pgx.Tx, s *System) (*Syste
 	}
 	stamped, err := scanSystem(tx.QueryRow(ctx,
 		`update system set label = $2, updated_at = now() where id = $1 returning `+systemCols,
-		s.ID, rendered))
+		s.ID, labelOrNull(rendered)))
 	if err != nil {
 		return nil, fmt.Errorf("storage: stamp system label: %w", err)
 	}
@@ -807,7 +807,7 @@ func (p *PG) stampLocationLabel(ctx context.Context, tx pgx.Tx, l *Location) (*L
 	}
 	stamped, err := scanLocation(tx.QueryRow(ctx,
 		`update location set label = $2, updated_at = now() where id = $1 returning `+locationCols,
-		l.ID, rendered))
+		l.ID, labelOrNull(rendered)))
 	if err != nil {
 		return nil, fmt.Errorf("storage: stamp location label: %w", err)
 	}

@@ -47,7 +47,7 @@ func (p *PG) UpsertRole(ctx context.Context, r Role) error {
 			    inherits     = excluded.inherits,
 			    label = excluded.label,
 			    description  = excluded.description`,
-		r.Name, r.Official, r.Permissions, r.Inherits, r.Label, nullize(r.Description))
+		r.Name, r.Official, r.Permissions, r.Inherits, labelOrNull(r.Label), nullize(r.Description))
 	if err != nil {
 		return fmt.Errorf("storage: upsert role %q: %w", r.Name, err)
 	}
@@ -99,7 +99,7 @@ func (p *PG) BootstrapOwner(ctx context.Context, spec OwnerSpec) (created bool, 
 	}
 	if _, err := tx.Exec(ctx,
 		`insert into human (principal_id, username, email, label) values ($1, $2, $3, $4)`,
-		pid, spec.Username, nullize(spec.Email), spec.Label); err != nil {
+		pid, spec.Username, nullize(spec.Email), labelOrNull(spec.Label)); err != nil {
 		return false, fmt.Errorf("storage: bootstrap human: %w", err)
 	}
 	if _, err := tx.Exec(ctx,
@@ -170,12 +170,11 @@ func (p *PG) IssueBearerCredential(ctx context.Context, spec BearerIssue) (bool,
 // nullize maps an empty string to a SQL NULL so optional text columns stay null
 // rather than empty.
 //
-// It is NOT for a `label`. Since #613 (ADR-0118) every label column is
-// NOT NULL with an empty-string default, so unset is the empty string and
-// nothing else, and a nullized label is now a not-null violation rather than a
-// second spelling of the same fact. The columns still on this helper are the
-// ones that genuinely keep a null: an optional email, a description, an actor
-// id on a system-written audit row, a scope id on an all-scoped grant.
+// It is NOT for a `label`, which has its own pair in label_unset.go. The rule
+// there is the same shape and one step stricter: it TRIMS first, so a label of
+// " " is unset too, and there is a PATCH variant because a label can be cleared
+// by an operator and these columns cannot. Sharing this helper would have meant
+// the two drifting the first time one of them learned something.
 func nullize(s string) any {
 	if s == "" {
 		return nil
@@ -645,7 +644,7 @@ type HumanProfilePatch struct {
 func (p *PG) UpdateHumanProfile(ctx context.Context, principalID string, patch HumanProfilePatch) error {
 	setDisplay, display := patch.Label != nil, any(nil)
 	if patch.Label != nil {
-		display = *patch.Label
+		display = labelOrNull(*patch.Label)
 	}
 	setEmail, email := patch.Email != nil, any(nil)
 	if patch.Email != nil {
@@ -922,7 +921,7 @@ func (p *PG) CreateHumanPrincipal(ctx context.Context, actorID string, spec Huma
 	}
 	if _, err := tx.Exec(ctx,
 		`insert into human (principal_id, username, email, label) values ($1, $2, $3, $4)`,
-		pid, spec.Username, nullize(spec.Email), spec.Label); err != nil {
+		pid, spec.Username, nullize(spec.Email), labelOrNull(spec.Label)); err != nil {
 		return nil, mapPrincipalWriteErr(err)
 	}
 	if spec.PasswordHash != "" {
@@ -995,14 +994,14 @@ func (p *PG) UpdatePrincipalHuman(ctx context.Context, actorID, principalID stri
 	// The audit "before" is the current human row.
 	var before HumanProfile
 	if err := tx.QueryRow(ctx,
-		`select username, coalesce(email, ''), label from human where principal_id = $1`,
+		`select username, coalesce(email, ''), coalesce(label, '') from human where principal_id = $1`,
 		principalID).Scan(&before.Username, &before.Email, &before.Label); err != nil {
 		return nil, fmt.Errorf("storage: update principal before: %w", err)
 	}
 
 	setDisplay, display := patch.Label != nil, any(nil)
 	if patch.Label != nil {
-		display = *patch.Label
+		display = labelOrNull(*patch.Label)
 	}
 	setEmail, email := patch.Email != nil, any(nil)
 	if patch.Email != nil {
@@ -1402,7 +1401,7 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 	case "human":
 		var h HumanProfile
 		if err := p.pool.QueryRow(ctx,
-			`select username, coalesce(email, ''), label, must_change_password,
+			`select username, coalesce(email, ''), coalesce(label, ''), must_change_password,
 			        avatar is not null, avatar_updated_at
 			 from human where principal_id = $1`,
 			pr.ID).Scan(&h.Username, &h.Email, &h.Label, &h.MustChangePassword,
@@ -1475,7 +1474,7 @@ func (p *PG) loadPrincipal(ctx context.Context, pr *Principal) error {
 
 // ListRoles returns every role, for building the in-process role index.
 func (p *PG) ListRoles(ctx context.Context) ([]Role, error) {
-	rows, err := p.pool.Query(ctx, `select id, name, official, permissions, inherits, label, coalesce(description, '') from role order by name`)
+	rows, err := p.pool.Query(ctx, `select id, name, official, permissions, inherits, coalesce(label, ''), coalesce(description, '') from role order by name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list roles: %w", err)
 	}

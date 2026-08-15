@@ -176,7 +176,7 @@ func (p *PG) SeedRoleChoice(ctx context.Context, ownerKind, ownerID string, spec
 		values ($1, %s, $3, $4)
 		on conflict (owner_kind, owner_ref, name) do nothing
 		returning id`, col, roleOwnerExpr(ownerKind)),
-		ownerKind, ownerArg, spec.Name, spec.Label).Scan(&choiceID)
+		ownerKind, ownerArg, spec.Name, labelOrNull(spec.Label)).Scan(&choiceID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = tx.QueryRow(ctx, fmt.Sprintf(
 			`select id from role_choice where owner_kind = $1 and %s = %s and name = $3`,
@@ -252,7 +252,7 @@ func (p *PG) SeedRoleChoice(ctx context.Context, ownerKind, ownerID string, spec
 			from role_choice rc where rc.id = $1
 			on conflict (choice_id, name) do update
 				set position = excluded.position
-			returning id`, choiceID, alt.Name, alt.Label, i+1).Scan(&altID)
+			returning id`, choiceID, alt.Name, labelOrNull(alt.Label), i+1).Scan(&altID)
 		if err != nil {
 			return nil, mapRoleWriteErr(err)
 		}

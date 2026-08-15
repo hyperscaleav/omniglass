@@ -444,7 +444,7 @@ func systemTypeLabelOf(ctx context.Context, q querier, systemTypeID *string) (st
 		return "", nil
 	}
 	var name string
-	err := q.QueryRow(ctx, `select label from system_type where id = $1`, *systemTypeID).Scan(&name)
+	err := q.QueryRow(ctx, `select coalesce(label, '') from system_type where id = $1`, *systemTypeID).Scan(&name)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", nil
 	}

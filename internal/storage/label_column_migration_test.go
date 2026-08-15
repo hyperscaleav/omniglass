@@ -66,9 +66,12 @@ func TestTheLabelColumnIsCalledLabel(t *testing.T) {
 		t.Errorf("these columns still say display_name after the rename: %v", leftovers)
 	}
 
-	// Every labelled table has `label`, NOT NULL, DEFAULT ''. One spelling of
-	// unset, which is what makes an `order by label` mean the same thing on
-	// every one of them.
+	// Every labelled table has `label`, NULLABLE, with no default. Unset is SQL
+	// NULL and nothing else (ADR-0118), which is what lets `order by label nulls
+	// last` mean the same thing on every one of them without a nullif to undo
+	// the storage choice. A DEFAULT would be a second way to arrive at a value
+	// nobody chose, so there is none: an insert that names no label leaves NULL,
+	// which is what the column already means.
 	for _, table := range labelledTables {
 		var nullable, def string
 		err := conn.QueryRow(ctx, `
@@ -83,11 +86,11 @@ func TestTheLabelColumnIsCalledLabel(t *testing.T) {
 		if err != nil {
 			t.Fatalf("probe %s.label: %v", table, err)
 		}
-		if nullable != "NO" {
-			t.Errorf("%s.label is nullable; unset must have one spelling, '' (#613 D3)", table)
+		if nullable != "YES" {
+			t.Errorf("%s.label is NOT NULL; unset is SQL NULL and the column has to be able to hold it (#613, ADR-0118)", table)
 		}
-		if def != "''::text" {
-			t.Errorf("%s.label default = %q, want ''::text", table, def)
+		if def != "" {
+			t.Errorf("%s.label has default %q; a label nobody set is NULL, not a default value", table, def)
 		}
 	}
 
@@ -133,16 +136,22 @@ func TestTheLabelColumnIsCalledLabel(t *testing.T) {
 		}
 	}
 
-	// The two named NOT NULL constraints moved with their column, or the
-	// schema carries a constraint whose name lies about what it constrains.
-	for _, want := range []string{"standard_label_not_null", "vendor_label_not_null"} {
+	// The two tables that spelled their NOT NULL as a NAMED constraint have to
+	// have lost it, under either name. A surviving constraint would make those
+	// two the odd ones out at exactly the moment every other table can hold a
+	// NULL, and the failure would surface as a write refusal on two registries
+	// rather than as a schema difference anybody could see.
+	for _, gone := range []string{
+		"standard_label_not_null", "vendor_label_not_null",
+		"standard_display_name_not_null", "vendor_display_name_not_null",
+	} {
 		var exists bool
 		if err := conn.QueryRow(ctx,
-			`select exists (select 1 from pg_constraint where conname = $1)`, want).Scan(&exists); err != nil {
-			t.Fatalf("probe constraint %s: %v", want, err)
+			`select exists (select 1 from pg_constraint where conname = $1)`, gone).Scan(&exists); err != nil {
+			t.Fatalf("probe constraint %s: %v", gone, err)
 		}
-		if !exists {
-			t.Errorf("constraint %s missing; the rename left its old name behind", want)
+		if exists {
+			t.Errorf("constraint %s still exists; label is nullable now (#613)", gone)
 		}
 	}
 }

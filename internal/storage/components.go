@@ -159,7 +159,7 @@ type ComponentMove struct {
 
 // --- component CRUD (read/delete via the generic helpers) --------------------
 
-const componentCols = `id, name, label, parent_id,
+const componentCols = `id, name, coalesce(label, ''), parent_id,
 	-- The primary membership, both forms: the name for display and the id as the
 	-- canonical handle. The arc points at the primary key, so the join is by id.
 	(select s.name from system s join system_member m on m.system_id = s.id
@@ -479,7 +479,7 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 		insert into component (name, label, parent_id, location_id, product_id, name_generated, ordinal, label_generated)
 		values ($1, $2, $3, $4, coalesce($5::uuid, (select id from product where name = 'generic-device')), $6, $7, $8)
 		returning `+componentCols,
-		name, spec.Label, parentID, locationID, productID, generated, ordinal, spec.Label == ""))
+		name, labelOrNull(spec.Label), parentID, locationID, productID, generated, ordinal, strings.TrimSpace(spec.Label) == ""))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}
@@ -620,21 +620,20 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 			namePatch, ordinalPatch = &newName, &newOrdinal
 		}
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	after, err := scanComponent(tx.QueryRow(ctx, `
 		update component set
 			name         = coalesce($5, name),
 			ordinal      = coalesce($6::integer, ordinal),
-			-- label is three-state like the placement fields, not a
-			-- coalesce: nil leaves it, and any value is the operator writing the
-			-- label, which is the empty string when they clear it and hand the
-			-- pen back ($7 below), acted on by the stamp after this statement
-			-- (#682). Two branches rather than three since #613: '' IS the
-			-- cleared state, and the null branch this used to carry would now be
-			-- a not-null violation (ADR-0118).
-			label = case
-				when $2::text is null then label
-				else $2::text
-			end,
+			-- label is two-state here, and the two states are carried by two
+			-- parameters rather than by overloading one: $8 says whether the
+			-- caller named the field at all, $2 is the value, and Go has already
+			-- decided that an empty or whitespace-only value is SQL NULL
+			-- (labelOrNull, ADR-0118). A single coalesce($2, label) cannot
+			-- express the difference between "leave it" and "clear it", which is
+			-- exactly the write an operator makes when they hand the pen back
+			-- ($7 below, acted on by the stamp after this statement, #682).
+			label = case when $8::boolean then $2 else label end,
 			label_generated = $7,
 			-- product_id has no clear state: the floor makes it NOT NULL, so unlike
 			-- a three-state placement field there is no empty-string-means-null
@@ -656,8 +655,8 @@ func (p *PG) UpdateComponent(ctx context.Context, actorID, name string, patch Co
 			updated_at   = now()
 		where id = $1
 		returning `+componentCols,
-		before.ID, patch.Label, patch.ProductName, patchProductID, namePatch, ordinalPatch,
-		labelPen(before.LabelGenerated, patch.Label)))
+		before.ID, labelVal, patch.ProductName, patchProductID, namePatch, ordinalPatch,
+		labelPen(before.LabelGenerated, patch.Label), setLabel))
 	if err != nil {
 		return nil, mapComponentWriteErr(err)
 	}

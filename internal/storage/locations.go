@@ -271,7 +271,7 @@ const locationTypeRegistry = "location_type"
 // left join on the row's own uuid, so an unforked row reads exactly as before
 // and a forked one carries the image scanLocationTypeResolved overlays.
 const locationTypeResolved = `
-	select lt.id, lt.name, lt.official, lt.label, lt.icon, lt.allowed_parent_types, lt.label_rule, lt.name_rule, s.image
+	select lt.id, lt.name, lt.official, coalesce(lt.label, ''), lt.icon, lt.allowed_parent_types, lt.label_rule, lt.name_rule, s.image
 	from location_type lt
 	left join registry_shadow s on s.registry = '` + locationTypeRegistry + `' and s.row_id = lt.id`
 
@@ -301,7 +301,7 @@ func (p *PG) UpsertLocationType(ctx context.Context, lt LocationType) error {
 			    allowed_parent_types = excluded.allowed_parent_types,
 			    label_rule           = excluded.label_rule,
 			    name_rule            = excluded.name_rule`,
-		lt.Name, lt.Official, lt.Label, lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes), nilIfEmpty(lt.LabelRule), rule); err != nil {
+		lt.Name, lt.Official, labelOrNull(lt.Label), lt.Icon, normalizeAllowedParentTypes(lt.AllowedParentTypes), nilIfEmpty(lt.LabelRule), rule); err != nil {
 		return fmt.Errorf("storage: upsert location_type %q: %w", lt.Name, err)
 	}
 	return nil
@@ -346,12 +346,15 @@ func normalizeAllowedParentTypes(s []string) []string {
 // The ORDER BY reads the resolved label (the shadow's when there is one)
 // so a relabelling fork sorts where an operator expects it, and it stays in SQL
 // so the collation the registry has always ordered by is the one it still
-// orders by. The nullif(...) nulls last wrapper puts unlabelled rows at the END
-// of the registry; see ListVendors for why a bare ordering does the opposite
-// (#613).
+// orders by.
+//
+// The ORDER BY resolves the shadow on the PRESENCE of the key rather than with a
+// coalesce, for the reason ListComponentTypes gives: a fork that cleared its
+// label holds the key as JSON null, and a coalesce would sort it under the
+// official label rather than at the end (#613).
 func (p *PG) ListLocationTypes(ctx context.Context) ([]LocationType, error) {
 	rows, err := p.pool.Query(ctx, locationTypeResolved+`
-		order by nullif(coalesce(s.image->>'label', lt.label), '') nulls last, lt.name`)
+		order by case when s.image ? 'label' then s.image->>'label' else lt.label end nulls last, lt.name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list location_types: %w", err)
 	}
@@ -391,7 +394,7 @@ func (p *PG) GetLocationType(ctx context.Context, ref string) (*LocationType, er
 // first being allowed_parent_types' nil-to-empty normalization), and two call
 // sites decoding jsonb by hand is how a list and a write path start disagreeing
 // about what an absent rule reads as.
-const locationTypeCols = `id, name, official, label, icon, allowed_parent_types, label_rule, name_rule`
+const locationTypeCols = `id, name, official, coalesce(label, ''), icon, allowed_parent_types, label_rule, name_rule`
 
 func scanLocationType(row pgx.Row) (*LocationType, error) {
 	var lt LocationType
@@ -453,7 +456,7 @@ func locationTypeShadowImage(lt LocationType) ([]byte, error) {
 		rule = &n
 	}
 	image, err := json.Marshal(map[string]any{
-		"label":                lt.Label,
+		"label":                labelOrNull(lt.Label),
 		"icon":                 lt.Icon,
 		"allowed_parent_types": normalizeAllowedParentTypes(lt.AllowedParentTypes),
 		"label_rule":           lt.LabelRule,
@@ -674,7 +677,7 @@ func (p *PG) CreateLocationType(ctx context.Context, actorID string, lt Location
 		`insert into location_type (name, official, label, icon, allowed_parent_types, label_rule, name_rule)
 		 values ($1, false, $2, $3, $4, $5, $6)
 		 returning `+locationTypeCols,
-		lt.Name, lt.Label, lt.Icon, lt.AllowedParentTypes, lt.LabelRule, rule))
+		lt.Name, labelOrNull(lt.Label), lt.Icon, lt.AllowedParentTypes, lt.LabelRule, rule))
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
@@ -768,7 +771,7 @@ func (p *PG) UpdateLocationType(ctx context.Context, actorID, ref string, patch 
 			name_rule            = $6::jsonb
 		where id = $1
 		returning `+locationTypeCols,
-		current.ID, updated.Label, updated.Icon, updated.AllowedParentTypes, updated.LabelRule, rule))
+		current.ID, labelOrNull(updated.Label), updated.Icon, updated.AllowedParentTypes, updated.LabelRule, rule))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -893,7 +896,7 @@ func (p *PG) DeleteLocationType(ctx context.Context, actorID, id string) error {
 }
 
 // locationCols is the column list every location read scans, in struct order.
-const locationCols = `id, name, label, name_generated, ordinal, label_generated,
+const locationCols = `id, name, coalesce(label, ''), name_generated, ordinal, label_generated,
 	(select t.name from location_type t where t.id = location.location_type) as location_type, location.location_type as location_type_id, parent_id,
 	(select p.name from location p where p.id = location.parent_id) as parent_name,
 	created_at, updated_at`
@@ -1040,7 +1043,7 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 		insert into location (name, label, location_type, parent_id, name_generated, ordinal, label_generated)
 		values ($1, $2, (select id from location_type where `+registryRefCol(spec.LocationType)+` = $3), $4, $5, $6, $7)
 		returning `+locationCols,
-		name, spec.Label, spec.LocationType, parentID, generated, ordinal, spec.Label == ""))
+		name, labelOrNull(spec.Label), spec.LocationType, parentID, generated, ordinal, strings.TrimSpace(spec.Label) == ""))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
 	}
@@ -1117,25 +1120,23 @@ func (p *PG) UpdateLocation(ctx context.Context, actorID, name string, patch Loc
 		}
 		namePatch, ordinalPatch = &newName, &newOrdinal
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	after, err := scanLocation(tx.QueryRow(ctx, `
 		update location set
 			name    = coalesce($5, name),
 			ordinal = coalesce($6::integer, ordinal),
-			-- Two-state, not a coalesce: nil leaves it, and any value is the
-			-- operator writing the label, the empty string being how they clear
-			-- it and hand the pen back ($4, #682). The null branch this carried
-			-- before #613 would now violate the column (ADR-0118).
-			label  = case
-				when $2::text is null then label
-				else $2::text
-			end,
+			-- Two parameters rather than one overloaded: $7 says whether the
+			-- caller named the field, $2 is the value, and an empty or
+			-- whitespace-only value is already SQL NULL by the time it gets here
+			-- (labelOrNull, ADR-0118). Clearing it hands the pen back ($4, #682).
+			label  = case when $7::boolean then $2 else label end,
 			label_generated = $4,
 			location_type = coalesce((select id from location_type where `+typeRefCol+` = $3), location_type),
 			updated_at    = now()
 		where id = $1
 		returning `+locationCols,
-		before.ID, patch.Label, patch.LocationType,
-		labelPen(before.LabelGenerated, patch.Label), namePatch, ordinalPatch))
+		before.ID, labelVal, patch.LocationType,
+		labelPen(before.LabelGenerated, patch.Label), namePatch, ordinalPatch, setLabel))
 	if err != nil {
 		return nil, mapLocationWriteErr(err)
 	}

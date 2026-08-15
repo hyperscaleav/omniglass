@@ -125,14 +125,14 @@ func (p *PG) UpsertSecretType(ctx context.Context, st SecretType) error {
 		on conflict (name) do update
 			set official = excluded.official, label = excluded.label,
 			    schema = excluded.schema, default_admin_sensitive = excluded.default_admin_sensitive`,
-		st.Name, st.Official, st.Label, schema, st.DefaultAdminSensitive); err != nil {
+		st.Name, st.Official, labelOrNull(st.Label), schema, st.DefaultAdminSensitive); err != nil {
 		return fmt.Errorf("storage: upsert secret_type %q: %w", st.Name, err)
 	}
 	return nil
 }
 
 func (p *PG) ListSecretTypes(ctx context.Context) ([]SecretType, error) {
-	rows, err := p.pool.Query(ctx, `select id, name, official, label, default_admin_sensitive, schema from secret_type order by name`)
+	rows, err := p.pool.Query(ctx, `select id, name, official, coalesce(label, ''), default_admin_sensitive, schema from secret_type order by name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list secret_types: %w", err)
 	}
@@ -150,7 +150,7 @@ func (p *PG) ListSecretTypes(ctx context.Context) ([]SecretType, error) {
 
 func (p *PG) GetSecretType(ctx context.Context, id string) (*SecretType, error) {
 	st, err := scanSecretType(p.pool.QueryRow(ctx,
-		`select id, name, official, label, default_admin_sensitive, schema from secret_type where `+registryRefCol(id)+` = $1`, id))
+		`select id, name, official, coalesce(label, ''), default_admin_sensitive, schema from secret_type where `+registryRefCol(id)+` = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUnknownSecretType
 	}

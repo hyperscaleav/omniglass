@@ -55,7 +55,7 @@ type MetricTypePatch struct {
 	Precision   *int
 }
 
-const metricTypeCols = `id, name, label, data_type, unit, "precision", fusion_policy, description, official`
+const metricTypeCols = `id, name, coalesce(label, ''), data_type, unit, "precision", fusion_policy, description, official`
 
 func scanMetricType(row pgx.Row) (*MetricType, error) {
 	var mt MetricType
@@ -77,7 +77,7 @@ func (p *PG) UpsertMetricType(ctx context.Context, mt MetricType) error {
 			unit = excluded.unit, "precision" = excluded."precision",
 			fusion_policy = excluded.fusion_policy, description = excluded.description,
 			official = excluded.official`,
-		mt.Name, mt.Label, mt.DataType, mt.Unit, mt.Precision, mt.FusionPolicy, mt.Description, mt.Official)
+		mt.Name, labelOrNull(mt.Label), mt.DataType, mt.Unit, mt.Precision, mt.FusionPolicy, mt.Description, mt.Official)
 	if err != nil {
 		return fmt.Errorf("storage: upsert metric type %q: %w", mt.Name, err)
 	}
@@ -173,7 +173,7 @@ func (p *PG) CreateMetricType(ctx context.Context, actorID string, spec MetricTy
 		`insert into metric_type (name, label, data_type, unit, "precision", description, official)
 		 values ($1, $2, $3, $4, $5, $6, false)
 		 returning id`,
-		spec.Name, spec.Label, spec.DataType, spec.Unit, spec.Precision, spec.Description).Scan(&mtID); err != nil {
+		spec.Name, labelOrNull(spec.Label), spec.DataType, spec.Unit, spec.Precision, spec.Description).Scan(&mtID); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrMetricTypeExists
 		}
@@ -208,14 +208,15 @@ func (p *PG) UpdateMetricType(ctx context.Context, actorID, name string, patch M
 		}
 		return nil, fmt.Errorf("storage: audit image metric_type %q: %w", name, err)
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	if _, err := tx.Exec(ctx, `
 		update metric_type set
-			label = coalesce($2, label),
+			label = case when $6::boolean then $2 else label end,
 			description  = coalesce($3, description),
 			unit         = coalesce($4, unit),
 			"precision"  = coalesce($5, "precision")
 		where name = $1`,
-		name, patch.Label, patch.Description, patch.Unit, patch.Precision); err != nil {
+		name, labelVal, patch.Description, patch.Unit, patch.Precision, setLabel); err != nil {
 		return nil, fmt.Errorf("storage: update metric type %q: %w", name, err)
 	}
 	mt, err := scanMetricType(tx.QueryRow(ctx, `select `+metricTypeCols+` from metric_type where name = $1`, name))

@@ -74,7 +74,7 @@ type SystemTypePatch struct {
 	LabelRule *string
 }
 
-const systemTypeCols = `id, name, label, stem, icon, abbrev, label_rule, official, parent_id`
+const systemTypeCols = `id, name, coalesce(label, ''), stem, icon, abbrev, label_rule, official, parent_id`
 
 func scanSystemType(row pgx.Row) (*SystemType, error) {
 	var st SystemType
@@ -119,7 +119,7 @@ func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 			    official     = excluded.official,
 			    parent_id    = excluded.parent_id,
 			    updated_at   = now()`,
-		st.Name, st.Label, st.Stem, st.Icon, st.Abbrev, nilIfEmpty(st.LabelRule), st.Official, st.ParentID)
+		st.Name, labelOrNull(st.Label), st.Stem, st.Icon, st.Abbrev, nilIfEmpty(st.LabelRule), st.Official, st.ParentID)
 	if err != nil {
 		return fmt.Errorf("storage: upsert system_type %q: %w", st.Name, mapSystemTypeWriteErr(err))
 	}
@@ -128,9 +128,9 @@ func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 
 // ListSystemTypes returns every system_type, ordered alphabetically by
 // label, with unlabelled rows last and the name breaking ties (#613; see
-// ListVendors for why the ordering is spelled nullif(...) nulls last).
+// ListVendors for why `nulls last` is written out).
 func (p *PG) ListSystemTypes(ctx context.Context) ([]SystemType, error) {
-	rows, err := p.pool.Query(ctx, `select `+systemTypeCols+` from system_type order by nullif(label, '') nulls last, name`)
+	rows, err := p.pool.Query(ctx, `select `+systemTypeCols+` from system_type order by label nulls last, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list system_types: %w", err)
 	}
@@ -196,7 +196,7 @@ func (p *PG) CreateSystemType(ctx context.Context, actorID string, st SystemType
 		insert into system_type (name, label, stem, icon, abbrev, label_rule, official, parent_id)
 		values ($1, $2, $3, $4, $5, $6, false, $7)
 		returning `+systemTypeCols,
-		st.Name, st.Label, st.Stem, st.Icon, st.Abbrev, nilIfEmpty(st.LabelRule), st.ParentID))
+		st.Name, labelOrNull(st.Label), st.Stem, st.Icon, st.Abbrev, nilIfEmpty(st.LabelRule), st.ParentID))
 	if err != nil {
 		return nil, mapSystemTypeWriteErr(err)
 	}
@@ -261,9 +261,10 @@ func (p *PG) UpdateSystemType(ctx context.Context, actorID, ref string, patch Sy
 		}
 		return nil, fmt.Errorf("storage: audit image system_type %q: %w", ref, err)
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	st, err := scanSystemType(tx.QueryRow(ctx, `
 		update system_type set
-			label = coalesce($2, label),
+			label = case when $7::boolean then $2 else label end,
 			-- The four columns whose NULL MEANS "this node declares no fact of
 			-- its own, walk to the nearest ancestor that does", so each has a
 			-- CLEAR state coalesce cannot express: an omitted field is
@@ -277,7 +278,7 @@ func (p *PG) UpdateSystemType(ctx context.Context, actorID, ref string, patch Sy
 			updated_at   = now()
 		where `+registryRefCol(ref)+` = $1
 		returning `+systemTypeCols,
-		ref, patch.Label, patch.Stem, patch.Icon, patch.Abbrev, patch.LabelRule))
+		ref, labelVal, patch.Stem, patch.Icon, patch.Abbrev, patch.LabelRule, setLabel))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound

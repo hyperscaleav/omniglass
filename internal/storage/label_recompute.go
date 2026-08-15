@@ -395,8 +395,10 @@ func writeLabelChanges(ctx context.Context, q txQuerier, tbl scopeTable, changes
 	labels := make([]*string, len(changes))
 	for i, ch := range changes {
 		ids[i] = ch.ID
-		if ch.To != "" {
-			to := ch.To
+		// Through the same rule every other write path uses, so a rule that
+		// renders nothing (or renders whitespace) writes SQL NULL here exactly
+		// as a create does (#613, ADR-0118).
+		if to, ok := labelOrNull(ch.To).(string); ok {
 			labels[i] = &to
 		}
 	}
