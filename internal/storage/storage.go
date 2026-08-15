@@ -561,7 +561,7 @@ type Gateway interface {
 	// effective-value view down the structural cascade.
 	ListVariables(ctx context.Context, read scope.Set) ([]Variable, error)
 	CreateVariable(ctx context.Context, actorID string, spec VariableSpec, create scope.Set) (*Variable, error)
-	UpdateVariable(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set, canPlatform bool) (*Variable, error)
+	UpdateVariable(ctx context.Context, actorID, id string, patch VariablePatch, read, action scope.Set, canPlatform bool) (*Variable, error)
 	DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set, canPlatform bool) error
 	ResolveVariables(ctx context.Context, componentID string, read scope.Set) ([]ResolvedVariable, error)
 

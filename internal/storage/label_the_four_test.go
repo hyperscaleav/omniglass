@@ -2,6 +2,7 @@ package storage_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -183,5 +184,82 @@ func TestAnUnlabelledTagReadsBackVerbatim(t *testing.T) {
 		if tg.Name == "cost-center" && tg.Label != "" {
 			t.Errorf("listed label = %q, want empty", tg.Label)
 		}
+	}
+}
+
+// TestAnUnlabelledVariableSortsLast is D4 on the simplest of the four. Same
+// ordering, same reason, and pinned separately because ListVariables is a
+// different statement that could drift on its own.
+func TestAnUnlabelledVariableSortsLast(t *testing.T) {
+	gw := variableGateway(t)
+	ctx := context.Background()
+
+	for _, r := range []struct{ name, label string }{
+		{fourUnlabelled, ""},
+		{fourLabelledZ, "Zulu"},
+		{fourLabelledA, "Alpha"},
+	} {
+		if _, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
+			Name: r.name, Label: r.label, ValueType: "int", OwnerKind: "platform",
+			Value: json.RawMessage(`1`),
+		}, all); err != nil {
+			t.Fatalf("create variable %q: %v", r.name, err)
+		}
+	}
+	vars, err := gw.ListVariables(ctx, all)
+	if err != nil {
+		t.Fatalf("list variables: %v", err)
+	}
+	got := make([]string, 0, len(vars))
+	for _, v := range vars {
+		got = append(got, v.Name)
+	}
+	assertLabelOrder(t, got)
+}
+
+// TestAVariablesLabelIsIndependentOfItsValue is the uuid-addressed case, where
+// the interesting collision is not with the address (a uuid cannot be disturbed)
+// but with the OTHER thing this table's PATCH carries. A variable's update path
+// took one argument, the value, and now takes two instructions that must not
+// contaminate each other: relabelling must not rewrite the value, and setting a
+// value must not clear the label.
+func TestAVariablesLabelIsIndependentOfItsValue(t *testing.T) {
+	gw := variableGateway(t)
+	ctx := context.Background()
+
+	made, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
+		Name: "poll-interval", Label: "Poll Interval", ValueType: "int", OwnerKind: "platform",
+		Value: json.RawMessage(`30`),
+	}, all)
+	if err != nil {
+		t.Fatalf("create variable: %v", err)
+	}
+	if made.Label != "Poll Interval" {
+		t.Fatalf("label = %q, want Poll Interval", made.Label)
+	}
+
+	// A value edit that says nothing about the label leaves it alone.
+	valued, err := gw.UpdateVariable(ctx, "", made.ID, storage.VariablePatch{
+		Value: json.RawMessage(`60`),
+	}, all, all, true)
+	if err != nil {
+		t.Fatalf("update value: %v", err)
+	}
+	if valued.Label != "Poll Interval" || string(valued.Value) != "60" {
+		t.Errorf("after a value edit: (label, value) = (%q, %s), want (Poll Interval, 60)",
+			valued.Label, valued.Value)
+	}
+
+	// And a relabel leaves the value, the name, the type and the id alone.
+	relabelled := "Polling interval (seconds)"
+	moved, err := gw.UpdateVariable(ctx, "", made.ID, storage.VariablePatch{Label: &relabelled}, all, all, true)
+	if err != nil {
+		t.Fatalf("relabel: %v", err)
+	}
+	if moved.Label != relabelled || string(moved.Value) != "60" {
+		t.Errorf("after a relabel: (label, value) = (%q, %s), want (%q, 60)", moved.Label, moved.Value, relabelled)
+	}
+	if moved.Name != "poll-interval" || moved.ValueType != "int" || moved.ID != made.ID {
+		t.Errorf("relabel moved something else: %+v", moved)
 	}
 }

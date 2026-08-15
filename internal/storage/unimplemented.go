@@ -576,7 +576,7 @@ func (UnimplementedGateway) ListVariables(context.Context, scope.Set) ([]Variabl
 func (UnimplementedGateway) CreateVariable(context.Context, string, VariableSpec, scope.Set) (*Variable, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateVariable(context.Context, string, string, json.RawMessage, scope.Set, scope.Set, bool) (*Variable, error) {
+func (UnimplementedGateway) UpdateVariable(context.Context, string, string, VariablePatch, scope.Set, scope.Set, bool) (*Variable, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) DeleteVariable(context.Context, string, string, scope.Set, scope.Set, bool) error {

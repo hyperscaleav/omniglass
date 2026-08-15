@@ -1428,6 +1428,10 @@ components:
           format: uri
           readOnly: true
           type: string
+        label:
+          description: What an operator reads in lists and pickers (Poll Interval); omit to fall back to the name
+          maxLength: 200
+          type: string
         name:
           description: The cascade name (lowercase letters, digits, and hyphens); unique per owner
           maxLength: 100
@@ -4740,6 +4744,9 @@ components:
           type: integer
         id:
           type: string
+        label:
+          description: The friendly string an operator reads; absent when unset
+          type: string
         name:
           type: string
         owner_id:
@@ -6431,10 +6438,12 @@ components:
           format: uri
           readOnly: true
           type: string
+        label:
+          description: A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone
+          maxLength: 200
+          type: string
         value:
-          description: The new value, validated against the fixed value_type
-      required:
-        - value
+          description: The new value, validated against the fixed value_type; omit to leave it
       type: object
     UpdateVendorInputBody:
       additionalProperties: false
@@ -6477,6 +6486,9 @@ components:
           readOnly: true
           type: string
         id:
+          type: string
+        label:
+          description: The friendly string an operator reads; absent when unset, and a surface with none renders the name verbatim
           type: string
         name:
           type: string
@@ -13194,7 +13206,7 @@ paths:
       summary: List variables (admin directory)
       x-omniglass-permission: variable:read
     post:
-      description: Sets a variable at an owner scope. The value is validated against value_type. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).
+      description: Sets a variable at an owner scope. The value is validated against value_type; the optional label is what an operator reads instead of the name. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).
       operationId: create-variable
       requestBody:
         content:
@@ -13243,7 +13255,7 @@ paths:
       x-omniglass-permission: variable:delete
       x-omniglass-platform-permission: platform:delete
     patch:
-      description: Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
+      description: Replaces a variable's value (validated against its fixed value_type) and patches its label; either may be omitted, and an empty label clears it. Name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
       operationId: update-variable
       parameters:
         - description: The variable's id
@@ -13272,7 +13284,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Update a variable's value
+      summary: Update a variable
       x-omniglass-permission: variable:update
       x-omniglass-platform-permission: platform:update
   /vendors:

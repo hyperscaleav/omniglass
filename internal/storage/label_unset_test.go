@@ -82,6 +82,15 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 
 	stem := "probe"
 	provers := map[string]func(t *testing.T) (keyCol, key string){
+		"variable": func(t *testing.T) (string, string) {
+			if _, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
+				Name: "lbl-var", Label: blank, ValueType: "int", OwnerKind: "platform",
+				Value: []byte(`1`),
+			}, all); err != nil {
+				t.Fatalf("create variable: %v", err)
+			}
+			return "name", "lbl-var"
+		},
 		"tag": func(t *testing.T) (string, string) {
 			if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "lbl-tag", Label: blank}, all); err != nil {
 				t.Fatalf("create tag: %v", err)
@@ -251,6 +260,21 @@ func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
 		prepare func(t *testing.T) string // creates a LABELLED row, returns its key
 		clear   func(t *testing.T, key string)
 	}{
+		{"variable", "name", func(t *testing.T) string {
+			v, err := gw.CreateVariable(ctx, "", storage.VariableSpec{
+				Name: "clr-var", Label: "Labelled", ValueType: "int", OwnerKind: "platform",
+				Value: []byte(`1`),
+			}, all)
+			if err != nil {
+				t.Fatalf("create: %v", err)
+			}
+			return v.Name
+		}, func(t *testing.T, key string) {
+			v := variableNamed(t, gw, key)
+			if _, err := gw.UpdateVariable(ctx, "", v.ID, storage.VariablePatch{Label: &empty}, all, all, true); err != nil {
+				t.Fatalf("clear: %v", err)
+			}
+		}},
 		{"tag", "name", func(t *testing.T) string {
 			if _, err := gw.CreateTag(ctx, "", storage.TagSpec{Name: "clr-tag", Label: "Labelled"}, all); err != nil {
 				t.Fatalf("create: %v", err)
@@ -355,4 +379,21 @@ func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
 			}
 		})
 	}
+}
+
+// variableNamed finds a variable by name for the clear cases, which key on the
+// name like every other row here while the write path takes the uuid.
+func variableNamed(t *testing.T, gw *storage.PG, name string) storage.Variable {
+	t.Helper()
+	vars, err := gw.ListVariables(context.Background(), all)
+	if err != nil {
+		t.Fatalf("list variables: %v", err)
+	}
+	for _, v := range vars {
+		if v.Name == name {
+			return v
+		}
+	}
+	t.Fatalf("no variable named %q", name)
+	return storage.Variable{}
 }

@@ -30,6 +30,7 @@ var (
 type Variable struct {
 	ID        string
 	Name      string
+	Label     string          // the friendly string an operator reads; empty falls back to Name
 	ValueType string          // string | int | float | bool | json
 	OwnerKind string          // platform | component | system | location
 	OwnerID   *string         // the owning entity id; nil for the platform singleton
@@ -44,10 +45,21 @@ type Variable struct {
 // validated against ValueType before any write.
 type VariableSpec struct {
 	Name      string
+	Label     string
 	ValueType string
 	OwnerKind string
 	OwnerName *string
 	Value     json.RawMessage
+}
+
+// VariablePatch is the update input: nil fields unchanged. A variable's name,
+// type and owner are fixed at creation, so the two things an operator can move
+// are its value and its label, and they are separate instructions. A nil Label
+// leaves the column alone and an empty one clears it, which is what keeps a
+// value edit from silently wiping a label.
+type VariablePatch struct {
+	Value json.RawMessage
+	Label *string
 }
 
 // ResolvedVariable is one entry in a component's effective-variables cascade: the
@@ -59,6 +71,7 @@ type VariableSpec struct {
 type ResolvedVariable struct {
 	ID        string
 	Name      string
+	Label     string
 	ValueType string
 	OwnerKind string
 	OwnerID   *string
@@ -69,7 +82,7 @@ type ResolvedVariable struct {
 	Value     json.RawMessage
 }
 
-const variableCols = `id, name, value_type, owner_kind, component_id, system_id, location_id, value, created_at, updated_at`
+const variableCols = `id, name, coalesce(label, ''), value_type, owner_kind, component_id, system_id, location_id, value, created_at, updated_at`
 
 // CreateVariable writes a new variable at its owner scope. The value_type and the
 // value are validated (app-level typing), the owner is resolved and scope-checked
@@ -101,10 +114,10 @@ func (p *PG) CreateVariable(ctx context.Context, actorID string, spec VariableSp
 
 	compID, sysID, locID := arcColumns(spec.OwnerKind, ownerID)
 	v, err := scanVariableRow(tx.QueryRow(ctx, `
-		insert into variable (name, value_type, owner_kind, component_id, system_id, location_id, value)
-		values ($1, $2, $3, $4, $5, $6, $7)
+		insert into variable (name, label, value_type, owner_kind, component_id, system_id, location_id, value)
+		values ($1, $2, $3, $4, $5, $6, $7, $8)
 		returning `+variableCols,
-		spec.Name, spec.ValueType, spec.OwnerKind, compID, sysID, locID, []byte(spec.Value)))
+		spec.Name, labelOrNull(spec.Label), spec.ValueType, spec.OwnerKind, compID, sysID, locID, []byte(spec.Value)))
 	if err != nil {
 		return nil, mapVariableWriteErr(err)
 	}
@@ -118,7 +131,11 @@ func (p *PG) CreateVariable(ctx context.Context, actorID string, spec VariableSp
 	return v, nil
 }
 
-// ListVariables returns every variable (the admin directory). Requires an
+// ListVariables returns every variable (the admin directory), ordered by the
+// label an operator reads with the unlabelled last and the name breaking ties
+// (D4, #613); the cascade projection below is ordered by NAME instead, because
+// there the name is the cascade key that groups a winner with the candidates it
+// shadows rather than a display order. Requires an
 // all-scope read: a variable is owned across three trees plus a platform tier, so
 // slice-1 lists it only for the all-scope operator; the scoped, per-component view
 // is ResolveVariables. A non-all read is ErrVariableForbidden.
@@ -133,7 +150,7 @@ func (p *PG) ListVariables(ctx context.Context, read scope.Set) ([]Variable, err
 		left join component c on v.component_id = c.id
 		left join system    sy on v.system_id   = sy.id
 		left join location  l on v.location_id  = l.id
-		order by v.name`)
+		order by v.label nulls last, v.name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list variables: %w", err)
 	}
@@ -151,12 +168,15 @@ func (p *PG) ListVariables(ctx context.Context, read scope.Set) ([]Variable, err
 }
 
 // UpdateVariable replaces a variable's value, validated against its fixed
-// value_type, audited. Name, type, and owner are fixed at creation. Requires the
+// value_type, and patches its label, audited. Both are optional and independent:
+// a nil value leaves the stored one alone (so a relabel is not a value write),
+// and a nil label leaves the column alone while an empty one clears it. Name,
+// type, and owner are fixed at creation. Requires the
 // owner within the action scope; an unknown or out-of-scope id is
 // ErrVariableNotFound. canPlatform is the caller's platform:update permission: a
 // variable at the platform tier is install-wide, so an all-scoped caller without
 // it is ErrVariableForbidden.
-func (p *PG) UpdateVariable(ctx context.Context, actorID, id string, value json.RawMessage, read, action scope.Set, canPlatform bool) (*Variable, error) {
+func (p *PG) UpdateVariable(ctx context.Context, actorID, id string, patch VariablePatch, read, action scope.Set, canPlatform bool) (*Variable, error) {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin update variable: %w", err)
@@ -167,17 +187,23 @@ func (p *PG) UpdateVariable(ctx context.Context, actorID, id string, value json.
 	if err != nil {
 		return nil, err
 	}
-	vt, err := variable.ParseValueType(row.valueType)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrUnknownValueType, err)
+	if patch.Value != nil {
+		vt, err := variable.ParseValueType(row.valueType)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrUnknownValueType, err)
+		}
+		if err := variable.ValidateValue(vt, patch.Value); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrVariableValueInvalid, err)
+		}
 	}
-	if err := variable.ValidateValue(vt, value); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrVariableValueInvalid, err)
-	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	v, err := scanVariableRow(tx.QueryRow(ctx, `
-		update variable set value = $2, updated_at = now()
+		update variable set
+			value = coalesce($2, value),
+			label = case when $4::boolean then $3 else label end,
+			updated_at = now()
 		where id = $1
-		returning `+variableCols, id, []byte(value)))
+		returning `+variableCols, id, nullableJSON(patch.Value), labelVal, setLabel))
 	if err != nil {
 		return nil, mapVariableWriteErr(err)
 	}
@@ -249,7 +275,7 @@ func (p *PG) ResolveVariables(ctx context.Context, componentID string, read scop
 			rnk       int
 			value     []byte
 		)
-		if err := rows.Scan(&r.ID, &r.Name, &r.ValueType, &r.OwnerKind, &ownerID,
+		if err := rows.Scan(&r.ID, &r.Name, &r.Label, &r.ValueType, &r.OwnerKind, &ownerID,
 			&r.Band, &r.Depth, &rnk, &ownerName, &value); err != nil {
 			return nil, fmt.Errorf("storage: scan resolved variable: %w", err)
 		}
@@ -309,14 +335,14 @@ owners(owner_kind, owner_id, band, depth) as (
     union all   select 'component', id,         3, depth from comp_chain
 ),
 ranked as (
-    select v.id, v.name, v.value_type, v.owner_kind, o.owner_id, o.band, o.depth, v.value,
+    select v.id, v.name, coalesce(v.label, '') as label, v.value_type, v.owner_kind, o.owner_id, o.band, o.depth, v.value,
            row_number() over (partition by v.name order by o.band desc, o.depth asc) as rnk
     from variable v
     join owners o
       on o.owner_kind = v.owner_kind
      and o.owner_id is not distinct from coalesce(v.component_id, v.system_id, v.location_id)
 )
-select r.id, r.name, r.value_type, r.owner_kind, r.owner_id, r.band, r.depth, r.rnk,
+select r.id, r.name, r.label, r.value_type, r.owner_kind, r.owner_id, r.band, r.depth, r.rnk,
        coalesce(c.name, sy.name, l.name, '') as owner_name,
        r.value
 from ranked r
@@ -462,7 +488,7 @@ func scanVariableRow(row pgx.Row) (*Variable, error) {
 		comp, sys, loc *string
 		value          []byte
 	)
-	if err := row.Scan(&v.ID, &v.Name, &v.ValueType, &v.OwnerKind, &comp, &sys, &loc, &value, &v.CreatedAt, &v.UpdatedAt); err != nil {
+	if err := row.Scan(&v.ID, &v.Name, &v.Label, &v.ValueType, &v.OwnerKind, &comp, &sys, &loc, &value, &v.CreatedAt, &v.UpdatedAt); err != nil {
 		return nil, err
 	}
 	v.OwnerID = firstNonNil(comp, sys, loc)
@@ -477,7 +503,7 @@ func scanVariableListRow(row pgx.Row) (*Variable, string, error) {
 		value          []byte
 		ownerName      string
 	)
-	if err := row.Scan(&v.ID, &v.Name, &v.ValueType, &v.OwnerKind, &comp, &sys, &loc, &value, &v.CreatedAt, &v.UpdatedAt, &ownerName); err != nil {
+	if err := row.Scan(&v.ID, &v.Name, &v.Label, &v.ValueType, &v.OwnerKind, &comp, &sys, &loc, &value, &v.CreatedAt, &v.UpdatedAt, &ownerName); err != nil {
 		return nil, "", err
 	}
 	v.OwnerID = firstNonNil(comp, sys, loc)
@@ -486,7 +512,7 @@ func scanVariableListRow(row pgx.Row) (*Variable, string, error) {
 }
 
 func variableColsQualified(alias string) string {
-	return alias + ".id, " + alias + ".name, " + alias + ".value_type, " + alias + ".owner_kind, " +
+	return alias + ".id, " + alias + ".name, coalesce(" + alias + ".label, ''), " + alias + ".value_type, " + alias + ".owner_kind, " +
 		alias + ".component_id, " + alias + ".system_id, " + alias + ".location_id, " +
 		alias + ".value, " + alias + ".created_at, " + alias + ".updated_at"
 }
@@ -496,6 +522,7 @@ func variableColsQualified(alias string) string {
 func auditVariable(v *Variable) map[string]any {
 	return map[string]any{
 		"name":       v.Name,
+		"label":      v.Label,
 		"value_type": v.ValueType,
 		"owner_kind": v.OwnerKind,
 		"owner_id":   v.OwnerID,

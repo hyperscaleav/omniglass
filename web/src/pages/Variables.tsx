@@ -1,9 +1,10 @@
-import { entityLabel } from "../lib/entities";
+import { byLabel, createIdentity, entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
+import BladeTitle from "../components/BladeTitle";
 import TreeSelect from "../components/TreeSelect";
 import KVStacked from "../components/KVStacked";
 import FieldRow from "../components/FieldRow";
@@ -55,7 +56,9 @@ export default function Variables() {
   const me = useMe();
   const variables = useQuery(() => ({ queryKey: VARIABLES_KEY, queryFn: listVariables }));
 
-  const rows = createMemo(() => [...(variables.data ?? [])].sort((a, b) => a.name.localeCompare(b.name)));
+  // Ordered by the label an operator reads, unlabelled last, exactly as
+  // ListVariables orders them in SQL (`order by label nulls last, name`, #613).
+  const rows = createMemo(() => [...(variables.data ?? [])].sort(byLabel));
 
   return (
     <FlatList<Variable>
@@ -65,7 +68,7 @@ export default function Variables() {
         loading: () => variables.isPending,
         error: () => variables.error,
         filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (v) => `${v.name} ${v.value_type}`, values: () => [] },
+          { key: "name", type: "string", hint: "substring", get: (v) => `${entityLabel(v)} ${v.name} ${v.value_type}`, values: () => [] },
           { key: "scope", type: "string", hint: "exact", get: (v) => v.owner_kind, values: (rs) => [...new Set(rs.map((r) => r.owner_kind))].sort() },
           { key: "type", type: "string", hint: "exact", get: (v) => v.value_type, values: (rs) => [...new Set(rs.map((r) => r.value_type))].sort() },
         ],
@@ -94,13 +97,11 @@ function useVariableById(id: string): () => Variable | undefined {
   return () => (variables.data ?? []).find((v) => v.id === id);
 }
 
-// The heading is the name, in the data face, because a variable carries no display
-// name: the name IS its only operator-facing string, so entityLabel would return
-// it anyway. Deliberate, not an oversight (#581); a variable blade would use BladeTitle
-// the moment the entity gained one.
+// The heading is the label, falling back to the name in the data face, through
+// the one blade-heading primitive. It was a bare span until the entity gained a
+// label (#613), which is the moment #581 said to switch.
 function VariableBladeTitle(p: { id: string }): JSX.Element {
-  const variable = useVariableById(p.id);
-  return <span class="font-data">{variable()?.name ?? "variable"}</span>;
+  return <BladeTitle row={useVariableById(p.id)} fallback="variable" />;
 }
 
 function VariableBladeBody(p: { id: string }): JSX.Element {
@@ -111,10 +112,14 @@ function VariableBladeBody(p: { id: string }): JSX.Element {
   const variable = useVariableById(p.id);
   const [err, setErr] = createSignal<string | null>(null);
   const [input, setInput] = createSignal("");
+  const [label, setLabel] = createSignal("");
 
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     setInput(displayValue(variable()?.value));
+    // The RAW column, never entityLabel: seeding the editor with the fallback
+    // would turn "no label" into a label the operator never typed.
+    setLabel(variable()?.label ?? "");
     setErr(null);
   }));
 
@@ -144,7 +149,7 @@ function VariableBladeBody(p: { id: string }): JSX.Element {
       throw e;
     }
     try {
-      await updateVariable(v.id, value);
+      await updateVariable(v.id, { value, label: label() });
       await qc.invalidateQueries({ queryKey: VARIABLES_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -183,6 +188,7 @@ function VariableBladeBody(p: { id: string }): JSX.Element {
               <span>{platformAuthorityHint("A variable", tierGap())}</span>
             </div>
           </Show>
+          <BladeField bind="label" value={() => v().label ?? ""} draft={label} onInput={setLabel} />
           <div class="grid grid-cols-2 gap-3 text-sm">
             <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{v().value_type}</span>} />
             <KVStacked label="Scope" value={<span>{ownerLabel(v())}</span>} />
@@ -250,7 +256,9 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
 
-  const [name, setName] = createSignal("");
+  // The operator types the label and the cascade name follows it, until they
+  // take the name over by hand (createIdentity, the registry-page affordance).
+  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
   const [valueType, setValueType] = createSignal<ValueType>("string");
   const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("platform");
   const [owner, setOwner] = createSignal("");
@@ -306,6 +314,7 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
     try {
       const created = await createVariable({
         name: name().trim(),
+        label: display().trim(),
         value_type: valueType(),
         owner_kind: ownerKind(),
         owner: ownerKind() === "platform" ? undefined : owner() || undefined,
@@ -325,7 +334,10 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="name" hint="What the cascade resolves by; unique per owner.">
+      <FieldRow bind="label" hint="What an operator reads in lists. Optional: a variable with none reads as its name.">
+        <input class="input input-bordered w-full" value={display()} placeholder="Poll Interval" onInput={(e) => setDisplay(e.currentTarget.value)} />
+      </FieldRow>
+      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "What the cascade resolves by; unique per owner."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="poll-interval" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <div class="grid grid-cols-2 gap-3">

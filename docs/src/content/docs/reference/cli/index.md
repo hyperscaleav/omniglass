@@ -4844,10 +4844,11 @@ Create a variable
 omniglass variable create [flags]
 ```
 
-Sets a variable at an owner scope. The value is validated against value_type. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).
+Sets a variable at an owner scope. The value is validated against value_type; the optional label is what an operator reads instead of the name. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--label` | string | (none) | What an operator reads in lists and pickers (Poll Interval); omit to fall back to the name |
 | `--name` | string | (none) | The cascade name (lowercase letters, digits, and hyphens); unique per owner |
 | `--owner` | string | (none) | The owning entity's name; omit for a platform variable |
 | `--owner-kind` | string | (none) | Which tier owns this variable |
@@ -4894,22 +4895,23 @@ omniglass variable list
 
 ### `omniglass variable update`
 
-Update a variable's value
+Update a variable
 
 ```
 omniglass variable update <id> [flags]
 ```
 
-Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
+Replaces a variable's value (validated against its fixed value_type) and patches its label; either may be omitted, and an empty label clears it. Name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--value` | string | (none) | The new value, validated against the fixed value_type |
+| `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone |
+| `--value` | string | (none) | The new value, validated against the fixed value_type; omit to leave it |
 
 Example:
 
 ```sh
-omniglass variable update <id> --value <json>
+omniglass variable update <id>
 ```
 
 ## `omniglass vendor`

@@ -3595,7 +3595,7 @@ export interface paths {
         put?: never;
         /**
          * Mint a tag key
-         * @description Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).
+         * @description Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier); the optional label is what an operator reads instead. Gated by tag:create (all-scope, an admin action).
          */
         post: operations["create-tag"];
         delete?: never;
@@ -3623,7 +3623,7 @@ export interface paths {
         head?: never;
         /**
          * Update a tag key
-         * @description Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).
+         * @description Replaces a key's governance fields (applies_to, propagates) and patches its label; the name is fixed. Gated by tag:update (all-scope).
          */
         patch: operations["update-tag"];
         trace?: never;
@@ -3763,7 +3763,7 @@ export interface paths {
         put?: never;
         /**
          * Create a variable
-         * @description Sets a variable at an owner scope. The value is validated against value_type. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).
+         * @description Sets a variable at an owner scope. The value is validated against value_type; the optional label is what an operator reads instead of the name. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).
          */
         post: operations["create-variable"];
         delete?: never;
@@ -3790,8 +3790,8 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Update a variable's value
-         * @description Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
+         * Update a variable
+         * @description Replaces a variable's value (validated against its fixed value_type) and patches its label; either may be omitted, and an empty label clears it. Name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
          */
         patch: operations["update-variable"];
         trace?: never;
@@ -4653,6 +4653,8 @@ export interface components {
             allowed_values?: string[] | null;
             /** @description Entity kinds this key may bind to (component, system, location); omit for universal */
             applies_to?: string[] | null;
+            /** @description What an operator reads in lists and pickers (Cost Center); omit to fall back to the name */
+            label?: string;
             /** @description The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide */
             name: string;
             /** @description Whether bindings cascade to descendants; defaults true */
@@ -4665,6 +4667,8 @@ export interface components {
              * @example /api/v1/schemas/CreateVariableInputBody.json
              */
             readonly $schema?: string;
+            /** @description What an operator reads in lists and pickers (Poll Interval); omit to fall back to the name */
+            label?: string;
             /** @description The cascade name (lowercase letters, digits, and hyphens); unique per owner */
             name: string;
             /** @description The owning entity's name; omit for a platform variable */
@@ -6463,6 +6467,8 @@ export interface components {
              */
             depth: number;
             id: string;
+            /** @description The friendly string an operator reads; absent when unset */
+            label?: string;
             name: string;
             /** @description The owning entity's id, the canonical handle; absent for a platform owner */
             owner_id?: string;
@@ -7099,6 +7105,8 @@ export interface components {
             /** @description Entity kinds this key may bind to; empty means universal */
             applies_to: string[] | null;
             id: string;
+            /** @description The friendly string an operator reads; absent when unset, and a surface with none renders the name verbatim */
+            label?: string;
             name: string;
             /** @description Whether a bound value cascades to descendants */
             propagates: boolean;
@@ -7447,6 +7455,8 @@ export interface components {
             allowed_values?: string[] | null;
             /** @description Entity kinds this key may bind to; omit for universal */
             applies_to?: string[] | null;
+            /** @description A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone */
+            label?: string;
             /** @description Whether bindings cascade to descendants; defaults true */
             propagates?: boolean;
         };
@@ -7457,8 +7467,10 @@ export interface components {
              * @example /api/v1/schemas/UpdateVariableInputBody.json
              */
             readonly $schema?: string;
-            /** @description The new value, validated against the fixed value_type */
-            value: unknown;
+            /** @description A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone */
+            label?: string;
+            /** @description The new value, validated against the fixed value_type; omit to leave it */
+            value?: unknown;
         };
         UpdateVendorInputBody: {
             /**
@@ -7489,6 +7501,8 @@ export interface components {
              */
             readonly $schema?: string;
             id: string;
+            /** @description The friendly string an operator reads; absent when unset, and a surface with none renders the name verbatim */
+            label?: string;
             name: string;
             /** @description The owning entity's id, the canonical handle; absent for a global owner */
             owner_id?: string;
