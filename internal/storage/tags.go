@@ -34,6 +34,7 @@ var (
 type Tag struct {
 	ID            string
 	Name          string
+	Label         string // the friendly string an operator reads; empty falls back to Name
 	AppliesTo     []string
 	Propagates    bool
 	AllowedValues []string // the value enum; empty means the key is free-text
@@ -41,12 +42,24 @@ type Tag struct {
 	UpdatedAt     time.Time
 }
 
-// TagSpec is the create/update input for a key.
+// TagSpec is the create input for a key.
 type TagSpec struct {
 	Name          string
+	Label         string
 	AppliesTo     []string
 	Propagates    bool
 	AllowedValues []string
+}
+
+// TagPatch is the update input. The governance fields are replaced wholesale,
+// as they always were (the name is fixed at creation and is not among them),
+// and Label follows the platform's patch convention: nil leaves it alone, an
+// empty string clears it, and both would otherwise arrive as SQL NULL.
+type TagPatch struct {
+	AppliesTo     []string
+	Propagates    bool
+	AllowedValues []string
+	Label         *string
 }
 
 // TagBinding is one bound value: the key it sets, the value, and the owner on
@@ -79,7 +92,7 @@ type ResolvedTag struct {
 	Winner    bool
 }
 
-const tagCols = `id, name, applies_to, propagates, allowed_values, created_at, updated_at`
+const tagCols = `id, name, coalesce(label, ''), applies_to, propagates, allowed_values, created_at, updated_at`
 
 // tagBindingConflictArc maps an owner kind to the ON CONFLICT target that
 // matches its partial unique index, so an upsert lands on the one-value-per-owner
@@ -117,10 +130,11 @@ func (p *PG) CreateTag(ctx context.Context, actorID string, spec TagSpec, create
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	t, err := scanTagRow(tx.QueryRow(ctx, `
-		insert into tag (name, applies_to, propagates, allowed_values)
-		values ($1, $2, $3, $4)
+		insert into tag (name, label, applies_to, propagates, allowed_values)
+		values ($1, $2, $3, $4, $5)
 		returning `+tagCols,
-		spec.Name, normalizeAppliesTo(spec.AppliesTo), spec.Propagates, normalizeAppliesTo(spec.AllowedValues)))
+		spec.Name, labelOrNull(spec.Label), normalizeAppliesTo(spec.AppliesTo), spec.Propagates,
+		normalizeAppliesTo(spec.AllowedValues)))
 	if err != nil {
 		return nil, mapTagWriteErr(err)
 	}
@@ -133,11 +147,15 @@ func (p *PG) CreateTag(ctx context.Context, actorID string, spec TagSpec, create
 	return t, nil
 }
 
-// ListTags returns the whole key vocabulary, ordered by name. The registry is
-// tenant-wide (not ABAC-scoped), so any reader past the tag:read floor sees
-// every key; the middleware is the gate.
+// ListTags returns the whole key vocabulary, ordered by the label an operator
+// reads, with the keys that carry none last and the name breaking ties (D4,
+// #613). `nulls last` is redundant on an ASC sort and written anyway, because it
+// is the half of this ordering that is a DECISION rather than a default, and
+// because it holds only while unset really is SQL NULL (labelOrNull, ADR-0118).
+// The registry is tenant-wide (not ABAC-scoped), so any reader past the tag:read
+// floor sees every key; the middleware is the gate.
 func (p *PG) ListTags(ctx context.Context) ([]Tag, error) {
-	rows, err := p.pool.Query(ctx, `select `+tagCols+` from tag order by name`)
+	rows, err := p.pool.Query(ctx, `select `+tagCols+` from tag order by label nulls last, name`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list tags: %w", err)
 	}
@@ -181,19 +199,22 @@ func (p *PG) DistinctTagValues(ctx context.Context, key string) ([]string, error
 	return out, rows.Err()
 }
 
-// UpdateTag replaces a key's governance fields (applies_to, propagates); the
-// name is fixed at creation. An all-scope update grant is required (tag:update).
-func (p *PG) UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, action scope.Set) (*Tag, error) {
+// UpdateTag replaces a key's governance fields (applies_to, propagates) and
+// patches its label; the name is fixed at creation, so this is the one write
+// that can move the label and it cannot move the address. A nil patch label
+// leaves the column alone, an empty one clears it. An all-scope update grant is
+// required (tag:update).
+func (p *PG) UpdateTag(ctx context.Context, actorID, name string, patch TagPatch, action scope.Set) (*Tag, error) {
 	if err := RejectAddressForm("tag", name); err != nil {
 		return nil, err
 	}
 	if !action.All {
 		return nil, ErrTagForbidden
 	}
-	if err := tag.ValidateAppliesTo(spec.AppliesTo); err != nil {
+	if err := tag.ValidateAppliesTo(patch.AppliesTo); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrTagAppliesToInvalid, err)
 	}
-	if err := tag.ValidateAllowedValues(spec.AllowedValues); err != nil {
+	if err := tag.ValidateAllowedValues(patch.AllowedValues); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrTagValueInvalid, err)
 	}
 
@@ -203,11 +224,18 @@ func (p *PG) UpdateTag(ctx context.Context, actorID, name string, spec TagSpec, 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	setLabel, labelVal := labelPatch(patch.Label)
 	t, err := scanTagRow(tx.QueryRow(ctx, `
-		update tag set applies_to = $2, propagates = $3, allowed_values = $4, updated_at = now()
+		update tag set
+			applies_to = $2,
+			propagates = $3,
+			allowed_values = $4,
+			label = case when $6::boolean then $5 else label end,
+			updated_at = now()
 		where name = $1
 		returning `+tagCols,
-		name, normalizeAppliesTo(spec.AppliesTo), spec.Propagates, normalizeAppliesTo(spec.AllowedValues)))
+		name, normalizeAppliesTo(patch.AppliesTo), patch.Propagates, normalizeAppliesTo(patch.AllowedValues),
+		labelVal, setLabel))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrTagNotFound
 	}
@@ -843,7 +871,7 @@ func normalizeAppliesTo(kinds []string) []string {
 
 func scanTagRow(row pgx.Row) (*Tag, error) {
 	var t Tag
-	if err := row.Scan(&t.ID, &t.Name, &t.AppliesTo, &t.Propagates, &t.AllowedValues, &t.CreatedAt, &t.UpdatedAt); err != nil {
+	if err := row.Scan(&t.ID, &t.Name, &t.Label, &t.AppliesTo, &t.Propagates, &t.AllowedValues, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return nil, err
 	}
 	if t.AppliesTo == nil {
@@ -893,6 +921,7 @@ func scanBindingListRow(row pgx.Row) (*TagBinding, string, error) {
 func auditTag(t *Tag) map[string]any {
 	return map[string]any{
 		"name":           t.Name,
+		"label":          t.Label,
 		"applies_to":     t.AppliesTo,
 		"propagates":     t.Propagates,
 		"allowed_values": t.AllowedValues,

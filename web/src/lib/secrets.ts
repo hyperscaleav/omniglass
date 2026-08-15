@@ -19,6 +19,9 @@ export type SecretField = {
 export type Secret = {
   id: string;
   name: string;
+  // The friendly string an operator reads. Optional: a secret with none renders
+  // its name verbatim, through entityLabel like every other row.
+  label?: string;
   secret_type: string;
   owner_kind: string;
 
@@ -38,6 +41,7 @@ export type OwnerKind = "platform" | "location" | "component";
 
 export type CreateSecret = {
   name: string;
+  label?: string;
   secret_type: string;
   owner_kind: OwnerKind;
   owner?: string;
@@ -51,9 +55,15 @@ export async function createSecret(body: CreateSecret): Promise<Secret> {
 }
 
 // updateSecret replaces the given field values (an omitted field keeps its
-// value); name, type, and owner are fixed at creation.
-export async function updateSecret(id: string, fields: Record<string, string>): Promise<Secret> {
-  const { data, error } = await api.PATCH("/secrets/{id}", { params: { path: { id } }, body: { fields } });
+// value) and patches the label; name, type, and owner are fixed at creation.
+// An empty label clears it; omitting it leaves it alone.
+export type UpdateSecret = {
+  fields?: Record<string, string>;
+  label?: string;
+};
+
+export async function updateSecret(id: string, body: UpdateSecret): Promise<Secret> {
+  const { data, error } = await api.PATCH("/secrets/{id}", { params: { path: { id } }, body });
   if (error) throw error;
   return data as Secret;
 }

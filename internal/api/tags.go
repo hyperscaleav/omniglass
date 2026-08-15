@@ -13,6 +13,7 @@ import (
 type tagBody struct {
 	ID            string   `json:"id"`
 	Name          string   `json:"name"`
+	Label         string   `json:"label,omitempty" doc:"The friendly string an operator reads; absent when unset, and a surface with none renders the name verbatim"`
 	AppliesTo     []string `json:"applies_to" doc:"Entity kinds this key may bind to; empty means universal"`
 	Propagates    bool     `json:"propagates" doc:"Whether a bound value cascades to descendants"`
 	AllowedValues []string `json:"allowed_values" doc:"The value enum a bound value must belong to; empty means free text"`
@@ -42,7 +43,7 @@ type resolvedTagBody struct {
 }
 
 func toTagBody(t *storage.Tag) tagBody {
-	return tagBody{ID: t.ID, Name: t.Name, AppliesTo: t.AppliesTo, Propagates: t.Propagates, AllowedValues: t.AllowedValues}
+	return tagBody{ID: t.ID, Name: t.Name, Label: t.Label, AppliesTo: t.AppliesTo, Propagates: t.Propagates, AllowedValues: t.AllowedValues}
 }
 
 func toTagBindingBody(b *storage.TagBinding) tagBindingBody {
@@ -71,6 +72,7 @@ type tagValuesOutput struct {
 type createTagInput struct {
 	Body struct {
 		Name          string   `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide"`
+		Label         string   `json:"label,omitempty" maxLength:"200" doc:"What an operator reads in lists and pickers (Cost Center); omit to fall back to the name"`
 		AppliesTo     []string `json:"applies_to,omitempty" doc:"Entity kinds this key may bind to (component, system, location); omit for universal"`
 		Propagates    *bool    `json:"propagates,omitempty" doc:"Whether bindings cascade to descendants; defaults true"`
 		AllowedValues []string `json:"allowed_values,omitempty" doc:"The value enum a bound value must belong to; omit for free text"`
@@ -80,6 +82,7 @@ type createTagInput struct {
 type updateTagInput struct {
 	Name string `path:"name" doc:"The tag key"`
 	Body struct {
+		Label         *string  `json:"label,omitempty" maxLength:"200" doc:"A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone"`
 		AppliesTo     []string `json:"applies_to,omitempty" doc:"Entity kinds this key may bind to; omit for universal"`
 		Propagates    *bool    `json:"propagates,omitempty" doc:"Whether bindings cascade to descendants; defaults true"`
 		AllowedValues []string `json:"allowed_values,omitempty" doc:"The value enum a bound value must belong to; omit for free text"`
@@ -165,10 +168,11 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:          "/tags",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Mint a tag key",
-		Description:   "Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).",
+		Description:   "Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier); the optional label is what an operator reads instead. Gated by tag:create (all-scope, an admin action).",
 	}, "tag", "create"), func(ctx context.Context, in *createTagInput) (*tagOutput, error) {
 		t, err := gw.CreateTag(ctx, actorID(ctx), storage.TagSpec{
 			Name:          in.Body.Name,
+			Label:         in.Body.Label,
 			AppliesTo:     in.Body.AppliesTo,
 			Propagates:    propagatesOr(in.Body.Propagates),
 			AllowedValues: in.Body.AllowedValues,
@@ -184,9 +188,10 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodPatch,
 		Path:        "/tags/{name}",
 		Summary:     "Update a tag key",
-		Description: "Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).",
+		Description: "Replaces a key's governance fields (applies_to, propagates) and patches its label; the name is fixed. Gated by tag:update (all-scope).",
 	}, "tag", "update"), func(ctx context.Context, in *updateTagInput) (*tagOutput, error) {
-		t, err := gw.UpdateTag(ctx, actorID(ctx), in.Name, storage.TagSpec{
+		t, err := gw.UpdateTag(ctx, actorID(ctx), in.Name, storage.TagPatch{
+			Label:         in.Body.Label,
 			AppliesTo:     in.Body.AppliesTo,
 			Propagates:    propagatesOr(in.Body.Propagates),
 			AllowedValues: in.Body.AllowedValues,

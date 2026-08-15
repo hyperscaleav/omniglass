@@ -1,10 +1,12 @@
-import { entityLabel } from "../lib/entities";
+import { byLabel, createIdentity, entityLabel } from "../lib/entities";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import { identityColumn } from "../components/IdentityCell";
+import BladeTitle from "../components/BladeTitle";
 import TreeSelect from "../components/TreeSelect";
 import FieldRow from "../components/FieldRow";
+import BladeField from "../components/BladeField";
 import KVStacked from "../components/KVStacked";
 import SecretFields from "../components/SecretFields";
 import { useFormActions } from "../lib/formactions";
@@ -66,7 +68,9 @@ export default function Secrets() {
   const me = useMe();
   const secrets = useQuery(() => ({ queryKey: SECRETS_KEY, queryFn: listSecrets }));
 
-  const rows = createMemo(() => [...(secrets.data ?? [])].sort((a, b) => a.name.localeCompare(b.name)));
+  // Ordered by the label an operator reads, unlabelled last, exactly as
+  // ListSecrets orders both arms of its query (#613).
+  const rows = createMemo(() => [...(secrets.data ?? [])].sort(byLabel));
 
   return (
     <FlatList<Secret>
@@ -106,13 +110,11 @@ function useSecretById(id: string): () => Secret | undefined {
   return () => (secrets.data ?? []).find((s) => s.id === id);
 }
 
-// The heading is the name, in the data face, because a secret carries no display
-// name: the name IS its only operator-facing string, so entityLabel would return
-// it anyway. Deliberate, not an oversight (#581); a secret blade would use BladeTitle
-// the moment the entity gained one.
+// The heading is the label, falling back to the name in the data face, through
+// the one blade-heading primitive. It was a bare span until the entity gained a
+// label (#613), which is the moment #581 said to switch.
 function SecretBladeTitle(p: { id: string }): JSX.Element {
-  const secret = useSecretById(p.id);
-  return <span class="font-data">{secret()?.name ?? "secret"}</span>;
+  return <BladeTitle row={useSecretById(p.id)} fallback="secret" />;
 }
 
 function SecretBladeBody(p: { id: string }): JSX.Element {
@@ -125,12 +127,16 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
   // The edit inputs, one per field. Non-secret fields seed with their current
   // value; secret fields start blank (masked), so a blank one is left unchanged.
   const [inputs, setInputs] = createSignal<Record<string, string>>({});
+  const [label, setLabel] = createSignal("");
 
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const seed: Record<string, string> = {};
     for (const f of secret()?.fields ?? []) seed[f.name] = f.secret ? "" : f.value;
     setInputs(seed);
+    // The RAW column, never entityLabel: seeding the editor with the fallback
+    // would turn "no label" into a label the operator never typed.
+    setLabel(secret()?.label ?? "");
     setErr(null);
   }));
 
@@ -157,7 +163,7 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
     for (const [k, v] of Object.entries(inputs())) if (v !== "") fields[k] = v;
     setErr(null);
     try {
-      await updateSecret(s.id, fields);
+      await updateSecret(s.id, { fields, label: label() });
       await qc.invalidateQueries({ queryKey: SECRETS_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -198,6 +204,7 @@ function SecretBladeBody(p: { id: string }): JSX.Element {
               <span>{platformAuthorityHint("A secret", tierGap())}</span>
             </div>
           </Show>
+          <BladeField bind="label" value={() => s().label ?? ""} draft={label} onInput={setLabel} />
           <div class="grid grid-cols-2 gap-3 text-sm">
             <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{s().secret_type}</span>} />
             <KVStacked label="Scope" value={<span>{ownerLabel(s())}</span>} />
@@ -240,7 +247,9 @@ function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
 
-  const [name, setName] = createSignal("");
+  // The operator types the label and the cascade name follows it, until they
+  // take the name over by hand (createIdentity, the registry-page affordance).
+  const { display, setDisplay, name, setName, nameDerived } = createIdentity();
   const [typeId, setTypeId] = createSignal("");
   const [ownerKind, setOwnerKind] = createSignal<OwnerKind>("platform");
   const [owner, setOwner] = createSignal("");
@@ -295,6 +304,7 @@ function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
     try {
       const created = await createSecret({
         name: name().trim(),
+        label: display().trim(),
         secret_type: typeId(),
         owner_kind: ownerKind(),
         owner: ownerKind() === "platform" ? undefined : owner() || undefined,
@@ -314,7 +324,10 @@ function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="name" hint="What the cascade resolves by; unique per owner.">
+      <FieldRow bind="label" hint="What an operator reads in lists. Optional: a secret with none reads as its name.">
+        <input class="input input-bordered w-full" value={display()} placeholder="Polling community" onInput={(e) => setDisplay(e.currentTarget.value)} />
+      </FieldRow>
+      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "What the cascade resolves by; unique per owner."}>
         <input class="input input-bordered w-full font-data" value={name()} placeholder="poll-community" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Type">

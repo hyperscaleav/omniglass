@@ -78,7 +78,7 @@ func TestTagRegistryCRUD(t *testing.T) {
 	}
 
 	// Update the governance fields; the name is fixed.
-	upd, err := gw.UpdateTag(ctx, "", "category", storage.TagSpec{AppliesTo: []string{"component", "system"}, Propagates: false}, all)
+	upd, err := gw.UpdateTag(ctx, "", "category", storage.TagPatch{AppliesTo: []string{"component", "system"}, Propagates: false}, all)
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestTagRegistryCRUD(t *testing.T) {
 		t.Errorf("updated = %+v, want propagates=false, applies_to len 2", upd)
 	}
 	// Updating an unknown key is a non-disclosing not-found.
-	if _, err := gw.UpdateTag(ctx, "", "ghost", storage.TagSpec{}, all); !errors.Is(err, storage.ErrTagNotFound) {
+	if _, err := gw.UpdateTag(ctx, "", "ghost", storage.TagPatch{}, all); !errors.Is(err, storage.ErrTagNotFound) {
 		t.Errorf("update ghost = %v, want ErrTagNotFound", err)
 	}
 }

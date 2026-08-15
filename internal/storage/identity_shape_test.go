@@ -130,6 +130,73 @@ func TestADeclaredIDOnlyTableCarriesNoName(t *testing.T) {
 // columnsByTable reads every table's columns out of the generated schema facts,
 // the same artifact liveTables and primaryKeys read, so this guard needs no
 // database of its own.
+// TestEveryNamedTableCarriesALabelOrSaysWhyNot is the third column of the triad,
+// turned from an assumption into a checked claim (#613).
+//
+// The declaration named the identifier and said nothing about the friendly
+// string beside it, and that silence IS this epic: `tag`, `variable`, `secret`
+// and `interface` went without a label, nothing failed, and an operator had
+// nowhere to type the words they would actually say. A shape that says "an
+// operator types its name" now also says whether an operator can read something
+// else instead.
+//
+// Three claims, all against the generated schema facts rather than against the
+// declaration's own prose, exactly as the primary-key guard above does:
+//
+//  1. A name-bearing table declared to carry a label HAS the column. This is the
+//     one that was red when it was written, and it named the four.
+//  2. A declared reason is not stale: a table that says it carries no label must
+//     not have grown one, or the published exemption is a lie.
+//  3. A table NOBODY names carries no label. There is no name for an unset label
+//     to fall back to, so the column could only render a blank row.
+func TestEveryNamedTableCarriesALabelOrSaysWhyNot(t *testing.T) {
+	cols := columnsByTable(t)
+	has := func(table string) bool {
+		for _, c := range cols[table] {
+			if c.Name == "label" {
+				return true
+			}
+		}
+		return false
+	}
+
+	var missing []string
+	for table, id := range storage.IdentityShapes {
+		if _, live := cols[table]; !live {
+			continue // the ghost check in TestEveryTableHasADeclaredIdentityShape owns this
+		}
+		switch {
+		case !id.Shape.NameBearing():
+			if id.NoLabel != "" {
+				t.Errorf("%q is declared %q, which nobody names, and carries a no-label reason anyway.\n"+
+					"The shape is already the reason; drop it.", table, id.Shape)
+			}
+			if has(table) {
+				t.Errorf("%q is declared %q, which says nobody names it, but it carries a label column.\n"+
+					"A label is what an operator reads INSTEAD of the name, so on a row with no name it "+
+					"renders a blank and nothing else. Either the shape is wrong or the column is.", table, id.Shape)
+			}
+		case id.NoLabel != "":
+			if has(table) {
+				t.Errorf("%q declares why it carries no label (%q), but the schema says it has one.\n"+
+					"A stale exemption publishes a false statement through cmd/identitygen; drop the reason.",
+					table, id.NoLabel)
+			}
+		default:
+			if !has(table) {
+				missing = append(missing, table)
+			}
+		}
+	}
+	sort.Strings(missing)
+	for _, table := range missing {
+		t.Errorf("%q is named by an operator and carries no label column.\n"+
+			"A name is a machine identifier under the entity name rule, so a table with only one is a "+
+			"table an operator cannot say the friendly version of (#613). Add the column, or declare "+
+			"NoLabel in internal/storage/identity_shape.go with the reason it needs none.", table)
+	}
+}
+
 func columnsByTable(t *testing.T) map[string][]schemaColumn {
 	t.Helper()
 	raw, err := os.ReadFile("../../docs/src/generated/schema.json")

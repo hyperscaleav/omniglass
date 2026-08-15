@@ -39,6 +39,7 @@ type secretTypeBody struct {
 type secretBody struct {
 	ID             string            `json:"id"`
 	Name           string            `json:"name"`
+	Label          string            `json:"label,omitempty" doc:"The friendly string an operator reads; absent when unset, and a surface with none renders the name verbatim"`
 	SecretType     string            `json:"secret_type" doc:"The secret_type name"`
 	SecretTypeID   string            `json:"secret_type_id" doc:"The secret_type's uuid, the stable form of secret_type"`
 	OwnerKind      string            `json:"owner_kind"`
@@ -58,7 +59,7 @@ func toSecretFieldBodies(fs []storage.ResolvedField) []secretFieldBody {
 
 func toSecretBody(s *storage.Secret) secretBody {
 	return secretBody{
-		ID: s.ID, Name: s.Name, SecretType: s.SecretType, SecretTypeID: s.SecretTypeID,
+		ID: s.ID, Name: s.Name, Label: s.Label, SecretType: s.SecretType, SecretTypeID: s.SecretTypeID,
 		OwnerKind: s.OwnerKind, OwnerID: s.OwnerID, OwnerName: s.OwnerName,
 		AdminSensitive: s.AdminSensitive,
 		Fields:         toSecretFieldBodies(s.Fields),
@@ -84,6 +85,7 @@ type secretOutput struct {
 type createSecretInput struct {
 	Body struct {
 		Name           string            `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The cascade name (lowercase letters, digits, and hyphens); unique per owner"`
+		Label          string            `json:"label,omitempty" maxLength:"200" doc:"What an operator reads in lists and pickers (Polling community); omit to fall back to the name"`
 		SecretType     string            `json:"secret_type" minLength:"1" doc:"A secret_type id"`
 		OwnerKind      string            `json:"owner_kind" enum:"platform,location,component" doc:"Which tier owns this secret (the system band is retired, ADR-0052)"`
 		Owner          *string           `json:"owner,omitempty" doc:"The owning entity's name; omit for a platform secret"`
@@ -99,7 +101,8 @@ type secretIDInput struct {
 type updateSecretInput struct {
 	ID   string `path:"id" doc:"The secret's id"`
 	Body struct {
-		Fields map[string]string `json:"fields" doc:"The field values to replace; an omitted field keeps its value"`
+		Fields map[string]string `json:"fields,omitempty" doc:"The field values to replace; an omitted field keeps its value"`
+		Label  *string           `json:"label,omitempty" maxLength:"200" doc:"A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone"`
 	}
 }
 
@@ -129,6 +132,7 @@ func (a *authenticator) canSecretAdmin(ctx context.Context, action string) bool 
 type resolvedSecretBody struct {
 	ID           string            `json:"id"`
 	Name         string            `json:"name"`
+	Label        string            `json:"label,omitempty" doc:"The friendly string an operator reads; absent when unset"`
 	SecretType   string            `json:"secret_type" doc:"The secret_type name"`
 	SecretTypeID string            `json:"secret_type_id" doc:"The secret_type's uuid"`
 	OwnerKind    string            `json:"owner_kind"`
@@ -175,7 +179,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 				fields = append(fields, secretFieldBody{Name: f.Name, Value: f.Value, Secret: f.Secret})
 			}
 			out.Body.Secrets = append(out.Body.Secrets, resolvedSecretBody{
-				ID: r.ID, Name: r.Name, SecretType: r.SecretType, SecretTypeID: r.SecretTypeID,
+				ID: r.ID, Name: r.Name, Label: r.Label, SecretType: r.SecretType, SecretTypeID: r.SecretTypeID,
 				OwnerKind: r.OwnerKind, OwnerID: r.OwnerID, OwnerName: r.OwnerName,
 				Band: r.Band, Depth: r.Depth, Winner: r.Winner, Fields: fields,
 			})
@@ -241,6 +245,7 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		}
 		s, err := gw.CreateSecret(ctx, actorID(ctx), storage.SecretSpec{
 			Name:           in.Body.Name,
+			Label:          in.Body.Label,
 			SecretType:     in.Body.SecretType,
 			OwnerKind:      in.Body.OwnerKind,
 			OwnerName:      in.Body.Owner,
@@ -257,12 +262,12 @@ func registerSecretRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		OperationID: "update-secret",
 		Method:      http.MethodPatch,
 		Path:        "/secrets/{id}",
-		Summary:     "Update a secret's field values",
-		Description: "Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.",
+		Summary:     "Update a secret",
+		Description: "Replaces the given field values on a secret, re-sealing secret fields, and patches its label. Only those change; name, type, and owner are fixed at creation. An omitted field keeps its value, an omitted label leaves it alone, and an empty label clears it. Gated by secret:update, plus platform:update when the secret sits at the platform tier.",
 	}, "secret", "update"), "update"), func(ctx context.Context, in *updateSecretInput) (*secretOutput, error) {
 		// Only the stored row knows its tier, so the resolved permission rides with
 		// the call and the Gateway applies it beside the scope split.
-		s, err := gw.UpdateSecret(ctx, actorID(ctx), in.ID, in.Body.Fields,
+		s, err := gw.UpdateSecret(ctx, actorID(ctx), in.ID, storage.SecretPatch{Fields: in.Body.Fields, Label: in.Body.Label},
 			a.scopeFor(ctx, "secret", "read"), a.scopeFor(ctx, "secret", "update"),
 			a.canSecretAdmin(ctx, "update"), a.canPlatform(ctx, "update"))
 		if err != nil {

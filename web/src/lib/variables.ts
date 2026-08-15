@@ -12,6 +12,9 @@ export const VALUE_TYPES: ValueType[] = ["string", "int", "float", "bool", "json
 export type Variable = {
   id: string;
   name: string;
+  // The friendly string an operator reads. Optional: a variable with none
+  // renders its name verbatim, through entityLabel like every other row.
+  label?: string;
   value_type: string;
   owner_kind: string;
 
@@ -25,6 +28,7 @@ export type OwnerKind = "platform" | "location" | "system" | "component";
 
 export type CreateVariable = {
   name: string;
+  label?: string;
   value_type: ValueType;
   owner_kind: OwnerKind;
   owner?: string;
@@ -43,10 +47,17 @@ export async function createVariable(body: CreateVariable): Promise<Variable> {
   return data as Variable;
 }
 
-// updateVariable replaces the value (validated against the fixed value_type);
-// name, type, and owner are fixed at creation.
-export async function updateVariable(id: string, value: unknown): Promise<Variable> {
-  const { data, error } = await api.PATCH("/variables/{id}", { params: { path: { id } }, body: { value } });
+// updateVariable replaces the value (validated against the fixed value_type) and
+// patches the label; name, type, and owner are fixed at creation. Both fields
+// are optional and independent: omitting the value leaves it alone, omitting the
+// label leaves it, and an empty label clears it.
+export type UpdateVariable = {
+  value?: unknown;
+  label?: string;
+};
+
+export async function updateVariable(id: string, body: UpdateVariable): Promise<Variable> {
+  const { data, error } = await api.PATCH("/variables/{id}", { params: { path: { id } }, body });
   if (error) throw error;
   return data as Variable;
 }

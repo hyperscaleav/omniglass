@@ -45,6 +45,13 @@ inventing `env` beside `environment` beside `Environment`. What an operator bind
 declares and applies the one-segment rule (lowercase letters, digits, and hyphens, 100 characters, a uuid
 refused), so `cost-center` is the canonical spelling and `cost_center` never enters the vocabulary.
 
+That rule tightening is the reason a key also carries a **`label`**, the friendly string an operator
+reads ("Cost Center") beside the one they bind by
+([ADR-0119](/architecture/decisions/#adr-0119-a-table-an-operator-names-carries-a-label-or-declares-why-it-does-not)).
+It is optional and it is not an identifier: no uniqueness, no pattern, and nothing resolves through
+it. A key with none renders `cost-center` **verbatim** in every list, never re-cased. The directory
+is ordered by the label an operator reads, with the unlabelled keys last.
+
 ## The governance split is the point
 
 Minting a key and setting a value are **two different permissions**, deliberately:
@@ -133,6 +140,7 @@ The `tag` row is the tenant-wide governed key vocabulary; minting a key needs `t
   table="tag"
   notes={{
     name: 'The governed key operators bind by',
+    label: 'The friendly string an operator reads; NULL falls back to the name, verbatim',
     applies_to: 'Narrows the key to entity kinds; empty is universal',
     propagates: 'Toggles cascade versus flat per-entity binding',
     allowed_values: 'The value enum; empty is free text, enforced on the binding write',

@@ -44,16 +44,16 @@ describe("variables data layer", () => {
     expect(sent).toMatchObject({ name: "poll", owner_kind: "location", owner: "room", value: 30 });
   });
 
-  it("patches the value on update", async () => {
+  it("patches the value and the label on update", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ id: uuidFor("sec_123"), name: "poll", value_type: "int", owner_kind: "platform", value: 60 }),
     );
-    await updateVariable("v1", 60);
+    await updateVariable("v1", { value: 60, label: "Poll Interval" });
     const req = fetchMock.mock.calls[0][0] as Request;
     expect(req.method).toBe("PATCH");
     expect(req.url).toContain("/api/v1/variables/v1");
     const sent = await req.json();
-    expect(sent).toMatchObject({ value: 60 });
+    expect(sent).toMatchObject({ value: 60, label: "Poll Interval" });
   });
 
   it("throws on an error status", async () => {

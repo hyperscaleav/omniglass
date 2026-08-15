@@ -1,0 +1,33 @@
+---
+// Renders the tables an operator NAMES that carry no label, from the same
+// declaration IdentityShapes reads (docs/src/generated/identity.json, written by
+// make gen via cmd/identitygen). Every other name-bearing table carries one, and
+// the guard in internal/storage fails on a table that carries neither the column
+// nor a declared reason, so this list is the whole of the exception set by
+// construction rather than by anyone remembering to update it (#613).
+//
+// It takes no props: there is one such list.
+import identity from '../generated/identity.json';
+
+const rows = (identity.tables as Array<{ table: string; labelled: boolean; no_label?: string }>)
+  .filter((r) => r.no_label);
+
+if (rows.length === 0) {
+  throw new Error(
+    'UnlabelledTables: no table declares a no-label reason in docs/src/generated/identity.json ' +
+      '(run make gen, or the field was renamed in internal/storage/identity_shape.go)',
+  );
+}
+---
+
+<table>
+    <thead><tr><th>table</th><th>why it carries no label</th></tr></thead>
+    <tbody>
+      {rows.map((r) => (
+        <tr>
+          <td><code>{r.table}</code></td>
+          <td>{r.no_label}</td>
+        </tr>
+      ))}
+    </tbody>
+</table>

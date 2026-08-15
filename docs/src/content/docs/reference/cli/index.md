@@ -1423,12 +1423,13 @@ Create an interface
 omniglass interface create [flags]
 ```
 
-Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant). The create scope cascades through the owning component. Gated by interface:create.
+Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by interface:create.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--component` | string | (none) | Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant) |
 | `--interface-type` | string | (none) | An interface_type name (the protocol); the interface is named by it, unique within the component |
+| `--label` | string | (none) | What an operator reads in lists (Control processor). Settable here because the name is derived from the type, so it says how the device is reached and never what the connection is for |
 | `--node` | string | (none) | Node placement, by name or id |
 | `--params` | string | (none) | Endpoint/target settings (jsonb) |
 
@@ -1494,10 +1495,11 @@ Update an interface
 omniglass interface update <id> [flags]
 ```
 
-Patches an interface's node placement or params. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
+Patches an interface's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone |
 | `--node` | string | (none) | Reassign the node placement, by name or id |
 | `--params` | string | (none) | Replace the endpoint/target settings (jsonb) |
 
@@ -3405,6 +3407,7 @@ Seals a secret at an owner scope. Fields are validated and encrypted against the
 |---|---|---|---|
 | `--admin-sensitive` | bool | `false` | Admin-only visibility; omit to use the type default. Setting true requires the admin tier |
 | `--fields` | string | (none) | The operator field map, validated against the type shape |
+| `--label` | string | (none) | What an operator reads in lists and pickers (Polling community); omit to fall back to the name |
 | `--name` | string | (none) | The cascade name (lowercase letters, digits, and hyphens); unique per owner |
 | `--owner` | string | (none) | The owning entity's name; omit for a platform secret |
 | `--owner-kind` | string | (none) | Which tier owns this secret (the system band is retired, ADR-0052) |
@@ -3466,22 +3469,23 @@ omniglass secret reveal <id>
 
 ### `omniglass secret update`
 
-Update a secret's field values
+Update a secret
 
 ```
 omniglass secret update <id> [flags]
 ```
 
-Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
+Replaces the given field values on a secret, re-sealing secret fields, and patches its label. Only those change; name, type, and owner are fixed at creation. An omitted field keeps its value, an omitted label leaves it alone, and an empty label clears it. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--fields` | string | (none) | The field values to replace; an omitted field keeps its value |
+| `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone |
 
 Example:
 
 ```sh
-omniglass secret update <id> --fields <json>
+omniglass secret update <id>
 ```
 
 ## `omniglass secret-type`
@@ -4644,12 +4648,13 @@ Mint a tag key
 omniglass tag create [flags]
 ```
 
-Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).
+Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier); the optional label is what an operator reads instead. Gated by tag:create (all-scope, an admin action).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--allowed-values` | string | (none) | The value enum a bound value must belong to; omit for free text |
 | `--applies-to` | string | (none) | Entity kinds this key may bind to (component, system, location); omit for universal |
+| `--label` | string | (none) | What an operator reads in lists and pickers (Cost Center); omit to fall back to the name |
 | `--name` | string | (none) | The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide |
 | `--propagates` | bool | `false` | Whether bindings cascade to descendants; defaults true |
 
@@ -4719,12 +4724,13 @@ Update a tag key
 omniglass tag update <name> [flags]
 ```
 
-Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).
+Replaces a key's governance fields (applies_to, propagates) and patches its label; the name is fixed. Gated by tag:update (all-scope).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--allowed-values` | string | (none) | The value enum a bound value must belong to; omit for free text |
 | `--applies-to` | string | (none) | Entity kinds this key may bind to; omit for universal |
+| `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone |
 | `--propagates` | bool | `false` | Whether bindings cascade to descendants; defaults true |
 
 Example:
@@ -4842,10 +4848,11 @@ Create a variable
 omniglass variable create [flags]
 ```
 
-Sets a variable at an owner scope. The value is validated against value_type. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).
+Sets a variable at an owner scope. The value is validated against value_type; the optional label is what an operator reads instead of the name. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
+| `--label` | string | (none) | What an operator reads in lists and pickers (Poll Interval); omit to fall back to the name |
 | `--name` | string | (none) | The cascade name (lowercase letters, digits, and hyphens); unique per owner |
 | `--owner` | string | (none) | The owning entity's name; omit for a platform variable |
 | `--owner-kind` | string | (none) | Which tier owns this variable |
@@ -4892,22 +4899,23 @@ omniglass variable list
 
 ### `omniglass variable update`
 
-Update a variable's value
+Update a variable
 
 ```
 omniglass variable update <id> [flags]
 ```
 
-Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
+Replaces a variable's value (validated against its fixed value_type) and patches its label; either may be omitted, and an empty label clears it. Name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--value` | string | (none) | The new value, validated against the fixed value_type |
+| `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone |
+| `--value` | string | (none) | The new value, validated against the fixed value_type; omit to leave it |
 
 Example:
 
 ```sh
-omniglass variable update <id> --value <json>
+omniglass variable update <id>
 ```
 
 ## `omniglass vendor`

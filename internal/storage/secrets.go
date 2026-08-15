@@ -54,6 +54,7 @@ func (st SecretType) Shape() secret.Shape {
 type Secret struct {
 	ID           string
 	Name         string
+	Label        string // the friendly string an operator reads; empty falls back to Name
 	SecretType   string
 	SecretTypeID string
 	OwnerKind    string  // platform | component | location (the system band is retired, ADR-0052)
@@ -74,11 +75,24 @@ type Secret struct {
 // plaintext field map, validated and sealed against the type's shape.
 type SecretSpec struct {
 	Name           string
+	Label          string
 	SecretType     string
 	OwnerKind      string
 	OwnerName      *string
 	AdminSensitive *bool // nil defaults to the secret_type's default; creating a sensitive one requires the admin tier
 	Fields         map[string]string
+}
+
+// SecretPatch is the update input. Fields merges over the stored value (an
+// omitted field keeps its value), and Label is the separate instruction beside
+// it: nil leaves the column alone, an empty string clears it. They are separate
+// because a relabel must not re-seal a field and a field write must not wipe a
+// label; the name, the type and the owner stay fixed at creation, which matters
+// more here than elsewhere because the sealed fields are bound to
+// (owner, name, field) as AAD.
+type SecretPatch struct {
+	Fields map[string]string
+	Label  *string
 }
 
 // ResolvedField is one field as displayed: its name, its display value (the
@@ -101,6 +115,7 @@ type ResolvedField struct {
 type ResolvedSecret struct {
 	ID           string
 	Name         string
+	Label        string
 	SecretType   string
 	SecretTypeID string
 	OwnerKind    string
@@ -171,7 +186,7 @@ func scanSecretType(row pgx.Row) (*SecretType, error) {
 
 // --- secret CRUD -------------------------------------------------------------
 
-const secretCols = `id, name, (select st.name from secret_type st where st.id = secret.secret_type) as secret_type, secret.secret_type as secret_type_id, owner_kind, component_id, system_id, location_id, value, created_at, updated_at, admin_sensitive`
+const secretCols = `id, name, coalesce(label, ''), (select st.name from secret_type st where st.id = secret.secret_type) as secret_type, secret.secret_type as secret_type_id, owner_kind, component_id, system_id, location_id, value, created_at, updated_at, admin_sensitive`
 
 // CreateSecret seals a new secret at its owner scope. The owner is resolved and
 // scope-checked (a platform secret needs an all create scope; a scoped one needs
@@ -235,10 +250,11 @@ func (p *PG) CreateSecret(ctx context.Context, actorID string, spec SecretSpec, 
 
 	compID, sysID, locID := arcColumns(spec.OwnerKind, ownerID)
 	s, err := scanSecretRow(tx.QueryRow(ctx, `
-		insert into secret (name, secret_type, owner_kind, component_id, system_id, location_id, value, admin_sensitive)
-		values ($1, (select id from secret_type where `+registryRefCol(spec.SecretType)+` = $2), $3, $4, $5, $6, $7, $8)
+		insert into secret (name, label, secret_type, owner_kind, component_id, system_id, location_id, value, admin_sensitive)
+		values ($1, $2, (select id from secret_type where `+registryRefCol(spec.SecretType)+` = $3), $4, $5, $6, $7, $8, $9)
 		returning `+secretCols,
-		spec.Name, spec.SecretType, spec.OwnerKind, compID, sysID, locID, valueJSON, adminSensitive), shape)
+		spec.Name, labelOrNull(spec.Label), spec.SecretType, spec.OwnerKind, compID, sysID, locID,
+		valueJSON, adminSensitive), shape)
 	if err != nil {
 		return nil, mapSecretWriteErr(err)
 	}
@@ -278,12 +294,16 @@ func (p *PG) ListSecrets(ctx context.Context, read scope.Set, canAdmin bool) ([]
 		left join location  l on s.location_id  = l.id
 		where (not s.admin_sensitive or $1)`
 	var rows pgx.Rows
+	// Both arms order the same way, by the label an operator reads with the
+	// unlabelled last (D4, #613). Two statements is two chances to order
+	// differently, which is why the ordering test drives this list rather than
+	// assuming the arms agree.
 	if read.All {
-		rows, err = p.pool.Query(ctx, sel+` order by s.name`, canAdmin)
+		rows, err = p.pool.Query(ctx, sel+` order by s.label nulls last, s.name`, canAdmin)
 	} else {
 		inclusive, excluded, selfIDs := arcScopeArgs(read)
 		rows, err = p.pool.Query(ctx,
-			arcScopeCTEs(2, 3)+sel+` and `+arcScopePredicate("s", 4)+` order by s.name`,
+			arcScopeCTEs(2, 3)+sel+` and `+arcScopePredicate("s", 4)+` order by s.label nulls last, s.name`,
 			canAdmin, inclusive, excluded, selfIDs)
 	}
 	if err != nil {
@@ -330,8 +350,10 @@ func (p *PG) DeleteSecret(ctx context.Context, actorID, id string, read, action 
 }
 
 // UpdateSecret replaces the given field values on a secret, re-sealing any
-// secret fields, audited. Only field values change; name, type, and owner are
-// fixed at creation. The map merges over the stored value: a field present in
+// secret fields, and patches its label, audited. Only those two change; name,
+// type, and owner are fixed at creation, which matters here more than elsewhere
+// because the sealed fields are bound to (owner, name, field) as AAD, so a
+// relabel is emphatically not a rename and leaves every envelope decryptable. The map merges over the stored value: a field present in
 // the map is set (a present-but-empty value seals an empty string), and an
 // OMITTED field keeps its value. The console strips blank inputs before the
 // call, so leaving a secret field blank there omits it (keeps the current
@@ -339,7 +361,7 @@ func (p *PG) DeleteSecret(ctx context.Context, actorID, id string, read, action 
 // it empty. Requires the owner within the action scope; an unknown or
 // out-of-scope id is ErrSecretNotFound. canPlatform is the caller's
 // platform:update permission, required to edit a secret at the platform tier.
-func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, fields map[string]string, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error) {
+func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, patch SecretPatch, read, action scope.Set, canAdmin, canPlatform bool) (*Secret, error) {
 	if p.secret == nil {
 		return nil, ErrNoSecretProvider
 	}
@@ -353,12 +375,14 @@ func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, fields map[st
 	if err != nil {
 		return nil, err
 	}
-	if err := shape.ValidateInput(fields); err != nil {
+	if err := shape.ValidateInput(patch.Fields); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrSecretFieldInvalid, err)
 	}
 	// Seal the provided fields (same owner|name|field AAD) and merge over the
-	// stored value, so the untouched fields are preserved.
-	sealed, err := p.sealFields(ctx, shape, row.ownerKind, row.ownerID, row.name, fields)
+	// stored value, so the untouched fields are preserved. A label-only patch
+	// seals nothing: sealFields over an empty map is a no-op, and the stored
+	// envelopes are left exactly as they are.
+	sealed, err := p.sealFields(ctx, shape, row.ownerKind, row.ownerID, row.name, patch.Fields)
 	if err != nil {
 		return nil, err
 	}
@@ -369,10 +393,14 @@ func (p *PG) UpdateSecret(ctx context.Context, actorID, id string, fields map[st
 	if err != nil {
 		return nil, fmt.Errorf("storage: marshal secret value: %w", err)
 	}
+	setLabel, labelVal := labelPatch(patch.Label)
 	s, err := scanSecretRow(tx.QueryRow(ctx, `
-		update secret set value = $2, updated_at = now()
+		update secret set
+			value = $2,
+			label = case when $4::boolean then $3 else label end,
+			updated_at = now()
 		where id = $1
-		returning `+secretCols, id, valueJSON), shape)
+		returning `+secretCols, id, valueJSON, labelVal, setLabel), shape)
 	if err != nil {
 		return nil, mapSecretWriteErr(err)
 	}
@@ -496,7 +524,7 @@ func (p *PG) ResolveSecrets(ctx context.Context, componentID string, read scope.
 			rnk       int
 			value     []byte
 		)
-		if err := rows.Scan(&r.ID, &r.Name, &r.SecretType, &r.SecretTypeID, &r.OwnerKind, &ownerID,
+		if err := rows.Scan(&r.ID, &r.Name, &r.Label, &r.SecretType, &r.SecretTypeID, &r.OwnerKind, &ownerID,
 			&r.Band, &r.Depth, &rnk, &ownerName, &value); err != nil {
 			return nil, fmt.Errorf("storage: scan resolved secret: %w", err)
 		}
@@ -539,7 +567,7 @@ owners(owner_kind, owner_id, band, depth) as (
     union all   select 'component', id,         3, depth from comp_chain
 ),
 ranked as (
-    select s.id, s.name, (select st.name from secret_type st where st.id = s.secret_type) as secret_type, s.secret_type as secret_type_id, s.owner_kind, o.owner_id, o.band, o.depth, s.value,
+    select s.id, s.name, coalesce(s.label, '') as label, (select st.name from secret_type st where st.id = s.secret_type) as secret_type, s.secret_type as secret_type_id, s.owner_kind, o.owner_id, o.band, o.depth, s.value,
            row_number() over (partition by s.name order by o.band desc, o.depth asc) as rnk
     from secret s
     join owners o
@@ -547,7 +575,7 @@ ranked as (
      and o.owner_id is not distinct from coalesce(s.component_id, s.system_id, s.location_id)
     where (not s.admin_sensitive or $2::boolean)
 )
-select r.id, r.name, r.secret_type, r.secret_type_id, r.owner_kind, r.owner_id, r.band, r.depth, r.rnk,
+select r.id, r.name, r.label, r.secret_type, r.secret_type_id, r.owner_kind, r.owner_id, r.band, r.depth, r.rnk,
        coalesce(c.name, sy.name, l.name, '') as owner_name,
        r.value
 from ranked r
@@ -678,6 +706,7 @@ func ownerNameOf(name *string) string {
 type secretRow struct {
 	id             string
 	name           string
+	label          string
 	ownerKind      string
 	ownerID        *string
 	adminSensitive bool
@@ -692,7 +721,7 @@ func (p *PG) secretForAction(ctx context.Context, q querier, id string, read, ac
 		return nil, err
 	}
 	s := &Secret{
-		ID: row.id, Name: row.name, OwnerKind: row.ownerKind, OwnerID: row.ownerID,
+		ID: row.id, Name: row.name, Label: row.label, OwnerKind: row.ownerKind, OwnerID: row.ownerID,
 		AdminSensitive: row.adminSensitive,
 		Fields:         maskValueMap(shape, row.value),
 	}
@@ -714,9 +743,9 @@ func (p *PG) secretRowForAction(ctx context.Context, q querier, id string, read,
 		value          []byte
 	)
 	err := q.QueryRow(ctx, `
-		select id, name, (select st.name from secret_type st where st.id = secret.secret_type) as secret_type, owner_kind, component_id, system_id, location_id, admin_sensitive, value
+		select id, name, coalesce(label, ''), (select st.name from secret_type st where st.id = secret.secret_type) as secret_type, owner_kind, component_id, system_id, location_id, admin_sensitive, value
 		from secret where id = $1`, id).
-		Scan(&row.id, &row.name, &secType, &row.ownerKind, &comp, &sys, &loc, &row.adminSensitive, &value)
+		Scan(&row.id, &row.name, &row.label, &secType, &row.ownerKind, &comp, &sys, &loc, &row.adminSensitive, &value)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return secretRow{}, secret.Shape{}, ErrSecretNotFound
 	}
@@ -827,7 +856,7 @@ func scanSecretRow(row pgx.Row, shape secret.Shape) (*Secret, error) {
 		comp, sys, loc *string
 		value          []byte
 	)
-	if err := row.Scan(&s.ID, &s.Name, &s.SecretType, &s.SecretTypeID, &s.OwnerKind, &comp, &sys, &loc, &value, &s.CreatedAt, &s.UpdatedAt, &s.AdminSensitive); err != nil {
+	if err := row.Scan(&s.ID, &s.Name, &s.Label, &s.SecretType, &s.SecretTypeID, &s.OwnerKind, &comp, &sys, &loc, &value, &s.CreatedAt, &s.UpdatedAt, &s.AdminSensitive); err != nil {
 		return nil, err
 	}
 	s.OwnerID = firstNonNil(comp, sys, loc)
@@ -842,7 +871,7 @@ func scanSecretListRow(row pgx.Row, shapes map[string]secret.Shape) (*Secret, st
 		value          []byte
 		ownerName      string
 	)
-	if err := row.Scan(&s.ID, &s.Name, &s.SecretType, &s.SecretTypeID, &s.OwnerKind, &comp, &sys, &loc, &value, &s.CreatedAt, &s.UpdatedAt, &s.AdminSensitive, &ownerName); err != nil {
+	if err := row.Scan(&s.ID, &s.Name, &s.Label, &s.SecretType, &s.SecretTypeID, &s.OwnerKind, &comp, &sys, &loc, &value, &s.CreatedAt, &s.UpdatedAt, &s.AdminSensitive, &ownerName); err != nil {
 		return nil, "", err
 	}
 	s.OwnerID = firstNonNil(comp, sys, loc)
@@ -851,7 +880,7 @@ func scanSecretListRow(row pgx.Row, shapes map[string]secret.Shape) (*Secret, st
 }
 
 func secretColsQualified(alias string) string {
-	return alias + ".id, " + alias + ".name, (select st.name from secret_type st where st.id = " + alias + ".secret_type) as secret_type, " + alias + ".secret_type as secret_type_id, " + alias + ".owner_kind, " +
+	return alias + ".id, " + alias + ".name, coalesce(" + alias + ".label, ''), (select st.name from secret_type st where st.id = " + alias + ".secret_type) as secret_type, " + alias + ".secret_type as secret_type_id, " + alias + ".owner_kind, " +
 		alias + ".component_id, " + alias + ".system_id, " + alias + ".location_id, " +
 		alias + ".value, " + alias + ".created_at, " + alias + ".updated_at, " + alias + ".admin_sensitive"
 }
@@ -860,6 +889,7 @@ func secretColsQualified(alias string) string {
 func auditSecret(s *Secret) map[string]any {
 	return map[string]any{
 		"name":        s.Name,
+		"label":       s.Label,
 		"secret_type": s.SecretType,
 		"owner_kind":  s.OwnerKind,
 		"owner_id":    s.OwnerID,

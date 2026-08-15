@@ -1,4 +1,5 @@
 import { api } from "../api/client";
+import { entityLabel } from "./entities";
 import type { FilterKey } from "./predicate";
 
 // The interfaces data layer: thin typed wrappers over the generated client, so the
@@ -11,6 +12,10 @@ export type InterfaceParams = { target?: string; port?: number | string } & Reco
 export type Interface = {
   id: string;
   name: string;
+  // The friendly string an operator reads, and the only identity string an
+  // operator types on an interface: the name is derived from the type, so two
+  // ssh interfaces on one component are told apart by this and nothing else.
+  label?: string;
   interface_type: string;
   interface_type_id?: string;
   component?: string;
@@ -52,9 +57,12 @@ export async function getInterface(id: string): Promise<Interface> {
 }
 
 // The interface is protocol-named: its name is DERIVED server-side from its type,
-// so the create body carries no name.
+// so the create body carries no name. It carries a LABEL, though, and that is the
+// point: the label is the only identity string an operator types here, so it has
+// to be settable at create rather than on a following patch (#613).
 export type CreateInterface = {
   interface_type: string;
+  label?: string;
   component?: string;
   node?: string;
   params?: InterfaceParams;
@@ -66,9 +74,10 @@ export async function createInterface(body: CreateInterface): Promise<Interface>
   return data as Interface;
 }
 
-// Only the node placement and the params are mutable after creation (name, type,
-// and owning component are set at creation). Addressed by the surrogate id.
-export type UpdateInterface = { node?: string; params?: InterfaceParams };
+// The node placement, the params and the label are mutable after creation (name,
+// type, and owning component are set at creation). An empty label clears it;
+// omitting it leaves it alone. Addressed by the surrogate id.
+export type UpdateInterface = { node?: string; params?: InterfaceParams; label?: string };
 
 export async function updateInterface(id: string, body: UpdateInterface): Promise<Interface> {
   const { data, error } = await api.PATCH("/interfaces/{id}", { params: { path: { id } }, body });
@@ -85,7 +94,7 @@ export async function deleteInterface(id: string): Promise<void> {
 // the default), type (exact, over the built types), and component (exact). Matching
 // is client-side over the loaded rows via lib/predicate.
 export const interfaceFilterKeys: FilterKey<Interface>[] = [
-  { key: "name", type: "string", hint: "substring", get: (i) => i.name },
+  { key: "name", type: "string", hint: "substring", get: (i) => `${entityLabel(i)} ${i.name}` },
   { key: "type", type: "string", hint: "exact", get: (i) => i.interface_type, values: (rows) => [...new Set(rows.map((r) => r.interface_type))].sort() },
   { key: "component", type: "string", hint: "exact", get: (i) => i.component ?? "", values: (rows) => [...new Set(rows.map((r) => r.component).filter(Boolean) as string[])].sort() },
 ];

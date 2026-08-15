@@ -1135,6 +1135,11 @@
       "nullable": false,
       "fk": true,
       "fk_target": "secret_type.id"
+     },
+     {
+      "name": "label",
+      "type": "text",
+      "nullable": true
      }
     ],
     "checks": [
@@ -1339,6 +1344,11 @@
       "nullable": true,
       "fk": true,
       "fk_target": "location.id"
+     },
+     {
+      "name": "label",
+      "type": "text",
+      "nullable": true
      }
     ],
     "checks": [
@@ -1496,6 +1506,11 @@
       "type": "ARRAY",
       "nullable": false,
       "default": "'{}'::text[]"
+     },
+     {
+      "name": "label",
+      "type": "text",
+      "nullable": true
      }
     ],
     "uniques": [
@@ -1750,6 +1765,11 @@
       "nullable": false,
       "fk": true,
       "fk_target": "interface_type.id"
+     },
+     {
+      "name": "label",
+      "type": "text",
+      "nullable": true
      }
     ],
     "uniques": [

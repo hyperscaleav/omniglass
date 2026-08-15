@@ -909,6 +909,10 @@ components:
           description: An interface_type name (the protocol); the interface is named by it, unique within the component
           minLength: 1
           type: string
+        label:
+          description: What an operator reads in lists (Control processor). Settable here because the name is derived from the type, so it says how the device is reached and never what the connection is for
+          maxLength: 200
+          type: string
         node:
           description: Node placement, by name or id
           type: string
@@ -1245,6 +1249,10 @@ components:
             type: string
           description: The operator field map, validated against the type shape
           type: object
+        label:
+          description: What an operator reads in lists and pickers (Polling community); omit to fall back to the name
+          maxLength: 200
+          type: string
         name:
           description: The cascade name (lowercase letters, digits, and hyphens); unique per owner
           maxLength: 100
@@ -1402,6 +1410,10 @@ components:
           type:
             - array
             - "null"
+        label:
+          description: What an operator reads in lists and pickers (Cost Center); omit to fall back to the name
+          maxLength: 200
+          type: string
         name:
           description: The normalized name (lowercase letters, digits, and hyphens), unique tenant-wide
           maxLength: 100
@@ -1423,6 +1435,10 @@ components:
             - /api/v1/schemas/CreateVariableInputBody.json
           format: uri
           readOnly: true
+          type: string
+        label:
+          description: What an operator reads in lists and pickers (Poll Interval); omit to fall back to the name
+          maxLength: 200
           type: string
         name:
           description: The cascade name (lowercase letters, digits, and hyphens); unique per owner
@@ -2402,8 +2418,11 @@ components:
         interface_type_id:
           description: The interface_type's uuid, the stable form of interface_type
           type: string
+        label:
+          description: "The friendly string an operator reads, and the only identity string an operator types here: the name is derived from the type. Absent when unset, and a surface with none renders the name verbatim"
+          type: string
         name:
-          description: The friendly name, unique within the owning component
+          description: The derived name (its protocol), unique within the owning component
           type: string
         node:
           description: The node placement name, if assigned
@@ -4328,10 +4347,13 @@ components:
             - array
             - "null"
         interface:
-          description: The interface name
+          description: The interface's derived name (its protocol)
           type: string
         interface_type:
           description: The interface type (icmp, tcp, ...)
+          type: string
+        label:
+          description: The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim
           type: string
         layers:
           description: The per-layer probe signals that compose the verdict
@@ -4661,6 +4683,9 @@ components:
             - "null"
         id:
           type: string
+        label:
+          description: The friendly string an operator reads; absent when unset
+          type: string
         name:
           type: string
         owner_id:
@@ -4735,6 +4760,9 @@ components:
           format: int64
           type: integer
         id:
+          type: string
+        label:
+          description: The friendly string an operator reads; absent when unset
           type: string
         name:
           type: string
@@ -5006,6 +5034,9 @@ components:
             - array
             - "null"
         id:
+          type: string
+        label:
+          description: The friendly string an operator reads; absent when unset, and a surface with none renders the name verbatim
           type: string
         name:
           type: string
@@ -5869,6 +5900,9 @@ components:
             - "null"
         id:
           type: string
+        label:
+          description: The friendly string an operator reads; absent when unset, and a surface with none renders the name verbatim
+          type: string
         name:
           type: string
         propagates:
@@ -6099,6 +6133,10 @@ components:
           format: uri
           readOnly: true
           type: string
+        label:
+          description: A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone
+          maxLength: 200
+          type: string
         node:
           description: Reassign the node placement, by name or id
           type: string
@@ -6314,8 +6352,10 @@ components:
             type: string
           description: The field values to replace; an omitted field keeps its value
           type: object
-      required:
-        - fields
+        label:
+          description: A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone
+          maxLength: 200
+          type: string
       type: object
     UpdateStandardInputBody:
       additionalProperties: false
@@ -6406,6 +6446,10 @@ components:
           type:
             - array
             - "null"
+        label:
+          description: A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone
+          maxLength: 200
+          type: string
         propagates:
           description: Whether bindings cascade to descendants; defaults true
           type: boolean
@@ -6420,10 +6464,12 @@ components:
           format: uri
           readOnly: true
           type: string
+        label:
+          description: A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone
+          maxLength: 200
+          type: string
         value:
-          description: The new value, validated against the fixed value_type
-      required:
-        - value
+          description: The new value, validated against the fixed value_type; omit to leave it
       type: object
     UpdateVendorInputBody:
       additionalProperties: false
@@ -6466,6 +6512,9 @@ components:
           readOnly: true
           type: string
         id:
+          type: string
+        label:
+          description: The friendly string an operator reads; absent when unset, and a surface with none renders the name verbatim
           type: string
         name:
           type: string
@@ -8458,7 +8507,7 @@ paths:
       summary: List interfaces in scope
       x-omniglass-permission: interface:read
     post:
-      description: Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant). The create scope cascades through the owning component. Gated by interface:create.
+      description: Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by interface:create.
       operationId: create-interface
       requestBody:
         content:
@@ -8531,7 +8580,7 @@ paths:
       summary: Get an interface
       x-omniglass-permission: interface:read
     patch:
-      description: Patches an interface's node placement or params. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
+      description: Patches an interface's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
       operationId: update-interface
       parameters:
         - in: path
@@ -11321,7 +11370,7 @@ paths:
       x-omniglass-permission: secret:delete
       x-omniglass-platform-permission: platform:delete
     patch:
-      description: Replaces the given field values on a secret, re-sealing secret fields. Only values change; name, type, and owner are fixed at creation. An omitted field keeps its value. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
+      description: Replaces the given field values on a secret, re-sealing secret fields, and patches its label. Only those change; name, type, and owner are fixed at creation. An omitted field keeps its value, an omitted label leaves it alone, and an empty label clears it. Gated by secret:update, plus platform:update when the secret sits at the platform tier.
       operationId: update-secret
       parameters:
         - description: The secret's id
@@ -11350,7 +11399,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Update a secret's field values
+      summary: Update a secret
       x-omniglass-permission: secret:update
       x-omniglass-platform-permission: platform:update
   /secrets/{id}:copy:
@@ -12929,7 +12978,7 @@ paths:
       summary: List tag keys
       x-omniglass-permission: tag:read
     post:
-      description: Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier). Gated by tag:create (all-scope, an admin action).
+      description: Adds a key to the governed vocabulary. The name is normalized (a lowercase identifier); the optional label is what an operator reads instead. Gated by tag:create (all-scope, an admin action).
       operationId: create-tag
       requestBody:
         content:
@@ -12976,7 +13025,7 @@ paths:
       summary: Delete a tag key
       x-omniglass-permission: tag:delete
     patch:
-      description: Replaces a key's governance fields (applies_to, propagates); the name is fixed. Gated by tag:update (all-scope).
+      description: Replaces a key's governance fields (applies_to, propagates) and patches its label; the name is fixed. Gated by tag:update (all-scope).
       operationId: update-tag
       parameters:
         - description: The tag key
@@ -13183,7 +13232,7 @@ paths:
       summary: List variables (admin directory)
       x-omniglass-permission: variable:read
     post:
-      description: Sets a variable at an owner scope. The value is validated against value_type. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).
+      description: Sets a variable at an owner scope. The value is validated against value_type; the optional label is what an operator reads instead of the name. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).
       operationId: create-variable
       requestBody:
         content:
@@ -13232,7 +13281,7 @@ paths:
       x-omniglass-permission: variable:delete
       x-omniglass-platform-permission: platform:delete
     patch:
-      description: Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
+      description: Replaces a variable's value (validated against its fixed value_type) and patches its label; either may be omitted, and an empty label clears it. Name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.
       operationId: update-variable
       parameters:
         - description: The variable's id
@@ -13261,7 +13310,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      summary: Update a variable's value
+      summary: Update a variable
       x-omniglass-permission: variable:update
       x-omniglass-platform-permission: platform:update
   /vendors:

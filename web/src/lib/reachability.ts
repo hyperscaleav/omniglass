@@ -21,6 +21,10 @@ export type ReachLayer = { layer: string; check: string; value: number; detail?:
 export type ReachHistory = { ts: string; value: string };
 export type ReachInterface = {
   interface: string;
+  // The friendly string an operator reads for this interface. The row's
+  // identity field is called `interface`, not `name`, so a caller adapts it to
+  // the structural `Labelled` shape before rendering it.
+  label?: string;
   interface_type: string;
   endpoint?: string;
   node?: string;

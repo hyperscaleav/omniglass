@@ -132,10 +132,10 @@ func TestVariableUpdate(t *testing.T) {
 
 	v := mustVar(t, gw, "poll-interval", "int", "platform", nil, `30`)
 	// A value that does not match the fixed type is refused.
-	if _, err := gw.UpdateVariable(ctx, "", v.ID, json.RawMessage(`"nope"`), all, all, true); !errors.Is(err, storage.ErrVariableValueInvalid) {
+	if _, err := gw.UpdateVariable(ctx, "", v.ID, storage.VariablePatch{Value: json.RawMessage(`"nope"`)}, all, all, true); !errors.Is(err, storage.ErrVariableValueInvalid) {
 		t.Errorf("update with bad value = %v, want ErrVariableValueInvalid", err)
 	}
-	updated, err := gw.UpdateVariable(ctx, "", v.ID, json.RawMessage(`60`), all, all, true)
+	updated, err := gw.UpdateVariable(ctx, "", v.ID, storage.VariablePatch{Value: json.RawMessage(`60`)}, all, all, true)
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}

@@ -4,6 +4,7 @@ import FlatList, { type FlatColumn } from "../components/FlatList";
 import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
+import BladeTitle from "../components/BladeTitle";
 import Button from "../components/Button";
 import { useFormActions } from "../lib/formactions";
 import { Plus, X } from "../components/icons";
@@ -18,6 +19,7 @@ import {
   deleteTag,
   appliesToLabel,
 } from "../lib/tags";
+import { byLabel, createIdentity, entityLabel } from "../lib/entities";
 import { useMe, can } from "../lib/auth";
 import { registryLock } from "../lib/catalog";
 import { describeError } from "../lib/format";
@@ -38,12 +40,11 @@ function propagatesBadge(t: Tag): JSX.Element {
 }
 
 const columns: FlatColumn<Tag>[] = [
-  // The shared identity cell, under the one header word every list uses. A tag's
-  // name is validated as a keyspace key (icmp-rtt-avg is legal here and not in a
-  // kebab name), but that is a validation difference, not a different concept: it
-  // is still the row's name. A tag carries no label, so the cell collapses
-  // to the name alone in the data face, which is the same rule the pages with a
-  // label follow rather than an exception to it.
+  // The shared identity cell, under the one header word every list uses: the
+  // label over the name it belongs to, and the name alone on a key that carries
+  // no label. A tag gained one in #613, which is what ADR-0076 left undone when
+  // it froze the name on the entity name rule: `cost-center` is the key every
+  // binding carries, and "Cost Center" is what this column now reads.
   identityColumn<Tag>(),
   { key: "applies_to", label: "Applies to", width: "220px", sortVal: (t) => appliesToLabel(t.applies_to), cell: (t) => <span class="text-base-content/70">{appliesToLabel(t.applies_to)}</span> },
   { key: "propagates", label: "Binding", width: "120px", sortVal: (t) => String(t.propagates), cell: (t) => propagatesBadge(t) },
@@ -53,7 +54,9 @@ export default function Tags() {
   const me = useMe();
   const tags = useQuery(() => ({ queryKey: TAGS_KEY, queryFn: listTags }));
 
-  const rows = createMemo(() => [...(tags.data ?? [])].sort((a, b) => a.name.localeCompare(b.name)));
+  // Ordered by the label an operator reads, unlabelled keys last, exactly as
+  // ListTags orders them in SQL (`order by label nulls last, name`, #613).
+  const rows = createMemo(() => [...(tags.data ?? [])].sort(byLabel));
 
   return (
     <FlatList<Tag>
@@ -63,7 +66,7 @@ export default function Tags() {
         loading: () => tags.isPending,
         error: () => tags.error,
         filterKeys: [
-          { key: "name", type: "string", hint: "substring", get: (t) => t.name, values: () => [] },
+          { key: "name", type: "string", hint: "substring", get: (t) => `${entityLabel(t)} ${t.name}`, values: () => [] },
           { key: "applies_to", type: "string", hint: "exact", get: (t) => appliesToLabel(t.applies_to), values: (rs) => [...new Set(rs.map((r) => appliesToLabel(r.applies_to)))].sort() },
           { key: "binding", type: "string", hint: "exact", get: (t) => (t.propagates ? "cascades" : "flat"), values: () => ["cascades", "flat"] },
         ],
@@ -96,12 +99,11 @@ function useTagByName(name: string): () => Tag | undefined {
   return () => (tags.data ?? []).find((t) => t.name === name);
 }
 
-// The heading is the name, in the data face, because a tag carries no display
-// name: the name IS its only operator-facing string, so entityLabel would return
-// it anyway. Deliberate, not an oversight (#581); a tag blade would use BladeTitle
-// the moment the entity gained one.
+// The heading is the label, falling back to the key in the data face, through
+// the one blade-heading primitive. It was a bare span until the entity gained a
+// label (#613), which is the moment #581 said to switch.
 function TagBladeTitle(p: { name: string }): JSX.Element {
-  return <span class="font-data">{p.name}</span>;
+  return <BladeTitle row={useTagByName(p.name)} fallback={p.name} />;
 }
 
 function TagBladeBody(p: { name: string }): JSX.Element {
@@ -111,6 +113,7 @@ function TagBladeBody(p: { name: string }): JSX.Element {
   const edit = useBladeEdit();
   const tag = useTagByName(p.name);
   const [err, setErr] = createSignal<string | null>(null);
+  const [label, setLabel] = createSignal("");
   const [appliesTo, setAppliesTo] = createSignal<EntityKind[]>([]);
   const [propagates, setPropagates] = createSignal(true);
   const [isEnum, setIsEnum] = createSignal(false);
@@ -119,6 +122,10 @@ function TagBladeBody(p: { name: string }): JSX.Element {
   createEffect(on(edit.editing, (editing) => {
     if (!editing) return;
     const t = tag();
+    // The RAW column, never entityLabel: seeding the editor with the fallback
+    // would turn "no label" into a label the operator never typed on the next
+    // save.
+    setLabel(t?.label ?? "");
     setAppliesTo((t?.applies_to ?? []) as EntityKind[]);
     setPropagates(t?.propagates ?? true);
     setIsEnum((t?.allowed_values ?? []).length > 0);
@@ -145,7 +152,7 @@ function TagBladeBody(p: { name: string }): JSX.Element {
     if (!t) return;
     setErr(null);
     try {
-      await updateTag(t.name, { applies_to: appliesTo(), propagates: propagates(), allowed_values: isEnum() ? allowedValues() : [] });
+      await updateTag(t.name, { label: label(), applies_to: appliesTo(), propagates: propagates(), allowed_values: isEnum() ? allowedValues() : [] });
       await qc.invalidateQueries({ queryKey: TAGS_KEY });
     } catch (e) {
       setErr(describeError(e));
@@ -169,6 +176,7 @@ function TagBladeBody(p: { name: string }): JSX.Element {
           <Show when={err()}>
             <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
           </Show>
+          <BladeField bind="label" value={() => t().label ?? ""} draft={label} onInput={setLabel} />
           <BladeField label="Applies to" value={() => appliesToLabel(t().applies_to)}>
             <AppliesToPicker value={appliesTo()} onChange={setAppliesTo} />
           </BladeField>
@@ -223,7 +231,7 @@ function PropagatesToggle(p: { value: boolean; onChange: (v: boolean) => void })
 // entity kinds it applies to and whether it cascades, then mint it.
 export function CreateTagForm(p: { onCreated: (t: Tag) => void; initialName?: string }): JSX.Element {
   const qc = useQueryClient();
-  const [name, setName] = createSignal(p.initialName ?? "");
+  const { display, setDisplay, name, setName, nameDerived } = createIdentity({ name: p.initialName });
   const [appliesTo, setAppliesTo] = createSignal<EntityKind[]>([]);
   const [propagates, setPropagates] = createSignal(true);
   const [isEnum, setIsEnum] = createSignal(false);
@@ -245,6 +253,7 @@ export function CreateTagForm(p: { onCreated: (t: Tag) => void; initialName?: st
     try {
       const created = await createTag({
         name: name().trim(),
+        label: display().trim(),
         applies_to: appliesTo(),
         propagates: propagates(),
         allowed_values: isEnum() ? allowedValues() : [],
@@ -263,8 +272,11 @@ export function CreateTagForm(p: { onCreated: (t: Tag) => void; initialName?: st
       <Show when={formErr()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
       </Show>
-      <FieldRow bind="name" hint="A lowercase identifier, unique tenant-wide (e.g. environment, cost_center).">
-        <input class="input input-bordered w-full font-data" value={name()} placeholder="environment" onInput={(e) => setName(e.currentTarget.value)} />
+      <FieldRow bind="label" hint="What an operator reads in lists and pickers. Optional: a key with none reads as its name.">
+        <input class="input input-bordered w-full" value={display()} placeholder="Cost Center" onInput={(e) => setDisplay(e.currentTarget.value)} />
+      </FieldRow>
+      <FieldRow bind="name" hint={nameDerived() ? "Derived from the label. Edit to set your own." : "A lowercase identifier, unique tenant-wide (e.g. environment, cost-center)."}>
+        <input class="input input-bordered w-full font-data" value={name()} placeholder="cost-center" onInput={(e) => setName(e.currentTarget.value)} />
       </FieldRow>
       <FieldRow label="Applies to">
         <AppliesToPicker value={appliesTo()} onChange={setAppliesTo} />

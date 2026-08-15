@@ -16,6 +16,7 @@ import (
 type variableBody struct {
 	ID        string  `json:"id"`
 	Name      string  `json:"name"`
+	Label     string  `json:"label,omitempty" doc:"The friendly string an operator reads; absent when unset, and a surface with none renders the name verbatim"`
 	ValueType string  `json:"value_type"`
 	OwnerKind string  `json:"owner_kind"`
 	OwnerID   *string `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a global owner"`
@@ -25,7 +26,7 @@ type variableBody struct {
 
 func toVariableBody(v *storage.Variable) variableBody {
 	return variableBody{
-		ID: v.ID, Name: v.Name, ValueType: v.ValueType,
+		ID: v.ID, Name: v.Name, Label: v.Label, ValueType: v.ValueType,
 		OwnerKind: v.OwnerKind, OwnerID: v.OwnerID, OwnerName: v.OwnerName,
 		Value: decodeVariableValue(v.Value),
 	}
@@ -53,6 +54,7 @@ type variableOutput struct {
 type createVariableInput struct {
 	Body struct {
 		Name      string  `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The cascade name (lowercase letters, digits, and hyphens); unique per owner"`
+		Label     string  `json:"label,omitempty" maxLength:"200" doc:"What an operator reads in lists and pickers (Poll Interval); omit to fall back to the name"`
 		ValueType string  `json:"value_type" enum:"string,int,float,bool,json" doc:"The declared value type"`
 		OwnerKind string  `json:"owner_kind" enum:"platform,location,system,component" doc:"Which tier owns this variable"`
 		Owner     *string `json:"owner,omitempty" doc:"The owning entity's name; omit for a platform variable"`
@@ -64,10 +66,17 @@ type variableIDInput struct {
 	ID string `path:"id" doc:"The variable's id"`
 }
 
+// updateVariableInput is the PATCH body: two independent instructions, either of
+// which may be omitted. An omitted `value` leaves the stored one alone, which is
+// what makes a label-only edit possible; an omitted `label` likewise, and an
+// empty one clears it. A `json`-typed variable cannot be set to JSON null
+// through this route, since an explicit null is indistinguishable from an
+// omitted field on the wire.
 type updateVariableInput struct {
 	ID   string `path:"id" doc:"The variable's id"`
 	Body struct {
-		Value any `json:"value" doc:"The new value, validated against the fixed value_type"`
+		Value any     `json:"value,omitempty" doc:"The new value, validated against the fixed value_type; omit to leave it"`
+		Label *string `json:"label,omitempty" maxLength:"200" doc:"A new label; an empty string clears it, and the surface falls back to the name. Omit to leave it alone"`
 	}
 }
 
@@ -83,6 +92,7 @@ type updateVariableInput struct {
 type resolvedVariableBody struct {
 	ID        string  `json:"id"`
 	Name      string  `json:"name"`
+	Label     string  `json:"label,omitempty" doc:"The friendly string an operator reads; absent when unset"`
 	ValueType string  `json:"value_type"`
 	OwnerKind string  `json:"owner_kind"`
 	OwnerID   *string `json:"owner_id,omitempty" doc:"The owning entity's id, the canonical handle; absent for a platform owner"`
@@ -124,7 +134,7 @@ func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		for i := range resolved {
 			r := &resolved[i]
 			out.Body.Variables = append(out.Body.Variables, resolvedVariableBody{
-				ID: r.ID, Name: r.Name, ValueType: r.ValueType,
+				ID: r.ID, Name: r.Name, Label: r.Label, ValueType: r.ValueType,
 				OwnerKind: r.OwnerKind, OwnerID: r.OwnerID, OwnerName: r.OwnerName,
 				Band: r.Band, Depth: r.Depth, Winner: r.Winner,
 				Value: decodeVariableValue(r.Value),
@@ -158,7 +168,7 @@ func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Path:          "/variables",
 		DefaultStatus: http.StatusCreated,
 		Summary:       "Create a variable",
-		Description:   "Sets a variable at an owner scope. The value is validated against value_type. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).",
+		Description:   "Sets a variable at an owner scope. The value is validated against value_type; the optional label is what an operator reads instead of the name. Gated by variable:create, plus platform:create when owner_kind is platform (the install-wide tier).",
 	}, "variable", "create"), "create"), func(ctx context.Context, in *createVariableInput) (*variableOutput, error) {
 		// The body says which tier the write lands at, so the tier gate runs here.
 		if in.Body.OwnerKind == platformTier {
@@ -172,6 +182,7 @@ func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		}
 		v, err := gw.CreateVariable(ctx, actorID(ctx), storage.VariableSpec{
 			Name:      in.Body.Name,
+			Label:     in.Body.Label,
 			ValueType: in.Body.ValueType,
 			OwnerKind: in.Body.OwnerKind,
 			OwnerName: in.Body.Owner,
@@ -187,16 +198,20 @@ func registerVariableRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		OperationID: "update-variable",
 		Method:      http.MethodPatch,
 		Path:        "/variables/{id}",
-		Summary:     "Update a variable's value",
-		Description: "Replaces a variable's value, validated against its fixed value_type. Only the value changes; name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.",
+		Summary:     "Update a variable",
+		Description: "Replaces a variable's value (validated against its fixed value_type) and patches its label; either may be omitted, and an empty label clears it. Name, type, and owner are fixed at creation. Gated by variable:update, plus platform:update when the variable sits at the platform tier.",
 	}, "variable", "update"), "update"), func(ctx context.Context, in *updateVariableInput) (*variableOutput, error) {
-		raw, err := json.Marshal(in.Body.Value)
-		if err != nil {
-			return nil, huma.Error422UnprocessableEntity("value is not encodable")
+		var raw json.RawMessage
+		if in.Body.Value != nil {
+			encoded, err := json.Marshal(in.Body.Value)
+			if err != nil {
+				return nil, huma.Error422UnprocessableEntity("value is not encodable")
+			}
+			raw = encoded
 		}
 		// Only the stored row knows its tier, so the resolved permission rides with
 		// the call and the Gateway applies it beside the scope split.
-		v, err := gw.UpdateVariable(ctx, actorID(ctx), in.ID, raw,
+		v, err := gw.UpdateVariable(ctx, actorID(ctx), in.ID, storage.VariablePatch{Value: raw, Label: in.Body.Label},
 			a.scopeFor(ctx, "variable", "read"), a.scopeFor(ctx, "variable", "update"),
 			a.canPlatform(ctx, "update"))
 		if err != nil {
