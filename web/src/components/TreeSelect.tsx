@@ -1,4 +1,5 @@
 import { For, Show } from "solid-js";
+import { bindSelectValue } from "../lib/selectvalue";
 import { flattenTree, type TreeNode } from "../lib/treeselect";
 
 // TreeSelect: a native <select> whose options read as a tree. Options come out in
@@ -31,11 +32,14 @@ const indent = (depth: number): string =>
 
 export default function TreeSelect(props: TreeSelectProps) {
   const options = () => flattenTree(props.items, props.excludeSubtreeOf);
+  // Its items are a query answer at every caller, so the control is routinely
+  // rendered before its options exist and must take the value again once they
+  // land (lib/selectvalue.ts, #772).
   return (
     <select
       id={props.id}
+      ref={bindSelectValue(() => props.value, options)}
       class={props.class ?? "select select-bordered w-full"}
-      value={props.value}
       disabled={props.disabled}
       onChange={(e) => props.onChange(e.currentTarget.value)}
     >

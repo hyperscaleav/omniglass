@@ -44,11 +44,14 @@ const hqProperties: EffectiveProperty[] = [
   { property_type_name: "site.note", property_type_id: "site.note-id", label: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "leased", value: "leased", value_id: "v-note" },
 ];
 
-function mount(path: string, extraLocations: Location[] = [], meOverride: Me = me) {
+// typeSeed is the location_type registry the page starts with. It is a parameter
+// so a test can start it EMPTY and deliver the rows afterwards, which is how the
+// registry answering later than the page renders is reproduced.
+function mount(path: string, extraLocations: Location[] = [], meOverride: Me = me, typeSeed: LocationType[] = types) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   const all = [hq, lab, hqB1, ...extraLocations];
   qc.setQueryData([...LOCATIONS_KEY], all);
-  qc.setQueryData([...LOCATION_TYPES_KEY], types);
+  qc.setQueryData([...LOCATION_TYPES_KEY], typeSeed);
   qc.setQueryData([...ME_KEY], meOverride);
   qc.setQueryData([...TAGS_KEY], []);
   // Keyed by uuid (#627 review finding 1): the detail page's panels now
@@ -58,14 +61,17 @@ function mount(path: string, extraLocations: Location[] = [], meOverride: Me = m
   // from cache (the tests that fake fetch refuse any request they did not expect).
   for (const l of all) qc.setQueryData([...ownerPropertiesKey("location", l.id)], l.name === "hq" ? hqProperties : []);
   window.history.pushState({}, "", path);
-  return render(() => (
-    <QueryClientProvider client={qc}>
-      <Router>
-        <Route path="/locations" component={Locations} />
-        <Route path="/locations/:id" component={Locations} />
-      </Router>
-    </QueryClientProvider>
-  ));
+  return Object.assign(
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/locations" component={Locations} />
+          <Route path="/locations/:id" component={Locations} />
+        </Router>
+      </QueryClientProvider>
+    )),
+    { qc },
+  );
 }
 
 // The server's draft answer, which is where the locked NAME comes from since
@@ -963,6 +969,28 @@ describe("edit as a URL fact", () => {
     await waitFor(() => expect(window.location.search).not.toContain("edit"));
     // The read-only affordance is back.
     expect(screen.getByText("Edit")).toBeTruthy();
+  });
+
+  it("shows the location's own type when the type registry answers after the edit face opened", async () => {
+    // A deep link begins edit the moment the node resolves, which can be before the
+    // location_type registry query answers. Assigning a <select> a value it has no
+    // option for leaves it on its first option, and nothing re-applies the value when
+    // the options arrive, so the edit face showed the wrong type (harmless to a save,
+    // which reads the signal, but a lie to the operator reading the field). Caught by
+    // the docs screenshot gate, which captures this exact URL: the shot flipped
+    // between Campus and Building across captures (#398, swept in #772).
+    // hqB1, not hq: its type is not the first row of the registry, so falling back
+    // to the first option is distinguishable from landing on the right one.
+    const { qc } = mount(`/locations/${hqB1.id}?edit=1`, [], me, []);
+    await waitFor(() => expect(screen.getByText("Save changes")).toBeTruthy());
+    const select = () => screen.getByLabelText("Location type") as HTMLSelectElement;
+    expect(select().options.length).toBe(1); // the placeholder alone
+
+    qc.setQueryData([...LOCATION_TYPES_KEY], types);
+
+    await waitFor(() => expect(select().options.length).toBeGreaterThan(1));
+    expect(select().value).toBe("building");
+    expect(select().selectedOptions[0]?.textContent).toBe("Building");
   });
 
   it("keeps ?edit=1 across the name-to-uuid redirect", async () => {

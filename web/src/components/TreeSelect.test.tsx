@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { createSignal } from "solid-js";
 import { render, fireEvent } from "@solidjs/testing-library";
 import TreeSelect from "./TreeSelect";
 import type { TreeNode } from "../lib/treeselect";
@@ -28,6 +29,24 @@ describe("TreeSelect", () => {
     const select = container.querySelector("select")!;
     fireEvent.change(select, { target: { value: "bldg-1" } });
     expect(picked).toBe("bldg-1");
+  });
+
+  it("takes its value when the items land after it is rendered", () => {
+    // Every caller feeds this from a query, so the picker is routinely rendered
+    // with an empty tree and filled a tick later. The value it was given must
+    // survive that, or a deep-linked edit face shows the root option in place of
+    // the stored parent (#772). Driven by a signal, not a timer: the gap is the
+    // subject of the test, so it is opened and closed by hand.
+    const [tree, setTree] = createSignal<TreeNode[]>([]);
+    const { container } = render(() => (
+      <TreeSelect items={tree()} value="bldg-1" onChange={() => {}} rootLabel="Root (no parent)" />
+    ));
+    const select = container.querySelector("select")!;
+    expect(select.value).toBe("");
+
+    setTree(items);
+
+    expect(select.value).toBe("bldg-1");
   });
 
   it("forwards an id to the underlying select", () => {
