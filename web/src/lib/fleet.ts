@@ -311,6 +311,40 @@ export function holesByRoot(view: FleetView): Map<string, FleetLocation[]> {
   return out;
 }
 
+// holeOnlyBands names the roots the system bands cannot: a root whose subtree
+// holds ONLY holes. A site nobody has commissioned yet is exactly the fleet's
+// mid-commissioning story, and a canvas that renders bands from systems alone
+// would leave that site invisible, which is the opposite of naming the gap.
+// Empty clusters; the recorded verdict and depth come from the location like
+// any other band's.
+export function holeOnlyBands(view: FleetView): Band[] {
+  const banded = new Set(
+    (view.systems ?? [])
+      .map((s) => byRootLocation.bandFor(s, view))
+      .filter((k): k is string => k !== null),
+  );
+  const index = locationIndex(view);
+  const children = childrenIndex(view);
+  const out: Band[] = [];
+  for (const key of holesByRoot(view).keys()) {
+    if (banded.has(key)) continue;
+    const root = index.get(key);
+    if (!root) continue;
+    out.push({
+      key,
+      label: entityLabel(root),
+      sublabel: root.location_type ?? "",
+      verdict: null,
+      clusters: [],
+      systemCount: 0,
+      componentCount: 0,
+      recordedVerdict: verdictOf(root.verdict),
+      depth: subtreeDepth(key, children),
+    });
+  }
+  return out.sort((a, b) => a.label.localeCompare(b.label));
+}
+
 // fleetTotals is the inspector's headline, counting a shared component once.
 export function fleetTotals(view: FleetView): { systems: number; components: number; roots: number } {
   const distinct = new Set<string>();

@@ -137,6 +137,23 @@ describe("the fleet zoom's bands", () => {
     expect(within(inspector).getByText(/1 location has no system/)).toBeTruthy();
   });
 
+  it("draws a root that holds only holes: a site nobody commissioned is a band of gaps, not invisible", () => {
+    const withEmptyRoot = {
+      ...view,
+      locations: [
+        ...view.locations!,
+        loc("fp-new", "north-annex", "North Annex", "building", "", "healthy"),
+        loc("fp-new-r1", "room-1", "Room 1", "room", "fp-new", "healthy"),
+      ],
+    } as unknown as FleetView;
+    mount(withEmptyRoot);
+    const band = screen.getByTestId(`band-${uuidFor("fp-new")}`);
+    expect(within(band).getByText("North Annex")).toBeTruthy();
+    expect(within(band).getByText(/0 systems/)).toBeTruthy();
+    // Its uncommissioned room is the band's content, dashed.
+    expect(within(band).getByText("Room 1")).toBeTruthy();
+  });
+
   it("renders the shared breadcrumb trail, one crumb at this zoom", () => {
     mount();
     const trail = screen.getByTestId("breadcrumb");

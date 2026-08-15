@@ -7,7 +7,7 @@ import HealthBadge from "../components/HealthBadge";
 import BandCanvas from "../components/BandCanvas";
 import ZoomLadder from "../components/ZoomLadder";
 import FleetInspector from "../components/FleetInspector";
-import { FLEET_VIEW_KEY, bandsOf, fleetView, holesByRoot, type Band, type FleetView } from "../lib/fleet";
+import { FLEET_VIEW_KEY, bandsOf, fleetView, holeOnlyBands, holesByRoot, type Band, type FleetView } from "../lib/fleet";
 import { zoomChips } from "../lib/zoom";
 import { entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
@@ -24,7 +24,12 @@ export default function Fleet() {
   const navigate = useNavigate();
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
 
-  const bands = createMemo<Band[]>(() => (view.data ? bandsOf(view.data) : []));
+  const bands = createMemo<Band[]>(() => {
+    if (!view.data) return [];
+    // System bands plus the roots that hold only holes: a site nobody has
+    // commissioned is a band of gaps, not invisible.
+    return [...bandsOf(view.data), ...holeOnlyBands(view.data)].sort((a, b) => a.label.localeCompare(b.label));
+  });
   const holes = createMemo(() => (view.data ? holesByRoot(view.data) : new Map()));
   const chips = createMemo(() => (view.data ? zoomChips("fleet", {}, view.data) : []));
 
