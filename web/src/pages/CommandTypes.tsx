@@ -121,10 +121,16 @@ function SettleWindowField(p: {
 function TargetSelect(p: { value: string; onChange: (v: string) => void }): JSX.Element {
   const properties = useQuery(() => ({ queryKey: PROPERTIES_KEY, queryFn: listProperties }));
   const metrics = useQuery(() => ({ queryKey: METRICS_KEY, queryFn: listMetricTypes }));
-  const byLabel = (a: { label?: string; name: string }, b: { label?: string; name: string }) =>
+  // The RENDERED label, not the raw column, so this is deliberately NOT
+  // lib/entities' byLabel: entityLabel falls back to the name, so an unlabelled
+  // catalog row sorts among the labelled ones under its own name rather than at
+  // the end of the list. Both rules are defensible on a picker of estate-wide
+  // vocabulary, where nearly every row is labelled; what is not defensible is
+  // two different things called byLabel, so this one says which label it means.
+  const byRenderedLabel = (a: { label?: string; name: string }, b: { label?: string; name: string }) =>
     entityLabel(a).localeCompare(entityLabel(b));
-  const propertyOptions = createMemo(() => [...(properties.data ?? [])].sort(byLabel) as PropertyRow[]);
-  const metricOptions = createMemo(() => [...(metrics.data ?? [])].sort(byLabel) as MetricRow[]);
+  const propertyOptions = createMemo(() => [...(properties.data ?? [])].sort(byRenderedLabel) as PropertyRow[]);
+  const metricOptions = createMemo(() => [...(metrics.data ?? [])].sort(byRenderedLabel) as MetricRow[]);
   return (
     <select class="select select-bordered w-full" value={p.value} onChange={(e) => p.onChange(e.currentTarget.value)}>
       <option value="">None (fire-and-forget)</option>
