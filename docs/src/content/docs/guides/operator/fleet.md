@@ -2,6 +2,9 @@
 title: Explore your fleet
 description: "The fleet zoom: the whole fleet on one canvas, every system a cluster of dots under its root location, coloured by what is wrong."
 screenshots:
+  - id: fleet-component
+    path: /web/components/dsp?zoom=1
+    alt: "The component leaf: what it is, the memberships with the primary marked, and collection in context with the node named."
   - id: fleet-system
     path: /web/systems/huddle?zoom=1
     alt: "The system zoom: one card per typed slot with the server's arithmetic, choices grouped with the active alternate marked, and the no-role strip."
@@ -105,6 +108,21 @@ server reported it.
 - **A shared occupant is chipped** with the other system it serves, and the members filling
   no role sit in their own strip at the bottom: in the room, accounted for, and that is a
   state, not an error.
+
+## The component leaf
+
+The end of the walk is one device. The leaf says **what it is** (product, vendor, driver),
+**where it sits** (the clickable ancestor chain above), and **what it serves**: one row per
+membership, the primary marked, with a note that the location above comes from the primary
+when there is more than one.
+
+::screenshot{#fleet-component}
+
+**Collection in context** is the one place a node appears to you, and it states the
+distinction that matters plainly: a **stale sample under a healthy node means the device or
+the path, not collection**. A node that stopped heartbeating says nothing about the device;
+a device answering down is a device fact. This sentence is why nodes do not need a zoom of
+their own.
 
 ## What you see is what you may read
 

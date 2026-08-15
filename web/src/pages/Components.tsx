@@ -42,6 +42,7 @@ import PropertiesPanel, { propertyResolutionBlade, propertyBladeId } from "../co
 import ResolutionPanel from "../components/ResolutionPanel";
 import AlarmsPanel from "../components/AlarmsPanel";
 import { hueFor } from "../lib/system_color";
+import ComponentLeaf from "./ComponentLeaf";
 
 // Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -81,6 +82,11 @@ export const componentsDescriptor: PageDescriptor = {
 };
 
 export default function Components() {
+  // The zoom face is a URL fact (ADR-0125): ?zoom=1 renders the component
+  // leaf, and the inventory detail stays the default.
+  const [zoomSearch] = useSearchParams();
+  const zoomParams = useParams();
+  if (zoomParams.id && zoomSearch.zoom === "1") return <ComponentLeaf />;
   const params = useParams();
   const [search] = useSearchParams();
   const navigate = useNavigate();
