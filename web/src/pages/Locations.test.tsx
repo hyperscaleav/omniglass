@@ -44,12 +44,12 @@ const hqProperties: EffectiveProperty[] = [
   { property_type_name: "site.note", property_type_id: "site.note-id", label: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "leased", value: "leased", value_id: "v-note" },
 ];
 
-function mount(path: string, extraLocations: Location[] = []) {
+function mount(path: string, extraLocations: Location[] = [], meOverride: Me = me) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   const all = [hq, lab, hqB1, ...extraLocations];
   qc.setQueryData([...LOCATIONS_KEY], all);
   qc.setQueryData([...LOCATION_TYPES_KEY], types);
-  qc.setQueryData([...ME_KEY], me);
+  qc.setQueryData([...ME_KEY], meOverride);
   qc.setQueryData([...TAGS_KEY], []);
   // Keyed by uuid (#627 review finding 1): the detail page's panels now
   // address by the location's id, not its name.
@@ -930,5 +930,47 @@ describe("Locations edit blade carries the label pen (#693)", () => {
     // from the console: before this the field posted `display() || undefined`,
     // so clearing it left the operator's label exactly where it was.
     expect(bodies[0].label).toBe("");
+  });
+});
+
+// The edit face is a URL fact: ?edit=1 on the detail route requests edit mode, and
+// leaving edit strips it. The one-shot in-memory handoff (pendingedit) is gone, so
+// a deep link, a refresh mid-edit, and the create/pencil handoffs all express the
+// mode in the URL itself.
+describe("edit as a URL fact", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  it("opens the detail in edit when the URL carries ?edit=1", async () => {
+    mount(`/locations/${hq.id}?edit=1`);
+    await waitFor(() => expect(screen.getByText("Save changes")).toBeTruthy());
+  });
+
+  it("lands read-only when ?edit=1 arrives without the update permission", async () => {
+    const reader: Me = { principal: { id: "u-read", kind: "human" }, human: { username: "reader" }, permissions: ["location:read"], grants: [] };
+    mount(`/locations/${hq.id}?edit=1`, [], reader);
+    // The detail renders (the name is on the read-only face) with no edit surface
+    // and no error.
+    await waitFor(() => expect(screen.getByText("hq")).toBeTruthy());
+    expect(screen.queryByText("Save changes")).toBeNull();
+  });
+
+  it("strips the param on Cancel, so the URL no longer requests edit", async () => {
+    mount(`/locations/${hq.id}?edit=1`);
+    await waitFor(() => expect(screen.getByText("Save changes")).toBeTruthy());
+    fireEvent.click(screen.getByText("Cancel"));
+    await waitFor(() => expect(screen.queryByText("Save changes")).toBeNull());
+    // The strip is a router replace, delivered a beat after the mode flips.
+    await waitFor(() => expect(window.location.search).not.toContain("edit"));
+    // The read-only affordance is back.
+    expect(screen.getByText("Edit")).toBeTruthy();
+  });
+
+  it("keeps ?edit=1 across the name-to-uuid redirect", async () => {
+    // A name-shaped deep link resolves to the uuid route (#627); the query string
+    // must survive that replace, or a shared edit link to a named entity opens
+    // read-only.
+    mount(`/locations/hq?edit=1`);
+    await waitFor(() => expect(screen.getByText("Save changes")).toBeTruthy());
+    expect(window.location.pathname.endsWith(hq.id)).toBe(true);
   });
 });

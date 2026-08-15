@@ -327,7 +327,9 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   const redirectToId = (id: string) => {
     const parts = location.pathname.split("/");
     parts[parts.length - 1] = encodeURIComponent(id);
-    routerNavigate(parts.join("/"), { replace: true, resolve: false });
+    // The query string rides along (#759): a name-shaped deep link can carry
+    // ?edit=1, and dropping it here would land the resolved uuid read-only.
+    routerNavigate(parts.join("/") + location.search, { replace: true, resolve: false });
   };
 
   // After a refetch, drop any open blade whose node no longer exists (e.g. it was

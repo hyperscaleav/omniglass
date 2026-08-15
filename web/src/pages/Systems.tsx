@@ -31,7 +31,7 @@ import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldr
 import { pathTo } from "../lib/treeselect";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
+import { useEditParam } from "../lib/editurl";
 import { ArrowRight, ChevronRight, Pencil, Plus, Save, Search, X } from "../components/icons";
 import Button from "../components/Button";
 import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "../components/PropertiesPanel";
@@ -211,9 +211,10 @@ export default function Systems() {
     createEffect(on(editing, (isEditing) => {
       if (isEditing) { seedLabelPen(displayPen, n().raw); setStandard(n().raw.standard ?? ""); setSystemType(n().raw.system_type ?? ""); setName(n().raw.name); setNameCheck(null); }
     }));
-    // Consume a pending "open in edit" handoff (from create or the row pencil) once
-    // the node has resolved.
-    createEffect(on(() => n().id, (id) => { if (id && consumePendingEdit(id) && canUpdate()) edit?.begin(); }));
+    // The edit face is a URL fact (#759): ?edit=1 requests edit once the node has
+    // resolved (a deep link, a refresh, the create or row-pencil handoff), and
+    // leaving edit strips the param again (lib/editurl.ts).
+    const editUrl = useEditParam(edit, { ready: () => !!n().id, canUpdate });
 
     edit?.bind({
       editable: canUpdate,
@@ -461,7 +462,7 @@ export default function Systems() {
                       one under different placements. */}
                   <Button icon={ArrowRight} iconTrailing onClick={() => navigate(`/components?system=${encodeURIComponent(n().raw.id)}`)}>Components</Button>
                   <Show when={edit?.editable()}>
-                    <Button intent="action" icon={Pencil} onClick={() => edit!.begin()}>Edit</Button>
+                    <Button intent="action" icon={Pencil} onClick={() => editUrl.request()}>Edit</Button>
                   </Show>
                 </>
               }
@@ -533,14 +534,13 @@ export default function Systems() {
       try {
         // Bind the create response (#627 Task 15c): see Components.tsx's
         // own create() for why the id, not the locally typed name, is what
-        // this hands off to openInEdit and navigate.
+        // the URL hands off to the detail.
         // An empty name is OMITTED rather than posted as "": omitted is
         // "generate one", where "" is a name of nothing the API refuses
         // against the entity-name pattern.
         const created = await createSystem({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, standard_id: standard() || undefined, system_type_id: systemType() || undefined, label: displayPen.value().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
-        openInEdit(created.id);
-        navigate(`/systems/${encodeURIComponent(created.id)}`);
+        navigate(`/systems/${encodeURIComponent(created.id)}?edit=1`);
       } catch (er) {
         setFormErr(await recoverFromMovedName(er, labelDraft.refetch));
         setBusy(false);
@@ -685,7 +685,7 @@ export default function Systems() {
     onBack: () => navigate("/systems"),
     onDelete: (n) => del(n),
     onNew: () => navigate("/systems/create"),
-    onEdit: (n) => { openInEdit(n.id); navigate(`/systems/${encodeURIComponent(n.id)}`); },
+    onEdit: (n) => navigate(`/systems/${encodeURIComponent(n.id)}?edit=1`),
     renderCreate: () => <SystemCreate />,
     renderDetail: (n, ctx) => <SystemDetail node={n} ctx={ctx} />,
     extraBlades: { "property-resolution": propertyResolutionBlade },

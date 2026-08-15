@@ -142,6 +142,18 @@ Two layers, deliberately decoupled:
    groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
    rearrangeable and user-customizable without touching a route.
 
+**The mode rides the URL too**
+([ADR-0119](/architecture/decisions/#adr-0119-the-edit-face-is-a-url-fact)): `?edit=1` beside a
+detail address (or beside a blade's id param, `?u=<id>&edit=1`) requests the edit face, behind the
+same `<resource>:update` permission the footer Edit is behind; without it the link lands read-only.
+Leaving edit (Cancel or Save) strips the param via history replace, so a refresh mid-edit keeps the
+mode while Back never re-enters an edit the operator left. One hook (`web/src/lib/editurl.ts`) owns
+both directions, the create-as-route and row-pencil handoffs are those URLs rather than in-memory
+signals, and the name-to-uuid redirect keeps its query string so a name-shaped edit link survives
+resolution. Every URL-reachable state is also a state the
+[docs screenshot pipeline](/contributing/docs-with-everything/) can declare and capture, which is
+what retired the one-shot handoffs.
+
 **Catalog is one rail entry opening a shell.** Clicking Catalog opens a two-column catalog area: a
 grouped subrail (Telemetry, Actions, Components, Systems, Locations, Metadata) whose entries
 navigate to the registries' own canonical flat routes (`/products`, `/metrics`, ...), each real

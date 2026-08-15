@@ -8,6 +8,9 @@ screenshots:
     steps:
       - action: click
         selector: "text=East Campus"
+  - id: entity-edit-face
+    path: /web/locations/east?edit=1
+    alt: "A location's full detail page lands directly in edit mode from an ?edit=1 deep link."
 ---
 
 Once you have [found an entity](/guides/operator/inventory/), you open it, read it, and change
@@ -18,8 +21,10 @@ it the same way everywhere in the console.
 Click a row to open its **blade**, a panel that slides in from the right with the entity's
 details. From a blade you can drill into a child (it stacks another blade behind the first),
 step back with the breadcrumb, or **Maximize** to the full detail page. The full page has its
-own URL, so it is shareable and bookmarkable; a blade is a quick look that does not change the
-URL. Rows are keyboard-operable: Tab to a row and press Enter to open it.
+own URL, so it is shareable and bookmarkable; a blade opened by a click is a quick look that
+does not change the URL, though a blade can be addressed by one (a user's `?u=<id>` deep link,
+which the create flow uses for its own handoff). Rows are keyboard-operable: Tab to a row and
+press Enter to open it.
 
 ::screenshot{#entity-blade}
 
@@ -50,6 +55,19 @@ The same bar carries **create**. A form that opens in a slide-over (New user, Ne
 file) or as its own blade (New interface) puts its **Create** button in the bar at the foot of the
 panel, never floating after the last field, and greys it out until the form is complete. **Cancel**
 sits beside it on the forms that offer one; where it does not, the header **x** closes the panel.
+
+## Deep-link the edit face
+
+The mode is part of the address: append `?edit=1` to an inventory detail's URL (or to a user's
+`?u=<id>` deep link) and the page lands **already editing**, so a "fix the label on this room"
+handoff is one link, not a link plus instructions. It is the same edit you reach through the
+footer bar, behind the same permission: without `<resource>:update` the link lands on the
+read-only face, quietly. Leaving edit (Cancel or Save) strips the param again, so refreshing
+mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already left.
+The console itself uses these links for its handoffs: creating an entity lands on
+`/…/<id>?edit=1`, and the row pencil is that same address.
+
+::screenshot{#entity-edit-face}
 
 ## Create, edit, delete
 
