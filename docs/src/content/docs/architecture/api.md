@@ -331,8 +331,10 @@ promotion, ADR-0063), the optional `payload_schema` a JSON Schema fragment for i
 `GET/POST/PATCH/DELETE /command-types[/{name}]`, gated `command_type:read` / `:create` / `:update` /
 `:delete`, each type carrying a `settle_window_seconds` and an optional `target_property_type` (the
 property a settleable command sets; the metric target arm is storage-deep, its authoring surface
-deferred). `POST /components/{name}/commands:issue` (gated `command:issue`,
-scope-injected through the component) is the write: it records the invocation, writes a caused event,
+deferred). `POST /components/{name}/commands:issue` (gated `command:issue`, and **fenced by that permission's
+own scope** on the component tier rather than by `component:read`,
+[ADR-0117](/architecture/decisions/#adr-0117-an-actuation-is-fenced-by-the-permission-that-authorizes-it))
+is the write: it records the invocation, writes a caused event,
 and (for a settleable command) opens an intended value, returning the computed settlement verdict
 (none/pending/settled/failed).
 

@@ -470,8 +470,15 @@ type Gateway interface {
 	DeleteCommandType(ctx context.Context, actorID, name string) error
 	// IssueCommand records an invocation, its caused event, and (for a settleable
 	// command) the intended value it opens. CommandSettlement is the computed verdict.
-	IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, commandType, instance string, value, params json.RawMessage, write scope.Set) (*Command, error)
-	CommandSettlement(ctx context.Context, ownerKind, ownerID, commandType, instance string, read scope.Set) (SettlementVerdict, error)
+	//
+	// Both take the owner's RESOLVED id and no scope of their own (#749). An
+	// actuation is fenced by the caller's command:issue scope against their
+	// component:read scope, which is a split rather than one set, so it is applied
+	// by ResolveActionTarget at the route and these two are bound to what it
+	// returned. Passing a name here is a caller error: nothing on this path
+	// narrows a resolve by scope any more.
+	IssueCommand(ctx context.Context, actorID, ownerKind, ownerID, commandType, instance string, value, params json.RawMessage) (*Command, error)
+	CommandSettlement(ctx context.Context, ownerKind, ownerID, commandType, instance string) (SettlementVerdict, error)
 
 	// The observed-metric sink. reject-not-project is applied by the caller
 	// (collection.Registry) before the write.

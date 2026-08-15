@@ -46,7 +46,13 @@ Issuing is one transaction writing three things:
 2. a **caused `event`** ([`origin=caused`](/architecture/events/#events-caught-caused-derived-scheduled), typed `command-issued`), the record that a command happened; and
 3. for a settleable command, an **`intended`** series row in the target lane (`provenance=intended`, its `ts` the moment of issue, `command_id` naming this command as its lineage), the **told** in the want/told/is pivot.
 
-`POST /components/{name}/commands:issue` is the write, gated by `command:issue` and scope-injected through the component.
+`POST /components/{name}/commands:issue` is the write, gated by `command:issue` and scope-injected
+through the component. The **fence is the issue scope, not the read scope**
+([ADR-0117](/architecture/decisions/#adr-0117-an-actuation-is-fenced-by-the-permission-that-authorizes-it)):
+`command` is a component-tier resource, so a principal holding a wide component read beside a
+room-scoped command grant may command that room and no more. The read scope decides only which
+refusal it is owed, a non-disclosing 404 outside it and a 403 for a component it can see but not
+command ([the three-way split](/architecture/identity-access/#the-three-way-status-split)).
 
 ## Settlement: the verdict is computed, the outcome is recorded
 

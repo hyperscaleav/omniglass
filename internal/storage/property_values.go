@@ -94,8 +94,8 @@ func scanProperty(row pgx.Row) (*Property, error) {
 // The owner is resolved with the read-then-action split (#736): out of the read
 // scope is that kind's non-disclosing not-found, and readable but out of the
 // action scope is its forbidden. One resolve, not the two this used to make
-// (guardOwnerScope for the check and ownerArcValueInScope for the arc), because
-// resolveTargetID returns the id the arc stores.
+// (a single-set owner guard for the check and ownerArcValueInScope for the arc),
+// because resolveTargetID returns the id the arc stores.
 func (p *PG) SetProperty(ctx context.Context, actorID, ownerKind, ownerID, propertyName, instance string, value json.RawMessage, read, action scope.Set) (*Property, error) {
 	col, err := ownerColumn(ownerKind)
 	if err != nil {
@@ -460,8 +460,8 @@ func (p *PG) ownerArcValue(ctx context.Context, q querier, ownerKind, ownerRef s
 
 // ownerArcValueInScope is ownerArcValue's scope-aware twin: ambiguity is
 // judged within s, not estate-wide (ruling 2, #627). Every caller that has
-// already scope-checked the same (ownerKind, ownerRef) via ownerInScope (or
-// guardOwnerScope, which calls it) must resolve the arc value through THIS,
+// already scope-checked the same (ownerKind, ownerRef) via ownerInScope must
+// resolve the arc value through THIS,
 // not the scope-blind ownerArcValue: ownerInScope narrowing to scope first
 // does not help if the very next statement re-resolves the same bare name
 // scope-blind, which is exactly how EffectiveProperties, EffectiveMetrics,
@@ -471,6 +471,11 @@ func (p *PG) ownerArcValue(ctx context.Context, q querier, ownerKind, ownerRef s
 // Nodes have no scope tree (node_name_key stays a plain global unique
 // constraint, so a bare node name is never ambiguous); this delegates to the
 // scope-blind resolve for that one kind.
+//
+// Four of those six no longer resolve a name at all, which is the stronger
+// answer to the same problem: the property writes take the id resolveTargetID
+// returned (#736), and the two command methods take the id the route resolved
+// (#749). A path with one resolve cannot have a second one that disagrees.
 func (p *PG) ownerArcValueInScope(ctx context.Context, q querier, ownerKind, ownerRef string, s scope.Set) (string, error) {
 	switch ownerKind {
 	case "component":
@@ -554,23 +559,14 @@ func (p *PG) ownerInScope(ctx context.Context, q querier, ownerKind, ownerID str
 	return false, ErrUnknownOwnerKind
 }
 
-// guardOwnerScope confirms the owner exists and is reachable within the caller's
-// scope before a value is written to it, so a caller cannot set a value on an
-// instance it cannot reach. Every arc is scope-checked, not just the component one.
-func (p *PG) guardOwnerScope(ctx context.Context, q querier, ownerKind, ownerID string, write scope.Set) error {
-	oc, ok := ownerContracts[ownerKind]
-	if !ok {
-		return ErrUnknownOwnerKind
-	}
-	inScope, err := p.ownerInScope(ctx, q, ownerKind, ownerID, write)
-	if err != nil {
-		return err
-	}
-	if !inScope {
-		return oc.notFound
-	}
-	return nil
-}
+// guardOwnerScope is GONE, and its absence is the point (#736, #749). It
+// confirmed an owner against ONE set and answered that kind's not-found, which is
+// the shape both of the arcs it guarded have now left behind: a write on an owner
+// resolves through resolveTargetID's read-then-action split (the property writes),
+// or is handed an id its route already resolved that way (the command pair). A
+// single-set guard on an owner is what made a readable-but-not-writable row
+// answer "not found", so re-introducing one is a decision to make, not a
+// convenience to reach for.
 
 // mapPropertyWriteErr turns a foreign-key violation on the value write into a
 // caller-meaningful sentinel: the owner or the property does not exist.

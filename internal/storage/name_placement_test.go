@@ -323,7 +323,8 @@ func TestNameAmbiguousGloballyButUniqueToCallerResolvesCleanly(t *testing.T) {
 // named in the review that asked for it: EffectiveProperties, EffectiveMetrics,
 // LatestValue, SystemHealth, LocationHealth, EffectiveRoles, SetProperty,
 // IssueCommand, and CommandSettlement all had this shape; this test drives
-// every one of them.
+// every one of them. The last two now take a resolved id instead (#749), so
+// they are driven that way below and no longer resolve a name at all.
 func TestOwnerScopedReadsResolveAmbiguousNameWithinScope(t *testing.T) {
 	gw := openGateway(t)
 	ctx := context.Background()
@@ -386,11 +387,20 @@ func TestOwnerScopedReadsResolveAmbiguousNameWithinScope(t *testing.T) {
 	if _, err := gw.LatestValue(ctx, "system", "shared", "note", "", "declared", readZoneA); err != nil {
 		t.Errorf("LatestValue(shared) scoped to zone-a = %v, want ok", err)
 	}
-	if _, err := gw.IssueCommand(ctx, actor, "system", "shared", "set-load", "", []byte(`5`), nil, readZoneA); err != nil {
-		t.Errorf("IssueCommand(shared) scoped to zone-a = %v, want ok", err)
+	// IssueCommand and CommandSettlement address the owner by RESOLVED ID since
+	// #749, so they are driven by id here rather than by the ambiguous name: an
+	// actuation's fence is a read-versus-issue split, which is applied by
+	// ResolveActionTarget at the route, and the pair of double resolves this test
+	// was written for is gone rather than made scoped. The ruling-2 property for
+	// that route is asserted where the resolve now lives (resolveScoped, driven
+	// per route by TestAuthzConformance). Kept in this test because the estate
+	// still holds two systems named "shared": a wrong-row landing would show up as
+	// the by-id assertion below finding nothing.
+	if _, err := gw.IssueCommand(ctx, actor, "system", sysInZone.ID, "set-load", "", []byte(`5`), nil); err != nil {
+		t.Errorf("IssueCommand(sysInZone) = %v, want ok", err)
 	}
-	if _, err := gw.CommandSettlement(ctx, "system", "shared", "set-load", "", readZoneA); err != nil {
-		t.Errorf("CommandSettlement(shared) scoped to zone-a = %v, want ok", err)
+	if _, err := gw.CommandSettlement(ctx, "system", sysInZone.ID, "set-load", ""); err != nil {
+		t.Errorf("CommandSettlement(sysInZone) = %v, want ok", err)
 	}
 
 	// And each one actually landed on sysInZone, not the other "shared": a

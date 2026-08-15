@@ -246,7 +246,7 @@ func TestDuplicateNamesDoNotBreakIngestPath(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
 		t.Fatalf("resolve actor: %v", err)
 	}
-	cmd, err := gw.IssueCommand(ctx, actor, "component", compA.ID, "set-volume-x", "", []byte(`42`), nil, all)
+	cmd, err := gw.IssueCommand(ctx, actor, "component", compA.ID, "set-volume-x", "", []byte(`42`), nil)
 	if err != nil {
 		t.Fatalf("issue command on compA by id: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestDuplicateNamesDoNotBreakIngestPath(t *testing.T) {
 	if status != "settled" {
 		t.Fatalf("command status = %q, want settled (matches compA's own observed sample)", status)
 	}
-	verdict, err := gw.CommandSettlement(ctx, "component", compA.ID, "set-volume-x", "", all)
+	verdict, err := gw.CommandSettlement(ctx, "component", compA.ID, "set-volume-x", "")
 	if err != nil {
 		t.Fatalf("command settlement on compA by id: %v", err)
 	}
