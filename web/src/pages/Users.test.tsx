@@ -49,6 +49,11 @@ function mount() {
   ));
 }
 
+// Every test leaves the URL where it found it: the create flow and the edit deep
+// link write search params now, and a stale ?u=<id>&edit=1 would bleed into the
+// next test's blade opens.
+afterEach(() => window.history.pushState({}, "", "/"));
+
 describe("Users page", () => {
   afterEach(() => vi.restoreAllMocks());
 
@@ -539,5 +544,19 @@ describe("Users create identity", () => {
     // And the field stops advertising itself as derived, which is what the
     // operator actually sees.
     expect(screen.queryByText(/Derived from the label/)).toBeNull();
+  });
+});
+
+// The blade's edit mode composes with its id deep link: ?u=<id>&edit=1 opens the
+// user's blade already editing, which is also how the create flow hands off (the
+// one-shot openPrincipalInEdit signal is gone).
+describe("edit as a URL fact", () => {
+  afterEach(() => window.history.pushState({}, "", "/"));
+
+  it("opens the user's blade in edit when the URL carries ?u=<id>&edit=1", async () => {
+    window.history.pushState({}, "", `/?u=${uuidFor("u-alice")}&edit=1`);
+    mount();
+    // The blade footer's edit pair is the witness: Save renders only in edit mode.
+    await waitFor(() => expect(screen.getByText("Save")).toBeTruthy());
   });
 });

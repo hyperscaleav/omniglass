@@ -42,3 +42,29 @@ jobs:
 
       - name: Test
         run: go test ./...
+
+  # The browser e2e tier (#761): the console driven as an operator would, against
+  # the real binary, fully containerized (web/e2e/run.sh: Postgres, the server,
+  # and Playwright on one private network, no host ports). Covers the CRUD
+  # round-trips plus one smoke per console route from the route manifest
+  # (web/e2e/routes.spec.ts), so a PR cannot merge with a route that errors in a
+  # real browser. No untrusted input reaches a shell: the job runs fixed make
+  # targets only.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The SPA build (make build-web) runs on the host; Playwright itself runs
+      # in the pinned container the runner pulls, matching local runs exactly.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Browser e2e (CRUD round-trips + route smoke)
+        run: make test-e2e

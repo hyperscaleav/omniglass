@@ -13,7 +13,11 @@ Nine workflows carry it: `test`, `pr-title`, `image`, `docs-shots`, `gen-drift`,
 - **`test.yml`** (the test gate) runs `go build ./...` and `go test ./...` on a runner with a
   Docker daemon, so the testcontainers-backed integration and e2e tiers actually execute
   (after widening `net.ipv4.ping_group_range` so the collection tier's unprivileged ICMP
-  probe can open its socket). It also runs on `main` after merge.
+  probe can open its socket). A second job in the same workflow runs the browser e2e tier
+  (`make test-e2e`): the console driven as an operator would against the real binary, fully
+  containerized, covering the CRUD round-trips plus one smoke per console route from the
+  route manifest, so a PR cannot merge with a route that errors in a real browser. Both jobs
+  also run on `main` after merge.
 - **`pr-title.yml`** lints the PR title to the conventional-commit grammar. This matters
   because the repo squash-merges: the squash subject *is* the PR title, and semantic-release
   reads it to decide the next version. A malformed title would either mis-version or silently

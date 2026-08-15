@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import FlatList, { type FlatColumn } from "../components/FlatList";
 import { useFormActions } from "../lib/formactions";
 import PasswordField from "../components/PasswordField";
-import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, openPrincipalInEdit, principalName, kindBadge } from "../lib/principals";
+import { type Principal, PRINCIPALS_KEY, listPrincipals, createPrincipal, principalName, kindBadge } from "../lib/principals";
 import { identityColumn } from "../components/IdentityCell";
 import { createIdentity, type Labelled } from "../lib/entities";
 import UserAvatar from "../components/UserAvatar";
@@ -85,7 +85,7 @@ const columns: FlatColumn<Principal>[] = [
 
 export default function Users() {
   const me = useMe();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   // Archived (soft-deleted) principals are hidden by default; the toggle includes
   // them (a distinct query key) so an admin can re-find one to restore or purge.
   const [showArchived, setShowArchived] = createSignal(false);
@@ -116,7 +116,10 @@ export default function Users() {
         create: {
           label: "New user",
           can: () => can(me.data, "principal", "create"),
-          body: (ctx) => <CreateUserForm close={ctx.close} onCreated={ctx.select} />,
+          // The handoff is the URL (#759): ?u=<id>&edit=1 opens the new user's
+          // blade already editing (the openId deep link plus the edit param),
+          // so grants are assigned without a second step.
+          body: (ctx) => <CreateUserForm close={ctx.close} onCreated={(p) => { setParams({ u: p.id, edit: "1" }); ctx.close(); }} />,
         },
       }}
     />
@@ -126,7 +129,7 @@ export default function Users() {
 // CreateUserForm is the new-human form the create Drawer hosts: label and
 // username (required), email, and an optional initial password (min 8) the user
 // changes after signing in. On success it invalidates the directory and hands the
-// created principal to onCreated, which opens its detail blade (closing this Drawer).
+// created principal to onCreated, which deep-links its detail blade in edit.
 //
 // The two identity fields are the shared coupling: the label leads and the
 // username derives from it, so an operator types "Jordan Rivera" without meeting the
@@ -162,10 +165,9 @@ function CreateUserForm(props: { close: () => void; onCreated: (p: Principal) =>
         email: email().trim() || undefined,
         password: password() || undefined,
       });
-      // Seed the new user's detail cache so its blade opens instantly, and flag it to
-      // open in edit mode so grants can be assigned right away, then hand it to select.
+      // Seed the new user's detail cache so its blade opens instantly, then hand it
+      // to onCreated, whose URL (#759) carries the open-in-edit intent.
       qc.setQueryData([...PRINCIPALS_KEY, created.id], created);
-      openPrincipalInEdit(created.id);
       await qc.invalidateQueries({ queryKey: PRINCIPALS_KEY });
       props.onCreated(created);
     } catch (er) {

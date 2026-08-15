@@ -27,7 +27,7 @@ import CreateIdentity from "../components/CreateIdentity";
 import LabelPenField, { seedLabelPen } from "../components/LabelPenField";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
+import { useEditParam } from "../lib/editurl";
 import { ChevronRight, Pencil, Plus, RotateCcw, Save, Search, X } from "../components/icons";
 import Button from "../components/Button";
 import TagPills from "../components/TagPills";
@@ -274,10 +274,11 @@ export default function Components() {
     createEffect(on(editing, (isEditing) => {
       if (isEditing) { seedLabelPen(displayPen, n().raw); setName(n().raw.name); setNameCheck(null); }
     }));
-    // Consume a pending "open in edit" handoff (from create or the row pencil) once
-    // the node has resolved. Keyed on id (#627 Task 15c), stable across a rename,
-    // unlike the name this used to key on.
-    createEffect(on(() => n().id, (id) => { if (id && consumePendingEdit(id) && canUpdate()) edit?.begin(); }));
+    // The edit face is a URL fact (#759): ?edit=1 requests edit once the node has
+    // resolved (a deep link, a refresh, the create or row-pencil handoff), and
+    // leaving edit strips the param again (lib/editurl.ts). Keyed on id (#627
+    // Task 15c), stable across a rename.
+    const editUrl = useEditParam(edit, { ready: () => !!n().id, canUpdate });
 
     edit?.bind({
       editable: canUpdate,
@@ -530,7 +531,7 @@ export default function Components() {
                   </Show>
                   <span class="flex-1" />
                   <Show when={edit?.editable()}>
-                    <Button intent="action" icon={Pencil} onClick={() => edit!.begin()}>Edit</Button>
+                    <Button intent="action" icon={Pencil} onClick={() => editUrl.request()}>Edit</Button>
                   </Show>
                 </>
               }
@@ -645,8 +646,7 @@ export default function Components() {
           product: product(),
         });
         await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
-        openInEdit(created.id);
-        navigate(`/components/${encodeURIComponent(created.id)}`);
+        navigate(`/components/${encodeURIComponent(created.id)}?edit=1`);
       } catch (er) {
         setFormErr(await recoverFromMovedName(er, labelDraft.refetch));
         setBusy(false);
@@ -806,7 +806,7 @@ export default function Components() {
     onBack: () => navigate("/components"),
     onDelete: (n) => del(n),
     onNew: () => navigate("/components/create"),
-    onEdit: (n) => { openInEdit(n.id); navigate(`/components/${encodeURIComponent(n.id)}`); },
+    onEdit: (n) => navigate(`/components/${encodeURIComponent(n.id)}?edit=1`),
     renderCreate: () => <ComponentCreate />,
     renderDetail: (n, ctx) => <ComponentDetail node={n} ctx={ctx} />,
     extraBlades: {

@@ -165,9 +165,9 @@ export const navByPath: Record<string, NavMeta> = (() => {
 // Stubbed sections: backends not built yet, each rendering SectionStub in the
 // router. /templates keeps its stub page though its rail entry is gone (#608).
 // /rules and /notifications mount INSIDE the CatalogShell (their stubs render
-// in the catalog pane; index.tsx filters them out of the top-level loop).
-// Lives here beside the entries it backs so the nav tests can assert every
-// unlive rail entry resolves to a registered stub rather than NotFound.
+// in the catalog pane). The router renders from the route manifest (#760), and
+// route-manifest-guard.test.ts pins the manifest's stub entries to this list,
+// so every unlive rail entry resolves to a registered stub rather than NotFound.
 export const STUBS = [
   "/dashboards", "/alarms",
   "/templates", "/rules", "/explore", "/learn",

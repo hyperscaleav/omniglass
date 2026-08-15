@@ -46,7 +46,11 @@ unproven proves nothing about the capability.
   run an ephemeral instance on a random port; never bind a fixed host port.
 - **End-to-end:** emulate the user at each entry point against the running stack: API
   (drive the contracts as a client), CLI (run the real commands), UI (browser-drive the
-  SPA). Assert the user-observable outcome, not internals.
+  SPA). Assert the user-observable outcome, not internals. The browser tier has a floor
+  no console route can dodge: the router renders from a route manifest
+  (`web/src/lib/routemanifest.ts`) and the smoke spec (`web/e2e/routes.spec.ts`) drives
+  the same manifest, visiting every route and failing on any page or console error, so
+  adding a route adds its smoke test by construction.
 
 No mocking the system under test. No tests-within-tests.
 

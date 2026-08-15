@@ -28,7 +28,7 @@ import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldr
 import { pathTo, type TreeNode } from "../lib/treeselect";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { openInEdit, consumePendingEdit } from "../lib/pendingedit";
+import { useEditParam } from "../lib/editurl";
 import { ChevronRight, Pencil, Plus, Save, Search, X, resolveIcon } from "../components/icons";
 import Button from "../components/Button";
 import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "../components/PropertiesPanel";
@@ -311,9 +311,10 @@ export default function Locations() {
         setInitialParentName(seed);
       }
     }));
-    // Consume a pending "open in edit" handoff (from create or the row pencil) once
-    // the node has resolved.
-    createEffect(on(() => n().id, (id) => { if (id && consumePendingEdit(id) && canUpdate()) edit?.begin(); }));
+    // The edit face is a URL fact (#759): ?edit=1 requests edit once the node has
+    // resolved (a deep link, a refresh, the create or row-pencil handoff), and
+    // leaving edit strips the param again (lib/editurl.ts).
+    const editUrl = useEditParam(edit, { ready: () => !!n().id, canUpdate });
 
     edit?.bind({
       editable: canUpdate,
@@ -526,7 +527,7 @@ export default function Locations() {
                   </Show>
                   <span class="flex-1" />
                   <Show when={edit?.editable()}>
-                    <Button intent="action" icon={Pencil} onClick={() => edit!.begin()}>Edit</Button>
+                    <Button intent="action" icon={Pencil} onClick={() => editUrl.request()}>Edit</Button>
                   </Show>
                 </>
               }
@@ -590,14 +591,13 @@ export default function Locations() {
       try {
         // Bind the create response (#627 Task 15c): see Components.tsx's
         // own create() for why the id, not the locally typed name, is what
-        // this hands off to openInEdit and navigate.
+        // the URL hands off to the detail.
         // An empty name is OMITTED rather than posted as "": omitted is
         // "generate one from the type's rule", where "" is a name of nothing
         // the API refuses against the entity-name pattern.
         const created = await createLocation({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, location_type: type().trim(), label: displayPen.value().trim() || undefined, parent: parent() || undefined });
         await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
-        openInEdit(created.id);
-        navigate(`/locations/${encodeURIComponent(created.id)}`);
+        navigate(`/locations/${encodeURIComponent(created.id)}?edit=1`);
       } catch (er) {
         setFormErr(await recoverFromMovedName(er, labelDraft.refetch));
         setBusy(false);
@@ -717,7 +717,7 @@ export default function Locations() {
     onBack: () => navigate("/locations"),
     onDelete: (n) => del(n),
     onNew: () => navigate("/locations/create"),
-    onEdit: (n) => { openInEdit(n.id); navigate(`/locations/${encodeURIComponent(n.id)}`); },
+    onEdit: (n) => navigate(`/locations/${encodeURIComponent(n.id)}?edit=1`),
     renderCreate: () => <LocationCreate />,
     renderDetail: (n, ctx) => <LocationDetail node={n} ctx={ctx} />,
     extraBlades: { "property-resolution": propertyResolutionBlade },

@@ -5346,3 +5346,29 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   ([#755](https://github.com/hyperscaleav/omniglass/issues/755)), and `interface_type`, `service`
   and `blob` gain declared ones, rendered into the docs by `cmd/identitygen` rather than written out
   by hand.
+- **The edit face becomes a URL fact.** `?edit=1` beside an inventory detail address (or the users
+  blade's `?u=<id>&edit=1`) lands the edit face directly, behind the same `<resource>:update` the
+  footer Edit is behind; leaving edit strips the param, and the create-as-route and row-pencil
+  handoffs carry the mode in the URL instead of the retired one-shot signals (`pendingedit`,
+  `openPrincipalInEdit`). One hook (`web/src/lib/editurl.ts`) owns both directions
+  ([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact)); the name-to-uuid
+  redirect keeps its query string. Proven by page tests on the deep link, the permission fallback,
+  the Cancel strip and the redirect, and at the e2e tier by the create handoff's own URL; the
+  operator guide's edit-face screenshot is declared from frontmatter with no capture-side clicks,
+  which is the pipeline this unlocks (#758, #759).
+
+- **Every console route smokes in a real browser.** The router now renders from a route manifest
+  (`web/src/lib/routemanifest.ts`, pure data; `web/src/routes.tsx` resolves each entry to its page),
+  and the e2e smoke spec (`web/e2e/routes.spec.ts`) drives the same array: one browser test per
+  route, failing on any page error or non-resource console error, with parametrized routes smoking
+  their honest miss face through a well-formed-unknown uuid and the not-found face smoked like any
+  other route. A guard suite pins the construction (every entry resolves to a registered page, the
+  stub entries equal the nav's own lists, every entry carries a concrete smoke address), so a route
+  cannot be added without the browser tier rendering it (#758, #760).
+
+- **The browser e2e tier gates every PR.** A second job in `test.yml` runs `make test-e2e` on
+  every pull request and on `main`: the already-containerized runner (`web/e2e/run.sh`) needs
+  only Go, Node, and the runner's Docker daemon, so CI executes exactly what a laptop does. With
+  the route smoke spec in the same tier, a change that breaks any console route in a real browser
+  cannot merge; `make test` stays unchanged (the local loop keeps the explicit `make test-e2e`
+  target, the Playwright image being too heavy to fold into the default gate) (#758, #761).

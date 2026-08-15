@@ -40,11 +40,21 @@ test.describe("operator console", () => {
     await page.getByLabel("Name", { exact: true }).fill(name);
     await page.getByRole("button", { name: /create location/i }).click();
 
-    // Create hands off to the new location's own detail in edit mode; Cancel
-    // drops it to the read-only face, which is where the identity is rendered.
-    await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}/);
+    // Create hands off to the new location's own detail in edit mode, and the
+    // handoff is the URL itself (#759): the route lands carrying ?edit=1. Cancel
+    // drops it to the read-only face (where the identity is rendered) and strips
+    // the param, so the URL stops requesting an edit the operator left.
+    await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}\?edit=1/);
     await page.getByRole("button", { name: /^cancel$/i }).first().click();
     await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+    await expect(page).not.toHaveURL(/edit=1/);
+
+    // The edit face is deep-linkable: revisiting the same detail with ?edit=1
+    // lands editing directly, no clicks involved.
+    await page.goto(page.url().split("?")[0] + "?edit=1");
+    await expect(page.getByRole("button", { name: /save changes/i })).toBeVisible();
+    await page.getByRole("button", { name: /^cancel$/i }).first().click();
+    await expect(page).not.toHaveURL(/edit=1/);
 
     // It appears as a new root row back on the list, under the label the rule
     // rendered from the name typed above.
