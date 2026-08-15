@@ -3,10 +3,13 @@ import {
   ancestors,
   bandsOf,
   byRootLocation,
+  childrenIndex,
   fleetTotals,
+  holesByRoot,
   locationIndex,
   locationsWithoutSystems,
   rootOf,
+  subtreeDepth,
   toCluster,
   type FleetView,
   type Grouping,
@@ -38,6 +41,10 @@ const dot = (component: string, name: string, verdict: string, primary: boolean,
   shared,
 });
 
+// hq's own recorded verdict deliberately DISAGREES with the fold over its
+// in-scope clusters (healthy vs degraded): the band chip renders the recorded
+// row (a band that contradicts its own detail page one click away is a
+// visible bug), and the fold stays available as what it is.
 const view: FleetView = {
   locations: [
     loc("l-hq", "hq", "campus"),
@@ -189,5 +196,68 @@ describe("fleetTotals", () => {
 describe("byRootLocation", () => {
   it("names itself, so a future picker has something to show", () => {
     expect(byRootLocation.name).toBe("location");
+  });
+});
+
+describe("childrenIndex and subtreeDepth", () => {
+  it("measures each root's own depth, which is the variable-depth fact the canvas teaches", () => {
+    const children = childrenIndex(view);
+    expect(subtreeDepth(uuidFor("l-hq"), children)).toBe(3);
+    expect(subtreeDepth(uuidFor("l-depot"), children)).toBe(2);
+  });
+
+  it("a leaf is depth one", () => {
+    expect(subtreeDepth(uuidFor("l-r1"), childrenIndex(view))).toBe(1);
+  });
+
+  it("does not hang on a parent cycle", () => {
+    const cyclic = {
+      locations: [loc("cyd-a", "a", "room", "cyd-b"), loc("cyd-b", "b", "room", "cyd-a")],
+      systems: [],
+    } as unknown as FleetView;
+    expect(() => subtreeDepth(uuidFor("cyd-a"), childrenIndex(cyclic))).not.toThrow();
+  });
+});
+
+describe("holesByRoot", () => {
+  it("groups the holes under their root band", () => {
+    const holes = holesByRoot(view);
+    expect(holes.get(uuidFor("l-hq"))?.map((l) => l.name)).toEqual(["hq-r2"]);
+    expect(holes.get(uuidFor("l-depot"))).toBeUndefined();
+  });
+
+  it("claims nothing when the systems tier is out of scope, like its source", () => {
+    const noSystems = { ...view, systems: [] } as unknown as FleetView;
+    expect(holesByRoot(noSystems).size).toBe(0);
+  });
+});
+
+describe("band verdicts and depth", () => {
+  it("carries the location's recorded verdict beside the in-scope fold, and they may disagree", () => {
+    const hq = bandsOf(view).find((b) => b.label === "hq")!;
+    // The fold over what the caller can see says degraded; the location's own
+    // recorded row says healthy. The chip renders the record; the fold stays
+    // named for what it is.
+    expect(hq.verdict).toBe("degraded");
+    expect(hq.recordedVerdict).toBe("healthy");
+  });
+
+  it("measures the band's subtree depth for the subtitle", () => {
+    const bands = bandsOf(view);
+    expect(bands.find((b) => b.label === "hq")?.depth).toBe(3);
+    expect(bands.find((b) => b.label === "depot")?.depth).toBe(2);
+  });
+
+  it("a grouping without the optional facts yields a null record and depth zero", () => {
+    const byVerdict: Grouping = {
+      name: "verdict",
+      bandFor: (s) => s.verdict ?? null,
+      label: (k) => k,
+      sublabel: () => "",
+      order: (keys) => [...keys].sort(),
+    };
+    const bands = bandsOf(view, byVerdict);
+    expect(bands[0].recordedVerdict).toBeNull();
+    expect(bands[0].depth).toBe(0);
   });
 });

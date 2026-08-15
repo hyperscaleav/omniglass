@@ -77,6 +77,16 @@ export type Band = {
   // ghost rule exists to prevent.
   systemCount: number;
   componentCount: number;
+  // recordedVerdict is the band subject's OWN server-recorded verdict, where
+  // the grouping can name one (a location band can; a tag band cannot). The
+  // chip renders this, never the fold above: the fold covers only in-scope
+  // clusters, and a band disagreeing with its own detail page one click away
+  // is a visible contradiction. Null when the grouping has no recorded row to
+  // offer.
+  recordedVerdict: Verdict | null;
+  // depth is the band subject's own tree depth in levels (0 for a grouping
+  // with no tree), the variable-depth fact the subtitle teaches.
+  depth: number;
 };
 
 // A Grouping decides which band a system belongs to and how that band is
@@ -91,10 +101,60 @@ export type Grouping = {
   sublabel(key: string, view: FleetView): string;
   // order sorts the band keys.
   order(keys: string[], view: FleetView): string[];
+  // recordedVerdict names the band subject's own recorded verdict, where the
+  // grouping has one to name; depth its subtree depth. Optional: a grouping
+  // over a non-tree axis simply has neither fact.
+  recordedVerdict?(key: string, view: FleetView): string | null | undefined;
+  depth?(key: string, view: FleetView): number;
 };
 
+// The index is memoized per view object: bandsOf and every grouping method
+// read it, and rebuilding a Map of the whole place tree once per system per
+// band turns a canvas repaint into O(systems x locations) for no reason. A
+// WeakMap keyed on the view keeps the memo exactly as long as the data it
+// derives from.
+const indexCache = new WeakMap<FleetView, Map<string, FleetLocation>>();
+
 export function locationIndex(view: FleetView): Map<string, FleetLocation> {
-  return new Map((view.locations ?? []).map((l) => [l.id, l]));
+  const hit = indexCache.get(view);
+  if (hit) return hit;
+  const index = new Map((view.locations ?? []).map((l) => [l.id, l]));
+  indexCache.set(view, index);
+  return index;
+}
+
+// childrenIndex inverts the parent pointers: the walk subtreeDepth needs, and
+// the one the later zooms will need to render a location's own children.
+export function childrenIndex(view: FleetView): Map<string, FleetLocation[]> {
+  const out = new Map<string, FleetLocation[]>();
+  for (const l of view.locations ?? []) {
+    if (!l.parent) continue;
+    const list = out.get(l.parent);
+    if (list) list.push(l);
+    else out.set(l.parent, [l]);
+  }
+  return out;
+}
+
+// subtreeDepth measures how deep a root's tree goes, in levels including the
+// root itself: the variable-depth fact the canvas exists to teach, rendered in
+// the band's subtitle. Bounded like rootOf: a cycle in the data must not hang
+// the canvas.
+export function subtreeDepth(rootId: string, children: Map<string, FleetLocation[]>): number {
+  let depth = 0;
+  let frontier = [rootId];
+  const seen = new Set<string>();
+  while (frontier.length > 0) {
+    depth++;
+    const next: string[] = [];
+    for (const id of frontier) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      for (const child of children.get(id) ?? []) next.push(child.id);
+    }
+    frontier = next;
+  }
+  return depth;
 }
 
 // rootOf walks a location to its root. The walk is bounded by the number of
@@ -143,6 +203,12 @@ export const byRootLocation: Grouping = {
     const index = locationIndex(view);
     return [...keys].sort((a, b) => (index.get(a) ? entityLabel(index.get(a)!) : a).localeCompare(index.get(b) ? entityLabel(index.get(b)!) : b));
   },
+  recordedVerdict(key, view) {
+    return locationIndex(view).get(key)?.verdict;
+  },
+  depth(key, view) {
+    return subtreeDepth(key, childrenIndex(view));
+  },
 };
 
 export function toCluster(system: FleetSystem): SystemCluster {
@@ -190,6 +256,8 @@ export function bandsOf(view: FleetView, grouping: Grouping = byRootLocation): B
       clusters,
       systemCount: clusters.length,
       componentCount: distinct.size,
+      recordedVerdict: verdictOf(grouping.recordedVerdict?.(key, view)),
+      depth: grouping.depth?.(key, view) ?? 0,
     };
   });
 }
@@ -215,6 +283,22 @@ export function locationsWithoutSystems(view: FleetView): FleetLocation[] {
   // where the systems belong, and drawing a hole at every level above them
   // would bury the real gaps in noise.
   return (view.locations ?? []).filter((l) => !hasChild.has(l.id) && !placed.has(l.id));
+}
+
+// holesByRoot folds the holes under the band that draws them, through the
+// same root walk the bands use. Location-specific by construction: a hole is
+// a place, and only the location grouping has places for keys.
+export function holesByRoot(view: FleetView): Map<string, FleetLocation[]> {
+  const index = locationIndex(view);
+  const out = new Map<string, FleetLocation[]>();
+  for (const hole of locationsWithoutSystems(view)) {
+    const root = rootOf(hole.id, index);
+    if (!root) continue;
+    const list = out.get(root.id);
+    if (list) list.push(hole);
+    else out.set(root.id, [hole]);
+  }
+  return out;
 }
 
 // fleetTotals is the inspector's headline, counting a shared component once.
