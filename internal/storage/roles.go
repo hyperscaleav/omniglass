@@ -318,7 +318,7 @@ func (e *CapacityFullShortfall) Error() string {
 func (p *PG) EffectiveRoles(ctx context.Context, systemName string, read scope.Set) ([]EffectiveRole, error) {
 	// Resolved once via scopedByNameInScope, not scopedByName-then-
 	// inScopeTree (ruling 2, #627: ambiguity judged inside read, not
-	// estate-wide): the query below binds sys.ID instead of re-deriving it
+	// fleet-wide): the query below binds sys.ID instead of re-deriving it
 	// from systemName, which #627 no longer guarantees is unique.
 	sys, err := scopedByNameInScope(ctx, p.pool, systemConfig, systemName, "system", read)
 	if err != nil {
@@ -405,7 +405,7 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	// resolveScoped, not scopedByNameInScope(write): the read-then-action split
 	// (#736), so a system this caller can see but not staff is refused as
 	// forbidden rather than reported absent. Ambiguity is judged inside the READ
-	// scope rather than estate-wide (ruling 2, #627).
+	// scope rather than fleet-wide (ruling 2, #627).
 	sys, err := resolveScoped(ctx, tx, systemConfig, systemName, read, action)
 	if err != nil {
 		return err // ErrSystemNotFound out of read scope, ErrSystemForbidden out of action scope
@@ -432,7 +432,7 @@ func (p *PG) AssignRole(ctx context.Context, actorID, systemName, roleName, comp
 	// checking write against componentConfig could never match (the same
 	// tier-mismatch shape Critical A fixed elsewhere). withoutCandidates
 	// closes the resulting disclosure: an ambiguous component name here
-	// listed every matching uuid estate-wide, including ones a
+	// listed every matching uuid fleet-wide, including ones a
 	// system:update-only caller holds no component:read grant to see.
 	component, err := scopedByName(ctx, tx, componentConfig, componentName)
 	if err != nil {
@@ -612,7 +612,7 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	// Resolved once (see AssignRole's comment): every statement below binds an
 	// id rather than re-deriving one from a name, and the resolve makes the
 	// read-then-action split (#736) with ambiguity judged inside the read scope
-	// rather than estate-wide (ruling 2, #627).
+	// rather than fleet-wide (ruling 2, #627).
 	sys, err := resolveScoped(ctx, tx, systemConfig, systemName, read, action)
 	if err != nil {
 		return err
@@ -621,10 +621,10 @@ func (p *PG) UnassignRole(ctx context.Context, actorID, systemName, roleName, co
 	if err != nil {
 		return err
 	}
-	// Resolved within THIS role's current occupants, not estate-wide (#627
+	// Resolved within THIS role's current occupants, not fleet-wide (#627
 	// review round 3, closing #645 without a wire change): the caller is
 	// naming a component it already believes fills this slot, so a
-	// same-named component elsewhere in the estate that never occupied it
+	// same-named component elsewhere in the fleet that never occupied it
 	// was never actually a candidate, only ambiguous under the coarser
 	// scopedByName resolve this replaced. A name matching nothing anywhere
 	// is ErrComponentNotFound; a name matching something real that just

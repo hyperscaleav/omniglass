@@ -19,7 +19,7 @@ import (
 // against an empty table and prove nothing.
 //
 // It stands the database one migration back (the ordinal column exists, the
-// backfill has not run), writes the four shapes an upgraded estate can hold,
+// backfill has not run), writes the four shapes an upgraded fleet can hold,
 // and then migrates forward over them. The REAL migration file runs, not a
 // copy of its SQL, so the two cannot drift.
 func TestComponentOrdinalBackfill(t *testing.T) {

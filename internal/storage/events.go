@@ -8,7 +8,7 @@ import (
 )
 
 // EventWrite is one occurrence to persist. It shares the owner-arc shape of a
-// sample (OwnerKind picks the arc column, OwnerID is the estate address). Key is
+// sample (OwnerKind picks the arc column, OwnerID is the fleet address). Key is
 // the event_type name. Origin is how the occurrence arrived (caught/caused/derived/
 // scheduled); empty defaults to caught (the natively-published path). Message is the
 // occurrence's human-readable line; Attributes carries its structured payload (json),

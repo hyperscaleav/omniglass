@@ -312,7 +312,7 @@ func (a *authenticator) allows(ctx context.Context, tokens ...string) bool {
 
 // canPlatform reports whether the caller holds platform:<action>, the install-wide
 // authority a write at the platform tier needs on top of the resource permission.
-// Full-estate SCOPE deliberately does not imply it: a senior operator may hold an
+// Full-fleet SCOPE deliberately does not imply it: a senior operator may hold an
 // all-scoped grant over every entity without being able to change the one value
 // that applies to the whole install. Handlers that know the target tier from the
 // request use requirePlatform; the Gateway takes this as a flag where only the

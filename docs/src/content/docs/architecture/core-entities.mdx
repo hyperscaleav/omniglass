@@ -1,6 +1,6 @@
 ---
 title: Core entities
-description: "The estate model: component, system, location, and node as the structural entities, the variable-depth trees, and the exclusive-arc owner."
+description: "The fleet model: component, system, location, and node as the structural entities, the variable-depth trees, and the exclusive-arc owner."
 sidebar:
   badge:
     text: Partial
@@ -25,11 +25,11 @@ trees with full scoped CRUD; a delete is refused while a structural child remain
 own custom method** (`POST /components/{name}:rename` and its siblings) gated `<resource>:rename`,
 with no `name` in the `PATCH` body and a placement-scoped `:checkName` precheck beside it
 ([ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)).
-**A name is unique within its placement, not across the whole estate**
+**A name is unique within its placement, not across the whole fleet**
 ([#627](https://github.com/hyperscaleav/omniglass/issues/627)): two components (or systems) may
 share a name under different parents or at different locations, and two rooms may hold their own
 same-named child; only a root (no parent) location's name and a node's name (also its NATS subject)
-stay estate-wide unique. A bare-name reference that now matches more than one row is refused
+stay fleet-wide unique. A bare-name reference that now matches more than one row is refused
 (`409`, naming the candidates) rather than silently resolving to whichever row sorted first. **A uuid
 is the address; a dotted path is a positional lookup**
 ([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup)),
@@ -74,7 +74,7 @@ accepts (a **typed-slot** guard,
 each role carrying an **impact**. See [implementation status](/architecture/status/).
 :::
 
-## The estate: four structural entities
+## The fleet: four structural entities
 
 - A **component** is a deployed device, app, or service (a display, a DSP, a cloud UCC service). It
   owns samples and points at the **`product`** it is, the source of its shape; the pointer is
@@ -111,8 +111,8 @@ system -> c2
 system -> c3
 ```
 
-:::design[The `global` estate owner (ADR-0057)]
-Above the four sits a singleton **`global`** estate owner where estate-wide health and KPIs roll up:
+:::design[The `global` fleet owner (ADR-0057)]
+Above the four sits a singleton **`global`** fleet owner where fleet-wide health and KPIs roll up:
 one per deployment, no FK, no built table carrying a `global` arm today (every arc CHECK admits
 exactly `component | system | location | node`). An **owner** only: not a location (the location tree
 is a forest of N unparented tops, no root) and not the [cascade](/architecture/cascade/)'s
@@ -284,7 +284,7 @@ tag set, while a system's effective tags come from the platform, its location, a
 tree, so the column would have no reader.
 
 The **type is not the standard**, and both stay. The type says what a system **is**; the standard
-below says which blueprint it is **built to**. One estate holds ten signage standards and six
+below says which blueprint it is **built to**. One fleet holds ten signage standards and six
 classroom standards under a single coarse type, which is exactly why standard's own
 `parent_standard_id` inheritance (which expresses **design forks**, two ways to build the same kind of
 room) is the wrong axis for this question.
@@ -460,7 +460,7 @@ Shipped content is two kinds, never conflated:
   never written by an operator. The classification catalogs (`vendor`, `driver`, `component_type`,
   `product`) ride that path today, and `location_type` joined them in
   [ADR-0106](/architecture/decisions/#adr-0106-a-location-type-is-platform-owned-and-a-nullable-object-clears-under-the-mask):
-  an estate still shapes its own place vocabulary, through the
+  an fleet still shapes its own place vocabulary, through the
   [registry fork](/architecture/decisions/#adr-0095-an-operator-forks-a-shipped-registry-row-instead-of-the-platform-writing-it)
   rather than by owning the row, which is what lets a release WITHDRAW a shipped value.
 
@@ -539,7 +539,7 @@ The singleton `global` owner rides the same arc as an all-null arm: none of the 
 :::
 
 This makes **system-, location-, and node-level samples first-class** (`health` is a `property` owned by
-a system; a node's self-health is owned by the node); estate-wide samples owned by `global` are the
+a system; a node's self-health is owned by the node); fleet-wide samples owned by `global` are the
 designed extension. The **owner** gives a recorded [health](/architecture/health/) verdict its level:
 component, system, and location each own a transition series under the same `health` property name. The same
 arc owns the `event` rows a sample produces, and is the design for `alarm` (component-local today),
@@ -693,12 +693,12 @@ with no `name` in the `PATCH` body at all
 Every exception is declared in `internal/storage/identity_shape.go` and rendered below, so this page
 cannot drift from the code. Most tables bear a name on the ordinary entity rule and the shape
 explains itself. Two groups need a reason: the keyspace tables, the catalog registries whose names
-are estate-wide vocabulary rather than rows inside a parent, and the tables carrying a
+are fleet-wide vocabulary rather than rows inside a parent, and the tables carrying a
 human-readable identifier that is not a name at all.
 
 A **keyspace** table carries a `name` on the same one kebab rule as every other name; the shape
 survives as a declaration of what the name is for, not a second rule. A keyspace name (`icmp-rtt-avg`)
-is estate-wide vocabulary a telemetry record is typed by, where an entity name addresses one row
+is fleet-wide vocabulary a telemetry record is typed by, where an entity name addresses one row
 under a parent. The dotted path rule and its 128-character ceiling retired with the one-name-rule collapse
 (#586): `storage.ValidateName` applies the one rule to every declared name-bearing table, so a call
 site cannot skip validation or invent a second rule. The console labels the identifier **Name** and
@@ -753,10 +753,10 @@ Every reference form the API accepts resolves through one `{ref}` path parameter
 /components/{ref}`, and every custom method beside it): a uuid, a bare name, or a dotted address,
 tried in that order. A bare name matching more than one row in the caller's scope is a `409` naming
 the candidates rather than silently resolving to whichever sorted first, since **#627 scopes a name's
-uniqueness to its placement, not the whole estate**: a component and a system both scope to their
-parent when they have one, else their location, else the estate, a three-bucket split each carries its
+uniqueness to its placement, not the whole fleet**: a component and a system both scope to their
+parent when they have one, else their location, else the fleet, a three-bucket split each carries its
 own partial unique index for; a location, which has no `location_id` column of its own, scopes to its
-parent when it has one, else the estate, two buckets rather than three. The accessor is spelled with a
+parent when it has one, else the fleet, two buckets rather than three. The accessor is spelled with a
 `$` precisely because the name rule excludes it, so `$comp` can never collide with a location
 legitimately named `comp`; the cost is that an unquoted `$comp` is exactly what a shell strips to
 nothing before the request ever leaves the terminal (`url.PathEscape` does not help; it leaves `$`
@@ -793,7 +793,7 @@ read, and then shows the name a blank field will be filled with, drafted by the 
 `POST /components:renderLabel` (and its system and location twins): the resolved stem and the lowest ordinal free in that placement
 bucket right now, `display-3` rather than `display-n`. Reading that number is not minting one, so the
 draft still takes no advisory lock, opens no write transaction and allocates nothing; a form may ask
-on every picker change without joining the queue every create in the estate is waiting in. There is
+on every picker change without joining the queue every create in the fleet is waiting in. There is
 deliberately still no draft verb that MINTS and rolls back, for the reason it never had one.
 
 The number is therefore true rather than reserved, and the create is where that is settled. The form
@@ -817,7 +817,7 @@ would report which of that bucket's names are taken, for whatever stem the calle
 name rule.
 
 The placement bucket is shown beside the field as a path, never as a prefix inside it: a name is
-unique within its placement rather than across the estate, so it no longer carries its ancestry.
+unique within its placement rather than across the fleet, so it no longer carries its ancestry.
 
 **The ordinal is stored, and it says who owns the name**
 ([ADR-0097](/architecture/decisions/#adr-0097-allocation-tests-the-name-it-would-mint-rather-than-reading-the-ordinal-it-stored)).
@@ -863,7 +863,7 @@ at a `component_type` chain, one hop further still, so two products under one ty
 ([ADR-0102](/architecture/decisions/#adr-0102-a-name-rule-is-a-declaration-a-type-opts-in-with-and-a-rule-change-renames-nothing)).
 `location_type.name_rule` is nullable and its presence IS the opt-in: `NULL` means an operator names
 every location of that type, and there is no boolean beside it for the two to disagree about. **No
-shipped place type carries one**, so a shipped estate names every location by hand: a campus, a
+shipped place type carries one**, so a shipped fleet names every location by hand: a campus, a
 building, a floor and a room each have a real-world name an operator holds, and `17c` is ground truth
 rather than a default.
 
@@ -874,7 +874,7 @@ so an allocated ordinal is the wrong kind of value rather than an imprecise one,
 case people reach for first (`-1` is unspellable under the name rule) turns out not to exist, since
 that floor is signed `B1`, already a legal name. The consequence is stated rather than hidden:
 location name generation ships **dormant**, correct and tested but demonstrated by nothing in a
-shipped estate, and reached when an operator declares a positional type of their own.
+shipped fleet, and reached when an operator declares a positional type of their own.
 
 The rule is a small declaration, a stem plus whether the first of that stem in a parent carries an
 ordinal, and it decodes straight into the same mint a component and a system are named from. An
@@ -951,7 +951,7 @@ no vendor because it is not an instance of a catalog row, and no placement fact 
 read its parent would stale every descendant on a campus rename.
 
 **A rule reads placement, and that is what the recompute verb is for**
-([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)).
+([ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-fleet)).
 `LocationLabel` and `SystemTypeLabel` above are the keys behind
 `{{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}}` rendering `Boardroom 204B Display`, and they
 are the reason this epic has a recompute verb at all: they are facts on rows the labelled entity does
@@ -959,12 +959,12 @@ not own.
 
 Because a label is **stored**, every fact a rule reads is a fact some write has to re-render on, and
 those facts now live on other rows. The line is blast radius rather than ownership. Bounded by a
-placement, the estate is restamped **inside the act's own transaction**, so a reader who sees the
+placement, the fleet is restamped **inside the act's own transaction**, so a reader who sees the
 rename sees the labels that follow from it: a location's rename or relabel restamps what is placed
 at it, a system's reclassify restamps its member components, and any act that moves a component's
-primary membership restamps that component. Bounded only by the estate, nothing is restamped at all
+primary membership restamps that component. Bounded only by the fleet, nothing is restamped at all
 and the operator applies it: editing a rule at any tier, or a `component_type`'s or `product`'s
-`label`, or the acronym list, leaves the estate exactly as it was until
+`label`, or the acronym list, leaves the fleet exactly as it was until
 `:previewLabels` shows the blast radius and `:recomputeLabels` applies it. A preview lists exactly
 the rows the apply then changes, including the components and systems a location recompute stales,
 and both are gated by the entity's own `:update`.
@@ -990,8 +990,8 @@ dictionary over it, which is a string the read ladder's last rung cannot produce
 unchanged and still **verbatim**: a row with no stored label renders its `name` exactly, never a
 prettified version. The difference is that a rule renders a label and STORES it.
 
-Because a rule change's blast radius is the whole estate, **shipping this rule restamps nothing on its
-own**. A new estate gets a rendered label when each location is created; an estate that already exists
+Because a rule change's blast radius is the whole fleet, **shipping this rule restamps nothing on its
+own**. A new fleet gets a rendered label when each location is created; an fleet that already exists
 keeps its raw kebab locations until an operator runs `:previewLabels` and `:recomputeLabels` on
 locations. The upgrade is an operator's act, not a release's.
 
@@ -1008,10 +1008,10 @@ records why that is a feature.
 That key is what the **shipped global rule for systems** reads,
 `{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}`, which is the component rule's shape on the system
 tier. Reading the type alone was not enough for the case AV
-estates are full of: a divisible boardroom is two `board` systems in one room, and both rendered
+fleets are full of: a divisible boardroom is two `board` systems in one room, and both rendered
 "Boardroom", so the platform could tell them apart (`boardroom` and `boardroom-2`) and an operator
 reading the console could not. They now read "Boardroom" and "Boardroom 2". The same
-restamps-nothing rule applies as for locations: an estate that already exists keeps both halves
+restamps-nothing rule applies as for locations: an fleet that already exists keeps both halves
 reading "Boardroom" until an operator runs `:previewLabels` and `:recomputeLabels` on systems.
 
 **`title` reads an acronym dictionary an operator owns.** Title-casing a word by upper-casing its

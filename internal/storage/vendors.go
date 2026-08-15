@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// VendorKind names the role a vendor plays in the estate model: who built a
+// VendorKind names the role a vendor plays in the fleet model: who built a
 // component (manufacturer), who installed it (integrator), or who wrote its
 // software (developer). It is a closed set, checked in the DB and validated at
 // the API edge.
@@ -30,7 +30,7 @@ func validVendorKind(s string) bool {
 	return false
 }
 
-// Vendor is a registry row naming an organization in the estate model (e.g.
+// Vendor is a registry row naming an organization in the fleet model (e.g.
 // "Cisco", "Crestron"): a stable id, the official flag, a label, a kind
 // (manufacturer/integrator/developer), and optional contact metadata (icon,
 // support phone, website). It is a flat registry like component_type: no tree,
@@ -38,7 +38,7 @@ func validVendorKind(s string) bool {
 // registry lists alphabetically by label; there is no ordering field.
 type Vendor struct {
 	// ID is the uuid primary key and Name the renameable name, the shape
-	// tag has and every estate entity has after ADR-0056. A vendor is addressable
+	// tag has and every fleet entity has after ADR-0056. A vendor is addressable
 	// by either, so `crestron` keeps working and a rename does not break a caller
 	// holding the id.
 	ID           string

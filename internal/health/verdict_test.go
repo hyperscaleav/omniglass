@@ -326,7 +326,7 @@ func TestSystemVerdictWithChoices(t *testing.T) {
 }
 
 // The recorded string round-trips, since the transition log stores it as text and
-// a misread would silently change an estate's history.
+// a misread would silently change an fleet's history.
 func TestVerdictRoundTrip(t *testing.T) {
 	for _, v := range []health.Verdict{health.Healthy, health.Degraded, health.Outage} {
 		if got := health.ParseVerdict(v.String()); got != v {
@@ -334,7 +334,7 @@ func TestVerdictRoundTrip(t *testing.T) {
 		}
 	}
 	if got := health.ParseVerdict("garbage"); got != health.Healthy {
-		t.Fatalf("unrecognized recorded value = %v, want healthy (a stray row cannot break an estate)", got)
+		t.Fatalf("unrecognized recorded value = %v, want healthy (a stray row cannot break an fleet)", got)
 	}
 }
 
@@ -347,7 +347,7 @@ func unstaffed(quorum int, impact string) health.Role {
 // A role short of quorum because nobody installed the hardware is a
 // COMMISSIONING GAP, not a failure. No alarm will ever fire for it, and
 // collapsing it into the role's declared impact paints a half-commissioned
-// estate entirely red, which is the state most real estates are in while they
+// fleet entirely red, which is the state most real fleets are in while they
 // are being built. Incomplete is what tells the two apart.
 func TestIncompleteIsACommissioningGapNotAFailure(t *testing.T) {
 	t.Run("a role nobody staffed reads incomplete, not its impact", func(t *testing.T) {

@@ -26,7 +26,7 @@ function mount(e: Labelled, placeholder = "Executive Boardroom") {
 const platformLabelled: Labelled = { name: "boardroom-2", label: "Boardroom 2", label_generated: true };
 const operatorLabelled: Labelled = { name: "boardroom-2", label: "The East Half", label_generated: false };
 // The rule resolved nowhere, so the platform stores nothing and the surface
-// reads the name. Every location in an estate that predates a location name rule.
+// reads the name. Every location in an fleet that predates a location name rule.
 const noRule: Labelled = { name: "north-wing", label: "", label_generated: true };
 
 describe("LabelPenField", () => {

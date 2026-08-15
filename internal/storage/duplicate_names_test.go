@@ -582,7 +582,7 @@ func TestResolveTagsSurvivesDuplicateSystemNames(t *testing.T) {
 // re-resolved that name through scopedByName. A standard-owned role
 // declaration re-derived an id from a name on every recompute, so the moment
 // a conforming system shared its name with an unrelated system anywhere in
-// the estate (the two need not even conform to the same standard),
+// the fleet (the two need not even conform to the same standard),
 // SetSystemRole and DeleteSystemRole failed with an unmapped
 // *storage.ErrAmbiguousName on a declaration that was never actually
 // ambiguous, and the whole write (including its audit row) rolled back.

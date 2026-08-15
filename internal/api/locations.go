@@ -92,7 +92,7 @@ type nameRuleBody struct {
 // closed for the drafted name: two implementations of one shape, whose failure
 // mode is an operator promised a name no create makes. It costs nothing to serve
 // (a pure function over two fields already in hand) and it is a fact about the
-// RULE, not about the estate, so it needs no read scope and reserves no ordinal.
+// RULE, not about the fleet, so it needs no read scope and reserves no ordinal.
 type nameRuleReadBody struct {
 	Stem      string   `json:"stem" doc:"The generated name's prefix; empty makes the type positional"`
 	BareFirst bool     `json:"bare_first,omitempty" doc:"True when the first of this stem in a parent carries no ordinal"`
@@ -462,7 +462,7 @@ func registerLocationRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodPost,
 		Path:        "/locations/{name}:resetName",
 		Summary:     "Regenerate a location's name",
-		Description: "Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped estate has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.",
+		Description: "Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.",
 	}, "location", "rename"), func(ctx context.Context, in *locationPathInput) (*locationOutput, error) {
 		l, err := gw.ResetLocationName(ctx, actorID(ctx), in.Name,
 			a.scopeFor(ctx, "location", "read"), a.scopeFor(ctx, "location", "rename"))

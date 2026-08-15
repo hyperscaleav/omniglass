@@ -8,9 +8,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The estate projection: the read behind the estate canvas.
+// The fleet projection: the read behind the fleet canvas.
 //
-// The canvas paints one square per component across the whole estate, which is
+// The canvas paints one square per component across the whole fleet, which is
 // the reason this exists rather than the console composing /locations,
 // /systems and /components itself. A five-figure component list fetched to draw
 // squares is a page that never loads; a dot needs an id, a verdict, and two
@@ -20,7 +20,7 @@ import (
 //
 // The shape is FLAT on purpose: locations carry their parent id rather than
 // nesting, and systems carry their location id. The client builds the tree, and
-// more to the point it builds the BANDS, which is what lets the estate be
+// more to the point it builds the BANDS, which is what lets the fleet be
 // grouped by something other than place later without a second endpoint. The
 // server says what exists and how it is placed; the view model decides how it
 // is gathered.
@@ -29,10 +29,10 @@ import (
 // primitive every other tree read uses. The three sets are separate arguments
 // rather than one, because they answer three different permissions: a principal
 // who may read the place tree but not its components gets the shape of their
-// estate with no contents, which is a legitimate view and not an error.
+// fleet with no contents, which is a legitimate view and not an error.
 
-// EstateLocation is one node of the place tree as the canvas needs it.
-type EstateLocation struct {
+// FleetLocation is one node of the place tree as the canvas needs it.
+type FleetLocation struct {
 	ID    string
 	Name  string
 	Label string
@@ -46,9 +46,9 @@ type EstateLocation struct {
 	Verdict        string
 }
 
-// EstateDot is one component's presence in one system: the whole payload behind
+// FleetDot is one component's presence in one system: the whole payload behind
 // a single square.
-type EstateDot struct {
+type FleetDot struct {
 	ComponentID string
 	Name        string
 	Verdict     string
@@ -56,26 +56,26 @@ type EstateDot struct {
 	// that draws it solid. Shared is true when it belongs to more than one
 	// system at all. Together they are the ring-and-ghost rule: a shared box is
 	// drawn once as owned and as an outline everywhere else, so an operator can
-	// see every system that depends on it without the estate counting one
+	// see every system that depends on it without the fleet counting one
 	// physical device several times.
 	Primary bool
 	Shared  bool
 }
 
-// EstateSystem is one system and the dots inside it.
-type EstateSystem struct {
+// FleetSystem is one system and the dots inside it.
+type FleetSystem struct {
 	ID         string
 	Name       string
 	Label      string
 	LocationID *string
 	Verdict    string
-	Dots       []EstateDot
+	Dots       []FleetDot
 }
 
-// EstateView is the whole projection.
-type EstateView struct {
-	Locations []EstateLocation
-	Systems   []EstateSystem
+// FleetView is the whole projection.
+type FleetView struct {
+	Locations []FleetLocation
+	Systems   []FleetSystem
 }
 
 // latestVerdict is the current recorded health for an owner column, the same
@@ -95,25 +95,25 @@ func latestVerdict(ownerCol, table string) string {
 // appends `order by name`, and an unaliased `select t.name from location_type`
 // puts a second output column called name in scope, which makes that ORDER BY
 // ambiguous rather than merely wrong (SQLSTATE 42702).
-var estateLocationCols = `id, name, coalesce(label, '') as label,
+var fleetLocationCols = `id, name, coalesce(label, '') as label,
 	(select t.name from location_type t where t.id = location.location_type) as location_type_name,
 	location.location_type as location_type_id,
 	parent_id, ` + latestVerdict("location_id", "location") + ` as verdict`
 
-var estateSystemCols = `id, name, coalesce(label, '') as label, location_id, ` +
+var fleetSystemCols = `id, name, coalesce(label, '') as label, location_id, ` +
 	latestVerdict("system_id", "system") + ` as verdict`
 
-// EstateProjection reads the whole in-scope estate as the canvas draws it.
-func (p *PG) EstateProjection(ctx context.Context, locRead, sysRead, compRead scope.Set) (*EstateView, error) {
-	view := &EstateView{Locations: []EstateLocation{}, Systems: []EstateSystem{}}
+// FleetProjection reads the whole in-scope fleet as the canvas draws it.
+func (p *PG) FleetProjection(ctx context.Context, locRead, sysRead, compRead scope.Set) (*FleetView, error) {
+	view := &FleetView{Locations: []FleetLocation{}, Systems: []FleetSystem{}}
 
-	locs, err := p.estateLocations(ctx, locRead)
+	locs, err := p.fleetLocations(ctx, locRead)
 	if err != nil {
 		return nil, err
 	}
 	view.Locations = locs
 
-	systems, err := p.estateSystems(ctx, sysRead)
+	systems, err := p.fleetSystems(ctx, sysRead)
 	if err != nil {
 		return nil, err
 	}
@@ -126,14 +126,14 @@ func (p *PG) EstateProjection(ctx context.Context, locRead, sysRead, compRead sc
 	for i := range systems {
 		ids = append(ids, systems[i].ID)
 	}
-	dots, err := p.estateDots(ctx, ids, compRead)
+	dots, err := p.fleetDots(ctx, ids, compRead)
 	if err != nil {
 		return nil, err
 	}
 	for i := range view.Systems {
 		view.Systems[i].Dots = dots[view.Systems[i].ID]
 		if view.Systems[i].Dots == nil {
-			view.Systems[i].Dots = []EstateDot{}
+			view.Systems[i].Dots = []FleetDot{}
 		}
 	}
 	return view, nil
@@ -143,7 +143,7 @@ func (p *PG) EstateProjection(ctx context.Context, locRead, sysRead, compRead sc
 // scopedListSQL the scoped-CRUD primitive uses, so this projection cannot drift
 // from the scope semantics every other tree read has. It returns nil rows (not
 // an error) when the caller's scope selects nothing at all: an empty canvas is a
-// legitimate answer, and refusing would tell a floor viewer their estate exists.
+// legitimate answer, and refusing would tell a floor viewer their fleet exists.
 func (p *PG) scopedTreeQuery(ctx context.Context, tbl scopeTable, cols string, read scope.Set) (pgx.Rows, error) {
 	if read.Empty() {
 		return nil, nil
@@ -160,55 +160,55 @@ func (p *PG) scopedTreeQuery(ctx context.Context, tbl scopeTable, cols string, r
 	return p.pool.Query(ctx, sql, roots, selfIDs)
 }
 
-func (p *PG) estateLocations(ctx context.Context, read scope.Set) ([]EstateLocation, error) {
-	rows, err := p.scopedTreeQuery(ctx, locationTable, estateLocationCols, read)
+func (p *PG) fleetLocations(ctx context.Context, read scope.Set) ([]FleetLocation, error) {
+	rows, err := p.scopedTreeQuery(ctx, locationTable, fleetLocationCols, read)
 	if err != nil {
-		return nil, fmt.Errorf("storage: estate locations: %w", err)
+		return nil, fmt.Errorf("storage: fleet locations: %w", err)
 	}
 	if rows == nil {
-		return []EstateLocation{}, nil
+		return []FleetLocation{}, nil
 	}
 	defer rows.Close()
-	out := []EstateLocation{}
+	out := []FleetLocation{}
 	for rows.Next() {
-		var l EstateLocation
+		var l FleetLocation
 		if err := rows.Scan(&l.ID, &l.Name, &l.Label, &l.LocationType, &l.LocationTypeID, &l.ParentID, &l.Verdict); err != nil {
-			return nil, fmt.Errorf("storage: scan estate location: %w", err)
+			return nil, fmt.Errorf("storage: scan fleet location: %w", err)
 		}
 		out = append(out, l)
 	}
 	return out, rows.Err()
 }
 
-func (p *PG) estateSystems(ctx context.Context, read scope.Set) ([]EstateSystem, error) {
-	rows, err := p.scopedTreeQuery(ctx, systemTable, estateSystemCols, read)
+func (p *PG) fleetSystems(ctx context.Context, read scope.Set) ([]FleetSystem, error) {
+	rows, err := p.scopedTreeQuery(ctx, systemTable, fleetSystemCols, read)
 	if err != nil {
-		return nil, fmt.Errorf("storage: estate systems: %w", err)
+		return nil, fmt.Errorf("storage: fleet systems: %w", err)
 	}
 	if rows == nil {
-		return []EstateSystem{}, nil
+		return []FleetSystem{}, nil
 	}
 	defer rows.Close()
-	out := []EstateSystem{}
+	out := []FleetSystem{}
 	for rows.Next() {
-		var s EstateSystem
+		var s FleetSystem
 		if err := rows.Scan(&s.ID, &s.Name, &s.Label, &s.LocationID, &s.Verdict); err != nil {
-			return nil, fmt.Errorf("storage: scan estate system: %w", err)
+			return nil, fmt.Errorf("storage: scan fleet system: %w", err)
 		}
 		out = append(out, s)
 	}
 	return out, rows.Err()
 }
 
-// estateDots reads every membership of the given systems whose component the
+// fleetDots reads every membership of the given systems whose component the
 // caller may read, as dots keyed by system id.
 //
 // The component scope is injected as a subquery over the SAME recursive tree
 // expansion scopedListSQL builds, rather than filtered out in Go afterwards: a
 // component the caller cannot read must never be fetched, let alone counted
 // into a cluster (the unscoped-gateway-list class, #458).
-func (p *PG) estateDots(ctx context.Context, systemIDs []string, read scope.Set) (map[string][]EstateDot, error) {
-	out := map[string][]EstateDot{}
+func (p *PG) fleetDots(ctx context.Context, systemIDs []string, read scope.Set) (map[string][]FleetDot, error) {
+	out := map[string][]FleetDot{}
 	if read.Empty() {
 		return out, nil
 	}
@@ -244,14 +244,14 @@ func (p *PG) estateDots(ctx context.Context, systemIDs []string, read scope.Set)
 
 	rows, err := p.pool.Query(ctx, sql, args...)
 	if err != nil {
-		return nil, fmt.Errorf("storage: estate dots: %w", err)
+		return nil, fmt.Errorf("storage: fleet dots: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var systemID string
-		var d EstateDot
+		var d FleetDot
 		if err := rows.Scan(&systemID, &d.ComponentID, &d.Name, &d.Verdict, &d.Primary, &d.Shared); err != nil {
-			return nil, fmt.Errorf("storage: scan estate dot: %w", err)
+			return nil, fmt.Errorf("storage: scan fleet dot: %w", err)
 		}
 		out[systemID] = append(out[systemID], d)
 	}

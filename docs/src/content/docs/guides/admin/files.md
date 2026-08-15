@@ -1,6 +1,6 @@
 ---
 title: Files
-description: "The Files directory under Values: upload, find, download, and delete the opaque bytes kept with an estate, deduplicated and content-addressed, with a sensitive tier for confidential ones."
+description: "The Files directory under Values: upload, find, download, and delete the opaque bytes kept with an fleet, deduplicated and content-addressed, with a sensitive tier for confidential ones."
 screenshots:
   - id: files
     path: /web/files
@@ -24,7 +24,7 @@ screenshots:
       - "text=/[A-Z][a-z]{2} \\d{1,2}, \\d{2}:\\d{2} (AM|PM)/ >> xpath=ancestor::td[1]"
 ---
 
-**Files** (under Values) is where you keep the **opaque bytes** that go with an estate, a firmware
+**Files** (under Values) is where you keep the **opaque bytes** that go with an fleet, a firmware
 image, a device config dump, a runbook, a screenshot, a packet capture, each as a searchable **file**
 handle over a deduplicated, content-addressed store ([files and blobs](/architecture/files/)). It sits
 beside Secrets and Variables as operator-provided content, but unlike them it is not a cascaded value:
@@ -32,7 +32,7 @@ it is flat and tenant-wide, not owned at a scope.
 
 ::screenshot{#files}
 
-It uses the same filter, column, and list controls as the estate directories, so browsing feels the
+It uses the same filter, column, and list controls as the fleet directories, so browsing feels the
 same. Two things differ:
 
 - The list is **flat**, not a tree, and tenant-wide rather than scoped to a subtree, so there is no

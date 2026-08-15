@@ -151,7 +151,7 @@ func registerTagRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Method:      http.MethodGet,
 		Path:        "/tags/{name}:values",
 		Summary:     "List the distinct values bound for a key",
-		Description: "Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.",
+		Description: "Returns the distinct values already bound for a key across the fleet, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.",
 	}, "tag", "read"), func(ctx context.Context, in *tagNameInput) (*tagValuesOutput, error) {
 		vals, err := gw.DistinctTagValues(ctx, in.Name)
 		if err != nil {

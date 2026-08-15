@@ -49,7 +49,7 @@ func TestALocationGrantOfDeployReachesOneTier(t *testing.T) {
 	grants := []scope.Grant{{Role: "deploy", ScopeKind: "location", ScopeID: "L1", ScopeOp: scope.OpSubtreeExclRoot}}
 
 	// Every action this role could plausibly resolve, against every resource a
-	// grant on an estate tier could plausibly contain. An action a role does not
+	// grant on an fleet tier could plausibly contain. An action a role does not
 	// carry resolves empty for the same reason an unreachable tier does (the
 	// per-action union), and both are reach, so both are listed.
 	actions := []string{"read", "create", "update", "rename", "move", "delete", "reveal", "issue", "push", "acknowledge"}

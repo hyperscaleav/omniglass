@@ -19,7 +19,7 @@ Tables are grouped into **subsystem containers**. Each table shows only its
 column list lives in its migration and its Storage Gateway type. Each edge is a
 **foreign key**, drawn from the referencing column to the row it points at;
 edges that cross container borders are the seams between subsystems
-(`estate.component.product_id` pointing at `catalog.product.id`).
+(`fleet.component.product_id` pointing at `catalog.product.id`).
 
 A table not yet assigned to a subsystem would render in an `unclustered`
 container, but the introspection test hard-fails on any unmapped table, so the
@@ -122,7 +122,7 @@ identity: {
   }
 }
 
-estate: {
+fleet: {
   component: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -421,42 +421,42 @@ catalog.standard_metric.standard_id -> catalog.standard.id
 catalog.standard_property.property_type_id -> telemetry.property_type.id
 catalog.standard_property.standard_id -> catalog.standard.id
 catalog.system_type.parent_id -> catalog.system_type.id
-collection.node.location_id -> estate.location.id
+collection.node.location_id -> fleet.location.id
 collection.node.principal_id -> identity.principal.id
 collection.node_log.node_id -> collection.node.principal_id
-collection.task.interface_id -> estate.interface.id
+collection.task.interface_id -> fleet.interface.id
 config.credential.principal_id -> identity.principal.id
-config.secret.component_id -> estate.component.id
-config.secret.location_id -> estate.location.id
+config.secret.component_id -> fleet.component.id
+config.secret.location_id -> fleet.location.id
 config.secret.secret_type -> config.secret_type.id
-config.secret.system_id -> estate.system.id
-config.variable.component_id -> estate.component.id
-config.variable.location_id -> estate.location.id
-config.variable.system_id -> estate.system.id
+config.secret.system_id -> fleet.system.id
+config.variable.component_id -> fleet.component.id
+config.variable.location_id -> fleet.location.id
+config.variable.system_id -> fleet.system.id
 content.file.sha256 -> content.blob.sha256
-content.tag_binding.component_id -> estate.component.id
-content.tag_binding.location_id -> estate.location.id
+content.tag_binding.component_id -> fleet.component.id
+content.tag_binding.location_id -> fleet.location.id
 content.tag_binding.node_id -> collection.node.principal_id
-content.tag_binding.system_id -> estate.system.id
+content.tag_binding.system_id -> fleet.system.id
 content.tag_binding.tag_id -> content.tag.id
-estate.component.location_id -> estate.location.id
-estate.component.parent_id -> estate.component.id
-estate.component.product_id -> catalog.product.id
-estate.interface.component -> estate.component.id
-estate.interface.node_name -> collection.node.principal_id
-estate.interface.type -> estate.interface_type.id
-estate.location.location_type -> estate.location_type.id
-estate.location.parent_id -> estate.location.id
-estate.location_type_metric.location_type_id -> estate.location_type.id
-estate.location_type_metric.metric_type_id -> telemetry.metric_type.id
-estate.location_type_property.location_type_id -> estate.location_type.id
-estate.location_type_property.property_type_id -> telemetry.property_type.id
-estate.system.location_id -> estate.location.id
-estate.system.parent_id -> estate.system.id
-estate.system.standard_id -> catalog.standard.id
-estate.system.system_type_id -> catalog.system_type.id
-estate.system_member.component_id -> estate.component.id
-estate.system_member.system_id -> estate.system.id
+fleet.component.location_id -> fleet.location.id
+fleet.component.parent_id -> fleet.component.id
+fleet.component.product_id -> catalog.product.id
+fleet.interface.component -> fleet.component.id
+fleet.interface.node_name -> collection.node.principal_id
+fleet.interface.type -> fleet.interface_type.id
+fleet.location.location_type -> fleet.location_type.id
+fleet.location.parent_id -> fleet.location.id
+fleet.location_type_metric.location_type_id -> fleet.location_type.id
+fleet.location_type_metric.metric_type_id -> telemetry.metric_type.id
+fleet.location_type_property.location_type_id -> fleet.location_type.id
+fleet.location_type_property.property_type_id -> telemetry.property_type.id
+fleet.system.location_id -> fleet.location.id
+fleet.system.parent_id -> fleet.system.id
+fleet.system.standard_id -> catalog.standard.id
+fleet.system.system_type_id -> catalog.system_type.id
+fleet.system_member.component_id -> fleet.component.id
+fleet.system_member.system_id -> fleet.system.id
 identity.choice_alternate.choice_id -> identity.role_choice.id
 identity.choice_alternate.choice_id -> identity.role_choice.id
 identity.choice_alternate.owner_kind -> identity.role_choice.owner_kind
@@ -470,52 +470,52 @@ identity.principal_grant.role_id -> identity.role.id
 identity.principal_group_member.group_id -> identity.principal_group.id
 identity.principal_group_member.principal_id -> identity.principal.id
 identity.role_choice.standard_id -> catalog.standard.id
-identity.role_choice.system_id -> estate.system.id
+identity.role_choice.system_id -> fleet.system.id
 identity.service.principal_id -> identity.principal.id
 identity.system_role.alternate_id -> identity.choice_alternate.id
 identity.system_role.owner_kind -> identity.choice_alternate.owner_kind
 identity.system_role.owner_ref -> identity.choice_alternate.owner_ref
 identity.system_role.standard_id -> catalog.standard.id
-identity.system_role.system_id -> estate.system.id
-identity.system_role_assignment.component_id -> estate.component.id
+identity.system_role.system_id -> fleet.system.id
+identity.system_role_assignment.component_id -> fleet.component.id
 identity.system_role_assignment.role_id -> identity.system_role.id
-identity.system_role_assignment.system_id -> estate.system.id
+identity.system_role_assignment.system_id -> fleet.system.id
 identity.system_role_product.product_id -> catalog.product.id
 identity.system_role_product.role_id -> identity.system_role.id
 identity.system_role_type.component_type_id -> catalog.component_type.id
 identity.system_role_type.role_id -> identity.system_role.id
 telemetry.alarm.acknowledged_by -> identity.principal.id
-telemetry.alarm.component_id -> estate.component.id
+telemetry.alarm.component_id -> fleet.component.id
 telemetry.command.caused_event_id -> telemetry.event.id
 telemetry.command.command_type_id -> telemetry.command_type.id
-telemetry.command.component_id -> estate.component.id
-telemetry.command.location_id -> estate.location.id
+telemetry.command.component_id -> fleet.component.id
+telemetry.command.location_id -> fleet.location.id
 telemetry.command.node_id -> collection.node.principal_id
-telemetry.command.system_id -> estate.system.id
+telemetry.command.system_id -> fleet.system.id
 telemetry.command_type.target_metric_type_id -> telemetry.metric_type.id
 telemetry.command_type.target_property_type_id -> telemetry.property_type.id
-telemetry.event.component_id -> estate.component.id
+telemetry.event.component_id -> fleet.component.id
 telemetry.event.event_type_id -> telemetry.event_type.id
-telemetry.event.location_id -> estate.location.id
+telemetry.event.location_id -> fleet.location.id
 telemetry.event.node_id -> collection.node.principal_id
 telemetry.event.source_event_id -> telemetry.event.id
 telemetry.event.source_log_line_id -> telemetry.log_line.id
-telemetry.event.system_id -> estate.system.id
-telemetry.log_line.component_id -> estate.component.id
+telemetry.event.system_id -> fleet.system.id
+telemetry.log_line.component_id -> fleet.component.id
 telemetry.metric.command_id -> telemetry.command.id
-telemetry.metric.component_id -> estate.component.id
+telemetry.metric.component_id -> fleet.component.id
 telemetry.metric.event_id -> telemetry.event.id
-telemetry.metric.location_id -> estate.location.id
+telemetry.metric.location_id -> fleet.location.id
 telemetry.metric.metric_type_id -> telemetry.metric_type.id
 telemetry.metric.node_id -> collection.node.principal_id
-telemetry.metric.system_id -> estate.system.id
+telemetry.metric.system_id -> fleet.system.id
 telemetry.property.command_id -> telemetry.command.id
-telemetry.property.component_id -> estate.component.id
+telemetry.property.component_id -> fleet.component.id
 telemetry.property.event_id -> telemetry.event.id
-telemetry.property.location_id -> estate.location.id
+telemetry.property.location_id -> fleet.location.id
 telemetry.property.node_id -> collection.node.principal_id
 telemetry.property.property_type_id -> telemetry.property_type.id
-telemetry.property.system_id -> estate.system.id
+telemetry.property.system_id -> fleet.system.id
 ```
 
 <!-- erd:end -->
@@ -525,7 +525,7 @@ telemetry.property.system_id -> estate.system.id
 - **identity** - who can act and what they may do: principals (human and
   service), groups, grants, roles, the typed-slot system-role guard, and the
   impersonation trail.
-- **estate** - what is being monitored: locations, systems, components, and the
+- **fleet** - what is being monitored: locations, systems, components, and the
   interfaces a component exposes.
 - **catalog** - the shared reference library: vendors, products, drivers,
   component types, and standards, plus the properties they define.

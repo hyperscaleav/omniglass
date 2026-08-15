@@ -442,7 +442,7 @@ func resolveMatches[T any](cfg scopedConfig[T], ref string, matches []*T) (*T, e
 // narrower set), generalized past scope.Set/inScopeTree: a caller here
 // narrows by membership in some OTHER relation (a role's current occupants,
 // a system's current members) rather than by tree scope, so ambiguity is
-// judged within that relation instead of estate-wide (#627 review round 3,
+// judged within that relation instead of fleet-wide (#627 review round 3,
 // closing #645: a same-named row that never touched this relation was never
 // actually a candidate for THIS call, only for a coarser, relation-blind
 // resolve).
@@ -514,7 +514,7 @@ const (
 // scope resolved for one tier checked against a DIFFERENT tier's table is
 // comparing incompatible id spaces (inScopeTree walks the target's own
 // ancestor chain, so the ids can never match), which silently denies every
-// non-all caller on a read/write path or leaks a candidate estate-wide on
+// non-all caller on a read/write path or leaks a candidate fleet-wide on
 // an advisory one, rather than being caught. This exact mismatch shipped
 // twice in this task's own history (CreateComponent's system/location
 // binds, ResolveTags' forSystem filter) before this guard existed; it is
@@ -583,7 +583,7 @@ func resolveRef[T any](ctx context.Context, q querier, cfg scopedConfig[T], ref,
 // fallback to a name lookup that would also miss: falling through would turn one
 // clear miss into two and report the second.
 //
-// Ambiguity here is estate-wide: every row sharing the name, in or out of any
+// Ambiguity here is fleet-wide: every row sharing the name, in or out of any
 // scope. That is the right answer for the callers above (a create's placement
 // reference is not itself a caller-scoped read), and the wrong one for a plain
 // GET, which is why scopedGet and resolveScoped do NOT call this directly; see
@@ -596,7 +596,7 @@ func scopedByName[T any](ctx context.Context, q querier, cfg scopedConfig[T], re
 // narrows the candidate rows to the caller's read scope BEFORE deciding whether
 // the reference is ambiguous, rather than after (architect ruling, #627: "scope
 // decides before ambiguity does"). Two consequences follow. First, a name that
-// is ambiguous estate-wide but unique within the caller's own scope resolves
+// is ambiguous fleet-wide but unique within the caller's own scope resolves
 // cleanly: an operator scoped to room-b, where exactly one "display-1" exists,
 // is not refused just because room-a holds an unrelated same-named row they
 // cannot even read. Second, an ErrAmbiguousName's Candidates list can never
@@ -718,7 +718,7 @@ func resolveScopedRef[T any](ctx context.Context, q querier, cfg scopedConfig[T]
 // 422 it is.
 //
 // The redaction does not survive it (#697). It was load-bearing while this bind
-// resolved estate-wide: a candidate list could name a row the caller holds no
+// resolved fleet-wide: a candidate list could name a row the caller holds no
 // grant to read, and disclosing that such a row exists, even only as a uuid in a
 // 409, is the leak the non-disclosing not-found exists to prevent. Narrowing to
 // the caller's read scope removes the leak at the source, because resolveRef

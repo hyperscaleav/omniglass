@@ -91,7 +91,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	// now the upsert asserting it rather than nothing touching it, which is the
 	// distinction #657 learned the hard way in the other direction: under
 	// insert-if-absent a value REMOVED from the shipped YAML was never withdrawn
-	// from an estate that already seeded it, because no update carried the
+	// from an fleet that already seeded it, because no update carried the
 	// removal.
 	for name, wantIcon := range map[string]string{
 		"campus": "landmark", "building": "building", "floor": "layers", "room": "door-open",
@@ -107,7 +107,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 
 	// The shipped standards seed idempotently, and they are operator-owned
 	// (official=false): a standard is example content forked from an in-code
-	// template, so the estate owns it once it lands.
+	// template, so the fleet owns it once it lands.
 	var standardCount, officialStandards int
 	if err := conn.QueryRow(ctx, `select count(*) from standard`).Scan(&standardCount); err != nil {
 		t.Fatalf("count standards: %v", err)

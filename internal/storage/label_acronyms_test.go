@@ -29,7 +29,7 @@ import (
 // It was "{{.Name | title}}" until #657, which is title with no words in front
 // of it and so leaves the separator standing: it rendered "DSP-Closet", the
 // exact defect words was added to fix. Installing the real shipped rule here
-// means the dictionary is asserted against the composition an estate actually
+// means the dictionary is asserted against the composition an fleet actually
 // runs, so the two cannot stop composing without this failing.
 const titleTheName = "{{title (words .Name)}}"
 

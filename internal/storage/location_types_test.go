@@ -50,7 +50,7 @@ func TestLocationTypeCRUD(t *testing.T) {
 	}
 
 	// A shipped location type is still editable, by a different mechanism: the
-	// estate shapes its own place vocabulary through a FORK now rather than by
+	// fleet shapes its own place vocabulary through a FORK now rather than by
 	// owning the row (#703, ADR-0095), and TestShippedLocationTypeForksAndRestores
 	// holds the fork's own behavior.
 	if _, err := gw.UpdateLocationType(ctx, "", "campus", storage.LocationTypePatch{Label: &name}); err != nil {

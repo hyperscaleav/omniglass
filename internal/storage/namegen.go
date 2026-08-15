@@ -181,7 +181,7 @@ func (r NameRule) normalized() NameRule {
 // create produces. Two is the whole output space worth showing, because a
 // declaration branches exactly once, at ordinal 1.
 //
-// Pure, and free: no I/O, no allocation ordinal, nothing about the estate. It
+// Pure, and free: no I/O, no allocation ordinal, nothing about the fleet. It
 // answers "what does this rule look like", never "what will the next row be
 // called", which is the question ADR-0104 refuses to answer without reading the
 // bucket.
@@ -198,7 +198,7 @@ func (r NameRule) Examples() []string {
 // A ceiling has to exist because "<stem>-<n>" grows with n, and
 // validateEntityName has a length cap: a 97-character stem mints legally at 1
 // and illegally at 100. Nine digits is a bucket of a billion siblings under one
-// parent, so the rule that passes here is one no estate can reach the end of.
+// parent, so the rule that passes here is one no fleet can reach the end of.
 const maxProvableOrdinal = 999999999
 
 // validateNameRule refuses a rule that cannot mint a legal name, by MINTING
@@ -461,7 +461,7 @@ func generateName(ctx context.Context, tx pgx.Tx, m nameMint, sc nameScope, excl
 //
 // That refusal is about ALLOCATING. A mint takes the bucket's
 // pg_advisory_xact_lock, which real creates need, so a form previewing on every
-// picker change would serialise the estate's creates behind a UI affordance.
+// picker change would serialise the fleet's creates behind a UI affordance.
 // This takes no lock, opens no write transaction and writes nothing: it is the
 // same read pickOrdinal already runs over sibling names, which is a question
 // Postgres answers without anyone having to queue for it. Two forms can preview
@@ -491,7 +491,7 @@ func previewName(ctx context.Context, q querier, m nameMint, sc nameScope) (stri
 
 // ErrDraftedNameMoved is a create whose form was shown one name and whose
 // allocation would produce another. It is a CONFLICT rather than a failure: the
-// estate is consistent, the operator's request is simply no longer the one they
+// fleet is consistent, the operator's request is simply no longer the one they
 // were shown, and the fix is to look at the new name and submit again.
 var ErrDraftedNameMoved = errors.New("storage: the name the form was shown is not the name this create would produce")
 

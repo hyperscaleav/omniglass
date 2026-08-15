@@ -13,7 +13,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-type estateViewWire struct {
+type fleetViewWire struct {
 	Locations []struct {
 		ID           string `json:"id"`
 		Name         string `json:"name"`
@@ -36,13 +36,13 @@ type estateViewWire struct {
 	} `json:"systems"`
 }
 
-// TestEstateViewAPI drives the estate projection over HTTP as the canvas will.
+// TestFleetViewAPI drives the fleet projection over HTTP as the canvas will.
 // Two claims are worth driving end to end rather than at the gateway: that the
 // wire carries dots and not component rows (a regression there is invisible on
-// screen and costs an estate-sized payload per paint), and that an alarm moves
+// screen and costs an fleet-sized payload per paint), and that an alarm moves
 // the dot, so the canvas is reading the same rollup the detail page reads
 // rather than a second opinion.
-func TestEstateViewAPI(t *testing.T) {
+func TestFleetViewAPI(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -72,11 +72,11 @@ func TestEstateViewAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "bar-1", "product": "cisco-room-bar"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/systems/hq-1/roles/table-mic/assignments/bar-1", nil, http.StatusNoContent)
 
-	view := func(tok string) estateViewWire {
+	view := func(tok string) fleetViewWire {
 		t.Helper()
-		var w estateViewWire
-		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/views/estate", nil, http.StatusOK), &w); err != nil {
-			t.Fatalf("decode estate view: %v", err)
+		var w fleetViewWire
+		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/views/fleet", nil, http.StatusOK), &w); err != nil {
+			t.Fatalf("decode fleet view: %v", err)
 		}
 		return w
 	}
@@ -84,7 +84,7 @@ func TestEstateViewAPI(t *testing.T) {
 	v := view(ownerTok)
 
 	// The tree arrives flat, each node carrying its parent, because the client
-	// assembles it and decides how the estate is gathered into bands.
+	// assembles it and decides how the fleet is gathered into bands.
 	var root, room struct {
 		ID, Parent, Verdict string
 	}
@@ -135,7 +135,7 @@ func TestEstateViewAPI(t *testing.T) {
 
 	// Dots, not rows. The projection must not be quietly widened into a
 	// component list: that is the whole reason it exists.
-	raw := c.do(ownerTok, http.MethodGet, "/views/estate", nil, http.StatusOK)
+	raw := c.do(ownerTok, http.MethodGet, "/views/fleet", nil, http.StatusOK)
 	var loose struct {
 		Systems []struct {
 			Dots []map[string]any `json:"dots"`

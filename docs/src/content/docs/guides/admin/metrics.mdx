@@ -6,7 +6,7 @@ description: "The Metrics catalog and the series behind it: the canonical numeri
 import SeededSet from '../../../../components/SeededSet.astro';
 
 **Catalog, under Telemetry: Metrics** (with `metric_type:read`, covered by every viewer's `*:read` floor) is the
-**numeric lane** of the estate's signal catalog: the directory of the quantities the estate
+**numeric lane** of the fleet's signal catalog: the directory of the quantities the fleet
 measures. A **metric** is a **quantity**: a numeric reading that **aggregates**, so an average, a
 p95, a rate over time all mean something, and beside its name and data type it carries the numeric
 facts, a display **unit** and a **precision**, that the property lane never holds. A
@@ -20,7 +20,7 @@ metric's canonical identifier, a single lowercase kebab segment, and the same me
 comparable series wherever it appears: registering `icmp-rtt-avg` once means every device's
 round-trip time lands under one name, in one unit, across vendors.
 
-The catalog is estate-wide reference data, not a scoped resource, so every metric is visible to
+The catalog is fleet-wide reference data, not a scoped resource, so every metric is visible to
 every reader; the write gates decide who may change it.
 
 - The directory lists every metric sorted by name, each showing its **name** (the canonical

@@ -18,7 +18,7 @@ import (
 // The operator-facing VERB (preview a rule change, then apply it) and the
 // internal CASCADE (a location was renamed, so restamp the rows that read it)
 // are the same computation over a different narrowing. Building them separately
-// would give the estate two answers to "what should this label be", and the
+// would give the fleet two answers to "what should this label be", and the
 // recompute-and-compare invariant would only ever be checking one of them.
 //
 // # Why a preview is an apply that rolls back
@@ -39,7 +39,7 @@ import (
 // on the rows it visits, and produces WAL that is then discarded, so it is an
 // operator gesture rather than something to put behind a keystroke.
 //
-// What it still does NOT promise is atomicity ACROSS the pair. The estate can
+// What it still does NOT promise is atomicity ACROSS the pair. The fleet can
 // move between the preview and the apply, and holding a lock across two HTTP
 // requests to prevent that would let an operator who opened a preview and
 // wandered off block every write on the tier. The apply's own returned set is
@@ -55,8 +55,8 @@ import (
 //
 //   - Bounded by placement (the rows AT one location, the members of one
 //     system, one component's own membership): cascaded eagerly, inside the
-//     act's transaction, so the estate is never observably stale.
-//   - Bounded only by the estate (a rule at any tier, a component_type's or
+//     act's transaction, so the fleet is never observably stale.
+//   - Bounded only by the fleet (a rule at any tier, a component_type's or
 //     product's or vendor's label, the acronym list): left to the verb.
 //     This is the epic's own argument, applied consistently: editing a shared
 //     classification must not silently rewrite 15,000 rows any more than
@@ -188,7 +188,7 @@ func labelScanQuery(tbl scopeTable, cols string, read, action scope.Set, n label
 // It is flat in row count by construction. The classification half is resolved
 // once per DISTINCT product (component) or per distinct classifier pair (system,
 // location), both of which are bounded by the registry rather than by the
-// estate; the placement half is one statement for the whole page; the global
+// fleet; the placement half is one statement for the whole page; the global
 // rule and the acronym dictionary are read once each. The counting instrument
 // from #650 is what holds that to being true rather than intended.
 func (p *PG) labelDrift(ctx context.Context, q querier, eng *label.Engine, kind string, n labelNarrow, read, action scope.Set, forUpdate bool) ([]LabelChange, error) {
@@ -426,21 +426,21 @@ func labelTable(kind string) (scopeTable, error) {
 }
 
 // PreviewLabelRecompute lists exactly the rows a recompute would change, in the
-// caller's read AND update scope, and leaves the estate as it found it. See the
+// caller's read AND update scope, and leaves the fleet as it found it. See the
 // file's own doc comment for why it does that by rolling back rather than by
 // not writing.
 //
 // It takes the same two scopes the apply does, and for the same reason the file
 // header gives for rolling back: a preview must list EXACTLY the rows the apply
 // then changes. Bounding it by the read scope alone was a second narrowing, and
-// an operator with estate-wide read and a narrow grant to update would have been
+// an operator with fleet-wide read and a narrow grant to update would have been
 // promised rows the apply then declined to touch, with nothing on the wire
 // saying why (ADR-0100).
 //
 // It is also the recompute-and-compare invariant, promoted from a test shim to
 // a gateway method: "this returns nothing" IS the statement that no stored
 // label has drifted from its rule, and a test can now assert it over a whole
-// estate rather than row by row.
+// fleet rather than row by row.
 func (p *PG) PreviewLabelRecompute(ctx context.Context, kind string, read, action scope.Set) ([]LabelChange, error) {
 	if _, err := labelTable(kind); err != nil {
 		return nil, err
@@ -524,7 +524,7 @@ func (p *PG) recomputeInTx(ctx context.Context, tx pgx.Tx, kind string, read, ac
 	if len(moved) == 0 {
 		return changes, nil
 	}
-	// Scoped exactly as the recompute that caused it, rather than estate-wide
+	// Scoped exactly as the recompute that caused it, rather than fleet-wide
 	// the way a rename's cascade is: this is still the operator's own bulk
 	// gesture, and its blast radius is the one their scope allows.
 	downstream, err := p.cascadeLocationLabelsWith(ctx, tx, eng, moved, read, action)
@@ -572,7 +572,7 @@ func (p *PG) lockedRecompute(ctx context.Context, tx pgx.Tx, eng *label.Engine, 
 // per-entity trail it buys is a restatement: a generated label is DERIVED, so
 // "why does this row read what it reads" is answered by the rule and the row's
 // own facts, both of which the trail already holds, where "who changed the
-// estate's labels and when" is answered by exactly this row and by nothing in a
+// fleet's labels and when" is answered by exactly this row and by nothing in a
 // per-entity trail. The nearest precedent in this gateway agrees: a health
 // recompute cascades across a whole ownership chain and audits nothing at all,
 // because the recompute is a consequence of an act that is itself audited.
@@ -600,7 +600,7 @@ func writeLabelRecomputeAudit(ctx context.Context, tx pgx.Tx, actorID, entityKin
 // --- the cascades -------------------------------------------------------
 //
 // Each one runs inside the transaction of the act that triggered it, so the
-// estate is never observably stale: a reader who sees the rename sees the
+// fleet is never observably stale: a reader who sees the rename sees the
 // labels that follow from it.
 //
 // None of them is scope-filtered, and that is deliberate rather than an

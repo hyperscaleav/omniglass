@@ -4,7 +4,7 @@ description: "The Vendors catalog: the organizations behind products (name, labe
 ---
 
 **Catalog, under Components: Vendors** (`/vendors`, with `vendor:read`, covered by every viewer's `*:read`
-floor) is the directory of **vendors**: the organizations behind the products in the estate, on
+floor) is the directory of **vendors**: the organizations behind the products in the fleet, on
 the same flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
 A vendor is not a device; it is the company a device comes from. Each row shows the **name**
 (for example `crestron`), the **label**, its **kind**
@@ -17,7 +17,7 @@ A vendor is consumed by the [product](/guides/admin/products/) catalog: a `produ
 by Acme") references its vendor through an optional `vendor_id`, chosen from a vendor picker on
 the product's create and edit forms, and a component then points at that product. Several shipped
 official products carry a vendor this way. See
-[core entities](/architecture/core-entities/) for where the vendor registry sits in the estate
+[core entities](/architecture/core-entities/) for where the vendor registry sits in the fleet
 model, and [Drivers](/guides/admin/drivers/) for the other leaf catalog beside it.
 
 - **Kind** classifies the organization: a **manufacturer** builds hardware, an **integrator**

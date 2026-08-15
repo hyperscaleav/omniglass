@@ -90,7 +90,7 @@ func TestResetPasswordAPI(t *testing.T) {
 // TestResetScopeEscalation proves a reset carries the same all-scope-only cover check
 // as act-as impersonation: a caller who can reach the reset endpoint (reset-password
 // at all-scope) but holds the target's real capability only at a narrow scope cannot
-// reset the target to escalate that capability estate-wide. Skipped under -short.
+// reset the target to escalate that capability fleet-wide. Skipped under -short.
 func TestResetScopeEscalation(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -117,11 +117,11 @@ func TestResetScopeEscalation(t *testing.T) {
 		{role: "resetter", scopeKind: "all"},
 		{role: "deploy", scopeKind: "location", scopeID: "11111111-1111-1111-1111-111111111111"},
 	})
-	// The target holds deploy at all-scope: taking it over would grant estate-wide deploy.
+	// The target holds deploy at all-scope: taking it over would grant fleet-wide deploy.
 	targetTok := principalWithGrants(t, ctx, dsn, "all-scope-deployer", []grant{{role: "deploy", scopeKind: "all"}})
 	targetID := meID(t, c, targetTok)
 
 	// Refused: the caller's ALL-SCOPE grants (reset-password only) do not cover the
-	// target's deploy, so a reset cannot promote a narrow deploy to estate-wide.
+	// target's deploy, so a reset cannot promote a narrow deploy to fleet-wide.
 	c.do(splitTok, "POST", "/principals/"+targetID+":resetPassword", map[string]string{"password": "orange-boat-42x"}, http.StatusForbidden)
 }

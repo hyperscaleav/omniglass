@@ -16,7 +16,7 @@ import {
 
 // AlarmsPanel: what is wrong with this component, and what was.
 //
-// An alarm is where estate health starts, and it impairs its component's own
+// An alarm is where fleet health starts, and it impairs its component's own
 // verdict wholesale (#626): any active alarm degrades it, a critical one is an
 // outage. A system role the component fills no longer counts it toward quorum
 // while it is down, so the role can drop below quorum and its impact becomes

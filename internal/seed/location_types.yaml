@@ -1,23 +1,23 @@
 # The shipped location types, written AUTHORITATIVELY on every boot
-# (ON CONFLICT DO UPDATE) as official rows the platform owns (#703). An estate
+# (ON CONFLICT DO UPDATE) as official rows the platform owns (#703). An fleet
 # still shapes its own place vocabulary: an operator's edit of one of these
 # FORKS it into registry_shadow and every read resolves the fork over the row
 # (ADR-0095), so re-seeding never reverts an edit, and `:restore` hands the row
 # back. What the authoritative write buys is the other direction, which
 # insert-if-absent could not do at all: a value REMOVED from this file is
-# actually withdrawn from an estate that already seeded it.
+# actually withdrawn from an fleet that already seeded it.
 #
 # The registry lists alphabetically by label; that ordering does NOT
 # constrain nesting. allowed_parent_types is what does: a set of
 # location_type ids and/or the reserved "root" sentinel (may sit at the top,
 # no parent) this type may be placed under. Empty means unconstrained; these
-# four ship the estate's implied hierarchy so a floor can never sit above a
+# four ship the fleet's implied hierarchy so a floor can never sit above a
 # room, but "skip a level" (a room straight under a campus) still works.
 # icon is a glyph key the console resolves to an SVG and renders as the leading
 # glyph on every location of this type; an unknown key falls back to map-pin.
 #
 # NONE of the four carries a name_rule, so an operator names every location in a
-# shipped estate. A campus, a building and a room were never in question: "17c"
+# shipped fleet. A campus, a building and a room were never in question: "17c"
 # is ground truth an operator holds, not a default a platform can invent. `floor`
 # shipped POSITIONAL for two slices (an empty stem, so a nameless floor create
 # gave 1, then 2 within its building), and ADR-0103 reversed it. The reason is
@@ -28,7 +28,7 @@
 # a legal name.
 #
 # The cost is stated rather than hidden: location name generation now ships
-# DORMANT, correct and tested but demonstrated by nothing in a shipped estate.
+# DORMANT, correct and tested but demonstrated by nothing in a shipped fleet.
 # Inventing a fifth type to keep the demo alive was refused. An operator who
 # wants a positional place declares one (a parking deck, a rack row, a berth) and
 # the generator is there.

@@ -329,7 +329,7 @@ describe("a blade heading renders through the primitive", () => {
   // same thing. Remove the entry when the entity gains a label.
   const NO_DISPLAY_NAME = ["SecretBladeTitle", "VariableBladeTitle", "TagBladeTitle", "InterfaceBladeTitle"];
   // Principals and roles label through their own helpers (principalName,
-  // groupName), which resolve a username or a group name rather than the estate
+  // groupName), which resolve a username or a group name rather than the fleet
   // entity triad, so they are not BladeTitle's shape.
   const OWN_LABEL_RULE = ["UserTitle", "GroupTitle", "RoleTitle"];
   const EXEMPT = new Set([...NO_DISPLAY_NAME, ...OWN_LABEL_RULE]);

@@ -68,7 +68,7 @@ type updatePropertyInput struct {
 	}
 }
 
-// registerPropertyRoutes wires the property catalog: the estate-wide signal
+// registerPropertyRoutes wires the property catalog: the fleet-wide signal
 // directory (no scope injection, it is reference data) and its custom-property CRUD.
 // Read rides the viewer floor; create/update/delete are gated by property_type:create /
 // property_type:update / property_type:delete. Official (seed-owned) properties are read-only.
@@ -78,7 +78,7 @@ func registerPropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Method:      http.MethodGet,
 		Path:        "/property-types",
 		Summary:     "List properties",
-		Description: "Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property_type:read.",
+		Description: "Lists every registered property (official and custom). The catalog is fleet-wide reference data. Gated by property_type:read.",
 	}, "property_type", "read"), func(ctx context.Context, _ *struct{}) (*listPropertiesOutput, error) {
 		properties, err := gw.ListPropertyTypes(ctx)
 		if err != nil {

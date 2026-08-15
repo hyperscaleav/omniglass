@@ -296,7 +296,7 @@ func TestMembershipCascadesFromBothEnds(t *testing.T) {
 	}
 }
 
-// Membership is scoped like every other estate relation, and since #736 the
+// Membership is scoped like every other fleet relation, and since #736 the
 // refusal it gives depends on which of the two sets the system falls out of:
 // outside the READ scope it is the non-disclosing not-found, and inside the read
 // scope but outside the action scope it is forbidden. This is the gateway seam

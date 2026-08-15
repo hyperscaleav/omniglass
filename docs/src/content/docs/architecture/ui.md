@@ -163,23 +163,23 @@ is all this". Subrail and cards derive from one group table judged through the s
 filter the rail uses, so a gated entry drops from both surfaces at once and a group whose entries
 are all gated away disappears with its header; secret types holds no subrail entry at all
 (`/secret-types` stays routed and gated, rendering in the pane). The naming rule
-([ADR-0083](/architecture/decisions/#adr-0083-the-catalog-rail-is-sectioned-by-the-estate-noun-each-registry-serves))
-carries into the subrail: a group is named for the estate noun it serves, an entry keeps the
+([ADR-0083](/architecture/decisions/#adr-0083-the-catalog-rail-is-sectioned-by-the-fleet-noun-each-registry-serves))
+carries into the subrail: a group is named for the fleet noun it serves, an entry keeps the
 registry's own word, and where the registry's only word is "type" the entry is Types with the
 group completing the sentence (Catalog, under Locations: Types). The organizing line the groups
 teach: **Telemetry is what you receive, Actions is what you send or run**; an event is a record of
-a happening (caught from the estate or caused by the platform), never an outbound message, which
+a happening (caught from the fleet or caused by the platform), never an outbound message, which
 is why Events sits in Telemetry while Rules, Commands, and the future Notifications sit in
 Actions.
 
-**Values is its own top-level group**, beside Inventory: values set on estate entities and resolved
+**Values is its own top-level group**, beside Inventory: values set on fleet entities and resolved
 down the cascade, a distinct genus from the entities themselves. **Config is the CI store** (desired
 configuration, optionally observed back to detect drift and reconcile), distinct from platform
 Settings (preferences: severity scales, schedules, retention, defaults) and Variables (free
 interpolated values, no observed side); the full split is
 [config, secrets, and variables](/architecture/variables/).
 
-**Inventory holds the estate entities**: locations, systems, components, and **nodes**, the
+**Inventory holds the fleet entities**: locations, systems, components, and **nodes**, the
 collection daemons, monitored and scope-controlled (live, gated on `node:read` plus ABAC scope), so
 a node sits in Inventory, not Admin. **Interfaces and tasks are not nav items**: an interface is a
 panel on a component, a task a panel on a node, facets of the owning entity's detail page.

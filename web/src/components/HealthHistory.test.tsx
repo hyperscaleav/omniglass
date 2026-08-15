@@ -16,7 +16,7 @@ const at = (ts: string, verdict: string): HealthTransition =>
 describe("HealthHistory", () => {
   // #631 made incomplete a recordable verdict, so this component started
   // receiving a value neither of its maps knew. A commissioning gap is the
-  // verdict a half-built estate sits in for months; painting it in the
+  // verdict a half-built fleet sits in for months; painting it in the
   // no-data grey would tell an operator their history is missing when it is
   // in fact complete and says something specific.
   it("styles an incomplete stretch as its own state, not as no data", () => {

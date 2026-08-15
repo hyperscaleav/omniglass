@@ -12,13 +12,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// The estate projection is the read behind the estate canvas: every root
+// The fleet projection is the read behind the fleet canvas: every root
 // location, the systems beneath it, and one dot per component in each system.
 // It is deliberately NOT a component list. The canvas paints thousands of
 // squares, and shipping full rows to do it is the thing this exists to avoid,
 // so the tests below pin what it carries as hard as what it excludes.
 //
-// The fixture is two roots of different shape, which is the estate the canvas
+// The fixture is two roots of different shape, which is the fleet the canvas
 // has to survive: nothing in the model requires a building or a floor.
 //
 //	hq    (campus)   > hq-b1 (building) > hq-r1 (room) -> hq-huddle, staffed
@@ -30,13 +30,13 @@ import (
 //
 // bar-1 fills a role in hq-huddle and is ALSO a member of depot-huddle, which
 // is what the shared-dot rules are read against.
-type estateFixture struct {
+type fleetFixture struct {
 	gw  *storage.PG
 	dsn string
 	all scope.Set
 }
 
-func newEstateFixture(t *testing.T) *estateFixture {
+func newFleetFixture(t *testing.T) *fleetFixture {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -51,7 +51,7 @@ func newEstateFixture(t *testing.T) *estateFixture {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	f := &estateFixture{gw: gw, dsn: dsn, all: scope.Set{All: true}}
+	f := &fleetFixture{gw: gw, dsn: dsn, all: scope.Set{All: true}}
 
 	mk := func(name, kind string, parent *string) {
 		t.Helper()
@@ -65,17 +65,17 @@ func newEstateFixture(t *testing.T) *estateFixture {
 	mk("depot", "building", nil)
 	mk("depot-r1", "room", ptrStr("depot"))
 
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "estate-huddle", Label: "Estate Huddle"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "fleet-huddle", Label: "Fleet Huddle"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
-	std := "estate-huddle"
+	std := "fleet-huddle"
 	for _, s := range []struct{ name, room string }{{"hq-huddle", "hq-r1"}, {"depot-huddle", "depot-r1"}} {
 		room := s.room
 		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: s.name, StandardID: &std, LocationName: &room}, f.all, f.all); err != nil {
 			t.Fatalf("create system %s: %v", s.name, err)
 		}
 	}
-	if _, err := gw.SetSystemRole(ctx, "", "standard", "estate-huddle", storage.SystemRoleSpec{
+	if _, err := gw.SetSystemRole(ctx, "", "standard", "fleet-huddle", storage.SystemRoleSpec{
 		Name: "table-mic", Label: "Table microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	}); err != nil {
@@ -97,16 +97,16 @@ func newEstateFixture(t *testing.T) *estateFixture {
 	return f
 }
 
-func (f *estateFixture) project(t *testing.T, loc, sys, comp scope.Set) *storage.EstateView {
+func (f *fleetFixture) project(t *testing.T, loc, sys, comp scope.Set) *storage.FleetView {
 	t.Helper()
-	v, err := f.gw.EstateProjection(context.Background(), loc, sys, comp)
+	v, err := f.gw.FleetProjection(context.Background(), loc, sys, comp)
 	if err != nil {
-		t.Fatalf("estate projection: %v", err)
+		t.Fatalf("fleet projection: %v", err)
 	}
 	return v
 }
 
-func locNames(v *storage.EstateView) []string {
+func locNames(v *storage.FleetView) []string {
 	out := make([]string, 0, len(v.Locations))
 	for _, l := range v.Locations {
 		out = append(out, l.Name)
@@ -114,7 +114,7 @@ func locNames(v *storage.EstateView) []string {
 	return out
 }
 
-func sysNames(v *storage.EstateView) []string {
+func sysNames(v *storage.FleetView) []string {
 	out := make([]string, 0, len(v.Systems))
 	for _, s := range v.Systems {
 		out = append(out, s.Name)
@@ -131,8 +131,8 @@ func has(list []string, want string) bool {
 	return false
 }
 
-func TestEstateProjectionCarriesTheWholeInScopeTree(t *testing.T) {
-	f := newEstateFixture(t)
+func TestFleetProjectionCarriesTheWholeInScopeTree(t *testing.T) {
+	f := newFleetFixture(t)
 	v := f.project(t, f.all, f.all, f.all)
 
 	for _, want := range []string{"hq", "hq-b1", "hq-r1", "depot", "depot-r1"} {
@@ -148,7 +148,7 @@ func TestEstateProjectionCarriesTheWholeInScopeTree(t *testing.T) {
 
 	// Every location carries its parent, because the client builds the tree and
 	// the bands from this flat list rather than the server nesting it.
-	byName := map[string]storage.EstateLocation{}
+	byName := map[string]storage.FleetLocation{}
 	for _, l := range v.Locations {
 		byName[l.Name] = l
 	}
@@ -164,10 +164,10 @@ func TestEstateProjectionCarriesTheWholeInScopeTree(t *testing.T) {
 }
 
 // The whole point of a projection: dots, not rows. A regression here is silent
-// (the canvas still draws) and expensive (an estate-sized component list on
+// (the canvas still draws) and expensive (an fleet-sized component list on
 // every paint), so the shape is pinned rather than trusted.
-func TestEstateProjectionCarriesDotsNotComponentRows(t *testing.T) {
-	f := newEstateFixture(t)
+func TestFleetProjectionCarriesDotsNotComponentRows(t *testing.T) {
+	f := newFleetFixture(t)
 	v := f.project(t, f.all, f.all, f.all)
 
 	var dots int
@@ -188,10 +188,10 @@ func TestEstateProjectionCarriesDotsNotComponentRows(t *testing.T) {
 }
 
 // A shared component is drawn once as owned in its primary system's cluster and
-// as a ghost everywhere else, so the estate's component count does not
+// as a ghost everywhere else, so the fleet's component count does not
 // double-count a box that exists once.
-func TestEstateProjectionMarksASharedComponentOwnedOnceAndGhostElsewhere(t *testing.T) {
-	f := newEstateFixture(t)
+func TestFleetProjectionMarksASharedComponentOwnedOnceAndGhostElsewhere(t *testing.T) {
+	f := newFleetFixture(t)
 	v := f.project(t, f.all, f.all, f.all)
 
 	owned, ghost, shared := 0, 0, 0
@@ -217,8 +217,8 @@ func TestEstateProjectionMarksASharedComponentOwnedOnceAndGhostElsewhere(t *test
 
 // A system's verdict comes from the same rollup the health read serves, so the
 // canvas and the detail page can never disagree about a room.
-func TestEstateProjectionSystemVerdictMatchesTheHealthRead(t *testing.T) {
-	f := newEstateFixture(t)
+func TestFleetProjectionSystemVerdictMatchesTheHealthRead(t *testing.T) {
+	f := newFleetFixture(t)
 	v := f.project(t, f.all, f.all, f.all)
 
 	rep, err := f.gw.SystemHealth(context.Background(), "hq-huddle", 0, f.all)
@@ -235,8 +235,8 @@ func TestEstateProjectionSystemVerdictMatchesTheHealthRead(t *testing.T) {
 // Scope decides what exists, per tier, in the query rather than after it. A
 // principal who can read no location sees an empty canvas, which is not an
 // error: there is simply nothing of theirs to draw.
-func TestEstateProjectionIsEmptyWithoutScopeRatherThanFailing(t *testing.T) {
-	f := newEstateFixture(t)
+func TestFleetProjectionIsEmptyWithoutScopeRatherThanFailing(t *testing.T) {
+	f := newFleetFixture(t)
 	v := f.project(t, scope.Set{}, scope.Set{}, scope.Set{})
 	if len(v.Locations) != 0 || len(v.Systems) != 0 {
 		t.Fatalf("an unscoped principal must get an empty canvas, got %d locations and %d systems",
@@ -245,10 +245,10 @@ func TestEstateProjectionIsEmptyWithoutScopeRatherThanFailing(t *testing.T) {
 }
 
 // The three tiers are scoped independently, which is what lets a principal who
-// may read the place tree but not its components see the shape of their estate
+// may read the place tree but not its components see the shape of their fleet
 // without its contents.
-func TestEstateProjectionScopesEachTierOnItsOwn(t *testing.T) {
-	f := newEstateFixture(t)
+func TestFleetProjectionScopesEachTierOnItsOwn(t *testing.T) {
+	f := newFleetFixture(t)
 	v := f.project(t, f.all, f.all, scope.Set{})
 
 	if len(v.Locations) == 0 {
@@ -271,8 +271,8 @@ func TestEstateProjectionScopesEachTierOnItsOwn(t *testing.T) {
 // seqscan is disabled for the question because the fixture's property table is
 // tiny and Postgres would rightly scan it whatever exists; what the planner
 // reaches for INSTEAD is what it will choose once the lane is real.
-func TestEstateProjectionVerdictLookupsAreIndexed(t *testing.T) {
-	f := newEstateFixture(t)
+func TestFleetProjectionVerdictLookupsAreIndexed(t *testing.T) {
+	f := newFleetFixture(t)
 	ctx := context.Background()
 
 	conn, err := pgx.Connect(ctx, f.dsn)
@@ -287,7 +287,7 @@ func TestEstateProjectionVerdictLookupsAreIndexed(t *testing.T) {
 	for _, tc := range []struct{ owner, table, index string }{
 		// The system arc's index landed with #725; the location arc's mirrors
 		// it in this slice's migration. Both are asserted here because the
-		// projection is the read that pays for both at estate width.
+		// projection is the read that pays for both at fleet width.
 		{"system_id", "system", "property_system_owner_idx"},
 		{"location_id", "location", "property_location_owner_idx"},
 	} {

@@ -23,12 +23,12 @@ alarm lifecycle) should ship a surface where a learner can *see the concept happ
 ## What it teaches, and what it does not
 
 The audience is **AV and IT systems integrators and operators**, and the subject is **monitoring**: what
-it is, how to do it well, and how Omniglass models and monitors an estate, so an operator understands the
+it is, how to do it well, and how Omniglass models and monitors an fleet, so an operator understands the
 data they get and the judgment behind it. It teaches the **AV Observability discipline** made concrete,
 the Align / Measure / Instrument / Practice layers as explorable artifacts rather than a PDF.
 
 It is **not** a software-engineering tutorial. It does not teach how to write software, how to architect
-a platform, or how Omniglass is built internally. The learner is operating an estate and learning
+a platform, or how Omniglass is built internally. The learner is operating an fleet and learning
 **monitoring**, not reading source. "Teach the concept it operates on" means the *monitoring* concept (an
 edge parse, a calc rollup, an alarm lifecycle, a health rollup), never the code that implements it.
 
@@ -37,13 +37,13 @@ edge parse, a calc rollup, an alarm lifecycle, a health rollup), never the code 
 The product is also the teaching artifact for the AV Observability discipline it
 implements. The Measure and Instrument layers should be concrete, explorable artifacts
 rather than blueprints in a PDF. A user who operates Omniglass should come away
-understanding *how* it models their estate, because the tool taught them while they used
+understanding *how* it models their fleet, because the tool taught them while they used
 it.
 
 ## Real or simulated data
 
 Teaching surfaces must work without a live fleet. A simulated/lab data source (the
-emulated estate) backs the interactive pages so a learner, or a CI run, gets the same
+emulated fleet) backs the interactive pages so a learner, or a CI run, gets the same
 explorable behavior as a live deployment. "Works against the lab emulator" is part of
 done for a learning surface.
 

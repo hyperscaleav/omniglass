@@ -1,10 +1,10 @@
 import { Show, type JSX } from "solid-js";
 import FieldRow from "./FieldRow";
 import PenToggle, { takeOver } from "./PenToggle";
-import { type EstateKind, type Pen, ordinalNote, penState } from "../lib/namegen";
+import { type FleetKind, type Pen, ordinalNote, penState } from "../lib/namegen";
 import { type DraftLabel } from "../lib/labeldraft";
 
-// The Identity section of the create form for the three estate entities whose
+// The Identity section of the create form for the three fleet entities whose
 // names and labels the platform can own (component, system, location).
 //
 // It exists as one component because those three forms had drifted into three
@@ -53,7 +53,7 @@ import { type DraftLabel } from "../lib/labeldraft";
 // location_type with no name rule are each a permanent answer, and the label
 // has its own: where no rule resolves at any tier the platform stores nothing
 // and the surface reads the NAME instead, which is every location in a shipped
-// estate. So a field is generated (locked, showing the value), overridden
+// fleet. So a field is generated (locked, showing the value), overridden
 // (editable, the operator owns it) or unavailable (editable, saying what is
 // missing). A lock over an empty field would be worse than the form this
 // replaces, so there is nowhere in here that one can appear.
@@ -78,7 +78,7 @@ import { type DraftLabel } from "../lib/labeldraft";
 // operator can see rather than a silent renumber.
 
 export interface CreateIdentityProps {
-  kind: EstateKind;
+  kind: FleetKind;
   // The server's draft of the identity this create would stamp: the name, the
   // ordinal it was minted from, the label, and the rule that rendered it.
   // undefined while the question is in flight, and while the form has not
@@ -105,7 +105,7 @@ export interface CreateIdentityProps {
 // case and so is the fix. These three keep their "so name it yourself" tail
 // where the other hints lost theirs: this is the one state with no action
 // button in the field, so the words are the only thing carrying the next move.
-const NO_MINT: Record<EstateKind, string> = {
+const NO_MINT: Record<FleetKind, string> = {
   component: "This product's type carries no stem, so name it yourself.",
   system: "This system is unclassified or its type chain sets no stem, so name it yourself.",
   location: "This type carries no name rule, so name it yourself.",
@@ -115,7 +115,7 @@ const NO_MINT: Record<EstateKind, string> = {
 // not read as one: nothing is chosen yet, or the answer is in flight. It names
 // the fact the form is waiting on rather than saying "loading", because for a
 // form with an empty picker that fact is the operator's next move.
-const AWAITING_MINT: Record<EstateKind, string> = {
+const AWAITING_MINT: Record<FleetKind, string> = {
   component: "Choose a product and the platform names this, or name it yourself.",
   system: "Choose a type and the platform names this, or name it yourself.",
   location: "Choose a type and the platform names this, or name it yourself.",

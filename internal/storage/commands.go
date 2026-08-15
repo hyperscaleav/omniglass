@@ -64,7 +64,7 @@ type Command struct {
 // AcknowledgeAlarm, whose component is resolved by its route and bound by id
 // here for the same reason.
 //
-// A bare NAME still resolves through that existence check, estate-wide, and a
+// A bare NAME still resolves through that existence check, fleet-wide, and a
 // route that passed one would be a route with no fence rather than one with a
 // wide fence. That failure is loud rather than silent: an ambiguous name refuses
 // as ErrAmbiguousName instead of picking a row, and an unambiguous one is a

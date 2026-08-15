@@ -512,7 +512,7 @@ func TestTheSystemAndLocationDataMapsAreClosedToo(t *testing.T) {
 // on this one) and #685 ended it outright: a component's map now reads its
 // location's label and its primary system's type, so acts on OTHER rows stale
 // it too. Those acts, and the cascade that answers them, are
-// labels_placement_test.go; the estate-wide invariant that no longer takes any
+// labels_placement_test.go; the fleet-wide invariant that no longer takes any
 // enumeration on trust is TestNoActLeavesALabelStaleAnywhere.
 func TestALabelFollowsEveryActThatChangesItsInputs(t *testing.T) {
 	gw, ctx := seededGateway(t)
@@ -653,7 +653,7 @@ func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
 	}
 	first, second := half("first"), half("second")
 
-	// The names are the fixture: this is the estate ADR-0101's suppression
+	// The names are the fixture: this is the fleet ADR-0101's suppression
 	// produces, and the labels are what the operator reads off it.
 	if first.Name != "boardroom" || second.Name != "boardroom-2" {
 		t.Fatalf("names = %q and %q, want %q and %q", first.Name, second.Name, "boardroom", "boardroom-2")
@@ -754,7 +754,7 @@ func TestTheGlobalRuleIsSeededAuthoritativelyAndStillOperatorOwned(t *testing.T)
 // argument for it: it re-cases the name and puts the operator's dictionary over
 // it, which is a different string from the name and not one a fallback could
 // have produced. The kind carries no other fact worth rendering (the type is
-// "Room" for every room in the estate), which is why this rule and not another.
+// "Room" for every room in the fleet), which is why this rule and not another.
 func TestTheShippedLocationRuleReadsTheNameAsWords(t *testing.T) {
 	gw, ctx := seededGateway(t)
 
@@ -897,7 +897,7 @@ func TestALocationsLabelFollowsItsRenameAndItsReclassify(t *testing.T) {
 // A stale value cannot pass unnoticed, which is the whole price of storing the
 // label instead of rendering it per read.
 //
-// The estate below is built to make the comparison capable of failing: three
+// The fleet below is built to make the comparison capable of failing: three
 // tiers of rule in play at once, rows in two placement buckets, rows that have
 // been renamed, moved, reclassified and reset, and rows whose label the operator
 // owns (which the invariant must skip, not silently rewrite).
@@ -941,7 +941,7 @@ func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
 		built = append(built, c.ID)
 	}
 	// Put every write path through its paces on real rows, so the invariant is
-	// checked against an estate that has been edited rather than only created.
+	// checked against an fleet that has been edited rather than only created.
 	if _, err := gw.RenameComponent(ctx, "", built[0], "kept-by-hand", all, all); err != nil {
 		t.Fatalf("rename: %v", err)
 	}
@@ -1014,7 +1014,7 @@ func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
 // rename stamps and the suite stayed green.
 //
 // Both rules here read .Name, so a rename that fails to re-render is a
-// mismatch, and both estates are edited rather than only created.
+// mismatch, and both fleets are edited rather than only created.
 func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	if _, err := gw.SetLabelRule(ctx, "", "system", "{{.TypeName}} {{.Name | upper}}"); err != nil {

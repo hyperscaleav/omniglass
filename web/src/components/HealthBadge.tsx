@@ -21,7 +21,7 @@ import {
 // incomplete is deliberately the odd one out in both hue and glyph: a dashed ring
 // on a cool indigo, against the solid warm glyphs the two failure verdicts wear.
 // A room nobody has finished building has not broken, and an operator scanning a
-// half-commissioned estate must be able to tell the two apart at a glance without
+// half-commissioned fleet must be able to tell the two apart at a glance without
 // reading a word of it.
 //
 // It reads its verdict either from a value the caller already has (a location's

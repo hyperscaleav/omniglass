@@ -109,9 +109,9 @@ func mustPositionalType(t *testing.T, gw storage.Gateway) {
 }
 
 // TestLocationTypeWithNoNameRuleGeneratesNothing is the first acceptance
-// behavior, and now the ONLY case a shipped estate can reach: all four shipped
+// behavior, and now the ONLY case a shipped fleet can reach: all four shipped
 // place types carry no rule, so a nameless create is refused rather than guessed
-// at. A campus is called what the estate calls it.
+// at. A campus is called what the fleet calls it.
 func TestLocationTypeWithNoNameRuleGeneratesNothing(t *testing.T) {
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
@@ -162,7 +162,7 @@ func TestTheNoNameRuleRefusalNamesTheEscape(t *testing.T) {
 // TestPositionalLocationTypeAllocatesWithinItsParent is the second and third
 // acceptance behaviors together: a positional type allocates the next free
 // ordinal, the bare-ordinal name that produces is legal, and the bucket is the
-// PARENT rather than the estate, so two buildings each have their own deck 1.
+// PARENT rather than the fleet, so two buildings each have their own deck 1.
 func TestPositionalLocationTypeAllocatesWithinItsParent(t *testing.T) {
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
@@ -213,21 +213,21 @@ func TestPositionalLocationTypeAllocatesWithinItsParent(t *testing.T) {
 	}
 }
 
-// TestPositionalTypeAtRootAllocatesAcrossTheEstate is the ruling this slice
+// TestPositionalTypeAtRootAllocatesAcrossTheFleet is the ruling this slice
 // owes: a positional type PERMITTED AT ROOT allocates 1, 2 across the whole
-// estate, and that is legal.
+// fleet, and that is legal.
 //
 // It is legal because the root bucket is not a special case, it is just a large
 // one. Two positional types under one parent already share an ordinal space
 // (the bucket is the placement, never the placement and the type), so refusing
-// at root would refuse the estate-sized instance of a rule that already holds
+// at root would refuse the fleet-sized instance of a rule that already holds
 // everywhere else, and the size of a bucket is not a property the platform can
 // or should police: a building with two hundred floors is the same shape. The
 // operator asked for this by making one type both positional and root-placeable.
 // The second half of the test is what makes the argument rather than asserting
 // it: the shared space at root is shown to be the same shared space under a
 // parent.
-func TestPositionalTypeAtRootAllocatesAcrossTheEstate(t *testing.T) {
+func TestPositionalTypeAtRootAllocatesAcrossTheFleet(t *testing.T) {
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
 	if err := seed.Run(ctx, gw); err != nil {
@@ -475,7 +475,7 @@ func TestLocationUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 }
 
 // TestEditingANameRuleRenamesNothing is the fourth acceptance behavior, and it
-// is asserted rather than only stated. A rule's blast radius is the ESTATE, not
+// is asserted rather than only stated. A rule's blast radius is the FLEET, not
 // a placement, so it does not cascade, which is ADR-0100's line applied to the
 // name side and ADR-0101's already applied to a system_type's stem.
 //
@@ -625,18 +625,18 @@ func TestNameRuleRoundTripsThroughTheRegistry(t *testing.T) {
 	}
 }
 
-// TestAForkedNameRuleSurvivesTheAuthoritativeSeed holds what an estate keeps
+// TestAForkedNameRuleSurvivesTheAuthoritativeSeed holds what an fleet keeps
 // when a release withdraws a shipped name rule and the operator had set one of
 // their own: their rule, still generating names, after a boot that rewrote the
 // row underneath it.
 //
 // The assertion outlived its explanation and this is the corrected one. It was
 // written when a shipped location type was operator-owned and the seed was
-// insert-when-absent, so the estate kept its rule because nothing touched the
+// insert-when-absent, so the fleet kept its rule because nothing touched the
 // row, and the cost of a withdrawal was that it reached new installs only.
 // #703 inverted both halves: the four shipped types are official, every boot
 // writes them with ON CONFLICT DO UPDATE, and a withdrawn value DOES leave an
-// estate (TestWithdrawnShippedValueLeavesTheEstate is that half). What survives
+// fleet (TestWithdrawnShippedValueLeavesTheFleet is that half). What survives
 // the boot now is the fork. An edit of a shipped type stores the operator's
 // whole version in registry_shadow keyed on the row's own uuid, and every read
 // resolves it over the official row (ADR-0095, ADR-0106).
@@ -656,12 +656,12 @@ func TestAForkedNameRuleSurvivesTheAuthoritativeSeed(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	// The estate that wants positional floors, in the shape an operator makes
+	// The fleet that wants positional floors, in the shape an operator makes
 	// one: a rule on a type the release ships with none. The write forks.
 	if _, err := gw.UpdateLocationType(ctx, "", "floor", storage.LocationTypePatch{
 		NameRule: &storage.NameRule{},
 	}); err != nil {
-		t.Fatalf("set the estate's own rule on a shipped type: %v", err)
+		t.Fatalf("set the fleet's own rule on a shipped type: %v", err)
 	}
 	// The official row is untouched by that write, which is the mechanism claim
 	// and the one an outcome cannot make: the rule the reads return lives in the
@@ -693,7 +693,7 @@ func TestAForkedNameRuleSurvivesTheAuthoritativeSeed(t *testing.T) {
 		byName[lt.Name] = lt
 	}
 	if got := byName["floor"].NameRule; got == nil || got.Stem != "" {
-		t.Fatalf("floor's rule after a boot = %+v, want the estate's own positional rule: a fork the seed can flatten is not a fork", got)
+		t.Fatalf("floor's rule after a boot = %+v, want the fleet's own positional rule: a fork the seed can flatten is not a fork", got)
 	}
 	if !byName["floor"].Forked {
 		t.Error("floor does not report forked=true, so the console cannot offer to restore it")
@@ -736,11 +736,11 @@ func TestAForkedNameRuleSurvivesTheAuthoritativeSeed(t *testing.T) {
 // TestStoredLocationOrdinalsRecomputeToThemselves is the recompute-and-compare
 // invariant on this tier, the same shape TestStoredOrdinalsRecomputeToThemselves
 // holds the component and system tiers to: for every location the platform
-// named, re-running allocation against the live estate (excluding the row's own
+// named, re-running allocation against the live fleet (excluding the row's own
 // name, as every recompute site does) must return the number and the name the
 // row already carries.
 //
-// The estate is built without deletes, deliberately: allocation reuses the
+// The fleet is built without deletes, deliberately: allocation reuses the
 // lowest free ordinal, so a delete genuinely frees a number and a recompute
 // after one is entitled to differ. What this asserts is that nothing DRIFTS.
 func TestStoredLocationOrdinalsRecomputeToThemselves(t *testing.T) {
@@ -844,7 +844,7 @@ func TestStoredLocationOrdinalsRecomputeToThemselves(t *testing.T) {
 	// and the one left frozen carry no ordinal and are not among them, which is
 	// the point of counting rather than trusting the loop ran.
 	if checked != 8 {
-		t.Fatalf("%d platform-named locations were checked, want 8: the estate did not build as intended", checked)
+		t.Fatalf("%d platform-named locations were checked, want 8: the fleet did not build as intended", checked)
 	}
 }
 

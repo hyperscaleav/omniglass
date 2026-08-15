@@ -94,7 +94,7 @@
   --og-up: #21cab9; --og-unknown: #8aa0c0; --og-snoozed: #a78bfa;
   --og-average: #fb923c; --og-disaster: #e11d48;
   /* incomplete: a commissioning gap, not a fault. Deliberately a cool indigo
-     rather than any warm hue, so a half-built estate never reads as a wall of
+     rather than any warm hue, so a half-built fleet never reads as a wall of
      alarm beside the warning amber and error red it sits next to. */
   --og-incomplete: #7f8bd6;
   /* tag pill: lightness + chroma for a JS-supplied hue (--tag-h). Lighter on

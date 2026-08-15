@@ -28,7 +28,7 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // the twin of the Metrics page. A property is a typed, registered non-numeric
 // signal named by a key that a sample observes and a field declares; a numeric
 // signal is a metric type. Official properties are read-only; custom
-// properties are operator-created. The catalog is estate-wide reference data, not
+// properties are operator-created. The catalog is fleet-wide reference data, not
 // a scoped resource, and every affordance gates on property_type, the resource
 // the API stamps.
 

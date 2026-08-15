@@ -24,7 +24,7 @@ func uuidRoots(ids []string) []string {
 	return out
 }
 
-// The scoped-tree primitive: the recursive ABAC walks shared by every estate
+// The scoped-tree primitive: the recursive ABAC walks shared by every fleet
 // entity that is a parent_id self-referencing tree (location, system, and
 // component). The entity-specific columns and scanning stay in each entity's
 // file; only the membership and subtree-expansion SQL lives here, so the

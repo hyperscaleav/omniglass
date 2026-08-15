@@ -48,7 +48,7 @@ func (f *healthFixture) healthSeries(t *testing.T, ctx context.Context, ownerKin
 func (f *healthFixture) assertTransitionOnly(t *testing.T, ctx context.Context) {
 	t.Helper()
 	type row struct{ owner, kind, value string }
-	// The three estate arcs store ids and the node arc still stores a name, so the
+	// The three fleet arcs store ids and the node arc still stores a name, so the
 	// owner resolves back to a NAME here: the invariant groups by owner, and a
 	// failure message naming the entity is worth more than one printing a uuid.
 	rows, err := f.conn.Query(ctx, `
@@ -366,7 +366,7 @@ func TestHealthRecordsEveryRealChange(t *testing.T) {
 // and makes the overlap the point of the test rather than a coin toss.
 const concurrentRooms = 8
 
-// staffPair builds one room of the estate the race proofs need: a system
+// staffPair builds one room of the fleet the race proofs need: a system
 // conforming to a shared standard whose single role sits at quorum 2, staffed by
 // two room bars, so the system reads healthy and EITHER bar failing drops the
 // role below quorum. Two writes that move the same system are what the record has
@@ -443,7 +443,7 @@ func runTogether(t *testing.T, writes ...func() error) {
 // the live database holds.
 //
 // Nothing about the sequence is exotic: two alarms on two components in one room
-// is a normal minute in an estate, and a console that saves a panel fires its
+// is a normal minute in an fleet, and a console that saves a panel fires its
 // writes together. The locations above the rooms make the same point harder,
 // since every one of these writes rolls up through the same three of them.
 func TestHealthConcurrentWritesRecordOneEdge(t *testing.T) {
@@ -515,7 +515,7 @@ func TestHealthConcurrentOppositeWritesLeaveNoStaleRecord(t *testing.T) {
 		// A standing critical alarm on one bar puts the room degraded. Clearing it
 		// is the write that says healthy, and a critical alarm on the other bar is
 		// the write that says degraded: run together, they disagree about what
-		// the estate is.
+		// the fleet is.
 		standing, err := f.gw.RaiseAlarm(ctx, "", a, storage.AlarmSpec{
 			Severity: "critical", Message: "mic array not responding",
 		})

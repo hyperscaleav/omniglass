@@ -134,7 +134,7 @@ func effectiveValues(t *testing.T, c *apiClient, tok, comp, route string) []reso
 // compares against it, so it must never be what the effective read returns.
 const cascadeSecretPlaintext = "s3cret-pw"
 
-// newCascadeFixture stands up an estate with a value bound at more than one tier,
+// newCascadeFixture stands up an fleet with a value bound at more than one tier,
 // which is the only shape that can show a winner AND a shadowed candidate. The
 // component sits in a room so the location band has something in it.
 func newCascadeFixture(t *testing.T) (*apiClient, string, string, string) {

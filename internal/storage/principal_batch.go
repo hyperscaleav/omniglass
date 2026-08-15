@@ -14,7 +14,7 @@ import (
 // effective grants, its group memberships. ListPrincipals called it once per row,
 // so the admin directory read at 1+3N, seven statements for two principals and
 // sixty-seven for twenty-two, and it is the one directory that grows with the
-// organisation rather than the estate and has no pagination to hide behind.
+// organisation rather than the fleet and has no pagination to hide behind.
 //
 // loadPrincipals reads the same three things for a whole page in three
 // statements, keyed by principal id and assembled in memory: the shape #648 used

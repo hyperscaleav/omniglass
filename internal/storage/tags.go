@@ -697,7 +697,7 @@ ranked as (
 )
 select target_id::text, key, value from ranked where rnk = 1 order by target_id, key`
 
-// A node is estate-wide, not a scope tree, so its effective tags are just the
+// A node is fleet-wide, not a scope tree, so its effective tags are just the
 // platform layer plus its own direct bindings (a node-direct value wins over a
 // propagating platform). No recursion: there is nothing above a node to inherit
 // from. Targets and owner ids are node.principal_id.
@@ -820,7 +820,7 @@ func resolveTagBindingOwner(ctx context.Context, q querier, kind string, name *s
 		}
 		return &l.ID, l.Name, nil
 	case "node":
-		// A node is estate-wide (not a scope tree), so tagging it needs an all
+		// A node is fleet-wide (not a scope tree), so tagging it needs an all
 		// scope on both legs, like a global owner; the owner id is its principal_id.
 		// RejectAddressForm first, same as GetNode/UpdateNode/DeleteNode/
 		// SetEnrollmentToken: a node's name stays a single token, and this arm's

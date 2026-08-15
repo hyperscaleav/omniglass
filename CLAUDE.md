@@ -1,6 +1,6 @@
 # Working in omniglass
 
-Open observability and control plane for AV/IT estates, and a learning tool for monitoring
+Open observability and control plane for AV/IT fleets, and a learning tool for monitoring
 itself. Single Go binary (run modes: server, node, migrate), BYO PostgreSQL. The
 architecture of record is the docs site under [docs/](docs/) (published at
 docs.omniglass.hyperscaleav.com); read the [architecture spine](docs/src/content/docs/architecture/index.md) before non-trivial changes.

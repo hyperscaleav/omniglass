@@ -10,7 +10,7 @@ import {
   verdictRank,
   worstAlarm,
   worstVerdict,
-  type EstateHealth,
+  type FleetHealth,
   type HealthRole,
 } from "./health";
 
@@ -73,7 +73,7 @@ describe("impairedRoles", () => {
       role({ name: "display", label: "Main display", impaired: true, impact: "outage" }),
       role({ name: "panel", label: "Touch panel", impaired: false, impact: "none" }),
     ],
-  } as unknown as EstateHealth;
+  } as unknown as FleetHealth;
 
   it("keeps only the impaired ones, worst impact first", () => {
     expect(impairedRoles(h).map((r) => r.name)).toEqual(["display", "mic"]);
@@ -102,7 +102,7 @@ describe("impairedRoles", () => {
       role({ name: "codec", label: "Codec", impaired: true, impact: "outage", active: false, choice: "conferencing", alternate: "component-built" }),
       role({ name: "camera", label: "Camera", impaired: true, impact: "outage", active: false, choice: "conferencing", alternate: "component-built" }),
     ],
-  } as unknown as EstateHealth;
+  } as unknown as FleetHealth;
 
   it("excludes an impaired role whose alternate lost the choice: it did not move the verdict", () => {
     expect(impairedRoles(withInactiveChoice)).toEqual([]);

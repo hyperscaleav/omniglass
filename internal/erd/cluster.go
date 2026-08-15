@@ -13,7 +13,7 @@ var Subsystems = []Cluster{
 		"system_role_type", "system_role_product",
 		"role_choice", "choice_alternate",
 	}},
-	{Name: "estate", Tables: []string{
+	{Name: "fleet", Tables: []string{
 		"location", "location_type", "location_type_property", "location_type_metric",
 		"system", "system_member",
 		"component",
@@ -40,7 +40,7 @@ var Subsystems = []Cluster{
 		"setting_override", "variable",
 		// label_rule is the global tier of the label rules (#682, ADR-0098),
 		// one row per labelled entity kind. It sits with config rather than
-		// with the estate it labels: it is platform-wide policy an operator
+		// with the fleet it labels: it is platform-wide policy an operator
 		// tunes, not a row any entity points at.
 		"label_rule",
 		"secret", "secret_type", "credential",

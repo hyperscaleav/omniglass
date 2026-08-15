@@ -18,7 +18,7 @@ import (
 // operator named. "No backfill" is not something the absence of a file can
 // demonstrate, since the column's DEFAULT is what an existing row actually
 // gets, so this stands the database one migration back, writes rows the way an
-// upgraded estate holds them, and migrates forward over them.
+// upgraded fleet holds them, and migrates forward over them.
 //
 // The REAL migration file runs, not a copy of its SQL, so the two cannot drift.
 func TestNamePenSpreadsWithoutClaimingExistingRows(t *testing.T) {
@@ -53,7 +53,7 @@ func TestNamePenSpreadsWithoutClaimingExistingRows(t *testing.T) {
 			t.Fatalf("read %s %q: %v", r.table, r.name, err)
 		}
 		if pen {
-			t.Errorf("%s %q reports name_generated = true after the migration, want false: an existing name was typed by an operator, and claiming it would let the first :move rename real estate", r.table, r.name)
+			t.Errorf("%s %q reports name_generated = true after the migration, want false: an existing name was typed by an operator, and claiming it would let the first :move rename real fleet", r.table, r.name)
 		}
 		if name != r.name {
 			t.Errorf("%s name after the migration = %q, want %q: the migration renames nothing", r.table, name, r.name)

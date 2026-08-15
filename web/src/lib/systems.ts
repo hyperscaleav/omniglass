@@ -11,7 +11,7 @@ import { api } from "../api/client";
 //
 // It is separately classified by a SYSTEM_TYPE: what kind of space it is (a
 // boardroom, a classroom, a video wall). The two answer different questions,
-// and an estate can hold many standards under one coarse type. Also optional
+// and an fleet can hold many standards under one coarse type. Also optional
 // while the column is nullable.
 export type System = {
   id: string;
@@ -120,7 +120,7 @@ export async function renameSystem(name: string, to: string): Promise<System> {
 export type NameCheck = { valid: boolean; available: boolean; reason?: string };
 
 // checkSystemName checks availability against a placement bucket (#627: name
-// uniqueness is scoped to placement, not the whole estate), the same one
+// uniqueness is scoped to placement, not the whole fleet), the same one
 // CreateSystem resolves into: parent wins over location, and neither means
 // the unplaced/root bucket. A rename check passes the system's OWN current
 // placement, since a rename does not move it.

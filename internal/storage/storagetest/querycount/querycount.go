@@ -1,7 +1,7 @@
 // Package querycount counts the SQL statements a piece of Storage Gateway code
 // issues against Postgres. It is the repo's performance instrument, and the
 // reason it counts round trips rather than timing them: the Gateway's dominant
-// cost is round trips to Postgres, the regression that hurts at estate scale is
+// cost is round trips to Postgres, the regression that hurts at fleet scale is
 // the N+1, and a count is deterministic. It needs no stored baseline and no
 // threshold policy, and it fails with an exact number that names the defect,
 // where a wall-clock measurement on a laptop or a shared runner has variance

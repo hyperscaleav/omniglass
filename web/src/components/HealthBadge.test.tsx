@@ -2,19 +2,19 @@ import { describe, it, expect } from "vitest";
 import { render } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
-import { systemHealthKey, locationHealthKey, type EstateHealth } from "../lib/health";
+import { systemHealthKey, locationHealthKey, type FleetHealth } from "../lib/health";
 
 // The badge is the one health chip: three distinct states, each carrying the WORD,
 // so the verdict never depends on hue alone. It reads either a verdict the caller
 // already holds or one it fetches itself (the systems list has no bulk health read,
 // so each row's badge owns its query and shares the panel's cache key).
-function mount(el: () => unknown, seed?: { key: readonly unknown[]; data: EstateHealth }) {
+function mount(el: () => unknown, seed?: { key: readonly unknown[]; data: FleetHealth }) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   if (seed) qc.setQueryData([...seed.key], seed.data);
   return render(() => <QueryClientProvider client={qc}>{el() as never}</QueryClientProvider>);
 }
 
-const health = (verdict: string, owner: string): EstateHealth => ({
+const health = (verdict: string, owner: string): FleetHealth => ({
   owner,
   owner_kind: "system",
   verdict,

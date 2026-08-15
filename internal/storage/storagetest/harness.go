@@ -374,7 +374,7 @@ func reclaimTemplate() error {
 // [Main], because the container it would start would then never be reclaimed.
 //
 // The parameter is testing.TB rather than *testing.T so a BENCHMARK can
-// provision an estate to measure against (#651). Nothing else changes: every
+// provision an fleet to measure against (#651). Nothing else changes: every
 // method used here (Helper, Skip, Fatal, Cleanup) is on TB, and a *testing.T
 // caller compiles unchanged.
 func NewDSN(t testing.TB) string {

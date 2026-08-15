@@ -69,7 +69,7 @@ func TestACreateHonoursTheNameTheFormWasShown(t *testing.T) {
 }
 
 // TestACreateRefusesANameAnotherCreateTook is the race, played out in the order
-// it happens in an estate: the form reads display-1, somebody else creates and
+// it happens in an fleet: the form reads display-1, somebody else creates and
 // takes it, the form submits. The second create must be refused rather than
 // silently renamed to display-2, because the whole point of the locked field is
 // that the operator was shown the name they get.
@@ -278,7 +278,7 @@ func TestTheNamePreconditionHoldsOnEveryTierThatGenerates(t *testing.T) {
 		t.Fatalf("create the positional location type: %v", err)
 	}
 	// The building makeRoomWithLabel already created above: the two tiers share
-	// one estate here on purpose, so the location bucket under test is a real
+	// one fleet here on purpose, so the location bucket under test is a real
 	// one with a sibling room in it rather than an empty fixture.
 	hq, err := gw.GetLocation(ctx, "hq", all)
 	if err != nil {

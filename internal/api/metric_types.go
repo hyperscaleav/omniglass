@@ -65,7 +65,7 @@ type updateMetricTypeInput struct {
 	}
 }
 
-// registerMetricTypeRoutes wires the metric_type catalog: the estate-wide numeric
+// registerMetricTypeRoutes wires the metric_type catalog: the fleet-wide numeric
 // signal directory (no scope injection, it is reference data) and its custom-type
 // CRUD. Read rides the viewer floor; create/update/delete are gated by
 // metric_type:create / metric_type:update / metric_type:delete. Official
@@ -76,7 +76,7 @@ func registerMetricTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodGet,
 		Path:        "/metric-types",
 		Summary:     "List metric types",
-		Description: "Lists every registered metric type (official and custom). The catalog is estate-wide reference data. Gated by metric_type:read.",
+		Description: "Lists every registered metric type (official and custom). The catalog is fleet-wide reference data. Gated by metric_type:read.",
 	}, "metric_type", "read"), func(ctx context.Context, _ *struct{}) (*listMetricTypesOutput, error) {
 		mts, err := gw.ListMetricTypes(ctx)
 		if err != nil {

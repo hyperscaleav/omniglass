@@ -405,7 +405,7 @@ func TestSetSystemRoleResolvesAmbiguousNameWithinCallerScope(t *testing.T) {
 	}
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "seat-1", "parent": "scope-av"}, http.StatusCreated)
 	// An UNRELATED "seat-1" elsewhere (a root, the system_orphan_name_key
-	// bucket), making the bare name ambiguous estate-wide.
+	// bucket), making the bare name ambiguous fleet-wide.
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "seat-1"}, http.StatusCreated)
 
 	// A deploy principal (system:update) scoped ONLY to scope-av's subtree.
@@ -413,7 +413,7 @@ func TestSetSystemRoleResolvesAmbiguousNameWithinCallerScope(t *testing.T) {
 
 	// Within scope-av's subtree, "seat-1" is unique (the other row sits
 	// entirely outside it), so the scoped caller's declare succeeds even
-	// though the bare name is ambiguous estate-wide.
+	// though the bare name is ambiguous fleet-wide.
 	c.do(deployTok, http.MethodPatch, "/systems/seat-1/roles/table-mic", map[string]any{
 		"label": "Table Mic", "quorum": 1,
 	}, http.StatusOK)

@@ -109,7 +109,7 @@ func (p *PG) LatestValue(ctx context.Context, ownerKind, ownerID, key, instance,
 // owner via EffectiveProperties or ownerInScope before reaching it, but
 // re-resolving the same bare name a second time SCOPE-BLIND would still leak
 // an out-of-scope row's uuid on a name unique to the caller's own scope but
-// ambiguous estate-wide, which is exactly what calling the scope-blind
+// ambiguous fleet-wide, which is exactly what calling the scope-blind
 // ownerArcValue here used to do even after the first check passed. An
 // unknown (or entirely out-of-scope) owner folds to nil, no error, matching
 // the old inline subquery's silent no-match; a future caller that has not

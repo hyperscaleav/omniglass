@@ -338,7 +338,7 @@ List command types
 omniglass command-type list
 ```
 
-Lists every registered command type (official and custom). Estate-wide reference data. Gated by command_type:read.
+Lists every registered command type (official and custom). Fleet-wide reference data. Gated by command_type:read.
 
 Example:
 
@@ -766,7 +766,7 @@ Preview a component label recompute
 omniglass component previewLabels
 ```
 
-Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by component:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+Lists exactly the rows a recompute would change, and leaves the fleet as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by component:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
 
 Example:
 
@@ -1274,7 +1274,7 @@ List event types
 omniglass event-type list
 ```
 
-Lists every registered event type (official and custom). The catalog is estate-wide reference data. Gated by event_type:read.
+Lists every registered event type (official and custom). The catalog is fleet-wide reference data. Gated by event_type:read.
 
 Example:
 
@@ -1691,7 +1691,7 @@ Preview a location label recompute
 omniglass location previewLabels
 ```
 
-Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by location:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+Lists exactly the rows a recompute would change, and leaves the fleet as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by location:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
 
 Example:
 
@@ -1819,7 +1819,7 @@ Draft the name and label a location create would store
 omniglass location renderLabel [flags]
 ```
 
-The location tier of :renderLabel on components. Drafts the name and the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create; the parent resolves within the caller's location:create scope, because a location's two placement buckets are under a parent or at the root and that is where the ordinal is read from. Omitting parent is the ROOT bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403) rather than reporting which names the estate root already holds.
+The location tier of :renderLabel on components. Drafts the name and the label a location create would stamp, allocating nothing. A shipped fleet answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create; the parent resolves within the caller's location:create scope, because a location's two placement buckets are under a parent or at the root and that is where the ordinal is read from. Omitting parent is the ROOT bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403) rather than reporting which names the fleet root already holds.
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
@@ -1841,7 +1841,7 @@ Regenerate a location's name
 omniglass location resetName <name>
 ```
 
-Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped estate has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.
+Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.
 
 Example:
 
@@ -2176,7 +2176,7 @@ List metric types
 omniglass metric-type list
 ```
 
-Lists every registered metric type (official and custom). The catalog is estate-wide reference data. Gated by metric_type:read.
+Lists every registered metric type (official and custom). The catalog is fleet-wide reference data. Gated by metric_type:read.
 
 Example:
 
@@ -2319,7 +2319,7 @@ List nodes
 omniglass node list
 ```
 
-Lists the edge nodes. A node is estate-wide, so listing requires an all-scope read. Gated by node:read.
+Lists the edge nodes. A node is fleet-wide, so listing requires an all-scope read. Gated by node:read.
 
 Example:
 
@@ -2571,7 +2571,7 @@ Assigns a role at a scope to a principal. Gated by principal_grant:create (all-s
 |---|---|---|---|
 | `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
 | `--scope-id` | string | (none) | The scope root id; omit for the all scope |
-| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered) |
+| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered) |
 | `--scope-op` | string | (none) | How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope. |
 
 Example:
@@ -2880,7 +2880,7 @@ Assigns a role at a scope to a group; its members inherit it. Gated by principal
 |---|---|---|---|
 | `--role` | string | (none) | A role id (viewer, operator, admin, owner, or a custom role) |
 | `--scope-id` | string | (none) | The scope root id; omit for the all scope |
-| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered) |
+| `--scope-kind` | string | (none) | The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered) |
 | `--scope-op` | string | (none) | How the scope root matches the tree; moot for the all scope |
 
 Example:
@@ -3323,7 +3323,7 @@ List properties
 omniglass property-type list
 ```
 
-Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property_type:read.
+Lists every registered property (official and custom). The catalog is fleet-wide reference data. Gated by property_type:read.
 
 Example:
 
@@ -3516,7 +3516,7 @@ Seed a dev database with example locations, users, and grants (idempotent; never
 omniglass seed-dev
 ```
 
-Populate a fresh dev database with a small example estate so `make dev` comes up with locations, sign-in-able users, and their grants instead of empty. The same trusted direct-DB lane as bootstrap, and idempotent, so it runs on every `make dev`. Not for production: these are operator rows, not ship-with reference data.
+Populate a fresh dev database with a small example fleet so `make dev` comes up with locations, sign-in-able users, and their grants instead of empty. The same trusted direct-DB lane as bootstrap, and idempotent, so it runs on every `make dev`. Not for production: these are operator rows, not ship-with reference data.
 
 ## `omniglass server`
 
@@ -4210,7 +4210,7 @@ Preview a system label recompute
 omniglass system previewLabels
 ```
 
-Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by system:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+Lists exactly the rows a recompute would change, and leaves the fleet as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by system:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
 
 Example:
 
@@ -4747,7 +4747,7 @@ List the distinct values bound for a key
 omniglass tag values <name>
 ```
 
-Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.
+Returns the distinct values already bound for a key across the fleet, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.
 
 Example:
 
@@ -5023,23 +5023,23 @@ omniglass vendor update <id>
 
 Commands for the view resource
 
-### `omniglass view estate`
+### `omniglass view fleet`
 
-Commands for the estate resource
+Commands for the fleet resource
 
-#### `omniglass view estate list`
+#### `omniglass view fleet list`
 
-Read the estate as the canvas draws it
+Read the fleet as the canvas draws it
 
 ```
-omniglass view estate list
+omniglass view fleet list
 ```
 
-The whole in-scope estate in one read: every location flat with its parent and verdict, every system with its location and verdict, and one dot per component in each system. A dot carries an id, a verdict, and the primary/shared flags, never a component row: the canvas paints a square per component across the estate, and an estate-sized component list to draw squares is the cost this read exists to avoid. Each tier is scoped on its own read permission, so a principal who may read the place tree but not its components gets the shape of their estate with no contents, and one with no estate scope at all gets an empty canvas rather than a refusal. Gated by location:read.
+The whole in-scope fleet in one read: every location flat with its parent and verdict, every system with its location and verdict, and one dot per component in each system. A dot carries an id, a verdict, and the primary/shared flags, never a component row: the canvas paints a square per component across the fleet, and an fleet-sized component list to draw squares is the cost this read exists to avoid. Each tier is scoped on its own read permission, so a principal who may read the place tree but not its components gets the shape of their fleet with no contents, and one with no fleet scope at all gets an empty canvas rather than a refusal. Gated by location:read.
 
 Example:
 
 ```sh
-omniglass view estate list
+omniglass view fleet list
 ```
 

@@ -24,7 +24,7 @@ var (
 
 	// ErrComponentExistsUnderParent / ErrComponentExistsInLocation /
 	// ErrComponentExistsUnplaced name which placement bucket a 23505 collided
-	// in (#627 scopes name uniqueness to placement, not the whole estate: a
+	// in (#627 scopes name uniqueness to placement, not the whole fleet: a
 	// name is unique under a given parent, or at a given location when
 	// unparented, or in the unplaced/root bucket, but not across all three at
 	// once). Each wraps ErrComponentExists via %w, so errors.Is(err,
@@ -36,7 +36,7 @@ var (
 	ErrComponentExistsUnplaced    = fmt.Errorf("storage: an unplaced component with this name already exists: %w", ErrComponentExists)
 )
 
-// Component is a leaf of the estate: name-addressable, nestable via parent_id,
+// Component is a leaf of the fleet: name-addressable, nestable via parent_id,
 // belonging to a primary system and located at a location. Its shape (the
 // properties it declares) comes from the product it is an instance of.
 type Component struct {
@@ -214,7 +214,7 @@ var componentConfig = scopedConfig[Component]{
 // maxComponentTypeDepth levels) are two more queries, for renders.bare, a
 // field no console surface reads (only renders.dash, which needs no abbrev
 // at all). scopedList calls this with full=false; scopedGet, the one-row
-// case where the extra cost is a single request's, not the whole estate's,
+// case where the extra cost is a single request's, not the whole fleet's,
 // passes true. Resolved once per DISTINCT product across the page, not once
 // per row: full is only ever true for a single row today, so that changes
 // nothing observable now, and it stops the N+1 from returning the day a
@@ -360,7 +360,7 @@ func (p *PG) CreateComponent(ctx context.Context, actorID string, spec Component
 		}
 	} else {
 		// resolveScopedRef, not scopedByName-then-inScopeTree: ruling 2
-		// (#627) requires ambiguity judged inside create, not estate-wide,
+		// (#627) requires ambiguity judged inside create, not fleet-wide,
 		// and Candidates on a collision must never name a component the
 		// caller cannot reach. A parent that exists only outside create
 		// scope stays ErrComponentForbidden (preserved, not collapsed into

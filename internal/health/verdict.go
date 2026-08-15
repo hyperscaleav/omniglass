@@ -1,4 +1,4 @@
-// Package health computes an estate's health verdict from resolved inputs. The
+// Package health computes an fleet's health verdict from resolved inputs. The
 // rollup is a pure function on purpose: the subtle cases (quorum boundaries, a
 // role nobody staffed, a component an alarm has taken down) are where this
 // gets quietly wrong, and they are far easier to pin down in a unit test than
@@ -20,7 +20,7 @@ const (
 	// Incomplete is a role short of quorum because the hardware was never
 	// installed, rather than because installed hardware is failing. No alarm
 	// will ever fire for it: nothing exists yet to alarm. It is deliberately
-	// not a failure, because most of a real estate is mid-commissioning for
+	// not a failure, because most of a real fleet is mid-commissioning for
 	// months and folding that into Outage paints the whole canvas red and
 	// teaches an operator to ignore it.
 	Incomplete
@@ -42,7 +42,7 @@ func (v Verdict) String() string {
 }
 
 // ParseVerdict reads a recorded verdict back. An unrecognized value is Healthy,
-// so a stray row cannot make an estate look broken.
+// so a stray row cannot make an fleet look broken.
 func ParseVerdict(s string) Verdict {
 	switch s {
 	case "outage":

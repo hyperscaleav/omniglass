@@ -11,7 +11,7 @@ import (
 
 // The audit read surface: GET /audit-log lists recent audit-trail events, each
 // with the actor and, for an impersonated action, the real actor behind it. The
-// write side lives in the gateway (writeAuditRes for estate mutations,
+// write side lives in the gateway (writeAuditRes for fleet mutations,
 // WriteAuthEvent for auth events); this is read-only and gated by audit:read.
 
 type auditListInput struct {

@@ -15,7 +15,7 @@ import (
 // with #650's counting instrument rather than asserted in a comment.
 //
 // This is the property the slice most needs held. Both halves walk a set whose
-// size is the estate's (every component in scope, every row placed at one
+// size is the fleet's (every component in scope, every row placed at one
 // location), both run inside a write transaction, and the obvious
 // implementation of either is one query per row. #648 exists because a per-row
 // version of exactly this walk was an N+1, and a comment saying "resolved once
@@ -27,8 +27,8 @@ import (
 // an argument would observe nothing at all and report a flat, fictional number
 // forever. See storagetest/querycount's doc comment for that hazard in full.
 
-// labelEstate is a seeded counting gateway plus a building and rooms.
-func labelEstate(t *testing.T, roomCount int) (storage.Gateway, *querycount.Counter, []string) {
+// labelFleet is a seeded counting gateway plus a building and rooms.
+func labelFleet(t *testing.T, roomCount int) (storage.Gateway, *querycount.Counter, []string) {
 	t.Helper()
 	ctx := context.Background()
 	gw, counter := storagetest.NewCountingDB(t)
@@ -51,7 +51,7 @@ func labelEstate(t *testing.T, roomCount int) (storage.Gateway, *querycount.Coun
 	return gw, counter, names
 }
 
-// TestTheBulkRecomputeCostIsFlatInEstateSize: a recompute over four components
+// TestTheBulkRecomputeCostIsFlatInFleetSize: a recompute over four components
 // and a recompute over twenty must cost the same number of statements.
 //
 // The rows are spread across rooms and across two products, because both are
@@ -59,9 +59,9 @@ func labelEstate(t *testing.T, roomCount int) (storage.Gateway, *querycount.Coun
 // one room and one product would hold both memo tables at size one and a
 // per-row loop would look exactly as flat as a batch. Distinct products stay
 // FIXED between the two measurements while row count grows, which is the honest
-// shape of the claim: cost is bounded by the registry, not by the estate.
-func TestTheBulkRecomputeCostIsFlatInEstateSize(t *testing.T) {
-	gw, counter, rooms := labelEstate(t, 4)
+// shape of the claim: cost is bounded by the registry, not by the fleet.
+func TestTheBulkRecomputeCostIsFlatInFleetSize(t *testing.T) {
+	gw, counter, rooms := labelFleet(t, 4)
 	ctx := context.Background()
 	if _, err := gw.CreateProduct(ctx, "", storage.Product{
 		Name: "my-mic", Label: "My Mic", ComponentType: "mic",
@@ -112,7 +112,7 @@ func TestTheBulkRecomputeCostIsFlatInEstateSize(t *testing.T) {
 // twenty. This is the cascade's own blast radius, and the one an operator can
 // reach by accident: renaming a busy room is an ordinary afternoon.
 func TestTheLocationCascadeCostIsFlatInWhatIsPlacedThere(t *testing.T) {
-	gw, counter, rooms := labelEstate(t, 2)
+	gw, counter, rooms := labelFleet(t, 2)
 	ctx := context.Background()
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.LocationLabel}} {{.TypeName}} {{.Ordinal}}"); err != nil {
 		t.Fatalf("component rule: %v", err)
@@ -141,7 +141,7 @@ func TestTheLocationCascadeCostIsFlatInWhatIsPlacedThere(t *testing.T) {
 	// placed at the room is the dimension flatness is claimed in, so it has to
 	// come from the database rather than from the fixture's own arithmetic, but
 	// it must not be charged to the reading: a list whose cost grows with the
-	// estate inside the window would swamp what is being measured.
+	// fleet inside the window would swamp what is being measured.
 	measureRename := func(from, to string) reading {
 		t.Helper()
 		placed := 0
@@ -172,14 +172,14 @@ func TestTheLocationCascadeCostIsFlatInWhatIsPlacedThere(t *testing.T) {
 
 // TestAPlacedCreateStillCostsAFixedNumberOfStatements pins the write path the
 // placement keys made more expensive, so the next slice to touch it sees the
-// number move rather than discovering it at estate scale.
+// number move rather than discovering it at fleet scale.
 //
 // It is a CEILING and an equality, not a flatness claim: a create is one row,
 // so there is no dimension to be flat in. What it catches is a placement
 // resolve that grows a second round trip, and a create whose cost depends on
 // how full the room already is.
 func TestAPlacedCreateStillCostsAFixedNumberOfStatements(t *testing.T) {
-	gw, counter, rooms := labelEstate(t, 1)
+	gw, counter, rooms := labelFleet(t, 1)
 	ctx := context.Background()
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}} {{.Ordinal}}"); err != nil {
 		t.Fatalf("component rule: %v", err)

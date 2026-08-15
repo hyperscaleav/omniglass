@@ -164,7 +164,7 @@ const ErrSystemBindNeedsUpdate = "creating a component into a system writes that
 // that system on the same screen could only read as a broken platform. A
 // principal with a location-scoped deploy grant is exactly that caller: the
 // cross-tier expansion is unbuilt (#10), so its system:update scope is empty
-// while its viewer floor reads every system in the estate.
+// while its viewer floor reads every system in the fleet.
 //
 // Naming the scope discloses nothing new, because this branch is reached only
 // after the reference resolved inside the caller's own system:read scope: a

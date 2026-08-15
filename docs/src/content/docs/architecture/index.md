@@ -29,7 +29,7 @@ of it exists. Every prose architecture page is also published machine-readable a
 pages are not included.
 :::
 
-## The estate
+## The fleet
 
 Three nouns describe what you operate.
 
@@ -191,7 +191,7 @@ The journey rides on a few foundations:
 - **[time](/architecture/time/)** is the one primitive that turns the passage of time into events, so
   the rest of the pipeline stays purely event-driven.
 - **[scaling and deployment](/architecture/scaling/)**: the single binary is a modular monolith with run
-  modes, deployed as one container for a small estate or scaled out on Kubernetes with a distributed
+  modes, deployed as one container for a small fleet or scaled out on Kubernetes with a distributed
   edge.
 
 Samples are parsed and emitted at the edge, not re-derived from a raw store. Raw payloads are a

@@ -17,7 +17,7 @@ A driver is consumed by the [product](/guides/admin/products/) catalog: a `produ
 its driver through an optional `driver_id` to say which driver reads it, chosen from a driver
 picker on the product's create and edit forms, and three of the shipped official products bind a
 driver this way. It is a leaf catalog beside the vendor registry. See
-[core entities](/architecture/core-entities/) for where it sits in the estate model.
+[core entities](/architecture/core-entities/) for where it sits in the fleet model.
 
 - **New driver** (with `driver:create`, an admin permission) opens a create drawer: give it a
   **name** (unique tenant-wide, e.g. `snmp-generic`), a **label**, and,

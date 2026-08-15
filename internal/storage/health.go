@@ -48,7 +48,7 @@ import (
 // was about to change, so both could conclude they were recording an edge (two
 // consecutive identical rows, which is not an edge) or neither could (a real
 // transition, silently missing). Two alarms in one room is an ordinary minute in
-// an estate, so this is not a corner. Every recompute therefore takes a
+// an fleet, so this is not a corner. Every recompute therefore takes a
 // transaction-scoped advisory lock on the owner BEFORE it resolves that owner's
 // inputs, and holds it to commit: the whole resolve-compare-write sequence is
 // serialized per owner, and the loser recomputes over the winner's committed
@@ -578,7 +578,7 @@ func (p *PG) systemsForRoleOwner(ctx context.Context, q txQuerier, ownerKind, ow
 // Ordered by ID, which is the recompute's lock order (see recomputeChain) and
 // the same key refSet.sorted() gives the component and system tiers. It used to
 // order by name, which was the same order back when a location name was unique
-// estate-wide and is not an order at all now that #627 scoped uniqueness to
+// fleet-wide and is not an order at all now that #627 scoped uniqueness to
 // placement: two rooms under different buildings can both be 415a, and a tied
 // comparison leaves their relative order to the plan. That is not academic. The
 // two arms of the union below feed the sort in different orders, so the two
@@ -663,7 +663,7 @@ type SystemVerdict struct {
 }
 
 // SystemVerdicts is the BULK health read: every system in the caller's read
-// scope with its current verdict, in one statement whatever the estate size.
+// scope with its current verdict, in one statement whatever the fleet size.
 //
 // It exists because the console had no bulk read and paid a full health
 // resolution per row to paint one column (#653). Its scope behaviour is
@@ -673,7 +673,7 @@ type SystemVerdict struct {
 // scope is an empty answer rather than a refusal.
 //
 // The shape is locationVerdict's, one `distinct on` pass over the series rather
-// than a correlated latest-row subquery per system, so an estate of fifteen
+// than a correlated latest-row subquery per system, so an fleet of fifteen
 // thousand systems reads the property series once and not once per row.
 //
 // A system with nothing recorded is reported HEALTHY rather than omitted, and
@@ -932,7 +932,7 @@ func (p *PG) SystemHealth(ctx context.Context, systemName string, window time.Du
 	// it might no longer be unique (#627). rep.OwnerID keeps echoing the
 	// caller's own reference, unchanged. scopedByNameInScope, not
 	// scopedByName-then-inScopeTree: ruling 2 requires ambiguity judged
-	// inside read, not estate-wide, since a name unique within this caller's
+	// inside read, not fleet-wide, since a name unique within this caller's
 	// own scope must resolve even when an unrelated out-of-scope row shares
 	// it.
 	sys, err := scopedByNameInScope(ctx, p.pool, systemConfig, systemName, "system", read)

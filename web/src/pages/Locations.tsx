@@ -162,7 +162,7 @@ export default function Locations() {
       >
         <span class="inline-flex items-center gap-2"><span class="h-2 w-2 flex-none rounded-sm" style={{ background: TYPE_COLOR[t] }} /><span class="eyebrow">{TYPE_PLURAL[t]}</span></span>
         <span class="tnum text-3xl font-semibold leading-none">{counts()[t] ?? 0}</span>
-        <span class="text-[11.5px] text-base-content/50">in the estate</span>
+        <span class="text-[11.5px] text-base-content/50">in the fleet</span>
       </button>
     ),
   });
@@ -563,7 +563,7 @@ export default function Locations() {
     // A location has TWO buckets, not three: it has no located-at column, so
     // the shape falls out of asking for the bucket with no location at all.
     const parentItems = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 })));
-    // The label the platform would write. A shipped estate answers with the
+    // The label the platform would write. A shipped fleet answers with the
     // global location rule's render of the name (#657); an empty answer means no
     // rule resolves at any tier, which the form still has to be honest about,
     // since it shows the name there rather than a locked empty field.

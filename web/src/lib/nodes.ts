@@ -22,7 +22,7 @@ export type Node = {
 };
 
 // nodeLabel is the node's human label: its label, falling back to the
-// name (the key/estate address) when unset. Used as the blade title and the list
+// name (the key/fleet address) when unset. Used as the blade title and the list
 // row label, mirroring how component/system/location present name vs label.
 // nodeLabel is entityLabel, kept as a named export because the node columns and
 // blade title read better with it. The rule itself lives in one place.

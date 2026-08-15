@@ -647,7 +647,7 @@ export default function Systems() {
       // Keyed by uuid, matching where RolesPanel and MembersPanel invalidate
       // after a role or member write (#627 review finding 1: those panels
       // address the system by its uuid, since the name is scoped to
-      // placement and not reliably unique estate-wide). Those sites now
+      // placement and not reliably unique fleet-wide). Those sites now
       // invalidate SYSTEM_VERDICTS_KEY alongside, or this column would go
       // stale silently exactly as it did in review round 3, regression 3.
       if (key === "health") return <HealthBadge verdict={verdicts.data?.get(n.raw.id)} quiet />;

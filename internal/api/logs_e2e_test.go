@@ -129,7 +129,7 @@ type nodeLogsResp struct {
 
 // TestNodeLogsAPI drives the per-node self-log read over HTTP (ADR-0066): a node's
 // own operational log lines come back newest-first with severity and attributes,
-// owner-bound to the node not a component. A node is estate-wide, so an all-scope
+// owner-bound to the node not a component. A node is fleet-wide, so an all-scope
 // viewer reads them (node:read), an unknown node is a 404, and an unauthenticated
 // request is a 401. Skipped under -short.
 func TestNodeLogsAPI(t *testing.T) {
@@ -192,7 +192,7 @@ func TestNodeLogsAPI(t *testing.T) {
 		t.Fatalf("oldest node log: want 'connected to bus' enrollment, got %+v", r.Logs[1])
 	}
 
-	// A node is estate-wide: an all-scope viewer reads its logs (node:read). An
+	// A node is fleet-wide: an all-scope viewer reads its logs (node:read). An
 	// unknown node is a 404; an unauthenticated request is a 401.
 	viewerTok := setupAllViewer(t, ctx, dsn, "viewer-node")
 	c.do(viewerTok, http.MethodGet, "/nodes/site-a/logs", nil, http.StatusOK)

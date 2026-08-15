@@ -116,7 +116,7 @@ export const CATALOG_GROUPS: CatalogGroup[] = [
   },
   {
     header: "Metadata",
-    copy: "Tags: the governed key vocabulary the whole estate labels with.",
+    copy: "Tags: the governed key vocabulary the whole fleet labels with.",
     entries: [{ label: "Tags", path: "/tags", gate: ["tag", "read"], key: TAGS_KEY, list: listTags }],
   },
 ];

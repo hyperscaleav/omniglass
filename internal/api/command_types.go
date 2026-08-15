@@ -77,7 +77,7 @@ type updateCommandTypeInput struct {
 	}
 }
 
-// registerCommandTypeRoutes wires the command_type catalog: the estate-wide "do"
+// registerCommandTypeRoutes wires the command_type catalog: the fleet-wide "do"
 // registry (no scope injection, reference data) and its custom-type CRUD, gated by
 // command_type:read / :create / :update / :delete. Official types are read-only.
 // Mirrors the property_type and event_type catalogs.
@@ -87,7 +87,7 @@ func registerCommandTypeRoutes(api huma.API, a *authenticator, gw storage.Gatewa
 		Method:      http.MethodGet,
 		Path:        "/command-types",
 		Summary:     "List command types",
-		Description: "Lists every registered command type (official and custom). Estate-wide reference data. Gated by command_type:read.",
+		Description: "Lists every registered command type (official and custom). Fleet-wide reference data. Gated by command_type:read.",
 	}, "command_type", "read"), func(ctx context.Context, _ *struct{}) (*listCommandTypesOutput, error) {
 		cts, err := gw.ListCommandTypes(ctx)
 		if err != nil {

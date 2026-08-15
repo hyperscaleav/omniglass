@@ -31,7 +31,7 @@ roles:
       - "command_type:create,update"
       - "command:issue"
       # alarm:acknowledge records that a human has seen an alarm. The role that
-      # runs the estate is the role that acknowledges. The verb is spelled out
+      # runs the fleet is the role that acknowledges. The verb is spelled out
       # like every other seeded action; `alarm:ack` was only ever fixture and
       # illustrative vocabulary, and a permission string is operator-facing (the
       # Roles view, the grant builder, /auth/me). Deliberately NOT on deploy: an
@@ -69,7 +69,7 @@ roles:
   - id: admin
     label: Administrator
     description: >-
-      Manages the estate, users, roles, and grants: full create, update, and
+      Manages the fleet, users, roles, and grants: full create, update, and
       delete on locations, systems, and components, and on principals,
       credentials, grants, and roles. Deliberately NOT the superuser: it cannot
       grant a role above its own tier, so it cannot make itself owner. Inherits
@@ -100,7 +100,7 @@ roles:
       - "variable:*"
       # platform:<action> is install-wide authority: the right to change the value
       # that applies to the WHOLE install (the least-specific cascade tier and the
-      # settings overrides), separate from how much of the estate a grant's scope
+      # settings overrides), separate from how much of the fleet a grant's scope
       # covers. Admin and owner (via >) hold it; operator and deploy deliberately do
       # not, so an all-scoped operator runs every site without being able to move
       # the install-wide floor under them.

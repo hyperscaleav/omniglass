@@ -94,7 +94,7 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 // TestTheSystemBindSaysWhichAuthorityIsMissing pins the OTHER half of the system
 // bind's refusal (#707 review). Both halves refuse, so nothing about whether the
 // create is served is at stake here; what is at stake is which of two opposite
-// claims about the estate the caller is handed.
+// claims about the fleet the caller is handed.
 //
 // The pair this drives (system:read covering the row, system:update not) is not
 // exotic, it is the ordinary shape today: applicableKinds("system") is

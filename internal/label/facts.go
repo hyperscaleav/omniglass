@@ -60,8 +60,8 @@ func FactsJSON() ([]byte, error) {
 // renderExample runs one function's documented input through a real rule on the
 // dictionary-less engine, which is what makes the published example a fact. The
 // dictionary is left out deliberately: what `title` does to a word in an
-// operator's acronym list is that estate's business, and a shipped table that
-// showed one estate's answer would be wrong everywhere else.
+// operator's acronym list is that fleet's business, and a shipped table that
+// showed one fleet's answer would be wrong everywhere else.
 func renderExample(f ruleFunc) (string, error) {
 	rule, err := Basic.Parse("{{." + exampleKey + " | " + f.Name + "}}")
 	if err != nil {

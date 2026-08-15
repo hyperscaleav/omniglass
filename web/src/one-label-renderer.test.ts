@@ -59,7 +59,7 @@ const IDENTIFIER = String.raw`\.(?:name|addr|username)\b`;
 const INTERPOLATED = new RegExp(String.raw`(?=.*\$\{[^}]*\.label\b[^}]*\})(?=.*${IDENTIFIER})`);
 // The same rule spelled downstream of the column, on a row whose label is already
 // resolved: `n.display === (n.addr ?? n.id)`. TreeList carried this for the whole
-// estate and the two regexes above could not see it, because it never mentions
+// fleet and the two regexes above could not see it, because it never mentions
 // `label` at all. It is the copy that mattered most, so it gets its own
 // pattern rather than trusting the next reader to notice.
 const RESOLVED = /\bdisplay\s*(?:===|!==)\s*\(?\w+\.(?:addr|id)\b/;

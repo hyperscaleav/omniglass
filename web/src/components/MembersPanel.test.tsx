@@ -122,8 +122,8 @@ describe("MembersPanel", () => {
     const opts = [...(getByLabelText("Component to add") as HTMLSelectElement).options].map((o) => o.value);
     // Options carry the component's uuid, not its name (#627 review, the
     // pre-existing surface: adding a member resolves the component
-    // estate-wide via scopedByName, internal/api/members.go, which 409s an
-    // estate-wide-ambiguous name regardless of this system's own scope).
+    // fleet-wide via scopedByName, internal/api/members.go, which 409s an
+    // fleet-wide-ambiguous name regardless of this system's own scope).
     expect(opts).toContain(uuidFor("c-4"));
     expect(opts).not.toContain(uuidFor("c-1"));
   });

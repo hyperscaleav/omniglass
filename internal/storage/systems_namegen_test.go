@@ -285,7 +285,7 @@ func TestSystemMoveReMintsTheOrdinal(t *testing.T) {
 // freed in the meantime, with no rename requested and possibly no
 // system:rename grant held.
 //
-// The estate is the one that makes it visible rather than silent, the same one
+// The fleet is the one that makes it visible rather than silent, the same one
 // the reclassify case uses: a rename has freed "boardroom" in this bucket, so a
 // spurious re-mint does not recompute to the same answer.
 func TestSystemMoveWithoutABucketChangeKeepsTheName(t *testing.T) {
@@ -410,7 +410,7 @@ func TestSystemReclassifyReMintsTheStem(t *testing.T) {
 // being present rather than on the classification changing would rename a
 // system whenever an operator edited its label.
 //
-// The estate here is the one that makes it visible rather than silent: a lower
+// The fleet here is the one that makes it visible rather than silent: a lower
 // ordinal has been freed by a rename, so a spurious re-mint does not recompute
 // to the same answer, it MOVES the name to "boardroom" under system:update,
 // with no rename requested and possibly no system:rename grant held.
@@ -467,7 +467,7 @@ func TestSystemUpdateWithoutAClassificationChangeKeepsTheName(t *testing.T) {
 // system_type rows inheriting one stem from a shared ancestor mint identical
 // names and a reclassify between them changes no input to the mint.
 //
-// The estate is the one that makes the difference visible rather than silent: a
+// The fleet is the one that makes the difference visible rather than silent: a
 // lower ordinal has been freed by a :rename, so re-minting anyway does not
 // recompute to the same answer, it MOVES the name onto the freed name under
 // system:update with no rename requested. That is the failure ADR-0101 refused
@@ -574,7 +574,7 @@ func TestSystemWithNoTypeCannotGenerate(t *testing.T) {
 }
 
 // TestSystemGeneratedNamesAreUniquePerBucket proves the uniqueness that
-// actually matters, per bucket rather than per estate: the same generated name
+// actually matters, per bucket rather than per fleet: the same generated name
 // lands in all three of a system's placement buckets at once (under a parent,
 // at a location, unplaced) and each is a distinct row.
 func TestSystemGeneratedNamesAreUniquePerBucket(t *testing.T) {
@@ -620,7 +620,7 @@ func TestSystemGeneratedNamesAreUniquePerBucket(t *testing.T) {
 
 // TestStoredSystemOrdinalsRecomputeToThemselves is the recompute-and-compare
 // invariant on the system tier: for every system the platform named, re-running
-// allocation against the live estate (excluding the row's own name from the
+// allocation against the live fleet (excluding the row's own name from the
 // bucket, as every recompute site does) must return the number and the name the
 // row already carries. A stored ordinal that has gone stale, or a name that no
 // longer matches the number recorded beside it, fails here rather than
@@ -691,7 +691,7 @@ func TestStoredSystemOrdinalsRecomputeToThemselves(t *testing.T) {
 		t.Fatalf("list: %v", err)
 	}
 	if len(systems) == 0 {
-		t.Fatal("the estate under test is empty, so this invariant proves nothing")
+		t.Fatal("the fleet under test is empty, so this invariant proves nothing")
 	}
 	checked := 0
 	for _, s := range systems {
@@ -720,6 +720,6 @@ func TestStoredSystemOrdinalsRecomputeToThemselves(t *testing.T) {
 	// and left frozen) carry no ordinal and are not among them, which is the
 	// point of counting rather than trusting the loop ran.
 	if checked != 7 {
-		t.Fatalf("%d platform-named systems were checked, want 7: the estate did not build as intended", checked)
+		t.Fatalf("%d platform-named systems were checked, want 7: the fleet did not build as intended", checked)
 	}
 }

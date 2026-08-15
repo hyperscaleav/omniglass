@@ -142,7 +142,7 @@ func Resolve(grants []Grant, idx rbac.RoleIndex, resource, action string) Set {
 // against a tier Covers says no for is comparing incompatible id spaces:
 // inScopeTree walks the target's own ancestor chain, so the ids can never
 // match, and the caller would be silently denied (or, on a write/advisory
-// path, would leak a candidate estate-wide) instead of being loudly caught.
+// path, would leak a candidate fleet-wide) instead of being loudly caught.
 // See resolveRef in internal/storage/scopedcrud.go, the caller of this.
 //
 // Blind spot: for the four-tier family (secret, variable, field, telemetry),
@@ -163,7 +163,7 @@ func Covers(resource, target string) bool {
 
 // applicableKinds returns the scope kinds that can contain a resource: "all"
 // always, plus the resource's own tier. The cross-tier cascade (a location scope
-// also covering its systems and components) is a later slice; today each estate
+// also covering its systems and components) is a later slice; today each fleet
 // tree entity is scoped by its own kind. interface and task are the exception:
 // they are not tree entities of their own, they hang off a component (an
 // interface owns a component, a task owns an interface), so they cascade through
@@ -208,7 +208,7 @@ func applicableKinds(resource string) map[string]bool {
 		// tiers can contain the owner: the gateway's inScopeTree walk resolves
 		// the specific owner within it.
 		//
-		// Pushed telemetry is the same shape: a batch is owned by an estate entity
+		// Pushed telemetry is the same shape: a batch is owned by an fleet entity
 		// on that arc, so a grant at any arc tier can contain its owner. This is
 		// what fences POST /telemetry:push, and it matters that the fence resolves
 		// from telemetry:push rather than component:read, since a principal often

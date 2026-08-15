@@ -557,7 +557,7 @@ func mapRoleErr(err error) error {
 	// A double-staffing or capacity-shortfall refusal depends on OTHER rows
 	// (what else is currently assigned), so it is a 409, not a 422: the
 	// declaration or assignment request is not invalid on its own, it
-	// conflicts with the estate's current state.
+	// conflicts with the fleet's current state.
 	var staffed *storage.ComponentStaffedShortfall
 	if errors.As(err, &staffed) {
 		return huma.Error409Conflict(fmt.Sprintf(

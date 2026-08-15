@@ -292,7 +292,7 @@ describe("Systems create-as-route", () => {
   });
 });
 
-// #627 scopes name uniqueness to placement, not the whole estate: two systems
+// #627 scopes name uniqueness to placement, not the whole fleet: two systems
 // under different parents may now legally share a name. The tree builder
 // used to key its construction-time map on the bare name (byId.set(s.name,
 // ...)), so the second same-named row silently overwrote the first and its
@@ -363,7 +363,7 @@ describe("Systems list health column (#627 review round 3, regression 3; #653)",
   // query, and that map is keyed by UUID, matching where RolesPanel and
   // MembersPanel invalidate after a role or member write (#627 review finding 1:
   // the detail panels address by uuid, since a name is scoped to placement, not
-  // the whole estate). A name-keyed map would render nothing here, which is what
+  // the whole fleet). A name-keyed map would render nothing here, which is what
   // this asserts: the verdict is seeded ONLY at the uuid.
   it("reads the health column from the system's uuid, matching where RolesPanel and MembersPanel invalidate", async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
@@ -703,7 +703,7 @@ describe("Systems list keeps a floor under the Name column (#690)", () => {
 describe("Systems edit blade carries the label pen (#693)", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
-  // The estate's own shape after #693: a rule renders "Boardroom 2" and the
+  // The fleet's own shape after #693: a rule renders "Boardroom 2" and the
   // platform holds the pen on it.
   const gen: System = { ...sys, id: uuidFor("s-gen"), name: "boardroom-2", label: "Boardroom 2", label_generated: true, member_count: 0 };
 

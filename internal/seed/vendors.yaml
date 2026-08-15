@@ -1,5 +1,5 @@
 # The official vendors (manufacturers), seeded idempotently at boot. A vendor
-# names an organization in the estate model (e.g. "Cisco", "Crestron"); a later
+# names an organization in the fleet model (e.g. "Cisco", "Crestron"); a later
 # product slice will point at one. Each vendor carries a kind (manufacturer,
 # integrator, or developer). The registry lists alphabetically by label.
 # Starter set, operator-extensible later; tune freely.

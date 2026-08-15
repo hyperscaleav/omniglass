@@ -1,11 +1,11 @@
 ---
 title: Admin guide
-description: "Administering an Omniglass platform: the people who can sign in, the access they carry, the audit trail, and the config and credentials that resolve down the estate."
+description: "Administering an Omniglass platform: the people who can sign in, the access they carry, the audit trail, and the config and credentials that resolve down the fleet."
 ---
 
 This is the how-to for **administering the platform**, the standing job of deciding who may
-sign in, what each account can see and do, and the config and credentials the estate runs on.
-It is a different job from **operating** the estate (running the inventory, reading the data),
+sign in, what each account can see and do, and the config and credentials the fleet runs on.
+It is a different job from **operating** the fleet (running the inventory, reading the data),
 which is the [operator guide](/guides/operator/), and from **standing the platform up**, which
 is [deployment](/guides/deployment/).
 
@@ -39,16 +39,16 @@ Every task on these pages has two front doors, and they call the same API with t
 - **[The audit trail](/guides/admin/audit/)** is the read-only record of every privileged
   action and every sign-in, including who acted behind an impersonation.
 - **[Secrets](/guides/admin/secrets/)** and **[variables](/guides/admin/variables/)** are the
-  config and credentials the estate resolves down the [cascade](/architecture/cascade/):
+  config and credentials the fleet resolves down the [cascade](/architecture/cascade/):
   encrypted secrets and plaintext variables, owned at a scope and resolved most-specific-wins
   onto a component.
-- **[Files](/guides/admin/files/)** is the content kept with the estate: uploads in the blob
+- **[Files](/guides/admin/files/)** is the content kept with the fleet: uploads in the blob
   store, owned at a scope like the other values.
 - **[Tags](/guides/admin/tags/)** is the governed key vocabulary behind the tag chips, and the
   signal catalog is two lane pages: **[properties](/guides/admin/properties/)** for the canonical
   typed values and **[metrics](/guides/admin/metrics/)** for the numeric quantities, with their
   units and precision.
-- The classifier catalogs shape the estate's entities:
+- The classifier catalogs shape the fleet's entities:
   **[location types](/guides/admin/location-types/)** for locations, **[standards](/guides/admin/standards/)** for
   systems, and **[products](/guides/admin/products/)** for components, with
   **[vendors](/guides/admin/vendors/)** and **[drivers](/guides/admin/drivers/)** the reference

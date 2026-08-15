@@ -166,7 +166,7 @@ Three rules, and an assertion that breaks one of them is worse than none:
 
 ### Benchmarks are diagnostic, never a gate
 
-`make bench` runs `go test -bench` over `internal/storage`, at a small estate and a larger
+`make bench` runs `go test -bench` over `internal/storage`, at a small fleet and a larger
 one, against real Postgres through the same harness the integration tests use. What it
 deliberately does **not** do is as much of the design as what it does:
 
@@ -187,7 +187,7 @@ Three rules make a benchmark here mean anything:
    measures the harness and moves whenever the harness does. Fixtures are built once per
    size and shared; `b.ResetTimer` runs before the loop.
 2. **Two sizes, always.** One number cannot tell a constant apart from a linear cost, and
-   the growth curve is the whole question: a list *should* grow with the estate, a tag
+   the growth curve is the whole question: a list *should* grow with the fleet, a tag
    cascade walking one component's ancestors should *not*, and only the pair says whether
    that is still true.
 3. **Subtract the floor.** `BenchmarkRoundTripFloor` measures one pool acquire and one
@@ -200,7 +200,7 @@ Three rules make a benchmark here mean anything:
 
 Read performance is asserted as a **count of SQL statements**, not as a duration.
 The Gateway's dominant cost is round trips to Postgres, and the regression that
-hurts at estate scale is the N+1: fifteen thousand components paying two or three
+hurts at fleet scale is the N+1: fifteen thousand components paying two or three
 queries each. A count is deterministic. It needs no stored baseline, no threshold
 policy, and no warm-up, and it fails with an exact number that names the defect,
 where a wall-clock measurement on a laptop or a shared runner has variance that

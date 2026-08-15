@@ -21,7 +21,7 @@ var (
 )
 
 // File is the searchable metadata handle over a blob. It owns no bytes; SHA256
-// points at the blob. A file carries no estate placement: it is tenant-wide,
+// points at the blob. A file carries no fleet placement: it is tenant-wide,
 // gated by the file:<action> permission plus the sensitive tier.
 type File struct {
 	ID          string

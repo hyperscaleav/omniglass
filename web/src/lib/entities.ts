@@ -1,6 +1,6 @@
 import { createSignal } from "solid-js";
 
-// How an estate entity is labelled, in one place.
+// How an fleet entity is labelled, in one place.
 //
 // The identity triad is `id` (a uuid, immutable), `name` (the renameable kebab
 // identifier an operator types and the API and CLI address the row by), and
@@ -39,7 +39,7 @@ export type IdentityBinding = keyof typeof IDENTITY_LABELS;
 // Labelled is the shape of anything the console labels: the name, plus the
 // optional label and the pen that says who owns it. It is deliberately
 // structural rather than a union of entity types, so a generated body satisfies
-// it without a cast, and so a row that is not an estate entity at all (a
+// it without a cast, and so a row that is not an fleet entity at all (a
 // property, whose identifier column is named something else) can be adapted to
 // it in one expression rather than growing a seventh copy of the rule.
 //
@@ -105,7 +105,7 @@ export function labelIsName(e: Labelled): boolean {
 // while a label was only ever operator-typed. A label rule (#682, ADR-0098) renders a
 // label that differs from the name exactly as an operator's does, so the string
 // comparison alone would grow a second identifier line under every row in the
-// estate: 15,000 rows each saying their name twice, which is the noise this
+// fleet: 15,000 rows each saying their name twice, which is the noise this
 // predicate exists to prevent.
 //
 // The pen (label_generated) is the fact that answers it, and #683 put it
@@ -178,7 +178,7 @@ export function deriveName(display: string): string {
 // no generator and stay globally unique, so deriving one from what the operator
 // typed is exactly the right affordance there.
 //
-// The three ESTATE entities (component, system, location) left it in #688, and
+// The three FLEET entities (component, system, location) left it in #688, and
 // the reason is not stylistic. A blank name on those is the REQUEST to have the
 // platform mint one from the entity's classification, so a form that filled the
 // field in from a typed label claimed the platform's pen on the operator's

@@ -4,7 +4,7 @@ import PenToggle, { takeOver } from "./PenToggle";
 import { type Pen, penState } from "../lib/namegen";
 import { entityLabel, type Labelled } from "../lib/entities";
 
-// LabelPenField is the label field on the edit blade of the three estate
+// LabelPenField is the label field on the edit blade of the three fleet
 // entities whose labels a rule can render (component, system, location), and it
 // is where the label's pen now lives (#693).
 //
@@ -84,7 +84,7 @@ export default function LabelPenField(props: {
   // "locked" and "posts nothing" cannot disagree.
   const state = () => penState(true, props.pen);
   // What the rule rendered, which is empty when no rule resolved at any tier: a
-  // real state (every location in an estate that predates a location name rule),
+  // real state (every location in an fleet that predates a location name rule),
   // and the read ladder's answer for it is the row's own name.
   const rendered = () => props.entity().label?.trim() ?? "";
   const available = () => rendered() !== "";

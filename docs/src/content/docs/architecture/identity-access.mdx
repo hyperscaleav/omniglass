@@ -10,7 +10,7 @@ sidebar:
 import SchemaTable from '../../../components/SchemaTable.astro';
 import SeededSet from '../../../components/SeededSet.astro';
 
-Identity and access controls who may call the platform and which slice of the estate each caller sees and acts on, enforced entirely in the app so "forgot to filter" cannot happen: the capability check (`<resource>:<action>`) runs as **API route middleware** before the handler, and the **ABAC scope** filter is injected by the **Storage Gateway**, the only path to the database. Scope is built on the cascade's groups ([cascade](/architecture/cascade/)).
+Identity and access controls who may call the platform and which slice of the fleet each caller sees and acts on, enforced entirely in the app so "forgot to filter" cannot happen: the capability check (`<resource>:<action>`) runs as **API route middleware** before the handler, and the **ABAC scope** filter is injected by the **Storage Gateway**, the only path to the database. Scope is built on the cascade's groups ([cascade](/architecture/cascade/)).
 
 :::note[Partial: what is built, and where it diverges]
 Built and tested today: the `principal` (+ per-kind `human` / `service`) and `credential` tables, the
@@ -154,7 +154,7 @@ converges.
 A **role** on this page is an IAM role: a capability set granted to a principal, in the `role` table, on the
 `/roles` routes. A **[system role](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)**
 is a slot a system needs filled, in `system_role`, on the `/standards/{id}/roles` and `/systems/{name}/roles`
-routes. They are separate namespaces with no crossing, which is why the estate-side storage methods are
+routes. They are separate namespaces with no crossing, which is why the fleet-side storage methods are
 named `ListSystemRoles` / `SetSystemRole` / `DeleteSystemRole` rather than colliding with `ListRoles` /
 `UpsertRole`.
 :::
@@ -174,7 +174,7 @@ What the permission strings above do not say, per role:
 - **`viewer`** reads every operator-facing resource in scope, and two families are deliberately not operator-facing. The IAM directories (`principal`, `role`, `principal_group`) read at the admin tier (`<resource>:read:admin`), which a two-token `*:read` structurally cannot reach, so the Users, Roles and Groups pages stay closed to it ([ADR-0023](/architecture/decisions/#adr-0023-the-iam-directory-reads-principal-role-principal_group-are-admin-tier)). `secret` is a **sensitive resource** a bare `*` does not reach at all, so `viewer` reads no secret directory ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)).
 - **`operator`** holds the operational secrets in its scope and never the platform's: secret **delete** stays admin-only, and an **admin-sensitive** secret (a platform credential, `admin_sensitive = true`) is absent from the directory and a non-disclosing 404 on reveal regardless of scope, so an operator sees device secrets but never a platform key at the same scope ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)). Creating an admin-sensitive secret needs the admin tier, so an operator mints only operational ones.
 - **`deploy`** is the integrator / field-tech role, typically granted with the `subtree_excl_root` operator to build out a subtree without editing its root, and **a grant of it reaches one tier, the tier it is scoped at**. Its permission set names three tiers, but a location-kind grant fills no system-tier or component-tier scope at all, not even to read one, because a scope kind contains only its own tier until the cross-tier expansion lands ([#10](https://github.com/hyperscaleav/omniglass/issues/10)). Building out a building therefore takes a location-scoped, a system-scoped and a component-scoped grant of this role together, the shape `internal/api/placement_scope_e2e_test.go` uses; the reach is pinned by `internal/seed/role_reach_test.go` and the role's own description says so.
-- **`admin`** adds `platform:*`, the install-wide authority a write at the cascade's `platform` tier needs ([below](#install-wide-authority-is-not-estate-scope)); `operator` and `deploy` hold no `platform` capability, so an all-scoped operator runs every site without being able to change the install-wide value under them. It holds `secret:>` and `file:>` (the tail wildcard, not the two-token `*`), which is what reaches the admin-sensitive tiers a two-token wildcard cannot. IAM management is meaningful only from an `@ all` grant: a scoped `admin @ subtree` keeps the operator powers within its subtree and gets no IAM. Registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. It is deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles.
+- **`admin`** adds `platform:*`, the install-wide authority a write at the cascade's `platform` tier needs ([below](#install-wide-authority-is-not-fleet-scope)); `operator` and `deploy` hold no `platform` capability, so an all-scoped operator runs every site without being able to change the install-wide value under them. It holds `secret:>` and `file:>` (the tail wildcard, not the two-token `*`), which is what reaches the admin-sensitive tiers a two-token wildcard cannot. IAM management is meaningful only from an `@ all` grant: a scoped `admin @ subtree` keeps the operator powers within its subtree and gets no IAM. Registry curation is a plain capability, so a custom role can carry `<registry>:create` alone for a non-admin curator. It is deliberately **not** the superuser: it cannot grant a role above its own tier ([ADR-0013](/architecture/decisions/#adr-0013-a-grant-cannot-confer-capabilities-the-granter-lacks)), so it cannot make itself owner, and it cannot delete `official` roles.
 - **`owner`** is break-glass and unkillable: at least one active `owner@all` grant must exist at all times (enforced by DB trigger), an owner account cannot be impersonated, and the bootstrap creates the first one.
 
 The console **Roles view** (`GET /roles`, gated `role:read:admin`) lists these read-only with label, description, inheritance, and **effective permissions**. The role blade renders a **net** view: the **permission universe** ([below](#the-permission-universe-published-per-route)) plus, per role, the **held** subset (resolved server-side by the same `rbac.Set.Allows` matcher), one-per-line, lexicographically, with a `Held / Missing / All` toggle. Custom-role editing is a later slice.
@@ -204,9 +204,9 @@ audit:read:admin              <- an admin-sensitive permission (three tokens)
 >                             <- everything, at every tier (the owner superuser)
 ```
 
-A normal permission is `resource:action` (two tokens); an **admin-sensitive** one carries a third `admin` token (`audit:read:admin`). Because `*` matches exactly one token, a two-token pattern like `*:read` or `principal:*` **structurally cannot** match a three-token `:admin` permission: admin-sensitivity is a **deeper token**, not a matcher special case. The IAM directory reads (`principal:read:admin`, `role:read:admin`, `principal_group:read:admin`) use this to stay off the `viewer` floor, alongside `audit:read:admin` and `principal:purge:admin`; `admin` carries each explicitly. `>` is the whole-estate superuser (owner); `<resource>:>` grants everything under one resource including its admin tier. Actions are HTTP-aligned (`read`, `create`, `update`, `delete`) plus resource-specific verbs (`acknowledge`, `reveal`, `issue`); there is no aggregate `write`.
+A normal permission is `resource:action` (two tokens); an **admin-sensitive** one carries a third `admin` token (`audit:read:admin`). Because `*` matches exactly one token, a two-token pattern like `*:read` or `principal:*` **structurally cannot** match a three-token `:admin` permission: admin-sensitivity is a **deeper token**, not a matcher special case. The IAM directory reads (`principal:read:admin`, `role:read:admin`, `principal_group:read:admin`) use this to stay off the `viewer` floor, alongside `audit:read:admin` and `principal:purge:admin`; `admin` carries each explicitly. `>` is the whole-fleet superuser (owner); `<resource>:>` grants everything under one resource including its admin tier. Actions are HTTP-aligned (`read`, `create`, `update`, `delete`) plus resource-specific verbs (`acknowledge`, `reveal`, `issue`); there is no aggregate `write`.
 
-One further carve-out: a **sensitive-resource set**, `{secret, settings, platform}`, that a bare single-token `*` does not reach in **either** place `*` can grant (the direct topic match and the `:read` floor), for resources not `:admin`-tier wholesale but that a bare wildcard must not sweep up: an operator holds a literal `secret:read` while a `*:read`-only `viewer` reads no secrets; `settings` is install configuration off the viewer floor (an ordinary user sees only the client-visible namespaces, through the authn-only `/settings/me`); and `platform` is install-wide **authority** ([below](#install-wide-authority-is-not-estate-scope)), which full-estate **reach** must not confer. A literal, a resource wildcard (`secret:*`), and owner's `>` still name a sensitive resource; only the **bare** `*` is turned away ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)). This composes with the `:admin` tier: `secret` uses **both**, a per-secret `admin_sensitive` flag flipping an individual platform credential to the `:admin` tier ([config and credentials](/architecture/variables/)). The IAM directories are **not** in the set (no legitimate sub-admin reader, so the `:admin` tier alone suffices).
+One further carve-out: a **sensitive-resource set**, `{secret, settings, platform}`, that a bare single-token `*` does not reach in **either** place `*` can grant (the direct topic match and the `:read` floor), for resources not `:admin`-tier wholesale but that a bare wildcard must not sweep up: an operator holds a literal `secret:read` while a `*:read`-only `viewer` reads no secrets; `settings` is install configuration off the viewer floor (an ordinary user sees only the client-visible namespaces, through the authn-only `/settings/me`); and `platform` is install-wide **authority** ([below](#install-wide-authority-is-not-fleet-scope)), which full-fleet **reach** must not confer. A literal, a resource wildcard (`secret:*`), and owner's `>` still name a sensitive resource; only the **bare** `*` is turned away ([ADR-0025](/architecture/decisions/#adr-0025-secret-is-a-sensitive-resource-a-per-secret-admin_sensitive-flag-flips-a-secret-to-the-admin-tier)). This composes with the `:admin` tier: `secret` uses **both**, a per-secret `admin_sensitive` flag flipping an individual platform credential to the `:admin` tier ([config and credentials](/architecture/variables/)). The IAM directories are **not** in the set (no legitimate sub-admin reader, so the `:admin` tier alone suffices).
 
 Inheritance composes permissions **by union**:
 
@@ -248,7 +248,7 @@ canDo(P, action, E)  iff  exists grant g in grants(P) such that
 | `group` | group id | members(G) at resolution time (dynamic groups re-resolve) |
 :::
 
-Today each estate entity is scoped by its own tier (a `location` scope contains locations only, and
+Today each fleet entity is scoped by its own tier (a `location` scope contains locations only, and
 so on; only `secret` / `variable` / `interface` / `task` resolve through their owning entity's
 tier), and a `group` scope is refused with a 422.
 
@@ -258,7 +258,7 @@ tier), and a `group` scope is refused with a 422.
 Whether a scope may mix include and exclude (e.g. "all except group X").
 :::
 
-### Install-wide authority is not estate scope
+### Install-wide authority is not fleet scope
 
 The [cascade](/architecture/cascade/)'s least-specific tier is **`platform`**: the value an admin set for the
 **whole install**. A write there needs **two** permissions, the resource's own and **`platform:<action>`**,
@@ -271,11 +271,11 @@ tag:update      + platform:update    <- POST /tags/{name}:setPlatform
 settings:update + platform:update    <- every settings write, which is install-wide by definition
 ```
 
-A **scope** says *how much of the estate* a grant reaches; `platform:<action>` says whether the principal may
+A **scope** says *how much of the fleet* a grant reaches; `platform:<action>` says whether the principal may
 change *the value under all of it*. `platform:*` is seeded to **`admin`** (and reaches `owner` through `>`);
 `operator` and `deploy` hold no `platform` write, and **nothing implies one**, mechanically: `platform` is in
 the [sensitive-resource set](#permission-format), so a bare single-token `*` never names it, which is why a
-custom role carrying `*:update` holds every estate write and still no install-wide authority. The console
+custom role carrying `*:update` holds every fleet write and still no install-wide authority. The console
 mirrors the same set, offering the tier controls only to a caller holding both halves and naming the missing
 capability. The tier gate is **published per route**: an `x-omniglass-platform-permission` extension beside
 the `x-omniglass-permission` stamp, both in the route-derived
@@ -326,7 +326,7 @@ Removing the last owner (by grant delete, principal delete, principal disable, o
 
 ### Grants cannot exceed the granter
 
-Creating a grant is refused (403) when the granted role's capabilities are not **covered** by the granter's own **all-scope** capabilities (`rbac.Set.Covers`, the same primitive as the impersonation escalation guard): no caller can promote anyone, itself included, above its own tier (an **admin cannot grant `owner`**, since admin's enumerated patterns do not subsume the superuser tail), and a capability held only through a narrower grant cannot be conferred estate-wide. The same rule will apply to role editing when it lands.
+Creating a grant is refused (403) when the granted role's capabilities are not **covered** by the granter's own **all-scope** capabilities (`rbac.Set.Covers`, the same primitive as the impersonation escalation guard): no caller can promote anyone, itself included, above its own tier (an **admin cannot grant `owner`**, since admin's enumerated patterns do not subsume the superuser tail), and a capability held only through a narrower grant cannot be conferred fleet-wide. The same rule will apply to role editing when it lands.
 
 ## Impersonation (view-as and act-as)
 
@@ -405,10 +405,10 @@ The capability check is **necessary not sufficient** (it only rejects), the `can
 - **Scope is structural, not per-handler**: the principal's scope is a required input to the gateway's query layer, so no code path can query unscoped by accident. With no RLS backstop, the gateway is the sole guarantor.
 - **Coverage scales with the surface, by test.** An **authz conformance matrix** runs the full assertion set (capability 403, the over-permit scope 403, the non-disclosing 404, in-scope success, the read/act asymmetry) against **every** scoped entity from a registry: a new scoped entity is one registry line. Each entity also declares the mutating routes that hang **off** it and resolve it as their target (its property writes, and for a system its membership and role writes, for a component its alarm writes and its command issue), and the matrix drives the whole three-way split through each one, so the truthful 403 is proved per **route** and not merely per entity: the routes are not uniform across the registry, and a per-entity assertion would have left thirteen of them unproved. A **route-gating guard** drives every generated-OpenAPI operation with a zero-permission principal, asserting 403 outside a short allow-list: `GET /healthz`, `GET /auth/status`, `POST /auth/login`, `POST /auth/logout`, the authn-only `/auth/me` family and `GET /settings/me`, and `POST /nodes:claim`, the API's **one public write** (safe unauthenticated because the enrollment token in its body **is** the credential, minted once by a `node:enroll`-gated route, only its hash stored; an invalid token is a 401 that discloses nothing). A **published-gate guard** is the spec-side companion: every route outside that allow-list carries an `x-omniglass-permission` stamp and every allow-listed route carries none, so "gated" and "published" are the same set.
 
-**Worked example (per-grant binding denies estate-wide acknowledgement).** This one is **built** ([#728](https://github.com/hyperscaleav/omniglass/issues/728), refusal status corrected by [#736](https://github.com/hyperscaleav/omniglass/issues/736)), so it is the real route rather than a stand-in. Principal P holds `operator @ component-A` (the role carries `alarm:acknowledge`) and `viewer @ all` (read-only). Alarm X hangs off **component B**. P calls `POST /components/{name}/alarms/{id}:acknowledge` naming B and X:
+**Worked example (per-grant binding denies fleet-wide acknowledgement).** This one is **built** ([#728](https://github.com/hyperscaleav/omniglass/issues/728), refusal status corrected by [#736](https://github.com/hyperscaleav/omniglass/issues/736)), so it is the real route rather than a stand-in. Principal P holds `operator @ component-A` (the role carries `alarm:acknowledge`) and `viewer @ all` (read-only). Alarm X hangs off **component B**. P calls `POST /components/{name}/alarms/{id}:acknowledge` naming B and X:
 
 1. **Middleware fast-reject**: `alarm:acknowledge` appears in *a* grant (the `operator @ component-A` one), so it passes; fast-reject cannot see that the acknowledging grant does not cover X.
-2. **Scope resolved from the acknowledgement's own permission**: `visible_set(P, alarm, acknowledge)` unions only the grants whose role carries it, so it is `{component-A}`; the estate-wide `viewer` grant carries no acknowledgement and widens nothing. This is the load-bearing part: resolving the scope from `component:read` (which P holds everywhere) or from `component:update` (which a pure responder role need not hold at all) would answer the wrong question in opposite directions.
+2. **Scope resolved from the acknowledgement's own permission**: `visible_set(P, alarm, acknowledge)` unions only the grants whose role carries it, so it is `{component-A}`; the fleet-wide `viewer` grant carries no acknowledgement and widens nothing. This is the load-bearing part: resolving the scope from `component:read` (which P holds everywhere) or from `component:update` (which a pure responder role need not hold at all) would answer the wrong question in opposite directions.
 3. **Status**: B is outside the acknowledgement's set, but P holds `viewer @ all` and so can READ B: the target resolves in `visible_set(P, read)` and fails only the action half, and P gets a **403**. Naming the refusal discloses nothing, because P can `GET` that component and that alarm already; answering 404 instead would tell a caller that a row it is looking straight at does not exist. Had P held no read over B at all, the same call would be the **non-disclosing 404** of case (c), and P would learn nothing about whether B exists ([the three-way split](#the-three-way-status-split)).
 4. **Backstop**: the gateway is where the scope is applied, not the handler, so a handler that forgot to pass it could not query unscoped: the scope is a required argument.
 
@@ -494,7 +494,7 @@ promise:
   supplied this reference itself in the same request, not the new disclosure a read's own uuid would
   be. Its guarantee is narrower than it can sound: a resolved reference is one the caller may
   **write** a binding against, not one the caller may **read**, and a bare-name 403 is a
-  name-existence oracle by construction (a caller learns a name exists somewhere in the estate from
+  name-existence oracle by construction (a caller learns a name exists somewhere in the fleet from
   the status code alone, with no candidates disclosed), predating this epic and tested
   (`interfaces_scope_test.go:82`), now asymmetric with the read path's single 404 by design, not by
   omission.
@@ -506,7 +506,7 @@ promise:
   being written, and a location's scope tree is its own unrelated ancestor chain, so checking a
   component-tier scope against the location table can never match and would deny every non-all
   caller; and the question a **location** asks is a **read** question, because since
-  [ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-estate)
+  [ADR-0100](/architecture/decisions/#adr-0100-a-label-cascades-where-the-blast-radius-is-a-placement-and-waits-for-the-verb-where-it-is-the-fleet)
   the label these writes stamp is rendered from the location's own label and the primary system's
   type label and is handed straight back in the response. Existence-only resolution therefore made a
   create a read of a row the caller holds no grant to read. The `:renderLabel` draft route
@@ -515,7 +515,7 @@ promise:
   the lenient one ([#700](https://github.com/hyperscaleav/omniglass/issues/700)). A caller holding no
   grant on a tier reads nothing there and so can bind nothing there, which is the same sentence in
   both directions. Because it resolves inside a caller scope, its ambiguity refusal **lists its
-  candidates**: it was the one bind that redacted them while resolving estate-wide, and it stopped
+  candidates**: it was the one bind that redacted them while resolving fleet-wide, and it stopped
   needing to the moment the scope narrowed
   ([#697](https://github.com/hyperscaleav/omniglass/issues/697)).
 
@@ -650,7 +650,7 @@ TLS on the HTTP API (terminated at the binary when given a cert + key, or at the
 
 ## Audit
 
-Every API operation records the resolved **actor** (the principal id) in `audit_log`; secret decrypts are always audited, never filterable. Node-mode writes record the node principal; a system-mode write records a **null** actor (`audit_log.actor_principal_id` is a nullable foreign key), distinguishing operator action from platform internals; an impersonated request also records `real_actor_principal_id`. Estate mutations write their `audit_log` row **in the same transaction** as the change (via the Storage Gateway); **auth events** (login, logout) fire on read/no-tx paths through a separate non-transactional seam under `resource = 'auth'`. The read side (`GET /audit-log`) requires the admin-sensitive `audit:read:admin`, out of a two-token wildcard's reach ([ADR-0015](/architecture/decisions/#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards)). An attempt on an **unknown** username is **not** written, so scanning random usernames cannot flood the log; endpoint rate limiting (a later slice) bounds a targeted brute force. The full model, including the auth-event verbs, is [audit](/architecture/audit/).
+Every API operation records the resolved **actor** (the principal id) in `audit_log`; secret decrypts are always audited, never filterable. Node-mode writes record the node principal; a system-mode write records a **null** actor (`audit_log.actor_principal_id` is a nullable foreign key), distinguishing operator action from platform internals; an impersonated request also records `real_actor_principal_id`. Fleet mutations write their `audit_log` row **in the same transaction** as the change (via the Storage Gateway); **auth events** (login, logout) fire on read/no-tx paths through a separate non-transactional seam under `resource = 'auth'`. The read side (`GET /audit-log`) requires the admin-sensitive `audit:read:admin`, out of a two-token wildcard's reach ([ADR-0015](/architecture/decisions/#adr-0015-permissions-are-topic-patterns-single-token-and-tail-wildcards)). An attempt on an **unknown** username is **not** written, so scanning random usernames cannot flood the log; endpoint rate limiting (a later slice) bounds a targeted brute force. The full model, including the auth-event verbs, is [audit](/architecture/audit/).
 
 ## Bootstrap
 

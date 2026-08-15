@@ -33,7 +33,7 @@ const (
 	// ShapeKeyspace: an operator types its name, on the same one kebab rule as
 	// every other name (the dotted path rule retired with the one-name-rule
 	// collapse, #586). The shape survives as a declaration of what the name is
-	// for: estate-wide vocabulary a telemetry record is typed by (icmp-rtt-avg),
+	// for: fleet-wide vocabulary a telemetry record is typed by (icmp-rtt-avg),
 	// where an entity name addresses one row under a parent.
 	ShapeKeyspace IdentityShape = "keyspace"
 

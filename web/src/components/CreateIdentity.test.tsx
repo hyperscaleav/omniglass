@@ -4,7 +4,7 @@ import CreateIdentity from "./CreateIdentity";
 import { createPen } from "../lib/namegen";
 import { type DraftLabel } from "../lib/labeldraft";
 
-// The shared Identity section of the three estate create forms. What is asserted
+// The shared Identity section of the three fleet create forms. What is asserted
 // here is the CONTRACT the three pages share; each page's own test proves it is
 // wired to this rather than to a copy of it.
 //

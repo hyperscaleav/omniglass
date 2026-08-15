@@ -78,7 +78,7 @@ func TestFixturesShape(t *testing.T) {
 		}
 	}
 
-	// Components place a device in the estate; a component that names a location must
+	// Components place a device in the fleet; a component that names a location must
 	// name one declared in this document (the seed resolves the placement by key).
 	seenComp := map[string]bool{}
 	for _, c := range doc.Components {
@@ -134,7 +134,7 @@ func TestFixturesShape(t *testing.T) {
 	}
 }
 
-// TestFixturesLetThePlatformNameTheEstate is the pure guard on what this estate
+// TestFixturesLetThePlatformNameTheFleet is the pure guard on what this fleet
 // is FOR: it demonstrates the name generator, so a fixture row must not hand the
 // platform a name it was supposed to mint. It is the test that fails the moment
 // somebody goes back to hand-writing names, which is the failure that otherwise
@@ -148,12 +148,12 @@ func TestFixturesShape(t *testing.T) {
 // is refused outright), and nothing else in the fixture may carry one.
 //
 // The location half was the other way around for two slices, when `floor` shipped
-// positional and the two floors were the estate's only generated location names.
+// positional and the two floors were the fleet's only generated location names.
 // ADR-0103 reversed that: a floor's designation is B2, LG, 12A, not an ordinal.
 // So the location tier's generator ships DORMANT, demonstrated by nothing in a
-// shipped estate, and this test now asserts the absence rather than papering over
+// shipped fleet, and this test now asserts the absence rather than papering over
 // it by inventing a positional type to keep the demo alive.
-func TestFixturesLetThePlatformNameTheEstate(t *testing.T) {
+func TestFixturesLetThePlatformNameTheFleet(t *testing.T) {
 	doc, err := devseed.Fixtures()
 	if err != nil {
 		t.Fatalf("parse fixtures: %v", err)
@@ -198,7 +198,7 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 	// The component with no product: with no classification to read, the
 	// component rule can only render "Generic Device 1", so the operator's own
 	// words are the only thing that says what the box is. The recording service
-	// is pinned for the estate-wide fact its generic-service classification
+	// is pinned for the fleet-wide fact its generic-service classification
 	// cannot render: "Service 1" says nothing about what depends on it.
 	wantComponentLabels := map[string]bool{"power": true, "recording-service": true}
 	for _, c := range doc.Components {
@@ -240,7 +240,7 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 	// that this test exists to catch. Released.
 	//
 	// boardroom, auditorium, annex, the media lab and the two floors carry none,
-	// which is what makes the estate demonstrate the rule instead of masking it.
+	// which is what makes the fleet demonstrate the rule instead of masking it.
 	wantLocationLabels := map[string]bool{
 		"hq": true, "west": true, "east": true, "airport": true,
 		"huddle": true, "briefing": true, "hall": true,
@@ -256,13 +256,13 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 	}
 }
 
-// TestFixturesEstateIsAForest is a pure check that the example estate teaches the
+// TestFixturesFleetIsAForest is a pure check that the example fleet teaches the
 // no-root-location rule: the location tree is a forest with more than one
 // unparented top, and devices sit under more than one of those tops. With every
 // device under a single top, a binding at that top looks like it covers the
-// estate, and the reason the install-wide `platform` tier exists (it is the only
+// fleet, and the reason the install-wide `platform` tier exists (it is the only
 // rung that reaches all of them) is invisible in the console.
-func TestFixturesEstateIsAForest(t *testing.T) {
+func TestFixturesFleetIsAForest(t *testing.T) {
 	doc, err := devseed.Fixtures()
 	if err != nil {
 		t.Fatalf("parse fixtures: %v", err)
@@ -300,7 +300,7 @@ func TestFixturesEstateIsAForest(t *testing.T) {
 	}
 }
 
-// TestRunIdempotent proves devseed.Run lands the example estate (and the worked
+// TestRunIdempotent proves devseed.Run lands the example fleet (and the worked
 // reachability check) through the Storage Gateway and that a second run neither
 // duplicates nor errors: make dev runs it on every start. Reference data (roles,
 // location types, sample types) must exist first, so the boot seed runs ahead of
@@ -333,13 +333,13 @@ func TestRunIdempotent(t *testing.T) {
 
 	// Counts prove idempotency: the second Run added nothing. The expected
 	// number is DERIVED from the fixture rather than written here as a literal.
-	// A literal has to be edited every time the example estate grows, which
+	// A literal has to be edited every time the example fleet grows, which
 	// makes a fixture change look like a test failure and invites bumping the
 	// number without reading why it moved. Derived, it asserts something
 	// stronger anyway: everything the fixture declares landed, and the second
 	// run added none of it twice. It is also the assertion that catches a seed
 	// which cannot recognise its own platform-named rows, because that failure
-	// doubles the estate rather than erroring.
+	// doubles the fleet rather than erroring.
 	fixtures, err := devseed.Fixtures()
 	if err != nil {
 		t.Fatalf("parse fixtures: %v", err)
@@ -376,7 +376,7 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("alarms = %d, want %d: a second run re-raised instead of finding the standing condition", alarms, len(fixtures.Alarms))
 	}
 	// Membership and staffing are counted too, because they are where a resolver
-	// that zipped the fixture onto the estate in the wrong order shows up: every
+	// that zipped the fixture onto the fleet in the wrong order shows up: every
 	// name and label would still be right, and the second Run would staff a
 	// second device into a role the first Run already filled. The expected
 	// membership count is the distinct (system, component) pairs the fixture
@@ -404,7 +404,7 @@ func TestRunIdempotent(t *testing.T) {
 		t.Errorf("role assignments = %d, want %d (the fixture's own, unchanged by the second Run)", assignments, len(fixtures.RoleAssignments))
 	}
 
-	// A multi-site estate: three campuses, not one.
+	// A multi-site fleet: three campuses, not one.
 	var campuses int
 	if err := conn.QueryRow(ctx, `select count(*) from location where location_type = (select id from location_type where name = 'campus')`).Scan(&campuses); err != nil {
 		t.Fatalf("count campuses: %v", err)
@@ -457,7 +457,7 @@ func TestRunIdempotent(t *testing.T) {
 
 	// The tree links resolve: the west building hangs under the hq campus, and
 	// its name carries no ancestry, because a location's name is unique within
-	// its parent rather than across the estate.
+	// its parent rather than across the fleet.
 	var parentName string
 	if err := conn.QueryRow(ctx, `
 		select p.name from location c join location p on p.id = c.parent_id
@@ -495,7 +495,7 @@ func TestRunIdempotent(t *testing.T) {
 	all := scope.Set{All: true}
 
 	// The component the checks hang on, placed under the boardroom. It is the one
-	// component in the estate an operator named, so it is addressable by that
+	// component in the fleet an operator named, so it is addressable by that
 	// name where its platform-named siblings are not.
 	var reachComps int
 	if err := conn.QueryRow(ctx, `select count(*) from component where name = 'dsp'`).Scan(&reachComps); err != nil {
@@ -654,7 +654,7 @@ func TestRunIdempotent(t *testing.T) {
 
 // huddleDisplaySQL and barSQL address two platform-named components the way
 // anything outside the seed has to: by placement plus the name the generator
-// minted, since a bare `display-1` matches three rows in this estate.
+// minted, since a bare `display-1` matches three rows in this fleet.
 const (
 	huddleDisplaySQL = `(select id from component where name = 'display-1'
 		and location_id = (select id from location where name = 'huddle'))`
@@ -677,7 +677,7 @@ const (
 // fixture that quietly went back to letting the platform name a floor fails on
 // the pen.
 func TestSeededNamesComeFromTheGenerator(t *testing.T) {
-	ctx, conn, _ := seededEstate(t)
+	ctx, conn, _ := seededFleet(t)
 
 	for _, tc := range []struct {
 		what      string
@@ -742,7 +742,7 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 	// The whole location chain is the operator's: `boardroom` sits under the
 	// floor they called `level-2`, under the building they called `west`. The
 	// join is kept (it used to prove a typed name nesting under a minted one)
-	// because it is what catches a fixture resolver that reparented the estate.
+	// because it is what catches a fixture resolver that reparented the fleet.
 	var roomGenerated bool
 	var roomOrdinal *int
 	if err := conn.QueryRow(ctx, `
@@ -761,7 +761,7 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 	// display, which is the direct proof that the fixture could not have used
 	// a generated name as its own identity. The count is derived from the
 	// fixture (the rooms holding at least one display-classified device)
-	// rather than restated, so the estate can grow without this reading as a
+	// rather than restated, so the fleet can grow without this reading as a
 	// failure.
 	roomsWithDisplay := map[string]bool{}
 	for _, c := range fixturesDoc(t).Components {
@@ -774,7 +774,7 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 		t.Fatalf("count display-1: %v", err)
 	}
 	if displays != len(roomsWithDisplay) {
-		t.Errorf("components named display-1 = %d, want %d (one per room holding a display; a name is unique within its placement, not across the estate)", displays, len(roomsWithDisplay))
+		t.Errorf("components named display-1 = %d, want %d (one per room holding a display; a name is unique within its placement, not across the fleet)", displays, len(roomsWithDisplay))
 	}
 }
 
@@ -785,7 +785,7 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 // carries was minted from that. A stem edited in the boot seed moves this
 // assertion with it, where a hand-written list of names would drift.
 func TestASeededComponentNameAgreesWithItsProductsStem(t *testing.T) {
-	ctx, conn, _ := seededEstate(t)
+	ctx, conn, _ := seededFleet(t)
 
 	rows, err := conn.Query(ctx, `
 		with recursive chain as (
@@ -844,10 +844,10 @@ func TestASeededComponentNameAgreesWithItsProductsStem(t *testing.T) {
 // A component's label comes from the shipped rule over its resolved type and the
 // ordinal the generator allocated, so it reads back what the thing is and which
 // one it is without anybody typing it. The rows that DO carry a typed label are
-// asserted to still own it, since that is the other half of what the estate
+// asserted to still own it, since that is the other half of what the fleet
 // teaches.
 func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
-	ctx, conn, _ := seededEstate(t)
+	ctx, conn, _ := seededFleet(t)
 
 	for _, tc := range []struct {
 		table    string
@@ -884,7 +884,7 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		// (`1` labelled Level 2). They are named for their designations now, so
 		// the rule renders those designations and the platform holds the pen.
 		// Looked up under their parent because a floor's name is unique within
-		// its building rather than across the estate.
+		// its building rather than across the fleet.
 		{table: "location", place: "west", name: "level-2", label: "Level 2", platform: true},
 		{table: "location", place: "hall", name: "level-1", label: "Level 1", platform: true},
 	} {
@@ -910,7 +910,7 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 	}
 
 	// The locations the shipped rule labels (#657), addressed by name alone
-	// because each of these is estate-unique (the two floors above are looked up
+	// because each of these is fleet-unique (the two floors above are looked up
 	// under their parent instead, since a floor's name is unique only within its
 	// building). This is the half of the demonstration that would otherwise be
 	// asserted by nothing: releasing a pin leaves no test behind unless the
@@ -943,14 +943,14 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 // TestSeededStaffingLandsOnTheRightDevices proves the fixture's references still
 // point where they say they do now that the keys and the names have come apart.
 // It is the assertion that catches a resolver which zips the fixture onto the
-// estate in the wrong order: every name and label would still be right, and the
+// fleet in the wrong order: every name and label would still be right, and the
 // wrong panel would be staffing the wrong half of the room.
 //
-// The staffing is also the estate's health story: boardroom-a holds two mics and
+// The staffing is also the fleet's health story: boardroom-a holds two mics and
 // a display and reads healthy; boardroom-b is one mic short of its quorum of two
 // and reads incomplete, with the shared bar in both.
 func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
-	ctx, conn, _ := seededEstate(t)
+	ctx, conn, _ := seededFleet(t)
 
 	for _, tc := range []struct {
 		room string
@@ -1017,7 +1017,7 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 }
 
 // TestAFloorIsNamedForItsDesignation is what ADR-0103's worked example became
-// when the architect reversed it. The estate used to ship two floors both named
+// when the architect reversed it. The fleet used to ship two floors both named
 // `1`, one labelled Level 1 and one Level 2, to teach that a positional name is
 // ALLOCATION ORDER rather than a designation. The sharper reading is that a
 // floor's designation is not an integer at all (B2, LG, G, M, 12A), so an
@@ -1028,7 +1028,7 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 // the two AGREE because they are one fact rather than two. This test is the
 // statement of that, and it fails if a floor ever goes back to being minted.
 func TestAFloorIsNamedForItsDesignation(t *testing.T) {
-	ctx, conn, _ := seededEstate(t)
+	ctx, conn, _ := seededFleet(t)
 
 	rows, err := conn.Query(ctx, `
 		select p.name, f.name, coalesce(f.label, ''), f.name_generated, f.ordinal, f.label_generated
@@ -1077,15 +1077,15 @@ func TestAFloorIsNamedForItsDesignation(t *testing.T) {
 	}
 }
 
-// TestSeededEstateTeachesPlatformReach carries the forest into the database and
-// proves what it is there to teach: the seeded estate has as many unparented tops
+// TestSeededFleetTeachesPlatformReach carries the forest into the database and
+// proves what it is there to teach: the seeded fleet has as many unparented tops
 // as the fixture declares (no row stands in for a root), and the platform binding
 // is the only rung that reaches all of them. The component under the HQ subtree
 // reads that subtree's location override, while the component under a different
 // top falls back to the install-wide `platform` value, which is the case a
 // synthetic root location would have hidden.
-func TestSeededEstateTeachesPlatformReach(t *testing.T) {
-	ctx, conn, gw := seededEstate(t)
+func TestSeededFleetTeachesPlatformReach(t *testing.T) {
+	ctx, conn, gw := seededFleet(t)
 
 	doc, err := devseed.Fixtures()
 	if err != nil {
@@ -1124,11 +1124,11 @@ func TestSeededEstateTeachesPlatformReach(t *testing.T) {
 	}
 }
 
-// seededEstate brings up a database with the boot seed and one devseed Run, and
+// seededFleet brings up a database with the boot seed and one devseed Run, and
 // hands back the raw connection and the gateway. One Run rather than two: the
 // idempotency property has its own test, and every other case here is about what
-// the estate IS.
-func seededEstate(t *testing.T) (context.Context, *pgx.Conn, storage.Gateway) {
+// the fleet IS.
+func seededFleet(t *testing.T) (context.Context, *pgx.Conn, storage.Gateway) {
 	t.Helper()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -1154,7 +1154,7 @@ func seededEstate(t *testing.T) (context.Context, *pgx.Conn, storage.Gateway) {
 
 // componentIn resolves a component by its room and its platform-minted name, and
 // then reads it back through the gateway by ID. The two steps are the point: a
-// bare `display-1` is ambiguous by design in this estate, so the id is the
+// bare `display-1` is ambiguous by design in this fleet, so the id is the
 // reference, exactly as devseed itself resolves one.
 func componentIn(t *testing.T, ctx context.Context, conn *pgx.Conn, gw storage.Gateway, room, name string) *storage.Component {
 	t.Helper()
@@ -1202,17 +1202,17 @@ func assertGrant(t *testing.T, conn *pgx.Conn, ctx context.Context, username, ro
 	}
 }
 
-// TestFixturesMakeAnEstateWorthLookingAt guards what the estate canvas (#630)
-// needs from the dev estate, which is a different bar from what the earlier
+// TestFixturesMakeAnFleetWorthLookingAt guards what the fleet canvas (#630)
+// needs from the dev fleet, which is a different bar from what the earlier
 // fixtures were built to clear. Those existed to teach one thing each (a shared
 // component, a member with no role, the platform-reach lesson) and a handful of
 // rows says all of that. A canvas is judged on whether an operator can read a
-// real estate in it, and a dozen dots in one room cannot answer that either way.
+// real fleet in it, and a dozen dots in one room cannot answer that either way.
 //
 // These are fixture-shape assertions, deliberately pure: they parse the YAML and
 // reason about it, so the whole guard runs with no Postgres and cannot rot into a
 // slow test nobody runs.
-func TestFixturesMakeAnEstateWorthLookingAt(t *testing.T) {
+func TestFixturesMakeAnFleetWorthLookingAt(t *testing.T) {
 	doc, err := devseed.Fixtures()
 	if err != nil {
 		t.Fatalf("parse fixtures: %v", err)
@@ -1257,13 +1257,13 @@ func TestFixturesMakeAnEstateWorthLookingAt(t *testing.T) {
 		depths[depth(name)] = true
 	}
 	if len(depths) < 3 {
-		t.Errorf("leaf depths %v, want at least three distinct depths so the canvas is read against an uneven estate", depths)
+		t.Errorf("leaf depths %v, want at least three distinct depths so the canvas is read against an uneven fleet", depths)
 	}
 
-	// Enough to paint. A dot grid is the estate zoom's whole claim, and it
+	// Enough to paint. A dot grid is the fleet zoom's whole claim, and it
 	// cannot be judged on a handful of squares in one room.
 	if len(doc.Systems) < 6 {
-		t.Errorf("systems = %d, want at least 6 spread across the estate", len(doc.Systems))
+		t.Errorf("systems = %d, want at least 6 spread across the fleet", len(doc.Systems))
 	}
 	if len(doc.Components) < 20 {
 		t.Errorf("components = %d, want at least 20 so a cluster reads as a cluster", len(doc.Components))
@@ -1275,7 +1275,7 @@ func TestFixturesMakeAnEstateWorthLookingAt(t *testing.T) {
 		}
 	}
 	if len(placed) < 3 {
-		t.Errorf("systems occupy %d roots, want at least 3 so the estate zoom has bands to compare", len(placed))
+		t.Errorf("systems occupy %d roots, want at least 3 so the fleet zoom has bands to compare", len(placed))
 	}
 
 	// A hole: a leaf nobody has put a system in. The canvas draws these, and
@@ -1302,7 +1302,7 @@ func TestFixturesMakeAnEstateWorthLookingAt(t *testing.T) {
 
 	// Every verdict the domain has must appear somewhere, incomplete above all:
 	// it landed in #631 and nothing in the seed produced it, so the colour that
-	// un-saturates a commissioning estate had never been seen on screen.
+	// un-saturates a commissioning fleet had never been seen on screen.
 	var anyUnstaffed bool
 	for _, s := range doc.Systems {
 		// A system with a standard but no assignment at all cannot satisfy any
@@ -1326,7 +1326,7 @@ func TestFixturesMakeAnEstateWorthLookingAt(t *testing.T) {
 	}
 
 	// A component shared across two DIFFERENT roots. Sharing inside one room
-	// already had a fixture; the estate zoom's ring-and-ghost rule is about a
+	// already had a fixture; the fleet zoom's ring-and-ghost rule is about a
 	// box two bands apart depending on each other, which is the case an
 	// operator cannot see any other way.
 	rootsOf := map[string]map[string]bool{}
@@ -1353,21 +1353,21 @@ func TestFixturesMakeAnEstateWorthLookingAt(t *testing.T) {
 		}
 	}
 	if !crossRoot {
-		t.Error("no component is shared across two roots, so the estate zoom's ghost rule is never exercised")
+		t.Error("no component is shared across two roots, so the fleet zoom's ghost rule is never exercised")
 	}
 }
 
-// TestSeededEstateShowsEveryVerdict traces the example estate through the real
+// TestSeededFleetShowsEveryVerdict traces the example fleet through the real
 // health rollup rather than trusting the fixture's shape. The fixture guard
 // above proves a system was left unstaffed; only this proves that the platform
-// then reads it as INCOMPLETE, which is the claim the estate canvas is coloured
+// then reads it as INCOMPLETE, which is the claim the fleet canvas is coloured
 // by and is a different fact from "no assignment row exists".
 //
 // It is also the regression that catches a seed drifting into monochrome. The
 // canvas's whole argument is that an operator can tell a commissioning gap from
-// an outage at a glance, and a dev estate where every room reads healthy
+// an outage at a glance, and a dev fleet where every room reads healthy
 // demonstrates nothing and hides a broken rollup behind a green screen.
-func TestSeededEstateShowsEveryVerdict(t *testing.T) {
+func TestSeededFleetShowsEveryVerdict(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
 	}
@@ -1398,7 +1398,7 @@ func TestSeededEstateShowsEveryVerdict(t *testing.T) {
 	// Systems are platform-named, so the fixture key is not an address, and a
 	// minted name is not one either: both boardroom halves mint plain
 	// `boardroom` in their own rooms, so the bare name is ambiguous
-	// estate-wide. A system is resolved to its uuid through the room that
+	// fleet-wide. A system is resolved to its uuid through the room that
 	// holds it instead, and a room may hold more than one (the lab's two
 	// pods), so the verdict is asserted over every system in the room.
 	conn2, err := pgx.Connect(ctx, dsn)
@@ -1445,7 +1445,7 @@ func TestSeededEstateShowsEveryVerdict(t *testing.T) {
 		}
 	}
 
-	// The estate must not be monochrome: an operator judging the canvas needs
+	// The fleet must not be monochrome: an operator judging the canvas needs
 	// more than one colour on it.
 	seen := map[string]bool{}
 	for _, room := range []string{"media-lab", "boardroom-a", "boardroom-b", "auditorium", "huddle", "bay-1", "briefing"} {
@@ -1454,7 +1454,7 @@ func TestSeededEstateShowsEveryVerdict(t *testing.T) {
 		}
 	}
 	if len(seen) < 3 {
-		t.Errorf("the seeded estate shows %d distinct verdicts (%v), want at least 3 so the canvas is judged against a real spread", len(seen), seen)
+		t.Errorf("the seeded fleet shows %d distinct verdicts (%v), want at least 3 so the canvas is judged against a real spread", len(seen), seen)
 	}
 }
 

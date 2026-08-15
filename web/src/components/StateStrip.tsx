@@ -4,7 +4,7 @@ import { For, type JSX } from "solid-js";
 // split into weighted segments, one per contiguous stretch in a single state, with
 // an optional trailing hint. It is deliberately dumb about MEANING: the caller maps
 // a state value to its tone class, so the same primitive draws interface
-// availability (up / down) and estate health (healthy / incomplete / degraded /
+// availability (up / down) and fleet health (healthy / incomplete / degraded /
 // outage) without
 // either surface inventing a second timeline idiom.
 //

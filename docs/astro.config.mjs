@@ -46,7 +46,7 @@ export default defineConfig({
     starlight({
       title: 'Omniglass',
       description:
-        'Open observability and control plane for AV and IT estates, and a place to learn monitoring by operating the real thing.',
+        'Open observability and control plane for AV and IT fleets, and a place to learn monitoring by operating the real thing.',
       logo: {
         light: './public/logo-light.svg',
         dark: './public/logo-dark.svg',
@@ -93,7 +93,7 @@ export default defineConfig({
             { label: 'Build log', slug: 'architecture/build-log' },
             { label: 'Decision log', slug: 'architecture/decisions' },
             { label: 'Roadmap', slug: 'architecture/roadmap' },
-            // the estate model, then the shapes it pins
+            // the fleet model, then the shapes it pins
             { label: 'Core entities', slug: 'architecture/core-entities' },
             // the journey, in the order the data travels
             { label: 'Data collection', slug: 'architecture/collection' },
@@ -157,7 +157,7 @@ export default defineConfig({
           items: [
             { label: 'Overview', slug: 'guides/operator' },
             { label: 'Sign in and your profile', slug: 'guides/operator/sign-in' },
-            { label: 'Find things in your estate', slug: 'guides/operator/inventory' },
+            { label: 'Find things in your fleet', slug: 'guides/operator/inventory' },
             { label: 'Work with an entity', slug: 'guides/operator/entities' },
             { label: 'Nodes and reachability', slug: 'guides/operator/collection' },
             { label: 'The CLI', slug: 'guides/cli' },

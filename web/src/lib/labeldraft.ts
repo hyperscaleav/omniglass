@@ -22,7 +22,7 @@ import { describeError } from "./format";
 // allocates nothing. It reads the lowest free ordinal rather than minting one,
 // takes no advisory lock and opens no write transaction, so asking on every
 // picker change costs a read, not a place in the queue every create in the
-// estate is waiting in.
+// fleet is waiting in.
 
 // DraftLabel is the answer: the name, the ordinal that name was minted from,
 // the label, and the rule that produced it.
@@ -37,7 +37,7 @@ import { describeError } from "./format";
 //
 // An empty label is a real state rather than an error: it means the platform
 // stores nothing and the surface reads the name instead. It is reached by
-// clearing the rule at every tier, rather than being where a shipped estate
+// clearing the rule at every tier, rather than being where a shipped fleet
 // starts (each of the three kinds ships a rule as of #657). The rule field is
 // what tells it apart from a rule that ran and had nothing to say.
 export interface DraftLabel {
@@ -79,7 +79,7 @@ export interface LocationDraft {
   parent?: string;
 }
 
-export type EstateDraft =
+export type FleetDraft =
   | { kind: "component"; body: ComponentDraft }
   | { kind: "system"; body: SystemDraft }
   | { kind: "location"; body: LocationDraft };
@@ -102,7 +102,7 @@ export async function renderLocationLabel(body: LocationDraft): Promise<DraftLab
   return data as DraftLabel;
 }
 
-export function renderDraftLabel(d: EstateDraft): Promise<DraftLabel> {
+export function renderDraftLabel(d: FleetDraft): Promise<DraftLabel> {
   switch (d.kind) {
     case "component":
       return renderComponentLabel(d.body);
@@ -132,7 +132,7 @@ export const LABEL_DRAFT_KEY = "label-draft";
 // no name rule, a placement out of scope), and none of them gets better by
 // being asked again; a retry would only delay the message that names the
 // missing fact.
-export function useLabelDraft(draft: () => EstateDraft | null) {
+export function useLabelDraft(draft: () => FleetDraft | null) {
   return useQuery(() => {
     const d = draft();
     return {

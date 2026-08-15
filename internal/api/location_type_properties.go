@@ -68,7 +68,7 @@ type setLocationTypePropertyInput struct {
 // is a row in its own table rather than a column of the registry row a fork
 // covers, and nothing seeds one, so every line in this table is an operator's
 // already. Refusing them on the four shipped types would have withdrawn the
-// contract editor for the types an estate actually uses.
+// contract editor for the types an fleet actually uses.
 func registerLocationTypePropertyRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-location-type-properties",

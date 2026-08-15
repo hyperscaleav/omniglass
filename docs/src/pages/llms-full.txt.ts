@@ -7,7 +7,7 @@ export const GET: APIRoute = () => {
   const header = [
     '# Omniglass documentation (full text)',
     '',
-    'Omniglass is an open, AV-native observability and control plane for AV and IT estates: one Go binary over PostgreSQL. This file concatenates the whole documentation site as one machine-readable artifact for LLM tools (NotebookLM and the like).',
+    'Omniglass is an open, AV-native observability and control plane for AV and IT fleets: one Go binary over PostgreSQL. This file concatenates the whole documentation site as one machine-readable artifact for LLM tools (NotebookLM and the like).',
     '',
     'This is a proposed, forward-looking architecture; per-page build status (Design / Partial / Built / Diverged) lives at /architecture/status/. Source: https://docs.omniglass.hyperscaleav.com/',
     '',

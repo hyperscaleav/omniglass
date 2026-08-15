@@ -14,7 +14,7 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
-// The collection tier's references survive a rename for the same reason the estate
+// The collection tier's references survive a rename for the same reason the fleet
 // tier's do: every arc stores the owner's primary key, so a rename touches nothing.
 //
 // This is the tier where getting it wrong is least visible. An orphaned interface

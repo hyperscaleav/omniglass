@@ -39,7 +39,7 @@ func TestNodeGateway(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	// Create requires an all-scope grant (node is estate-wide, not tree-scoped).
+	// Create requires an all-scope grant (node is fleet-wide, not tree-scoped).
 	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "node-a", Description: "lab a"}, scope.Set{}, all); !errors.Is(err, storage.ErrNodeForbidden) {
 		t.Fatalf("create without all-scope: want ErrNodeForbidden, got %v", err)
 	}
@@ -333,7 +333,7 @@ func TestNodeIdentityAndEdit(t *testing.T) {
 		t.Fatalf("unknown location: want ErrLocationNotFound, got %v", err)
 	}
 
-	// Estate-wide: an update without all-scope is forbidden; an unknown node is not found.
+	// Fleet-wide: an update without all-scope is forbidden; an unknown node is not found.
 	if _, err := gw.UpdateNode(ctx, "", "edge-hq", storage.NodePatch{Label: str("x")}, scope.Set{}, scope.Set{}, all); !errors.Is(err, storage.ErrNodeForbidden) {
 		t.Fatalf("update without all-scope: want ErrNodeForbidden, got %v", err)
 	}

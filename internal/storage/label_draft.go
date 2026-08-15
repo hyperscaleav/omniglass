@@ -19,7 +19,7 @@ import (
 //
 // That refusal is about MINTING. A draft preview that allocated an ordinal took
 // the same pg_advisory_xact_lock on the placement bucket that real creates
-// take, so a form previewing per picker change would serialise the estate's
+// take, so a form previewing per picker change would serialise the fleet's
 // creates behind a UI affordance.
 //
 // A render allocates nothing. It resolves the rule through the same tiers, over
@@ -297,7 +297,7 @@ func (p *PG) RenderSystemDraftLabel(ctx context.Context, d SystemLabelDraft, cre
 // RenderLocationDraftLabel renders the name and the label a location create
 // would stamp. Its one scope is the create's own, and it guards the PARENT
 // rather than the render: a location's data map reads nothing off another
-// estate row (its keys are the location's own name and its type's display
+// fleet row (its keys are the location's own name and its type's display
 // name), but the previewed ordinal is read from the parent's bucket, which is
 // the same reference CreateLocation resolves in this same set.
 func (p *PG) RenderLocationDraftLabel(ctx context.Context, d LocationLabelDraft, create scope.Set) (DraftLabel, error) {

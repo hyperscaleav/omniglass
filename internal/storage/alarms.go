@@ -18,7 +18,7 @@ import (
 // Raising and clearing both recompute health in the SAME transaction. That is the
 // slice's load-bearing rule: an alarm and the verdict it caused must never be
 // separately visible, and a verdict computed later would stamp its transition at
-// the time somebody looked rather than the time the estate changed.
+// the time somebody looked rather than the time the fleet changed.
 
 // Alarm is one raised condition on a component. ClearedAt is nil while the alarm
 // is active; clearing keeps the row, so the record of what was wrong and when
@@ -247,7 +247,7 @@ func (p *PG) ClearAlarm(ctx context.Context, actorID, componentName, alarmID str
 // AcknowledgeAlarm records that a human has seen this alarm, and changes nothing
 // else. It deliberately does NOT recompute health: an alarm's raised state
 // belongs to its condition, so acknowledging is not fixing, and a recompute here
-// would stamp a transition at a moment when nothing about the estate changed.
+// would stamp a transition at a moment when nothing about the fleet changed.
 //
 // Acknowledging twice is IDEMPOTENT, not a refusal (#728). The recorded fact is
 // "a human has seen this", which is monotonic, and the FIRST sighting is the

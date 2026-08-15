@@ -3,10 +3,10 @@ import type { components } from "../api/schema.gen";
 import { verdictOf, worstVerdict, type Verdict } from "./health";
 import { entityLabel } from "./entities";
 
-// The estate view model: the shapes the canvas renders, and the pure functions
+// The fleet view model: the shapes the canvas renders, and the pure functions
 // that derive them from the projection.
 //
-// This module is the seam the whole estate surface is built on. Every renderer
+// This module is the seam the whole fleet surface is built on. Every renderer
 // consumes the types below and NOTHING else: no role, no assignment, no quorum
 // arithmetic, no API body. That is deliberate and it is load-bearing. The model
 // underneath is still moving (typed slots landed in #647, plans and positions
@@ -23,17 +23,17 @@ import { entityLabel } from "./entities";
 // carries them; the one rollup below folds verdicts the server already decided,
 // worst-wins, which is a different act from deciding one.
 
-export type EstateView = components["schemas"]["EstateViewOutputBody"];
-export type EstateLocation = NonNullable<EstateView["locations"]>[number];
-export type EstateSystem = NonNullable<EstateView["systems"]>[number];
-export type EstateDot = NonNullable<EstateSystem["dots"]>[number];
+export type FleetView = components["schemas"]["FleetViewOutputBody"];
+export type FleetLocation = NonNullable<FleetView["locations"]>[number];
+export type FleetSystem = NonNullable<FleetView["systems"]>[number];
+export type FleetDot = NonNullable<FleetSystem["dots"]>[number];
 
-export const ESTATE_VIEW_KEY = ["estate-view"] as const;
+export const FLEET_VIEW_KEY = ["fleet-view"] as const;
 
-export async function estateView(): Promise<EstateView> {
-  const { data, error } = await api.GET("/views/estate");
+export async function fleetView(): Promise<FleetView> {
+  const { data, error } = await api.GET("/views/fleet");
   if (error) throw error;
-  return data as EstateView;
+  return data as FleetView;
 }
 
 // A Dot is one square. It carries the verdict that colours it, the two flags
@@ -46,7 +46,7 @@ export type Dot = {
   // owned is the single cluster that draws this component solid. A shared
   // component is owned in exactly one place (its primary system) and a ghost
   // everywhere else, which is how the canvas shows every system depending on a
-  // box without the estate appearing to contain several of it.
+  // box without the fleet appearing to contain several of it.
   owned: boolean;
   shared: boolean;
 };
@@ -85,15 +85,15 @@ export type Band = {
 export type Grouping = {
   name: string;
   // bandFor returns the band key a system belongs to, or null to drop it.
-  bandFor(system: EstateSystem, view: EstateView): string | null;
+  bandFor(system: FleetSystem, view: FleetView): string | null;
   // label and sublabel describe a band, given its key and the view.
-  label(key: string, view: EstateView): string;
-  sublabel(key: string, view: EstateView): string;
+  label(key: string, view: FleetView): string;
+  sublabel(key: string, view: FleetView): string;
   // order sorts the band keys.
-  order(keys: string[], view: EstateView): string[];
+  order(keys: string[], view: FleetView): string[];
 };
 
-export function locationIndex(view: EstateView): Map<string, EstateLocation> {
+export function locationIndex(view: FleetView): Map<string, FleetLocation> {
   return new Map((view.locations ?? []).map((l) => [l.id, l]));
 }
 
@@ -101,7 +101,7 @@ export function locationIndex(view: EstateView): Map<string, EstateLocation> {
 // locations, not by trust: a parent cycle in the data would otherwise hang the
 // canvas, and the tree is arbitrary-depth by design so no fixed ladder can
 // stand in for the walk.
-export function rootOf(id: string | null | undefined, index: Map<string, EstateLocation>): EstateLocation | null {
+export function rootOf(id: string | null | undefined, index: Map<string, FleetLocation>): FleetLocation | null {
   let current = id ? index.get(id) : undefined;
   let guard = index.size + 1;
   while (current && current.parent && guard-- > 0) {
@@ -114,8 +114,8 @@ export function rootOf(id: string | null | undefined, index: Map<string, EstateL
 
 // ancestors returns root-first the chain down to id, which is what the
 // breadcrumb and the type path read.
-export function ancestors(id: string, index: Map<string, EstateLocation>): EstateLocation[] {
-  const out: EstateLocation[] = [];
+export function ancestors(id: string, index: Map<string, FleetLocation>): FleetLocation[] {
+  const out: FleetLocation[] = [];
   let current = index.get(id);
   let guard = index.size + 1;
   while (current && guard-- > 0) {
@@ -145,7 +145,7 @@ export const byRootLocation: Grouping = {
   },
 };
 
-export function toCluster(system: EstateSystem): SystemCluster {
+export function toCluster(system: FleetSystem): SystemCluster {
   return {
     systemId: system.id,
     name: system.name,
@@ -163,10 +163,10 @@ export function toCluster(system: EstateSystem): SystemCluster {
 }
 
 // bandsOf is the whole gathering step, and the only place the canvas learns how
-// the estate is arranged. Swap the grouping and the same dots land in different
+// the fleet is arranged. Swap the grouping and the same dots land in different
 // rows with no renderer touched.
-export function bandsOf(view: EstateView, grouping: Grouping = byRootLocation): Band[] {
-  const groups = new Map<string, EstateSystem[]>();
+export function bandsOf(view: FleetView, grouping: Grouping = byRootLocation): Band[] {
+  const groups = new Map<string, FleetSystem[]>();
   for (const system of view.systems ?? []) {
     const key = grouping.bandFor(system, view);
     if (key === null) continue;
@@ -195,18 +195,18 @@ export function bandsOf(view: EstateView, grouping: Grouping = byRootLocation): 
 }
 
 // locationsWithoutSystems names the rooms that exist and hold nothing: the
-// dashed holes the canvas draws. A hole is the half of the estate a list view
+// dashed holes the canvas draws. A hole is the half of the fleet a list view
 // cannot show, and naming it is most of what the canvas is for.
 //
 // It answers ONLY from what the view contains, which matters because the system
 // tier is scoped independently of the place tree. A caller who may read
 // locations but not systems receives a view with no systems in it, and "every
 // leaf is a hole" would then be a confident lie about a fully commissioned
-// estate. There is no way to tell that case from a genuinely empty one from
+// fleet. There is no way to tell that case from a genuinely empty one from
 // here, so this refuses to guess: with no systems in view at all, it claims no
-// holes. A brand-new estate loses a true-but-obvious answer; a scoped operator
+// holes. A brand-new fleet loses a true-but-obvious answer; a scoped operator
 // is not told their rooms are empty when they are not.
-export function locationsWithoutSystems(view: EstateView): EstateLocation[] {
+export function locationsWithoutSystems(view: FleetView): FleetLocation[] {
   const systems = view.systems ?? [];
   if (systems.length === 0) return [];
   const placed = new Set(systems.map((s) => s.location).filter(Boolean) as string[]);
@@ -217,8 +217,8 @@ export function locationsWithoutSystems(view: EstateView): EstateLocation[] {
   return (view.locations ?? []).filter((l) => !hasChild.has(l.id) && !placed.has(l.id));
 }
 
-// estateTotals is the inspector's headline, counting a shared component once.
-export function estateTotals(view: EstateView): { systems: number; components: number; roots: number } {
+// fleetTotals is the inspector's headline, counting a shared component once.
+export function fleetTotals(view: FleetView): { systems: number; components: number; roots: number } {
   const distinct = new Set<string>();
   for (const s of view.systems ?? []) for (const d of s.dots ?? []) distinct.add(d.component);
   return {

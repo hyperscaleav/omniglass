@@ -40,7 +40,7 @@ import (
 
 type locationGrantFixture struct {
 	c *apiClient
-	// dsn is kept so a test can mint a further principal against the same estate.
+	// dsn is kept so a test can mint a further principal against the same fleet.
 	dsn string
 	// owner runs the control half: the identical body, served, so every refusal
 	// below is a scope boundary rather than a broken route.

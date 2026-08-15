@@ -45,7 +45,7 @@ func TestSecretAPI(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// Estate: a room in a building, a system, and a codec at both.
+	// Fleet: a room in a building, a system, and a codec at both.
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "bldg", "location_type": "building"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "room", "location_type": "room", "parent": "bldg"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "sys"}, http.StatusCreated)
@@ -220,7 +220,7 @@ func TestSecretAdminSensitive(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// Estate: a room in a building, a system, and a codec at both.
+	// Fleet: a room in a building, a system, and a codec at both.
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "bldg", "location_type": "building"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "room", "location_type": "room", "parent": "bldg"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "sys"}, http.StatusCreated)

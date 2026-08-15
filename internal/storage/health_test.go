@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// healthFixture is the estate the health tests reason over: a location tree with
+// healthFixture is the fleet the health tests reason over: a location tree with
 // a system in its deepest room, a standard that wants one table mic, and a room
 // bar staffing it. Everything below asserts on how an alarm travels this chain.
 type healthFixture struct {

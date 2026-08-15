@@ -3,17 +3,17 @@ import {
   ancestors,
   bandsOf,
   byRootLocation,
-  estateTotals,
+  fleetTotals,
   locationIndex,
   locationsWithoutSystems,
   rootOf,
   toCluster,
-  type EstateView,
+  type FleetView,
   type Grouping,
-} from "./estate";
+} from "./fleet";
 import { uuidFor } from "./testids";
 
-// The fixture is the estate the canvas has to survive: two roots of different
+// The fixture is the fleet the canvas has to survive: two roots of different
 // depth, no level in common below the root, and one component shared between
 // two systems in DIFFERENT roots, which is the case every count below is really
 // testing.
@@ -38,7 +38,7 @@ const dot = (component: string, name: string, verdict: string, primary: boolean,
   shared,
 });
 
-const view: EstateView = {
+const view: FleetView = {
   locations: [
     loc("l-hq", "hq", "campus"),
     loc("l-b1", "hq-b1", "building", "l-hq"),
@@ -66,7 +66,7 @@ const view: EstateView = {
       dots: [dot(uuidFor("c-bar"), "bar-1", "healthy", false, true)],
     },
   ],
-} as unknown as EstateView;
+} as unknown as FleetView;
 
 describe("rootOf", () => {
   it("walks an arbitrary-depth tree to its root", () => {
@@ -82,7 +82,7 @@ describe("rootOf", () => {
     const cyclic = {
       locations: [loc("cyc-a", "a", "room", "cyc-b"), loc("cyc-b", "b", "room", "cyc-a")],
       systems: [],
-    } as unknown as EstateView;
+    } as unknown as FleetView;
     expect(() => rootOf(uuidFor("cyc-a"), locationIndex(cyclic))).not.toThrow();
   });
 
@@ -122,7 +122,7 @@ describe("bandsOf", () => {
   });
 
   // The count a shared component makes wrong. bar-1 is one box in two systems
-  // in two different roots; each band counts it once, and the estate total
+  // in two different roots; each band counts it once, and the fleet total
   // counts it once overall.
   it("counts a component once per band, not once per dot", () => {
     const hq = bandsOf(view).find((b) => b.label === "hq")!;
@@ -156,7 +156,7 @@ describe("bandsOf", () => {
     const orphan = {
       ...view,
       systems: [...view.systems!, { id: uuidFor("s-none"), name: "floating", label: "", location: "", verdict: "healthy", dots: [] }],
-    } as unknown as EstateView;
+    } as unknown as FleetView;
     expect(bandsOf(orphan).length).toBe(2);
   });
 });
@@ -172,17 +172,17 @@ describe("locationsWithoutSystems", () => {
   // The system tier is scoped independently of the place tree, so a view can
   // arrive with locations and no systems because the caller may not read them.
   // Claiming every leaf is a hole there would tell a scoped operator their
-  // commissioned estate is empty, and nothing here can tell that case from a
+  // commissioned fleet is empty, and nothing here can tell that case from a
   // genuinely empty one, so it claims nothing.
   it("claims no holes when it cannot see the systems at all", () => {
-    const noSystems = { ...view, systems: [] } as unknown as EstateView;
+    const noSystems = { ...view, systems: [] } as unknown as FleetView;
     expect(locationsWithoutSystems(noSystems)).toEqual([]);
   });
 });
 
-describe("estateTotals", () => {
-  it("counts a shared component once across the whole estate", () => {
-    expect(estateTotals(view)).toEqual({ systems: 2, components: 2, roots: 2 });
+describe("fleetTotals", () => {
+  it("counts a shared component once across the whole fleet", () => {
+    expect(fleetTotals(view)).toEqual({ systems: 2, components: 2, roots: 2 });
   });
 });
 

@@ -179,7 +179,7 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
 
   // The editable identity fields (label, description, location), the same
   // read-edit-save shape the component/location blades use. The location options
-  // are the estate's locations (a descriptive placement, not scope). The signals
+  // are the fleet's locations (a descriptive placement, not scope). The signals
   // re-sync from the live node whenever it changes or edit mode toggles, so Cancel
   // reverts and a Save reflects.
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: () => listLocations() }));

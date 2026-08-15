@@ -22,7 +22,7 @@ export type NavChild = {
   // so the sidebar hides the tab from exactly whoever the server would 403.
   perm?: string;
   // The section this entry sits under inside its group. A section is named for
-  // the estate noun it serves; the entry keeps the registry's own word (and where
+  // the fleet noun it serves; the entry keeps the registry's own word (and where
   // the registry's only word is "type", the entry is Types). The sidebar renders
   // a section header as a non-folding label before each run of children sharing a
   // section, never as a collapsible fold; filterNav still judges each entry on
@@ -47,7 +47,7 @@ export const navItems: NavItem[] = [
   { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
   { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering sample." },
   {
-    label: "Inventory", icon: Icons.Package, hint: "The monitored estate: components, systems, locations, and the collection nodes, each addressable with its health and configuration.",
+    label: "Inventory", icon: Icons.Package, hint: "The monitored fleet: components, systems, locations, and the collection nodes, each addressable with its health and configuration.",
     children: [
       { label: "Components", path: "/components", live: true, resource: "component", hint: "The component inventory, with declared config, props, and tags. Device interfaces are a panel on the component." },
       { label: "Systems", path: "/systems", live: true, resource: "system", hint: "Location and system trees, navigable, with health at each level." },
@@ -59,15 +59,15 @@ export const navItems: NavItem[] = [
     ],
   },
   {
-    label: "Values", icon: Icons.Sliders, hint: "Operator-set values and content: interpolation variables, encrypted secrets, and reconciled component config, each resolved down the scope cascade, plus the files kept with the estate.",
+    label: "Values", icon: Icons.Sliders, hint: "Operator-set values and content: interpolation variables, encrypted secrets, and reconciled component config, each resolved down the scope cascade, plus the files kept with the fleet.",
     children: [
       { label: "Variables", path: "/variables", live: true, resource: "variable", hint: "Free interpolated values (macros), resolved down the scope cascade." },
       { label: "Secrets", path: "/secrets", live: true, resource: "secret", hint: "Shared device and platform credentials, resolved down the scope cascade." },
       { label: "Config", path: "/config", hint: "Reconciled component and system configuration: desired values operators set, optionally observed back from the device to detect drift and reconcile." },
       // Files are operator-uploaded content, not a cascaded value: a flat, tenant-wide
-      // store of opaque bytes kept beside the estate. It sits in Values as the
+      // store of opaque bytes kept beside the fleet. It sits in Values as the
       // non-cascading member (deliberately off the exclusive arc).
-      { label: "Files", path: "/files", live: true, resource: "file", hint: "Firmware images, config dumps, runbooks, and captures kept with the estate, deduplicated and searchable." },
+      { label: "Files", path: "/files", live: true, resource: "file", hint: "Firmware images, config dumps, runbooks, and captures kept with the fleet, deduplicated and searchable." },
     ],
   },
   // Catalog is a single live entry opening the catalog area: a layout shell
@@ -78,7 +78,7 @@ export const navItems: NavItem[] = [
   // exactly the registries it may read, while each registry page keeps its own
   // route-guard gate. The per-registry pages stay declared off-rail (OFF_RAIL
   // below): that carries their top-bar identity and their route-guard gates.
-  { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, hint: "Everything the estate is typed by: every registry, browsable in one place." },
+  { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, hint: "Everything the fleet is typed by: every registry, browsable in one place." },
   { label: "Explore", path: "/explore", icon: Icons.Compass, hint: "Sample history, the event log, and the cascade resolve view." },
   { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned samples." },
   {

@@ -13,7 +13,7 @@ import { visibleGroups, type CatalogEntry, type CatalogGroup } from "../lib/cata
 // no card, through the same visibleGroups over the same can() the rail uses.
 // Each card teaches its group (the sentence lives on the table) and counts its
 // registries live through the list pages' own query keys (learning-tool
-// doctrine: the numbers are this estate's real rows, not decoration); a soon
+// doctrine: the numbers are this fleet's real rows, not decoration); a soon
 // entry reads soon without a count, linking when its stub page is routed
 // (Rules, Notifications) and inert when none exists (the Templates slots). One
 // query per registry, so a failing fetch marks its own row and nothing else
@@ -26,7 +26,7 @@ export default function CatalogOverview() {
   return (
     <Page
       title="Catalog"
-      subtitle="The authored model behind the estate: what each group's registries hold, counted live from this install."
+      subtitle="The authored model behind the fleet: what each group's registries hold, counted live from this install."
     >
       <div class="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
         <For each={groups()}>{(g) => <GroupCard group={g} />}</For>

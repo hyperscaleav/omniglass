@@ -514,7 +514,7 @@ describe("Locations properties panel", () => {
   });
 });
 
-// #627 scopes name uniqueness to placement, not the whole estate: two
+// #627 scopes name uniqueness to placement, not the whole fleet: two
 // locations under different parents may now legally share a name. The tree
 // builder used to key its construction-time map on the bare name
 // (byId.set(l.name, ...)), so the second same-named row silently overwrote
@@ -611,7 +611,7 @@ describe("Locations list identity", () => {
   // resolved label to the row's address, and that copy cannot see who chose the
   // label. Left alone it would repeat the name under every platform-labelled row,
   // which is the regression the flat list's IdentityCell was fixed to avoid, on the
-  // surface that renders most of the estate.
+  // surface that renders most of the fleet.
   it("does not repeat the key beneath a label the platform rendered", async () => {
     const generated: Location = {
       id: uuidFor("l-gen"), name: "level-1", label: "Level 1",
@@ -626,7 +626,7 @@ describe("Locations list identity", () => {
   // The tree list carried the same chip the flat list did, and it goes for the
   // same reason (#693): a full-text mark on every platform-labelled row cost the
   // Name column the width of the word, on the surface that renders most of the
-  // estate, to state a fact an operator could not act on from a list. It is now
+  // fleet, to state a fact an operator could not act on from a list. It is now
   // the lock on the label field of the edit blade.
   it("renders no pen chip in the tree, whoever holds the pen", async () => {
     const generated: Location = {
@@ -715,7 +715,7 @@ describe("Locations create identity", () => {
     const { typeSelect, key } = await fields();
     fireEvent.change(typeSelect, { target: { value: "room" } });
     await waitFor(() => expect(key.value).toBe("room"));
-    expect(screen.getByText(/Unique at the estate root/)).toBeTruthy();
+    expect(screen.getByText(/Unique at the fleet root/)).toBeTruthy();
 
     const parentSelect = screen.getByText("Root (no parent)").closest("select") as HTMLSelectElement;
     fireEvent.change(parentSelect, { target: { value: hqB1.id } });
@@ -747,7 +747,7 @@ describe("Locations create identity", () => {
 
   it("falls back to the name in the locked label field where no rule resolves", async () => {
     // Reachable by clearing the rule at every tier, and it stopped being the
-    // shipped estate's default when the location rule landed (#657). A locked
+    // shipped fleet's default when the location rule landed (#657). A locked
     // field showing nothing at all would be worse than the form this replaces,
     // so it shows what an operator will actually read, which is the name.
     stubFetch();

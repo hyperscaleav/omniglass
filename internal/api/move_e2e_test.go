@@ -157,7 +157,7 @@ func TestMoveIsItsOwnPermission(t *testing.T) {
 // different placement buckets (#627: name uniqueness is scoped to placement,
 // so this is legal), one moving into the other's bucket. Addressed by uuid
 // (returned from its create), never by the now-shared bare name "dup", which
-// would be ambiguous estate-wide for an all-scoped owner; the 409 message
+// would be ambiguous fleet-wide for an all-scoped owner; the 409 message
 // still names it by its actual name (componentMoverName resolves the ref back
 // to the row's own name), proving the message is correct under uuid
 // addressing too, not just when the caller happens to type the plain name.

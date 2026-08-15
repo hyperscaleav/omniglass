@@ -13,7 +13,7 @@ import SchemaTable from '../../../components/SchemaTable.astro';
 The first slice ([ADR-0029](/architecture/decisions/#adr-0029-files-slice-1-a-content-addressed-blob-store-and-a-tenant-wide-file-handle), [epic #242](https://github.com/hyperscaleav/omniglass/issues/242), [#244](https://github.com/hyperscaleav/omniglass/issues/244)) is **built**: the content-addressed **`blob`** store as a Storage Gateway primitive (default **pgblobs**, dedup on the hash), the **`file`** handle CRUD over the API, generated CLI, and typed client, and the Files operator directory, gated by **`file:<action>`** plus the per-file **`sensitive`** flag. Deferred: **attaching** a file to entities and types ([#242](https://github.com/hyperscaleav/omniglass/issues/242)), async mark-sweep **GC**, the **S3** and **disk** backends, **tags-on-files** ([#191](https://github.com/hyperscaleav/omniglass/issues/191)), and richer search; the **resource-classification + clearance** lattice subsuming the binary `sensitive` flag is [its own epic (#243)](https://github.com/hyperscaleav/omniglass/issues/243).
 :::
 
-Files keep the opaque bytes that go with an estate (a firmware image, a config dump, a runbook, a
+Files keep the opaque bytes that go with an fleet (a firmware image, a config dump, a runbook, a
 packet capture) searchable and deduplicated: a **`file`** handle over a content-addressed **blob**
 store, behind the same Storage Gateway as everything else.
 
@@ -39,7 +39,7 @@ from. The vocabulary is shared; the cascade is not.
 
 ## Access: a permission and a sensitive tier, no placement
 
-A file carries **no estate placement**: unlike a [secret](/architecture/variables/), which is *for*
+A file carries **no fleet placement**: unlike a [secret](/architecture/variables/), which is *for*
 one component or system and sits on the exclusive arc, a file relates to *many* things (a firmware
 image documents many device types) or to nothing, so its locality is its future **attachments** (a
 many-to-many relation), not an owner column. A file is **tenant-wide**, gated by two existing

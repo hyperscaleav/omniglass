@@ -80,7 +80,7 @@ Everything lives under `/api/v1`. The path shape is derivable, not special-cased
   `POST /systems:checkName` (also `/components:checkName`, `/locations:checkName`) is an advisory
   precheck for a technical-name rename, returning `{ valid, available, reason }`, gated by
   `<entity>:update` (the advisory reads a name's availability; performing the rename needs
-  `<entity>:rename`). Name uniqueness is scoped to **placement**, not the whole estate
+  `<entity>:rename`). Name uniqueness is scoped to **placement**, not the whole fleet
   ([#627](https://github.com/hyperscaleav/omniglass/issues/627)): the request carries the same
   `parent`/`location` fields a create would, and availability is checked against that specific
   placement bucket, not a single global fact. It stays **blind to the caller's own grant scope**:
@@ -183,7 +183,7 @@ mint a create allocates from. It is served rather than derived by a surface for 
 resolved icon and the drafted name are
 ([ADR-0104](/architecture/decisions/#adr-0104-a-create-form-shows-the-name-it-can-know-and-never-mints-one-to-preview-it)):
 a shape implemented twice eventually disagrees, and here the wrong answer would be a name an operator
-was promised that no create produces. It is a fact about the RULE and not the estate, so it costs no
+was promised that no create produces. It is a fact about the RULE and not the fleet, so it costs no
 read, reserves no ordinal, and needs no scope.
 
 Built on the role declarations (`PATCH /standards/{id}/roles/{role}`, `PATCH
@@ -282,7 +282,7 @@ only its hash and never logs it, so a re-enroll invalidates the previous token. 
 the **node-facing** side: a node presents its token and receives its NATS credential (url, username,
 password). It is the surface's **one public route**, unauthenticated because the token itself is the
 authentication, and an invalid token is a **401** (a claim must not disclose which nodes exist). A node
-is estate-wide, so `node:read` and `node:create` require an **all-scope** grant.
+is fleet-wide, so `node:read` and `node:create` require an **all-scope** grant.
 
 **The interface is authored; the task is derived.** An interface is addressed by a surrogate `id` and
 **named by its protocol**: `name` derives from `interface_type`, unique **within its component**
@@ -317,7 +317,7 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   [latest-series-row reads](/architecture/properties/#current-value-is-the-latest-series-row),
   with **drift** (observed present and disagreeing with declared) computed on read.
 
-**Three registries ride the `/property-types` shape** (estate-wide reference data, no scope injection;
+**Three registries ride the `/property-types` shape** (fleet-wide reference data, no scope injection;
 official types are read-only, a 409). The **metric_type catalog is the numeric keyspace**:
 `GET/POST/PATCH/DELETE /metric-types[/{name}]`, gated `metric_type:read` / `:create` / `:update` /
 `:delete`, each type carrying the numeric facts (`unit`, `precision`); the two sample catalogs and
@@ -477,9 +477,9 @@ What each catalog adds over the shared shape (bodies in the [reference](/referen
 
 The cascade's least-specific tier is **`platform`** ([cascade](/architecture/cascade/)), and a write that
 lands there needs **two** permissions: the resource's own (`secret:create`, `variable:update`,
-`tag:update`, `settings:update`) **and** `platform:<action>`, because estate **scope** and install-wide
+`tag:update`, `settings:update`) **and** `platform:<action>`, because fleet **scope** and install-wide
 **authority** are different questions
-([identity and access](/architecture/identity-access/#install-wide-authority-is-not-estate-scope)).
+([identity and access](/architecture/identity-access/#install-wide-authority-is-not-fleet-scope)).
 `platform:*` is seeded to `admin` (and to `owner` through `>`); `operator` and `deploy` do not hold it.
 The tier gate is **published in the spec** like every primary gate: an
 `x-omniglass-platform-permission` extension beside the route's `x-omniglass-permission` stamp, both in
@@ -544,7 +544,7 @@ A **[system role](/architecture/core-entities/#system-roles-the-slots-a-system-n
 system needs filled, in three arcs: **declaration** (what a standard says every conforming system
 needs, and what one system declares ad-hoc), **resolution** (the per-system read merging both with who
 fills each role today), and **staffing** (assign and unassign). It is **not** the
-[IAM role](/architecture/identity-access/): `/roles` is the RBAC catalog, these routes are the estate model.
+[IAM role](/architecture/identity-access/): `/roles` is the RBAC catalog, these routes are the fleet model.
 
 A role is addressed **by name within its owner**, so every declaration is a `PATCH` that declares or
 revises in place. The body is `{update_mask?, label?, quorum?, capacity?, position_labels?,
@@ -595,7 +595,7 @@ component "panel-1" is a display; role "table-mic" wants a video-bar
 ```
 
 That guard, and a bad declaration (an unknown type, product, or impact), are **422**: the request is
-invalid on its own, regardless of anything else in the estate. A component already staffing a
+invalid on its own, regardless of anything else in the fleet. A component already staffing a
 **different** role in the same system, or an assignment a role's declared `capacity` cannot hold, are
 **409** instead:
 
@@ -635,7 +635,7 @@ An alarm hangs off its component and rides that component's gating:
   component's, is a **404**.
 
 Raising and clearing both **recompute health in the same transaction**, so an alarm and the verdict it
-caused are never separately visible, and the recorded edge carries the time the estate changed.
+caused are never separately visible, and the recorded edge carries the time the fleet changed.
 
 **Acknowledgement is the one alarm write that does not**, and it is the one that does not ride
 `component:update` either:
@@ -646,7 +646,7 @@ caused are never separately visible, and the recorded edge carries the time the 
 
 The permission is its own because recording that somebody looked is not editing the component, and a
 role may hold one without the other. Its scope resolves on the **component tier from
-`alarm:acknowledge` itself**, so an estate-wide read never widens what may be acknowledged and a
+`alarm:acknowledge` itself**, so an fleet-wide read never widens what may be acknowledged and a
 narrow component write never narrows it; a component outside that scope is a non-disclosing **404**.
 Acknowledgement is **orthogonal to cleared** in both directions: an alarm can be acknowledged and
 still raised, raised and unacknowledged, or cleared having never been acknowledged, and a cleared
@@ -681,22 +681,22 @@ very rows served beside it, so a report can never disagree with its own evidence
 Every read above answers "what is this row". A **view** answers "what does this screen need", and it
 earns its own tier only when composing the entity reads in the browser would be the wrong shape.
 
-- `GET /views/estate` (`location:read`) is the read behind the estate canvas: every location flat
+- `GET /views/fleet` (`location:read`) is the read behind the fleet canvas: every location flat
   with its `parent` and `verdict`, every system with its `location` and `verdict`, and one **dot**
   per component in each system. A dot is `{component, name, verdict, primary, shared}` and nothing
-  else. The canvas paints a square per component across the whole estate, so a component **row** per
-  square is an estate-sized payload on every paint; the projection is the shape that avoids it, and
+  else. The canvas paints a square per component across the whole fleet, so a component **row** per
+  square is an fleet-sized payload on every paint; the projection is the shape that avoids it, and
   the wire is pinned by test against being widened back into a component list.
 
 Two properties are worth stating because they are easy to lose:
 
 - **Flat, not nested.** Locations carry a parent id and the client assembles the tree. The server
-  says what exists and how it is placed; the client decides how the estate is **gathered into
+  says what exists and how it is placed; the client decides how the fleet is **gathered into
   bands**, which is what lets a future grouping (by standard, by vendor, by tag) be a mapper rather
   than a second endpoint.
 - **Scoped per tier.** The three tiers resolve their own read scope, so a principal who may read the
-  place tree but not its components gets the shape of their estate with no contents, and one with no
-  estate scope at all gets an **empty canvas rather than a refusal**: there is simply nothing of
+  place tree but not its components gets the shape of their fleet with no contents, and one with no
+  fleet scope at all gets an **empty canvas rather than a refusal**: there is simply nothing of
   theirs to draw.
 
 A view is a read and only a read. It adds no write path and no judgement of its own: the verdicts it

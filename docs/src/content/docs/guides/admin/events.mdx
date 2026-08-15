@@ -6,7 +6,7 @@ description: "The Events catalog and the occurrences behind it: the canonical ha
 import SeededSet from '../../../../components/SeededSet.astro';
 
 **Catalog, under Telemetry: Events** (with `event_type:read`, covered by every viewer's `*:read` floor) is the
-estate's **occurrence catalog**: the directory of the discrete happenings the estate can assert.
+fleet's **occurrence catalog**: the directory of the discrete happenings the fleet can assert.
 An **event** is an **occurrence**, something that *happened* at a moment (a call started, a cable
 came unplugged), not a value something holds; a **value** is a
 [property](/guides/admin/properties/) and a numeric **quantity** is a
@@ -24,7 +24,7 @@ standard, it simply occurs.
 The console page lives at `/event-types`, and the nav says why: the address reserves `/events`
 for the events instance surface when it lands, so the catalog keeps the type-named route.
 
-The catalog is estate-wide reference data, not a scoped resource, so every event type is visible
+The catalog is fleet-wide reference data, not a scoped resource, so every event type is visible
 to every reader; the write gates decide who may change it.
 
 - The directory lists every event type sorted by name, each showing its **name** (the canonical

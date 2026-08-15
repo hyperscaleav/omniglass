@@ -1,6 +1,6 @@
-# Dev-only example estate, applied by `make dev` (via `omniglass seed-dev`) so a
+# Dev-only example fleet, applied by `make dev` (via `omniglass seed-dev`) so a
 # fresh dev environment comes up populated instead of empty: a few campuses (a
-# multi-site estate), a few users, and their grants. Idempotent: re-running leaves
+# multi-site fleet), a few users, and their grants. Idempotent: re-running leaves
 # anything that already exists untouched.
 #
 # This is NOT the boot seed (internal/seed, ship-with reference data that runs on
@@ -13,7 +13,7 @@
 # Every location, component and system carries a `key`. The key is LOCAL to this
 # document: it is how one fixture row references another (`parent: west`,
 # `location: boardroom`), it is never written to the database, and it is NOT the
-# row's name. It cannot be, because most of this estate does not know its own
+# row's name. It cannot be, because most of this fleet does not know its own
 # name until the platform mints one.
 #
 # `name` is optional, and its absence is the whole point of this fixture (#657):
@@ -38,13 +38,13 @@
 # 2" and so on, from the shipped component rule over its resolved type and the
 # ordinal the generator allocated.
 #
-# The estate is a FOREST: three unparented tops (hq, east, airport), never one
+# The fleet is a FOREST: three unparented tops (hq, east, airport), never one
 # root. There is no root location and no "bind this to every location", so a
 # binding at hq covers hq and nothing else, and a fourth site added next year
 # starts uncovered. The install-wide `platform` tier is the only rung that reaches
 # all of them, which is why the seed places devices under two different tops (see
 # components, below): with everything under one top, a binding there would look
-# like it covered the estate.
+# like it covered the fleet.
 #
 # LABELS. The shipped location rule reads a location's own name as words and
 # titles it (#657), so most of these rows need no label at all: a room
@@ -70,7 +70,7 @@ locations:
     type: building
     parent: hq
   # A floor is named by the operator, like every other place here. It carried
-  # the estate's one generated location name for two slices, `1`, under a
+  # the fleet's one generated location name for two slices, `1`, under a
   # positional `floor` rule; ADR-0103 reversed that, because a floor's
   # designation is B2, LG, G, M, 12A, and an ordinal cannot spell any of them.
   # This one's designation is Level 2, so its NAME is level-2 and the shipped
@@ -85,14 +85,14 @@ locations:
     parent: west
   # Boardroom A and B are the two halves of a divisible space, and they are two
   # ROOMS, not two systems sharing one. An air wall splits a room into rooms;
-  # nothing in an estate has two boardrooms inside one boardroom. The shared bar
+  # nothing in an fleet has two boardrooms inside one boardroom. The shared bar
   # lives physically in A and serves both (components, below), which is what
   # actually happens when the wall opens, and it is why membership has to be
   # many-valued.
   #
   # A room's name is ground truth an operator knows, so the fixture types it. It
   # needs no ancestry in it: names are unique within their parent (not across
-  # the estate). No labels: the shipped rule renders "Boardroom A" and
+  # the fleet). No labels: the shipped rule renders "Boardroom A" and
   # "Boardroom B" from these names, the halves' real-world signage (ADR-0103's
   # designation case).
   - key: boardroom-a
@@ -112,7 +112,7 @@ locations:
     parent: west-l2
   # Ground-floor lobby, holding a signage endpoint nobody has commissioned into
   # a system yet (components, below): a display on the wall and no system above
-  # it is an ordinary state, and the estate canvas draws it as a hole rather
+  # it is an ordinary state, and the fleet canvas draws it as a hole rather
   # than hiding it. No label: the rule renders "Lobby", and the building above
   # it already says which one.
   - key: lobby
@@ -176,7 +176,7 @@ locations:
   # building at the root with rooms hanging straight off it, no campus above and
   # no floor between, which the seeded type registry allows and the model has
   # never required. Three tops shaped campus -> building -> floor -> room taught
-  # a fixed ladder that does not exist, and an estate canvas read against only
+  # a fixed ladder that does not exist, and an fleet canvas read against only
   # that shape would let a fixed-ladder assumption ship green (#630).
   #
   # Pinned: the rule renders "Depot", and "Service Depot" is what the site is
@@ -192,7 +192,7 @@ locations:
     type: room
     parent: depot
   # Bay 2 holds no system on purpose: a leaf nobody has commissioned is the
-  # dashed hole the estate canvas draws, and naming a gap is half of what it
+  # dashed hole the fleet canvas draws, and naming a gap is half of what it
   # is for.
   - key: bay-2
     name: bay-2
@@ -201,12 +201,12 @@ locations:
 
 users:
   # Username convention: a user limited to a region carries that region in its name
-  # (viewer-hq, tech-east); an estate-wide user carries none (operator). No `-dev`
+  # (viewer-hq, tech-east); an fleet-wide user carries none (operator). No `-dev`
   # suffix, since this fixture only ever seeds a dev environment. All share the
   # password `dev`.
 
   # A broad operator, all-scoped across every site: no region, since the grant is
-  # estate-wide. The everyday driver for demos.
+  # fleet-wide. The everyday driver for demos.
   - username: operator
     password: dev
     label: Operator
@@ -235,7 +235,7 @@ users:
         scope_op: subtree_excl_root
 
 # Platform example variables (macros), so the Variables directory comes up
-# populated. Scoped variables are added once the dev estate seeds systems and
+# populated. Scoped variables are added once the dev fleet seeds systems and
 # components; these platform ones need no owner.
 variables:
   - name: poll-interval
@@ -295,7 +295,7 @@ files:
     content: "CONFIDENTIAL competitive bid, integrator A"
     sensitive: true
 
-# Product contract lines: one property the dev estate adds to the Samsung QM55's
+# Product contract lines: one property the dev fleet adds to the Samsung QM55's
 # declared-property contract, on top of the ones the boot seed ships
 # (serial-number, firmware-version, and model-number with a default). It shows an
 # operator-extended contract in the editor, and `mac-address` carries no default,
@@ -305,7 +305,7 @@ product_properties:
   - product: samsung-qm55
     property: mac-address
 
-# Components: example devices placed in the estate, so the Components directory
+# Components: example devices placed in the fleet, so the Components directory
 # comes up populated. Not one of them names itself: each asks the platform for a
 # name, which mints it from the product's resolved component_type stem and the
 # lowest free ordinal in its own room. So the huddle display, the first boardroom
@@ -320,7 +320,7 @@ product_properties:
 # outside the west binding's subtree, so its environment resolves to the platform
 # value (prod) while the huddle display reads staging. Same key, two rungs,
 # because a binding at a top covers that top only and no location binding can
-# cover the whole estate.
+# cover the whole fleet.
 components:
   - key: huddle-display
     product: samsung-qm55
@@ -409,12 +409,12 @@ components:
 
   # A central recording service, a member of systems in TWO different tops. A
   # shared box inside one room already had a fixture (the shared bar); this is
-  # the case the estate canvas exists to show, where two bands an operator
+  # the case the fleet canvas exists to show, where two bands an operator
   # would never read together depend on one thing. It draws once as owned in
-  # its primary cluster and as a ghost in the other, so the estate never
+  # its primary cluster and as a ghost in the other, so the fleet never
   # counts it twice. No location: it is a service, not a box in a room.
   - key: recording-service
-    label: Estate Recording Service
+    label: Fleet Recording Service
     product: generic-service
 
 # Property values: two overrides the huddle display declares over its product's
@@ -462,7 +462,7 @@ systems:
 
   # Fully staffed and quiet, until an alarm (below) knocks one of its two
   # microphones out: a REAL failure beside the commissioning gaps, which is the
-  # contrast the estate canvas exists to draw.
+  # contrast the fleet canvas exists to draw.
   - key: auditorium-av
     standard: meeting-room
     system_type: meeting
@@ -471,10 +471,10 @@ systems:
   # Racked, cabled, and not yet commissioned: two training pods conforming to a
   # standard with nothing assigned to any role either declares. Both read
   # INCOMPLETE, the verdict #631 added, and nothing in this seed produced it
-  # before. Most of a real estate looks like this for months, which is the
+  # before. Most of a real fleet looks like this for months, which is the
   # whole reason that verdict is not outage.
   #
-  # They are also the estate's same-BUCKET same-type siblings, the pair that
+  # They are also the fleet's same-BUCKET same-type siblings, the pair that
   # demonstrates the ordinal the system rule reads (#693): two `class` systems
   # in one room mint `classroom` and `classroom-2`, rendering "Classroom" and
   # "Classroom 2". The divisible boardroom used to carry this demo and cannot
@@ -580,7 +580,7 @@ role_assignments:
     role: main-display
     component: bay-1-display
 
-# Something actually wrong, so the estate is not all healthy-and-incomplete. A
+# Something actually wrong, so the fleet is not all healthy-and-incomplete. A
 # CRITICAL alarm takes its component's own verdict to outage, which stops it
 # occupying the roles it fills (#626); a lesser one degrades the component while
 # it keeps its slot. Both appear here because the difference is exactly what an
@@ -589,7 +589,7 @@ role_assignments:
 # auditorium-bar going down leaves the auditorium's room-mic role holding one of
 # the two it wants, so the room drops to degraded on a REAL failure, beside the
 # briefing room sitting at incomplete on a gap. Same arithmetic, different
-# cause, different colour: that contrast is the estate canvas's whole argument.
+# cause, different colour: that contrast is the fleet canvas's whole argument.
 alarms:
   - component: auditorium-bar
     severity: critical

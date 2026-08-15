@@ -412,7 +412,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List command types",
-					Long:    "Lists every registered command type (official and custom). Estate-wide reference data. Gated by command_type:read.",
+					Long:    "Lists every registered command type (official and custom). Fleet-wide reference data. Gated by command_type:read.",
 					Example: "  omniglass command-type list",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -996,7 +996,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "previewLabels",
 					Short:   "Preview a component label recompute",
-					Long:    "Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by component:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.",
+					Long:    "Lists exactly the rows a recompute would change, and leaves the fleet as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by component:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.",
 					Example: "  omniglass component previewLabels",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -1677,7 +1677,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List event types",
-					Long:    "Lists every registered event type (official and custom). The catalog is estate-wide reference data. Gated by event_type:read.",
+					Long:    "Lists every registered event type (official and custom). The catalog is fleet-wide reference data. Gated by event_type:read.",
 					Example: "  omniglass event-type list",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2219,7 +2219,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "previewLabels",
 					Short:   "Preview a location label recompute",
-					Long:    "Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by location:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.",
+					Long:    "Lists exactly the rows a recompute would change, and leaves the fleet as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by location:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.",
 					Example: "  omniglass location previewLabels",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2369,7 +2369,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "renderLabel",
 					Short:   "Draft the name and label a location create would store",
-					Long:    "The location tier of :renderLabel on components. Drafts the name and the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create; the parent resolves within the caller's location:create scope, because a location's two placement buckets are under a parent or at the root and that is where the ordinal is read from. Omitting parent is the ROOT bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403) rather than reporting which names the estate root already holds.",
+					Long:    "The location tier of :renderLabel on components. Drafts the name and the label a location create would stamp, allocating nothing. A shipped fleet answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create; the parent resolves within the caller's location:create scope, because a location's two placement buckets are under a parent or at the root and that is where the ordinal is read from. Omitting parent is the ROOT bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403) rather than reporting which names the fleet root already holds.",
 					Example: "  omniglass location renderLabel --location-type location_type",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2400,7 +2400,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "resetName <name>",
 					Short:   "Regenerate a location's name",
-					Long:    "Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped estate has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.",
+					Long:    "Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.",
 					Example: "  omniglass location resetName <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -2860,7 +2860,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List metric types",
-					Long:    "Lists every registered metric type (official and custom). The catalog is estate-wide reference data. Gated by metric_type:read.",
+					Long:    "Lists every registered metric type (official and custom). The catalog is fleet-wide reference data. Gated by metric_type:read.",
 					Example: "  omniglass metric-type list",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3042,7 +3042,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List nodes",
-					Long:    "Lists the edge nodes. A node is estate-wide, so listing requires an all-scope read. Gated by node:read.",
+					Long:    "Lists the edge nodes. A node is fleet-wide, so listing requires an all-scope read. Gated by node:read.",
 					Example: "  omniglass node list",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -3358,7 +3358,7 @@ func generatedCommands() []*cobra.Command {
 					cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
 					_ = cmd.MarkFlagRequired("role")
 					cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root id; omit for the all scope")
-					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)")
+					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)")
 					_ = cmd.MarkFlagRequired("scope-kind")
 					cmd.Flags().StringVar(&fScopeOp, "scope-op", "", "How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope.")
 					return cmd
@@ -3754,7 +3754,7 @@ func generatedCommands() []*cobra.Command {
 					cmd.Flags().StringVar(&fRole, "role", "", "A role id (viewer, operator, admin, owner, or a custom role)")
 					_ = cmd.MarkFlagRequired("role")
 					cmd.Flags().StringVar(&fScopeId, "scope-id", "", "The scope root id; omit for the all scope")
-					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)")
+					cmd.Flags().StringVar(&fScopeKind, "scope-kind", "", "The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)")
 					_ = cmd.MarkFlagRequired("scope-kind")
 					cmd.Flags().StringVar(&fScopeOp, "scope-op", "", "How the scope root matches the tree; moot for the all scope")
 					return cmd
@@ -4343,7 +4343,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List properties",
-					Long:    "Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property_type:read.",
+					Long:    "Lists every registered property (official and custom). The catalog is fleet-wide reference data. Gated by property_type:read.",
 					Example: "  omniglass property-type list",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -5451,7 +5451,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "previewLabels",
 					Short:   "Preview a system label recompute",
-					Long:    "Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by system:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.",
+					Long:    "Lists exactly the rows a recompute would change, and leaves the fleet as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by system:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.",
 					Example: "  omniglass system previewLabels",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -6199,7 +6199,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "values <name>",
 					Short:   "List the distinct values bound for a key",
-					Long:    "Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.",
+					Long:    "Returns the distinct values already bound for a key across the fleet, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.",
 					Example: "  omniglass tag values <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -6594,19 +6594,19 @@ func generatedCommands() []*cobra.Command {
 		}
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
-				Use:   "estate",
-				Short: "Commands for the estate resource",
+				Use:   "fleet",
+				Short: "Commands for the fleet resource",
 			}
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list",
-						Short:   "Read the estate as the canvas draws it",
-						Long:    "The whole in-scope estate in one read: every location flat with its parent and verdict, every system with its location and verdict, and one dot per component in each system. A dot carries an id, a verdict, and the primary/shared flags, never a component row: the canvas paints a square per component across the estate, and an estate-sized component list to draw squares is the cost this read exists to avoid. Each tier is scoped on its own read permission, so a principal who may read the place tree but not its components gets the shape of their estate with no contents, and one with no estate scope at all gets an empty canvas rather than a refusal. Gated by location:read.",
-						Example: "  omniglass view estate list",
+						Short:   "Read the fleet as the canvas draws it",
+						Long:    "The whole in-scope fleet in one read: every location flat with its parent and verdict, every system with its location and verdict, and one dot per component in each system. A dot carries an id, a verdict, and the primary/shared flags, never a component row: the canvas paints a square per component across the fleet, and an fleet-sized component list to draw squares is the cost this read exists to avoid. Each tier is scoped on its own read permission, so a principal who may read the place tree but not its components gets the shape of their fleet with no contents, and one with no fleet scope at all gets an empty canvas rather than a refusal. Gated by location:read.",
+						Example: "  omniglass view fleet list",
 						Args:    cobra.ExactArgs(0),
 						RunE: func(cmd *cobra.Command, args []string) error {
-							path := fmt.Sprintf("/api/v1/views/estate")
+							path := fmt.Sprintf("/api/v1/views/fleet")
 							return runAPICommand(cmd, "GET", path, nil)
 						},
 					}

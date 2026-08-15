@@ -341,7 +341,7 @@ function CreateSecretForm(p: { onCreated: (s: Secret) => void }): JSX.Element {
       <div class="grid grid-cols-2 gap-3">
         <FieldRow
           label="Scope"
-          info="The estate scope this secret attaches to. It cascades down onto the components below it: platform, or a location or component (a secret has no system band, ADR-0052)."
+          info="The fleet scope this secret attaches to. It cascades down onto the components below it: platform, or a location or component (a secret has no system band, ADR-0052)."
           docHref="https://docs.omniglass.hyperscaleav.com/architecture/variables/"
           hint={tierGap().length > 0 ? platformAuthorityHint("A secret", tierGap()) : undefined}
         >

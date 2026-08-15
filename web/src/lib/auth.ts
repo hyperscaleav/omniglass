@@ -182,7 +182,7 @@ export async function fetchMyAvatar(): Promise<string | null> {
 // admin_sensitivity, enforced server-side, then fences individual rows).
 // `platform` is here for a different reason: it is not a resource anyone reads, it
 // is install-wide AUTHORITY (the right to write at the cascade's least-specific
-// tier), and full-estate reach must not confer it. Keep this in sync with the Go
+// tier), and full-fleet reach must not confer it. Keep this in sync with the Go
 // set: the server's copy is what admits the request, and a console that disagrees
 // either hides a control that works or offers one the server refuses.
 const SENSITIVE_RESOURCES = new Set(["secret", "platform"]);
@@ -252,7 +252,7 @@ export function can(me: Me | null | undefined, ...tokens: string[]): boolean {
 
 // A write at the `platform` tier, the cascade's least-specific rung, applies to the
 // whole install, so the server gates it on `platform:<action>` on top of the
-// resource permission: full-estate SCOPE is reach, not install-wide authority.
+// resource permission: full-fleet SCOPE is reach, not install-wide authority.
 // canAtPlatform is that pair, the check a console control writing at the tier gates
 // on, so the console never offers a control the server refuses.
 export function canAtPlatform(me: Me | null | undefined, resource: string, action: string): boolean {

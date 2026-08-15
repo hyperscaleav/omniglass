@@ -43,7 +43,7 @@ var (
 	//
 	// It refused unconditionally on this tier for one slice (#686 shipped the
 	// pen and the verbs ahead of the generator, so a location an operator named
-	// then is already frozen now), and in a SHIPPED estate it refuses
+	// then is already frozen now), and in a SHIPPED fleet it refuses
 	// unconditionally again. A rule reaches it only when an operator declares a
 	// positional type of their own.
 	//
@@ -143,7 +143,7 @@ func (p *PG) locationIsDescendant(ctx context.Context, q querier, targetID, cand
 	return ok, nil
 }
 
-// Location is a place in the estate tree: name-addressable (name is globally
+// Location is a place in the fleet tree: name-addressable (name is globally
 // unique), classified by location_type, and nested under an optional parent.
 type Location struct {
 	ID    string
@@ -278,7 +278,7 @@ const locationTypeResolved = `
 // UpsertLocationType installs or updates a location type by name, the boot-seed
 // phase's write and the authoritative one: ON CONFLICT DO UPDATE, so a value a
 // release WITHDRAWS (a rule removed from location_types.yaml) is actually gone
-// from an estate that already seeded it, rather than frozen at whatever the
+// from an fleet that already seeded it, rather than frozen at whatever the
 // first boot wrote (#703).
 //
 // It stomps nothing an operator owns, because an operator does not own these
@@ -999,7 +999,7 @@ func (p *PG) CreateLocation(ctx context.Context, actorID string, spec LocationSp
 		}
 	} else {
 		// resolveScopedRef, not locationByName-then-inScope: ruling 2 (#627)
-		// requires ambiguity judged inside create, not estate-wide. A parent
+		// requires ambiguity judged inside create, not fleet-wide. A parent
 		// that exists only outside create scope stays ErrLocationForbidden
 		// (preserved, not collapsed into not-found).
 		parent, err := resolveScopedRef(ctx, tx, locationConfig, *spec.ParentName, "location", create)
@@ -1248,7 +1248,7 @@ func (p *PG) MoveLocation(ctx context.Context, actorID, name string, move Locati
 	parentID := before.ParentID
 	if move.ParentName != nil {
 		// resolveScopedRef, not locationByName-then-inScope: ruling 2
-		// (#627), ambiguity judged inside action rather than estate-wide.
+		// (#627), ambiguity judged inside action rather than fleet-wide.
 		newParent, err := resolveScopedRef(ctx, tx, locationConfig, *move.ParentName, "location", action)
 		if errors.Is(err, ErrLocationNotFound) {
 			return nil, ErrParentNotFound
@@ -1397,7 +1397,7 @@ func (p *PG) RenameLocation(ctx context.Context, actorID, name, newName string, 
 	}
 	// And so does everything placed here, when the rename moved what this
 	// location READS as: an unlabelled location reads as its name, which is the
-	// state every shipped estate is in (#685).
+	// state every shipped fleet is in (#685).
 	if locationReadLabel(before) != locationReadLabel(after) {
 		if err := p.cascadeLocationLabels(ctx, tx, after.ID); err != nil {
 			return nil, err

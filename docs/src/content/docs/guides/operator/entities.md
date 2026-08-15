@@ -112,7 +112,7 @@ The console itself uses these links for its handoffs: creating an entity lands o
   `boardroom` and the second is `boardroom-2`; the form shows whichever applies rather than a shape you
   have to read. Under it the form names the **placement the name has to be unique in**, as a path: the
   name itself never carries that path, since a name is unique within its placement rather than across
-  the estate.
+  the fleet.
 
   **The number is true rather than reserved, and Create is where that is settled.** Nothing is created
   and no number is held while you fill the form in, so somebody else creating in the same place can
@@ -147,7 +147,7 @@ The console itself uses these links for its handoffs: creating an entity lands o
   with no lock to close: a system with no type (or a type whose chain sets no stem), a location whose
   type carries no name rule, a product whose type chain carries no stem. The form names the missing
   fact rather than just refusing. Elsewhere (the catalog and admin pages, whose names have no
-  generator and are unique estate-wide) the name still fills itself in from the label until you
+  generator and are unique fleet-wide) the name still fills itself in from the label until you
   edit it.
 
   A location's type is required, since for a location the type is the only shape-definer; on a
@@ -320,7 +320,7 @@ the systems list:
 **`incomplete` is not a fault.** It means a role is short because nobody has put the hardware in
 yet, so no alarm will ever fire for it: there is nothing there to alarm. A room mid-installation
 reads incomplete, and it stays that way until somebody fills the slot. That is deliberately a
-different colour from a room that is broken, because during a rollout most of your estate is in
+different colour from a room that is broken, because during a rollout most of your fleet is in
 the first state and you need to be able to see past it to the second.
 
 A location's verdict is the **worst** of every system placed anywhere beneath it, so a campus reads red
@@ -346,7 +346,7 @@ nobody is assigned. Those are two different jobs, and the panel keeps them apart
 **The History strip is the answer to "since when".** It is the same shape as the reachability
 availability strip: one segment per stretch the entity held a verdict, drawn from the **recorded edges**
 over the last 30 days. It is not a sample and not a redraw of what somebody happened to look at; each edge
-was written at the moment the estate changed, by the write that changed it. That is what makes "it broke
+was written at the moment the fleet changed, by the write that changed it. That is what makes "it broke
 Friday at 18:40 and came back Monday at 09:15" answerable on Tuesday.
 
 From the CLI: `omniglass system health list <name>` and `omniglass location health list <name>`.

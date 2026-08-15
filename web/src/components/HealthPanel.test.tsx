@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, within } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import SystemHealthPanel, { LocationHealthPanel } from "./HealthPanel";
-import { locationHealthKey, systemHealthKey, type EstateHealth } from "../lib/health";
+import { locationHealthKey, systemHealthKey, type FleetHealth } from "../lib/health";
 import { SYSTEMS_KEY, type System } from "../lib/systems";
 import { hueFor } from "../lib/system_color";
 import { uuidFor } from "../lib/testids";
@@ -14,7 +14,7 @@ import { uuidFor } from "../lib/testids";
 // needed; the panel is read-only, so nothing is faked.
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
-const degraded: EstateHealth = {
+const degraded: FleetHealth = {
   owner: "boardroom",
   owner_kind: "system",
   verdict: "outage",
@@ -82,7 +82,7 @@ const degraded: EstateHealth = {
   ],
 };
 
-const healthy: EstateHealth = {
+const healthy: FleetHealth = {
   owner: "huddle",
   owner_kind: "system",
   verdict: "healthy",
@@ -106,7 +106,7 @@ const healthy: EstateHealth = {
   transitions: [],
 };
 
-function mountSystem(data: EstateHealth, onOpenComponent?: (name: string) => void) {
+function mountSystem(data: FleetHealth, onOpenComponent?: (name: string) => void) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...systemHealthKey(data.owner)], data);
   return render(() => (
@@ -217,7 +217,7 @@ describe("SystemHealthPanel reconciliation", () => {
   // roles as ordinary impairments would show "healthy" at the top and an
   // "impaired" list underneath, flatly contradicting each other; active is
   // what the console must consult to avoid that (#626 Task 9).
-  const huddleRoom: EstateHealth = {
+  const huddleRoom: FleetHealth = {
     owner: "huddle-room",
     owner_kind: "system",
     verdict: "healthy",
@@ -280,7 +280,7 @@ describe("SystemHealthPanel history", () => {
   });
 });
 
-const location: EstateHealth = {
+const location: FleetHealth = {
   owner: "hq-floor-3",
   owner_kind: "location",
   verdict: "outage",

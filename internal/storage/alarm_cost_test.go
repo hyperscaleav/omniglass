@@ -59,7 +59,7 @@ import (
 // explicitly out of scope: a reduction with no measurement in front of it cannot
 // be shown to have worked. This file is that measurement.
 
-// alarmProbe is an estate whose two growth dimensions are set independently:
+// alarmProbe is an fleet whose two growth dimensions are set independently:
 // `staffs` systems, spread across `roomsN` rooms under one building under one
 // campus, with ONE component staffed into the single role each system inherits
 // from the shared standard. So the slots the component fills is exactly staffs,
@@ -185,7 +185,7 @@ func TestAlarmRecomputeCostIsFlatInAlarmCount(t *testing.T) {
 			lonelyRaise, lonelyClear, lonelyOpen, loudRaise, loudClear, loudOpen)
 	}
 	if loudRaise > ceiling || loudClear > ceiling {
-		t.Errorf("the recompute cost %d/%d statements (raise/clear) at this estate's smallest shape, want at most %d each",
+		t.Errorf("the recompute cost %d/%d statements (raise/clear) at this fleet's smallest shape, want at most %d each",
 			loudRaise, loudClear, ceiling)
 	}
 }

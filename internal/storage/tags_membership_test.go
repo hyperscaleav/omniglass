@@ -89,7 +89,7 @@ func TestContextFreeResolutionFollowsThePrimary(t *testing.T) {
 }
 
 // A component in no system resolves the location and global bands and nothing
-// else, without erroring. Most of an estate looks like this before anyone models
+// else, without erroring. Most of an fleet looks like this before anyone models
 // it, so it must not be a special case.
 func TestNoMembershipResolvesTheOtherBands(t *testing.T) {
 	ctx := context.Background()

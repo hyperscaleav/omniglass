@@ -15,11 +15,11 @@ import (
 // It matters because the generator this slice adds is the first thing that can
 // rename a location the platform owns. A name_rule backfilled onto the shipped
 // types, or a pen or an ordinal claimed for an existing row, would make the
-// first :move or reclassify rename real estate: exactly the failure the two
+// first :move or reclassify rename real fleet: exactly the failure the two
 // name-pen migrations before this one each argued against, one slice apart.
 // "No backfill" is not something the absence of a file can demonstrate, since
 // the column's DEFAULT is what an existing row actually gets, so this stands
-// the database one migration back, writes rows the way an upgraded estate holds
+// the database one migration back, writes rows the way an upgraded fleet holds
 // them, and migrates forward over them.
 //
 // The REAL migration file runs, not a copy of its SQL, so the two cannot drift.
@@ -32,7 +32,7 @@ func TestLocationNameRuleArrivesClaimingNothing(t *testing.T) {
 	conn := connectDSN(t, dsn)
 
 	// The registries are seeded by the boot phase rather than by a migration,
-	// so this fixture writes the rows an upgraded estate would already hold.
+	// so this fixture writes the rows an upgraded fleet would already hold.
 	// The column is `display_name` at this point in the chain: #613's rename
 	// (20260814100000_label_is_the_column.sql) is above the version this test
 	// stands the database at, so writing `label` here would fail on a column
@@ -64,7 +64,7 @@ func TestLocationNameRuleArrivesClaimingNothing(t *testing.T) {
 	}
 
 	// And the type does not start generating either. A backfilled rule would
-	// turn every later nameless create on an upgraded estate into a generated
+	// turn every later nameless create on an upgraded fleet into a generated
 	// name the operator never opted into.
 	var rule *string
 	if err := conn.QueryRow(ctx, `select name_rule::text from location_type where name = 'floor'`).Scan(&rule); err != nil {

@@ -15,18 +15,18 @@ import (
 
 // The bulk health read (#653), and the two things it has to be true about:
 // it must AGREE with the per-system report it replaces on a list, and it must
-// cost the same for a large estate as for a small one. Either alone is
+// cost the same for a large fleet as for a small one. Either alone is
 // worthless. A cheap read that disagrees with the panel a row opens into is a
 // console contradicting itself; an agreeing read that costs one query per system
 // is the defect it was built to remove, moved from the browser to the server.
 
-// verdictEstate builds `systems` systems in one room, staffs each with the
+// verdictFleet builds `systems` systems in one room, staffs each with the
 // component named for it, and returns the gateway plus its counter. Every system
 // is built to one standard carrying one role, so a raised alarm on a member
 // degrades exactly its own system and leaves the rest healthy: the fixture has to
 // contain more than one verdict or an oracle that always answered "healthy" would
 // pass it.
-func verdictEstate(t *testing.T, gw storage.Gateway, systems int) {
+func verdictFleet(t *testing.T, gw storage.Gateway, systems int) {
 	t.Helper()
 	ctx := context.Background()
 	sc := scope.Set{All: true}
@@ -85,7 +85,7 @@ func verdictEstate(t *testing.T, gw storage.Gateway, systems int) {
 // read the badge used to make per row, and it computes its verdict live from the
 // roles; SystemVerdicts reads the recorded series and defaults what it does not
 // find. Those are two different mechanisms answering one question, so the
-// agreement is asserted rather than assumed, over an estate deliberately holding
+// agreement is asserted rather than assumed, over an fleet deliberately holding
 // all three verdicts AND a system nothing has ever recomputed.
 func TestSystemVerdictsAgreeWithTheReport(t *testing.T) {
 	gw := storagetest.NewDB(t)
@@ -93,7 +93,7 @@ func TestSystemVerdictsAgreeWithTheReport(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	verdictEstate(t, gw, 7)
+	verdictFleet(t, gw, 7)
 	all := scope.Set{All: true}
 
 	bulk, err := gw.SystemVerdicts(ctx, all)
@@ -137,10 +137,10 @@ func TestSystemVerdictsAgreeWithTheReport(t *testing.T) {
 	}
 }
 
-// TestSystemVerdictsCostIsFlatInEstateSize: one statement, whatever the estate.
+// TestSystemVerdictsCostIsFlatInFleetSize: one statement, whatever the fleet.
 // The point of the read is that it does not pay per system, on the server any
 // more than in the browser.
-func TestSystemVerdictsCostIsFlatInEstateSize(t *testing.T) {
+func TestSystemVerdictsCostIsFlatInFleetSize(t *testing.T) {
 	small, smallCounter := storagetest.NewCountingDB(t)
 	large, largeCounter := storagetest.NewCountingDB(t)
 	ctx := context.Background()
@@ -149,8 +149,8 @@ func TestSystemVerdictsCostIsFlatInEstateSize(t *testing.T) {
 			t.Fatalf("seed: %v", err)
 		}
 	}
-	verdictEstate(t, small, 1)
-	verdictEstate(t, large, widePage)
+	verdictFleet(t, small, 1)
+	verdictFleet(t, large, widePage)
 
 	read := func(gw storage.Gateway, c *querycount.Counter) reading {
 		t.Helper()
@@ -172,7 +172,7 @@ func TestSystemVerdictsScopeMatchesTheList(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	verdictEstate(t, gw, 4)
+	verdictFleet(t, gw, 4)
 	all := scope.Set{All: true}
 
 	systems, err := gw.ListSystems(ctx, all)
@@ -209,7 +209,7 @@ func TestSystemVerdictsScopeMatchesTheList(t *testing.T) {
 		t.Errorf("the list shows system %s and the bulk read has no verdict for it", id)
 	}
 
-	// An empty scope is an empty answer, not a refusal and not the whole estate.
+	// An empty scope is an empty answer, not a refusal and not the whole fleet.
 	empty, err := gw.SystemVerdicts(ctx, scope.Set{})
 	if err != nil {
 		t.Fatalf("SystemVerdicts (empty scope): %v", err)

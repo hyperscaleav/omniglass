@@ -297,7 +297,7 @@ export interface paths {
         };
         /**
          * List command types
-         * @description Lists every registered command type (official and custom). Estate-wide reference data. Gated by command_type:read.
+         * @description Lists every registered command type (official and custom). Fleet-wide reference data. Gated by command_type:read.
          */
         get: operations["list-command-type"];
         put?: never;
@@ -919,7 +919,7 @@ export interface paths {
         put?: never;
         /**
          * Preview a component label recompute
-         * @description Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by component:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+         * @description Lists exactly the rows a recompute would change, and leaves the fleet as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by component:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
          */
         post: operations["preview-component-labels"];
         delete?: never;
@@ -1029,7 +1029,7 @@ export interface paths {
         };
         /**
          * List event types
-         * @description Lists every registered event type (official and custom). The catalog is estate-wide reference data. Gated by event_type:read.
+         * @description Lists every registered event type (official and custom). The catalog is fleet-wide reference data. Gated by event_type:read.
          */
         get: operations["list-event-type"];
         put?: never;
@@ -1595,7 +1595,7 @@ export interface paths {
         put?: never;
         /**
          * Regenerate a location's name
-         * @description Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped estate has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.
+         * @description Hands the pen back to the platform, the same verb components and systems carry: the name is re-minted from the location_type's name rule and the lowest free ordinal in this placement, and name_generated goes back to true. A location_type carrying no name rule refuses (422), which is every type a shipped fleet has: only a positional kind of place, one whose number is an arbitrary disambiguator rather than a designation read off the signage (a parking deck, a rack row), has a name the platform can generate, and an operator declares such a type themselves. Gated by location:rename, the same token :rename uses.
          */
         post: operations["reset-location-name"];
         delete?: never;
@@ -1655,7 +1655,7 @@ export interface paths {
         put?: never;
         /**
          * Preview a location label recompute
-         * @description Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by location:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+         * @description Lists exactly the rows a recompute would change, and leaves the fleet as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by location:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
          */
         post: operations["preview-location-labels"];
         delete?: never;
@@ -1695,7 +1695,7 @@ export interface paths {
         put?: never;
         /**
          * Draft the name and label a location create would store
-         * @description The location tier of :renderLabel on components. Drafts the name and the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create; the parent resolves within the caller's location:create scope, because a location's two placement buckets are under a parent or at the root and that is where the ordinal is read from. Omitting parent is the ROOT bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403) rather than reporting which names the estate root already holds.
+         * @description The location tier of :renderLabel on components. Drafts the name and the label a location create would stamp, allocating nothing. A shipped fleet answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create; the parent resolves within the caller's location:create scope, because a location's two placement buckets are under a parent or at the root and that is where the ordinal is read from. Omitting parent is the ROOT bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403) rather than reporting which names the fleet root already holds.
          */
         post: operations["render-location-label"];
         delete?: never;
@@ -1713,7 +1713,7 @@ export interface paths {
         };
         /**
          * List metric types
-         * @description Lists every registered metric type (official and custom). The catalog is estate-wide reference data. Gated by metric_type:read.
+         * @description Lists every registered metric type (official and custom). The catalog is fleet-wide reference data. Gated by metric_type:read.
          */
         get: operations["list-metric-type"];
         put?: never;
@@ -1765,7 +1765,7 @@ export interface paths {
         };
         /**
          * List nodes
-         * @description Lists the edge nodes. A node is estate-wide, so listing requires an all-scope read. Gated by node:read.
+         * @description Lists the edge nodes. A node is fleet-wide, so listing requires an all-scope read. Gated by node:read.
          */
         get: operations["list-nodes"];
         put?: never;
@@ -2585,7 +2585,7 @@ export interface paths {
         };
         /**
          * List properties
-         * @description Lists every registered property (official and custom). The catalog is estate-wide reference data. Gated by property_type:read.
+         * @description Lists every registered property (official and custom). The catalog is fleet-wide reference data. Gated by property_type:read.
          */
         get: operations["list-property-type"];
         put?: never;
@@ -3531,7 +3531,7 @@ export interface paths {
         put?: never;
         /**
          * Preview a system label recompute
-         * @description Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by system:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
+         * @description Lists exactly the rows a recompute would change, and leaves the fleet as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by system:update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.
          */
         post: operations["preview-system-labels"];
         delete?: never;
@@ -3677,7 +3677,7 @@ export interface paths {
         };
         /**
          * List the distinct values bound for a key
-         * @description Returns the distinct values already bound for a key across the estate, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.
+         * @description Returns the distinct values already bound for a key across the fleet, for value autocomplete on a free-text key (an enum key carries its allowed set on the key itself). Rides the tag:read floor.
          */
         get: operations["list-tag-values"];
         put?: never;
@@ -3848,7 +3848,7 @@ export interface paths {
         patch: operations["update-vendor"];
         trace?: never;
     };
-    "/views/estate": {
+    "/views/fleet": {
         parameters: {
             query?: never;
             header?: never;
@@ -3856,10 +3856,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Read the estate as the canvas draws it
-         * @description The whole in-scope estate in one read: every location flat with its parent and verdict, every system with its location and verdict, and one dot per component in each system. A dot carries an id, a verdict, and the primary/shared flags, never a component row: the canvas paints a square per component across the estate, and an estate-sized component list to draw squares is the cost this read exists to avoid. Each tier is scoped on its own read permission, so a principal who may read the place tree but not its components gets the shape of their estate with no contents, and one with no estate scope at all gets an empty canvas rather than a refusal. Gated by location:read.
+         * Read the fleet as the canvas draws it
+         * @description The whole in-scope fleet in one read: every location flat with its parent and verdict, every system with its location and verdict, and one dot per component in each system. A dot carries an id, a verdict, and the primary/shared flags, never a component row: the canvas paints a square per component across the fleet, and an fleet-sized component list to draw squares is the cost this read exists to avoid. Each tier is scoped on its own read permission, so a principal who may read the place tree but not its components gets the shape of their fleet with no contents, and one with no fleet scope at all gets an empty canvas rather than a refusal. Gated by location:read.
          */
-        get: operations["get-estate-view"];
+        get: operations["get-fleet-view"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4000,7 +4000,7 @@ export interface components {
              * @example /api/v1/schemas/CheckNameOutputBody.json
              */
             readonly $schema?: string;
-            /** @description Whether the name is free within the checked placement (parent/location); a name taken elsewhere in the estate is still available here */
+            /** @description Whether the name is free within the checked placement (parent/location); a name taken elsewhere in the fleet is still available here */
             available: boolean;
             /** @description Human explanation when not valid or not available */
             reason?: string;
@@ -4337,7 +4337,7 @@ export interface components {
             /** @description The scope root id; omit for the all scope */
             scope_id?: string;
             /**
-             * @description The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)
+             * @description The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)
              * @enum {string}
              */
             scope_kind: "all" | "location" | "system" | "component";
@@ -4359,7 +4359,7 @@ export interface components {
             /** @description The scope root id; omit for the all scope */
             scope_id?: string;
             /**
-             * @description The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)
+             * @description The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)
              * @enum {string}
              */
             scope_kind: "all" | "location" | "system" | "component";
@@ -4979,74 +4979,6 @@ export interface components {
              */
             type: string;
         };
-        EstateDotBody: {
-            /** @description The component's uuid: what the canvas navigates to when a dot is clicked */
-            component: string;
-            /** @description The component's name, for the dot's hover title */
-            name: string;
-            /** @description True in the component's primary system, the one cluster that draws it solid. A shared component is a ghost outline everywhere else, so the estate never counts one physical device twice */
-            primary: boolean;
-            /** @description True when the component belongs to more than one system, which is what earns it a ring */
-            shared: boolean;
-            /** @description healthy, incomplete, degraded, or outage: the component's own verdict, which is the only thing that colours the dot */
-            verdict: string;
-        };
-        EstateHealthOutputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/EstateHealthOutputBody.json
-             */
-            readonly $schema?: string;
-            owner: string;
-            owner_kind: string;
-            /** @description The contributing roles; empty for a location */
-            roles: components["schemas"]["HealthRoleBody"][] | null;
-            /** @description The systems beneath a location with their verdicts; empty for a system */
-            systems: components["schemas"]["HealthSystemBody"][] | null;
-            /** @description The recorded edges over the window, oldest first: one entry per change, never a sample */
-            transitions: components["schemas"]["HealthTransitionBody"][] | null;
-            /** @description healthy, incomplete, degraded, or outage: the rollup of the roles or systems served beside it. incomplete is a commissioning gap, a role short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
-            verdict: string;
-        };
-        EstateLocationBody: {
-            /** @description The location's uuid, the address the canvas navigates by */
-            id: string;
-            label: string;
-            /** @description The type's name, which the band renders as its type chip */
-            location_type: string;
-            /** @description The type's uuid, the stable handle beside its renameable name */
-            location_type_id: string;
-            name: string;
-            /** @description The uuid of this location's parent; absent on a root. The tree is flat here and assembled by the client */
-            parent?: string;
-            /** @description The location's recorded verdict, worst-wins over the systems beneath it */
-            verdict: string;
-        };
-        EstateSystemBody: {
-            /** @description One entry per component in this system; empty when the caller may read the system but not its components */
-            dots: components["schemas"]["EstateDotBody"][] | null;
-            /** @description The system's uuid, the address the canvas navigates by */
-            id: string;
-            label: string;
-            /** @description The uuid of the location this system is placed at; absent when it is placed nowhere */
-            location?: string;
-            name: string;
-            /** @description The system's recorded verdict, the same one its health read serves */
-            verdict: string;
-        };
-        EstateViewOutputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/EstateViewOutputBody.json
-             */
-            readonly $schema?: string;
-            /** @description Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the estate can be gathered into bands by something other than place without a second read */
-            locations: components["schemas"]["EstateLocationBody"][] | null;
-            /** @description Every system the caller may read, each carrying its dots */
-            systems: components["schemas"]["EstateSystemBody"][] | null;
-        };
         EventBody: {
             /** @description Structured attributes, when the occurrence carried a JSON payload */
             attributes?: unknown;
@@ -5113,6 +5045,74 @@ export interface components {
             sha256: string;
             /** Format: int64 */
             size: number;
+        };
+        FleetDotBody: {
+            /** @description The component's uuid: what the canvas navigates to when a dot is clicked */
+            component: string;
+            /** @description The component's name, for the dot's hover title */
+            name: string;
+            /** @description True in the component's primary system, the one cluster that draws it solid. A shared component is a ghost outline everywhere else, so the fleet never counts one physical device twice */
+            primary: boolean;
+            /** @description True when the component belongs to more than one system, which is what earns it a ring */
+            shared: boolean;
+            /** @description healthy, incomplete, degraded, or outage: the component's own verdict, which is the only thing that colours the dot */
+            verdict: string;
+        };
+        FleetHealthOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/FleetHealthOutputBody.json
+             */
+            readonly $schema?: string;
+            owner: string;
+            owner_kind: string;
+            /** @description The contributing roles; empty for a location */
+            roles: components["schemas"]["HealthRoleBody"][] | null;
+            /** @description The systems beneath a location with their verdicts; empty for a system */
+            systems: components["schemas"]["HealthSystemBody"][] | null;
+            /** @description The recorded edges over the window, oldest first: one entry per change, never a sample */
+            transitions: components["schemas"]["HealthTransitionBody"][] | null;
+            /** @description healthy, incomplete, degraded, or outage: the rollup of the roles or systems served beside it. incomplete is a commissioning gap, a role short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded */
+            verdict: string;
+        };
+        FleetLocationBody: {
+            /** @description The location's uuid, the address the canvas navigates by */
+            id: string;
+            label: string;
+            /** @description The type's name, which the band renders as its type chip */
+            location_type: string;
+            /** @description The type's uuid, the stable handle beside its renameable name */
+            location_type_id: string;
+            name: string;
+            /** @description The uuid of this location's parent; absent on a root. The tree is flat here and assembled by the client */
+            parent?: string;
+            /** @description The location's recorded verdict, worst-wins over the systems beneath it */
+            verdict: string;
+        };
+        FleetSystemBody: {
+            /** @description One entry per component in this system; empty when the caller may read the system but not its components */
+            dots: components["schemas"]["FleetDotBody"][] | null;
+            /** @description The system's uuid, the address the canvas navigates by */
+            id: string;
+            label: string;
+            /** @description The uuid of the location this system is placed at; absent when it is placed nowhere */
+            location?: string;
+            name: string;
+            /** @description The system's recorded verdict, the same one its health read serves */
+            verdict: string;
+        };
+        FleetViewOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/FleetViewOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Every location the caller may read, flat: each carries its parent, and the client builds the tree. Flat rather than nested so the fleet can be gathered into bands by something other than place without a second read */
+            locations: components["schemas"]["FleetLocationBody"][] | null;
+            /** @description Every system the caller may read, each carrying its dots */
+            systems: components["schemas"]["FleetSystemBody"][] | null;
         };
         GrantBody: {
             /**
@@ -5353,7 +5353,7 @@ export interface components {
              * @example /api/v1/schemas/LabelRecomputeOutputBody.json
              */
             readonly $schema?: string;
-            /** @description Every row, one entry each. Bounded by the estate, not paginated: this is the whole blast radius by design */
+            /** @description Every row, one entry each. Bounded by the fleet, not paginated: this is the whole blast radius by design */
             changed: components["schemas"]["LabelChangeBody"][] | null;
             /**
              * Format: int64
@@ -10722,7 +10722,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EstateHealthOutputBody"];
+                    "application/json": components["schemas"]["FleetHealthOutputBody"];
                 };
             };
             /** @description Error */
@@ -14553,7 +14553,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EstateHealthOutputBody"];
+                    "application/json": components["schemas"]["FleetHealthOutputBody"];
                 };
             };
             /** @description Error */
@@ -16001,7 +16001,7 @@ export interface operations {
             };
         };
     };
-    "get-estate-view": {
+    "get-fleet-view": {
         parameters: {
             query?: never;
             header?: never;
@@ -16016,7 +16016,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EstateViewOutputBody"];
+                    "application/json": components["schemas"]["FleetViewOutputBody"];
                 };
             };
             /** @description Error */

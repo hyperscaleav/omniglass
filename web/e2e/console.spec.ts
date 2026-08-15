@@ -29,7 +29,7 @@ test.describe("operator console", () => {
     // carries no name rule, so the operator types the name: the other half of
     // the same form is proven by the component case below.
     const name = `e2e-${Date.now()}`;
-    // What the LIST will show for it. A shipped estate renders every location's
+    // What the LIST will show for it. A shipped fleet renders every location's
     // label from its own name ({{title (words .Name)}}, ADR-0105), and a row
     // whose label is generated shows that label and no second line, so the raw
     // name is on the detail and the label is on the list. Derived from the name
@@ -155,7 +155,7 @@ test.describe("operator console", () => {
   // and jsdom will not measure a column, which is exactly how a Name column
   // measuring zero pixels sat on main behind a green suite.
   //
-  // The numbers this replaced were measured on the dev estate at a 1280 viewport,
+  // The numbers this replaced were measured on the dev fleet at a 1280 viewport,
   // where the list card offers 973px: Components' Name column was 0px wide (890px
   // of declared columns plus 150px of actions, with nothing left), Systems' was
   // 0px (960 declared), and Locations' was 173px (650 declared), which is why one

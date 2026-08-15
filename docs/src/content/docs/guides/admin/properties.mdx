@@ -6,7 +6,7 @@ description: "The Properties catalog and the values behind it: the canonical typ
 import SeededSet from '../../../../components/SeededSet.astro';
 
 **Catalog, under Telemetry: Properties** (with `property_type:read`, covered by every viewer's `*:read` floor) is
-one of the estate's **two signal catalogs**: the **value lane**. A **property** is a **value**,
+one of the fleet's **two signal catalogs**: the **value lane**. A **property** is a **value**,
 what something *is*, including a number used as a name (a serial number identifies a unit, it
 measures nothing); a numeric **quantity** you would average or graph is a
 [metric](/guides/admin/metrics/), the other lane, with its own catalog and its own page. Here, a
@@ -23,7 +23,7 @@ There are three classifiers and they behave identically: a [product](/guides/adm
 for its components, a [standard](/guides/admin/standards/) for its systems, and a
 [location type](/guides/admin/location-types/) for its locations.
 
-The catalog is estate-wide reference data, not a scoped resource, so every property is visible to
+The catalog is fleet-wide reference data, not a scoped resource, so every property is visible to
 every reader; the write gates decide who may change it.
 
 - The directory lists every property sorted by name, each showing its **name** (the canonical
@@ -86,7 +86,7 @@ and optionally marks it **required**.
 | a **location type** | the locations of that type | **Catalog, under Locations: [Types](/guides/admin/location-types/)** | `location_type:update` / `:delete` |
 
 Declaring `serial-number`, `firmware-version`, and `model-number` on a Samsung QM55 is what makes
-every QM55 in the estate carry those three, with the same names and the same types, without touching
+every QM55 in the fleet carry those three, with the same names and the same types, without touching
 a component. Declaring `room-capacity` on Huddle Room does the same for every huddle room. Type and
 validation are **not** repeated in the contract, they stay on the catalog entry, so a property means
 one thing everywhere.

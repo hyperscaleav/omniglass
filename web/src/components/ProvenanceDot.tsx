@@ -12,7 +12,7 @@ import { type JSX } from "solid-js";
 //
 // It carries no encoding of DISTANCE, deliberately. A per-rung mark was built
 // first and failed on real data twice over: its width was driven by how deep
-// that corner of the estate happens to nest (8px at two rungs, 28px at six, the
+// that corner of the fleet happens to nest (8px at two rungs, 28px at six, the
 // same object in the design's mind and a different one on screen), and three
 // marks encoding the same chain never lined up, because each trailed a label of
 // a different length. A dot has no width to spend and no position to compare.

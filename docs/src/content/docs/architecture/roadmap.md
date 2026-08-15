@@ -28,7 +28,7 @@ per-slice detail (136 entries at this update) is on [implementation status](/arc
   lockout, and password policy; the full principal lifecycle (disable, archive, purge); impersonation
   with dual-actor audit; principal groups with grant-by-group; grants with scope operators; and the
   append-only [audit](/architecture/audit/) trail with its admin read surface.
-- **The estate and its catalogs.** The `location` / `system` / `component` trees on the shared
+- **The fleet and its catalogs.** The `location` / `system` / `component` trees on the shared
   scoped-CRUD primitive, `system_member` multi-membership, system roles with the typed-slot assignment
   guard, the standard / product / vendor / driver / component_type registries, and location types with
   `allowed_parent_types` placement rules.
@@ -58,7 +58,7 @@ authoritative.
 |---|---|---|
 | [Identity tier (#27)](https://github.com/hyperscaleav/omniglass/issues/27) | **Shipped.** Password login over an httpOnly cookie session, self-service profile and password change, and admin user / grant management, then well beyond the original scope (lifecycle, impersonation, groups, tokens, lockout). Its exit condition is met: the bearer-only and bootstrap divergences ([ADR-0004](/architecture/decisions/#adr-0004-credentials-ship-bearer-only), [ADR-0005](/architecture/decisions/#adr-0005-the-first-owner-is-omniglass-bootstrap)) are closed. The identity slices on [implementation status](/architecture/status/) carry the detail. | [identity and access](/architecture/identity-access/) |
 | [Deploy spine: PR previews (#41)](https://github.com/hyperscaleav/omniglass/issues/41) | **Live.** Every open PR gets an ephemeral, Access-gated preview of the console, provisioned by Argo CD from the Helm chart (the chart is also the production deploy artifact). See [PR previews](/guides/pr-previews/). | [scaling and deployment](/architecture/scaling/) |
-| [Estate model: groups + dynamic scope (#10)](https://github.com/hyperscaleav/omniglass/issues/10) | Ahead: entity-groups as scope anchors and dynamic-membership scope, plus the cross-tier cascade (a location scope reaching its systems and components). Principal groups as grant subjects shipped; group-as-scope has not. | [identity and access](/architecture/identity-access/), [groups](/architecture/groups/), [cascade](/architecture/cascade/) |
+| [Fleet model: groups + dynamic scope (#10)](https://github.com/hyperscaleav/omniglass/issues/10) | Ahead: entity-groups as scope anchors and dynamic-membership scope, plus the cross-tier cascade (a location scope reaching its systems and components). Principal groups as grant subjects shipped; group-as-scope has not. | [identity and access](/architecture/identity-access/), [groups](/architecture/groups/), [cascade](/architecture/cascade/) |
 | [Public releases (#57)](https://github.com/hyperscaleav/omniglass/issues/57) | Ahead: signed and notarized binaries for every major OS/arch and one-line installs (Homebrew / Scoop / winget), so a first-time user runs with no security warning. | [scaling and deployment](/architecture/scaling/) |
 | [Embedded Postgres run mode (#19)](https://github.com/hyperscaleav/omniglass/issues/19) | Ahead: an opt-in single-binary mode with a managed embedded Postgres, for edge, demo, and learning installs with zero external database. | [scaling and deployment](/architecture/scaling/) |
 

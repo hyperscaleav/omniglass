@@ -16,7 +16,7 @@ import type { FilterKey } from "./predicate";
 type N = { id: string; display: string; children: N[]; type: string };
 const node = (id: string, display: string, type: string, children: N[] = []): N => ({ id, display, type, children });
 
-function estate(): N[] {
+function fleet(): N[] {
   return [
     node("hq", "HQ", "campus", [
       node("b1", "Building 1", "building", [
@@ -34,44 +34,44 @@ const sortVal = (n: N, key: string) => (key === "type" ? n.type : n.display.toLo
 
 describe("buildIndex", () => {
   it("flattens the forest depth-first into the in-order node list", () => {
-    const idx = buildIndex(estate());
+    const idx = buildIndex(fleet());
     expect(idx.all.map((n) => n.id)).toEqual(["hq", "b1", "f1", "r1", "r2"]);
   });
 
   it("maps each child to its parent", () => {
-    const idx = buildIndex(estate());
+    const idx = buildIndex(fleet());
     expect(idx.parentOf.get("r1")?.id).toBe("f1");
     expect(idx.parentOf.get("f1")?.id).toBe("b1");
     expect(idx.parentOf.has("hq")).toBe(false);
   });
 
   it("records only the containers (nodes with children)", () => {
-    const idx = buildIndex(estate());
+    const idx = buildIndex(fleet());
     expect([...idx.containerIds].sort()).toEqual(["b1", "f1", "hq"]);
   });
 });
 
 describe("pathOf", () => {
   it("returns ancestors root-first", () => {
-    const idx = buildIndex(estate());
+    const idx = buildIndex(fleet());
     expect(pathOf(idx, idx.byId.get("r1")!).map((c) => c.id)).toEqual(["hq", "b1", "f1"]);
   });
 
   it("is empty for a root", () => {
-    const idx = buildIndex(estate());
+    const idx = buildIndex(fleet());
     expect(pathOf(idx, idx.byId.get("hq")!)).toEqual([]);
   });
 });
 
 describe("flattenRows", () => {
   it("with no sort keeps index (tree depth-first) order, not alphabetical", () => {
-    const idx = buildIndex(estate());
+    const idx = buildIndex(fleet());
     const rows = flattenRows(idx, keys, [], null, sortVal);
     expect(rows.map((r) => r.n.id)).toEqual(["hq", "b1", "f1", "r1", "r2"]);
   });
 
   it("a column sort overrides the default order", () => {
-    const idx = buildIndex(estate());
+    const idx = buildIndex(fleet());
     const rows = flattenRows(idx, keys, [], { key: "name", dir: 1 }, sortVal);
     expect(rows.map((r) => r.n.display)).toEqual(["Building 1", "Floor 1", "HQ", "Room A", "Room B"]);
     const desc = flattenRows(idx, keys, [], { key: "name", dir: -1 }, sortVal);
@@ -79,7 +79,7 @@ describe("flattenRows", () => {
   });
 
   it("filters by a chip and carries each row's ancestor path", () => {
-    const idx = buildIndex(estate());
+    const idx = buildIndex(fleet());
     const rows = flattenRows(idx, keys, [{ key: "type", op: "eq", values: ["room"] }], null, sortVal);
     expect(rows.map((r) => r.n.id)).toEqual(["r1", "r2"]);
     expect(rows[0].path?.map((c) => c.id)).toEqual(["hq", "b1", "f1"]);
@@ -105,7 +105,7 @@ describe("flattenRows", () => {
   });
 
   it("omits pathRender when the node carries none", () => {
-    const idx = buildIndex(estate());
+    const idx = buildIndex(fleet());
     const rows = flattenRows(idx, keys, [], null, sortVal);
     expect(rows[0].pathRender).toBeUndefined();
   });
@@ -113,12 +113,12 @@ describe("flattenRows", () => {
 
 describe("treeRows", () => {
   it("shows only roots when nothing is expanded", () => {
-    const rows = treeRows(estate(), new Set());
+    const rows = treeRows(fleet(), new Set());
     expect(rows.map((r) => r.n.id)).toEqual(["hq"]);
   });
 
   it("descends only into expanded containers, with depth", () => {
-    const rows = treeRows(estate(), new Set(["hq", "b1"]));
+    const rows = treeRows(fleet(), new Set(["hq", "b1"]));
     expect(rows.map((r) => [r.n.id, r.depth])).toEqual([
       ["hq", 0],
       ["b1", 1],

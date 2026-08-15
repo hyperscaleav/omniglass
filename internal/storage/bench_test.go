@@ -33,23 +33,23 @@ import (
 //
 // # Two sizes, and why
 //
-// Every benchmark runs on a small estate and a large one, about a factor of ten
+// Every benchmark runs on a small fleet and a large one, about a factor of ten
 // apart. A single size cannot tell a constant apart from a linear cost, and the
 // growth curve is the entire question here: ListComponents SHOULD grow with the
-// estate (it returns every row) while ResolveTags should NOT (it walks one
+// fleet (it returns every row) while ResolveTags should NOT (it walks one
 // component's ancestors), and only the pair of numbers says whether that is
 // still true.
 //
 // # Setup is never inside the timed section
 //
 // Every benchmark below calls b.ResetTimer after its fixture is in hand, and the
-// fixture itself is built once per size for the whole binary (benchEstate) and
+// fixture itself is built once per size for the whole binary (benchFleet) and
 // shared. A benchmark that provisions inside its own timed loop measures the
 // harness, which is the mistake to avoid: a database create plus a boot seed
 // costs far more than any query here, so it would swamp every signal and every
 // number would move together whenever the harness changed.
 //
-// The shared estate is why the read benchmarks in this file are read-ONLY. A
+// The shared fleet is why the read benchmarks in this file are read-ONLY. A
 // benchmark that wrote to it would change what the next one measures, and the
 // numbers would depend on the order -bench happened to select.
 //
@@ -65,9 +65,9 @@ import (
 // candidate benchmark was measured and then deliberately not shipped (see the
 // note above warmRows).
 
-// benchSize is one estate shape. The two are about a factor of ten apart in every
+// benchSize is one fleet shape. The two are about a factor of ten apart in every
 // dimension that a query here grows along, with component density per room held
-// roughly constant so the difference between them is estate SIZE and not estate
+// roughly constant so the difference between them is fleet SIZE and not fleet
 // shape.
 type benchSize struct {
 	name       string
@@ -82,10 +82,10 @@ var benchSizes = []benchSize{
 	{name: "large", buildings: 6, roomsPer: 10, systems: 50, components: 250},
 }
 
-// benchEstate is a built estate plus the handles a benchmark needs to address
+// benchFleet is a built fleet plus the handles a benchmark needs to address
 // it: the gateway, the ids a batch read takes, and the names a single-row read
 // resolves.
-type benchEstate struct {
+type benchFleet struct {
 	gw         *storage.PG
 	campus     string   // the root location's name
 	rooms      []string // every room's name
@@ -96,46 +96,46 @@ type benchEstate struct {
 	compScope  scope.Set
 }
 
-// benchEstates caches one built estate per size for the life of the test binary.
+// benchFleets caches one built fleet per size for the life of the test binary.
 //
 // Correctness does not depend on this (ResetTimer already excludes the build
 // from the timing); the run's length does. Every benchmark in this file reads
-// the same two estates, and `make bench` passes -count=5, so an estate built
+// the same two fleets, and `make bench` passes -count=5, so an fleet built
 // inside the benchmark function would be provisioned dozens of times per run for
 // no measurable difference in the answer. Built once here, each size is
 // provisioned exactly once.
 //
 // This works only because every benchmark here is read-ONLY, which is a real
 // constraint on what may be added to this file rather than an incidental
-// property: a benchmark that wrote to a shared estate would change what the next
+// property: a benchmark that wrote to a shared fleet would change what the next
 // one measures, and the numbers would depend on the order -bench selected.
 //
 // The gateway is deliberately never closed. It outlives every b that touches it,
 // and the container it points at is reclaimed by storagetest.Main on exit, so
 // there is nothing left behind that a b.Cleanup would have caught.
 var (
-	benchMu      sync.Mutex
-	benchEstates = map[string]*benchEstate{}
+	benchMu     sync.Mutex
+	benchFleets = map[string]*benchFleet{}
 )
 
-func estateFor(b *testing.B, size benchSize) *benchEstate {
+func fleetFor(b *testing.B, size benchSize) *benchFleet {
 	b.Helper()
 	benchMu.Lock()
 	defer benchMu.Unlock()
-	if e, ok := benchEstates[size.name]; ok {
+	if e, ok := benchFleets[size.name]; ok {
 		return e
 	}
-	e := buildBenchEstate(b, size)
-	benchEstates[size.name] = e
+	e := buildBenchFleet(b, size)
+	benchFleets[size.name] = e
 	return e
 }
 
-// buildBenchEstate provisions one estate through the real gateway write paths,
+// buildBenchFleet provisions one fleet through the real gateway write paths,
 // not raw INSERTs. The writes are what put the rows in the shape the reads
 // assume (placement columns, membership rows, the product classification every
 // component carries), and a hand-rolled INSERT fixture drifts from that shape
 // the first time a write path changes.
-func buildBenchEstate(b *testing.B, size benchSize) *benchEstate {
+func buildBenchFleet(b *testing.B, size benchSize) *benchFleet {
 	b.Helper()
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(b))
@@ -145,7 +145,7 @@ func buildBenchEstate(b *testing.B, size benchSize) *benchEstate {
 	if err := seed.Run(ctx, gw); err != nil {
 		b.Fatalf("seed: %v", err)
 	}
-	e := &benchEstate{gw: gw, campus: "bench-campus"}
+	e := &benchFleet{gw: gw, campus: "bench-campus"}
 
 	mustLocation(b, gw, e.campus, "campus", nil)
 	for i := range size.buildings {
@@ -272,18 +272,18 @@ func mustLocation(b *testing.B, gw storage.Gateway, name, kind string, parent *s
 	}
 }
 
-// eachSize runs body against both estates as sub-benchmarks, and reports the row
+// eachSize runs body against both fleets as sub-benchmarks, and reports the row
 // count each one read as a custom metric.
 //
-// rows/op is not decoration. A benchmark whose ns/op grew because the estate
+// rows/op is not decoration. A benchmark whose ns/op grew because the fleet
 // grew is doing its job; one whose ns/op grew while rows/op stayed put is the
 // regression. Without the row count in the output, benchstat comparing two runs
 // cannot tell the reader which of the two happened, and the number is only
 // interpretable by someone who remembers the fixture.
-func eachSize(b *testing.B, body func(b *testing.B, e *benchEstate) int) {
+func eachSize(b *testing.B, body func(b *testing.B, e *benchFleet) int) {
 	for _, size := range benchSizes {
 		b.Run(size.name, func(b *testing.B) {
-			e := estateFor(b, size)
+			e := fleetFor(b, size)
 			rows := body(b, e)
 			b.ReportMetric(float64(rows), "rows/op")
 		})
@@ -310,7 +310,7 @@ func eachSize(b *testing.B, body func(b *testing.B, e *benchEstate) int) {
 // per-statement cost is somewhat above this; the point of the number is its order
 // of magnitude and its stability, not arithmetic to three digits.
 func BenchmarkRoundTripFloor(b *testing.B) {
-	e := estateFor(b, benchSizes[0])
+	e := fleetFor(b, benchSizes[0])
 	ctx := context.Background()
 	if err := e.gw.Ping(ctx); err != nil {
 		b.Fatalf("warm ping: %v", err)
@@ -323,12 +323,12 @@ func BenchmarkRoundTripFloor(b *testing.B) {
 	}
 }
 
-// BenchmarkListComponents: the unpaginated estate read, all-scope. One scoped
+// BenchmarkListComponents: the unpaginated fleet read, all-scope. One scoped
 // list query plus the batch address attach, which is the recursive walk #648
-// rewrote. Every row in the estate comes back, so this one is EXPECTED to grow
-// with the estate; what would be a regression is growing faster than it does.
+// rewrote. Every row in the fleet comes back, so this one is EXPECTED to grow
+// with the fleet; what would be a regression is growing faster than it does.
 func BenchmarkListComponents(b *testing.B) {
-	eachSize(b, func(b *testing.B, e *benchEstate) int {
+	eachSize(b, func(b *testing.B, e *benchFleet) int {
 		ctx := context.Background()
 		rows := warmRows(b, func() (int, error) {
 			cs, err := e.gw.ListComponents(ctx, all)
@@ -347,7 +347,7 @@ func BenchmarkListComponents(b *testing.B) {
 // BenchmarkListSystems: the same read on the system plane, which shares the
 // scoped-list and attach machinery but its own accessor and its own table.
 func BenchmarkListSystems(b *testing.B) {
-	eachSize(b, func(b *testing.B, e *benchEstate) int {
+	eachSize(b, func(b *testing.B, e *benchFleet) int {
 		ctx := context.Background()
 		rows := warmRows(b, func() (int, error) {
 			ss, err := e.gw.ListSystems(ctx, all)
@@ -367,7 +367,7 @@ func BenchmarkListSystems(b *testing.B) {
 // chain with no plane to cross, so it pays one walk rather than three. The
 // cheapest of the three lists, and the baseline the other two are read against.
 func BenchmarkListLocations(b *testing.B) {
-	eachSize(b, func(b *testing.B, e *benchEstate) int {
+	eachSize(b, func(b *testing.B, e *benchFleet) int {
 		ctx := context.Background()
 		rows := warmRows(b, func() (int, error) {
 			ls, err := e.gw.ListLocations(ctx, all)
@@ -397,7 +397,7 @@ func BenchmarkListLocations(b *testing.B) {
 // It should be roughly flat across the sizes: the walk is seeded from one root
 // and descends, so it is bounded by the subtree, not by the table.
 func BenchmarkListComponentsScoped(b *testing.B) {
-	eachSize(b, func(b *testing.B, e *benchEstate) int {
+	eachSize(b, func(b *testing.B, e *benchFleet) int {
 		ctx := context.Background()
 		rows := warmRows(b, func() (int, error) {
 			cs, err := e.gw.ListComponents(ctx, e.compScope)
@@ -425,7 +425,7 @@ func BenchmarkListComponentsScoped(b *testing.B) {
 // number should grow with the page but far more slowly than a per-row walk
 // would, and much of what remains is scanning rows rather than planning.
 func BenchmarkPathsOfComponents(b *testing.B) {
-	eachSize(b, func(b *testing.B, e *benchEstate) int {
+	eachSize(b, func(b *testing.B, e *benchFleet) int {
 		ctx := context.Background()
 		if _, err := e.gw.BenchPathsOf(ctx, "component", e.compIDs); err != nil {
 			b.Fatalf("paths of components: %v", err)
@@ -447,12 +447,12 @@ func BenchmarkPathsOfComponents(b *testing.B) {
 //
 // This one should be FLAT across the two sizes, and that is the point of running
 // it at both. It walks one component's three ancestor chains, and neither chain
-// gets deeper when the estate gets wider. A version of this that tracked estate
+// gets deeper when the fleet gets wider. A version of this that tracked fleet
 // size would mean a chain walk had turned into a table scan, which is exactly
 // the class of regression counting cannot see: the statement count would not
 // move.
 func BenchmarkResolveTags(b *testing.B) {
-	eachSize(b, func(b *testing.B, e *benchEstate) int {
+	eachSize(b, func(b *testing.B, e *benchFleet) int {
 		ctx := context.Background()
 		rows := warmRows(b, func() (int, error) {
 			ts, err := e.gw.ResolveTags(ctx, e.deepComp, e.sysName, all)
@@ -469,14 +469,14 @@ func BenchmarkResolveTags(b *testing.B) {
 }
 
 // BenchmarkEffectiveTags: the same cascade BATCHED over every component in the
-// estate, which is the read that feeds the directory's Tags column.
+// fleet, which is the read that feeds the directory's Tags column.
 //
 // The batch form is where a cascade regression actually hurts, because it runs
 // the whole thing once per listed page rather than once per drill-down, and it
 // is the one whose cost is supposed to be sublinear in the page. Paired with
 // ResolveTags above, the two say whether the batch is really batching.
 func BenchmarkEffectiveTags(b *testing.B) {
-	eachSize(b, func(b *testing.B, e *benchEstate) int {
+	eachSize(b, func(b *testing.B, e *benchFleet) int {
 		ctx := context.Background()
 		if _, err := e.gw.EffectiveTags(ctx, "component", e.compIDs); err != nil {
 			b.Fatalf("effective tags: %v", err)
@@ -497,11 +497,11 @@ func BenchmarkEffectiveTags(b *testing.B) {
 //
 // The correlated subquery is the reason this is here rather than assumed cheap:
 // it is a per-system lookup into the property table, ordered and limited, and
-// property is the table that grows without bound as an estate runs. It issues
+// property is the table that grows without bound as an fleet runs. It issues
 // one statement however many systems it covers, so counting sees a flat 3 and
 // always will; the cost lives entirely inside the plan.
 func BenchmarkLocationHealth(b *testing.B) {
-	eachSize(b, func(b *testing.B, e *benchEstate) int {
+	eachSize(b, func(b *testing.B, e *benchFleet) int {
 		ctx := context.Background()
 		window := time.Duration(0)
 		rows := warmRows(b, func() (int, error) {
@@ -526,13 +526,13 @@ func BenchmarkLocationHealth(b *testing.B) {
 // the verdict, and explains each role.
 //
 // Like ResolveTags this should be flat across the sizes: a system's roles do not
-// multiply because the estate got bigger. Unlike ResolveTags it is a small
+// multiply because the fleet got bigger. Unlike ResolveTags it is a small
 // constant of statements plus one alarm read per IMPAIRED role, so on a healthy
 // system most of the number is the resolve, and on a broken one counting and
 // timing would move together. It is here because nothing else in the file
 // exercises role resolution at all.
 func BenchmarkSystemHealth(b *testing.B) {
-	eachSize(b, func(b *testing.B, e *benchEstate) int {
+	eachSize(b, func(b *testing.B, e *benchFleet) int {
 		ctx := context.Background()
 		window := time.Duration(0)
 		rows := warmRows(b, func() (int, error) {

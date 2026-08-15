@@ -10,7 +10,7 @@ import (
 )
 
 // MetricSampleWrite is one observed metric to persist. OwnerKind picks the
-// arc; OwnerID is the estate address (component/system/location/node name).
+// arc; OwnerID is the fleet address (component/system/location/node name).
 // Instance discriminates many values of one key on one owner (default "").
 type MetricSampleWrite struct {
 	OwnerKind string

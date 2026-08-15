@@ -16,7 +16,7 @@ import (
 // land on those four and nothing else.
 //
 // So it stands the database one migration back (the location_type table exists,
-// the fork adoption has not run), writes the rows the way an installed estate
+// the fork adoption has not run), writes the rows the way an installed fleet
 // holds them, and migrates forward over them, running the real migration file
 // rather than a copy of its SQL. Then it boots the seed, which is what the flip
 // buys: a shipped value the release withdrew can finally leave a row that
@@ -26,7 +26,7 @@ import (
 // An earlier draft captured operator edits into registry_shadow ahead of the
 // flip, discriminating by the audit trail; that half was removed because there
 // are no releases and no operator data for it to protect (ADR-0106, as amended).
-// The first real release changes that calculus and owes its estates a migration
+// The first real release changes that calculus and owes its fleets a migration
 // of its own; this one may not quietly grow the machinery back.
 func TestShippedLocationTypesFlipToPlatformOwned(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
@@ -36,7 +36,7 @@ func TestShippedLocationTypesFlipToPlatformOwned(t *testing.T) {
 	conn := connectDSN(t, dsn)
 	ctx := context.Background()
 
-	// The shape an installed estate holds: shipped rows seeded operator-owned
+	// The shape an installed fleet holds: shipped rows seeded operator-owned
 	// (official=false, which is what insert-if-absent wrote), one of them
 	// carrying a rule a release shipped and ADR-0103 withdrew.
 	rows := []struct {
@@ -123,7 +123,7 @@ func TestShippedLocationTypesFlipToPlatformOwned(t *testing.T) {
 		t.Error("the round trip claimed the operator's own type")
 	}
 
-	// Then the boot the estate actually takes, which is the point of the flip:
+	// Then the boot the fleet actually takes, which is the point of the flip:
 	// under the old ownership the seed could not write these rows at all, so a
 	// withdrawn value stayed forever.
 	gw, err := storage.NewPG(ctx, dsn)
@@ -140,7 +140,7 @@ func TestShippedLocationTypesFlipToPlatformOwned(t *testing.T) {
 		t.Fatalf("get floor: %v", err)
 	}
 	if floor.NameRule != nil {
-		t.Errorf("floor still carries %+v after the migration and a boot, want nil: a withdrawn shipped value must leave the estate", floor.NameRule)
+		t.Errorf("floor still carries %+v after the migration and a boot, want nil: a withdrawn shipped value must leave the fleet", floor.NameRule)
 	}
 	wing, err := gw.GetLocationType(ctx, "wing")
 	if err != nil {

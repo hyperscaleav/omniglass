@@ -139,7 +139,7 @@ func registerTelemetryRoutes(api huma.API, a *authenticator, gw storage.Gateway,
 		// Scope is the fence that makes a caller-declared owner trustworthy, and it must
 		// be the scope that actually confers telemetry:push, NOT the component:read
 		// scope. A principal routinely holds a wide read and a narrow write (viewer over
-		// the estate plus operator on one component), so fencing this with the read scope
+		// the fleet plus operator on one component), so fencing this with the read scope
 		// would let it push telemetry to anything it can see. Resolving the push scope and
 		// looking the owner up through it means an owner outside the caller's push
 		// authority is a non-disclosing 404, the same shape as everywhere else.

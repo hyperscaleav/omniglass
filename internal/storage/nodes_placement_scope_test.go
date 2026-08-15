@@ -41,7 +41,7 @@ func TestANodeBindsOnlyALocationTheCallerCanRead(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	closet := makeRoomIn(t, gw, ctx, "node-closet")
 	vault := makeRoomIn(t, gw, ctx, "node-vault")
-	// The caller reads one room of the two. Its node scope is estate-wide,
+	// The caller reads one room of the two. Its node scope is fleet-wide,
 	// because a node create requires that and this test is about the OTHER set.
 	narrow := scope.Set{IDs: []string{closet.ID}}
 

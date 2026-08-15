@@ -46,7 +46,7 @@ func TestHealthReadsReachTheSystemOwnerIndex(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	verdictEstate(t, gw, 3)
+	verdictFleet(t, gw, 3)
 	all := scope.Set{All: true}
 
 	// The bulk read (#653) and the location rollup, in one pass each. The

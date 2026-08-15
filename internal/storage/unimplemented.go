@@ -808,6 +808,6 @@ func (UnimplementedGateway) LocationHealth(context.Context, string, time.Duratio
 	return nil, nil
 }
 
-func (UnimplementedGateway) EstateProjection(context.Context, scope.Set, scope.Set, scope.Set) (*EstateView, error) {
+func (UnimplementedGateway) FleetProjection(context.Context, scope.Set, scope.Set, scope.Set) (*FleetView, error) {
 	return nil, nil
 }

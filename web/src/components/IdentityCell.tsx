@@ -20,7 +20,7 @@ import { entityLabel, hasLabel, labelIsName, type Labelled } from "../lib/entiti
 //   - one column, label plus inline muted name (Groups, Roles, Users, Nodes)
 //   - the name alone                               (Secrets, Variables)
 //
-// Four idioms is why the same estate read four different ways depending on which
+// Four idioms is why the same fleet read four different ways depending on which
 // page an operator was on, and why the column header for the same fact was "Name"
 // here and "Key" there. Those retired words are named here because this comment is
 // the history; the guard forbids a second word for the identifier everywhere else.
@@ -42,7 +42,7 @@ import { entityLabel, hasLabel, labelIsName, type Labelled } from "../lib/entiti
 // The pen split the one flag this cell used to read into three states (#683). A
 // label a RULE rendered (#682) differs from the name exactly as an operator's
 // does, so the old "the label differs from the name" would have put a second
-// identifier line under every row in a 15,000-component estate. The three states,
+// identifier line under every row in a 15,000-component fleet. The three states,
 // and what each renders:
 //
 //   no label            the name, once, in the data face (it IS an identifier)
@@ -56,12 +56,12 @@ import { entityLabel, hasLabel, labelIsName, type Labelled } from "../lib/entiti
 // "Generated" chip beside the label. It left in #693, for two reasons that point
 // the same way. It cost the Name column the width of the word on every
 // platform-labelled row of the 18 pages this cell serves plus every TreeList,
-// which is a permanent charge for a fact most rows in a settled estate share.
+// which is a permanent charge for a fact most rows in a settled fleet share.
 // And it was unactionable where it stood: an operator reading it in a list could
 // do nothing about it there. It is now the lock on the label field of the
 // edit blade (components/LabelPenField.tsx), beside the field it owns and next
 // to the act that changes it, which is where the NAME's own pen already stated
-// itself. The estate-wide question the chip half-answered, which rows a rule
+// itself. The fleet-wide question the chip half-answered, which rows a rule
 // edit would rewrite, is answered whole by `<entity> previewLabels`.
 //
 // The pen has not left this cell, only its badge: hasLabel still reads it

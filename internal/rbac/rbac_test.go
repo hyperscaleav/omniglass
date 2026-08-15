@@ -37,7 +37,7 @@ func TestSetAllows(t *testing.T) {
 		{"*:read still reaches a non-sensitive resource (variable)", []string{"*:read"}, "variable", "read", true},
 		// platform is sensitive for a different reason than secret: it is not a
 		// resource anyone reads, it is install-wide AUTHORITY (the right to write at
-		// the cascade's least-specific tier). Full-estate reach must not confer it, so
+		// the cascade's least-specific tier). Full-fleet reach must not confer it, so
 		// a bare resource wildcard does not name it: only a literal grant, a
 		// platform:* resource wildcard, or owner's > does.
 		{"*:update does not reach platform:update", []string{"*:update"}, "platform", "update", false},

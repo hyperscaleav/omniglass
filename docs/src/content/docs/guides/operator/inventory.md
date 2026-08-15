@@ -1,5 +1,5 @@
 ---
-title: Find things in your estate
+title: Find things in your fleet
 description: "The inventory pages, the chip filter, and the tree, list, and column controls for locating a location, system, or component."
 screenshots:
   - id: inventory
@@ -28,7 +28,7 @@ then a value; each commit becomes a chip:
   key, then a value, to match its **effective** value (a component matches on a tag it inherits
   from its system or location, not only one set on it directly). Two operators, **is set** and
   **is absent**, take no value and find the rows that carry the tag at all or lack it entirely.
-  Every tag in use is reachable this way, so the list tracks whatever your estate is tagged with.
+  Every tag in use is reachable this way, so the list tracks whatever your fleet is tagged with.
 
 This is a page-local filter, distinct from the global **⌘K** jump that moves you between
 sections ([getting around](/guides/operator/#getting-around)).
@@ -56,14 +56,14 @@ sections ([getting around](/guides/operator/#getting-around)).
   only ever answer one row at a time, run `omniglass <entity> previewLabels`: it lists exactly the rows
   the platform still labels, and nothing you typed yourself.
 - **Upgrading into a new rule does not relabel anything you already have.** Locations shipped with no
-  label rule before, so an estate created then keeps reading its raw names (`north-wing`) after the
+  label rule before, so an fleet created then keeps reading its raw names (`north-wing`) after the
   upgrade. Applying the new rule is your act, and there is no console button for it yet: run
   `omniglass location previewLabels` to see exactly which rows would move, then
   `omniglass location recomputeLabels` to apply it, and the same rows read **North Wing**. Nothing you
   typed yourself is touched by either.
 - **The same applies to systems, and the upgrade worth running is this one.** A system's shipped label
   now carries the number its name carries, so the two halves of a divisible boardroom read **Boardroom**
-  and **Boardroom 2** instead of both reading "Boardroom". An estate created before the upgrade keeps
+  and **Boardroom 2** instead of both reading "Boardroom". An fleet created before the upgrade keeps
   both halves reading alike until you run `omniglass system previewLabels` and then
   `omniglass system recomputeLabels`. Only the first of a kind in a room is bare: a room with one
   boardroom in it reads **Boardroom**, exactly as its name is `boardroom` rather than `boardroom-1`.
@@ -71,7 +71,7 @@ sections ([getting around](/guides/operator/#getting-around)).
   layout is remembered per browser.
 - On Locations, each row wears its **type's icon** as a leading glyph (a campus, building,
   floor, and room each read differently at a glance), tinted the same hue as the type badge.
-- On Locations, a **summary board** at the top breaks the estate down by place type (a donut
+- On Locations, a **summary board** at the top breaks the fleet down by place type (a donut
   plus count cards); click any segment or card to filter to it.
 - A **Tags** column shows each row's **effective [tags](/architecture/tags/)**: the `key = value`
   labels that resolve onto it down the cascade, not only the ones set directly on it (so a component
@@ -81,7 +81,7 @@ sections ([getting around](/guides/operator/#getting-around)).
   hide it from the columns menu.
 
 Everything on these pages is already filtered to [your scope](/guides/operator/#what-you-see-is-your-scope):
-you are searching within the subtree your grants reach, not the whole estate.
+you are searching within the subtree your grants reach, not the whole fleet.
 
 The **[Files](/guides/admin/files/)** directory (under Values) uses these same filter, column, and list
-controls, but it holds uploaded content, not the estate, so it is covered separately.
+controls, but it holds uploaded content, not the fleet, so it is covered separately.

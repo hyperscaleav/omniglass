@@ -372,12 +372,12 @@ func (p *PG) membersWhere(ctx context.Context, where string, arg string) ([]Memb
 //
 // AddMember and SetPrimaryMember only: RemoveMember uses
 // resolveMembershipEndsForRemoval instead (#627 review round 3), because the
-// component it resolves must already BE a member, and estate-wide is the
+// component it resolves must already BE a member, and fleet-wide is the
 // wrong set to judge that in. AddMember's own component is not yet a member
 // (that is the point of adding it), so it cannot use a members-only resolve;
 // its console callsite addresses the component by uuid now regardless (round
-// 3's assign/add fix), where this estate-wide scopedByName's ambiguity branch
-// cannot fire. SetPrimaryMember carries the same estate-wide-ambiguity shape
+// 3's assign/add fix), where this fleet-wide scopedByName's ambiguity branch
+// cannot fire. SetPrimaryMember carries the same fleet-wide-ambiguity shape
 // RemoveMember had; left alone here, out of this round's scope (#645 named
 // only unassign and remove).
 func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName, componentName string, read, action scope.Set) (systemID, componentID string, err error) {
@@ -395,7 +395,7 @@ func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName,
 	// unrelated to it, so checking write against componentConfig could never
 	// match (the tier-mismatch shape a review caught elsewhere).
 	// withoutCandidates closes the disclosure an ambiguous component name
-	// would otherwise carry: every matching uuid estate-wide, including ones
+	// would otherwise carry: every matching uuid fleet-wide, including ones
 	// this system:update-only caller holds no component:read grant to see.
 	c, err := scopedByName(ctx, q, componentConfig, componentName)
 	if err != nil {
@@ -406,9 +406,9 @@ func (p *PG) resolveMembershipEnds(ctx context.Context, q txQuerier, systemName,
 
 // resolveMembershipEndsForRemoval resolves the same pair resolveMembershipEnds
 // does, but judges the component's name ambiguity within THIS system's current
-// members, not estate-wide (#627 review round 3, closing #645 without a wire
+// members, not fleet-wide (#627 review round 3, closing #645 without a wire
 // change): RemoveMember is naming a component it already believes is a member
-// here, so a same-named component elsewhere in the estate that was never a
+// here, so a same-named component elsewhere in the fleet that was never a
 // member of this system was never actually a candidate. A name matching
 // nothing anywhere is ErrComponentNotFound; a name matching something real
 // that just is not a member here is ErrMemberNotFound, the same sentinel

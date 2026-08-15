@@ -30,7 +30,7 @@ import (
 // a narrow principal is refused proves nothing on its own: a broken route
 // refuses everyone.
 
-// placementFixture is the estate every test below shares: one campus, two wings
+// placementFixture is the fleet every test below shares: one campus, two wings
 // under it, and a component and a system inside wing-a for a narrow principal to
 // write against. wing-b is the one it must never be able to read, and its label
 // is the string that must never appear in an answer it receives.
@@ -333,7 +333,7 @@ func TestAGrantOnOnlyTheWrittenTierBindsNoPlacement(t *testing.T) {
 //
 // The narrow principal runs first and the owner runs the identical body second:
 // the same reference is ambiguous between TWO rooms for the one and THREE for
-// the other, off the same estate, which is what makes the filtering a property of
+// the other, off the same fleet, which is what makes the filtering a property of
 // the caller's scope rather than of the fixture.
 func TestAnAmbiguousPlacementNamesOnlyTheCandidatesTheCallerCanRead(t *testing.T) {
 	f := newPlacementFixture(t)
@@ -387,7 +387,7 @@ func TestAnAmbiguousPlacementNamesOnlyTheCandidatesTheCallerCanRead(t *testing.T
 	}, http.StatusCreated)
 
 	// The owner, whose scope holds all three, is refused with all three named:
-	// the two-row list above is this caller's scope, not the estate's shape.
+	// the two-row list above is this caller's scope, not the fleet's shape.
 	status, body = f.c.send(f.owner, http.MethodPost, "/components", create)
 	if status != http.StatusConflict {
 		t.Fatalf("owner create against the ambiguous location = %d, want 409\nbody: %s", status, body)

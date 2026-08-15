@@ -22,7 +22,7 @@ import (
 // join by uuid to render one label.
 //
 // The guard in name_address_test.go checks the shape of the contract; this checks
-// the behaviour, over HTTP, on the three estate entities that had the defect.
+// the behaviour, over HTTP, on the three fleet entities that had the defect.
 func TestPlacementRoundTripsByName(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()

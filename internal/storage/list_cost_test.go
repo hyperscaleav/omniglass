@@ -16,7 +16,7 @@ import (
 
 // The round-trip cost of the gateway's LIST paths (#650), pinned at an exact
 // number rather than timed. The Gateway's dominant cost is round trips to
-// Postgres and the regression that hurts at estate scale is the N+1: fifteen
+// Postgres and the regression that hurts at fleet scale is the N+1: fifteen
 // thousand components paying two or three queries each. A count is
 // deterministic, needs no baseline, and fails with a number that names the
 // defect; a wall-clock measurement on a laptop has variance that swamps
@@ -81,10 +81,10 @@ func assertFlatCost(t *testing.T, small, large reading, ceiling int) {
 	}
 }
 
-// countingEstate is a seeded gateway whose pool counts, one per subtest: each
+// countingFleet is a seeded gateway whose pool counts, one per subtest: each
 // case measures a page of one and then a page of twenty-one, so it needs a
 // database no other case has already filled.
-func countingEstate(t *testing.T) (storage.Gateway, *querycount.Counter) {
+func countingFleet(t *testing.T) (storage.Gateway, *querycount.Counter) {
 	t.Helper()
 	gw, counter := storagetest.NewCountingDB(t)
 	if err := seed.Run(context.Background(), gw); err != nil {
@@ -133,7 +133,7 @@ func mustRooms(t *testing.T, gw storage.Gateway) []string {
 // all, so a small page of one unplaced component would take a different branch
 // and the comparison would be measuring branches rather than page sizes.
 func TestListComponentsCostIsFlatInPageSize(t *testing.T) {
-	gw, counter := countingEstate(t)
+	gw, counter := countingFleet(t)
 	ctx := context.Background()
 	roomNames := mustRooms(t, gw)
 
@@ -163,7 +163,7 @@ func TestListComponentsCostIsFlatInPageSize(t *testing.T) {
 // TestListSystemsCostIsFlatInPageSize: the same shape for the system plane,
 // which shares the scoped-list and attach machinery but its own accessor.
 func TestListSystemsCostIsFlatInPageSize(t *testing.T) {
-	gw, counter := countingEstate(t)
+	gw, counter := countingFleet(t)
 	ctx := context.Background()
 	roomNames := mustRooms(t, gw)
 
@@ -190,7 +190,7 @@ func TestListSystemsCostIsFlatInPageSize(t *testing.T) {
 // ancestor chain with no plane to cross, so its attach is one query rather than
 // three, and the whole read is two.
 func TestListLocationsCostIsFlatInPageSize(t *testing.T) {
-	gw, counter := countingEstate(t)
+	gw, counter := countingFleet(t)
 	ctx := context.Background()
 
 	list := func() (int, error) {
@@ -229,7 +229,7 @@ func TestListLocationsCostIsFlatInPageSize(t *testing.T) {
 // cost what one does. The members are components spread across several rooms, so
 // a per-member address walk (the shape the scoped list once had) would grow.
 func TestListMembersCostIsFlatInMemberCount(t *testing.T) {
-	gw, counter := countingEstate(t)
+	gw, counter := countingFleet(t)
 	ctx := context.Background()
 	roomNames := mustRooms(t, gw)
 	mustCreateSystem(t, gw, storage.SystemSpec{Name: "av", LocationName: strptr(roomNames[0])}, all)
@@ -263,7 +263,7 @@ func TestListMembersCostIsFlatInMemberCount(t *testing.T) {
 // recursive component-subtree walk joined onto interface, however many
 // interfaces on however many components.
 func TestListInterfacesCostIsFlatInPageSize(t *testing.T) {
-	gw, counter := countingEstate(t)
+	gw, counter := countingFleet(t)
 	ctx := context.Background()
 	roomNames := mustRooms(t, gw)
 
@@ -295,7 +295,7 @@ func TestListInterfacesCostIsFlatInPageSize(t *testing.T) {
 // TestListAlarmsCostIsFlatInAlarmCount: resolving the component by name, then
 // one query for its alarms, whatever the depth of its history.
 func TestListAlarmsCostIsFlatInAlarmCount(t *testing.T) {
-	gw, counter := countingEstate(t)
+	gw, counter := countingFleet(t)
 	ctx := context.Background()
 	roomNames := mustRooms(t, gw)
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "dsp", LocationName: strptr(roomNames[0])}, all)
@@ -330,7 +330,7 @@ func TestListAlarmsCostIsFlatInAlarmCount(t *testing.T) {
 // key (its allowed values live on the row, not in a child table, which is
 // exactly the design decision a per-key read would undo).
 func TestListTagsCostIsFlatInPageSize(t *testing.T) {
-	gw, counter := countingEstate(t)
+	gw, counter := countingFleet(t)
 	ctx := context.Background()
 
 	mint := func(i int) {
@@ -360,9 +360,9 @@ func TestListTagsCostIsFlatInPageSize(t *testing.T) {
 
 // TestListRolesCostIsFlatInPageSize: the role index is read whole on every
 // permission refresh, and a role carries its permissions and inheritance as
-// array columns, so the read is one query however many roles the estate defines.
+// array columns, so the read is one query however many roles the fleet defines.
 func TestListRolesCostIsFlatInPageSize(t *testing.T) {
-	gw, counter := countingEstate(t)
+	gw, counter := countingFleet(t)
 	ctx := context.Background()
 
 	list := func() (int, error) {
@@ -404,7 +404,7 @@ func TestListRolesCostIsFlatInPageSize(t *testing.T) {
 // rows carry no grants would leave the grant assembly untested and flat by
 // accident.
 func TestListPrincipalsCostIsFlatInPageSize(t *testing.T) {
-	gw, counter := countingEstate(t)
+	gw, counter := countingFleet(t)
 	ctx := context.Background()
 
 	// One group holding a grant, so every member's effective grants include an
@@ -460,7 +460,7 @@ func TestListPrincipalsCostIsFlatInPageSize(t *testing.T) {
 // claim, and this is the one that checks it: the same component page, read once
 // under an all scope and once under a subtree scope, costs the same.
 func TestListCostDoesNotDependOnScopeShape(t *testing.T) {
-	gw, counter := countingEstate(t)
+	gw, counter := countingFleet(t)
 	ctx := context.Background()
 	roomNames := mustRooms(t, gw)
 
@@ -505,7 +505,7 @@ func TestListCostDoesNotDependOnScopeShape(t *testing.T) {
 // each walk climbs, which is what a per-level query would charge for and what a
 // flat count therefore has to hold against.
 func TestListComponentTypesCostIsFlatInRegistryDepth(t *testing.T) {
-	gw, counter := countingEstate(t)
+	gw, counter := countingFleet(t)
 	ctx := context.Background()
 
 	list := func() (int, error) {
@@ -534,7 +534,7 @@ func TestListComponentTypesCostIsFlatInRegistryDepth(t *testing.T) {
 // TestListSystemTypesCostIsFlatInRegistryDepth: the system registry's listing
 // resolves the same three facts over the same walk, so it owes the same number.
 func TestListSystemTypesCostIsFlatInRegistryDepth(t *testing.T) {
-	gw, counter := countingEstate(t)
+	gw, counter := countingFleet(t)
 	ctx := context.Background()
 
 	list := func() (int, error) {

@@ -120,7 +120,7 @@ export async function resetComponentName(name: string): Promise<Component> {
 export type NameCheck = { valid: boolean; available: boolean; reason?: string };
 
 // checkComponentName checks availability against a placement bucket (#627:
-// name uniqueness is scoped to placement, not the whole estate), the same
+// name uniqueness is scoped to placement, not the whole fleet), the same
 // one CreateComponent resolves into: parent wins over location, and neither
 // means the unplaced/root bucket. A rename check passes the component's OWN
 // current placement, since a rename does not move it.

@@ -45,7 +45,7 @@ var (
 
 	// ErrSystemExistsUnderParent / ErrSystemExistsInLocation / ErrSystemExistsUnplaced
 	// name which placement bucket a 23505 collided in, mirroring the component
-	// set: #627 scopes name uniqueness to placement, not the whole estate. Each
+	// set: #627 scopes name uniqueness to placement, not the whole fleet. Each
 	// wraps ErrSystemExists via %w, so errors.Is(err, ErrSystemExists) still
 	// matches any of them generically.
 	ErrSystemExistsUnderParent = fmt.Errorf("storage: a system with this name already exists under this parent: %w", ErrSystemExists)
@@ -192,7 +192,7 @@ type SystemMove struct {
 // --- standard registry -------------------------------------------------------
 
 // parent_standard_id stores a uuid; the parent's handle is projected beside it,
-// as the estate arcs do.
+// as the fleet arcs do.
 const standardCols = `id, name, official, coalesce(label, ''), parent_standard_id,
 	(select p.name from standard p where p.id = standard.parent_standard_id) as parent_handle, label_rule`
 
@@ -225,7 +225,7 @@ func mapStandardWriteErr(err error) error {
 // write. Idempotent: re-seeding the same id updates it in place.
 // SeedStandard inserts a shipped example standard only when it is absent. A
 // standard is operator-owned content: it is forked from an in-code template and
-// then belongs to the estate, so re-seeding must never reassert over an edit the
+// then belongs to the fleet, so re-seeding must never reassert over an edit the
 // operator made. This is deliberately not UpsertStandard, whose ON CONFLICT DO
 // UPDATE is the authoritative behavior the canonical catalogs want.
 func (p *PG) SeedStandard(ctx context.Context, st Standard) error {
@@ -555,7 +555,7 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 		}
 	} else {
 		// resolveScopedRef, not systemByName-then-inScopeTree: ruling 2
-		// (#627) requires ambiguity judged inside create, not estate-wide.
+		// (#627) requires ambiguity judged inside create, not fleet-wide.
 		// A parent that exists only outside create scope stays
 		// ErrSystemForbidden (preserved, not collapsed into not-found).
 		parent, err := resolveScopedRef(ctx, tx, systemConfig, *spec.ParentName, "system", create)
@@ -818,7 +818,7 @@ func (p *PG) UpdateSystem(ctx context.Context, actorID, name string, patch Syste
 	}
 	// A system's TYPE is a fact its member components read (.SystemTypeLabel,
 	// #685), so a reclassify stales every one of them. Bounded by the system's
-	// own membership rather than by the estate, which is why it cascades here
+	// own membership rather than by the fleet, which is why it cascades here
 	// instead of waiting for the recompute verb. The label lock is taken before
 	// any health lock below, the fixed order that keeps the two from
 	// deadlocking (see label_recompute.go).

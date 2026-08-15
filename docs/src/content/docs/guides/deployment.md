@@ -4,7 +4,7 @@ description: "Standing an Omniglass platform up: the single binary, the containe
 ---
 
 This is the how-to for **standing the platform up**, a different job from
-[operating the estate](/guides/operator/) or [administering it](/guides/admin/). Omniglass is a
+[operating the fleet](/guides/operator/) or [administering it](/guides/admin/). Omniglass is a
 single self-contained Go binary with the operator console compiled in and a BYO PostgreSQL
 database, so a deployment is that one binary in one of its run modes (`server`, `node run`, `migrate`)
 plus a database. How it scales and the deploy model behind these pages is

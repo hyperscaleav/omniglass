@@ -20,7 +20,7 @@ import (
 // ADR-0104 refused a draft preview that MINTS, on two grounds: the answer is
 // provisional (another create can take the ordinal between the preview and the
 // commit) and a rolled-back mint takes the same bucket advisory lock real
-// creates need, so previewing per picker change would serialise the estate's
+// creates need, so previewing per picker change would serialise the fleet's
 // creates. Neither objection reaches a render that ALLOCATES NOTHING, which is
 // what this is: the same tier resolution, the same closed data map, the same one
 // engine, and the lowest free ordinal READ from the bucket's siblings rather
@@ -146,7 +146,7 @@ func stemOf(t *testing.T, gw *storage.PG, ctx context.Context, product string) s
 
 // TestTheDraftedOrdinalIsTheLowestFreeOneInThatBucket is the number itself, and
 // the two things about it that are easy to get wrong: it MOVES as the bucket
-// fills, and it is per bucket rather than per estate. A draft that read the
+// fills, and it is per bucket rather than per fleet. A draft that read the
 // wrong bucket would still show a plausible number, which is why this asserts
 // two buckets at once rather than one twice.
 func TestTheDraftedOrdinalIsTheLowestFreeOneInThatBucket(t *testing.T) {
@@ -181,7 +181,7 @@ func TestTheDraftedOrdinalIsTheLowestFreeOneInThatBucket(t *testing.T) {
 	// The other bucket is untouched by them, which is the whole reason the
 	// draft has to resolve the placement before it reads the number.
 	if got := draft(there.Name); got.Ordinal != 1 {
-		t.Errorf("draft in the other room = %+v, want ordinal 1: the bucket is the placement, not the estate", got)
+		t.Errorf("draft in the other room = %+v, want ordinal 1: the bucket is the placement, not the fleet", got)
 	}
 }
 
@@ -257,7 +257,7 @@ func TestTheDraftSystemLabelCarriesTheOrdinalItWillLandWith(t *testing.T) {
 
 // TestTheDraftedLocationLabelIsTheOneTheCreateStores is the location tier, and
 // it is not an edge case: the shipped GLOBAL location rule
-// (internal/seed/label_rules.yaml) is what EVERY location a shipped estate
+// (internal/seed/label_rules.yaml) is what EVERY location a shipped fleet
 // creates renders through, so this is the form's ordinary answer rather than a
 // corner of it. The form shows it locked, and the create beside it must store
 // the same string or the locked field was a lie.
@@ -289,7 +289,7 @@ func TestTheDraftedLocationLabelIsTheOneTheCreateStores(t *testing.T) {
 
 // The empty answer is still reachable and still means what it meant: no rule
 // resolves at any tier, so nothing is stored and the surface reads the name.
-// It stopped being a shipped estate's default state when the location rule
+// It stopped being a shipped fleet's default state when the location rule
 // landed (#657), which is precisely why it is worth its own test now: an
 // operator who clears the rule at every tier gets an empty label rather than a
 // refusal, and the form has to have words for that.
@@ -566,7 +566,7 @@ func TestTheDraftRefusesTheParentlessBucketItCannotCreateIn(t *testing.T) {
 	}
 	subtree := scope.Set{IDs: []string{hq.ID}}
 
-	// Location. The parentless bucket is the estate ROOT, and this caller's
+	// Location. The parentless bucket is the fleet ROOT, and this caller's
 	// create scope is one campus.
 	if _, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{
 		LocationTypeRef: "deck",

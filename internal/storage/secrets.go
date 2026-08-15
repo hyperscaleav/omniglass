@@ -590,7 +590,7 @@ order by r.name, r.band desc, r.depth asc`
 // enforcing the create scope: a platform secret needs an all create scope; a
 // scoped one resolves its owner in the matching tree, within the create scope
 // (resolveScopedRef, ruling 2, #627: ambiguity is judged inside create, not
-// estate-wide, so a name unique to the caller's own create scope resolves even
+// fleet-wide, so a name unique to the caller's own create scope resolves even
 // when an unrelated out-of-scope row shares it, and the resulting id is never
 // one the caller could not otherwise reach). An absent owner is
 // ErrSecretOwnerNotFound; one that exists only outside create scope is

@@ -43,7 +43,7 @@ type labelChangeBody struct {
 type labelRecomputeOutput struct {
 	Body struct {
 		Count   int               `json:"count" doc:"How many rows changed, or would change"`
-		Changed []labelChangeBody `json:"changed" doc:"Every row, one entry each. Bounded by the estate, not paginated: this is the whole blast radius by design"`
+		Changed []labelChangeBody `json:"changed" doc:"Every row, one entry each. Bounded by the fleet, not paginated: this is the whole blast radius by design"`
 	}
 }
 
@@ -75,7 +75,7 @@ func registerLabelRecomputeRoutes(api huma.API, a *authenticator, gw storage.Gat
 		Method:      http.MethodPost,
 		Path:        collection + ":previewLabels",
 		Summary:     "Preview a " + kind + " label recompute",
-		Description: "Lists exactly the rows a recompute would change, and leaves the estate as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by " + kind + ":update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.",
+		Description: "Lists exactly the rows a recompute would change, and leaves the fleet as it found it. Use it before :recomputeLabels to see the blast radius of a rule edit. Every generated label in the caller's read and update scope is re-rendered from its current rules and compared with what is stored; a label an operator typed by hand is never a candidate. Bounded by the same two scopes the apply is, so it never lists a row the apply would then refuse to touch. A location preview also lists the components and systems placed at every location whose label would move, because those go stale the moment it does. Gated by " + kind + ":update, the same permission the apply needs: a preview is half of an edit rather than a report, and an operator who cannot apply has no use for it.",
 	}, kind, "update"), func(ctx context.Context, _ *struct{}) (*labelRecomputeOutput, error) {
 		changes, err := gw.PreviewLabelRecompute(ctx, kind,
 			a.scopeFor(ctx, kind, "read"), a.scopeFor(ctx, kind, "update"))

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { IdentityCell, identityColumn } from "./IdentityCell";
 
 // The display rule, pinned once. Before this primitive it was restated in sixteen
-// FlatList column arrays across four idioms, which is why the same estate read
+// FlatList column arrays across four idioms, which is why the same fleet read
 // four different ways depending on the page, and why nothing could assert it.
 describe("IdentityCell", () => {
   it("shows the label on top and the name beneath it", () => {
@@ -44,7 +44,7 @@ describe("IdentityCell", () => {
 
   // The pen (#683). A label a rule rendered differs from the name exactly as an
   // operator's does, so the old string comparison would have put a second
-  // identifier line under every row in the estate.
+  // identifier line under every row in the fleet.
   it("does not repeat the name beneath a label the platform rendered", () => {
     render(() => <IdentityCell entity={{ name: "display-1", label: "Display 1", label_generated: true }} />);
     expect(screen.getByText("Display 1")).toBeTruthy();
@@ -63,7 +63,7 @@ describe("IdentityCell", () => {
   // pages this cell serves while telling an operator something they could not act
   // on from a list. The fact moved to the field it belongs to, the label
   // on the edit blade, where the same lock the create form carries states it and
-  // offers the act (components/LabelPenField.tsx). The whole-estate question the
+  // offers the act (components/LabelPenField.tsx). The whole-fleet question the
   // chip half-answered ("which rows would a rule edit rewrite") is answered whole
   // by `<entity> previewLabels`, which a chip could only ever answer one row at a
   // time.

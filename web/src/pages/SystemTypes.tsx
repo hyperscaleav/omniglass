@@ -31,7 +31,7 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // (ADR-0096). It classifies the SYSTEM (`system.system_type_id`) by what kind
 // of space it is, a boardroom, a classroom, a video wall. It is deliberately
 // not the standard, which sits beside it and says which blueprint the system is
-// built to: one estate can hold ten signage standards and six classroom
+// built to: one fleet can hold ten signage standards and six classroom
 // standards under a single coarse type here. It nests by parent_id (av over
 // room over board), on the same official/custom pattern as Component Types, and
 // every identity fact (stem, abbrev, icon) inherits down the tree unless a node

@@ -6,7 +6,7 @@ import "testing"
 // whose name the platform chose, so it is tested as the pure value it is, with
 // no database in the way.
 
-// TestGenIndexHandsOutAllocationOrder proves the index answers with the estate's
+// TestGenIndexHandsOutAllocationOrder proves the index answers with the fleet's
 // rows in the order the generator allocated them, whatever order they were read
 // in. Sorting on the stored ordinal rather than the name is the point: a
 // suppressed first ordinal ("boardroom" is 1, "boardroom-2" is 2) sorts
@@ -24,7 +24,7 @@ func TestGenIndexHandsOutAllocationOrder(t *testing.T) {
 		t.Errorf("second take = %q, want second", got)
 	}
 	if got := idx.take(room); got != "" {
-		t.Errorf("third take = %q, want \"\" (the estate is short of one, so the caller creates it)", got)
+		t.Errorf("third take = %q, want \"\" (the fleet is short of one, so the caller creates it)", got)
 	}
 }
 
@@ -55,25 +55,25 @@ func TestGenIndexKeepsSlotsApart(t *testing.T) {
 	}
 }
 
-// TestGenIndexAdvancesEvenWhenTheEstateIsShort is why nothing has to record the
-// rows a run creates. Two identical fixture rows on an empty estate must each be
+// TestGenIndexAdvancesEvenWhenTheFleetIsShort is why nothing has to record the
+// rows a run creates. Two identical fixture rows on an empty fleet must each be
 // told "not here" so each is created; if the slot only advanced on a hit, the
-// second would resolve to the first and the estate would come up one short, which
+// second would resolve to the first and the fleet would come up one short, which
 // a fresh run's counts would never notice.
-func TestGenIndexAdvancesEvenWhenTheEstateIsShort(t *testing.T) {
+func TestGenIndexAdvancesEvenWhenTheFleetIsShort(t *testing.T) {
 	room := genSlot{bucket: "location/room-1", class: "samsung-qm55"}
 	idx := newGenIndex([]genRow{{slot: room, ordinal: 1, id: "already-here"}})
 	if got, want := idx.take(room), "already-here"; got != want {
 		t.Fatalf("first take = %q, want %q", got, want)
 	}
 	if got := idx.take(room); got != "" {
-		t.Errorf("second take = %q, want \"\" (the estate holds one and the fixture declares two)", got)
+		t.Errorf("second take = %q, want \"\" (the fleet holds one and the fixture declares two)", got)
 	}
 	if got := idx.take(room); got != "" {
 		t.Errorf("third take = %q, want \"\" (a slot never hands the same row out twice)", got)
 	}
 
-	// The next run over the estate those creates left behind resolves all three.
+	// The next run over the fleet those creates left behind resolves all three.
 	next := newGenIndex([]genRow{
 		{slot: room, ordinal: 1, id: "already-here"},
 		{slot: room, ordinal: 2, id: "created-2"},
@@ -87,7 +87,7 @@ func TestGenIndexAdvancesEvenWhenTheEstateIsShort(t *testing.T) {
 }
 
 // TestProductClassSpellsTheGenericTheGatewayResolves pins the one place the
-// fixture and the estate could spell a classification differently: an omitted
+// fixture and the fleet could spell a classification differently: an omitted
 // product is not "unclassified", the gateway resolves it to generic-device, and
 // that is what the row then reports back.
 func TestProductClassSpellsTheGenericTheGatewayResolves(t *testing.T) {

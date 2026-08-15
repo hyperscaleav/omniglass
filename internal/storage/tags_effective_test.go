@@ -7,11 +7,11 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// tagEstate builds a campus/building/room location tree, a system PLACED in the
+// tagFleet builds a campus/building/room location tree, a system PLACED in the
 // room, and a component under both the system and the room, returning their ids.
 // The placed system is the point: it lets the resolver test that a system
 // inherits its own location's tags.
-func tagEstate(t *testing.T, gw storage.Gateway) (campus, room, sysID, compID string) {
+func tagFleet(t *testing.T, gw storage.Gateway) (campus, room, sysID, compID string) {
 	t.Helper()
 	ctx := context.Background()
 	mustLoc(t, gw, "campus", "campus", nil)
@@ -44,7 +44,7 @@ func tagEstate(t *testing.T, gw storage.Gateway) (campus, room, sysID, compID st
 func TestEffectiveTagsComponent(t *testing.T) {
 	gw := tagGateway(t)
 	ctx := context.Background()
-	_, _, _, compID := tagEstate(t, gw)
+	_, _, _, compID := tagFleet(t, gw)
 
 	mustTag(t, gw, "environment", nil, true) // cascades
 	mustTag(t, gw, "compliance", nil, true)  // cascades
@@ -78,7 +78,7 @@ func TestEffectiveTagsComponent(t *testing.T) {
 func TestEffectiveTagsSystem(t *testing.T) {
 	gw := tagGateway(t)
 	ctx := context.Background()
-	_, _, sysID, _ := tagEstate(t, gw)
+	_, _, sysID, _ := tagFleet(t, gw)
 
 	mustTag(t, gw, "environment", nil, true)
 	mustTag(t, gw, "compliance", nil, true)
@@ -110,7 +110,7 @@ func TestEffectiveTagsSystem(t *testing.T) {
 func TestEffectiveTagsLocation(t *testing.T) {
 	gw := tagGateway(t)
 	ctx := context.Background()
-	campusID, roomID, _, _ := tagEstate(t, gw)
+	campusID, roomID, _, _ := tagFleet(t, gw)
 
 	mustTag(t, gw, "environment", nil, true)
 
@@ -136,7 +136,7 @@ func TestEffectiveTagsLocation(t *testing.T) {
 func TestEffectiveTagsBatchSharedAncestor(t *testing.T) {
 	gw := tagGateway(t)
 	ctx := context.Background()
-	tagEstate(t, gw)
+	tagFleet(t, gw)
 	// A second component in the same room, no system.
 	comp2, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 		Name: "display", LocationName: strptr("room"),

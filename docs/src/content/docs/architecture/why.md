@@ -57,7 +57,7 @@ signal, or in the operator's head at 3am against half of it. Omniglass runs it a
 
 ## What Omniglass is
 
-Omniglass is an **open, self-hosted observability and control plane for AV (and IT) estates**. It
+Omniglass is an **open, self-hosted observability and control plane for AV (and IT) fleets**. It
 does three things an IT tool cannot, designed in from the start rather than bolted on.
 
 **It meets the devices where they are.** Agentless and protocol-diverse, it gets the data however
@@ -65,7 +65,7 @@ the device will give it (SNMP, HTTP, SSH, a control processor's raw command dial
 every vendor's reading into one canonical signal, so a Sony display and a Samsung display answer
 the same question the same way.
 
-**It models your estate the way it actually nests.** Components, systems, rooms, buildings. The
+**It models your fleet the way it actually nests.** Components, systems, rooms, buildings. The
 room is a first-class system, not a tag, so health, alarms, and config attach at the level you
 operate.
 

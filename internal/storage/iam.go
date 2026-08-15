@@ -211,7 +211,7 @@ type PrincipalGroupRef struct{ ID, Name string }
 
 // HumanProfile, ServiceProfile, and NodeProfile carry the kind-specific
 // attributes. Each kind's identifier is its own column: a human's username, a
-// service account's name, a node's name (the estate address).
+// service account's name, a node's name (the fleet address).
 type HumanProfile struct {
 	Username, Email, Label string
 	// MustChangePassword is set by an admin reset and cleared by the user's own

@@ -161,6 +161,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0120](#adr-0120-the-edit-face-is-a-url-fact) | 2026-08-14 | Accepted | `?edit=1` beside a detail address (or a blade's id param, `?u=<id>&edit=1`) is how the console expresses edit mode: deep links, refresh, and the create/row-pencil handoffs all carry the mode in the URL, behind the same `<resource>:update` the footer Edit is behind, and leaving edit strips the param via history replace. The one-shot in-memory handoffs (`pendingedit`, `openPrincipalInEdit`) are retired for one hook (`web/src/lib/editurl.ts`); the param is a consume-once intent (deriving the mode would re-enter edit in the Cancel gap), a blade honors it only when the URL also names it, and the name-to-uuid redirect keeps its query string. The groups blade keeps its one-shot until it gains an id deep link |
 | [ADR-0121](#adr-0121-the-console-ships-its-own-typefaces) | 2026-08-15 | Accepted | The console serves IBM Plex Sans and JetBrains Mono from its own origin (vendored under `web/public/fonts/`, embedded in the binary, declared by a generated `web/src/fonts.css`) instead of linking a font CDN: rendering correctly stops depending on reaching a third party, which is the deployment this product targets and was also the cause of a docs capture writing fallback-font PNGs the zero-tolerance freshness gate reported as UI drift. Every script the CDN served is vendored (54 files, 1,005,028 bytes) so no operator string renders differently than before; `font-display: block` replaces `swap`; the capture now aborts rather than photograph a fallback render; `DOCS_SHOTS_PROXY` retires |
 | [ADR-0121](#adr-0121-a-commissioning-gap-is-not-a-failure-so-the-verdict-domain-gains-incomplete) | 2026-08-09 | Accepted | The verdict domain gains a fourth value: a role short because its hardware was never installed reads `incomplete` (ranked between healthy and degraded) rather than its declared `impact`, which now describes failure only; `impact: none` stays healthy when empty and a losing alternate's roles contribute nothing. No migration. Amends ADR-0050 |
+| [ADR-0122](#adr-0122-the-word-for-everything-an-install-manages-is-fleet) | 2026-08-14 | Accepted | The totality-of-managed-things noun becomes **fleet**, everywhere at once (code identifiers, routes, docs prose, glossary, scope grammar, nav): a fleet of SYSTEMS, uniform units maintained at scale against a standard, stationed across the location tree. The old noun retires to the docs denylist. Ruled all-in rather than surface-only: two words for one referent is a permanent translation tax |
 
 ## Entries
 
@@ -5910,3 +5911,27 @@ interface create form, since that name is the platform's to mint.
   conflate never-measured with never-installed.
 - **Tracked under** epic [#630](https://github.com/hyperscaleav/omniglass/issues/630), slice
   [#631](https://github.com/hyperscaleav/omniglass/issues/631).
+### ADR-0122: The word for everything an install manages is `fleet`
+
+- **Date:** 2026-08-14 | **Status:** Accepted | **Pages:** [glossary](/architecture/glossary/),
+  [ui](/architecture/ui/), [health](/architecture/health/), [identity and access](/architecture/identity-access/)
+- **Decision:** the totality an install manages is a **fleet**: the systems are the fleet's
+  units, the components staff them, and the location tree is the geography they are stationed
+  across. The rename is all-in, in one sweep: Go identifiers (`FleetProjection`, `FleetView`),
+  the view route (`/views/fleet`), the console surface and its nav entry, docs prose, the
+  glossary, and the scope grammar (`fleet-wide`). The old noun joins the docs denylist; the
+  decision log and build log keep it as the historical record they are.
+- **Context:** the product's differentiation is the SYSTEM model: every competitor manages
+  rooms or devices, and none can say "a fleet of systems" because none has one. A fleet is
+  uniform units maintained at scale against a type, which is exactly a standard-conforming
+  system: standard as airframe type, system as tail number, slots as parts, verdict as
+  maintenance state, location as base. The old word was accurate and industry-anchored
+  (UK/enterprise IT usage) but reads as property and governance rather than operation, and the
+  surface being named is operated daily. Two costs are accepted with eyes open: in
+  observability vocabulary a fleet often means the COLLECTOR fleet (Elastic Fleet, Datadog
+  Fleet Automation), so the word will occasionally be misread as node management; and the noun
+  names the units better than the buildings, which the location tree keeps first-class
+  regardless. Surface-only renaming (a fresh label over the old domain word) was rejected as a
+  permanent translation tax between nav, glossary, and API vocabulary.
+- **Tracked under** epic [#630](https://github.com/hyperscaleav/omniglass/issues/630), ahead of
+  slice [#633](https://github.com/hyperscaleav/omniglass/issues/633).
