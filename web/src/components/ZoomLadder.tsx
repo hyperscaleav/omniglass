@@ -17,7 +17,7 @@ export default function ZoomLadder(props: { chips: ZoomChip[]; onSelect?: (chip:
             onClick={() => props.onSelect?.(chip)}
           >
             {chip.label}
-            {chip.count === "" ? "" : ` ${chip.count}`}
+            {chip.count === "" ? "" : <span class="opacity-60">{` · ${chip.count}`}</span>}
           </Button>
         )}
       </For>
