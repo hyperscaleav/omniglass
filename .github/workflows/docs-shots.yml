@@ -6,10 +6,11 @@ name: docs-shots
 # - verify (fast, deterministic): every declared shot has a committed PNG, every
 #   PNG is declared, ids are unique. Catches a forgotten capture or an orphan.
 # - freshness (heavier): recapture against the real console (Postgres + the built
-#   binary + Playwright, all in Docker) and fail if any shot drifts beyond a small
-#   tolerance. Catches a UI change that was not re-captured. Tolerance rather than
-#   byte equality because the dev seed's random UUIDs move a fraction of a percent
-#   of pixels; DOCS_SHOTS_MAX_RATIO tunes it.
+#   binary + Playwright, all in Docker) and fail on ANY unmasked pixel change.
+#   Nondeterministic regions (v7-uuid text, seed-time stamps) are masked in each
+#   page's frontmatter, so the pinned browser's rasters are byte-stable and the
+#   tolerance is zero (#398, #623); DOCS_SHOTS_MAX_RATIO remains an escape hatch
+#   for unpinned local browsers only.
 
 on:
   pull_request:

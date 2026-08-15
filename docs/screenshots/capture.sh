@@ -9,9 +9,9 @@
 #
 # Determinism: capture runs in a pinned Playwright image, so raster output is
 # reproducible. The dev seed still generates random UUIDs (avatar hues, audit ids),
-# so a fresh capture differs from the committed one by a fraction of a percent;
-# the freshness gate (docs-shots-diff.mjs) compares with a small tolerance rather
-# than byte-for-byte.
+# so the regions that render them (id subtexts, seed-time stamps) are masked in
+# each page's frontmatter; the freshness gate (docs-shots-diff.mjs) then compares
+# at zero tolerance, any unmasked pixel change failing it (#398, #623).
 #
 # Env: DOCS_SHOTS_OUT overrides the output dir (default docs/public/screenshots).
 # Prereqs: docker. Run via `make docs-shots`.

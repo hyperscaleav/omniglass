@@ -127,10 +127,13 @@ image) **fails the build**, and adding a screenshot is a frontmatter edit, not a
 
 Because the images track the live UI, they are refreshed like any generated artifact: a change
 to an operator surface **re-runs `make docs-shots` and commits the new PNGs**, and
-`make docs-shots-check` recaptures against the real console and fails if a shot drifts beyond a
-small tolerance, the visual sibling of the `make gen` drift check. (Tolerance rather than an
-exact hash because the dev seed's random UUIDs move a fraction of a percent of pixels between
-captures; a real UI change moves far more.)
+`make docs-shots-check` recaptures against the real console and fails on **any unmasked pixel
+difference**, the visual sibling of the `make gen` drift check. The regions a capture cannot
+render deterministically (a v7-uuid id subtext, a seed-time timestamp) are masked in the
+page's `screenshots` frontmatter and painted as constant boxes, so the pinned browser's
+rasters are byte-stable and the tolerance is zero: the old percentage ceiling passed exactly
+the changes the gate exists to catch, a renamed label or a collapsed rail repainting fewer
+pixels than seed jitter (#398, #623).
 
 ## Style
 
