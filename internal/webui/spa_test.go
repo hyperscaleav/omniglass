@@ -13,9 +13,47 @@ import (
 
 func fakeConsole() fstest.MapFS {
 	return fstest.MapFS{
-		"index.html":           {Data: []byte(`<!doctype html><div id="root"></div>`)},
-		"assets/app-abc123.js": {Data: []byte(`console.log("app")`)},
-		"favicon.svg":          {Data: []byte(`<svg/>`)},
+		"index.html":                          {Data: []byte(`<!doctype html><div id="root"></div>`)},
+		"assets/app-abc123.js":                {Data: []byte(`console.log("app")`)},
+		"favicon.svg":                         {Data: []byte(`<svg/>`)},
+		"fonts/ibm-plex-sans-latin-400.woff2": {Data: []byte("wOF2fake")},
+	}
+}
+
+func TestServesFontsWithTheirOwnContentType(t *testing.T) {
+	// The console serves its own typefaces (#775), so their content type is this
+	// binary's job. net/http types by extension from the HOST's mime database,
+	// and the runtime images this ships in (distroless, debian-slim) carry no
+	// /etc/mime.types at all: without this, a woff2 is sniffed to
+	// application/octet-stream, which any nosniff policy in front of the console
+	// is entitled to refuse. The type must come from the binary, not the host.
+	h := SPAHandler(fakeConsole())
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/fonts/ibm-plex-sans-latin-400.woff2", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("font = %d, want 200", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "font/woff2" {
+		t.Errorf("font Content-Type = %q, want font/woff2", ct)
+	}
+}
+
+func TestContentTypeComesFromTheBinaryNotTheHost(t *testing.T) {
+	// The mapping itself, with no filesystem and no ambient mime database in the
+	// way: on a developer box /etc/mime.types usually knows woff2 and the handler
+	// test above would pass with no code at all, while the shipped image does not
+	// know it. This is the assertion that cannot be satisfied by the host.
+	cases := map[string]string{
+		"fonts/ibm-plex-sans-latin-400.woff2":  "font/woff2",
+		"fonts/jetbrains-mono-latin-700.woff2": "font/woff2",
+		"assets/app-abc123.js":                 "", // net/http already types these
+		"index.html":                           "",
+		"favicon.svg":                          "",
+	}
+	for name, want := range cases {
+		if got := contentTypeFor(name); got != want {
+			t.Errorf("contentTypeFor(%q) = %q, want %q", name, got, want)
+		}
 	}
 }
 

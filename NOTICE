@@ -11,3 +11,21 @@ WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
 
 The full license text is in the LICENSE file at the root of this repository.
+
+Third-party components redistributed with this program
+------------------------------------------------------
+
+The operator console embeds and serves two typefaces, each used unmodified and
+each licensed under the SIL Open Font License, Version 1.1. The license text
+ships with the fonts (web/public/fonts/, embedded into the binary and served at
+/web/fonts/), as OFL 1.1 requires.
+
+  IBM Plex Sans
+  Copyright (C) 2017 IBM Corp. with Reserved Font Name "Plex"
+  https://github.com/IBM/plex
+  License: web/public/fonts/ibm-plex-sans-OFL.txt
+
+  JetBrains Mono
+  Copyright (C) 2020 The JetBrains Mono Project Authors
+  https://github.com/JetBrains/JetBrainsMono
+  License: web/public/fonts/jetbrains-mono-OFL.txt

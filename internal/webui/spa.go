@@ -32,12 +32,35 @@ func SPAHandler(fsys fs.FS) http.Handler {
 				if strings.HasPrefix(p, "assets/") {
 					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 				}
+				if ct := contentTypeFor(p); ct != "" {
+					w.Header().Set("Content-Type", ct)
+				}
 				fileServer.ServeHTTP(w, r)
 				return
 			}
 		}
 		serveIndex(w, r, fsys)
 	})
+}
+
+// contentTypeFor returns the media type this binary states for a console file,
+// or "" to leave net/http's own typing alone.
+//
+// It exists for the typefaces the console serves itself (#775). net/http types by
+// extension from the HOST's mime database, and the images this binary ships in
+// (distroless, debian-slim) carry no /etc/mime.types, so a woff2 there is sniffed
+// to application/octet-stream: correct enough for a browser, which types a font by
+// its own magic, but refusable by any nosniff policy in front of the console. A
+// single-binary product should not answer differently depending on which packages
+// the base image happened to install. Pure and table-driven so the mapping is
+// testable without a filesystem or an ambient mime database.
+func contentTypeFor(name string) string {
+	switch path.Ext(name) {
+	case ".woff2":
+		return "font/woff2"
+	default:
+		return ""
+	}
 }
 
 func serveIndex(w http.ResponseWriter, r *http.Request, fsys fs.FS) {
