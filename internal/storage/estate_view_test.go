@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
@@ -66,33 +65,33 @@ func newEstateFixture(t *testing.T) *estateFixture {
 	mk("depot", "building", nil)
 	mk("depot-r1", "room", ptrStr("depot"))
 
-	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "estate-huddle", DisplayName: "Estate Huddle"}); err != nil {
+	if err := gw.UpsertStandard(ctx, storage.Standard{Name: "estate-huddle", Label: "Estate Huddle"}); err != nil {
 		t.Fatalf("create standard: %v", err)
 	}
 	std := "estate-huddle"
 	for _, s := range []struct{ name, room string }{{"hq-huddle", "hq-r1"}, {"depot-huddle", "depot-r1"}} {
 		room := s.room
-		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: s.name, StandardID: &std, LocationName: &room}, f.all); err != nil {
+		if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: s.name, StandardID: &std, LocationName: &room}, f.all, f.all); err != nil {
 			t.Fatalf("create system %s: %v", s.name, err)
 		}
 	}
 	if _, err := gw.SetSystemRole(ctx, "", "standard", "estate-huddle", storage.SystemRoleSpec{
-		Name: "table-mic", DisplayName: "Table microphone", Quorum: 1,
+		Name: "table-mic", Label: "Table microphone", Quorum: 1,
 		AcceptedTypes: []string{"video-bar"}, Impact: "degraded",
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
 
 	bar := "cisco-room-bar"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, f.all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
-	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all); err != nil {
+	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 	// The same physical box also serves the depot room. This is the case the dot
 	// grid exists to show honestly: one component, two systems depending on it.
-	if err := gw.AddMember(ctx, "", "depot-huddle", "bar-1", f.all); err != nil {
+	if err := gw.AddMember(ctx, "", "depot-huddle", "bar-1", f.all, f.all); err != nil {
 		t.Fatalf("add member: %v", err)
 	}
 	return f
@@ -222,7 +221,7 @@ func TestEstateProjectionSystemVerdictMatchesTheHealthRead(t *testing.T) {
 	f := newEstateFixture(t)
 	v := f.project(t, f.all, f.all, f.all)
 
-	rep, err := f.gw.SystemHealth(context.Background(), "hq-huddle", time.Time{}, f.all)
+	rep, err := f.gw.SystemHealth(context.Background(), "hq-huddle", 0, f.all)
 	if err != nil {
 		t.Fatalf("system health: %v", err)
 	}
@@ -286,8 +285,11 @@ func TestEstateProjectionVerdictLookupsAreIndexed(t *testing.T) {
 	}
 
 	for _, tc := range []struct{ owner, table, index string }{
-		{"system_id", "system", "property_system_idx"},
-		{"location_id", "location", "property_location_idx"},
+		// The system arc's index landed with #725; the location arc's mirrors
+		// it in this slice's migration. Both are asserted here because the
+		// projection is the read that pays for both at estate width.
+		{"system_id", "system", "property_system_owner_idx"},
+		{"location_id", "location", "property_location_owner_idx"},
 	} {
 		rows, err := conn.Query(ctx, `explain select (select v.value #>> '{}' from property v
 			where v.`+tc.owner+` = t.id

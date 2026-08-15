@@ -523,7 +523,8 @@ members:
 
 # Staffing, which creates the membership as a side effect. boardroom-a is fully
 # staffed and reads healthy; boardroom-b is one microphone short of its quorum of
-# two, so it reads degraded and the Health panel names the reason.
+# two with the one it has healthy, so it reads incomplete (#631: a box nobody
+# installed, not a box that broke) and the Health panel names the reason.
 role_assignments:
   - system: boardroom-a
     role: room-mic

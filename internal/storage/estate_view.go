@@ -33,9 +33,9 @@ import (
 
 // EstateLocation is one node of the place tree as the canvas needs it.
 type EstateLocation struct {
-	ID          string
-	Name        string
-	DisplayName string
+	ID    string
+	Name  string
+	Label string
 	// Both forms of the type reference: the name is what the band's chip reads,
 	// the uuid is the stable handle a rename cannot move out from under a
 	// client (TestReferencesCarryBothForms). Carried per location, which is tens
@@ -64,12 +64,12 @@ type EstateDot struct {
 
 // EstateSystem is one system and the dots inside it.
 type EstateSystem struct {
-	ID          string
-	Name        string
-	DisplayName string
-	LocationID  *string
-	Verdict     string
-	Dots        []EstateDot
+	ID         string
+	Name       string
+	Label      string
+	LocationID *string
+	Verdict    string
+	Dots       []EstateDot
 }
 
 // EstateView is the whole projection.
@@ -95,12 +95,12 @@ func latestVerdict(ownerCol, table string) string {
 // appends `order by name`, and an unaliased `select t.name from location_type`
 // puts a second output column called name in scope, which makes that ORDER BY
 // ambiguous rather than merely wrong (SQLSTATE 42702).
-var estateLocationCols = `id, name, coalesce(display_name, '') as display_name,
+var estateLocationCols = `id, name, coalesce(label, '') as label,
 	(select t.name from location_type t where t.id = location.location_type) as location_type_name,
 	location.location_type as location_type_id,
 	parent_id, ` + latestVerdict("location_id", "location") + ` as verdict`
 
-var estateSystemCols = `id, name, coalesce(display_name, '') as display_name, location_id, ` +
+var estateSystemCols = `id, name, coalesce(label, '') as label, location_id, ` +
 	latestVerdict("system_id", "system") + ` as verdict`
 
 // EstateProjection reads the whole in-scope estate as the canvas draws it.
@@ -172,7 +172,7 @@ func (p *PG) estateLocations(ctx context.Context, read scope.Set) ([]EstateLocat
 	out := []EstateLocation{}
 	for rows.Next() {
 		var l EstateLocation
-		if err := rows.Scan(&l.ID, &l.Name, &l.DisplayName, &l.LocationType, &l.LocationTypeID, &l.ParentID, &l.Verdict); err != nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.Label, &l.LocationType, &l.LocationTypeID, &l.ParentID, &l.Verdict); err != nil {
 			return nil, fmt.Errorf("storage: scan estate location: %w", err)
 		}
 		out = append(out, l)
@@ -192,7 +192,7 @@ func (p *PG) estateSystems(ctx context.Context, read scope.Set) ([]EstateSystem,
 	out := []EstateSystem{}
 	for rows.Next() {
 		var s EstateSystem
-		if err := rows.Scan(&s.ID, &s.Name, &s.DisplayName, &s.LocationID, &s.Verdict); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Label, &s.LocationID, &s.Verdict); err != nil {
 			return nil, fmt.Errorf("storage: scan estate system: %w", err)
 		}
 		out = append(out, s)

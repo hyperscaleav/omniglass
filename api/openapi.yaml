@@ -2020,10 +2020,10 @@ components:
     EstateLocationBody:
       additionalProperties: false
       properties:
-        display_name:
-          type: string
         id:
           description: The location's uuid, the address the canvas navigates by
+          type: string
+        label:
           type: string
         location_type:
           description: The type's name, which the band renders as its type chip
@@ -2042,7 +2042,7 @@ components:
       required:
         - id
         - name
-        - display_name
+        - label
         - location_type
         - location_type_id
         - verdict
@@ -2050,8 +2050,6 @@ components:
     EstateSystemBody:
       additionalProperties: false
       properties:
-        display_name:
-          type: string
         dots:
           description: One entry per component in this system; empty when the caller may read the system but not its components
           items:
@@ -2061,6 +2059,8 @@ components:
             - "null"
         id:
           description: The system's uuid, the address the canvas navigates by
+          type: string
+        label:
           type: string
         location:
           description: The uuid of the location this system is placed at; absent when it is placed nowhere
@@ -2073,7 +2073,7 @@ components:
       required:
         - id
         - name
-        - display_name
+        - label
         - verdict
         - dots
       type: object

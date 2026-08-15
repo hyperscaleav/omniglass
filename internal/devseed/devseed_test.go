@@ -929,7 +929,7 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 //
 // The staffing is also the estate's health story: boardroom-a holds two mics and
 // a display and reads healthy; boardroom-b is one mic short of its quorum of two
-// and reads degraded, with the shared bar in both.
+// and reads incomplete, with the shared bar in both.
 func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 	ctx, conn, _ := seededEstate(t)
 

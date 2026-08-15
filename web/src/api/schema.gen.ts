@@ -5010,9 +5010,9 @@ export interface components {
             verdict: string;
         };
         EstateLocationBody: {
-            display_name: string;
             /** @description The location's uuid, the address the canvas navigates by */
             id: string;
+            label: string;
             /** @description The type's name, which the band renders as its type chip */
             location_type: string;
             /** @description The type's uuid, the stable handle beside its renameable name */
@@ -5024,11 +5024,11 @@ export interface components {
             verdict: string;
         };
         EstateSystemBody: {
-            display_name: string;
             /** @description One entry per component in this system; empty when the caller may read the system but not its components */
             dots: components["schemas"]["EstateDotBody"][] | null;
             /** @description The system's uuid, the address the canvas navigates by */
             id: string;
+            label: string;
             /** @description The uuid of the location this system is placed at; absent when it is placed nowhere */
             location?: string;
             name: string;

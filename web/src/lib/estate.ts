@@ -1,6 +1,7 @@
 import { api } from "../api/client";
 import type { components } from "../api/schema.gen";
 import { verdictOf, worstVerdict, type Verdict } from "./health";
+import { entityLabel } from "./entities";
 
 // The estate view model: the shapes the canvas renders, and the pure functions
 // that derive them from the projection.
@@ -92,8 +93,6 @@ export type Grouping = {
   order(keys: string[], view: EstateView): string[];
 };
 
-const labelOf = (e: { name: string; display_name?: string | null }) => e.display_name?.trim() || e.name;
-
 export function locationIndex(view: EstateView): Map<string, EstateLocation> {
   return new Map((view.locations ?? []).map((l) => [l.id, l]));
 }
@@ -135,14 +134,14 @@ export const byRootLocation: Grouping = {
   },
   label(key, view) {
     const l = locationIndex(view).get(key);
-    return l ? labelOf(l) : key;
+    return l ? entityLabel(l) : key;
   },
   sublabel(key, view) {
     return locationIndex(view).get(key)?.location_type ?? "";
   },
   order(keys, view) {
     const index = locationIndex(view);
-    return [...keys].sort((a, b) => (index.get(a) ? labelOf(index.get(a)!) : a).localeCompare(index.get(b) ? labelOf(index.get(b)!) : b));
+    return [...keys].sort((a, b) => (index.get(a) ? entityLabel(index.get(a)!) : a).localeCompare(index.get(b) ? entityLabel(index.get(b)!) : b));
   },
 };
 
@@ -150,7 +149,7 @@ export function toCluster(system: EstateSystem): SystemCluster {
   return {
     systemId: system.id,
     name: system.name,
-    label: labelOf(system),
+    label: entityLabel(system),
     locationId: system.location || null,
     verdict: verdictOf(system.verdict),
     dots: (system.dots ?? []).map((d) => ({

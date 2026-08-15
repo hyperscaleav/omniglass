@@ -33,18 +33,18 @@ type estateDotBody struct {
 }
 
 type estateSystemBody struct {
-	ID          string          `json:"id" doc:"The system's uuid, the address the canvas navigates by"`
-	Name        string          `json:"name"`
-	DisplayName string          `json:"display_name"`
-	Location    string          `json:"location,omitempty" doc:"The uuid of the location this system is placed at; absent when it is placed nowhere"`
-	Verdict     string          `json:"verdict" doc:"The system's recorded verdict, the same one its health read serves"`
-	Dots        []estateDotBody `json:"dots" doc:"One entry per component in this system; empty when the caller may read the system but not its components"`
+	ID       string          `json:"id" doc:"The system's uuid, the address the canvas navigates by"`
+	Name     string          `json:"name"`
+	Label    string          `json:"label"`
+	Location string          `json:"location,omitempty" doc:"The uuid of the location this system is placed at; absent when it is placed nowhere"`
+	Verdict  string          `json:"verdict" doc:"The system's recorded verdict, the same one its health read serves"`
+	Dots     []estateDotBody `json:"dots" doc:"One entry per component in this system; empty when the caller may read the system but not its components"`
 }
 
 type estateLocationBody struct {
 	ID             string `json:"id" doc:"The location's uuid, the address the canvas navigates by"`
 	Name           string `json:"name"`
-	DisplayName    string `json:"display_name"`
+	Label          string `json:"label"`
 	LocationType   string `json:"location_type" doc:"The type's name, which the band renders as its type chip"`
 	LocationTypeID string `json:"location_type_id" doc:"The type's uuid, the stable handle beside its renameable name"`
 	Parent         string `json:"parent,omitempty" doc:"The uuid of this location's parent; absent on a root. The tree is flat here and assembled by the client"`
@@ -64,7 +64,7 @@ func toEstateViewOutput(v *storage.EstateView) *estateViewOutput {
 	for i := range v.Locations {
 		l := &v.Locations[i]
 		body := estateLocationBody{
-			ID: l.ID, Name: l.Name, DisplayName: l.DisplayName,
+			ID: l.ID, Name: l.Name, Label: l.Label,
 			LocationType: l.LocationType, LocationTypeID: l.LocationTypeID, Verdict: l.Verdict,
 		}
 		if l.ParentID != nil {
@@ -76,7 +76,7 @@ func toEstateViewOutput(v *storage.EstateView) *estateViewOutput {
 	for i := range v.Systems {
 		s := &v.Systems[i]
 		body := estateSystemBody{
-			ID: s.ID, Name: s.Name, DisplayName: s.DisplayName,
+			ID: s.ID, Name: s.Name, Label: s.Label,
 			Verdict: s.Verdict, Dots: make([]estateDotBody, 0, len(s.Dots)),
 		}
 		if s.LocationID != nil {

@@ -23,7 +23,7 @@ import { uuidFor } from "./testids";
 const loc = (handle: string, name: string, type: string, parent?: string) => ({
   id: uuidFor(handle),
   name,
-  display_name: "",
+  label: "",
   location_type: type,
   location_type_id: uuidFor(`type-${type}`),
   parent: parent ? uuidFor(parent) : "",
@@ -51,7 +51,7 @@ const view: EstateView = {
     {
       id: uuidFor("s-hq"),
       name: "hq-huddle",
-      display_name: "HQ Huddle",
+      label: "HQ Huddle",
       location: uuidFor("l-r1"),
       verdict: "degraded",
       dots: [dot(uuidFor("c-bar"), "bar-1", "healthy", true, true), dot(uuidFor("c-mic"), "mic-1", "degraded", true, false)],
@@ -59,7 +59,7 @@ const view: EstateView = {
     {
       id: uuidFor("s-depot"),
       name: "depot-huddle",
-      display_name: "",
+      label: "",
       location: uuidFor("l-dr1"),
       verdict: "outage",
       // The same physical box, a ghost here: owned by hq-huddle.
@@ -155,7 +155,7 @@ describe("bandsOf", () => {
   it("drops a system its grouping cannot place, rather than inventing a band", () => {
     const orphan = {
       ...view,
-      systems: [...view.systems!, { id: uuidFor("s-none"), name: "floating", display_name: "", location: "", verdict: "healthy", dots: [] }],
+      systems: [...view.systems!, { id: uuidFor("s-none"), name: "floating", label: "", location: "", verdict: "healthy", dots: [] }],
     } as unknown as EstateView;
     expect(bandsOf(orphan).length).toBe(2);
   });
