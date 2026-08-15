@@ -2,6 +2,7 @@ import { For, Show, createMemo } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
+import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
 import BandCanvas from "../components/BandCanvas";
 import ZoomLadder from "../components/ZoomLadder";
@@ -28,7 +29,7 @@ export default function Fleet() {
   const chips = createMemo(() => (view.data ? zoomChips("fleet", {}, view.data) : []));
 
   return (
-    <Page title="Fleet" subtitle="Explore your environment.">
+    <Page title="Fleet" subtitle="Explore your environment." breadcrumb={<Breadcrumb crumbs={[{ key: "fleet", label: "Fleet" }]} />}>
       <Show when={!view.isPending} fallback={<div class="skeleton h-32 w-full" />}>
         <Show
           when={!view.isError}

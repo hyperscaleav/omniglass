@@ -137,6 +137,12 @@ describe("the fleet zoom's bands", () => {
     expect(within(inspector).getByText(/1 location has no system/)).toBeTruthy();
   });
 
+  it("renders the shared breadcrumb trail, one crumb at this zoom", () => {
+    mount();
+    const trail = screen.getByTestId("breadcrumb");
+    expect(within(trail).getByText("Fleet")).toBeTruthy();
+  });
+
   it("mounts and renders its chrome when the canvas has no 2d context (jsdom)", () => {
     // jsdom's getContext returns null; the page must render every word anyway.
     mount();
