@@ -14,13 +14,15 @@ import (
 // default for context-free callers, not a resolution rule.
 type systemMemberBody struct {
 	System      string `json:"system" doc:"Name of the system, or a dotted address (e.g. boi.17c.$sys.av)"`
+	SystemID    string `json:"system_id" doc:"The system's uuid, the address to navigate by: a bare name is unique only within its placement, so a shared component's memberships can name two systems that share a name"`
 	Component   string `json:"component" doc:"Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)"`
+	ComponentID string `json:"component_id" doc:"The component's uuid"`
 	Primary     bool   `json:"primary" doc:"Whether this membership is the component's default when no system is given"`
 	SystemCount int    `json:"system_count" doc:"How many systems this component belongs to in total; more than one means it is shared"`
 }
 
 func toSystemMemberBody(m storage.Member) systemMemberBody {
-	return systemMemberBody{System: m.SystemID, Component: m.ComponentID, Primary: m.IsPrimary, SystemCount: m.SystemCount}
+	return systemMemberBody{System: m.SystemID, SystemID: m.SystemUUID, Component: m.ComponentID, ComponentID: m.ComponentUUID, Primary: m.IsPrimary, SystemCount: m.SystemCount}
 }
 
 func toSystemMemberBodies(ms []storage.Member) []systemMemberBody {

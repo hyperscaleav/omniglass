@@ -68,7 +68,21 @@ describe("membershipRows", () => {
     expect(rows[1].primary).toBe(false);
   });
 
-  it("leaves an ambiguous system name undrillable rather than guessing", () => {
+  it("resolves two same-named systems by their uuids when the wire carries them", () => {
+    const rows = membershipRows(
+      [
+        { component: "x", system: "twin", system_id: uuidFor("cl-s-a2"), primary: true, system_count: 2 },
+        { component: "x", system: "twin", system_id: uuidFor("cl-s-a3"), primary: false, system_count: 2 },
+      ] as never,
+      view,
+    );
+    expect(rows.map((r) => r.label)).toEqual(["Twin 1", "Twin 2"]);
+    // Neither twin is placed in this fixture, so no room to tell them apart by.
+    expect(rows.map((r) => r.where)).toEqual([undefined, undefined]);
+    expect(rows.map((r) => r.systemId)).toEqual([uuidFor("cl-s-a2"), uuidFor("cl-s-a3")]);
+  });
+
+  it("without a uuid on the wire, an ambiguous name stays undrillable rather than guessed", () => {
     const rows = membershipRows([{ component: "x", system: "twin", primary: true, system_count: 1 }] as never, view);
     expect(rows[0].systemId).toBeNull();
     expect(rows[0].label).toBe("twin");

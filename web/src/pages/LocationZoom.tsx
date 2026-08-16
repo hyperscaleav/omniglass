@@ -6,6 +6,8 @@ import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
 import SystemCard from "../components/SystemCard";
 import ZoomLadder from "../components/ZoomLadder";
+import ZoomRail from "../components/ZoomRail";
+import { railModel } from "../lib/zoom_rail";
 import {
   FLEET_VIEW_KEY,
   ancestors,
@@ -90,24 +92,33 @@ export default function LocationZoom() {
         >
           <ZoomLadder
             chips={chips()}
+            hint="Bands are child locations, whatever type they are."
             onSelect={(chip) => {
               if (chip.id === "fleet") navigate("/fleet");
             }}
           />
-          <div class="flex flex-col gap-5">
-            <For each={bands()}>{(band) => <ZoomBand band={band} view={view.data!} />}</For>
-            <Show when={bands().length === 0 && holes().size === 0}>
-              <p class="text-sm text-base-content/60">Nothing under this location yet.</p>
-            </Show>
-          </div>
-          <Show when={childTypes().length > 0}>
-            <div data-testid="allowed-child-types" class="flex flex-wrap items-center gap-2 border-t border-base-content/10 pt-3 text-xs text-base-content/60">
-              <span>May contain:</span>
-              <For each={childTypes()}>
-                {(t) => <span class="rounded-md border border-base-content/15 px-1.5 py-0.5">{entityLabel(t)}</span>}
-              </For>
+          <div class="flex gap-6">
+            <div class="flex min-w-0 flex-1 flex-col gap-4">
+              <For each={bands()}>{(band) => <ZoomBand band={band} view={view.data!} />}</For>
+              <Show when={bands().length === 0 && holes().size === 0}>
+                <p class="text-sm text-base-content/60">Nothing under this location yet.</p>
+              </Show>
+              {/* Inert create affordance (epic ruling): where a child location
+                  would go, and what it may be. */}
+              <div data-testid="add-location-hole" class="flex flex-wrap items-center gap-3">
+                <div class="w-44 rounded-lg border border-dashed border-base-content/25 px-3 py-2 text-xs text-base-content/50">
+                  <div class="font-medium text-base-content/70">+ Location</div>
+                  <Show when={childTypes().length > 0}>
+                    <div data-testid="allowed-child-types" class="truncate">{childTypes().map((t) => entityLabel(t).toLowerCase()).join(", ")}</div>
+                  </Show>
+                </div>
+                <Show when={childTypes().length > 0}>
+                  <span class="text-xs text-base-content/40">A child can be any type this one allows.</span>
+                </Show>
+              </div>
             </div>
-          </Show>
+            <Show when={view.data}>{(v) => <ZoomRail model={railModel({ zoom: "location", locationId: id() }, v())} onOpen={(row) => navigate(`/systems/${row.key}?zoom=1`)} />}</Show>
+          </div>
         </Show>
       </Show>
     </Page>
@@ -141,32 +152,29 @@ export default function LocationZoom() {
             >
               <div class="flex items-center gap-2">
                 <HealthBadge verdict={props.band.recordedVerdict ?? undefined} size="xs" />
-                <span class="truncate font-medium">{props.band.label}</span>
+                <span class="line-clamp-2 font-medium leading-tight">{props.band.label}</span>
               </div>
-              <div class="mt-1 flex items-center gap-2">
+              <div class="mt-0.5 flex items-baseline gap-2 text-xs text-base-content/60">
                 <Show when={props.band.sublabel}>
                   <span class="text-[10px] uppercase tracking-wider text-base-content/50">{props.band.sublabel}</span>
                 </Show>
+                <span>{counts()}</span>
               </div>
-              <div class="mt-1 text-xs text-base-content/60">{counts()}</div>
             </button>
           </Show>
         </div>
         <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap gap-3">
-            <For each={props.band.clusters}>{(cluster) => <SystemCard cluster={cluster} onOpen={(sid) => navigate(`/systems/${sid}?zoom=1`)} />}</For>
+          <div class="flex flex-wrap gap-2">
+            <For each={props.band.clusters}>{(cluster) => <SystemCard cluster={cluster} view={props.view} onOpen={(sid) => navigate(`/systems/${sid}?zoom=1`)} />}</For>
+            <For each={bandHoles()}>
+              {(hole) => (
+                <div class="flex w-40 flex-none flex-col justify-center gap-0.5 rounded-md border border-dashed border-primary/40 px-2 py-2 text-xs text-base-content/50">
+                  <div class="font-medium text-primary/80">+ System</div>
+                  <div class="truncate">{entityLabel(hole)} has none</div>
+                </div>
+              )}
+            </For>
           </div>
-          <Show when={bandHoles().length > 0}>
-            <div class="mt-2 flex flex-wrap gap-2">
-              <For each={bandHoles()}>
-                {(hole) => (
-                  <div class="rounded-md border border-dashed border-base-content/25 px-2 py-1 text-xs text-base-content/50">
-                    {entityLabel(hole)}
-                  </div>
-                )}
-              </For>
-            </div>
-          </Show>
         </div>
       </section>
     );

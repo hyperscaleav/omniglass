@@ -43,7 +43,7 @@ export type DotLayoutOpts = {
 
 // The lab's proven measures, minus its label row and band padding: DOM owns
 // the chrome here, so the canvas is only the dot field.
-export const DOT_LAYOUT: DotLayoutOpts = { dot: 7, gap: 2, sysGap: 7, rowGap: 3, padX: 0, padY: 0 };
+export const DOT_LAYOUT: DotLayoutOpts = { dot: 8, gap: 3, sysGap: 9, rowGap: 4, padX: 0, padY: 0 };
 
 export type ClusterRect = {
   systemId: string;

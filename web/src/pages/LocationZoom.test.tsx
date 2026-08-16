@@ -85,7 +85,7 @@ const lobbyHealth: FleetHealth = {
       spare: 0,
       impaired: true,
       active: true,
-      assigned_to: [],
+      assigned_to: ["display-1"],
       down: [],
       alarms: [],
     },
@@ -132,8 +132,11 @@ describe("the location zoom", () => {
     expect(within(bands[0]).getByText("Placed here")).toBeTruthy();
     // The area-typed child bands like any other: no fixed ladder.
     const yard = screen.getByTestId(`zoomband-${uuidFor("lz-yard")}`);
-    expect(within(yard).getByText("The Yard")).toBeTruthy();
-    expect(within(yard).getByText("area")).toBeTruthy();
+    // The band's label button carries the name and the type chip; the card
+    // beneath repeats the room name on its where-line, so scope to the button.
+    const label = within(yard).getAllByRole("button").find((b) => b.textContent?.includes("area"))!;
+    expect(within(label).getByText("The Yard")).toBeTruthy();
+    expect(within(label).getByText("area")).toBeTruthy();
   });
 
   it("a system attached to the location itself appears in the placed-here band, not among the children", () => {
@@ -145,16 +148,28 @@ describe("the location zoom", () => {
     expect(within(west).getByText("Boardroom")).toBeTruthy();
   });
 
-  it("a system card shows the shortfall in the server's own terms, and unstaffed reads incomplete", () => {
+  it("a system card draws the slot strip and the gap line in the server's own terms; unstaffed is an empty slot, never outage", () => {
     mount();
     const card = screen.getByTestId(`syscard-${uuidFor("lz-s-lobby")}`);
-    // The card's verdict is the server's word.
-    expect(within(card).getByText("incomplete")).toBeTruthy();
-    // The arithmetic is the server's own figures, rendered not recomputed.
-    expect(within(card).getByText(/1 of 2 satisfying/)).toBeTruthy();
+    // signage wants 2, has 1 (healthy): one filled square, one empty.
+    const strip = within(card).getByTestId("slot-strip");
+    expect(strip.children).toHaveLength(2);
+    expect(within(card).getByText("1 required slot empty")).toBeTruthy();
     // Nothing on the card says outage: the role's impact describes failure
     // only, and nothing has failed.
     expect(within(card).queryByText("outage")).toBeNull();
+  });
+
+  it("shows the rail scoped to this location: worst first, and the subtree's gaps", () => {
+    mount();
+    const rail = screen.getByTestId("zoom-rail");
+    expect(within(rail).getByText("Headquarters")).toBeTruthy();
+    const list = within(rail).getByTestId("rail-list");
+    // Boardroom is degraded, Lobby AV incomplete; Yard AV healthy stays off.
+    expect(within(list).getByText("Boardroom")).toBeTruthy();
+    expect(within(list).getByText("Lobby AV")).toBeTruthy();
+    expect(within(list).queryByText("Yard AV")).toBeNull();
+    expect(within(rail).getByText(/1 location has no system/)).toBeTruthy();
   });
 
   it("clicking a child band drills deeper, carrying the zoom param", async () => {
@@ -167,27 +182,29 @@ describe("the location zoom", () => {
 
   it("clicking a system card walks inward to the system zoom", async () => {
     mount();
-    const card = screen.getByTestId(`syscard-${uuidFor("lz-s-lobby")}`);
-    fireEvent.click(within(card).getByRole("button", { name: /Lobby AV/ }));
+    // The whole card is the button now.
+    fireEvent.click(screen.getByTestId(`syscard-${uuidFor("lz-s-lobby")}`));
     await waitFor(() => expect(window.location.pathname).toBe(`/web/systems/${uuidFor("lz-s-lobby")}`));
     expect(window.location.search).toContain("zoom=1");
   });
 
-  it("a systemless leaf in the subtree renders a dashed hole, inert", () => {
+  it("a systemless leaf in the subtree renders as an inert + System hole naming it", () => {
     mount();
-    const hole = screen.getByText("The Shed");
+    const hole = screen.getByText(/The Shed has none/);
     fireEvent.click(hole);
     expect(window.location.pathname).toBe(`/web/locations/${uuidFor("lz-hq")}`);
   });
 
-  it("names the allowed child types beneath", () => {
+  it("names the allowed child types on the inert + Location hole", () => {
     mount();
-    const footer = screen.getByTestId("allowed-child-types");
+    const hole = screen.getByTestId("allowed-child-types");
     // building allows campus parents; area allows anything; room does not
-    // allow campus. The footer names what THIS location may contain.
-    expect(within(footer).getByText("Building")).toBeTruthy();
-    expect(within(footer).getByText("Area")).toBeTruthy();
-    expect(within(footer).queryByText("Room")).toBeNull();
+    // allow campus. The hole names what THIS location may contain.
+    expect(hole.textContent).toContain("building");
+    expect(hole.textContent).toContain("area");
+    expect(hole.textContent).not.toContain("room");
+    fireEvent.click(screen.getByTestId("add-location-hole"));
+    expect(window.location.pathname).toBe(`/web/locations/${uuidFor("lz-hq")}`);
   });
 
   it("the breadcrumb walks the ancestor chain and the ladder lights fleet and location", () => {

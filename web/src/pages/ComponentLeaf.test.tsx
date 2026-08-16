@@ -98,6 +98,20 @@ describe("the component leaf", () => {
     expect(within(card).getByText(/kestrel-vroom by kestrel, driven by kestrel-http/)).toBeTruthy();
   });
 
+  it("says where it sits: the clickable chain, the type path, and the primary system", () => {
+    mount();
+    const card = screen.getByTestId("leaf-placement");
+    expect(within(card).getByRole("button", { name: "Boardroom A" })).toBeTruthy();
+    expect(within(card).getByTestId("leaf-type-path").textContent).toBe("campus / room");
+    expect(within(card).getByRole("button", { name: "Boardroom System" })).toBeTruthy();
+  });
+
+  it("shows the rail on the leaf, scoped to the primary system", () => {
+    mount();
+    const rail = screen.getByTestId("zoom-rail");
+    expect(within(rail).getByText("Boardroom System")).toBeTruthy();
+  });
+
   it("lists one row per membership with the primary marked, and says the location comes from the primary", () => {
     mount();
     const card = screen.getByTestId("leaf-memberships");

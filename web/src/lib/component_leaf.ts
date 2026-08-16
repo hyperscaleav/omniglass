@@ -4,7 +4,7 @@
 // means the device or the path, not collection, and that sentence is why
 // nodes need no zoom of their own.
 
-import type { FleetView } from "./fleet";
+import { locationIndex, type FleetView } from "./fleet";
 import type { Member } from "./members";
 import type { Node } from "./nodes";
 import { nodeStatus } from "./nodes";
@@ -34,6 +34,10 @@ export function collectionState(iface: ReachInterface, node: Node | undefined, n
 export type MembershipRow = {
   system: string;
   label: string;
+  // The room the system sits in, when the view knows it: two memberships can
+  // legally read the same label (each the first of its kind in its own room),
+  // and the room is what tells them apart.
+  where?: string;
   primary: boolean;
   // The uuid to drill to, resolved through the fleet view when the bare name
   // is unique there; null when ambiguous (two systems may legally share a
@@ -43,6 +47,7 @@ export type MembershipRow = {
 };
 
 export function membershipRows(members: Member[], view: FleetView): MembershipRow[] {
+  const byId = new Map((view.systems ?? []).map((s) => [s.id, s]));
   const byName = new Map<string, { id: string; label: string }[]>();
   for (const s of view.systems ?? []) {
     const list = byName.get(s.name);
@@ -51,12 +56,19 @@ export function membershipRows(members: Member[], view: FleetView): MembershipRo
     else byName.set(s.name, [entry]);
   }
   return members.map((m) => {
+    // The wire carries the uuid (system_id); resolve by it, and fall back to
+    // the bare name only when the wire lacks it and the name is unique.
+    const direct = m.system_id ? byId.get(m.system_id) : undefined;
+    if (direct) {
+      const room = direct.location ? locationIndex(view).get(direct.location) : undefined;
+      return { system: m.system, label: entityLabel(direct), where: room ? entityLabel(room) : undefined, primary: m.primary, systemId: direct.id };
+    }
     const hits = byName.get(m.system) ?? [];
     return {
       system: m.system,
       label: hits.length === 1 ? hits[0].label : m.system,
       primary: m.primary,
-      systemId: hits.length === 1 ? hits[0].id : null,
+      systemId: m.system_id ?? (hits.length === 1 ? hits[0].id : null),
     };
   });
 }

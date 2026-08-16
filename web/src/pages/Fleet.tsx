@@ -6,7 +6,8 @@ import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
 import BandCanvas from "../components/BandCanvas";
 import ZoomLadder from "../components/ZoomLadder";
-import FleetInspector from "../components/FleetInspector";
+import ZoomRail from "../components/ZoomRail";
+import { railModel } from "../lib/zoom_rail";
 import { FLEET_VIEW_KEY, bandsOf, fleetView, holeOnlyBands, holesByRoot, type Band, type FleetView } from "../lib/fleet";
 import { zoomChips } from "../lib/zoom";
 import { entityLabel } from "../lib/entities";
@@ -44,15 +45,21 @@ export default function Fleet() {
             </div>
           }
         >
-          <ZoomLadder chips={chips()} />
+          <ZoomLadder chips={chips()} hint="Each root is shaped differently. Click one to zoom in." />
           <div class="flex gap-6">
-            <div class="flex min-w-0 flex-1 flex-col gap-5">
+            <div class="flex min-w-0 flex-1 flex-col gap-4">
               <For each={bands()}>{(band) => <FleetBand band={band} view={view.data!} onOpen={(id) => navigate(`/locations/${encodeURIComponent(id)}?zoom=1`)} />}</For>
               <Show when={bands().length === 0}>
                 <p class="text-sm text-base-content/60">Nothing in scope yet.</p>
               </Show>
+              {/* Inert create affordance (epic ruling: mutation renders as a
+                  hole that shows where the thing would go). */}
+              <div data-testid="add-root-hole" class="w-56 rounded-lg border border-dashed border-base-content/25 px-3 py-2 text-xs text-base-content/50">
+                <div class="font-medium text-base-content/70">+ Top-level location</div>
+                <div>campus, site, or a type you define</div>
+              </div>
             </div>
-            <Show when={view.data}>{(v) => <FleetInspector view={v()} />}</Show>
+            <Show when={view.data}>{(v) => <ZoomRail model={railModel({ zoom: "fleet" }, v())} onOpen={(row) => navigate(`/locations/${row.key}?zoom=1`)} />}</Show>
           </div>
         </Show>
       </Show>
@@ -85,14 +92,14 @@ export default function Fleet() {
           >
             <div class="flex items-center gap-2">
               <HealthBadge verdict={props.band.recordedVerdict ?? undefined} size="xs" />
-              <span class="truncate font-medium">{props.band.label}</span>
+              <span class="line-clamp-2 font-medium leading-tight">{props.band.label}</span>
             </div>
-            <div class="mt-1 flex items-center gap-2">
+            <div class="mt-0.5 flex items-baseline gap-2 text-xs text-base-content/60">
               <Show when={props.band.sublabel}>
                 <span class="text-[10px] uppercase tracking-wider text-base-content/50">{props.band.sublabel}</span>
               </Show>
+              <span>{counts()}</span>
             </div>
-            <div class="mt-1 text-xs text-base-content/60">{counts()}</div>
           </button>
         </div>
         <div class="min-w-0 flex-1">

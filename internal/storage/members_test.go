@@ -123,6 +123,40 @@ func TestMemberCarriesHowManySystemsItServes(t *testing.T) {
 	}
 }
 
+// A membership carries both ends' uuids beside their names (#645's class):
+// a shared component's memberships can name two systems that legally share a
+// bare name under different placements, and a console addressing by name
+// would either guess or refuse. The uuid is what it navigates by.
+func TestMemberCarriesBothEndsUUIDs(t *testing.T) {
+	ctx := context.Background()
+	f := newMemberFixture(t, ctx)
+	if err := f.gw.AddMember(ctx, "", "room-a", "dsp", f.all, f.all); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	members, err := f.gw.ComponentMemberships(ctx, "dsp", f.all)
+	if err != nil {
+		t.Fatalf("memberships: %v", err)
+	}
+	if len(members) != 1 {
+		t.Fatalf("memberships = %d, want 1", len(members))
+	}
+	sys, err := f.gw.GetSystem(ctx, "room-a", f.all)
+	if err != nil {
+		t.Fatalf("get system: %v", err)
+	}
+	comp, err := f.gw.GetComponent(ctx, "dsp", f.all)
+	if err != nil {
+		t.Fatalf("get component: %v", err)
+	}
+	if members[0].SystemUUID != sys.ID || members[0].ComponentUUID != comp.ID {
+		t.Errorf("membership uuids = (%q, %q), want (%q, %q): the wire must carry an address, not only a name",
+			members[0].SystemUUID, members[0].ComponentUUID, sys.ID, comp.ID)
+	}
+	if members[0].SystemID != "room-a" || members[0].ComponentID != "dsp" {
+		t.Errorf("membership names = (%q, %q), want (room-a, dsp): the names stay beside the uuids", members[0].SystemID, members[0].ComponentID)
+	}
+}
+
 // Adding the same membership twice is the same membership, not a second one.
 func TestAddMemberIsIdempotent(t *testing.T) {
 	ctx := context.Background()

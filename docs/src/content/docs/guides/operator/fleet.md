@@ -3,23 +3,19 @@ title: Explore your fleet
 description: "The Fleet page: every system as a cluster of dots grouped by root location, with zoom pages for locations, systems, and components."
 screenshots:
   - id: fleet-component
-    path: /web/components/dsp?zoom=1
+    path: /web/components/service-1?zoom=1
     alt: "The component leaf: product and driver, memberships with the primary marked, and the collection card naming the node."
   - id: fleet-system
     path: /web/systems/huddle?zoom=1
     alt: "The system zoom: one card per role with the reported arithmetic, choices grouped with the build in use marked, and the no-role list."
   - id: fleet-location
     path: /web/locations/east?zoom=1
-    alt: "The location zoom: a band per child location, system cards with quorum arithmetic, and the allowed child types."
-    # Dot strips masked: the colours derive from system uuids (ADR-0124), and
-    # every capture run re-seeds the database. Unmask when the diff gate grows
-    # a perceptual threshold (#774).
-    mask:
-      - "canvas"
+    alt: "The location zoom: a band per child location, system cards with slot strips, and the allowed child types."
   - id: fleet
     path: /web/fleet
-    alt: "The fleet zoom: a band per root location, system dot clusters, dashed holes, the zoom ladder, and the inspector."
-    # Same masking rationale as fleet-location.
+    alt: "The fleet zoom: a band per root location, system dot clusters, dashed holes, the zoom ladder, and the rail."
+    # Dot fields masked: the colours derive from system uuids (ADR-0124) and
+    # every capture run re-seeds the database. Unmask at #774.
     mask:
       - "canvas"
 ---
@@ -47,12 +43,18 @@ list rows; this page shows status at a glance.
 Hover a dot for its name and verdict. Click a band to open that location; the browser back
 button returns here.
 
-## The ladder and the inspector
+## The ladder and the rail
 
 The four chips above the canvas are the zoom levels: fleet, location, system, component.
 Chips resolve from the current address, so a shared deep link arrives with the chips
-already correct. The right-hand inspector shows totals (a shared component counted once)
-and how many locations have no system.
+already correct.
+
+The right-hand rail is the same on every zoom: totals for what is in scope (a shared
+component counted once), a bar showing the share of components at each verdict, the
+location types present, a worst-first list of what needs attention (click a row to open
+it), and a footer counting locations with no system.
+
+The dashed **+** cards mark where a location or a system would go. They do nothing yet.
 
 ## Zoom into a location
 
@@ -62,12 +64,13 @@ the same address shows the inventory detail.
 ::screenshot{#fleet-location}
 
 One band per direct child, whatever its type, plus a **placed here** band for systems
-attached to this location itself. Systems render as cards: the recorded verdict, the dot
-strip, and each impaired role's shortfall as the server reported it ("1 of 2 satisfying").
-An unstaffed role reads **incomplete**. Locations in the subtree with no system render as
-dashed cards under the child that contains them. The footer lists which location types
-this one may contain. The breadcrumb is the ancestor chain; each crumb is a link that
-keeps the zoom.
+attached to this location itself. Each system is a card: a status dot and border, the room
+and standard, a **slot strip** (one square per slot the standard wants: filled squares in
+the occupant's state, empty squares outlined), and a line saying how many required slots
+are empty, how many are down, or that all are filled. Locations in the subtree with no
+system render as **+ System** cards under the child that contains them. The **+ Location**
+card names which location types this one may contain. The breadcrumb is the ancestor
+chain; each crumb is a link that keeps the zoom.
 
 ## Zoom into a system
 
@@ -86,9 +89,10 @@ labels where the role declares them), and the reported arithmetic.
 
 ## The component leaf
 
-The leaf shows the product, vendor, and driver; the ancestor chain; and one row per
-system membership with the primary marked. When there is more than one membership, the
-location shown above comes from the primary.
+The leaf shows **what it is** (product, vendor, driver) and **where it sits** (the ancestor
+chain, each level a link; the type path; the primary system). **Slots it fills** lists one
+row per system membership with the room beside it and the primary marked. When there is
+more than one membership, the location shown above comes from the primary.
 
 ::screenshot{#fleet-component}
 

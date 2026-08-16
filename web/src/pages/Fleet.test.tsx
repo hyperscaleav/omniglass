@@ -128,14 +128,23 @@ describe("the fleet zoom's bands", () => {
     for (const chip of chips.slice(1)) expect(chip.hasAttribute("disabled")).toBe(true);
   });
 
-  it("shows the inspector's totals, counting a shared component once", () => {
+  it("shows the rail: totals counting a shared component once, the ratio bar, the roots needing attention, and the gaps", () => {
     mount();
-    const inspector = screen.getByTestId("fleet-inspector");
-    expect(within(inspector).getByText(/2 systems/)).toBeTruthy();
-    expect(within(inspector).getByText(/3 components/)).toBeTruthy();
-    expect(within(inspector).getByText(/2 roots/)).toBeTruthy();
-    // The gap footer names how many rooms hold nothing.
-    expect(within(inspector).getByText(/1 location has no system/)).toBeTruthy();
+    const rail = screen.getByTestId("zoom-rail");
+    expect(within(rail).getByText(/2 systems · 3 components · 2 roots/)).toBeTruthy();
+    expect(within(rail).getByTestId("rail-ratio")).toBeTruthy();
+    // Worst first: hq is degraded, the depot is healthy and stays off the list.
+    const list = within(rail).getByTestId("rail-list");
+    expect(within(list).getByText("Headquarters")).toBeTruthy();
+    expect(within(list).queryByText("Service Depot")).toBeNull();
+    expect(within(rail).getByText(/1 location has no system/)).toBeTruthy();
+  });
+
+  it("renders the inert add-location hole", () => {
+    mount();
+    const hole = screen.getByTestId("add-root-hole");
+    fireEvent.click(hole);
+    expect(window.location.pathname).toBe("/web/fleet");
   });
 
   it("draws a root that holds only holes: a site nobody commissioned is a band of gaps, not invisible", () => {
@@ -164,7 +173,8 @@ describe("the fleet zoom's bands", () => {
   it("mounts and renders its chrome when the canvas has no 2d context (jsdom)", () => {
     // jsdom's getContext returns null; the page must render every word anyway.
     mount();
-    expect(screen.getByText("Headquarters")).toBeTruthy();
+    // Headquarters now appears in the band AND the rail's attention list.
+    expect(within(screen.getByTestId(`band-${uuidFor("fp-hq")}`)).getByText("Headquarters")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Fleet" })).toBeTruthy();
   });
 });

@@ -118,6 +118,12 @@
    bg-warning / bg-error. daisyUI ships no semantic for this hue, so the strip
    needs its own utility or an incomplete stretch falls back to the no-data grey. */
 .bg-incomplete  { background-color: var(--og-incomplete); }
+/* the text and border counterparts, for the fleet zoom's slot strip and card
+   chrome, where an incomplete slot needs the same hue as text and as outline. */
+.text-incomplete   { color: var(--og-incomplete); }
+.border-incomplete { border-color: var(--og-incomplete); }
+.border-incomplete\/45 { border-color: color-mix(in oklch, var(--og-incomplete) 45%, transparent); }
+.bg-incomplete\/5      { background-color: color-mix(in oklch, var(--og-incomplete) 5%, transparent); }
 
 /* tag pill: one seed hue (--tag-h, supplied per chip from the key name),
    composed with the per-theme --tag-l / --tag-c into text, a 45%-toward-

@@ -5714,6 +5714,9 @@ components:
         component:
           description: Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1)
           type: string
+        component_id:
+          description: The component's uuid
+          type: string
         primary:
           description: Whether this membership is the component's default when no system is given
           type: boolean
@@ -5724,9 +5727,14 @@ components:
           description: How many systems this component belongs to in total; more than one means it is shared
           format: int64
           type: integer
+        system_id:
+          description: "The system's uuid, the address to navigate by: a bare name is unique only within its placement, so a shared component's memberships can name two systems that share a name"
+          type: string
       required:
         - system
+        - system_id
         - component
+        - component_id
         - primary
         - system_count
       type: object

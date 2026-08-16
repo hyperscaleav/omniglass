@@ -7027,6 +7027,8 @@ export interface components {
         SystemMemberBody: {
             /** @description Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
             component: string;
+            /** @description The component's uuid */
+            component_id: string;
             /** @description Whether this membership is the component's default when no system is given */
             primary: boolean;
             /** @description Name of the system, or a dotted address (e.g. boi.17c.$sys.av) */
@@ -7036,6 +7038,8 @@ export interface components {
              * @description How many systems this component belongs to in total; more than one means it is shared
              */
             system_count: number;
+            /** @description The system's uuid, the address to navigate by: a bare name is unique only within its placement, so a shared component's memberships can name two systems that share a name */
+            system_id: string;
         };
         SystemMetricsOutputBody: {
             /**

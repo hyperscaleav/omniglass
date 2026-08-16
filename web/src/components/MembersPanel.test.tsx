@@ -14,12 +14,12 @@ import { uuidFor } from "../lib/testids";
 // server is needed; the writes are faked where a test drives one.
 const members: Member[] = [
   // Its default lives here: this is the ordinary single-system case.
-  { system: "boardroom-a", component: "boardroom-a-bar", primary: true, system_count: 1 },
+  { system: "boardroom-a", system_id: uuidFor("s-a"), component: "boardroom-a-bar", component_id: uuidFor("c-1"), primary: true, system_count: 1 },
   // The shared device, and the case that matters: its default IS here, and it
   // still serves another system. Sharing cannot be read off the default flag.
-  { system: "boardroom-a", component: "shared-bar", primary: true, system_count: 2 },
+  { system: "boardroom-a", system_id: uuidFor("s-a"), component: "shared-bar", component_id: uuidFor("c-2"), primary: true, system_count: 2 },
   // A member with no role at all, which is the case staffing alone cannot produce.
-  { system: "boardroom-a", component: "boardroom-power", primary: true, system_count: 1 },
+  { system: "boardroom-a", system_id: uuidFor("s-a"), component: "boardroom-power", component_id: uuidFor("c-3"), primary: true, system_count: 1 },
 ];
 
 const components: Comp[] = [

@@ -28,14 +28,21 @@ var (
 // other systems, and a surface that inferred sharing from the default would call
 // that one exclusive.
 type Member struct {
-	ID          string
-	SystemID    string
-	ComponentID string
-	IsPrimary   bool
-	SystemCount int
+	ID string
+	// SystemID and ComponentID are the NAMES of the two ends (the field names
+	// predate ADR-0062, when the name was the address); SystemUUID and
+	// ComponentUUID are the uuids, which is what a console that must
+	// disambiguate a same-named system across placements needs (#645's class:
+	// a name-only wire gives the console nothing to address by).
+	SystemID      string
+	ComponentID   string
+	SystemUUID    string
+	ComponentUUID string
+	IsPrimary     bool
+	SystemCount   int
 }
 
-const memberCols = `m.id, s.name, c.name, m.is_primary,
+const memberCols = `m.id, s.name, c.name, s.id, c.id, m.is_primary,
 	(select count(*) from system_member peer where peer.component_id = m.component_id)`
 
 // memberFrom joins both ends back to their names, because a membership is
@@ -46,7 +53,7 @@ const memberFrom = ` from system_member m
 
 func scanMember(row pgx.Row) (*Member, error) {
 	var m Member
-	if err := row.Scan(&m.ID, &m.SystemID, &m.ComponentID, &m.IsPrimary, &m.SystemCount); err != nil {
+	if err := row.Scan(&m.ID, &m.SystemID, &m.ComponentID, &m.SystemUUID, &m.ComponentUUID, &m.IsPrimary, &m.SystemCount); err != nil {
 		return nil, err
 	}
 	return &m, nil
