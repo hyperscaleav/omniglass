@@ -199,6 +199,165 @@ locations:
     type: room
     parent: depot
 
+
+  # Volume rows (mass for the canvas; no teaching purpose beyond size).
+  - key: harbor
+    name: harbor
+    label: Harbor Point
+    type: campus
+  - key: pav-a
+    name: pavilion-a
+    type: building
+    parent: harbor
+  - key: pav-b
+    name: pavilion-b
+    type: building
+    parent: harbor
+  - key: west-l3
+    name: level-3
+    type: floor
+    parent: west
+  - key: wl3-r1
+    name: meeting-301
+    type: room
+    parent: west-l3
+  - key: wl3-r2
+    name: meeting-302
+    type: room
+    parent: west-l3
+  - key: wl3-r3
+    name: meeting-303
+    type: room
+    parent: west-l3
+  - key: wl3-r4
+    name: meeting-304
+    type: room
+    parent: west-l3
+  - key: wl3-r5
+    name: meeting-305
+    type: room
+    parent: west-l3
+  - key: wl3-r6
+    name: meeting-306
+    type: room
+    parent: west-l3
+  - key: west-l4
+    name: level-4
+    type: floor
+    parent: west
+  - key: wl4-r1
+    name: meeting-401
+    type: room
+    parent: west-l4
+  - key: wl4-r2
+    name: meeting-402
+    type: room
+    parent: west-l4
+  - key: wl4-r3
+    name: meeting-403
+    type: room
+    parent: west-l4
+  - key: wl4-r4
+    name: meeting-404
+    type: room
+    parent: west-l4
+  - key: wl4-r5
+    name: meeting-405
+    type: room
+    parent: west-l4
+  - key: hall-l2
+    name: mezzanine
+    type: floor
+    parent: hall
+  - key: hl2-r1
+    name: class-201
+    type: room
+    parent: hall-l2
+  - key: hl2-r2
+    name: class-202
+    type: room
+    parent: hall-l2
+  - key: hl2-r3
+    name: class-203
+    type: room
+    parent: hall-l2
+  - key: hl2-r4
+    name: class-204
+    type: room
+    parent: hall-l2
+  - key: hl2-r5
+    name: class-205
+    type: room
+    parent: hall-l2
+  - key: hl2-r6
+    name: class-206
+    type: room
+    parent: hall-l2
+  - key: pava-r1
+    name: suite-a1
+    type: room
+    parent: pav-a
+  - key: pava-r2
+    name: suite-a2
+    type: room
+    parent: pav-a
+  - key: pava-r3
+    name: suite-a3
+    type: room
+    parent: pav-a
+  - key: pava-r4
+    name: suite-a4
+    type: room
+    parent: pav-a
+  - key: pava-r5
+    name: suite-a5
+    type: room
+    parent: pav-a
+  - key: pavb-r1
+    name: suite-b1
+    type: room
+    parent: pav-b
+  - key: pavb-r2
+    name: suite-b2
+    type: room
+    parent: pav-b
+  - key: pavb-r3
+    name: suite-b3
+    type: room
+    parent: pav-b
+  - key: pavb-r4
+    name: suite-b4
+    type: room
+    parent: pav-b
+  - key: pavb-r5
+    name: suite-b5
+    type: room
+    parent: pav-b
+  - key: ann-r1
+    name: brief-2
+    type: room
+    parent: annex
+  - key: ann-r2
+    name: brief-3
+    type: room
+    parent: annex
+  - key: ann-r3
+    name: brief-4
+    type: room
+    parent: annex
+  - key: dep-r1
+    name: bay-3
+    type: room
+    parent: depot
+  - key: dep-r2
+    name: bay-4
+    type: room
+    parent: depot
+  - key: dep-r3
+    name: bay-5
+    type: room
+    parent: depot
+
 users:
   # Username convention: a user limited to a region carries that region in its name
   # (viewer-hq, tech-east); a fleet-wide user carries none (operator). No `-dev`
@@ -417,6 +576,276 @@ components:
     label: Fleet Recording Service
     product: generic-service
 
+
+  # Volume devices (mass for the canvas).
+  - key: wl3-c1a
+    product: cisco-room-bar
+    location: wl3-r1
+  - key: wl3-c1d
+    product: samsung-qm55
+    location: wl3-r1
+  - key: wl3-c1b
+    product: cisco-room-bar
+    location: wl3-r1
+  - key: wl3-c2a
+    product: cisco-room-bar
+    location: wl3-r2
+  - key: wl3-c2d
+    product: samsung-qm55
+    location: wl3-r2
+  - key: wl3-c2b
+    product: cisco-room-bar
+    location: wl3-r2
+  - key: wl3-c3a
+    product: cisco-room-bar
+    location: wl3-r3
+  - key: wl3-c3d
+    product: samsung-qm55
+    location: wl3-r3
+  - key: wl3-c3b
+    product: cisco-room-bar
+    location: wl3-r3
+  - key: wl3-c4a
+    product: cisco-room-bar
+    location: wl3-r4
+  - key: wl3-c4d
+    product: samsung-qm55
+    location: wl3-r4
+  - key: wl3-c4b
+    product: cisco-room-bar
+    location: wl3-r4
+  - key: wl3-c5a
+    product: cisco-room-bar
+    location: wl3-r5
+  - key: wl3-c5d
+    product: samsung-qm55
+    location: wl3-r5
+  - key: wl3-c5b
+    product: cisco-room-bar
+    location: wl3-r5
+  - key: wl3-c6a
+    product: cisco-room-bar
+    location: wl3-r6
+  - key: wl3-c6d
+    product: samsung-qm55
+    location: wl3-r6
+  - key: wl3-c6b
+    product: cisco-room-bar
+    location: wl3-r6
+  - key: wl4-c1a
+    product: cisco-room-bar
+    location: wl4-r1
+  - key: wl4-c1d
+    product: samsung-qm55
+    location: wl4-r1
+  - key: wl4-c2a
+    product: cisco-room-bar
+    location: wl4-r2
+  - key: wl4-c2d
+    product: samsung-qm55
+    location: wl4-r2
+  - key: wl4-c3a
+    product: cisco-room-bar
+    location: wl4-r3
+  - key: wl4-c3d
+    product: samsung-qm55
+    location: wl4-r3
+  - key: wl4-c4a
+    product: cisco-room-bar
+    location: wl4-r4
+  - key: wl4-c4d
+    product: samsung-qm55
+    location: wl4-r4
+  - key: wl4-c5a
+    product: cisco-room-bar
+    location: wl4-r5
+  - key: wl4-c5d
+    product: samsung-qm55
+    location: wl4-r5
+  - key: hl2-c1a
+    product: cisco-room-bar
+    location: hl2-r1
+  - key: hl2-c1d
+    product: samsung-qm55
+    location: hl2-r1
+  - key: hl2-c1b
+    product: cisco-room-bar
+    location: hl2-r1
+  - key: hl2-c2a
+    product: cisco-room-bar
+    location: hl2-r2
+  - key: hl2-c2d
+    product: samsung-qm55
+    location: hl2-r2
+  - key: hl2-c2b
+    product: cisco-room-bar
+    location: hl2-r2
+  - key: hl2-c3a
+    product: cisco-room-bar
+    location: hl2-r3
+  - key: hl2-c3d
+    product: samsung-qm55
+    location: hl2-r3
+  - key: hl2-c3b
+    product: cisco-room-bar
+    location: hl2-r3
+  - key: hl2-c4a
+    product: cisco-room-bar
+    location: hl2-r4
+  - key: hl2-c4d
+    product: samsung-qm55
+    location: hl2-r4
+  - key: hl2-c4b
+    product: cisco-room-bar
+    location: hl2-r4
+  - key: hl2-c5a
+    product: cisco-room-bar
+    location: hl2-r5
+  - key: hl2-c5d
+    product: samsung-qm55
+    location: hl2-r5
+  - key: hl2-c5b
+    product: cisco-room-bar
+    location: hl2-r5
+  - key: hl2-c6a
+    product: cisco-room-bar
+    location: hl2-r6
+  - key: hl2-c6d
+    product: samsung-qm55
+    location: hl2-r6
+  - key: hl2-c6b
+    product: cisco-room-bar
+    location: hl2-r6
+  - key: pava-c1a
+    product: cisco-room-bar
+    location: pava-r1
+  - key: pava-c1d
+    product: samsung-qm55
+    location: pava-r1
+  - key: pava-c1b
+    product: cisco-room-bar
+    location: pava-r1
+  - key: pava-c2a
+    product: cisco-room-bar
+    location: pava-r2
+  - key: pava-c2d
+    product: samsung-qm55
+    location: pava-r2
+  - key: pava-c2b
+    product: cisco-room-bar
+    location: pava-r2
+  - key: pava-c3a
+    product: cisco-room-bar
+    location: pava-r3
+  - key: pava-c3d
+    product: samsung-qm55
+    location: pava-r3
+  - key: pava-c3b
+    product: cisco-room-bar
+    location: pava-r3
+  - key: pava-c4a
+    product: cisco-room-bar
+    location: pava-r4
+  - key: pava-c4d
+    product: samsung-qm55
+    location: pava-r4
+  - key: pava-c4b
+    product: cisco-room-bar
+    location: pava-r4
+  - key: pava-c5a
+    product: cisco-room-bar
+    location: pava-r5
+  - key: pava-c5d
+    product: samsung-qm55
+    location: pava-r5
+  - key: pava-c5b
+    product: cisco-room-bar
+    location: pava-r5
+  - key: pavb-c1a
+    product: cisco-room-bar
+    location: pavb-r1
+  - key: pavb-c1d
+    product: samsung-qm55
+    location: pavb-r1
+  - key: pavb-c2a
+    product: cisco-room-bar
+    location: pavb-r2
+  - key: pavb-c2d
+    product: samsung-qm55
+    location: pavb-r2
+  - key: pavb-c3a
+    product: cisco-room-bar
+    location: pavb-r3
+  - key: pavb-c3d
+    product: samsung-qm55
+    location: pavb-r3
+  - key: pavb-c4a
+    product: cisco-room-bar
+    location: pavb-r4
+  - key: pavb-c4d
+    product: samsung-qm55
+    location: pavb-r4
+  - key: pavb-c5a
+    product: cisco-room-bar
+    location: pavb-r5
+  - key: pavb-c5d
+    product: samsung-qm55
+    location: pavb-r5
+  - key: ann-c1a
+    product: cisco-room-bar
+    location: ann-r1
+  - key: ann-c1d
+    product: samsung-qm55
+    location: ann-r1
+  - key: ann-c1b
+    product: cisco-room-bar
+    location: ann-r1
+  - key: ann-c2a
+    product: cisco-room-bar
+    location: ann-r2
+  - key: ann-c2d
+    product: samsung-qm55
+    location: ann-r2
+  - key: ann-c2b
+    product: cisco-room-bar
+    location: ann-r2
+  - key: ann-c3a
+    product: cisco-room-bar
+    location: ann-r3
+  - key: ann-c3d
+    product: samsung-qm55
+    location: ann-r3
+  - key: ann-c3b
+    product: cisco-room-bar
+    location: ann-r3
+  - key: dep-c1a
+    product: cisco-room-bar
+    location: dep-r1
+  - key: dep-c1d
+    product: samsung-qm55
+    location: dep-r1
+  - key: dep-c1b
+    product: cisco-room-bar
+    location: dep-r1
+  - key: dep-c2a
+    product: cisco-room-bar
+    location: dep-r2
+  - key: dep-c2d
+    product: samsung-qm55
+    location: dep-r2
+  - key: dep-c2b
+    product: cisco-room-bar
+    location: dep-r2
+  - key: dep-c3a
+    product: cisco-room-bar
+    location: dep-r3
+  - key: dep-c3d
+    product: samsung-qm55
+    location: dep-r3
+  - key: dep-c3b
+    product: cisco-room-bar
+    location: dep-r3
+
 # Property values: two overrides the huddle display declares over its product's
 # contract, so the effective-properties panel teaches direct-vs-inherited.
 # `model-number` stays unset and resolves to the product default ("QM55"), and
@@ -502,6 +931,141 @@ systems:
     system_type: meeting
     location: bay-1
 
+
+  # Volume systems (mass for the canvas). The partial blocks read incomplete.
+  - key: wl3-s1
+    standard: meeting-room
+    system_type: meeting
+    location: wl3-r1
+  - key: wl3-s2
+    standard: meeting-room
+    system_type: meeting
+    location: wl3-r2
+  - key: wl3-s3
+    standard: meeting-room
+    system_type: meeting
+    location: wl3-r3
+  - key: wl3-s4
+    standard: meeting-room
+    system_type: meeting
+    location: wl3-r4
+  - key: wl3-s5
+    standard: meeting-room
+    system_type: meeting
+    location: wl3-r5
+  - key: wl3-s6
+    standard: meeting-room
+    system_type: meeting
+    location: wl3-r6
+  - key: wl4-s1
+    standard: meeting-room
+    system_type: meeting
+    location: wl4-r1
+  - key: wl4-s2
+    standard: meeting-room
+    system_type: meeting
+    location: wl4-r2
+  - key: wl4-s3
+    standard: meeting-room
+    system_type: meeting
+    location: wl4-r3
+  - key: wl4-s4
+    standard: meeting-room
+    system_type: meeting
+    location: wl4-r4
+  - key: wl4-s5
+    standard: meeting-room
+    system_type: meeting
+    location: wl4-r5
+  - key: hl2-s1
+    standard: meeting-room
+    system_type: meeting
+    location: hl2-r1
+  - key: hl2-s2
+    standard: meeting-room
+    system_type: meeting
+    location: hl2-r2
+  - key: hl2-s3
+    standard: meeting-room
+    system_type: meeting
+    location: hl2-r3
+  - key: hl2-s4
+    standard: meeting-room
+    system_type: meeting
+    location: hl2-r4
+  - key: hl2-s5
+    standard: meeting-room
+    system_type: meeting
+    location: hl2-r5
+  - key: hl2-s6
+    standard: meeting-room
+    system_type: meeting
+    location: hl2-r6
+  - key: pava-s1
+    standard: meeting-room
+    system_type: meeting
+    location: pava-r1
+  - key: pava-s2
+    standard: meeting-room
+    system_type: meeting
+    location: pava-r2
+  - key: pava-s3
+    standard: meeting-room
+    system_type: meeting
+    location: pava-r3
+  - key: pava-s4
+    standard: meeting-room
+    system_type: meeting
+    location: pava-r4
+  - key: pava-s5
+    standard: meeting-room
+    system_type: meeting
+    location: pava-r5
+  - key: pavb-s1
+    standard: meeting-room
+    system_type: conference
+    location: pavb-r1
+  - key: pavb-s2
+    standard: meeting-room
+    system_type: conference
+    location: pavb-r2
+  - key: pavb-s3
+    standard: meeting-room
+    system_type: conference
+    location: pavb-r3
+  - key: pavb-s4
+    standard: meeting-room
+    system_type: conference
+    location: pavb-r4
+  - key: pavb-s5
+    standard: meeting-room
+    system_type: conference
+    location: pavb-r5
+  - key: ann-s1
+    standard: meeting-room
+    system_type: meeting
+    location: ann-r1
+  - key: ann-s2
+    standard: meeting-room
+    system_type: meeting
+    location: ann-r2
+  - key: ann-s3
+    standard: meeting-room
+    system_type: meeting
+    location: ann-r3
+  - key: dep-s1
+    standard: meeting-room
+    system_type: training
+    location: dep-r1
+  - key: dep-s2
+    standard: meeting-room
+    system_type: training
+    location: dep-r2
+  - key: dep-s3
+    standard: meeting-room
+    system_type: training
+    location: dep-r3
+
 # Membership without a job. The shared bar staffs the microphone role in both halves
 # (below, through assignment), but the power conditioner fills no declared role at
 # all: it is in the room, it is accounted for, and no role wants it. A model that
@@ -579,6 +1143,276 @@ role_assignments:
   - system: bay-1-av
     role: main-display
     component: bay-1-display
+
+
+  # Volume staffing.
+  - system: wl3-s1
+    role: room-mic
+    component: wl3-c1a
+  - system: wl3-s1
+    role: main-display
+    component: wl3-c1d
+  - system: wl3-s1
+    role: room-mic
+    component: wl3-c1b
+  - system: wl3-s2
+    role: room-mic
+    component: wl3-c2a
+  - system: wl3-s2
+    role: main-display
+    component: wl3-c2d
+  - system: wl3-s2
+    role: room-mic
+    component: wl3-c2b
+  - system: wl3-s3
+    role: room-mic
+    component: wl3-c3a
+  - system: wl3-s3
+    role: main-display
+    component: wl3-c3d
+  - system: wl3-s3
+    role: room-mic
+    component: wl3-c3b
+  - system: wl3-s4
+    role: room-mic
+    component: wl3-c4a
+  - system: wl3-s4
+    role: main-display
+    component: wl3-c4d
+  - system: wl3-s4
+    role: room-mic
+    component: wl3-c4b
+  - system: wl3-s5
+    role: room-mic
+    component: wl3-c5a
+  - system: wl3-s5
+    role: main-display
+    component: wl3-c5d
+  - system: wl3-s5
+    role: room-mic
+    component: wl3-c5b
+  - system: wl3-s6
+    role: room-mic
+    component: wl3-c6a
+  - system: wl3-s6
+    role: main-display
+    component: wl3-c6d
+  - system: wl3-s6
+    role: room-mic
+    component: wl3-c6b
+  - system: wl4-s1
+    role: room-mic
+    component: wl4-c1a
+  - system: wl4-s1
+    role: main-display
+    component: wl4-c1d
+  - system: wl4-s2
+    role: room-mic
+    component: wl4-c2a
+  - system: wl4-s2
+    role: main-display
+    component: wl4-c2d
+  - system: wl4-s3
+    role: room-mic
+    component: wl4-c3a
+  - system: wl4-s3
+    role: main-display
+    component: wl4-c3d
+  - system: wl4-s4
+    role: room-mic
+    component: wl4-c4a
+  - system: wl4-s4
+    role: main-display
+    component: wl4-c4d
+  - system: wl4-s5
+    role: room-mic
+    component: wl4-c5a
+  - system: wl4-s5
+    role: main-display
+    component: wl4-c5d
+  - system: hl2-s1
+    role: room-mic
+    component: hl2-c1a
+  - system: hl2-s1
+    role: main-display
+    component: hl2-c1d
+  - system: hl2-s1
+    role: room-mic
+    component: hl2-c1b
+  - system: hl2-s2
+    role: room-mic
+    component: hl2-c2a
+  - system: hl2-s2
+    role: main-display
+    component: hl2-c2d
+  - system: hl2-s2
+    role: room-mic
+    component: hl2-c2b
+  - system: hl2-s3
+    role: room-mic
+    component: hl2-c3a
+  - system: hl2-s3
+    role: main-display
+    component: hl2-c3d
+  - system: hl2-s3
+    role: room-mic
+    component: hl2-c3b
+  - system: hl2-s4
+    role: room-mic
+    component: hl2-c4a
+  - system: hl2-s4
+    role: main-display
+    component: hl2-c4d
+  - system: hl2-s4
+    role: room-mic
+    component: hl2-c4b
+  - system: hl2-s5
+    role: room-mic
+    component: hl2-c5a
+  - system: hl2-s5
+    role: main-display
+    component: hl2-c5d
+  - system: hl2-s5
+    role: room-mic
+    component: hl2-c5b
+  - system: hl2-s6
+    role: room-mic
+    component: hl2-c6a
+  - system: hl2-s6
+    role: main-display
+    component: hl2-c6d
+  - system: hl2-s6
+    role: room-mic
+    component: hl2-c6b
+  - system: pava-s1
+    role: room-mic
+    component: pava-c1a
+  - system: pava-s1
+    role: main-display
+    component: pava-c1d
+  - system: pava-s1
+    role: room-mic
+    component: pava-c1b
+  - system: pava-s2
+    role: room-mic
+    component: pava-c2a
+  - system: pava-s2
+    role: main-display
+    component: pava-c2d
+  - system: pava-s2
+    role: room-mic
+    component: pava-c2b
+  - system: pava-s3
+    role: room-mic
+    component: pava-c3a
+  - system: pava-s3
+    role: main-display
+    component: pava-c3d
+  - system: pava-s3
+    role: room-mic
+    component: pava-c3b
+  - system: pava-s4
+    role: room-mic
+    component: pava-c4a
+  - system: pava-s4
+    role: main-display
+    component: pava-c4d
+  - system: pava-s4
+    role: room-mic
+    component: pava-c4b
+  - system: pava-s5
+    role: room-mic
+    component: pava-c5a
+  - system: pava-s5
+    role: main-display
+    component: pava-c5d
+  - system: pava-s5
+    role: room-mic
+    component: pava-c5b
+  - system: pavb-s1
+    role: room-mic
+    component: pavb-c1a
+  - system: pavb-s1
+    role: main-display
+    component: pavb-c1d
+  - system: pavb-s2
+    role: room-mic
+    component: pavb-c2a
+  - system: pavb-s2
+    role: main-display
+    component: pavb-c2d
+  - system: pavb-s3
+    role: room-mic
+    component: pavb-c3a
+  - system: pavb-s3
+    role: main-display
+    component: pavb-c3d
+  - system: pavb-s4
+    role: room-mic
+    component: pavb-c4a
+  - system: pavb-s4
+    role: main-display
+    component: pavb-c4d
+  - system: pavb-s5
+    role: room-mic
+    component: pavb-c5a
+  - system: pavb-s5
+    role: main-display
+    component: pavb-c5d
+  - system: ann-s1
+    role: room-mic
+    component: ann-c1a
+  - system: ann-s1
+    role: main-display
+    component: ann-c1d
+  - system: ann-s1
+    role: room-mic
+    component: ann-c1b
+  - system: ann-s2
+    role: room-mic
+    component: ann-c2a
+  - system: ann-s2
+    role: main-display
+    component: ann-c2d
+  - system: ann-s2
+    role: room-mic
+    component: ann-c2b
+  - system: ann-s3
+    role: room-mic
+    component: ann-c3a
+  - system: ann-s3
+    role: main-display
+    component: ann-c3d
+  - system: ann-s3
+    role: room-mic
+    component: ann-c3b
+  - system: dep-s1
+    role: room-mic
+    component: dep-c1a
+  - system: dep-s1
+    role: main-display
+    component: dep-c1d
+  - system: dep-s1
+    role: room-mic
+    component: dep-c1b
+  - system: dep-s2
+    role: room-mic
+    component: dep-c2a
+  - system: dep-s2
+    role: main-display
+    component: dep-c2d
+  - system: dep-s2
+    role: room-mic
+    component: dep-c2b
+  - system: dep-s3
+    role: room-mic
+    component: dep-c3a
+  - system: dep-s3
+    role: main-display
+    component: dep-c3d
+  - system: dep-s3
+    role: room-mic
+    component: dep-c3b
 
 # Something actually wrong, so the fleet is not all healthy-and-incomplete. A
 # CRITICAL alarm takes its component's own verdict to outage, which stops it

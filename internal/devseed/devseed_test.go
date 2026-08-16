@@ -134,6 +134,24 @@ func TestFixturesShape(t *testing.T) {
 	}
 }
 
+// TestFixtureLocationNamesAreUniqueFleetWide is the pure guard on a seed
+// footgun the volume rows tripped twice: the seed tolerates an existing
+// location by BARE NAME, so two fixture rows sharing a name under different
+// parents make the second one silently resolve to the first, and the fleet
+// comes up one location short with every count test pointing at the wrong
+// place. Names are legally placement-scoped in the model, but this fixture
+// keeps them fleet-unique so the lookup cannot be fooled.
+func TestFixtureLocationNamesAreUniqueFleetWide(t *testing.T) {
+	doc := fixturesDoc(t)
+	seen := map[string]string{}
+	for _, l := range doc.Locations {
+		if prev, ok := seen[l.Name]; ok {
+			t.Errorf("location name %q is used by keys %q and %q; the seed resolves existing rows by bare name, so the second silently becomes the first", l.Name, prev, l.Key)
+		}
+		seen[l.Name] = l.Key
+	}
+}
+
 // TestFixturesLetThePlatformNameTheFleet is the pure guard on what this fleet
 // is FOR: it demonstrates the name generator, so a fixture row must not hand the
 // platform a name it was supposed to mint. It is the test that fails the moment
@@ -247,6 +265,8 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 		// depot: the rule renders "Depot"; the qualifying word ("Service
 		// Depot") is what the site is called and is not in the name.
 		"depot": true,
+		// harbor: same shape ("Harbor Point" vs the rule's "Harbor").
+		"harbor": true,
 	}
 	for _, l := range doc.Locations {
 		if (l.Label != "") != wantLocationLabels[l.Key] {
@@ -409,8 +429,8 @@ func TestRunIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from location where location_type = (select id from location_type where name = 'campus')`).Scan(&campuses); err != nil {
 		t.Fatalf("count campuses: %v", err)
 	}
-	if campuses != 3 {
-		t.Errorf("campuses = %d, want 3 (hq, east, airport)", campuses)
+	if campuses != 4 {
+		t.Errorf("campuses = %d, want 4 (hq, east, airport, harbor)", campuses)
 	}
 	if err := conn.QueryRow(ctx, `select count(*) from principal where kind = 'human'`).Scan(&humans); err != nil {
 		t.Fatalf("count humans: %v", err)
@@ -1054,7 +1074,7 @@ func TestAFloorIsNamedForItsDesignation(t *testing.T) {
 		if !labelGenerated {
 			t.Errorf("the floor under %q holds the label pen; the shipped rule renders its designation from its name, so a pin would be a hand-typed copy of that output", building)
 		}
-		got[building] = [2]string{name, label}
+		got[building+"/"+name] = [2]string{name, label}
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatalf("iterate floors: %v", err)
@@ -1062,18 +1082,18 @@ func TestAFloorIsNamedForItsDesignation(t *testing.T) {
 
 	// Name and label say the same thing, which is the whole change: the name is
 	// the designation in kebab, the label is what the rule renders from it.
+	// The two floors that carry the argument, keyed by building and name
+	// since a building holds several floors now (the volume rows add more, all
+	// held to the same rule by the loop above).
 	want := map[string][2]string{
-		"hall": {"level-1", "Level 1"},
-		"west": {"level-2", "Level 2"},
+		"hall/level-1": {"level-1", "Level 1"},
+		"west/level-2": {"level-2", "Level 2"},
 	}
-	for building, w := range want {
-		if got[building] != w {
-			t.Errorf("the floor under %q reads (name %q, label %q), want (name %q, label %q)",
-				building, got[building][0], got[building][1], w[0], w[1])
+	for key, w := range want {
+		if got[key] != w {
+			t.Errorf("the floor %q reads (name %q, label %q), want (name %q, label %q)",
+				key, got[key][0], got[key][1], w[0], w[1])
 		}
-	}
-	if len(got) != len(want) {
-		t.Errorf("seeded floors = %d %v, want %d", len(got), got, len(want))
 	}
 }
 
