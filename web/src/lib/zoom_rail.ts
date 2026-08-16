@@ -45,9 +45,40 @@ function ratioOf(systems: FleetSystem[]): RailModel["ratio"] {
   return r;
 }
 
-function subtreeOf(rootId: string, view: FleetView): FleetLocation[] {
+// depthIndex is one pass over the tree: each location's depth (root is 1)
+// and its root, memoized per view. The rail reads depth for the topology
+// sentence, the type ordering and the subtree test, and walking ancestors()
+// per location for each of those is O(locations x depth) three times over on
+// a page that re-renders on every zoom; one pass is O(locations).
+const depthCache = new WeakMap<FleetView, Map<string, { depth: number; root: string; chain: string[] }>>();
+function depthIndex(view: FleetView): Map<string, { depth: number; root: string; chain: string[] }> {
+  const hit = depthCache.get(view);
+  if (hit) return hit;
   const index = locationIndex(view);
-  return (view.locations ?? []).filter((l) => ancestors(l.id, index).some((a) => a.id === rootId));
+  const out = new Map<string, { depth: number; root: string; chain: string[] }>();
+  const resolve = (id: string, guard: number): { depth: number; root: string; chain: string[] } => {
+    const done = out.get(id);
+    if (done) return done;
+    const l = index.get(id);
+    if (!l) return { depth: 0, root: id, chain: [] };
+    if (!l.parent || guard <= 0 || !index.has(l.parent)) {
+      const r = { depth: 1, root: id, chain: [id] };
+      out.set(id, r);
+      return r;
+    }
+    const p = resolve(l.parent, guard - 1);
+    const r = { depth: p.depth + 1, root: p.root, chain: [...p.chain, id] };
+    out.set(id, r);
+    return r;
+  };
+  for (const l of view.locations ?? []) resolve(l.id, index.size + 1);
+  depthCache.set(view, out);
+  return out;
+}
+
+function subtreeOf(rootId: string, view: FleetView): FleetLocation[] {
+  const di = depthIndex(view);
+  return (view.locations ?? []).filter((l) => di.get(l.id)?.chain.includes(rootId));
 }
 
 export function railModel(scope: RailScope, view: FleetView): RailModel {
@@ -56,6 +87,7 @@ export function railModel(scope: RailScope, view: FleetView): RailModel {
   const holesAll = locationsWithoutSystems(view);
   // Types listed shallowest-first (the depth a type first appears at), so the
   // chips read as a ladder even though the model has none.
+  const di = depthIndex(view);
   const distinctTypes = (locs: FleetLocation[]) => {
     // Tie on depth (a fleet with a campus root AND a building root, both at
     // depth 1) breaks toward the type that appears more often at that depth.
@@ -63,7 +95,7 @@ export function railModel(scope: RailScope, view: FleetView): RailModel {
     const countAtDepth = new Map<string, number>();
     for (const l of locs) {
       if (!l.location_type) continue;
-      const d = ancestors(l.id, index).length;
+      const d = di.get(l.id)?.depth ?? 0;
       const prev = depth.get(l.location_type);
       if (prev === undefined || d < prev) {
         depth.set(l.location_type, d);
@@ -123,7 +155,7 @@ export function railModel(scope: RailScope, view: FleetView): RailModel {
   // Fleet zoom (and any scope with nothing to anchor on).
   const roots = (view.locations ?? []).filter((l) => !l.parent);
   const leaves = (view.locations ?? []).filter((l) => !(view.locations ?? []).some((c) => c.parent === l.id));
-  const depths = leaves.map((l) => ancestors(l.id, index).length);
+  const depths = leaves.map((l) => di.get(l.id)?.depth ?? 0);
   const ratio = ratioOf(allSystems);
   const lo = depths.length ? Math.min(...depths) : 0;
   const hi = depths.length ? Math.max(...depths) : 0;
