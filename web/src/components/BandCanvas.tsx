@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
-import { fillBuffer, hitTest, layoutBand, paintGroups, canvasPalette, FLAG_OWNED, FLAG_SHARED, type DotLayout } from "../lib/fleet_canvas";
+import { fillBuffer, hitTest, layoutBand, outlineFor, paintGroups, canvasPalette, FLAG_OWNED, FLAG_SHARED, type DotLayout } from "../lib/fleet_canvas";
 import type { Dot, SystemCluster } from "../lib/fleet";
 
 // One band's dot field, on canvas (#633). This is the impure shell around the
@@ -64,6 +64,29 @@ export default function BandCanvas(props: {
     // paint is cheaper than watching the theme and can never go stale.
     const palette = canvasPalette((t) => getComputedStyle(document.documentElement).getPropertyValue(t));
     const d = l.opts.dot;
+    // Pass 0: the cluster outline, one rounded rect per system, in the colour
+    // of the SYSTEM's verdict (neutral when healthy). Two facts, two channels:
+    // the outline says how the room reads, the dots inside say which boxes.
+    const pad = 3;
+    ctx.lineWidth = 1;
+    for (let ci = 0; ci < l.clusters.length; ci++) {
+      const r = l.clusters[ci];
+      if (r.to <= r.from) continue;
+      ctx.strokeStyle = outlineFor(buf.systemVerdict[ci], palette);
+      const x = r.x - pad + 0.5;
+      const y = r.y - pad + 0.5;
+      const w = r.w + pad * 2 - 1;
+      const h = r.h + pad * 2 - 1;
+      const rad = 3;
+      ctx.beginPath();
+      ctx.moveTo(x + rad, y);
+      ctx.arcTo(x + w, y, x + w, y + h, rad);
+      ctx.arcTo(x + w, y + h, x, y + h, rad);
+      ctx.arcTo(x, y + h, x, y, rad);
+      ctx.arcTo(x, y, x + w, y, rad);
+      ctx.closePath();
+      ctx.stroke();
+    }
     for (const group of paintGroups(buf, l.count, palette)) {
       if (group.ghost) {
         // A ghost is stroke-only: the box exists, it lives elsewhere.

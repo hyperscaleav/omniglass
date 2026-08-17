@@ -1,6 +1,6 @@
 import { api } from "../api/client";
 import type { components } from "../api/schema.gen";
-import { verdictOf, worstVerdict, type Verdict } from "./health";
+import { verdictOf, verdictRank, worstVerdict, type Verdict } from "./health";
 import { entityLabel } from "./entities";
 
 // The fleet view model: the shapes the canvas renders, and the pure functions
@@ -318,11 +318,13 @@ export function bandsOf(view: FleetView, grouping: Grouping = byRootLocation): B
 
   return grouping.order([...groups.keys()], view).map((key) => {
     const systems = groups.get(key) ?? [];
-    // Clusters draw in label order for the same reason dots draw in name
-    // order: the wire is a set, and the canvas must not reshuffle.
+    // Clusters draw worst-first, then by label: the operator's eye lands on
+    // what needs attention first, and the tie order is stable (the wire is a
+    // set, and the canvas must not reshuffle between reads).
+    const rank = (v: Verdict | null) => (v ? verdictRank(v) : -1);
     const clusters = systems
       .map(toCluster)
-      .sort((a, b) => a.label.localeCompare(b.label) || a.name.localeCompare(b.name) || a.systemId.localeCompare(b.systemId));
+      .sort((a, b) => rank(b.verdict) - rank(a.verdict) || a.label.localeCompare(b.label) || a.name.localeCompare(b.name) || a.systemId.localeCompare(b.systemId));
     // A shared component appears in several clusters and is one box, so the
     // band counts distinct components rather than dots.
     const distinct = new Set<string>();

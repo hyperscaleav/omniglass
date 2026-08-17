@@ -205,7 +205,7 @@ describe("drawing order", () => {
   // The projection sends SETS (no ORDER BY rides the scoped tree query), so
   // the view model owns the drawing order: without this, the canvas would
   // reshuffle its clusters on every refresh.
-  it("orders a band's clusters by label whatever order the wire sent", () => {
+  it("orders a band's clusters worst-first, then by label, whatever order the wire sent", () => {
     const shuffled = { ...view, systems: [...view.systems!].reverse() } as unknown as FleetView;
     const a = bandsOf(view).map((b) => b.clusters.map((c) => c.label));
     const b = bandsOf(shuffled).map((b2) => b2.clusters.map((c) => c.label));

@@ -59,6 +59,12 @@ export type ChoiceVM = { name: string; activeAlternate?: string; alternates: Alt
 
 export type SystemZoomVM = {
   unconditional: SlotVM[];
+  // choices carries only the ANSWERING build per choice. The alternate a
+  // system did not choose is a configuration fact, not an operational one: a
+  // room does not change build without an edit, so the losing build's roles
+  // are the standard editor's to show, and rendering them here as outstanding
+  // work was the noise the operator-clarity ruling removed. `activeAlternate`
+  // names the build so the card can say which.
   choices: ChoiceVM[];
   // Members filling no role: in the system and accounted for, which is a
   // legitimate state, never an error.
@@ -116,6 +122,8 @@ export function systemZoomVM(health: FleetHealth, declared: EffectiveRole[], vie
   const choices: ChoiceVM[] = [];
   for (const slot of slots) {
     if (!slot.choice || !slot.alternate) continue;
+    // Only the build in use reaches the zoom (see SystemZoomVM.choices).
+    if (!slot.active) continue;
     let choice = choices.find((c) => c.name === slot.choice);
     if (!choice) {
       choice = { name: slot.choice, activeAlternate: undefined, alternates: [] };

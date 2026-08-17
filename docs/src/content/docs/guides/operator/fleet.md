@@ -13,11 +13,7 @@ screenshots:
     alt: "The location zoom: a band per child location, system cards with slot strips, and the allowed child types."
   - id: fleet
     path: /web/fleet
-    alt: "The fleet zoom: a band per root location, system dot clusters, dashed holes, the zoom ladder, and the rail."
-    # Dot fields masked: the colours derive from system uuids (ADR-0124) and
-    # every capture run re-seeds the database. Unmask at #774.
-    mask:
-      - "canvas"
+    alt: "The fleet zoom: a band per root location, system dot clusters outlined by system verdict, dashed holes, the zoom ladder, and the rail."
 ---
 
 **Fleet** shows everything you can read on one page: a band per root location, a cluster
@@ -31,9 +27,10 @@ list rows; this page shows status at a glance.
 - **A band is a root location.** Its chip shows the location's recorded verdict, the same
   value its detail page shows. The subtitle counts systems, components, and how many
   levels deep its tree goes.
-- **A cluster is a system; a dot is a component.** Healthy dots use the system's identity
-  colour, so clusters are easy to tell apart. Anything not healthy uses a status colour:
-  incomplete, degraded, or outage.
+- **A cluster is a system; a dot is a component.** A dot's colour is that component's
+  verdict: green healthy, or incomplete, degraded, outage. The outline around a cluster is
+  the **system's** verdict, quiet when healthy and tinted when not. Two colours, two facts:
+  the outline says how the room reads, the dots say which boxes.
 - **Incomplete is not failure.** It means hardware was never installed, not that installed
   hardware broke.
 - **A ringed dot is shared.** A component in more than one system draws solid once, in its
@@ -81,9 +78,9 @@ labels where the role declares them), and the reported arithmetic.
 
 - A role nobody staffed reads **incomplete**. A role whose occupant is down shows the
   impact the role declared. Same arithmetic, different cause.
-- Roles group by **choice**. The alternate currently answering the choice is marked
-  **in use**; the other alternate renders dimmed, and its figures are not part of the
-  verdict.
+- Roles group by **choice**, and only the build in use is shown, named ("built as
+  all-in-one"). The alternate a room did not choose is a configuration fact for the standard
+  editor, not something an operator watches.
 - A shared occupant is tagged with the other system it serves. Members filling no role
   are listed at the bottom; that is a normal state.
 

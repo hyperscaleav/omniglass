@@ -133,17 +133,15 @@ describe("the system zoom", () => {
     expect(within(display).queryByText("outage")).toBeNull();
   });
 
-  it("marks the active alternate and renders the loser as a legal build, not outstanding work", () => {
+  it("shows only the build in use for a choice, named, and never the alternate the room did not choose", () => {
     mount();
-    const winner = screen.getByTestId("alternate-conferencing-all-in-one");
-    expect(within(winner).getByText("in use")).toBeTruthy();
-    const loser = screen.getByTestId("alternate-conferencing-component-system");
-    expect(within(loser).getByText("not the build in use")).toBeTruthy();
-    // The loser's role card carries no verdict badge: its figures did not
-    // contribute, and a badge would contradict the list beneath it.
-    const codec = within(loser).getByTestId("slot-conf-codec");
-    expect(within(codec).queryByText("incomplete")).toBeNull();
-    expect(within(codec).queryByText("outage")).toBeNull();
+    const conf = screen.getByTestId("choice-conferencing");
+    expect(within(conf).getByText(/built as all-in-one/)).toBeTruthy();
+    expect(within(conf).getByTestId("slot-conf-bar")).toBeTruthy();
+    // The losing build's role is not on the page at all: it is a
+    // configuration fact for the standard editor, not an operational one.
+    expect(screen.queryByTestId("slot-conf-codec")).toBeNull();
+    expect(screen.queryByText(/not the build in use/)).toBeNull();
   });
 
   it("an occupant serving another system carries a chip naming it", () => {

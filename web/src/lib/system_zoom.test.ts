@@ -135,15 +135,14 @@ describe("systemZoomVM", () => {
     expect(mic.occupants[1].sharedWith).toEqual([]);
   });
 
-  it("groups by choice, marks the active alternate, and keeps the loser's figures out of the verdict story", () => {
+  it("carries only the build in use per choice: the alternate a room did not choose is the editor's business", () => {
     const conf = vm().choices.find((c) => c.name === "conferencing")!;
     expect(conf.activeAlternate).toBe("all-in-one");
-    // The answering build leads whatever order the wire sent.
-    expect(conf.alternates[0].name).toBe("all-in-one");
-    const loser = conf.alternates.find((a) => a.name === "component-system")!;
-    expect(loser.active).toBe(false);
-    // The loser's roles ride along as the legal build they are, active false.
-    expect(loser.roles[0].active).toBe(false);
+    expect(conf.alternates.map((a) => a.name)).toEqual(["all-in-one"]);
+    expect(conf.alternates[0].roles.map((r) => r.name)).toEqual(["conf-bar"]);
+    // The losing build's role is nowhere on the zoom.
+    const all = [...vm().unconditional, ...vm().choices.flatMap((c) => c.alternates.flatMap((a) => a.roles))];
+    expect(all.find((r) => r.name === "conf-codec")).toBeUndefined();
   });
 
   it("puts a member filling no role in the no-role strip, no error", () => {

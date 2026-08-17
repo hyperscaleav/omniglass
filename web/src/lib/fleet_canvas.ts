@@ -30,7 +30,6 @@
 
 import type { SystemCluster } from "./fleet";
 import { verdictRank } from "./health";
-import { hueFor } from "./system_color";
 
 export type DotLayoutOpts = {
   dot: number;
@@ -43,7 +42,7 @@ export type DotLayoutOpts = {
 
 // The lab's proven measures, minus its label row and band padding: DOM owns
 // the chrome here, so the canvas is only the dot field.
-export const DOT_LAYOUT: DotLayoutOpts = { dot: 8, gap: 3, sysGap: 9, rowGap: 4, padX: 0, padY: 0 };
+export const DOT_LAYOUT: DotLayoutOpts = { dot: 8, gap: 3, sysGap: 12, rowGap: 10, padX: 4, padY: 4 };
 
 export type ClusterRect = {
   systemId: string;
@@ -185,7 +184,9 @@ export function clusterAt(layout: DotLayout, px: number, py: number): number {
 export type DotBuffer = {
   verdict: Uint8Array;
   flags: Uint8Array;
-  hue: Float32Array;
+  // systemVerdict is per CLUSTER (indexed by cluster, not dot): the rank the
+  // outline wears.
+  systemVerdict: Uint8Array;
 };
 
 export const VERDICT_UNKNOWN = 255;
@@ -195,21 +196,17 @@ export const FLAG_SHARED = 2;
 export function fillBuffer(layout: DotLayout, clusters: SystemCluster[]): DotBuffer {
   const verdict = new Uint8Array(layout.count);
   const flags = new Uint8Array(layout.count);
-  const hue = new Float32Array(layout.count);
+  const systemVerdict = new Uint8Array(clusters.length);
   let i = 0;
-  for (const c of clusters) {
-    // One hue per cluster, computed once and broadcast: the hue derives from
-    // the system uuid, and computing it per dot would be the same value at
-    // 8x the cost.
-    const h = hueFor(c.systemId);
+  clusters.forEach((c, ci) => {
+    systemVerdict[ci] = c.verdict === null ? VERDICT_UNKNOWN : verdictRank(c.verdict);
     for (const d of c.dots) {
       verdict[i] = d.verdict === null ? VERDICT_UNKNOWN : verdictRank(d.verdict);
       flags[i] = (d.owned ? FLAG_OWNED : 0) | (d.shared ? FLAG_SHARED : 0);
-      hue[i] = h;
       i++;
     }
-  }
-  return { verdict, flags, hue };
+  });
+  return { verdict, flags, systemVerdict };
 }
 
 // The CSS custom-property boundary. ctx.fillStyle cannot read var(), and
@@ -218,12 +215,15 @@ export function fillBuffer(layout: DotLayout, clusters: SystemCluster[]): DotBuf
 // values, so a canvas painted before the tokens resolve is wrong-theme, not
 // invisible.
 export type CanvasPalette = {
-  healthy(hue: number): string;
+  healthy: string;
   incomplete: string;
   degraded: string;
   outage: string;
   unknown: string;
   ghostAlpha: number;
+  // The cluster outline colours, one per system verdict, plus the neutral
+  // one a healthy or unknown system wears.
+  outline: { neutral: string; incomplete: string; degraded: string; outage: string };
 };
 
 export function canvasPalette(read: (token: string) => string): CanvasPalette {
@@ -231,25 +231,33 @@ export function canvasPalette(read: (token: string) => string): CanvasPalette {
     const v = read(name).trim();
     return v === "" ? fallback : v;
   };
-  const l = token("--tag-l", "0.72");
-  const c = token("--tag-c", "0.11");
+  const incomplete = token("--og-incomplete", "#8494ab");
+  const degraded = token("--color-warning", "#f0b232");
+  const outage = token("--color-error", "#f0676b");
   return {
-    // The exact recipe .og-system-dot uses (app.css), so a canvas dot and a
-    // DOM dot can never drift.
-    healthy: (hue: number) => `oklch(${l} ${c} ${hue})`,
-    incomplete: token("--og-incomplete", "#8494ab"),
-    degraded: token("--color-warning", "#f0b232"),
-    outage: token("--color-error", "#f0676b"),
+    // A dot's colour is its component's verdict and nothing else: one channel,
+    // one meaning. The system's verdict rides the CLUSTER OUTLINE (below).
+    healthy: token("--color-success", "#3ecf8e"),
+    incomplete,
+    degraded,
+    outage,
     unknown: token("--og-unknown", "#64748b"),
     ghostAlpha: 0.45,
+    outline: {
+      neutral: token("--og-outline", "rgba(148,163,184,0.25)"),
+      incomplete,
+      degraded,
+      outage,
+    },
   };
 }
 
 // One paint group is one fillStyle write: the whole "how few state changes
 // does a frame need" question answered as data. Group key is ghost-or-solid
-// plus the colour, where a healthy dot's colour is its cluster's identity hue
-// and anything else wears the semantic verdict colour (ADR: on the canvas,
-// health colour is exceptional and identity colour is the ground).
+// plus the colour, and the colour is the dot's own verdict: healthy, incomplete,
+// degraded, outage, or unknown. Nothing else colours a dot (the identity-hue
+// scheme ADR-0124 tried was reversed for operator clarity: one channel, one
+// meaning; the system's verdict is the cluster outline's job).
 export type PaintGroup = {
   fill: string;
   ghost: boolean;
@@ -257,7 +265,7 @@ export type PaintGroup = {
 };
 
 // Verdict ranks, mirrored from health.ts's RANK: 0 healthy, 1 incomplete,
-// 2 degraded, 3 outage. Only rank 0 wears the hue.
+// 2 degraded, 3 outage; VERDICT_UNKNOWN for anything the console cannot narrow.
 export function paintGroups(buf: DotBuffer, count: number, palette: CanvasPalette): PaintGroup[] {
   const byKey = new Map<string, { fill: string; ghost: boolean; indices: number[] }>();
   for (let i = 0; i < count; i++) {
@@ -265,7 +273,7 @@ export function paintGroups(buf: DotBuffer, count: number, palette: CanvasPalett
     let fill: string;
     switch (buf.verdict[i]) {
       case 0:
-        fill = palette.healthy(buf.hue[i]);
+        fill = palette.healthy;
         break;
       case 1:
         fill = palette.incomplete;
@@ -285,4 +293,19 @@ export function paintGroups(buf: DotBuffer, count: number, palette: CanvasPalett
     else byKey.set(key, { fill, ghost, indices: [i] });
   }
   return [...byKey.values()].map((g) => ({ fill: g.fill, ghost: g.ghost, indices: Uint32Array.from(g.indices) }));
+}
+
+// outlineFor picks the cluster outline colour for a system verdict rank (the
+// same 0..3 the buffer uses), neutral for healthy or unknown.
+export function outlineFor(rank: number, palette: CanvasPalette): string {
+  switch (rank) {
+    case 1:
+      return palette.outline.incomplete;
+    case 2:
+      return palette.outline.degraded;
+    case 3:
+      return palette.outline.outage;
+    default:
+      return palette.outline.neutral;
+  }
 }

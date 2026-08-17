@@ -9,11 +9,11 @@ import {
   fillBuffer,
   hitTest,
   layoutBand,
+  outlineFor,
   paintGroups,
   type CanvasPalette,
 } from "./fleet_canvas";
 import type { SystemCluster } from "./fleet";
-import { hueFor } from "./system_color";
 import { verdictRank } from "./health";
 import { uuidFor } from "./testids";
 
@@ -42,12 +42,12 @@ const fakeRead = (tokens: Record<string, string>) => (t: string) => tokens[t] ??
 const palette = (): CanvasPalette =>
   canvasPalette(
     fakeRead({
+      "--color-success": "#33cc88",
       "--color-warning": "#f0b232",
       "--color-error": "#f0676b",
       "--og-incomplete": "#8899aa",
       "--og-unknown": "#556677",
-      "--tag-l": "0.72",
-      "--tag-c": "0.11",
+      "--og-outline": "#334455",
     }),
   );
 
@@ -83,9 +83,10 @@ describe("layoutBand", () => {
     // Width fits exactly three dots (3*7 + 2*2 = 25). The first cluster fills
     // the row; the second must start on a fresh row at x=0, not squeeze a
     // sysGap into space that cannot hold its first dot.
-    const width = 3 * DOT_LAYOUT.dot + 2 * DOT_LAYOUT.gap;
+    const width = 3 * DOT_LAYOUT.dot + 2 * DOT_LAYOUT.gap + 2 * DOT_LAYOUT.padX;
     const l = layoutBand([cluster("cf", [{ c: "f1", v: "healthy" }, { c: "f2", v: "healthy" }, { c: "f3", v: "healthy" }]), cluster("cg", [{ c: "g1", v: "healthy" }])], width);
-    expect(l.xs[3]).toBe(0);
+    // The break lands at the row start (padX), not squeezed after a gap.
+    expect(l.xs[3]).toBe(DOT_LAYOUT.padX);
     expect(l.ys[3]).toBeGreaterThan(l.ys[2]);
   });
 
@@ -124,13 +125,13 @@ describe("hitTest", () => {
 });
 
 describe("fillBuffer", () => {
-  it("carries verdict rank, ownership flags, and one hue per cluster", () => {
+  it("carries per-dot verdict rank and ownership flags, and per-cluster the system's own verdict rank", () => {
     const clusters = [
-      cluster("cb1", [
+      { ...cluster("cb1", [
         { c: "d-ok", v: "healthy", owned: true, shared: true },
         { c: "d-bad", v: "outage" },
-      ]),
-      cluster("cb2", [{ c: "d-ghost", v: "healthy", owned: false, shared: true }]),
+      ]), verdict: "degraded" as const },
+      { ...cluster("cb2", [{ c: "d-ghost", v: "healthy", owned: false, shared: true }]), verdict: "healthy" as const },
     ];
     const l = layoutBand(clusters, 1000);
     const buf = fillBuffer(l, clusters);
@@ -138,8 +139,11 @@ describe("fillBuffer", () => {
     expect(buf.verdict[1]).toBe(verdictRank("outage"));
     expect(buf.flags[0]).toBe(FLAG_OWNED | FLAG_SHARED);
     expect(buf.flags[2]).toBe(FLAG_SHARED);
-    expect(buf.hue[0]).toBe(hueFor(uuidFor("cb1")));
-    expect(buf.hue[2]).toBe(hueFor(uuidFor("cb2")));
+    // The outline's fact: the SYSTEM verdict per cluster, independent of the
+    // dots inside it (cb1's dots are healthy and outage; the system says
+    // degraded, and the outline says what the system says).
+    expect(buf.systemVerdict[0]).toBe(verdictRank("degraded"));
+    expect(buf.systemVerdict[1]).toBe(verdictRank("healthy"));
   });
 
   it("an unrecognised verdict becomes the unknown sentinel, never a substituted word", () => {
@@ -150,22 +154,26 @@ describe("fillBuffer", () => {
 });
 
 describe("paintGroups", () => {
-  it("a healthy dot's fill is its system's identity hue through the shipped OKLCH recipe", () => {
-    const clusters = [cluster("cp", [{ c: "p1", v: "healthy" }])];
+  it("a dot's fill is its own component verdict and nothing else: one channel, one meaning", () => {
+    const clusters = [cluster("cq", [{ c: "q0", v: "healthy" }, { c: "q1", v: "outage" }, { c: "q2", v: "degraded" }, { c: "q3", v: "incomplete" }])];
     const buf = fillBuffer(layoutBand(clusters, 1000), clusters);
-    const groups = paintGroups(buf, 1, palette());
-    expect(groups).toHaveLength(1);
-    expect(groups[0].fill).toBe(`oklch(0.72 0.11 ${hueFor(uuidFor("cp"))})`);
-  });
-
-  it("a not-healthy dot wears the semantic verdict colour, never a hue", () => {
-    const clusters = [cluster("cq", [{ c: "q1", v: "outage" }, { c: "q2", v: "degraded" }, { c: "q3", v: "incomplete" }])];
-    const buf = fillBuffer(layoutBand(clusters, 1000), clusters);
-    const fills = paintGroups(buf, 3, palette()).map((g) => g.fill);
+    const fills = paintGroups(buf, 4, palette()).map((g) => g.fill);
+    expect(fills).toContain("#33cc88");
     expect(fills).toContain("#f0676b");
     expect(fills).toContain("#f0b232");
     expect(fills).toContain("#8899aa");
+    // No identity hue anywhere: two systems with the same dot verdicts paint
+    // the same colours, so a colour can never be misread as a status.
     for (const f of fills) expect(f).not.toContain("oklch");
+  });
+
+  it("the cluster outline wears the system's verdict, neutral when healthy", () => {
+    const p = palette();
+    expect(outlineFor(0, p)).toBe("#334455");
+    expect(outlineFor(1, p)).toBe("#8899aa");
+    expect(outlineFor(2, p)).toBe("#f0b232");
+    expect(outlineFor(3, p)).toBe("#f0676b");
+    expect(outlineFor(255, p)).toBe("#334455");
   });
 
   it("an owned dot and its ghost land in different groups, and the ghost group is stroke-only", () => {
@@ -201,20 +209,16 @@ describe("paintGroups", () => {
 
 describe("canvasPalette", () => {
   it("resolves a distinct palette per theme reader", () => {
-    const dark = canvasPalette(fakeRead({ "--color-error": "#f0676b", "--tag-l": "0.72", "--tag-c": "0.11" }));
-    const light = canvasPalette(fakeRead({ "--color-error": "#d6494d", "--tag-l": "0.55", "--tag-c": "0.09" }));
+    const dark = canvasPalette(fakeRead({ "--color-error": "#f0676b", "--color-success": "#3ecf8e" }));
+    const light = canvasPalette(fakeRead({ "--color-error": "#d6494d", "--color-success": "#16a06b" }));
     expect(dark.outage).toBe("#f0676b");
     expect(light.outage).toBe("#d6494d");
-    expect(dark.healthy(200)).toBe("oklch(0.72 0.11 200)");
-    expect(light.healthy(200)).toBe("oklch(0.55 0.09 200)");
+    expect(dark.healthy).toBe("#3ecf8e");
+    expect(light.healthy).toBe("#16a06b");
   });
 
   it("falls back to a usable colour when the token read is empty (jsdom)", () => {
     const p = canvasPalette(fakeRead({}));
-    expect(p.outage).toBeTruthy();
-    expect(p.degraded).toBeTruthy();
-    expect(p.incomplete).toBeTruthy();
-    expect(p.unknown).toBeTruthy();
-    expect(p.healthy(120)).toContain("120");
+    for (const c of [p.healthy, p.outage, p.degraded, p.incomplete, p.unknown, p.outline.neutral]) expect(c).toBeTruthy();
   });
 });

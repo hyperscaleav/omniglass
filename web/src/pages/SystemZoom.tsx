@@ -101,33 +101,14 @@ export default function SystemZoom() {
                 <For each={z().choices}>
                   {(choice) => (
                     <section data-testid={`choice-${choice.name}`} class="flex flex-col gap-2">
-                      <h2 class="text-sm font-semibold capitalize">{choice.name}</h2>
-                      <div class="flex flex-col gap-3">
-                        <For each={choice.alternates}>
-                          {(alt) => (
-                            <div
-                              data-testid={`alternate-${choice.name}-${alt.name}`}
-                              class="rounded-lg border p-3"
-                              classList={{
-                                "border-base-content/15": alt.active,
-                                "border-dashed border-base-content/10 opacity-70": !alt.active,
-                              }}
-                            >
-                              <div class="mb-2 flex items-center gap-2 text-xs">
-                                <span class="font-medium">{alt.name}</span>
-                                <Show
-                                  when={alt.active}
-                                  fallback={<span class="text-base-content/50">not the build in use</span>}
-                                >
-                                  <span class="rounded-md border border-base-content/20 px-1.5 py-0.5">in use</span>
-                                </Show>
-                              </div>
-                              <div class="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
-                                <For each={alt.roles}>{(slot) => <SlotCard slot={slot} />}</For>
-                              </div>
-                            </div>
-                          )}
-                        </For>
+                      <h2 class="flex items-baseline gap-2 text-sm font-semibold capitalize">
+                        {choice.name}
+                        <Show when={choice.activeAlternate}>
+                          <span class="text-[10px] font-normal normal-case tracking-wider text-base-content/50">built as {choice.activeAlternate}</span>
+                        </Show>
+                      </h2>
+                      <div class="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
+                        <For each={choice.alternates.flatMap((a) => a.roles)}>{(slot) => <SlotCard slot={slot} />}</For>
                       </div>
                     </section>
                   )}
