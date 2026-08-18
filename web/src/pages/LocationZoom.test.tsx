@@ -102,6 +102,7 @@ const types: LocationType[] = [
 ] as unknown as LocationType[];
 
 function mount(path = `/web/locations/${uuidFor("lz-hq")}?zoom=1`) {
+  localStorage.removeItem("fleet-sumopen");
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], me);
@@ -160,16 +161,17 @@ describe("the location zoom", () => {
     expect(within(card).queryByText("outage")).toBeNull();
   });
 
-  it("shows the rail scoped to this location: worst first, and the subtree's gaps", () => {
+  it("wears the same shell as the fleet zoom: the fleet-wide summary on top, and the attention badge filters this zoom's cards", () => {
     mount();
-    const rail = screen.getByTestId("zoom-rail");
-    expect(within(rail).getByText("Headquarters")).toBeTruthy();
-    const list = within(rail).getByTestId("rail-list");
-    // Boardroom is degraded, Lobby AV incomplete; Yard AV healthy stays off.
-    expect(within(list).getByText("Boardroom")).toBeTruthy();
-    expect(within(list).getByText("Lobby AV")).toBeTruthy();
-    expect(within(list).queryByText("Yard AV")).toBeNull();
-    expect(within(rail).getByText(/1 location has no system/)).toBeTruthy();
+    const rail = screen.getByTestId("fleet-summary");
+    expect(screen.queryByTestId("zoom-rail")).toBeNull();
+    // Two systems need attention fleet-wide (Boardroom degraded, Lobby AV incomplete).
+    const attention = within(rail).getByTestId("badge-attention");
+    expect(within(attention).getByText("2")).toBeTruthy();
+    fireEvent.click(attention);
+    // The healthy Yard AV card is filtered out of this zoom; the others stay.
+    expect(screen.queryByTestId(`syscard-${uuidFor("lz-s-yard")}`)).toBeNull();
+    expect(screen.getByTestId(`syscard-${uuidFor("lz-s-lobby")}`)).toBeTruthy();
   });
 
   it("clicking a child band drills deeper, carrying the zoom param", async () => {

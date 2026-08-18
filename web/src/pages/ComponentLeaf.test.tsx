@@ -106,10 +106,10 @@ describe("the component leaf", () => {
     expect(within(card).getByRole("button", { name: "Boardroom System" })).toBeTruthy();
   });
 
-  it("shows the rail on the leaf, scoped to the primary system", () => {
+  it("wears the same shell as every zoom: the fleet-wide summary rail on top, no right rail", () => {
     mount();
-    const rail = screen.getByTestId("zoom-rail");
-    expect(within(rail).getByText("Boardroom System")).toBeTruthy();
+    expect(screen.getByTestId("fleet-summary")).toBeTruthy();
+    expect(screen.queryByTestId("zoom-rail")).toBeNull();
   });
 
   it("lists one row per membership with the primary marked, and says the location comes from the primary", () => {

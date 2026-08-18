@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 import { useNavigate, useParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
@@ -6,8 +6,9 @@ import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
 import SystemCard from "../components/SystemCard";
 import ZoomLadder from "../components/ZoomLadder";
-import ZoomRail from "../components/ZoomRail";
-import { railModel } from "../lib/zoom_rail";
+import FleetShell from "../components/FleetShell";
+import { fleetTiles } from "../lib/fleet_tiles";
+import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
 import {
   FLEET_VIEW_KEY,
   ancestors,
@@ -18,6 +19,7 @@ import {
   locationIndex,
   type Band,
   type FleetView,
+  type SystemCluster,
 } from "../lib/fleet";
 import { zoomChips } from "../lib/zoom";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
@@ -38,6 +40,12 @@ export default function LocationZoom() {
   const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
 
   const anchor = createMemo(() => (view.data ? locationIndex(view.data).get(id()) : undefined));
+  const tiles = createMemo(() => (view.data ? fleetTiles(view.data) : undefined));
+  const [chips, setChips] = createSignal<Chip[]>([]);
+  const filterKeys: FilterKey<SystemCluster>[] = [
+    { key: "verdict", type: "string", hint: "exact", get: (c) => c.verdict ?? "unknown", values: () => ["outage", "degraded", "incomplete", "healthy"] },
+    { key: "system", type: "string", hint: "substring", get: (c) => c.label },
+  ];
 
   // A name-shaped address resolves to the uuid and the URL is rewritten to
   // keep saying what it means, query string included (#759's rule, applied
@@ -50,9 +58,13 @@ export default function LocationZoom() {
     const matches = (view.data.locations ?? []).filter((l) => l.name === id());
     if (matches.length === 1) navigate(`/locations/${matches[0].id}?zoom=1`, { replace: true });
   });
-  const bands = createMemo<Band[]>(() => (view.data ? bandsOf(view.data, byChildOfLocation(id())) : []));
+  const bands = createMemo<Band[]>(() => {
+    if (!view.data) return [];
+    const pred = buildPredicate(filterKeys, chips());
+    return bandsOf(view.data, byChildOfLocation(id())).map((b) => ({ ...b, clusters: b.clusters.filter(pred) }));
+  });
   const holes = createMemo(() => (view.data ? holesUnder(id(), view.data) : new Map()));
-  const chips = createMemo(() => (view.data ? zoomChips("location", { locationId: id() }, view.data) : []));
+  const ladderChips = createMemo(() => (view.data ? zoomChips("location", { locationId: id() }, view.data) : []));
 
   const crumbs = createMemo(() => {
     if (!view.data) return [];
@@ -90,21 +102,21 @@ export default function LocationZoom() {
             </div>
           }
         >
-          <ZoomLadder
-            chips={chips()}
-            hint="Bands are child locations, whatever type they are."
-            onSelect={(chip) => {
-              if (chip.id === "fleet") navigate("/fleet");
-            }}
-          />
-          <div class="flex gap-6">
-            <div class="flex min-w-0 flex-1 flex-col gap-4">
+          <FleetShell
+            storageKey="fleet"
+            tiles={tiles()}
+            rows={bands().flatMap((b) => b.clusters)}
+            filterKeys={filterKeys}
+            chips={chips}
+            onChips={setChips}
+            placeholder="Filter by verdict or system…"
+            trailing={<ZoomLadder chips={ladderChips()} hint="Bands are child locations, whatever type they are." onSelect={(chip) => { if (chip.id === "fleet") navigate("/fleet"); }} />}
+          >
+            <div class="flex flex-col gap-5">
               <For each={bands()}>{(band) => <ZoomBand band={band} view={view.data!} />}</For>
               <Show when={bands().length === 0 && holes().size === 0}>
                 <p class="text-sm text-base-content/60">Nothing under this location yet.</p>
               </Show>
-              {/* Inert create affordance (epic ruling): where a child location
-                  would go, and what it may be. */}
               <div data-testid="add-location-hole" class="flex flex-wrap items-center gap-3">
                 <div class="w-44 rounded-lg border border-dashed border-base-content/25 px-3 py-2 text-xs text-base-content/50">
                   <div class="font-medium text-base-content/70">+ Location</div>
@@ -117,8 +129,7 @@ export default function LocationZoom() {
                 </Show>
               </div>
             </div>
-            <Show when={view.data}>{(v) => <ZoomRail model={railModel({ zoom: "location", locationId: id() }, v())} onOpen={(row) => navigate(`/systems/${row.key}?zoom=1`)} />}</Show>
-          </div>
+          </FleetShell>
         </Show>
       </Show>
     </Page>

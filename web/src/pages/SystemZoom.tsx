@@ -5,8 +5,10 @@ import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
 import ZoomLadder from "../components/ZoomLadder";
-import ZoomRail from "../components/ZoomRail";
-import { railModel } from "../lib/zoom_rail";
+import FleetShell from "../components/FleetShell";
+import { fleetTiles } from "../lib/fleet_tiles";
+import { createSignal } from "solid-js";
+import type { Chip } from "../lib/predicate";
 import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/fleet";
 import { systemHealth, systemHealthKey } from "../lib/health";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
@@ -45,9 +47,11 @@ export default function SystemZoom() {
     return systemZoomVM(health.data, declared.data, view.data, id());
   });
 
-  const chips = createMemo(() =>
+  const ladderChips = createMemo(() =>
     view.data ? zoomChips("system", { locationId: system()?.location ?? null, systemId: id() }, view.data) : [],
   );
+  const tiles = createMemo(() => (view.data ? fleetTiles(view.data) : undefined));
+  const [chips, setChips] = createSignal<Chip[]>([]);
 
   const crumbs = createMemo(() => {
     if (!view.data) return [];
@@ -81,15 +85,24 @@ export default function SystemZoom() {
             </div>
           }
         >
-          <ZoomLadder
-            chips={chips()}
-            hint="One card per role the standard declares."
-            onSelect={(chip) => {
-              if (chip.id === "fleet") navigate("/fleet");
-              if (chip.id === "location" && system()?.location) navigate(`/locations/${system()!.location}?zoom=1`);
-            }}
-          />
-          <div class="flex gap-6">
+          <FleetShell
+            storageKey="fleet"
+            tiles={tiles()}
+            rows={[]}
+            filterKeys={[]}
+            chips={chips}
+            onChips={setChips}
+            trailing={
+              <ZoomLadder
+                chips={ladderChips()}
+                hint="One card per role the standard declares."
+                onSelect={(chip) => {
+                  if (chip.id === "fleet") navigate("/fleet");
+                  if (chip.id === "location" && system()?.location) navigate(`/locations/${system()!.location}?zoom=1`);
+                }}
+              />
+            }
+          >
           <Show when={vm()}>
             {(z) => (
               <div class="flex min-w-0 flex-1 flex-col gap-6">
@@ -131,8 +144,7 @@ export default function SystemZoom() {
               </div>
             )}
           </Show>
-          <Show when={view.data}>{(v) => <ZoomRail model={railModel({ zoom: "system", systemId: id() }, v())} />}</Show>
-          </div>
+          </FleetShell>
         </Show>
       </Show>
     </Page>

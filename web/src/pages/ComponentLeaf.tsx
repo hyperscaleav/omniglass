@@ -4,8 +4,10 @@ import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
 import ZoomLadder from "../components/ZoomLadder";
-import ZoomRail from "../components/ZoomRail";
-import { railModel } from "../lib/zoom_rail";
+import FleetShell from "../components/FleetShell";
+import { fleetTiles } from "../lib/fleet_tiles";
+import { createSignal } from "solid-js";
+import type { Chip } from "../lib/predicate";
 import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/fleet";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
 import { componentSystemsKey, componentSystems } from "../lib/members";
@@ -73,6 +75,8 @@ export default function ComponentLeaf() {
   const rows = createMemo(() => (view.data && memberships.data ? membershipRows(memberships.data, view.data) : []));
   const nodeByName = createMemo(() => new Map((nodes.data ?? []).map((n) => [n.name, n])));
 
+  const tiles = createMemo(() => (view.data ? fleetTiles(view.data) : undefined));
+  const [filterChips, setFilterChips] = createSignal<Chip[]>([]);
   const chips = createMemo(() => {
     if (!view.data) return [];
     const primary = rows().find((r) => r.primary);
@@ -110,18 +114,27 @@ export default function ComponentLeaf() {
             </div>
           }
         >
-          <ZoomLadder
-            chips={chips()}
-            onSelect={(chip) => {
-              if (chip.id === "fleet") navigate("/fleet");
-              if (chip.id === "location" && component()?.location_id) navigate(`/locations/${component()!.location_id}?zoom=1`);
-              if (chip.id === "system") {
-                const primary = rows().find((r) => r.primary);
-                if (primary?.systemId) navigate(`/systems/${primary.systemId}?zoom=1`);
-              }
-            }}
-          />
-          <div class="flex gap-6">
+          <FleetShell
+            storageKey="fleet"
+            tiles={tiles()}
+            rows={[]}
+            filterKeys={[]}
+            chips={filterChips}
+            onChips={setFilterChips}
+            trailing={
+              <ZoomLadder
+                chips={chips()}
+                onSelect={(chip) => {
+                  if (chip.id === "fleet") navigate("/fleet");
+                  if (chip.id === "location" && component()?.location_id) navigate(`/locations/${component()!.location_id}?zoom=1`);
+                  if (chip.id === "system") {
+                    const primary = rows().find((r) => r.primary);
+                    if (primary?.systemId) navigate(`/systems/${primary.systemId}?zoom=1`);
+                  }
+                }}
+              />
+            }
+          >
           <div class="flex min-w-0 flex-1 flex-col gap-5">
             <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
               <section data-testid="leaf-identity" class="rounded-lg border border-base-content/10 p-3 text-sm">
@@ -247,8 +260,7 @@ export default function ComponentLeaf() {
               </Show>
             </section>
           </div>
-          <Show when={view.data}>{(v) => <ZoomRail model={railModel({ zoom: "component", systemId: rows().find((r) => r.primary)?.systemId ?? null, componentId: id() }, v())} />}</Show>
-          </div>
+          </FleetShell>
         </Show>
       </Show>
     </Page>

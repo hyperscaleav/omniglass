@@ -66,6 +66,8 @@ const view: FleetView = {
 } as unknown as FleetView;
 
 function mount(data: FleetView = view) {
+  // The summary rail persists its open state per page; start each mount collapsed.
+  localStorage.removeItem("fleet-sumopen");
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...FLEET_VIEW_KEY], data);
   qc.setQueryData([...ME_KEY], me);
@@ -123,30 +125,32 @@ describe("the fleet zoom's bands", () => {
     for (const chip of chips.slice(1)) expect(chip.hasAttribute("disabled")).toBe(true);
   });
 
-  it("shows the summary tiles over systems: counts, attention, gaps, health bar, roots", () => {
+  it("shows the summary rail over systems, the Locations page's shape: mix badge, attention, gaps, components, roots", () => {
     mount();
-    const tiles = screen.getByTestId("fleet-tiles");
-    expect(within(tiles).getByText("Systems")).toBeTruthy();
-    expect(within(tiles).getByText(/3 components/)).toBeTruthy();
+    const rail = screen.getByTestId("fleet-summary");
+    expect(within(rail).getByText("systems")).toBeTruthy();
+    const attention = within(rail).getByTestId("badge-attention");
     // One degraded system needs attention.
-    const attention = within(tiles).getByTestId("tile-attention");
     expect(within(attention).getByText("1")).toBeTruthy();
-    expect(within(attention).getByText(/1 degraded/)).toBeTruthy();
-    expect(within(tiles).getByText(/location, no system/)).toBeTruthy();
-    expect(within(tiles).getByTestId("tile-health").getAttribute("title")).toContain("1 healthy");
-    expect(within(tiles).getByText(/levels deep/)).toBeTruthy();
-    // No rail: the tiles are where its facts went.
+    expect(within(rail).getByText(/gap$/)).toBeTruthy();
+    expect(within(rail).getByText("components")).toBeTruthy();
+    expect(within(rail).getByText("roots")).toBeTruthy();
+    // No right rail: the summary is where its facts went.
     expect(screen.queryByTestId("zoom-rail")).toBeNull();
+    // Expanding shows the verdict donut with its legend and the count tiles.
+    fireEvent.click(within(rail).getByRole("button", { name: /expand summary/i }));
+    expect(within(rail).getByText("Summary")).toBeTruthy();
+    expect(within(rail).getByText("Gaps")).toBeTruthy();
+    expect(within(rail).getByText(/levels deep/)).toBeTruthy();
   });
 
-  it("the attention tile filters the canvas to what needs it, and again clears it", () => {
+  it("the attention badge filters the canvas to what needs it, and again clears it", () => {
     mount();
-    fireEvent.click(screen.getByTestId("tile-attention"));
-    // The depot's only system is healthy: filtered out, its band stays, its
-    // canvas paints nothing (aria says 0 marks). hq keeps its degraded one.
+    fireEvent.click(screen.getByTestId("badge-attention"));
+    // The depot's only system is healthy: filtered out, its band stays.
     const depot = screen.getByTestId(`band-${uuidFor("fp-depot")}`);
     expect(within(depot).getByRole("img").getAttribute("aria-label")).toContain("Service Depot");
-    fireEvent.click(screen.getByTestId("tile-attention"));
+    fireEvent.click(screen.getByTestId("badge-attention"));
     expect(screen.getByTestId(`band-${uuidFor("fp-depot")}`)).toBeTruthy();
   });
 

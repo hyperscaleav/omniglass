@@ -25,9 +25,10 @@ need you and how many.
 
 ## Reading the page
 
-- **The tiles** on top: how many systems (and components), how many need attention (click
-  the tile to show only those), how many locations have no system, a bar with the share of
-  systems at each verdict, and how many roots.
+- **The summary rail** on top, the same shape as the inventory pages: badges for systems (with
+  a verdict mix bar), how many need attention (click to show only those), gaps, components,
+  and roots. Expand it for the verdict donut with a clickable legend and the count tiles.
+  The summary is fleet-wide on every zoom.
 - **The filter bar** narrows the canvas by verdict, system name, or room, with the same chips
   the inventory pages use.
 - **A band is a root location.** Its chip shows the location's recorded verdict. The subtitle
@@ -45,8 +46,10 @@ location; the browser back button returns here.
 
 ## The ladder
 
-The four chips are the zoom levels: fleet, location, system, component. Chips resolve from
-the current address, so a shared deep link arrives with the chips already correct.
+The four chips at the right of the filter bar are the zoom levels: fleet, location, system,
+component. Chips resolve from the current address, so a shared deep link arrives with the
+chips already correct. Every zoom keeps the same layout: summary rail, filter bar, then the
+zoom's own content. Right-hand drawers open only as detail blades.
 
 The dashed **+** cards mark where a location or a system would go. They do nothing yet.
 
