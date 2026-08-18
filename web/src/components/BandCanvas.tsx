@@ -19,13 +19,20 @@ import type { Dot, SystemCluster } from "../lib/fleet";
 export default function BandCanvas(props: {
   clusters: SystemCluster[];
   ariaLabel: string;
+  // square: component dots inside a system outline (the location zoom).
+  // round: one system per cluster, the dot IS the system, no outline (the
+  // fleet zoom, design option B: the shape is the grain).
+  shape?: "square" | "round";
   onHoverDot?: (dot: Dot | null) => void;
+  onClickDot?: (dot: Dot) => void;
 }) {
   let el!: HTMLCanvasElement;
   let wrap!: HTMLDivElement;
   const [width, setWidth] = createSignal(0);
 
-  const layout = createMemo<DotLayout>(() => layoutBand(props.clusters, Math.max(width(), 0)));
+  const layout = createMemo<DotLayout>(() =>
+    layoutBand(props.clusters, Math.max(width(), 0), props.shape === "round" ? { dot: 10, gap: 4, sysGap: 4, rowGap: 6, padX: 0, padY: 2 } : undefined),
+  );
   const buffer = createMemo(() => fillBuffer(layout(), props.clusters));
 
   // The dot a canvas point resolves to, for hover chrome. Flat list mirroring
@@ -64,12 +71,14 @@ export default function BandCanvas(props: {
     // paint is cheaper than watching the theme and can never go stale.
     const palette = canvasPalette((t) => getComputedStyle(document.documentElement).getPropertyValue(t));
     const d = l.opts.dot;
-    // Pass 0: the cluster outline, one rounded rect per system, in the colour
-    // of the SYSTEM's verdict (neutral when healthy). Two facts, two channels:
-    // the outline says how the room reads, the dots inside say which boxes.
+    const round = props.shape === "round";
+    // Pass 0 (square only): the cluster outline, one rounded rect per system,
+    // in the colour of the SYSTEM's verdict (neutral when healthy). Two facts,
+    // two channels: the outline says how the room reads, the dots inside say
+    // which boxes. A round mark is the system itself, so it takes no outline.
     const pad = 3;
     ctx.lineWidth = 1;
-    for (let ci = 0; ci < l.clusters.length; ci++) {
+    for (let ci = 0; !round && ci < l.clusters.length; ci++) {
       const r = l.clusters[ci];
       if (r.to <= r.from) continue;
       ctx.strokeStyle = outlineFor(buf.systemVerdict[ci], palette);
@@ -95,6 +104,14 @@ export default function BandCanvas(props: {
         ctx.lineWidth = 1;
         for (const i of group.indices) ctx.strokeRect(l.xs[i] + 0.5, l.ys[i] + 0.5, d - 1, d - 1);
         ctx.globalAlpha = 1;
+      } else if (round) {
+        ctx.fillStyle = group.fill;
+        const r = d / 2;
+        for (const i of group.indices) {
+          ctx.beginPath();
+          ctx.arc(l.xs[i] + r, l.ys[i] + r, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
       } else {
         ctx.fillStyle = group.fill;
         for (const i of group.indices) ctx.fillRect(l.xs[i], l.ys[i], d, d);
@@ -140,6 +157,13 @@ export default function BandCanvas(props: {
   });
   onCleanup(() => cancelAnimationFrame(raf));
 
+  function onClick(e: MouseEvent) {
+    const rect = el.getBoundingClientRect();
+    const i = hitTest(layout(), e.clientX - rect.x, e.clientY - rect.y);
+    const dot = i >= 0 ? (flatDots()[i] ?? null) : null;
+    if (dot) props.onClickDot?.(dot);
+  }
+
   function onMove(e: MouseEvent) {
     const rect = el.getBoundingClientRect();
     const i = hitTest(layout(), e.clientX - rect.x, e.clientY - rect.y);
@@ -152,7 +176,15 @@ export default function BandCanvas(props: {
 
   return (
     <div ref={wrap} class="min-w-0 flex-1">
-      <canvas ref={el} role="img" aria-label={props.ariaLabel} onMouseMove={onMove} onMouseLeave={() => props.onHoverDot?.(null)} />
+      <canvas
+        ref={el}
+        role="img"
+        aria-label={props.ariaLabel}
+        onMouseMove={onMove}
+        onMouseLeave={() => props.onHoverDot?.(null)}
+        onClick={onClick}
+        classList={{ "cursor-pointer": !!props.onClickDot }}
+      />
     </div>
   );
 }

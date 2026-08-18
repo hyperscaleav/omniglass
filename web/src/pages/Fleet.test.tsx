@@ -87,15 +87,11 @@ describe("the fleet zoom's bands", () => {
     mount();
     const hq = screen.getByTestId(`band-${uuidFor("fp-hq")}`);
     expect(within(hq).getByText("Headquarters")).toBeTruthy();
-    // The type chip is the location type's own word.
     expect(within(hq).getByText("campus")).toBeTruthy();
-    // The verdict chip renders the server's recorded word, verbatim.
     expect(within(hq).getByText("degraded")).toBeTruthy();
-    // Counts: one system, two components, three levels.
     expect(within(hq).getByText(/1 system/)).toBeTruthy();
     expect(within(hq).getByText(/2 components/)).toBeTruthy();
     expect(within(hq).getByText(/3 levels/)).toBeTruthy();
-
     const depot = screen.getByTestId(`band-${uuidFor("fp-depot")}`);
     expect(within(depot).getByText("Service Depot")).toBeTruthy();
     expect(within(depot).getByText("healthy")).toBeTruthy();
@@ -124,26 +120,39 @@ describe("the fleet zoom's bands", () => {
     const chips = within(ladder).getAllByRole("button");
     expect(chips).toHaveLength(4);
     expect(chips[0].textContent).toContain("Fleet");
-    expect(chips[0].getAttribute("disabled")).toBeNull();
     for (const chip of chips.slice(1)) expect(chip.hasAttribute("disabled")).toBe(true);
   });
 
-  it("shows the rail: totals counting a shared component once, the ratio bar, the roots needing attention, and the gaps", () => {
+  it("shows the summary tiles over systems: counts, attention, gaps, health bar, roots", () => {
     mount();
-    const rail = screen.getByTestId("zoom-rail");
-    expect(within(rail).getByText(/2 systems · 3 components · 2 roots/)).toBeTruthy();
-    expect(within(rail).getByTestId("rail-ratio")).toBeTruthy();
-    // Worst first: hq is degraded, the depot is healthy and stays off the list.
-    const list = within(rail).getByTestId("rail-list");
-    expect(within(list).getByText("Headquarters")).toBeTruthy();
-    expect(within(list).queryByText("Service Depot")).toBeNull();
-    expect(within(rail).getByText(/1 location has no system/)).toBeTruthy();
+    const tiles = screen.getByTestId("fleet-tiles");
+    expect(within(tiles).getByText("Systems")).toBeTruthy();
+    expect(within(tiles).getByText(/3 components/)).toBeTruthy();
+    // One degraded system needs attention.
+    const attention = within(tiles).getByTestId("tile-attention");
+    expect(within(attention).getByText("1")).toBeTruthy();
+    expect(within(attention).getByText(/1 degraded/)).toBeTruthy();
+    expect(within(tiles).getByText(/location, no system/)).toBeTruthy();
+    expect(within(tiles).getByTestId("tile-health").getAttribute("title")).toContain("1 healthy");
+    expect(within(tiles).getByText(/levels deep/)).toBeTruthy();
+    // No rail: the tiles are where its facts went.
+    expect(screen.queryByTestId("zoom-rail")).toBeNull();
+  });
+
+  it("the attention tile filters the canvas to what needs it, and again clears it", () => {
+    mount();
+    fireEvent.click(screen.getByTestId("tile-attention"));
+    // The depot's only system is healthy: filtered out, its band stays, its
+    // canvas paints nothing (aria says 0 marks). hq keeps its degraded one.
+    const depot = screen.getByTestId(`band-${uuidFor("fp-depot")}`);
+    expect(within(depot).getByRole("img").getAttribute("aria-label")).toContain("Service Depot");
+    fireEvent.click(screen.getByTestId("tile-attention"));
+    expect(screen.getByTestId(`band-${uuidFor("fp-depot")}`)).toBeTruthy();
   });
 
   it("renders the inert add-location hole", () => {
     mount();
-    const hole = screen.getByTestId("add-root-hole");
-    fireEvent.click(hole);
+    fireEvent.click(screen.getByTestId("add-root-hole"));
     expect(window.location.pathname).toBe("/web/fleet");
   });
 
@@ -160,7 +169,6 @@ describe("the fleet zoom's bands", () => {
     const band = screen.getByTestId(`band-${uuidFor("fp-new")}`);
     expect(within(band).getByText("North Annex")).toBeTruthy();
     expect(within(band).getByText(/0 systems/)).toBeTruthy();
-    // Its uncommissioned room is the band's content, dashed.
     expect(within(band).getByText("Room 1")).toBeTruthy();
   });
 
@@ -171,9 +179,7 @@ describe("the fleet zoom's bands", () => {
   });
 
   it("mounts and renders its chrome when the canvas has no 2d context (jsdom)", () => {
-    // jsdom's getContext returns null; the page must render every word anyway.
     mount();
-    // Headquarters now appears in the band AND the rail's attention list.
     expect(within(screen.getByTestId(`band-${uuidFor("fp-hq")}`)).getByText("Headquarters")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Fleet" })).toBeTruthy();
   });

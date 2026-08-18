@@ -217,6 +217,22 @@ test.describe("operator console", () => {
     const holeLabel = hole.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
     await expect(page.getByText(holeLabel).first()).toBeVisible();
 
+    // The summary tiles are on top, and no right rail: the tiles carry
+    // what the rail carried (design ruling 2026-08-18).
+    await expect(page.getByTestId("fleet-tiles")).toBeVisible();
+    await expect(page.getByTestId("zoom-rail")).toHaveCount(0);
+
+    // Clicking a system mark on the canvas opens the blade with the health
+    // panel; the mark is the system. This test's system has no components,
+    // so its round mark is the band's only one: click the canvas centre-left.
+    // The mark sits at the canvas origin plus padY (a round 10px mark).
+    await band.locator("canvas").click({ position: { x: 5, y: 7 } });
+    const blade = page.locator("aside[data-blade]").last();
+    await expect(blade).toBeVisible();
+    await expect(blade).toContainText(/e2e-sys/);
+    await page.keyboard.press("Escape");
+    await expect(page.locator("aside[data-blade]")).toHaveCount(0);
+
     // A band click navigates to the root location BY UUID, and the browser
     // back button returns to the fleet zoom (#633 acceptance).
     await band.getByRole("button").first().click();

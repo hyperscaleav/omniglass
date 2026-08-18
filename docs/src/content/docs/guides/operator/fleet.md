@@ -13,43 +13,40 @@ screenshots:
     alt: "The location zoom: a band per child location, system cards with slot strips, and the allowed child types."
   - id: fleet
     path: /web/fleet
-    alt: "The fleet zoom: a band per root location, system dot clusters outlined by system verdict, dashed holes, the zoom ladder, and the rail."
+    alt: "The fleet zoom: summary tiles, the filter bar, a band per root location with one round mark per system, and dashed holes."
 ---
 
-**Fleet** shows everything you can read on one page: a band per root location, a cluster
-of dots per system, one dot per component. The [inventory pages](/guides/operator/inventory/)
-list rows; this page shows status at a glance.
+**Fleet** shows every system you can read on one page: a band per root location, one round
+mark per system, coloured by the system's verdict, worst first. The
+[inventory pages](/guides/operator/inventory/) list rows; this page answers which systems
+need you and how many.
 
 ::screenshot{#fleet}
 
-## Reading the canvas
+## Reading the page
 
-- **A band is a root location.** Its chip shows the location's recorded verdict, the same
-  value its detail page shows. The subtitle counts systems, components, and how many
-  levels deep its tree goes.
-- **A cluster is a system; a dot is a component.** A dot's colour is that component's
-  verdict: green healthy, or incomplete, degraded, outage. The outline around a cluster is
-  the **system's** verdict, quiet when healthy and tinted when not. Two colours, two facts:
-  the outline says how the room reads, the dots say which boxes.
+- **The tiles** on top: how many systems (and components), how many need attention (click
+  the tile to show only those), how many locations have no system, a bar with the share of
+  systems at each verdict, and how many roots.
+- **The filter bar** narrows the canvas by verdict, system name, or room, with the same chips
+  the inventory pages use.
+- **A band is a root location.** Its chip shows the location's recorded verdict. The subtitle
+  counts systems, components, and levels.
+- **A round mark is a system.** Its colour is the system's verdict: green healthy, or
+  incomplete, degraded, outage. Marks order worst first inside a band. **Round means system;
+  square means component**, one zoom down.
 - **Incomplete is not failure.** It means hardware was never installed, not that installed
   hardware broke.
-- **A ringed dot is shared.** A component in more than one system draws solid once, in its
-  primary system, with a ring; other clusters show a ghost outline. It is counted once.
 - **A dashed card is a location with no system.** It is inert for now.
 
-Hover a dot for its name and verdict. Click a band to open that location; the browser back
-button returns here.
+Hover a mark for the system and its room. **Click a mark to open the system in the blade**:
+its health panel, and buttons to open the system or its location. Click a band to open the
+location; the browser back button returns here.
 
-## The ladder and the rail
+## The ladder
 
-The four chips above the canvas are the zoom levels: fleet, location, system, component.
-Chips resolve from the current address, so a shared deep link arrives with the chips
-already correct.
-
-The right-hand rail is the same on every zoom: totals for what is in scope (a shared
-component counted once), a bar showing the share of components at each verdict, the
-location types present, a worst-first list of what needs attention (click a row to open
-it), and a footer counting locations with no system.
+The four chips are the zoom levels: fleet, location, system, component. Chips resolve from
+the current address, so a shared deep link arrives with the chips already correct.
 
 The dashed **+** cards mark where a location or a system would go. They do nothing yet.
 
@@ -60,7 +57,8 @@ the same address shows the inventory detail.
 
 ::screenshot{#fleet-location}
 
-One band per direct child, whatever its type, plus a **placed here** band for systems
+One zoom down, marks are **square components** inside a **system outline** (the outline is
+the system's verdict, quiet when healthy). One band per direct child, whatever its type, plus a **placed here** band for systems
 attached to this location itself. Each system is a card: a status dot and border, the room
 and standard, a **slot strip** (one square per slot the standard wants: filled squares in
 the occupant's state, empty squares outlined), and a line saying how many required slots
