@@ -116,14 +116,6 @@ describe("the fleet zoom's bands", () => {
     expect(screen.queryByTestId("location-page")).toBeNull();
   });
 
-  it("renders the zoom ladder with only the Fleet chip active", () => {
-    mount();
-    const ladder = screen.getByTestId("zoom-ladder");
-    const chips = within(ladder).getAllByRole("button");
-    expect(chips).toHaveLength(4);
-    expect(chips[0].textContent).toContain("Fleet");
-    for (const chip of chips.slice(1)) expect(chip.hasAttribute("disabled")).toBe(true);
-  });
 
   it("shows the summary rail over systems, the Locations page's shape: mix badge, attention, gaps, components, roots", () => {
     mount();
@@ -176,10 +168,11 @@ describe("the fleet zoom's bands", () => {
     expect(within(band).getByText("Room 1")).toBeTruthy();
   });
 
-  it("renders the shared breadcrumb trail, one crumb at this zoom", () => {
+  it("is the root of the walk: a title and no breadcrumb, no ladder", () => {
     mount();
-    const trail = screen.getByTestId("breadcrumb");
-    expect(within(trail).getByText("Fleet")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Fleet" })).toBeTruthy();
+    expect(screen.queryByTestId("breadcrumb")).toBeNull();
+    expect(screen.queryByTestId("zoom-ladder")).toBeNull();
   });
 
   it("mounts and renders its chrome when the canvas has no 2d context (jsdom)", () => {

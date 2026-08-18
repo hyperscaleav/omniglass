@@ -5,7 +5,6 @@ import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
 import SystemCard from "../components/SystemCard";
-import ZoomLadder from "../components/ZoomLadder";
 import FleetShell from "../components/FleetShell";
 import { fleetTiles } from "../lib/fleet_tiles";
 import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
@@ -21,7 +20,6 @@ import {
   type FleetView,
   type SystemCluster,
 } from "../lib/fleet";
-import { zoomChips } from "../lib/zoom";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
@@ -64,17 +62,18 @@ export default function LocationZoom() {
     return bandsOf(view.data, byChildOfLocation(id())).map((b) => ({ ...b, clusters: b.clusters.filter(pred) }));
   });
   const holes = createMemo(() => (view.data ? holesUnder(id(), view.data) : new Map()));
-  const ladderChips = createMemo(() => (view.data ? zoomChips("location", { locationId: id() }, view.data) : []));
 
   const crumbs = createMemo(() => {
     if (!view.data) return [];
     const chain = ancestors(id(), locationIndex(view.data));
     return [
       { key: "fleet", label: "Fleet", onClick: () => navigate("/fleet") },
-      ...chain.map((l, i) => ({
+      // The trail ends at the parent: the current location is the page title,
+      // and repeating it as the last crumb would say it twice.
+      ...chain.slice(0, -1).map((l) => ({
         key: l.id,
         label: entityLabel(l),
-        onClick: i === chain.length - 1 ? undefined : () => navigate(`/locations/${l.id}?zoom=1`),
+        onClick: () => navigate(`/locations/${l.id}?zoom=1`),
       })),
     ];
   });
@@ -90,7 +89,6 @@ export default function LocationZoom() {
   return (
     <Page
       title={anchor() ? entityLabel(anchor()!) : "Location"}
-      subtitle={anchor()?.location_type ?? ""}
       breadcrumb={<Breadcrumb crumbs={crumbs()} />}
     >
       <Show when={!view.isPending} fallback={<div class="skeleton h-32 w-full" />}>
@@ -110,7 +108,6 @@ export default function LocationZoom() {
             chips={chips}
             onChips={setChips}
             placeholder="Filter by verdict or system…"
-            trailing={<ZoomLadder chips={ladderChips()} hint="Bands are child locations, whatever type they are." onSelect={(chip) => { if (chip.id === "fleet") navigate("/fleet"); }} />}
           >
             <div class="flex flex-col gap-5">
               <For each={bands()}>{(band) => <ZoomBand band={band} view={view.data!} />}</For>

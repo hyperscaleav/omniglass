@@ -2,10 +2,8 @@ import { For, Show, createMemo, createSignal } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
-import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
 import BandCanvas from "../components/BandCanvas";
-import ZoomLadder from "../components/ZoomLadder";
 import BladeStack from "../components/BladeStack";
 import FleetShell from "../components/FleetShell";
 import Button from "../components/Button";
@@ -13,7 +11,6 @@ import SystemHealthPanel from "../components/HealthPanel";
 import { BladesContext, createBladeController, type BladeDef } from "../lib/blades";
 import { FLEET_VIEW_KEY, fleetView, holesByRoot, type Band, type FleetView, type SystemCluster } from "../lib/fleet";
 import { fleetTiles, systemMarks } from "../lib/fleet_tiles";
-import { zoomChips } from "../lib/zoom";
 import { entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
@@ -46,7 +43,6 @@ export default function Fleet() {
     return systemMarks(view.data).map((b) => ({ ...b, clusters: b.clusters.filter(pred) }));
   });
   const holes = createMemo(() => (view.data ? holesByRoot(view.data) : new Map()));
-  const ladder = createMemo(() => (view.data ? zoomChips("fleet", {}, view.data) : []));
 
   // The blade registry: a system's health panel, with drill actions.
   const registry: Record<string, BladeDef> = {
@@ -71,7 +67,7 @@ export default function Fleet() {
 
   return (
     <BladesContext.Provider value={blades}>
-      <Page title="Fleet" subtitle="Explore your environment." breadcrumb={<Breadcrumb crumbs={[{ key: "fleet", label: "Fleet" }]} />}>
+      <Page title="Fleet" subtitle="Explore your environment.">
         <Show when={!view.isPending} fallback={<div class="skeleton h-32 w-full" />}>
           <Show
             when={!view.isError}
@@ -89,7 +85,7 @@ export default function Fleet() {
               chips={chips}
               onChips={setChips}
               placeholder="Filter by verdict, system, room…"
-              trailing={<ZoomLadder chips={ladder()} hint={worstFirst() ? "Worst first" : ""} />}
+              trailing={<span class="text-xs text-base-content/40">{worstFirst() ? "Worst first" : ""}</span>}
             >
               <div class="flex flex-col gap-4">
                 <For each={bands()}>{(band) => <FleetBand band={band} view={view.data!} onOpen={(id) => navigate(`/locations/${encodeURIComponent(id)}?zoom=1`)} />}</For>

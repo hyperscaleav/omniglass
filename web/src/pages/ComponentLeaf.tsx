@@ -3,7 +3,6 @@ import { useNavigate, useParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
-import ZoomLadder from "../components/ZoomLadder";
 import FleetShell from "../components/FleetShell";
 import { fleetTiles } from "../lib/fleet_tiles";
 import { createSignal } from "solid-js";
@@ -15,7 +14,6 @@ import { REACHABILITY_KEY, getReachability } from "../lib/reachability";
 import { NODES_KEY, listNodes } from "../lib/nodes";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { collectionState, membershipRows } from "../lib/component_leaf";
-import { zoomChips } from "../lib/zoom";
 import { entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 
@@ -77,32 +75,25 @@ export default function ComponentLeaf() {
 
   const tiles = createMemo(() => (view.data ? fleetTiles(view.data) : undefined));
   const [filterChips, setFilterChips] = createSignal<Chip[]>([]);
-  const chips = createMemo(() => {
-    if (!view.data) return [];
-    const primary = rows().find((r) => r.primary);
-    return zoomChips(
-      "component",
-      { locationId: component()?.location_id ?? null, systemId: primary?.systemId ?? null, componentId: id() },
-      view.data,
-    );
-  });
 
   const chain = createMemo(() => (view.data && component()?.location_id ? ancestors(component()!.location_id!, locationIndex(view.data)) : []));
 
   const crumbs = createMemo(() => {
     if (!view.data) return [];
     const chainList = chain();
+    // Fleet / places / primary system: the walk this leaf sits at the end of.
+    // The leaf itself is the page title, so it is not the last crumb.
+    const primary = rows().find((r) => r.primary);
     return [
       { key: "fleet", label: "Fleet", onClick: () => navigate("/fleet") },
       ...chainList.map((l) => ({ key: l.id, label: entityLabel(l), onClick: () => navigate(`/locations/${l.id}?zoom=1`) })),
-      ...(component() ? [{ key: component()!.id, label: entityLabel(component()!) }] : []),
+      ...(primary && primary.systemId ? [{ key: primary.systemId, label: primary.label, onClick: () => navigate(`/systems/${primary.systemId}?zoom=1`) }] : []),
     ];
   });
 
   return (
     <Page
       title={component() ? entityLabel(component()!) : "Component"}
-      subtitle={component()?.product ?? ""}
       breadcrumb={<Breadcrumb crumbs={crumbs()} />}
     >
       <Show when={!view.isPending && !components.isPending} fallback={<div class="skeleton h-32 w-full" />}>
@@ -121,19 +112,6 @@ export default function ComponentLeaf() {
             filterKeys={[]}
             chips={filterChips}
             onChips={setFilterChips}
-            trailing={
-              <ZoomLadder
-                chips={chips()}
-                onSelect={(chip) => {
-                  if (chip.id === "fleet") navigate("/fleet");
-                  if (chip.id === "location" && component()?.location_id) navigate(`/locations/${component()!.location_id}?zoom=1`);
-                  if (chip.id === "system") {
-                    const primary = rows().find((r) => r.primary);
-                    if (primary?.systemId) navigate(`/systems/${primary.systemId}?zoom=1`);
-                  }
-                }}
-              />
-            }
           >
           <div class="flex min-w-0 flex-1 flex-col gap-5">
             <div class="grid grid-cols-1 gap-3 md:grid-cols-2">

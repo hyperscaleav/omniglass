@@ -10,10 +10,10 @@ screenshots:
     alt: "The system zoom: one card per role with the reported arithmetic, choices grouped with the build in use marked, and the no-role list."
   - id: fleet-location
     path: /web/locations/east?zoom=1
-    alt: "The location zoom: a band per child location, system cards with slot strips, and the allowed child types."
+    alt: "The location zoom: the breadcrumb, a band per child location, system cards with slot strips, and the allowed child types."
   - id: fleet
     path: /web/fleet
-    alt: "The fleet zoom: summary tiles, the filter bar, a band per root location with one round mark per system, and dashed holes."
+    alt: "The fleet zoom: the summary rail, the filter bar, a band per root location with one round mark per system, and dashed holes."
 ---
 
 **Fleet** shows every system you can read on one page: a band per root location, one round
@@ -44,12 +44,12 @@ Hover a mark for the system and its room. **Click a mark to open the system in t
 its health panel, and buttons to open the system or its location. Click a band to open the
 location; the browser back button returns here.
 
-## The ladder
+## Moving between zooms
 
-The four chips at the right of the filter bar are the zoom levels: fleet, location, system,
-component. Chips resolve from the current address, so a shared deep link arrives with the
-chips already correct. Every zoom keeps the same layout: summary rail, filter bar, then the
-zoom's own content. Right-hand drawers open only as detail blades.
+Every zoom keeps the same layout: the summary rail, the filter bar, then the zoom's own
+content. Click a band or a card to go deeper; the breadcrumb above the title walks back out
+(Fleet, then each location, then the system a component belongs to). Right-hand drawers open
+only as detail blades.
 
 The dashed **+** cards mark where a location or a system would go. They do nothing yet.
 

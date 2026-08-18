@@ -209,16 +209,16 @@ describe("the location zoom", () => {
     expect(window.location.pathname).toBe(`/web/locations/${uuidFor("lz-hq")}`);
   });
 
-  it("the breadcrumb walks the ancestor chain and the ladder lights fleet and location", () => {
+  it("the breadcrumb walks the ancestor chain to the parent; the page itself is the title, not a crumb", () => {
     mount(`/web/locations/${uuidFor("lz-room")}?zoom=1`);
     const trail = screen.getByTestId("breadcrumb");
+    expect(within(trail).getByText("Fleet")).toBeTruthy();
     expect(within(trail).getByText("Headquarters")).toBeTruthy();
     expect(within(trail).getByText("West Building")).toBeTruthy();
-    expect(within(trail).getByText("Boardroom A")).toBeTruthy();
-    const ladder = screen.getByTestId("zoom-ladder");
-    const chips = within(ladder).getAllByRole("button");
-    expect(chips[1].textContent).toContain("Boardroom A");
-    expect(chips[1].hasAttribute("disabled")).toBe(false);
+    // Boardroom A is the page: in the heading, not repeated in the trail.
+    expect(within(trail).queryByText("Boardroom A")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Boardroom A" })).toBeTruthy();
+    expect(screen.queryByTestId("zoom-ladder")).toBeNull();
   });
 
   it("a name-shaped zoom link resolves to the uuid, keeping the param (#759's rule)", async () => {

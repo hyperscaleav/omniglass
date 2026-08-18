@@ -201,8 +201,7 @@ test.describe("operator console", () => {
 
     // The chrome: title, ladder, inspector, breadcrumb.
     await expect(page.getByRole("heading", { name: "Fleet" })).toBeVisible();
-    await expect(page.getByTestId("zoom-ladder")).toBeVisible();
-    await expect(page.getByTestId("fleet-inspector")).toBeVisible();
+    await expect(page.getByTestId("fleet-summary")).toBeVisible();
 
     // The band for this test's own root, and the canvas element inside it
     // (role img so the pixels have an accessible name). The system holds no
@@ -237,12 +236,13 @@ test.describe("operator console", () => {
     // back button returns to the fleet zoom (#633 acceptance).
     await band.getByRole("button").first().click();
     await page.waitForURL(new RegExp(`/web/locations/${root.id}\\?zoom=1`));
-    // The zoom face renders at the identity route (ADR-0125): the ladder is
-    // there, and the location chip is live.
-    await expect(page.getByTestId("zoom-ladder")).toBeVisible();
+    // The zoom face renders at the identity route (ADR-0126): the breadcrumb
+    // walks back to the fleet, and the summary rail is the same one.
+    await expect(page.getByTestId("breadcrumb")).toBeVisible();
+    await expect(page.getByTestId("fleet-summary")).toBeVisible();
     await page.goBack();
     await page.waitForURL(/\/web\/fleet/);
-    await expect(page.getByTestId("zoom-ladder")).toBeVisible();
+    await expect(page.getByTestId("fleet-summary")).toBeVisible();
   });
 
 });

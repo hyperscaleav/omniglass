@@ -84,12 +84,16 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}?zoom=1`, membershi
 afterEach(cleanup);
 
 describe("the component leaf", () => {
-  it("arriving directly renders the breadcrumb from the ancestor chain, no prior navigation", () => {
+  it("arriving directly renders the breadcrumb from the ancestor chain through the primary system, no prior navigation", () => {
     mount();
     const trail = screen.getByTestId("breadcrumb");
+    expect(within(trail).getByText("Fleet")).toBeTruthy();
     expect(within(trail).getByText("Headquarters")).toBeTruthy();
     expect(within(trail).getByText("Boardroom A")).toBeTruthy();
-    expect(within(trail).getByText("Video Bar 1")).toBeTruthy();
+    // The primary system is the last crumb; the leaf itself is the title.
+    expect(within(trail).getByText("Boardroom System")).toBeTruthy();
+    expect(within(trail).queryByText("Video Bar 1")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Video Bar 1" })).toBeTruthy();
   });
 
   it("says what it is: product, vendor, driver", () => {

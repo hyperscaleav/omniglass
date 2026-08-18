@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
-import ZoomLadder from "../components/ZoomLadder";
 import FleetShell from "../components/FleetShell";
 import { fleetTiles } from "../lib/fleet_tiles";
 import { createSignal } from "solid-js";
@@ -13,7 +12,6 @@ import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/flee
 import { systemHealth, systemHealthKey } from "../lib/health";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
 import { systemZoomVM, type SlotVM } from "../lib/system_zoom";
-import { zoomChips } from "../lib/zoom";
 import { entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 
@@ -47,9 +45,6 @@ export default function SystemZoom() {
     return systemZoomVM(health.data, declared.data, view.data, id());
   });
 
-  const ladderChips = createMemo(() =>
-    view.data ? zoomChips("system", { locationId: system()?.location ?? null, systemId: id() }, view.data) : [],
-  );
   const tiles = createMemo(() => (view.data ? fleetTiles(view.data) : undefined));
   const [chips, setChips] = createSignal<Chip[]>([]);
 
@@ -63,7 +58,6 @@ export default function SystemZoom() {
         label: entityLabel(l),
         onClick: () => navigate(`/locations/${l.id}?zoom=1`),
       })),
-      ...(system() ? [{ key: system()!.id, label: entityLabel(system()!) }] : []),
     ];
   });
 
@@ -73,7 +67,6 @@ export default function SystemZoom() {
   return (
     <Page
       title={system() ? entityLabel(system()!) : "System"}
-      subtitle={health.data?.verdict ? "" : ""}
       breadcrumb={<Breadcrumb crumbs={crumbs()} />}
     >
       <Show when={!pending()} fallback={<div class="skeleton h-32 w-full" />}>
@@ -92,16 +85,6 @@ export default function SystemZoom() {
             filterKeys={[]}
             chips={chips}
             onChips={setChips}
-            trailing={
-              <ZoomLadder
-                chips={ladderChips()}
-                hint="One card per role the standard declares."
-                onSelect={(chip) => {
-                  if (chip.id === "fleet") navigate("/fleet");
-                  if (chip.id === "location" && system()?.location) navigate(`/locations/${system()!.location}?zoom=1`);
-                }}
-              />
-            }
           >
           <Show when={vm()}>
             {(z) => (
