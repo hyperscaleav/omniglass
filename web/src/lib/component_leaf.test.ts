@@ -44,8 +44,15 @@ describe("collectionState", () => {
 });
 
 const view: FleetView = {
-  locations: [],
+  locations: [
+    { id: uuidFor("cl-l-huddle"), name: "huddle", label: "Huddle Room", location_type: "room", parent: null, verdict: "healthy" },
+    { id: uuidFor("cl-l-201"), name: "class-201", label: "Class 201", location_type: "room", parent: null, verdict: "healthy" },
+  ],
   systems: [
+    // A system named for its room, the commonest naming in the field: the
+    // room would only repeat the label, so the row carries no where.
+    { id: uuidFor("cl-s-huddle"), name: "huddle", label: "Huddle Room", location: uuidFor("cl-l-huddle"), verdict: "healthy", dots: [] },
+    { id: uuidFor("cl-s-201"), name: "meeting", label: "Meeting Room", location: uuidFor("cl-l-201"), verdict: "healthy", dots: [] },
     { id: uuidFor("cl-s-a"), name: "boardroom", label: "Boardroom A System", location: null, verdict: "healthy", dots: [] },
     { id: uuidFor("cl-s-b"), name: "overflow", label: "Overflow", location: null, verdict: "healthy", dots: [] },
     // A second system sharing the name of the first: the bare name is
@@ -80,6 +87,18 @@ describe("membershipRows", () => {
     // Neither twin is placed in this fixture, so no room to tell them apart by.
     expect(rows.map((r) => r.where)).toEqual([undefined, undefined]);
     expect(rows.map((r) => r.systemId)).toEqual([uuidFor("cl-s-a2"), uuidFor("cl-s-a3")]);
+  });
+
+  it("names the room beside a system, unless the room would only repeat the system's label", () => {
+    const rows = membershipRows(
+      [
+        { component: "x", system: "meeting", system_id: uuidFor("cl-s-201"), primary: true, system_count: 2 },
+        { component: "x", system: "huddle", system_id: uuidFor("cl-s-huddle"), primary: false, system_count: 2 },
+      ] as never,
+      view,
+    );
+    expect(rows[0]).toMatchObject({ label: "Meeting Room", where: "Class 201" });
+    expect(rows[1]).toMatchObject({ label: "Huddle Room", where: undefined });
   });
 
   it("without a uuid on the wire, an ambiguous name stays undrillable rather than guessed", () => {

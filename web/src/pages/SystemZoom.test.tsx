@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, within, cleanup } from "@solidjs/testing-library";
-import { Router, Route } from "@solidjs/router";
+import { render, screen, within, cleanup, fireEvent } from "@solidjs/testing-library";
+import { Router, Route, useLocation } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Systems from "./Systems";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
@@ -112,6 +112,13 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}?zoom=1`) {
         <Route path="/systems/:id" component={Systems} />
         <Route path="/locations/:id" component={() => <div data-testid="location-page" />} />
         <Route path="/fleet" component={() => <div data-testid="fleet-page" />} />
+        <Route
+          path="/components/:id"
+          component={() => {
+            const loc = useLocation();
+            return <div data-testid="component-page">{loc.pathname + loc.search}</div>;
+          }}
+        />
       </Router>
     </QueryClientProvider>
   ));
@@ -154,6 +161,24 @@ describe("the system zoom", () => {
     mount();
     const strip = screen.getByTestId("no-role-strip");
     expect(within(strip).getByText("device-1")).toBeTruthy();
+  });
+
+  // The drilldown's last step: an occupant is the component, so clicking it
+  // opens the leaf by uuid (names repeat across rooms) and keeps the zoom.
+  it("clicking an occupant opens the component leaf, by id, keeping the zoom", async () => {
+    mount();
+    const bar = screen.getByTestId("slot-conf-bar");
+    fireEvent.click(within(bar).getByRole("button", { name: /videobar-1/ }));
+    const page = await screen.findByTestId("component-page");
+    expect(page.textContent).toBe(`/web/components/${uuidFor("szp-c-bar")}?zoom=1`);
+  });
+
+  it("clicking a no-role member opens its leaf too", async () => {
+    mount();
+    const strip = screen.getByTestId("no-role-strip");
+    fireEvent.click(within(strip).getByRole("button", { name: /device-1/ }));
+    const page = await screen.findByTestId("component-page");
+    expect(page.textContent).toBe(`/web/components/${uuidFor("szp-c-power")}?zoom=1`);
   });
 
   it("without the zoom param the route renders the inventory detail, untouched", () => {

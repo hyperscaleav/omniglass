@@ -87,14 +87,16 @@ export default function Fleet() {
               placeholder="Filter by verdict, system, room…"
               trailing={<span class="text-xs text-base-content/40">{worstFirst() ? "Worst first" : ""}</span>}
             >
-              <div class="flex flex-col gap-4">
+              <div class="flex flex-col divide-y divide-base-300">
                 <For each={bands()}>{(band) => <FleetBand band={band} view={view.data!} onOpen={(id) => navigate(`/locations/${encodeURIComponent(id)}?zoom=1`)} />}</For>
                 <Show when={bands().length === 0}>
-                  <p class="text-sm text-base-content/60">Nothing in scope yet.</p>
+                  <p class="px-4 py-6 text-sm text-base-content/60">Nothing in scope yet.</p>
                 </Show>
-                <div data-testid="add-root-hole" class="w-56 rounded-lg border border-dashed border-base-content/25 px-3 py-2 text-xs text-base-content/50">
-                  <div class="font-medium text-base-content/70">+ Top-level location</div>
-                  <div>campus, site, or a type you define</div>
+                <div class="px-4 py-3">
+                  <div data-testid="add-root-hole" class="inline-flex flex-col rounded-field border border-dashed border-base-content/25 px-3 py-1.5 text-xs text-base-content/50">
+                    <span class="font-medium text-base-content/70">+ Top-level location</span>
+                    <span>campus, site, or a type you define</span>
+                  </div>
                 </div>
               </div>
             </FleetShell>
@@ -110,18 +112,17 @@ export default function Fleet() {
     const counts = () => {
       const b = props.band;
       const parts = [b.systemCount === 1 ? "1 system" : `${b.systemCount} systems`, b.componentCount === 1 ? "1 component" : `${b.componentCount} components`];
-      if (b.depth > 0) parts.push(b.depth === 1 ? "1 level" : `${b.depth} levels`);
       return parts.join(", ");
     };
     return (
-      <section data-testid={`band-${props.band.key}`} class="flex gap-4">
-        <div class="w-52 flex-none">
+      <section data-testid={`band-${props.band.key}`} class="flex gap-4 px-4 py-3">
+        <div class="w-60 flex-none">
           <button type="button" class="block w-full cursor-pointer rounded-lg p-1 text-left hover:bg-base-content/5" onClick={() => props.onOpen(props.band.key)}>
             <div class="flex items-center gap-2">
               <HealthBadge verdict={props.band.recordedVerdict ?? undefined} size="xs" />
-              <span class="line-clamp-2 font-medium leading-tight">{props.band.label}</span>
+              <span class="min-w-0 truncate font-medium" title={props.band.label}>{props.band.label}</span>
             </div>
-            <div class="mt-0.5 flex items-baseline gap-2 text-xs text-base-content/60">
+            <div class="mt-0.5 flex items-baseline gap-2 truncate text-xs text-base-content/60">
               <Show when={props.band.sublabel}>
                 <span class="text-[10px] uppercase tracking-wider text-base-content/50">{props.band.sublabel}</span>
               </Show>

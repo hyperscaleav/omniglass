@@ -109,21 +109,18 @@ export default function LocationZoom() {
             onChips={setChips}
             placeholder="Filter by verdict or system…"
           >
-            <div class="flex flex-col gap-5">
+            <div class="flex flex-col divide-y divide-base-300">
               <For each={bands()}>{(band) => <ZoomBand band={band} view={view.data!} />}</For>
               <Show when={bands().length === 0 && holes().size === 0}>
-                <p class="text-sm text-base-content/60">Nothing under this location yet.</p>
+                <p class="px-4 py-6 text-sm text-base-content/60">Nothing under this location yet.</p>
               </Show>
-              <div data-testid="add-location-hole" class="flex flex-wrap items-center gap-3">
-                <div class="w-44 rounded-lg border border-dashed border-base-content/25 px-3 py-2 text-xs text-base-content/50">
-                  <div class="font-medium text-base-content/70">+ Location</div>
+              <div data-testid="add-location-hole" class="flex flex-wrap items-center gap-3 px-4 py-3">
+                <div class="inline-flex flex-col rounded-field border border-dashed border-base-content/25 px-3 py-1.5 text-xs text-base-content/50">
+                  <span class="font-medium text-base-content/70">+ Location</span>
                   <Show when={childTypes().length > 0}>
-                    <div data-testid="allowed-child-types" class="truncate">{childTypes().map((t) => entityLabel(t).toLowerCase()).join(", ")}</div>
+                    <span data-testid="allowed-child-types" class="truncate">{childTypes().map((t) => entityLabel(t).toLowerCase()).join(", ")}</span>
                   </Show>
                 </div>
-                <Show when={childTypes().length > 0}>
-                  <span class="text-xs text-base-content/40">A child can be any type this one allows.</span>
-                </Show>
               </div>
             </div>
           </FleetShell>
@@ -137,13 +134,11 @@ export default function LocationZoom() {
     const bandHoles = () => holes().get(props.band.key) ?? [];
     const counts = () => {
       const b = props.band;
-      const parts = [b.systemCount === 1 ? "1 system" : `${b.systemCount} systems`];
-      if (b.depth > 1) parts.push(`${b.depth} levels`);
-      return parts.join(", ");
+      return b.systemCount === 1 ? "1 system" : `${b.systemCount} systems`;
     };
     return (
-      <section data-testid={`zoomband-${props.band.key}`} class="flex gap-4">
-        <div class="w-52 flex-none">
+      <section data-testid={`zoomband-${props.band.key}`} class="flex gap-4 px-4 py-3">
+        <div class="w-60 flex-none">
           <Show
             when={!isHere()}
             fallback={
@@ -160,9 +155,9 @@ export default function LocationZoom() {
             >
               <div class="flex items-center gap-2">
                 <HealthBadge verdict={props.band.recordedVerdict ?? undefined} size="xs" />
-                <span class="line-clamp-2 font-medium leading-tight">{props.band.label}</span>
+                <span class="min-w-0 truncate font-medium" title={props.band.label}>{props.band.label}</span>
               </div>
-              <div class="mt-0.5 flex items-baseline gap-2 text-xs text-base-content/60">
+              <div class="mt-0.5 flex items-baseline gap-2 truncate text-xs text-base-content/60">
                 <Show when={props.band.sublabel}>
                   <span class="text-[10px] uppercase tracking-wider text-base-content/50">{props.band.sublabel}</span>
                 </Show>

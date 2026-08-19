@@ -113,13 +113,18 @@ export default function ComponentLeaf() {
             chips={filterChips}
             onChips={setFilterChips}
           >
-          <div class="flex min-w-0 flex-1 flex-col gap-5">
+          <div class="flex min-w-0 flex-1 flex-col gap-5 p-4">
             <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <section data-testid="leaf-identity" class="rounded-lg border border-base-content/10 p-3 text-sm">
-                <h2 class="text-[10px] uppercase tracking-wider text-base-content/50">What it is</h2>
+              <section data-testid="leaf-identity" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
+                <h2 class="eyebrow">What it is</h2>
                 <dl class="mt-2 grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1">
                   <dt class="text-base-content/50">Product</dt>
-                  <dd>{product() ? entityLabel(product()!) : (component()?.product ?? "no product")}</dd>
+                  <dd class="flex flex-wrap items-baseline gap-x-2">
+                    <span>{product() ? entityLabel(product()!) : (component()?.product ?? "no product")}</span>
+                    <Show when={product() && entityLabel(product()!) !== product()!.name}>
+                      <span class="font-mono text-xs text-base-content/45">{product()!.name}</span>
+                    </Show>
+                  </dd>
                   <Show when={product()?.vendor}>
                     <dt class="text-base-content/50">Vendor</dt>
                     <dd>{product()!.vendor}</dd>
@@ -129,16 +134,9 @@ export default function ComponentLeaf() {
                     <dd class="font-mono text-xs">{product()!.driver}</dd>
                   </Show>
                 </dl>
-                {/* The one-line form the tests and the old card asserted stays,
-                    visually quiet, so a reader can copy it. */}
-                <div class="mt-2 text-xs text-base-content/50">
-                  {component()?.product ?? "no product"}
-                  <Show when={product()?.vendor}>{` by ${product()!.vendor}`}</Show>
-                  <Show when={product()?.driver}>{`, driven by ${product()!.driver}`}</Show>
-                </div>
               </section>
-              <section data-testid="leaf-placement" class="rounded-lg border border-base-content/10 p-3 text-sm">
-                <h2 class="text-[10px] uppercase tracking-wider text-base-content/50">Where it sits</h2>
+              <section data-testid="leaf-placement" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
+                <h2 class="eyebrow">Where it sits</h2>
                 <dl class="mt-2 grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1">
                   <dt class="text-base-content/50">Location</dt>
                   <dd class="flex flex-wrap gap-1">
@@ -146,16 +144,12 @@ export default function ComponentLeaf() {
                       {(l, i) => (
                         <>
                           <Show when={i() > 0}><span class="text-base-content/30">/</span></Show>
-                          <button type="button" class="cursor-pointer text-primary hover:underline" onClick={() => navigate(`/locations/${l.id}?zoom=1`)}>{entityLabel(l)}</button>
+                          <button type="button" class="cursor-pointer text-primary hover:underline" title={l.location_type} onClick={() => navigate(`/locations/${l.id}?zoom=1`)}>{entityLabel(l)}</button>
                         </>
                       )}
                     </For>
                     <Show when={chain().length === 0}><span class="text-base-content/50">unplaced</span></Show>
                   </dd>
-                  <Show when={chain().length > 0}>
-                    <dt class="text-base-content/50">Path</dt>
-                    <dd data-testid="leaf-type-path" class="font-mono text-xs text-base-content/60">{chain().map((l) => l.location_type).join(" / ")}</dd>
-                  </Show>
                   <Show when={rows().find((r) => r.primary)}>
                     {(p) => (
                       <>
@@ -172,13 +166,13 @@ export default function ComponentLeaf() {
               </section>
             </div>
 
-            <section data-testid="leaf-memberships" class="rounded-lg border border-base-content/10 p-3 text-sm">
-              <h2 class="text-[10px] uppercase tracking-wider text-base-content/50">Slots it fills</h2>
+            <section data-testid="leaf-memberships" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
+              <h2 class="eyebrow">Slots it fills</h2>
               <Show when={rows().length > 0} fallback={<p class="text-base-content/60">Not in any system yet.</p>}>
-                <ul class="flex flex-col gap-1">
+                <ul class="mt-2 divide-y divide-base-300 rounded-field border border-base-300">
                   <For each={rows()}>
                     {(row) => (
-                      <li class="flex items-center gap-2">
+                      <li class="flex items-center gap-2 px-3 py-1.5">
                         <Show
                           when={row.systemId}
                           fallback={<span>{row.label}</span>}
@@ -188,23 +182,23 @@ export default function ComponentLeaf() {
                           </button>
                         </Show>
                         <Show when={row.where}>
-                          <span class="font-mono text-[10px] text-base-content/40">{row.where}</span>
+                          <span class="text-xs text-base-content/55">{row.where}</span>
                         </Show>
                         <Show when={row.primary}>
-                          <span class="ml-auto text-[10px] uppercase tracking-wider text-base-content/50">primary</span>
+                          <span class="ml-auto rounded-field border border-primary/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-primary">primary</span>
                         </Show>
                       </li>
                     )}
                   </For>
                 </ul>
                 <Show when={rows().length > 1}>
-                  <p class="text-xs text-base-content/50">The location above comes from the primary.</p>
+                  <p class="mt-1.5 text-xs text-base-content/50">Location follows the primary system.</p>
                 </Show>
               </Show>
             </section>
 
-            <section data-testid="leaf-collection" class="rounded-lg border border-base-content/10 p-3 text-sm">
-              <h2 class="text-[10px] uppercase tracking-wider text-base-content/50">Collection</h2>
+            <section data-testid="leaf-collection" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
+              <h2 class="eyebrow">Collection</h2>
               <Show when={reach.data && (reach.data.interfaces ?? []).length > 0} fallback={<p class="text-base-content/60">No interface declared yet, so nothing collects from this component.</p>}>
                 <ul class="flex flex-col gap-1">
                   <For each={reach.data!.interfaces}>

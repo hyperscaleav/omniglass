@@ -24,6 +24,11 @@ export type EffectiveRole = components["schemas"]["EffectiveRoleBody"];
 
 export type SlotOccupant = {
   name: string;
+  // The component's id, so the page can open its leaf: names repeat across
+  // rooms (every huddle has a videobar-1), ids do not. Empty only when the
+  // fleet projection carries no dot for the name, which the wire never does
+  // for an assigned member; the page then renders the name without a link.
+  componentId: string;
   // Down means the occupant's OWN verdict is outage: it holds the slot and
   // cannot serve it, the opposite of a slot nobody filled.
   down: boolean;
@@ -92,6 +97,7 @@ export function systemZoomVM(health: FleetHealth, declared: EffectiveRole[], vie
       const positionLabel = pos !== undefined && labels[pos - 1] ? labels[pos - 1] : undefined;
       return {
         name,
+        componentId: dot?.component ?? "",
         down: (r.down ?? []).includes(name),
         sharedWith: dot ? sharedWith(dot.component) : [],
         positionLabel,

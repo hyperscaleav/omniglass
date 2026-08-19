@@ -31,7 +31,7 @@ export default function BandCanvas(props: {
   const [width, setWidth] = createSignal(0);
 
   const layout = createMemo<DotLayout>(() =>
-    layoutBand(props.clusters, Math.max(width(), 0), props.shape === "round" ? { dot: 10, gap: 4, sysGap: 4, rowGap: 6, padX: 0, padY: 2 } : undefined),
+    layoutBand(props.clusters, Math.max(width(), 0), props.shape === "round" ? { dot: 11, gap: 5, sysGap: 5, rowGap: 7, padX: 0, padY: 3 } : undefined),
   );
   const buffer = createMemo(() => fillBuffer(layout(), props.clusters));
 

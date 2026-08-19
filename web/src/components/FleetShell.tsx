@@ -33,6 +33,10 @@ export default function FleetShell(props: {
   onChips: (chips: Chip[]) => void;
   placeholder?: string;
   trailing?: JSX.Element;
+  // A zoom's own header line inside the card, above its body (a system's
+  // verdict and slot count, say). Renders where the filter bar would when a
+  // zoom has nothing to filter; above the body when it has both.
+  header?: JSX.Element;
   children: JSX.Element;
 }) {
   const [summaryOpen, setSummaryOpen] = createSignal(localStorage.getItem(`${props.storageKey}-sumopen`) === "1");
@@ -159,9 +163,30 @@ export default function FleetShell(props: {
           </div>
         )}
       </Show>
-      <ListShell filterKeys={props.filterKeys} rows={props.rows} chips={props.chips} onChips={props.onChips} trailing={props.trailing} placeholder={props.placeholder}>
-        {() => props.children}
-      </ListShell>
+      <Show
+        when={props.filterKeys.length > 0}
+        fallback={
+          <div class="og-stack flex flex-col">
+            <div class="card overflow-hidden border border-base-300 bg-base-200 p-0">
+              <Show when={props.header}>
+                <div class="border-b border-base-300 px-4 py-3">{props.header}</div>
+              </Show>
+              {props.children}
+            </div>
+          </div>
+        }
+      >
+        <ListShell filterKeys={props.filterKeys} rows={props.rows} chips={props.chips} onChips={props.onChips} trailing={props.trailing} placeholder={props.placeholder}>
+          {() => (
+            <>
+              <Show when={props.header}>
+                <div class="border-b border-base-300 px-4 py-3">{props.header}</div>
+              </Show>
+              {props.children}
+            </>
+          )}
+        </ListShell>
+      </Show>
     </section>
   );
 }

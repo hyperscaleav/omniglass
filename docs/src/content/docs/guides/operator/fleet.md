@@ -2,9 +2,15 @@
 title: Explore your fleet
 description: "The Fleet page: every system as a cluster of dots grouped by root location, with zoom pages for locations, systems, and components."
 screenshots:
+  # Component names repeat across rooms (every huddle has a videobar-1), so the
+  # leaf is reached the way an operator reaches it: from the system zoom, by
+  # clicking the occupant.
   - id: fleet-component
-    path: /web/components/service-1?zoom=1
-    alt: "The component leaf: product and driver, memberships with the primary marked, and the collection card naming the node."
+    path: /web/systems/huddle?zoom=1
+    steps:
+      - action: click
+        selector: "[data-testid=slot-conf-bar] button:has-text('videobar-1')"
+    alt: "The component leaf: product and driver, the location chain, the slot it fills with the primary marked, and the collection card."
   - id: fleet-system
     path: /web/systems/huddle?zoom=1
     alt: "The system zoom: one card per role with the reported arithmetic, choices grouped with the build in use marked, and the no-role list."
@@ -88,9 +94,10 @@ labels where the role declares them), and the reported arithmetic.
 ## The component leaf
 
 The leaf shows **what it is** (product, vendor, driver) and **where it sits** (the ancestor
-chain, each level a link; the type path; the primary system). **Slots it fills** lists one
-row per system membership with the room beside it and the primary marked. When there is
-more than one membership, the location shown above comes from the primary.
+chain, each level a link with its type as the tooltip; the primary system). **Slots it
+fills** lists one row per system membership, the room beside it when the room says
+something the system's name does not, and the primary marked. When there is more than one
+membership, the location shown follows the primary system.
 
 ::screenshot{#fleet-component}
 

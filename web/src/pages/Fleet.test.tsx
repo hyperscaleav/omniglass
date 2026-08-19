@@ -93,7 +93,9 @@ describe("the fleet zoom's bands", () => {
     expect(within(hq).getByText("degraded")).toBeTruthy();
     expect(within(hq).getByText(/1 system/)).toBeTruthy();
     expect(within(hq).getByText(/2 components/)).toBeTruthy();
-    expect(within(hq).getByText(/3 levels/)).toBeTruthy();
+    // Depth is a tile on the summary rail, not a band subtitle: the band line
+    // stays one line wide so the label column never wraps.
+    expect(within(hq).queryByText(/levels/)).toBeNull();
     const depot = screen.getByTestId(`band-${uuidFor("fp-depot")}`);
     expect(within(depot).getByText("Service Depot")).toBeTruthy();
     expect(within(depot).getByText("healthy")).toBeTruthy();

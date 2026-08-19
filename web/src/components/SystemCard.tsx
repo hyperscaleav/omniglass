@@ -20,11 +20,11 @@ export default function SystemCard(props: { cluster: SystemCluster; view: FleetV
   // all render "Meeting Room" from the same rule (a name is unique within its
   // placement, and each room holds the first), so the room is what tells the
   // cards apart on a grid. The standard rides after it.
-  const where = createMemo(() => {
-    const room = props.cluster.locationId ? locationIndex(props.view).get(props.cluster.locationId) : undefined;
-    const std = (systems.data ?? []).find((s) => s.id === props.cluster.systemId)?.standard;
-    return [room ? entityLabel(room) : undefined, std].filter(Boolean).join(" · ");
+  const room = createMemo(() => {
+    const r = props.cluster.locationId ? locationIndex(props.view).get(props.cluster.locationId) : undefined;
+    return r ? entityLabel(r) : undefined;
   });
+  const standard = createMemo(() => (systems.data ?? []).find((s) => s.id === props.cluster.systemId)?.standard);
   const v = () => props.cluster.verdict;
 
   return (
@@ -53,8 +53,15 @@ export default function SystemCard(props: { cluster: SystemCluster; view: FleetV
         />
         <span class="truncate text-xs font-semibold">{props.cluster.label}</span>
       </div>
-      <Show when={where()}>
-        <div class="truncate font-mono text-[9px] text-base-content/40">{where()}</div>
+      <Show when={room() || standard()}>
+        <div class="flex min-w-0 items-baseline gap-1.5 text-[10px] leading-tight">
+          <Show when={room()}>
+            <span class="truncate text-base-content/60">{room()}</span>
+          </Show>
+          <Show when={standard()}>
+            <span class="truncate font-mono text-[9px] text-base-content/35">{standard()}</span>
+          </Show>
+        </div>
       </Show>
       <Show when={strip()}>
         {(s) => (
@@ -63,7 +70,7 @@ export default function SystemCard(props: { cluster: SystemCluster; view: FleetV
               <For each={s().squares}>
                 {(sq) => (
                   <span
-                    class="h-2 w-2 rounded-sm"
+                    class="h-2 w-2 rounded-[1px]"
                     classList={{
                       "bg-success": sq.kind === "filled",
                       "bg-error": sq.kind === "down",

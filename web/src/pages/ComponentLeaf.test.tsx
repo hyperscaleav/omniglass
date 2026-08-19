@@ -96,17 +96,22 @@ describe("the component leaf", () => {
     expect(screen.getByRole("heading", { name: "Video Bar 1" })).toBeTruthy();
   });
 
-  it("says what it is: product, vendor, driver", () => {
+  it("says what it is: product (label with its handle), vendor, driver, once each", () => {
     mount();
     const card = screen.getByTestId("leaf-identity");
-    expect(within(card).getByText(/kestrel-vroom by kestrel, driven by kestrel-http/)).toBeTruthy();
+    expect(within(card).getByText("kestrel-vroom")).toBeTruthy();
+    expect(within(card).getByText("kestrel")).toBeTruthy();
+    expect(within(card).getByText("kestrel-http")).toBeTruthy();
+    // No slug sentence restating the rows above it.
+    expect(within(card).queryByText(/driven by/)).toBeNull();
   });
 
-  it("says where it sits: the clickable chain, the type path, and the primary system", () => {
+  it("says where it sits: the clickable chain (each crumb's type as its tooltip) and the primary system", () => {
     mount();
     const card = screen.getByTestId("leaf-placement");
-    expect(within(card).getByRole("button", { name: "Boardroom A" })).toBeTruthy();
-    expect(within(card).getByTestId("leaf-type-path").textContent).toBe("campus / room");
+    const room = within(card).getByRole("button", { name: "Boardroom A" });
+    expect(room.getAttribute("title")).toBe("room");
+    expect(within(card).queryByTestId("leaf-type-path")).toBeNull();
     expect(within(card).getByRole("button", { name: "Boardroom System" })).toBeTruthy();
   });
 
@@ -122,7 +127,7 @@ describe("the component leaf", () => {
     expect(within(card).getByText("Boardroom System")).toBeTruthy();
     expect(within(card).getByText("Overflow")).toBeTruthy();
     expect(within(card).getByText("primary")).toBeTruthy();
-    expect(within(card).getByText(/location above comes from the primary/)).toBeTruthy();
+    expect(within(card).getByText(/Location follows the primary system/)).toBeTruthy();
   });
 
   it("distinguishes a stale sample under a healthy node from an offline node", () => {

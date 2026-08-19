@@ -121,6 +121,9 @@ describe("systemZoomVM", () => {
   it("marks each occupant's own state and position label", () => {
     const mic = vm().unconditional.find((s) => s.name === "room-mic")!;
     expect(mic.occupants.map((o) => o.name)).toEqual(["videobar-1", "mic-1"]);
+    // The id rides beside the name so the page can open the leaf: names repeat
+    // across rooms, ids do not.
+    expect(mic.occupants.map((o) => o.componentId)).toEqual([uuidFor("sz-c-bar"), uuidFor("sz-c-mic")]);
     expect(mic.occupants[1].down).toBe(true);
     expect(mic.occupants[0].down).toBe(false);
     // positions [1, 3] against labels ["Left", "", "Right"]: 1-based, gaps legal.

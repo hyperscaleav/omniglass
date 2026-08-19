@@ -12,6 +12,8 @@ import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/flee
 import { systemHealth, systemHealthKey } from "../lib/health";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
 import { systemZoomVM, type SlotVM } from "../lib/system_zoom";
+import { slotStrip } from "../lib/slot_strip";
+import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 
@@ -39,6 +41,10 @@ export default function SystemZoom() {
     const matches = (view.data.systems ?? []).filter((s) => s.name === id());
     if (matches.length === 1) navigate(`/systems/${matches[0].id}?zoom=1`, { replace: true });
   });
+
+  const strip = createMemo(() => (health.data ? slotStrip(health.data) : undefined));
+  const systemsList = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
+  const standard = createMemo(() => (systemsList.data ?? []).find((x) => x.id === id())?.standard);
 
   const vm = createMemo(() => {
     if (!view.data || !health.data || !declared.data) return undefined;
@@ -85,41 +91,65 @@ export default function SystemZoom() {
             filterKeys={[]}
             chips={chips}
             onChips={setChips}
+            header={
+              <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                <HealthBadge verdict={health.data?.verdict} size="sm" />
+                <Show when={strip()}>{(st) => <span class="tabular-nums text-base-content/80">{st().filled} of {st().total} slots filled</span>}</Show>
+                <Show when={standard()}>
+                  <span class="text-base-content/30">·</span>
+                  <span class="font-mono text-xs text-base-content/60">{standard()}</span>
+                </Show>
+                <Show when={system()?.location}>
+                  {(loc) => (
+                    <>
+                      <span class="text-base-content/30">·</span>
+                      <button type="button" class="cursor-pointer text-xs text-primary hover:underline" onClick={() => navigate(`/locations/${loc()}?zoom=1`)}>Open location</button>
+                    </>
+                  )}
+                </Show>
+              </div>
+            }
           >
           <Show when={vm()}>
             {(z) => (
-              <div class="flex min-w-0 flex-1 flex-col gap-6">
-                <Show when={z().unconditional.length > 0}>
-                  <div class="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
-                    <For each={z().unconditional}>{(slot) => <SlotCard slot={slot} />}</For>
-                  </div>
-                </Show>
-                <For each={z().choices}>
-                  {(choice) => (
-                    <section data-testid={`choice-${choice.name}`} class="flex flex-col gap-2">
-                      <h2 class="flex items-baseline gap-2 text-sm font-semibold capitalize">
-                        {choice.name}
-                        <Show when={choice.activeAlternate}>
-                          <span class="text-[10px] font-normal normal-case tracking-wider text-base-content/50">built as {choice.activeAlternate}</span>
-                        </Show>
-                      </h2>
-                      <div class="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
-                        <For each={choice.alternates.flatMap((a) => a.roles)}>{(slot) => <SlotCard slot={slot} />}</For>
-                      </div>
-                    </section>
-                  )}
-                </For>
+              <div class="flex min-w-0 flex-1 flex-col">
+                <div class="flex flex-col gap-5 p-4">
+                  <Show when={z().unconditional.length > 0}>
+                    <div class="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
+                      <For each={z().unconditional}>{(slot) => <SlotCard slot={slot} />}</For>
+                    </div>
+                  </Show>
+                  <For each={z().choices}>
+                    {(choice) => (
+                      <section data-testid={`choice-${choice.name}`} class="flex flex-col gap-2">
+                        <div class="flex items-baseline gap-2">
+                          <span class="eyebrow">{choice.name}</span>
+                          <Show when={choice.activeAlternate}>
+                            <span class="text-[10.5px] text-base-content/50">built as {choice.activeAlternate}</span>
+                          </Show>
+                        </div>
+                        <div class="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
+                          <For each={choice.alternates.flatMap((a) => a.roles)}>{(slot) => <SlotCard slot={slot} />}</For>
+                        </div>
+                      </section>
+                    )}
+                  </For>
+                </div>
                 <Show when={z().noRole.length > 0}>
-                  <section data-testid="no-role-strip" class="flex flex-wrap items-center gap-2 border-t border-base-content/10 pt-3 text-xs text-base-content/60">
-                    <span>Members with no role:</span>
+                  <section data-testid="no-role-strip" class="flex flex-wrap items-center gap-2 border-t border-base-300 px-4 py-3 text-xs text-base-content/60">
+                    <span class="eyebrow">In the room, no role</span>
                     <For each={z().noRole}>
                       {(m) => (
-                        <span class="rounded-md border border-base-content/15 px-1.5 py-0.5">
+                        <button
+                          type="button"
+                          class="cursor-pointer rounded-field border border-base-300 bg-base-100 px-2 py-0.5 font-mono text-[11px] text-base-content/80 hover:border-primary/50"
+                          onClick={() => navigate(`/components/${m.componentId}?zoom=1`)}
+                        >
                           {m.name}
                           <Show when={m.sharedWith.length > 0}>
                             <span class="opacity-60">{` · also ${m.sharedWith.join(", ")}`}</span>
                           </Show>
-                        </span>
+                        </button>
                       )}
                     </For>
                   </section>
@@ -138,14 +168,16 @@ export default function SystemZoom() {
     return (
       <div
         data-testid={`slot-${s().name}`}
-        class="flex flex-col gap-2 rounded-lg border p-3"
+        class="flex flex-col gap-2 rounded-box border bg-base-100 p-3"
         classList={{
-          "border-base-content/10": s().active,
-          "border-dashed border-base-content/10": !s().active,
+          "border-error/50 bg-error/5": s().active && s().gap === "occupant-down" && s().impact === "outage",
+          "border-warning/40 bg-warning/5": s().active && s().gap === "occupant-down" && s().impact !== "outage",
+          "border-incomplete/45 bg-incomplete/5": s().active && s().gap === "unstaffed",
+          "border-base-300": !s().active || s().gap === "none",
         }}
       >
         <div class="flex items-center justify-between gap-2">
-          <span class="truncate text-sm font-medium">{s().label}</span>
+          <span class="truncate text-sm font-semibold">{s().label}</span>
           {/* The gap kind is the card's one verdict-adjacent mark, and it is
               the server's distinction rendered, never recomputed: an active
               short role with nothing down is a commissioning gap (incomplete);
@@ -156,7 +188,7 @@ export default function SystemZoom() {
             <HealthBadge verdict={s().gap === "unstaffed" ? "incomplete" : s().impact} size="xs" />
           </Show>
         </div>
-        <div class="text-xs text-base-content/60">
+        <div class="text-xs tabular-nums text-base-content/60">
           {s().satisfying} of {s().quorum} satisfying
         </div>
         <Show when={s().occupants.length > 0}>
@@ -164,7 +196,20 @@ export default function SystemZoom() {
             <For each={s().occupants}>
               {(o) => (
                 <li class="flex items-center gap-2">
-                  <span classList={{ "text-base-content/40 line-through": o.down }}>{o.name}</span>
+                  <span class="h-1.5 w-1.5 flex-none rounded-sm" classList={{ "bg-error": o.down, "bg-success": !o.down }} />
+                  <Show when={o.componentId} fallback={<span class="font-mono text-[11px]" classList={{ "text-base-content/40 line-through": o.down }}>{o.name}</span>}>
+                    <button
+                      type="button"
+                      class="cursor-pointer font-mono text-[11px] hover:underline"
+                      classList={{ "text-base-content/40 line-through": o.down }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/components/${o.componentId}?zoom=1`);
+                      }}
+                    >
+                      {o.name}
+                    </button>
+                  </Show>
                   <Show when={o.positionLabel}>
                     <span class="rounded border border-base-content/15 px-1 text-[10px]">{o.positionLabel}</span>
                   </Show>
@@ -180,7 +225,7 @@ export default function SystemZoom() {
           </ul>
         </Show>
         <Show when={s().acceptedTypes.length > 0}>
-          <div class="text-[10px] uppercase tracking-wider text-base-content/40">
+          <div class="mt-auto pt-1 text-[10px] uppercase tracking-wider text-base-content/40">
             accepts {s().acceptedTypes.join(", ")}
             <Show when={s().pinnedProducts.length > 0}>{`, pinned ${s().pinnedProducts.join(", ")}`}</Show>
           </div>

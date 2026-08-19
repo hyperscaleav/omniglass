@@ -61,7 +61,12 @@ export function membershipRows(members: Member[], view: FleetView): MembershipRo
     const direct = m.system_id ? byId.get(m.system_id) : undefined;
     if (direct) {
       const room = direct.location ? locationIndex(view).get(direct.location) : undefined;
-      return { system: m.system, label: entityLabel(direct), where: room ? entityLabel(room) : undefined, primary: m.primary, systemId: direct.id };
+      const label = entityLabel(direct);
+      // A system named for its room (the field's commonest naming) would
+      // read "Huddle Room  Huddle Room": the room only tells rows apart when
+      // it says something the label does not.
+      const where = room && entityLabel(room) !== label ? entityLabel(room) : undefined;
+      return { system: m.system, label, where, primary: m.primary, systemId: direct.id };
     }
     const hits = byName.get(m.system) ?? [];
     return {
