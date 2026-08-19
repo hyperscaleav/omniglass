@@ -143,10 +143,14 @@ export default function BandCanvas(props: {
     // dot), which is what lets the chrome tests mount this component.
     if (typeof ResizeObserver !== "undefined") {
       let timer: ReturnType<typeof setTimeout> | undefined;
-      const ro = new ResizeObserver(() => {
+      // The observer hands over the element it fired for, so the debounced
+      // read never reaches back to the ref from an async callback.
+      const ro = new ResizeObserver((entries) => {
+        const target = entries[0]?.target as HTMLElement | undefined;
+        if (!target) return;
         clearTimeout(timer);
         timer = setTimeout(() => {
-          const w = container.clientWidth;
+          const w = target.clientWidth;
           if (w !== width()) setWidth(w);
         }, 120);
       });
