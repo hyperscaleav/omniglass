@@ -111,7 +111,7 @@ export default function FleetShell(props: {
                 <span class="flex-1" />
                 <Button icon={ChevronDown} iconTrailing onClick={() => setSummaryOpen(false)}>Collapse</Button>
               </div>
-              <div class="flex flex-wrap items-stretch gap-3">
+              <div data-testid="fleet-tiles" class="flex flex-wrap items-stretch gap-3">
                 <div class="min-w-50 max-w-sm flex-[1_1_260px]">
                   <div class={`${tileBox} flex-row items-center gap-4`}>
                     <Donut

@@ -216,9 +216,13 @@ test.describe("operator console", () => {
     const holeLabel = hole.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
     await expect(page.getByText(holeLabel).first()).toBeVisible();
 
-    // The summary tiles are on top, and no right rail: the tiles carry
-    // what the rail carried (design ruling 2026-08-18).
+    // The summary is on top, badges by default; expanding it shows the tile
+    // board that carries what the right rail carried (design ruling
+    // 2026-08-18), and no right rail exists.
+    await expect(page.getByTestId("fleet-tiles")).toHaveCount(0);
+    await page.getByRole("button", { name: "Expand summary" }).first().click();
     await expect(page.getByTestId("fleet-tiles")).toBeVisible();
+    await page.getByRole("button", { name: "Collapse" }).click();
     await expect(page.getByTestId("zoom-rail")).toHaveCount(0);
 
     // Clicking a system mark on the canvas opens the blade with the health

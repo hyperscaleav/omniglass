@@ -26,8 +26,12 @@ export default function BandCanvas(props: {
   onHoverDot?: (dot: Dot | null) => void;
   onClickDot?: (dot: Dot) => void;
 }) {
-  let el!: HTMLCanvasElement;
-  let wrap!: HTMLDivElement;
+  // The house ref shape (`| undefined` plus a guard at each use) rather than
+  // a definite-assignment bang: Solid assigns both before onMount and before
+  // any effect or handler can run, but a reader (or a static analyser)
+  // cannot see that from here, and the guard costs nothing.
+  let el: HTMLCanvasElement | undefined;
+  let wrap: HTMLDivElement | undefined;
   const [width, setWidth] = createSignal(0);
 
   const layout = createMemo<DotLayout>(() =>
@@ -55,15 +59,17 @@ export default function BandCanvas(props: {
   // fix for the lab's divergence bug, where a drag to a different-dpr monitor
   // clipped the canvas until the next rebuild.
   function paint() {
-    const ctx = el.getContext("2d");
+    const canvas = el;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
     if (!ctx) return; // jsdom: the chrome renders, the pixels are Playwright's job
     const l = layout();
     const buf = buffer();
     const dpr = window.devicePixelRatio || 1;
-    el.style.width = `${l.width}px`;
-    el.style.height = `${l.height}px`;
-    el.width = Math.max(1, Math.round(l.width * dpr));
-    el.height = Math.max(1, Math.round(l.height * dpr));
+    canvas.style.width = `${l.width}px`;
+    canvas.style.height = `${l.height}px`;
+    canvas.width = Math.max(1, Math.round(l.width * dpr));
+    canvas.height = Math.max(1, Math.round(l.height * dpr));
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, l.width, l.height);
 
@@ -129,7 +135,9 @@ export default function BandCanvas(props: {
   }
 
   onMount(() => {
-    setWidth(wrap.clientWidth);
+    const container = wrap;
+    if (!container) return;
+    setWidth(container.clientWidth);
     // jsdom has no ResizeObserver and zero layout, so guard it; the width
     // signal then stays 0 and the layout still computes (usable clamps to one
     // dot), which is what lets the chrome tests mount this component.
@@ -138,11 +146,11 @@ export default function BandCanvas(props: {
       const ro = new ResizeObserver(() => {
         clearTimeout(timer);
         timer = setTimeout(() => {
-          const w = wrap.clientWidth;
+          const w = container.clientWidth;
           if (w !== width()) setWidth(w);
         }, 120);
       });
-      ro.observe(wrap);
+      ro.observe(container);
       onCleanup(() => {
         clearTimeout(timer);
         ro.disconnect();
@@ -157,20 +165,23 @@ export default function BandCanvas(props: {
   });
   onCleanup(() => cancelAnimationFrame(raf));
 
-  function onClick(e: MouseEvent) {
-    const rect = el.getBoundingClientRect();
+  // The handlers read the canvas off the event: it is the element they are
+  // attached to, so it is never missing.
+  function onClick(e: MouseEvent & { currentTarget: HTMLCanvasElement }) {
+    const rect = e.currentTarget.getBoundingClientRect();
     const i = hitTest(layout(), e.clientX - rect.x, e.clientY - rect.y);
     const dot = i >= 0 ? (flatDots()[i] ?? null) : null;
     if (dot) props.onClickDot?.(dot);
   }
 
-  function onMove(e: MouseEvent) {
-    const rect = el.getBoundingClientRect();
+  function onMove(e: MouseEvent & { currentTarget: HTMLCanvasElement }) {
+    const canvas = e.currentTarget;
+    const rect = canvas.getBoundingClientRect();
     const i = hitTest(layout(), e.clientX - rect.x, e.clientY - rect.y);
     const dot = i >= 0 ? (flatDots()[i] ?? null) : null;
     // The native tooltip: zero positioning code, and assertable by reading
     // the attribute.
-    el.title = dot ? `${dot.name}${dot.verdict ? ` (${dot.verdict})` : ""}` : "";
+    canvas.title = dot ? `${dot.name}${dot.verdict ? ` (${dot.verdict})` : ""}` : "";
     props.onHoverDot?.(dot);
   }
 
