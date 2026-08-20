@@ -609,6 +609,58 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	if err := seedNodeLogs(ctx, gw); err != nil {
 		return err
 	}
+	// The meeting-room standard's first metric contract, with samples on the
+	// huddle system (#790): the system zoom's KPI tiles render only what the
+	// standard declares, so without this no room would show a tile.
+	if err := seedStandardMetrics(ctx, gw, sysIDs); err != nil {
+		return err
+	}
+	return nil
+}
+
+// kpiSystem carries the sampled KPI values: the huddle room, the fleet's
+// worked healthy example (and the docs shot's subject). Every other seeded
+// room still carries the tiles' CONTRACT from its standard, unsampled, which
+// is itself the teaching: contract first, sample when the room's build wires
+// a source in.
+const kpiSystem = "huddle-north"
+
+// seedStandardMetrics declares room-temperature and occupancy-count on the
+// meeting-room standard and lands one sample of each on the huddle system.
+// The contract upsert is idempotent by nature; the samples are append-only,
+// so the sampled series is the sentinel: present means this ran, and a
+// re-run writes nothing.
+func seedStandardMetrics(ctx context.Context, gw storage.Gateway, sysIDs map[string]string) error {
+	// Both example standards declare the pair, so every seeded room type
+	// carries the tiles (the huddle is the sampled subject below).
+	for _, std := range []string{"meeting-room", "huddle-room"} {
+		for _, m := range []string{"room-temperature", "occupancy-count"} {
+			if err := gw.UpsertStandardMetric(ctx, std, storage.StandardMetricSpec{MetricTypeName: m}); err != nil {
+				return fmt.Errorf("devseed: declare %s on %s: %w", m, std, err)
+			}
+		}
+	}
+	sysID, ok := sysIDs[kpiSystem]
+	if !ok {
+		return fmt.Errorf("devseed: the KPI fixture system %q is not in the fleet", kpiSystem)
+	}
+	all := scope.Set{All: true}
+	eff, err := gw.EffectiveMetrics(ctx, "system", sysID, all)
+	if err != nil {
+		return fmt.Errorf("devseed: check KPI samples: %w", err)
+	}
+	for _, m := range eff {
+		if m.MetricTypeName == "room-temperature" && m.IsSampled {
+			return nil
+		}
+	}
+	now := time.Now()
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
+		{OwnerKind: "system", OwnerID: sysID, Key: "room-temperature", Value: 23.5, Source: "devseed", TS: now.Add(-4 * time.Minute)},
+		{OwnerKind: "system", OwnerID: sysID, Key: "occupancy-count", Value: 0, Source: "devseed", TS: now.Add(-4 * time.Minute)},
+	}); err != nil {
+		return fmt.Errorf("devseed: write KPI samples: %w", err)
+	}
 	return nil
 }
 

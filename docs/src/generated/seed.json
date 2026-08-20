@@ -304,6 +304,19 @@
    "unit": "ms",
    "label": "TCP Connect Time",
    "description": "Time to establish the TCP connection; absent when the port is closed."
+  },
+  {
+   "name": "room-temperature",
+   "data_type": "float",
+   "unit": "C",
+   "label": "Room Temperature",
+   "description": "Ambient temperature reported for the space, in degrees Celsius."
+  },
+  {
+   "name": "occupancy-count",
+   "data_type": "int",
+   "label": "Occupancy Count",
+   "description": "People detected in the space by the room's occupancy source."
   }
  ],
  "event_types": [

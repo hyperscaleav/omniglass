@@ -7,6 +7,7 @@ import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { systemHealthKey, type FleetHealth } from "../lib/health";
 import { systemRolesKey } from "../lib/system_roles";
 import { SYSTEMS_KEY } from "../lib/systems";
+import { systemMetricsKey } from "../lib/system_metrics";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { ME_KEY, type Me } from "../lib/auth";
@@ -104,7 +105,7 @@ const declared = [
   },
 ] as unknown as EffectiveRole[];
 
-function mount(path = `/web/systems/${uuidFor("szp-sys")}?zoom=1`, healthOverride: FleetHealth = health) {
+function mount(path = `/web/systems/${uuidFor("szp-sys")}?zoom=1`, healthOverride: FleetHealth = health, metrics: unknown[] = []) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], me);
@@ -114,6 +115,7 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}?zoom=1`, healthOverrid
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], healthOverride);
   qc.setQueryData([...systemRolesKey(uuidFor("szp-sys"))], declared);
+  qc.setQueryData([...systemMetricsKey(uuidFor("szp-sys"))], metrics);
   window.history.pushState({}, "", path);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -136,67 +138,50 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}?zoom=1`, healthOverrid
 afterEach(cleanup);
 
 describe("the system zoom", () => {
-  it("renders one card per role with the server's own arithmetic", () => {
+  // #790 reshaped the body to components-first; the behaviors the retired
+  // one-card-per-role tests pinned live on in the group and card forms below.
+  it("arithmetic renders only where a role earned a group; the 1:1 case carries none", () => {
     mount();
-    const display = screen.getByTestId("slot-main-display");
-    expect(within(display).getByText("0 of 1 satisfying")).toBeTruthy();
+    expect(within(screen.getByTestId("rolegroup-room-mic")).getByText(/1 of 2/)).toBeTruthy();
+    expect(within(screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`)).queryByText(/of \d/)).toBeNull();
   });
 
-  it("a role nobody staffed reads incomplete, visually distinct from a role whose occupant is down", () => {
+  it("an unstaffed role and a down occupant stay visually distinct: commissioning wears incomplete, failure wears the impact", () => {
     mount();
-    const display = screen.getByTestId("slot-main-display");
-    expect(within(display).getByText("incomplete")).toBeTruthy();
-    expect(within(display).queryByText("outage")).toBeNull();
+    expect(screen.getByTestId("rolegroup-main-display").className).toContain("border-incomplete");
+    expect(screen.getByTestId("rolegroup-room-mic").className).toContain("border-warning");
+    expect(within(screen.getByTestId(`compcard-${uuidFor("szp-c-mic")}`)).getByText("mic-1")).toBeTruthy();
   });
 
-  it("shows only the build in use for a choice, named, and never the alternate the room did not choose", () => {
+  it("the build not in use never renders", () => {
     mount();
-    const conf = screen.getByTestId("choice-conferencing");
-    expect(within(conf).getByText(/built as all-in-one/)).toBeTruthy();
-    expect(within(conf).getByTestId("slot-conf-bar")).toBeTruthy();
-    // The losing build's role is not on the page at all: it is a
-    // configuration fact for the standard editor, not an operational one.
-    expect(screen.queryByTestId("slot-conf-codec")).toBeNull();
-    expect(screen.queryByText(/not the build in use/)).toBeNull();
+    expect(screen.queryByText(/conf-codec/)).toBeNull();
   });
 
-  it("an occupant serving another system carries a chip naming it", () => {
+  it("an occupant serving another system carries a badge naming it", () => {
     mount();
-    const bar = screen.getByTestId("slot-conf-bar");
-    expect(within(bar).getByText(/also Overflow Room/)).toBeTruthy();
+    const card = screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`);
+    expect(within(card).getByText(/also Overflow Room/)).toBeTruthy();
   });
 
-  it("a member filling no role appears in the no-role strip, and is not an error", () => {
+  it("a no-role member's card opens its leaf too", async () => {
     mount();
-    const strip = screen.getByTestId("no-role-strip");
-    expect(within(strip).getByText("device-1")).toBeTruthy();
-  });
-
-  // The drilldown's last step: an occupant is the component, so clicking it
-  // opens the leaf by uuid (names repeat across rooms) and keeps the zoom.
-  it("clicking an occupant opens the component leaf, by id, keeping the zoom", async () => {
-    mount();
-    const bar = screen.getByTestId("slot-conf-bar");
-    fireEvent.click(within(bar).getByRole("button", { name: /videobar-1/ }));
-    const page = await screen.findByTestId("component-page");
-    expect(page.textContent).toBe(`/web/components/${uuidFor("szp-c-bar")}?zoom=1`);
-  });
-
-  it("clicking a no-role member opens its leaf too", async () => {
-    mount();
-    const strip = screen.getByTestId("no-role-strip");
-    fireEvent.click(within(strip).getByRole("button", { name: /device-1/ }));
+    fireEvent.click(screen.getByTestId(`compcard-${uuidFor("szp-c-power")}`));
     const page = await screen.findByTestId("component-page");
     expect(page.textContent).toBe(`/web/components/${uuidFor("szp-c-power")}?zoom=1`);
   });
 
-  // #785: the header answers since-when, the alarms lead, the history strip
-  // renders, and slot arithmetic stops leading a fully staffed room.
+  it("a spare beyond quorum reads on the group header", () => {
+    mount();
+    expect(within(screen.getByTestId("rolegroup-room-mic")).getByText(/\+ 1 spare/)).toBeTruthy();
+  });
+
+
+  // #785: the header answers since-when, the alarms lead, the history strip renders.
   it("the header names the last edge and its age; slot arithmetic leads only while something is missing", () => {
     mount();
     const header = screen.getByTestId("system-header");
     expect(within(header).getByText(/since/)).toBeTruthy();
-    // This fixture IS short, so the line earns its place.
     expect(within(header).getByText(/slots filled/)).toBeTruthy();
   });
 
@@ -215,8 +200,7 @@ describe("the system zoom", () => {
       })),
     } as FleetHealth;
     mount(undefined, full);
-    const header = screen.getByTestId("system-header");
-    expect(within(header).queryByText(/slots filled/)).toBeNull();
+    expect(within(screen.getByTestId("system-header")).queryByText(/slots filled/)).toBeNull();
   });
 
   it("renders the active alarms worst first, above the roles, each naming its component and role", () => {
@@ -232,14 +216,70 @@ describe("the system zoom", () => {
     expect(screen.getByTestId("health-history")).toBeTruthy();
   });
 
-  it("a role holding more occupants than its quorum says so", () => {
-    mount();
-    const card = screen.getByTestId("slot-room-mic");
-    expect(within(card).getByText(/\+ 1 spare/)).toBeTruthy();
-  });
-
   it("without the zoom param the route renders the inventory detail, untouched", () => {
     mount(`/web/systems/${uuidFor("szp-sys")}`);
     expect(screen.queryByTestId("zoom-ladder")).toBeNull();
+  });
+});
+
+describe("the components-first body (#790)", () => {
+  it("a 1:1 occupant is one card with a role badge, no box and no arithmetic", () => {
+    mount();
+    const card = screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`);
+    expect(within(card).getByText("videobar-1")).toBeTruthy();
+    expect(within(card).getByText("Conferencing Bar")).toBeTruthy();
+    expect(within(card).queryByText(/satisfying/)).toBeNull();
+  });
+
+  it("the choice jargon never renders: no 'built as', no choice eyebrow", () => {
+    mount();
+    expect(screen.queryByText(/built as/)).toBeNull();
+    expect(screen.queryByText(/conferencing$/i)).toBeNull();
+  });
+
+  it("an unstaffed role renders as an empty group wearing its badge and arithmetic", () => {
+    mount();
+    const g = screen.getByTestId("rolegroup-main-display");
+    expect(within(g).getByText("Main Display")).toBeTruthy();
+    expect(within(g).getByText(/0 of 1/)).toBeTruthy();
+  });
+
+  it("a short role renders as a group with its occupants inside and the gap named", () => {
+    mount();
+    const g = screen.getByTestId("rolegroup-room-mic");
+    expect(within(g).getByText(/1 of 2/)).toBeTruthy();
+    expect(within(g).getByTestId(`compcard-${uuidFor("szp-c-mic")}`)).toBeTruthy();
+  });
+
+  it("a no-role member is a card with the no-role badge, not a strip of chips", () => {
+    mount();
+    const card = screen.getByTestId(`compcard-${uuidFor("szp-c-power")}`);
+    expect(within(card).getByText("no role")).toBeTruthy();
+    expect(screen.queryByTestId("no-role-strip")).toBeNull();
+  });
+
+  it("clicking a card opens the component leaf, keeping the zoom", async () => {
+    mount();
+    fireEvent.click(screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`));
+    const page = await screen.findByTestId("component-page");
+    expect(page.textContent).toBe(`/web/components/${uuidFor("szp-c-bar")}?zoom=1`);
+  });
+});
+
+describe("the KPI tiles (#790)", () => {
+  it("renders one tile per contract metric with the effective value, sampled or default", () => {
+    mount(undefined, health, [
+      { metric_type_name: "room-temperature", label: "Room Temperature", data_type: "float", value: 23.5, is_sampled: true, from_contract: true, required: false },
+      { metric_type_name: "occupancy-count", label: "Occupancy Count", data_type: "int", value: 0, is_sampled: false, from_contract: true, required: false },
+    ]);
+    const tiles = screen.getByTestId("kpi-tiles");
+    expect(within(tiles).getByText("Room Temperature")).toBeTruthy();
+    expect(within(tiles).getByText("23.5")).toBeTruthy();
+    expect(within(tiles).getByText(/default/)).toBeTruthy();
+  });
+
+  it("renders no tile row at all when the standard declares nothing", () => {
+    mount();
+    expect(screen.queryByTestId("kpi-tiles")).toBeNull();
   });
 });

@@ -21,3 +21,16 @@ metric_types:
     unit: ms
     label: TCP Connect Time
     description: Time to establish the TCP connection; absent when the port is closed.
+  # Room-level series: the first standard-contract metrics (#790). A meeting
+  # room's standard declares them, so every conforming system's zoom shows the
+  # same KPI tiles; the sensor feeding them is whatever the room's build wires
+  # in (a bar's occupancy count, a thermostat's probe).
+  - name: room-temperature
+    data_type: float
+    unit: "C"
+    label: Room Temperature
+    description: Ambient temperature reported for the space, in degrees Celsius.
+  - name: occupancy-count
+    data_type: int
+    label: Occupancy Count
+    description: People detected in the space by the room's occupancy source.

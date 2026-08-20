@@ -108,23 +108,26 @@ last recorded change and its age). Below it, cause before arithmetic:
 
 - **Active alarms** lead, worst first: severity, message, the down component (click it to
   open the leaf), the role it impairs, and how long it has been raised.
-- **History** is the verdict over the recorded window, one span per change, never a
-  sample.
-- Then one card per role: what it accepts (and any pinned products), who fills it (with
-  position labels where the role declares them), and the reported arithmetic, including
-  spares beyond quorum ("1 of 1 + 1 spare").
+- **KPI tiles**, when the system's standard declares metrics: the latest sample per
+  series, or the contract default until one lands.
+- **History** is the verdict over the recorded window; the model it teaches is on the
+  label's tooltip, like every explainer on these pages.
+- Then the room itself, **components first**: one card per component (name, product, its
+  state) with its role as a **badge**. Click a card to open the leaf.
 
 ::screenshot{#fleet-system}
 
-- **A deployed room fills every role**, so slot arithmetic appears only while something is
-  missing; a full house says nothing about slots. A role nobody staffed reads
-  **incomplete** (a commissioning gap); a role whose occupant is down shows the impact the
-  role declared. Same arithmetic, different cause.
-- Roles group by **choice**, and only the build in use is shown, named ("built as
-  all-in-one"). The alternate a room did not choose is a configuration fact for the standard
-  editor, not something an operator watches.
-- A shared occupant is tagged with the other system it serves. Members filling no role
-  are listed at the bottom; that is a normal state.
+- **Role chrome appears only where it says something a badge cannot.** A role that wants
+  more than one occupant, is short, or is unstaffed renders as a grouped outline with its
+  arithmetic ("1 of 2 + 1 spare") and its occupants inside; empty slots draw dashed. The
+  common room (one role, one healthy occupant) is a flat row of cards.
+- **A deployed room fills every role**, so slot arithmetic appears only while hardware is
+  missing. An unstaffed role wears **incomplete** (a commissioning gap); a down occupant
+  wears the impact its role declared. Same arithmetic, different cause.
+- The build a room did not choose never renders; choices are the standard editor's
+  vocabulary, not an operator's.
+- A shared occupant is badged with the other system it serves; a member filling no role
+  is a card with a "no role" badge, and that is a normal state.
 
 ## The component leaf
 

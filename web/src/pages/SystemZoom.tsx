@@ -5,6 +5,7 @@ import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
 import HealthHistory from "../components/HealthHistory";
+import Eyebrow from "../components/Eyebrow";
 import FleetShell from "../components/FleetShell";
 import { fleetTiles } from "../lib/fleet_tiles";
 import { createSignal } from "solid-js";
@@ -12,9 +13,13 @@ import type { Chip } from "../lib/predicate";
 import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/fleet";
 import { systemHealth, systemHealthKey } from "../lib/health";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
-import { alarmRows, sinceOf, systemZoomVM, type SlotVM } from "../lib/system_zoom";
+import { systemMetrics, systemMetricsKey } from "../lib/system_metrics";
+import { alarmRows, componentCards, sinceOf, systemZoomVM, type ComponentCard } from "../lib/system_zoom";
+import { vitalRows } from "../lib/component_leaf";
 import { slotStrip } from "../lib/slot_strip";
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
+import { COMPONENTS_KEY, listComponents } from "../lib/components";
+import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { entityLabel } from "../lib/entities";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
@@ -58,6 +63,16 @@ export default function SystemZoom() {
   });
 
   const alarms = createMemo(() => (view.data && health.data ? alarmRows(health.data, view.data, id()) : []));
+  const bodyOf = createMemo(() => (vm() ? componentCards(vm()!) : undefined));
+  const metricsQ = useQuery(() => ({ queryKey: systemMetricsKey(id()), queryFn: () => systemMetrics(id()) }));
+  const kpis = createMemo(() => vitalRows(metricsQ.data ?? []));
+  const comps = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
+  const prods = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
+  const productOf = (componentId: string): string | undefined => {
+    const c = (comps.data ?? []).find((x) => x.id === componentId);
+    const pr = c?.product ? (prods.data ?? []).find((p) => p.name === c.product) : undefined;
+    return pr ? entityLabel(pr) : c?.product ?? undefined;
+  };
   const tiles = createMemo(() => (view.data ? fleetTiles(view.data) : undefined));
   const [chips, setChips] = createSignal<Chip[]>([]);
 
@@ -149,49 +164,64 @@ export default function SystemZoom() {
                       </For>
                     </section>
                   </Show>
+                  <Show when={kpis().length > 0}>
+                    <div data-testid="kpi-tiles" class="flex flex-wrap gap-3">
+                      <For each={kpis()}>
+                        {(k) => (
+                          <div class="flex min-w-36 flex-col gap-0.5 rounded-box border border-base-300 bg-base-100 p-3 pr-6">
+                            <Eyebrow label={k.label} />
+                            <span class="font-mono text-xl tabular-nums">{String(k.value)}</span>
+                            <span class="text-[10px] text-base-content/45">{k.sampled ? "sampled" : "contract default"}</span>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
                   <div data-testid="health-history">
                     <HealthHistory transitions={health.data?.transitions ?? []} verdict={health.data?.verdict} />
                   </div>
-                  <Show when={z().unconditional.length > 0}>
-                    <div class="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
-                      <For each={z().unconditional}>{(slot) => <SlotCard slot={slot} />}</For>
+                  {/* Components-first (#790): the unit is the component, its
+                      role a badge. Role chrome renders only where it says
+                      something a badge cannot: quorum beyond one, a shortfall,
+                      or a role nobody staffed. */}
+                  <Show when={bodyOf() && bodyOf()!.cards.length > 0}>
+                    <div class="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-3">
+                      <For each={bodyOf()!.cards}>{(c) => <CompCard card={c} />}</For>
                     </div>
                   </Show>
-                  <For each={z().choices}>
-                    {(choice) => (
-                      <section data-testid={`choice-${choice.name}`} class="flex flex-col gap-2">
-                        <div class="flex items-baseline gap-2">
-                          <span class="eyebrow">{choice.name}</span>
-                          <Show when={choice.activeAlternate}>
-                            <span class="text-[10.5px] text-base-content/50">built as {choice.activeAlternate}</span>
-                          </Show>
+                  <For each={bodyOf()?.groups ?? []}>
+                    {(g) => (
+                      <section
+                        data-testid={`rolegroup-${g.name}`}
+                        class="flex flex-col gap-2 rounded-box border border-dashed p-3"
+                        classList={{
+                          "border-error/45": g.short > 0 && g.impact === "outage",
+                          "border-warning/45": g.short > 0 && g.impact === "degraded",
+                          "border-incomplete/50": g.short > 0 && g.members.length === 0,
+                          "border-base-content/20": g.short === 0,
+                        }}
+                      >
+                        <div class="flex flex-wrap items-baseline gap-2">
+                          <span class="badge badge-sm badge-outline">{g.label}</span>
+                          <span class="text-xs tabular-nums text-base-content/60">
+                            {g.satisfying} of {g.quorum}
+                            <Show when={g.spare > 0}>{` + ${g.spare} spare`}</Show>
+                          </span>
                         </div>
-                        <div class="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
-                          <For each={choice.alternates.flatMap((a) => a.roles)}>{(slot) => <SlotCard slot={slot} />}</For>
+                        <div class="grid grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-3">
+                          <For each={g.memberCards}>{(c) => <CompCard card={c} inGroup />}</For>
+                          <For each={Array.from({ length: g.short })}>
+                            {() => (
+                              <div class="flex min-h-16 items-center justify-center rounded-md border border-dashed border-base-content/25 text-xs text-base-content/45">
+                                empty
+                              </div>
+                            )}
+                          </For>
                         </div>
                       </section>
                     )}
                   </For>
                 </div>
-                <Show when={z().noRole.length > 0}>
-                  <section data-testid="no-role-strip" class="flex flex-wrap items-center gap-2 border-t border-base-300 px-4 py-3 text-xs text-base-content/60">
-                    <span class="eyebrow">In the room, no role</span>
-                    <For each={z().noRole}>
-                      {(m) => (
-                        <button
-                          type="button"
-                          class="cursor-pointer rounded-field border border-base-300 bg-base-100 px-2 py-0.5 font-mono text-[11px] text-base-content/80 hover:border-primary/50"
-                          onClick={() => navigate(`/components/${m.componentId}?zoom=1`)}
-                        >
-                          {m.name}
-                          <Show when={m.sharedWith.length > 0}>
-                            <span class="opacity-60">{` · also ${m.sharedWith.join(", ")}`}</span>
-                          </Show>
-                        </button>
-                      )}
-                    </For>
-                  </section>
-                </Show>
               </div>
             )}
           </Show>
@@ -201,75 +231,40 @@ export default function SystemZoom() {
     </Page>
   );
 
-  function SlotCard(props: { slot: SlotVM }) {
-    const s = () => props.slot;
+  function CompCard(props: { card: ComponentCard; inGroup?: boolean }) {
+    const c = () => props.card;
     return (
-      <div
-        data-testid={`slot-${s().name}`}
-        class="flex flex-col gap-2 rounded-box border bg-base-100 p-3"
-        classList={{
-          "border-error/50 bg-error/5": s().active && s().gap === "occupant-down" && s().impact === "outage",
-          "border-warning/40 bg-warning/5": s().active && s().gap === "occupant-down" && s().impact !== "outage",
-          "border-incomplete/45 bg-incomplete/5": s().active && s().gap === "unstaffed",
-          "border-base-300": !s().active || s().gap === "none",
-        }}
+      <button
+        type="button"
+        data-testid={`compcard-${c().componentId}`}
+        class="flex cursor-pointer flex-col gap-1 rounded-md border p-2.5 text-left hover:border-primary/50"
+        classList={{ "border-error/50 bg-error/5": c().down, "border-base-300 bg-base-100": !c().down }}
+        onClick={() => navigate(`/components/${c().componentId}?zoom=1`)}
       >
-        <div class="flex items-center justify-between gap-2">
-          <span class="truncate text-sm font-semibold">{s().label}</span>
-          {/* The gap kind is the card's one verdict-adjacent mark, and it is
-              the server's distinction rendered, never recomputed: an active
-              short role with nothing down is a commissioning gap (incomplete);
-              one with a down occupant wears the failure it declared. An
-              inactive role wears neither, because its figures did not
-              contribute. */}
-          <Show when={s().active && s().gap !== "none"}>
-            <HealthBadge verdict={s().gap === "unstaffed" ? "incomplete" : s().impact} size="xs" />
+        <div class="flex items-center gap-1.5">
+          <span class="h-1.5 w-1.5 flex-none rounded-full" classList={{ "bg-error": c().down, "bg-success": !c().down }} />
+          <span class="font-mono text-[12px]" classList={{ "text-base-content/40 line-through": c().down }}>{c().name}</span>
+        </div>
+        <Show when={productOf(c().componentId)}>
+          <span class="truncate text-xs text-base-content/60">{productOf(c().componentId)}</span>
+        </Show>
+        <div class="mt-0.5 flex flex-wrap gap-1">
+          <For each={c().roles.filter((r) => !(props.inGroup && r.position === undefined && c().roles.length === 1))}>
+            {(r) => (
+              <span class="badge badge-xs badge-outline">
+                {r.label}
+                <Show when={r.position}>{` · ${r.position}`}</Show>
+              </span>
+            )}
+          </For>
+          <Show when={c().noRole && c().roles.length === 0}>
+            <span class="badge badge-xs badge-ghost">no role</span>
+          </Show>
+          <Show when={c().shared.length > 0}>
+            <span class="badge badge-xs badge-ghost">also {c().shared.join(", ")}</span>
           </Show>
         </div>
-        <div class="text-xs tabular-nums text-base-content/60">
-          {s().satisfying} of {s().quorum} satisfying
-          <Show when={s().spare > 0}>{` + ${s().spare} spare`}</Show>
-        </div>
-        <Show when={s().occupants.length > 0}>
-          <ul class="flex flex-col gap-1 text-xs">
-            <For each={s().occupants}>
-              {(o) => (
-                <li class="flex items-center gap-2">
-                  <span class="h-1.5 w-1.5 flex-none rounded-sm" classList={{ "bg-error": o.down, "bg-success": !o.down }} />
-                  <Show when={o.componentId} fallback={<span class="font-mono text-[11px]" classList={{ "text-base-content/40 line-through": o.down }}>{o.name}</span>}>
-                    <button
-                      type="button"
-                      class="cursor-pointer font-mono text-[11px] hover:underline"
-                      classList={{ "text-base-content/40 line-through": o.down }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/components/${o.componentId}?zoom=1`);
-                      }}
-                    >
-                      {o.name}
-                    </button>
-                  </Show>
-                  <Show when={o.positionLabel}>
-                    <span class="rounded border border-base-content/15 px-1 text-[10px]">{o.positionLabel}</span>
-                  </Show>
-                  <Show when={o.down}>
-                    <span class="text-[10px] text-base-content/50">down</span>
-                  </Show>
-                  <Show when={o.sharedWith.length > 0}>
-                    <span class="rounded border border-base-content/15 px-1 text-[10px]">also {o.sharedWith.join(", ")}</span>
-                  </Show>
-                </li>
-              )}
-            </For>
-          </ul>
-        </Show>
-        <Show when={s().acceptedTypes.length > 0}>
-          <div class="mt-auto pt-1 text-[10px] uppercase tracking-wider text-base-content/40">
-            accepts {s().acceptedTypes.join(", ")}
-            <Show when={s().pinnedProducts.length > 0}>{`, pinned ${s().pinnedProducts.join(", ")}`}</Show>
-          </div>
-        </Show>
-      </div>
+      </button>
     );
   }
 }
