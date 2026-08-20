@@ -55,8 +55,8 @@ const health: FleetHealth = {
       name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 2, satisfying: 1, short: 1, spare: 0,
       impaired: true, active: true, assigned_to: ["videobar-1", "mic-1"], down: ["mic-1"],
       alarms: [
-        { id: "al-1", component: "mic-1", severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" },
-        { id: "al-2", component: "mic-1", severity: "warning", message: "Fan speed high", raised_at: "2026-08-15T13:00:00Z" },
+        { id: "al-1", component: uuidFor("sz-c-mic"), severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" },
+        { id: "al-2", component: uuidFor("sz-c-mic"), severity: "warning", message: "Fan speed high", raised_at: "2026-08-15T13:00:00Z" },
       ],
     },
     // Unconditional, nobody staffed: the commissioning gap.
@@ -74,7 +74,7 @@ const health: FleetHealth = {
     {
       name: "conf-codec", label: "conf-codec", impact: "outage", quorum: 1, satisfying: 0, short: 1, spare: 0,
       impaired: true, active: false, assigned_to: [], down: [],
-      alarms: [{ id: "al-ghost", component: "ghost-1", severity: "critical", message: "From the build not in use", raised_at: "2026-08-10T00:00:00Z" }],
+      alarms: [{ id: "al-ghost", component: uuidFor("sz-c-ghost"), severity: "critical", message: "From the build not in use", raised_at: "2026-08-10T00:00:00Z" }],
       choice: "conferencing", alternate: "component-system",
     },
   ],
@@ -188,7 +188,7 @@ describe("alarmRows", () => {
         {
           name: "spare-mic", label: "Spare Microphone", impact: "none", quorum: 1, satisfying: 0, short: 1, spare: 0,
           impaired: true, active: true, assigned_to: ["mic-1"], down: ["mic-1"],
-          alarms: [{ id: "al-1", component: "mic-1", severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
+          alarms: [{ id: "al-1", component: uuidFor("sz-c-mic"), severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
         },
       ],
     } as never;

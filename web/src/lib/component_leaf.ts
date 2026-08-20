@@ -5,6 +5,8 @@
 // nodes need no zoom of their own.
 
 import { locationIndex, type FleetView } from "./fleet";
+import { sortAlarms, type Alarm } from "./alarms";
+import type { components } from "../api/schema.gen";
 import type { Member } from "./members";
 import type { Node } from "./nodes";
 import { nodeStatus } from "./nodes";
@@ -76,4 +78,51 @@ export function membershipRows(members: Member[], view: FleetView): MembershipRo
       systemId: m.system_id ?? (hits.length === 1 ? hits[0].id : null),
     };
   });
+}
+
+// The dispatch facts (#786): what a truck roll or an RMA needs, derived
+// pure from the three reads the leaf adds.
+
+export type IdentityRow = { name: string; label: string; value: unknown };
+
+// identityRows keeps every property that resolves to a value (an explicit
+// set or the contract default): model, serial, firmware are the point, but
+// the rule is the value's presence, not a hand-kept key list.
+export function identityRows(props: components["schemas"]["EffectivePropertyBody"][]): IdentityRow[] {
+  return (props ?? [])
+    .filter((p) => p.value !== null && p.value !== undefined)
+    .map((p) => ({ name: p.property_type_name, label: entityLabel({ name: p.property_type_name, label: p.label }), value: p.value }));
+}
+
+export type VitalRow = { name: string; label: string; value: unknown; sampled: boolean };
+
+// vitalRows is the same rule over the metric lane, with the live-series
+// marker: a sampled row is the device speaking, an unsampled one is the
+// contract's default standing in.
+export function vitalRows(metrics: components["schemas"]["EffectiveMetricBody"][]): VitalRow[] {
+  return (metrics ?? [])
+    .filter((m) => m.value !== null && m.value !== undefined)
+    .map((m) => ({ name: m.metric_type_name, label: entityLabel({ name: m.metric_type_name, label: m.label }), value: m.value, sampled: m.is_sampled }));
+}
+
+// leafAlarmSince: the component has no transitions read, so since-when comes
+// from what took it down: the worst ACTIVE alarm and its age. Null when
+// nothing is actively wrong (a cleared alarm is history, not a state).
+export function leafAlarmSince(alarms: Alarm[], now: number): { message: string; severity: string; ts: string; ms: number } | null {
+  const active = sortAlarms((alarms ?? []).filter((a) => a.active));
+  if (active.length === 0) return null;
+  const worst = active[0];
+  return { message: worst.message, severity: worst.severity, ts: worst.raised_at, ms: now - Date.parse(worst.raised_at) };
+}
+
+// dotVerdict reads the component's verdict off the fleet projection: any
+// system's dot for it carries the component's OWN verdict, the same value
+// wherever it appears.
+export function dotVerdict(view: FleetView, componentId: string): string | null {
+  for (const s of view.systems ?? []) {
+    for (const d of s.dots ?? []) {
+      if (d.component === componentId) return d.verdict ?? null;
+    }
+  }
+  return null;
 }

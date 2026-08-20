@@ -177,17 +177,22 @@ export type AlarmRow = {
 
 export function alarmRows(health: FleetHealth, view: FleetView, systemId: string): AlarmRow[] {
   const self = (view.systems ?? []).find((s) => s.id === systemId);
-  const dotsByName = new Map((self?.dots ?? []).map((d) => [d.name, d.component]));
+  // The alarm wire names its component by UUID (healthAlarmBody carries
+  // a.ComponentID); the projection's dots translate it to the name an
+  // operator recognises. An alarm on a component the projection does not
+  // carry keeps the raw id as its text and renders unlinked.
+  const nameById = new Map((self?.dots ?? []).map((d) => [d.component, d.name]));
   const rows: AlarmRow[] = [];
   for (const r of health.roles ?? []) {
     if (!r.active) continue;
     for (const a of r.alarms ?? []) {
+      const known = nameById.has(a.component);
       rows.push({
         id: a.id,
         severity: a.severity,
         message: a.message,
-        component: a.component,
-        componentId: dotsByName.get(a.component) ?? null,
+        component: nameById.get(a.component) ?? a.component,
+        componentId: known ? a.component : null,
         roleLabel: entityLabel(r),
         raisedAt: a.raised_at,
       });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectionState, membershipRows } from "./component_leaf";
+import { collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "./component_leaf";
 import type { FleetView } from "./fleet";
 import type { Node } from "./nodes";
 import type { ReachInterface } from "./reachability";
@@ -105,5 +105,55 @@ describe("membershipRows", () => {
     const rows = membershipRows([{ component: "x", system: "twin", primary: true, system_count: 1 }] as never, view);
     expect(rows[0].systemId).toBeNull();
     expect(rows[0].label).toBe("twin");
+  });
+});
+
+describe("the leaf's dispatch facts (#786)", () => {
+  it("identityRows keeps only the properties that resolve to a value, label first", () => {
+    const rows = identityRows([
+      { property_type_name: "serial-number", label: "Serial Number", value: "SN-1183", is_set: true, from_contract: true },
+      { property_type_name: "firmware-version", value: "2.1.4", is_set: false, from_contract: true },
+      { property_type_name: "mac-address", value: null, is_set: false, from_contract: true },
+    ] as never);
+    expect(rows).toEqual([
+      { name: "serial-number", label: "Serial Number", value: "SN-1183" },
+      { name: "firmware-version", label: "firmware-version", value: "2.1.4" },
+    ]);
+  });
+
+  it("vitalRows keeps only metrics carrying a value and marks the live series", () => {
+    const rows = vitalRows([
+      { metric_type_name: "icmp-rtt-avg", label: "RTT", data_type: "float", value: 6.1, is_sampled: true, from_contract: false, required: false },
+      { metric_type_name: "target-volume", data_type: "float", value: 0.8, is_sampled: false, from_contract: true, required: false },
+      { metric_type_name: "mic-gain", data_type: "float", is_sampled: false, from_contract: true, required: false },
+    ] as never);
+    expect(rows).toEqual([
+      { name: "icmp-rtt-avg", label: "RTT", value: 6.1, sampled: true },
+      { name: "target-volume", label: "target-volume", value: 0.8, sampled: false },
+    ]);
+  });
+
+  it("leafAlarmSince answers since-when from the worst ACTIVE alarm, and null when nothing is wrong", () => {
+    const now = Date.parse("2026-08-15T17:00:00Z");
+    const alarms = [
+      { id: "a1", severity: "warning", message: "Fan speed high", raised_at: "2026-08-15T16:00:00Z", active: true },
+      { id: "a2", severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true },
+      { id: "a3", severity: "critical", message: "Old outage", raised_at: "2026-08-01T00:00:00Z", active: false },
+    ] as never;
+    const s = leafAlarmSince(alarms, now)!;
+    expect(s.message).toBe("No route to host");
+    expect(s.ms).toBe(now - Date.parse("2026-08-15T14:20:00Z"));
+    expect(leafAlarmSince([{ id: "a3", severity: "critical", message: "x", raised_at: "2026-08-01T00:00:00Z", active: false }] as never, now)).toBeNull();
+  });
+
+  it("dotVerdict reads the component's verdict off any system's dots", () => {
+    const v = {
+      locations: [],
+      systems: [
+        { id: uuidFor("cl-dv-s1"), name: "a", label: "A", location: null, verdict: "degraded", dots: [{ component: uuidFor("cl-dv-c9"), name: "mic-1", verdict: "outage", primary: true, shared: false }] },
+      ],
+    } as never;
+    expect(dotVerdict(v, uuidFor("cl-dv-c9"))).toBe("outage");
+    expect(dotVerdict(v, "cX")).toBeNull();
   });
 });

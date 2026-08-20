@@ -104,10 +104,11 @@ export default function SystemZoom() {
                 <Show when={health.data && sinceOf(health.data, pageNow)}>
                   {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
                 </Show>
-                {/* Slot arithmetic leads only when something is missing: a
-                    deployed room fills every role, so a full house says
-                    nothing about slots (#785). */}
-                <Show when={strip() && strip()!.filled < strip()!.total}>
+                {/* Slot arithmetic leads only when hardware is MISSING: a
+                    deployed room fills every role (#785), and a down
+                    occupant is a failure the alarms explain, not a gap, so
+                    the trigger is empty squares, never merely unfilled. */}
+                <Show when={strip() && strip()!.empty > 0}>
                   {(_) => <span class="tabular-nums text-base-content/80">{strip()!.filled} of {strip()!.total} slots filled</span>}
                 </Show>
                 <Show when={standard()}>
