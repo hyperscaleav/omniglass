@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
+import HealthHistory from "../components/HealthHistory";
 import FleetShell from "../components/FleetShell";
 import { fleetTiles } from "../lib/fleet_tiles";
 import { createSignal } from "solid-js";
@@ -11,11 +12,13 @@ import type { Chip } from "../lib/predicate";
 import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/fleet";
 import { systemHealth, systemHealthKey } from "../lib/health";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
-import { systemZoomVM, type SlotVM } from "../lib/system_zoom";
+import { alarmRows, sinceOf, systemZoomVM, type SlotVM } from "../lib/system_zoom";
 import { slotStrip } from "../lib/slot_strip";
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { entityLabel } from "../lib/entities";
-import { describeError } from "../lib/format";
+import { describeError, fmtTime } from "../lib/format";
+import { durationText } from "../lib/timeline";
+import { severityRank } from "../lib/alarms";
 
 // The system zoom (#636): the typed slots a system needs filled, at the
 // identity route behind ?zoom=1 (ADR-0126). One card per role with the
@@ -27,6 +30,9 @@ export default function SystemZoom() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   const id = () => params.id;
+  // Pinned at setup, like HealthHistory's: a "now" that moved under the
+  // since-line would re-age it on every unrelated re-render.
+  const pageNow = Date.now();
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const health = useQuery(() => ({ queryKey: systemHealthKey(id()), queryFn: () => systemHealth(id()) }));
@@ -51,6 +57,7 @@ export default function SystemZoom() {
     return systemZoomVM(health.data, declared.data, view.data, id());
   });
 
+  const alarms = createMemo(() => (view.data && health.data ? alarmRows(health.data, view.data, id()) : []));
   const tiles = createMemo(() => (view.data ? fleetTiles(view.data) : undefined));
   const [chips, setChips] = createSignal<Chip[]>([]);
 
@@ -94,7 +101,15 @@ export default function SystemZoom() {
             header={
               <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                 <HealthBadge verdict={health.data?.verdict} size="sm" />
-                <Show when={strip()}>{(st) => <span class="tabular-nums text-base-content/80">{st().filled} of {st().total} slots filled</span>}</Show>
+                <Show when={health.data && sinceOf(health.data, pageNow)}>
+                  {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
+                </Show>
+                {/* Slot arithmetic leads only when something is missing: a
+                    deployed room fills every role, so a full house says
+                    nothing about slots (#785). */}
+                <Show when={strip() && strip()!.filled < strip()!.total}>
+                  {(_) => <span class="tabular-nums text-base-content/80">{strip()!.filled} of {strip()!.total} slots filled</span>}
+                </Show>
                 <Show when={standard()}>
                   <span class="text-base-content/30">·</span>
                   <span class="font-mono text-xs text-base-content/60">{standard()}</span>
@@ -114,6 +129,28 @@ export default function SystemZoom() {
             {(z) => (
               <div class="flex min-w-0 flex-1 flex-col">
                 <div class="flex flex-col gap-5 p-4">
+                  {/* Cause before arithmetic (#785): what is wrong, on which
+                      component, impairing which role, since when. */}
+                  <Show when={alarms().length > 0}>
+                    <section data-testid="alarm-strip" class="flex flex-col gap-1.5 rounded-box border p-3" classList={{ "border-error/40 bg-error/5": severityRank(alarms()[0].severity) === 0, "border-warning/40 bg-warning/5": severityRank(alarms()[0].severity) !== 0 }}>
+                      <h2 class="eyebrow">Active alarms</h2>
+                      <For each={alarms()}>
+                        {(a) => (
+                          <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+                            <span class="badge badge-sm" classList={{ "badge-error badge-soft": a.severity === "critical", "badge-warning badge-soft": a.severity !== "critical" }}>{a.severity}</span>
+                            <span>{a.message}</span>
+                            <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
+                              <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => navigate(`/components/${a.componentId}?zoom=1`)}>{a.component}</button>
+                            </Show>
+                            <span class="text-xs text-base-content/50">impairs {a.roleLabel} · {durationText(pageNow - Date.parse(a.raisedAt))}</span>
+                          </div>
+                        )}
+                      </For>
+                    </section>
+                  </Show>
+                  <div data-testid="health-history">
+                    <HealthHistory transitions={health.data?.transitions ?? []} verdict={health.data?.verdict} />
+                  </div>
                   <Show when={z().unconditional.length > 0}>
                     <div class="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
                       <For each={z().unconditional}>{(slot) => <SlotCard slot={slot} />}</For>
@@ -190,6 +227,7 @@ export default function SystemZoom() {
         </div>
         <div class="text-xs tabular-nums text-base-content/60">
           {s().satisfying} of {s().quorum} satisfying
+          <Show when={s().spare > 0}>{` + ${s().spare} spare`}</Show>
         </div>
         <Show when={s().occupants.length > 0}>
           <ul class="flex flex-col gap-1 text-xs">

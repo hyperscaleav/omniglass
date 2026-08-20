@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { systemZoomVM } from "./system_zoom";
+import { alarmRows, sinceOf, systemZoomVM } from "./system_zoom";
 import type { FleetView } from "./fleet";
 import type { EffectiveRole, FleetHealth } from "./system_zoom";
 import { uuidFor } from "./testids";
@@ -53,7 +53,11 @@ const health: FleetHealth = {
     // Unconditional, occupant down: the failure gap.
     {
       name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 2, satisfying: 1, short: 1, spare: 0,
-      impaired: true, active: true, assigned_to: ["videobar-1", "mic-1"], down: ["mic-1"], alarms: [],
+      impaired: true, active: true, assigned_to: ["videobar-1", "mic-1"], down: ["mic-1"],
+      alarms: [
+        { id: "al-1", component: "mic-1", severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" },
+        { id: "al-2", component: "mic-1", severity: "warning", message: "Fan speed high", raised_at: "2026-08-15T13:00:00Z" },
+      ],
     },
     // Unconditional, nobody staffed: the commissioning gap.
     {
@@ -69,12 +73,16 @@ const health: FleetHealth = {
     // The losing alternate's roles: legal build, not outstanding work.
     {
       name: "conf-codec", label: "conf-codec", impact: "outage", quorum: 1, satisfying: 0, short: 1, spare: 0,
-      impaired: true, active: false, assigned_to: [], down: [], alarms: [],
+      impaired: true, active: false, assigned_to: [], down: [],
+      alarms: [{ id: "al-ghost", component: "ghost-1", severity: "critical", message: "From the build not in use", raised_at: "2026-08-10T00:00:00Z" }],
       choice: "conferencing", alternate: "component-system",
     },
   ],
   systems: [],
-  transitions: [],
+  transitions: [
+    { ts: "2026-08-01T09:00:00Z", verdict: "healthy" },
+    { ts: "2026-08-15T14:20:00Z", verdict: "degraded" },
+  ],
 } as unknown as FleetHealth;
 
 const declared: EffectiveRole[] = [
@@ -151,5 +159,58 @@ describe("systemZoomVM", () => {
   it("puts a member filling no role in the no-role strip, no error", () => {
     expect(vm().noRole.map((m) => m.name)).toEqual(["device-1"]);
     expect(vm().noRole[0].sharedWith).toEqual([]);
+  });
+});
+
+describe("alarmRows", () => {
+  const now = Date.parse("2026-08-15T17:00:00Z");
+  it("flattens the active roles' alarms worst-first, joined to the role and the component's id", () => {
+    const rows = alarmRows(health, view, uuidFor("sz-sys"));
+    expect(rows.map((r) => r.severity)).toEqual(["critical", "warning"]);
+    expect(rows[0]).toMatchObject({
+      message: "No route to host",
+      component: "mic-1",
+      componentId: uuidFor("sz-c-mic"),
+      roleLabel: "Room Microphone",
+    });
+  });
+
+  it("never carries an alarm from a build not in use: an inactive role's alarms did not move the verdict", () => {
+    const rows = alarmRows(health, view, uuidFor("sz-sys"));
+    expect(rows.find((r) => r.message === "From the build not in use")).toBeUndefined();
+  });
+
+  it("renders one row per alarm even when one down component staffs two active roles (the wire repeats per role)", () => {
+    const doubled = {
+      ...health,
+      roles: [
+        ...(health.roles ?? []),
+        {
+          name: "spare-mic", label: "Spare Microphone", impact: "none", quorum: 1, satisfying: 0, short: 1, spare: 0,
+          impaired: true, active: true, assigned_to: ["mic-1"], down: ["mic-1"],
+          alarms: [{ id: "al-1", component: "mic-1", severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
+        },
+      ],
+    } as never;
+    const rows = alarmRows(doubled, view, uuidFor("sz-sys"));
+    expect(rows.filter((r) => r.id === "al-1")).toHaveLength(1);
+  });
+
+  it("is empty for a healthy report", () => {
+    expect(alarmRows({ ...health, roles: [] } as never, view, uuidFor("sz-sys"))).toEqual([]);
+  });
+  void now;
+});
+
+describe("sinceOf", () => {
+  it("names the last recorded edge and its age", () => {
+    const now = Date.parse("2026-08-15T17:00:00Z");
+    const s = sinceOf(health, now)!;
+    expect(s.ts).toBe("2026-08-15T14:20:00Z");
+    expect(s.ms).toBe(now - Date.parse("2026-08-15T14:20:00Z"));
+  });
+
+  it("is null when nothing was ever recorded", () => {
+    expect(sinceOf({ ...health, transitions: [] } as never, Date.now())).toBeNull();
   });
 });

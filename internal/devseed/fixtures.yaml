@@ -504,6 +504,9 @@ components:
   - key: panel-b
     product: samsung-qm55
     location: boardroom-b
+  - key: bar-b
+    product: cisco-room-bar
+    location: boardroom-b
   # No product on purpose: it classifies as generic-device, a type no role's
   # accepted_types names, so no role can want it. It is in the room and
   # accounted for, and nothing more, which is exactly the case membership
@@ -638,11 +641,17 @@ components:
   - key: wl4-c1d
     product: samsung-qm55
     location: wl4-r1
+  - key: wl4-c1b
+    product: cisco-room-bar
+    location: wl4-r1
   - key: wl4-c2a
     product: cisco-room-bar
     location: wl4-r2
   - key: wl4-c2d
     product: samsung-qm55
+    location: wl4-r2
+  - key: wl4-c2b
+    product: cisco-room-bar
     location: wl4-r2
   - key: wl4-c3a
     product: cisco-room-bar
@@ -650,17 +659,26 @@ components:
   - key: wl4-c3d
     product: samsung-qm55
     location: wl4-r3
+  - key: wl4-c3b
+    product: cisco-room-bar
+    location: wl4-r3
   - key: wl4-c4a
     product: cisco-room-bar
     location: wl4-r4
   - key: wl4-c4d
     product: samsung-qm55
     location: wl4-r4
+  - key: wl4-c4b
+    product: cisco-room-bar
+    location: wl4-r4
   - key: wl4-c5a
     product: cisco-room-bar
     location: wl4-r5
   - key: wl4-c5d
     product: samsung-qm55
+    location: wl4-r5
+  - key: wl4-c5b
+    product: cisco-room-bar
     location: wl4-r5
   - key: hl2-c1a
     product: cisco-room-bar
@@ -767,11 +785,17 @@ components:
   - key: pavb-c1d
     product: samsung-qm55
     location: pavb-r1
+  - key: pavb-c1b
+    product: cisco-room-bar
+    location: pavb-r1
   - key: pavb-c2a
     product: cisco-room-bar
     location: pavb-r2
   - key: pavb-c2d
     product: samsung-qm55
+    location: pavb-r2
+  - key: pavb-c2b
+    product: cisco-room-bar
     location: pavb-r2
   - key: pavb-c3a
     product: cisco-room-bar
@@ -779,17 +803,26 @@ components:
   - key: pavb-c3d
     product: samsung-qm55
     location: pavb-r3
+  - key: pavb-c3b
+    product: cisco-room-bar
+    location: pavb-r3
   - key: pavb-c4a
     product: cisco-room-bar
     location: pavb-r4
   - key: pavb-c4d
     product: samsung-qm55
     location: pavb-r4
+  - key: pavb-c4b
+    product: cisco-room-bar
+    location: pavb-r4
   - key: pavb-c5a
     product: cisco-room-bar
     location: pavb-r5
   - key: pavb-c5d
     product: samsung-qm55
+    location: pavb-r5
+  - key: pavb-c5b
+    product: cisco-room-bar
     location: pavb-r5
   - key: ann-c1a
     product: cisco-room-bar
@@ -932,7 +965,9 @@ systems:
     location: bay-1
 
 
-  # Volume systems (mass for the canvas). The partial blocks read incomplete.
+  # Volume systems (mass for the canvas), staffed to quorum: a deployed fleet
+  # is mostly healthy rooms (#785), and the exceptions above carry the
+  # teaching, not the volume.
   - key: wl3-s1
     standard: meeting-room
     system_type: meeting
@@ -1085,10 +1120,10 @@ members:
   - system: auditorium-av
     component: auditorium-touch
 
-# Staffing, which creates the membership as a side effect. boardroom-a is fully
-# staffed and reads healthy; boardroom-b is one microphone short of its quorum of
-# two with the one it has healthy, so it reads incomplete (#631: a box nobody
-# installed, not a box that broke) and the Health panel names the reason.
+# Staffing, which creates the membership as a side effect. Both boardroom halves
+# are fully staffed (#785: a deployed room fills every role; the one-mic-short
+# teaching case is briefing-av, below): the shared bar counts toward each half's
+# quorum and each half racks a bar of its own beside it.
 role_assignments:
   - system: boardroom-a
     role: room-mic
@@ -1102,6 +1137,9 @@ role_assignments:
   - system: boardroom-b
     role: room-mic
     component: shared-bar
+  - system: boardroom-b
+    role: room-mic
+    component: bar-b
   - system: boardroom-b
     role: main-display
     component: panel-b
@@ -1206,30 +1244,45 @@ role_assignments:
   - system: wl4-s1
     role: main-display
     component: wl4-c1d
+  - system: wl4-s1
+    role: room-mic
+    component: wl4-c1b
   - system: wl4-s2
     role: room-mic
     component: wl4-c2a
   - system: wl4-s2
     role: main-display
     component: wl4-c2d
+  - system: wl4-s2
+    role: room-mic
+    component: wl4-c2b
   - system: wl4-s3
     role: room-mic
     component: wl4-c3a
   - system: wl4-s3
     role: main-display
     component: wl4-c3d
+  - system: wl4-s3
+    role: room-mic
+    component: wl4-c3b
   - system: wl4-s4
     role: room-mic
     component: wl4-c4a
   - system: wl4-s4
     role: main-display
     component: wl4-c4d
+  - system: wl4-s4
+    role: room-mic
+    component: wl4-c4b
   - system: wl4-s5
     role: room-mic
     component: wl4-c5a
   - system: wl4-s5
     role: main-display
     component: wl4-c5d
+  - system: wl4-s5
+    role: room-mic
+    component: wl4-c5b
   - system: hl2-s1
     role: room-mic
     component: hl2-c1a
@@ -1335,30 +1388,45 @@ role_assignments:
   - system: pavb-s1
     role: main-display
     component: pavb-c1d
+  - system: pavb-s1
+    role: room-mic
+    component: pavb-c1b
   - system: pavb-s2
     role: room-mic
     component: pavb-c2a
   - system: pavb-s2
     role: main-display
     component: pavb-c2d
+  - system: pavb-s2
+    role: room-mic
+    component: pavb-c2b
   - system: pavb-s3
     role: room-mic
     component: pavb-c3a
   - system: pavb-s3
     role: main-display
     component: pavb-c3d
+  - system: pavb-s3
+    role: room-mic
+    component: pavb-c3b
   - system: pavb-s4
     role: room-mic
     component: pavb-c4a
   - system: pavb-s4
     role: main-display
     component: pavb-c4d
+  - system: pavb-s4
+    role: room-mic
+    component: pavb-c4b
   - system: pavb-s5
     role: room-mic
     component: pavb-c5a
   - system: pavb-s5
     role: main-display
     component: pavb-c5d
+  - system: pavb-s5
+    role: room-mic
+    component: pavb-c5b
   - system: ann-s1
     role: room-mic
     component: ann-c1a

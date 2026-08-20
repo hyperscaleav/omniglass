@@ -34,7 +34,11 @@ export default function StateStrip(props: {
   children?: JSX.Element;
 }) {
   return (
-    <div class="flex items-center gap-2">
+    // og-statestrip is a capture hook, not styling: the segment weights (and
+    // the trailing hint) divide by the capture's own clock, so the shot
+    // pipeline masks the whole row by this class (#780's 40px flap was this
+    // strip breathing between two honest captures).
+    <div class="og-statestrip flex items-center gap-2">
       <div class={`flex ${props.height ?? "h-2"} flex-1 overflow-hidden rounded-full bg-base-300`} title={props.title}>
         <For each={props.segments}>
           {(s) => <div class={props.tone(s.value)} style={{ flex: `${Math.max(s.weight, 0.001)} 1 0%` }} title={s.title} />}

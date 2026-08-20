@@ -43,6 +43,7 @@ const view: FleetView = {
       dots: [
         { component: uuidFor("szp-c-bar"), name: "videobar-1", verdict: "healthy", primary: true, shared: true },
         { component: uuidFor("szp-c-power"), name: "device-1", verdict: "healthy", primary: true, shared: false },
+        { component: uuidFor("szp-c-mic"), name: "mic-1", verdict: "outage", primary: true, shared: false },
       ],
     },
     {
@@ -64,6 +65,11 @@ const health: FleetHealth = {
       impaired: true, active: true, assigned_to: [], down: [], alarms: [],
     },
     {
+      name: "room-mic", label: "Room Microphone", impact: "degraded", quorum: 2, satisfying: 1, short: 1, spare: 1,
+      impaired: true, active: true, assigned_to: ["videobar-1", "mic-1"], down: ["mic-1"],
+      alarms: [{ id: "al-1", component: "mic-1", severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z" }],
+    },
+    {
       name: "conf-bar", label: "Conferencing Bar", impact: "outage", quorum: 1, satisfying: 1, short: 0, spare: 0,
       impaired: false, active: true, assigned_to: ["videobar-1"], down: [], alarms: [],
       choice: "conferencing", alternate: "all-in-one",
@@ -75,7 +81,10 @@ const health: FleetHealth = {
     },
   ],
   systems: [],
-  transitions: [],
+  transitions: [
+    { ts: "2026-08-01T09:00:00Z", verdict: "healthy" },
+    { ts: "2026-08-15T14:20:00Z", verdict: "degraded" },
+  ],
 } as unknown as FleetHealth;
 
 const declared = [
@@ -95,7 +104,7 @@ const declared = [
   },
 ] as unknown as EffectiveRole[];
 
-function mount(path = `/web/systems/${uuidFor("szp-sys")}?zoom=1`) {
+function mount(path = `/web/systems/${uuidFor("szp-sys")}?zoom=1`, healthOverride: FleetHealth = health) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], me);
@@ -103,7 +112,7 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}?zoom=1`) {
   qc.setQueryData([...LOCATIONS_KEY], []);
   qc.setQueryData([...LOCATION_TYPES_KEY], []);
   qc.setQueryData([...TAGS_KEY], []);
-  qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], health);
+  qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], healthOverride);
   qc.setQueryData([...systemRolesKey(uuidFor("szp-sys"))], declared);
   window.history.pushState({}, "", path);
   return render(() => (
@@ -179,6 +188,54 @@ describe("the system zoom", () => {
     fireEvent.click(within(strip).getByRole("button", { name: /device-1/ }));
     const page = await screen.findByTestId("component-page");
     expect(page.textContent).toBe(`/web/components/${uuidFor("szp-c-power")}?zoom=1`);
+  });
+
+  // #785: the header answers since-when, the alarms lead, the history strip
+  // renders, and slot arithmetic stops leading a fully staffed room.
+  it("the header names the last edge and its age; slot arithmetic leads only while something is missing", () => {
+    mount();
+    const header = screen.getByTestId("system-header");
+    expect(within(header).getByText(/since/)).toBeTruthy();
+    // This fixture IS short, so the line earns its place.
+    expect(within(header).getByText(/slots filled/)).toBeTruthy();
+  });
+
+  it("a fully staffed room says nothing about slots: deployed is the norm, not an achievement", () => {
+    const full = {
+      ...health,
+      verdict: "healthy",
+      roles: (health.roles ?? []).map((r) => ({
+        ...r,
+        satisfying: r.quorum,
+        short: 0,
+        impaired: false,
+        down: [],
+        alarms: [],
+        assigned_to: Array.from({ length: Math.max(r.quorum, (r.assigned_to ?? []).length) }, (_, i) => (r.assigned_to ?? [])[i] ?? `filler-${r.name}-${i}`),
+      })),
+    } as FleetHealth;
+    mount(undefined, full);
+    const header = screen.getByTestId("system-header");
+    expect(within(header).queryByText(/slots filled/)).toBeNull();
+  });
+
+  it("renders the active alarms worst first, above the roles, each naming its component and role", () => {
+    mount();
+    const strip = screen.getByTestId("alarm-strip");
+    expect(within(strip).getByText("No route to host")).toBeTruthy();
+    expect(within(strip).getByText(/Room Microphone/)).toBeTruthy();
+    expect(within(strip).getByRole("button", { name: /mic-1/ })).toBeTruthy();
+  });
+
+  it("renders the verdict history strip from the transitions", () => {
+    mount();
+    expect(screen.getByTestId("health-history")).toBeTruthy();
+  });
+
+  it("a role holding more occupants than its quorum says so", () => {
+    mount();
+    const card = screen.getByTestId("slot-room-mic");
+    expect(within(card).getByText(/\+ 1 spare/)).toBeTruthy();
   });
 
   it("without the zoom param the route renders the inventory detail, untouched", () => {

@@ -19,6 +19,7 @@ screenshots:
       - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
       - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
       - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
+      - ".og-statestrip"
       - ".og-system-dot"
   - id: entity-edit-face
     path: /web/locations/east?edit=1
@@ -27,6 +28,7 @@ screenshots:
       - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
       - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
       - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
+      - ".og-statestrip"
       - ".og-system-dot"
 ---
 

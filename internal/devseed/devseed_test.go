@@ -966,9 +966,10 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 // fleet in the wrong order: every name and label would still be right, and the
 // wrong panel would be staffing the wrong half of the room.
 //
-// The staffing is also the fleet's health story: boardroom-a holds two mics and
-// a display and reads healthy; boardroom-b is one mic short of its quorum of two
-// and reads incomplete, with the shared bar in both.
+// The staffing is also the fleet's health story: both halves hold two mics and
+// a display and read healthy (#785: a deployed room fills every role; the
+// quorum-short teaching case is the briefing room), with the shared bar
+// counting in both from its physical home in A.
 func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 	ctx, conn, _ := seededFleet(t)
 
@@ -980,7 +981,11 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 		// address here. The shared bar staffs room-mic in BOTH, from its
 		// physical home in A.
 		{room: "boardroom-a", want: map[string]string{"room-mic": "videobar-1,videobar-2", "main-display": "display-1"}},
-		{room: "boardroom-b", want: map[string]string{"room-mic": "videobar-1", "main-display": "display-1"}},
+		// Two mics, two rooms, one name each: the shared bar keeps the name it
+		// minted in A, and B's own bar is the first bar OF ITS OWN ROOM, so
+		// both render videobar-1. The placement-scoped index at work, not a
+		// duplicate.
+		{room: "boardroom-b", want: map[string]string{"room-mic": "videobar-1,videobar-1", "main-display": "display-1"}},
 	} {
 		rows, err := conn.Query(ctx, `
 			select r.name, c.name
@@ -1452,7 +1457,7 @@ func TestSeededFleetShowsEveryVerdict(t *testing.T) {
 	for _, tc := range []struct{ room, want, why string }{
 		{"media-lab", "incomplete", "two pods conforming to a standard with nothing assigned to any role: commissioning gaps, and no alarm will ever fire for them"},
 		{"boardroom-a", "healthy", "fully staffed, the shared bar counted where it physically sits"},
-		{"boardroom-b", "incomplete", "one of the two microphones it wants, and that one is fine: the shortfall is a box nobody installed, not a box that broke"},
+		{"boardroom-b", "healthy", "fully staffed since #785: the shared bar plus a bar of its own; the quorum-short teaching case lives in the briefing room now"},
 		{"briefing", "incomplete", "same shape as the second boardroom half: short a microphone nobody has installed"},
 		{"auditorium", "degraded", "fully staffed, but a critical alarm took one of its two microphones down: a real failure, not a gap"},
 		{"bay-1", "healthy", "fully staffed and quiet"},
@@ -1499,4 +1504,39 @@ func fixtureComponentNames(doc devseed.Doc) []string {
 		out = append(out, c.Name)
 	}
 	return out
+}
+
+// The deployed-fleet invariant (#785): a real estate is mostly rooms whose
+// every role is staffed to quorum; commissioning is the exception that
+// carries the teaching, not the norm. This pins the ruling so a future
+// volume block cannot quietly regress the fleet back to a wall of
+// incomplete: every meeting-room system in the fixture is staffed to the
+// standard's quorum (two mics, one display) unless it is one of the three
+// named teaching cases.
+func TestFixtureFleetReadsDeployed(t *testing.T) {
+	doc := fixturesDoc(t)
+	teaching := map[string]string{
+		"lab-pod-a":   "the commissioning pair: racked, cabled, nothing assigned",
+		"lab-pod-b":   "the commissioning pair: racked, cabled, nothing assigned",
+		"briefing-av": "the quorum-short case: one microphone short, the one it has healthy",
+	}
+	staffed := map[string]map[string]int{}
+	for _, ra := range doc.RoleAssignments {
+		if staffed[ra.System] == nil {
+			staffed[ra.System] = map[string]int{}
+		}
+		staffed[ra.System][ra.Role]++
+	}
+	for _, s := range doc.Systems {
+		if s.Standard != "meeting-room" {
+			continue
+		}
+		if _, ok := teaching[s.Key]; ok {
+			continue
+		}
+		got := staffed[s.Key]
+		if got["room-mic"] < 2 || got["main-display"] < 1 {
+			t.Errorf("system %q is staffed mic %d/2 display %d/1; a deployed room fills every role (#785), and only the named teaching cases stay short", s.Key, got["room-mic"], got["main-display"])
+		}
+	}
 }

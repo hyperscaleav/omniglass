@@ -14,6 +14,18 @@ screenshots:
   - id: fleet-system
     path: /web/systems/huddle?zoom=1
     alt: "The system zoom: one card per role with the reported arithmetic, choices grouped with the build in use marked, and the no-role list."
+    # The since-line and the history rows age with the capture (edge stamps
+    # are seed-run times, the relative ages count from the capture's own
+    # clock), so they mask: the header line whole, and each history row via
+    # its own moving text, the entity blade's exact selectors. The strip
+    # masks too: its span weights divide seed-time gaps by the capture's own
+    # age, the breathing #780 measured as a 40px flap on the blade.
+    mask:
+      - "[data-testid=since-line]"
+      - ".og-statestrip"
+      - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
+      - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
+      - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
   - id: fleet-location
     path: /web/locations/east?zoom=1
     alt: "The location zoom: the breadcrumb, a band per child location, system cards with slot strips, and the allowed child types."
@@ -78,13 +90,23 @@ chain; each crumb is a link that keeps the zoom.
 
 ## Zoom into a system
 
-One card per role: what it accepts (and any pinned products), who fills it (with position
-labels where the role declares them), and the reported arithmetic.
+The header answers the first two operator questions: the verdict, and **since when** (the
+last recorded change and its age). Below it, cause before arithmetic:
+
+- **Active alarms** lead, worst first: severity, message, the down component (click it to
+  open the leaf), the role it impairs, and how long it has been raised.
+- **History** is the verdict over the recorded window, one span per change, never a
+  sample.
+- Then one card per role: what it accepts (and any pinned products), who fills it (with
+  position labels where the role declares them), and the reported arithmetic, including
+  spares beyond quorum ("1 of 1 + 1 spare").
 
 ::screenshot{#fleet-system}
 
-- A role nobody staffed reads **incomplete**. A role whose occupant is down shows the
-  impact the role declared. Same arithmetic, different cause.
+- **A deployed room fills every role**, so slot arithmetic appears only while something is
+  missing; a full house says nothing about slots. A role nobody staffed reads
+  **incomplete** (a commissioning gap); a role whose occupant is down shows the impact the
+  role declared. Same arithmetic, different cause.
 - Roles group by **choice**, and only the build in use is shown, named ("built as
   all-in-one"). The alternate a room did not choose is a configuration fact for the standard
   editor, not something an operator watches.
