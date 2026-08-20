@@ -27,10 +27,12 @@ export default function TimeseriesChart(props: { samples: ChartSample[]; now: nu
   // The crosshair: the sample nearest the pointer, an exact time and value
   // where a sample exists, never an interpolation (#795 review).
   const [hover, setHover] = createSignal<ChartPoint | null>(null);
-  let svgEl: SVGSVGElement | undefined;
-  const onMove = (e: MouseEvent) => {
-    if (props.spark || !svgEl) return;
-    const r = svgEl.getBoundingClientRect();
+  // The handler reads the svg off the event it is attached to (the BandCanvas
+  // pattern): no ref, no initialization-order question for a reader or an
+  // analyzer to puzzle over.
+  const onMove = (e: MouseEvent & { currentTarget: SVGSVGElement }) => {
+    if (props.spark) return;
+    const r = e.currentTarget.getBoundingClientRect();
     if (r.width <= 0) return;
     setHover(nearestPoint(layout(), ((e.clientX - r.left) / r.width) * W()));
   };
@@ -44,7 +46,6 @@ export default function TimeseriesChart(props: { samples: ChartSample[]; now: nu
       }
     >
       <svg
-        ref={svgEl}
         data-testid={props.spark ? "sparkline" : "timeseries-chart"}
         viewBox={`0 0 ${W()} ${H()}`}
         class={props.spark ? "h-9 w-40" : "w-full max-w-3xl"}
