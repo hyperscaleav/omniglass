@@ -60,7 +60,7 @@ export default function ComponentLeaf() {
   createEffect(() => {
     if (!components.data) return;
     const c = component();
-    if (c && c.id !== id()) navigate(`/components/${c.id}?zoom=1`, { replace: true });
+    if (c && c.id !== id()) navigate(`/components/${c.id}${window.location.search}`, { replace: true });
   });
 
   const memberships = useQuery(() => ({

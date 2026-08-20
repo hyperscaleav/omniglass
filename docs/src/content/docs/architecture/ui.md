@@ -44,7 +44,9 @@ satisfied by hover and the page itself stays scannable. The standard-editor's vo
 (choices, alternates, accepted types) never leads an operator view, and a system's body
 renders components-first: one card per component with its role as a badge, role-level chrome
 only where it says something a badge cannot (a quorum beyond one, a shortfall, an unstaffed
-role). The platform-wide sweep of the older pages is tracked in #784.
+role). The platform-wide sweep of the older pages is tracked in #784. The system zoom is growing
+into the workspace #788 defines: facets as `?tab=` URL facts (`TabRail`), the Map tab
+rendering the standard's declared room (ADR-0128) with live occupant state on each marker.
 
 ## One renderer library, two composition modes
 

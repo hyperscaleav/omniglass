@@ -5610,3 +5610,11 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   its primitives: `Eyebrow` (a section label with its explainer on the (i)) beside the
   existing `InfoTip`, and the history strip's pedagogy rides the hover. The `TabRail`
   primitive ships tested, param-driven and deep-linked, mounting once a second facet lands.
+- **The standard declares a map, the system renders it**
+  ([#791](https://github.com/hyperscaleav/omniglass/issues/791), ADR-0128). One jsonb
+  value on `standard` (aspect plus normalized 1-based role positions, validated in Go,
+  cleared by JSON null), carried on the standard wire and patched through the standard
+  API; both example standards declare one in the dev seed. The system zoom grows its
+  first second facet: the Map tab (the `TabRail` mounts), a top-down room with one marker
+  per declared position of the build in use, solid in the occupant's state and linking to
+  its leaf, hollow where nobody is staffed.

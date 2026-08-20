@@ -3949,6 +3949,7 @@ Patches a custom standard's label or parent. Official standards are read-only (4
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--label` | string | (none) | A new operator-facing label |
+| `--map` | string | (none) | The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair |
 | `--parent-standard-id` | string | (none) | A new variant parent, by handle or uuid |
 
 Example:

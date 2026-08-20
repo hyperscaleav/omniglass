@@ -60,7 +60,7 @@ export default function LocationZoom() {
   createEffect(() => {
     if (!view.data || anchor()) return;
     const matches = (view.data.locations ?? []).filter((l) => l.name === id());
-    if (matches.length === 1) navigate(`/locations/${matches[0].id}?zoom=1`, { replace: true });
+    if (matches.length === 1) navigate(`/locations/${matches[0].id}${window.location.search}`, { replace: true });
   });
   const bands = createMemo<Band[]>(() => {
     if (!view.data) return [];

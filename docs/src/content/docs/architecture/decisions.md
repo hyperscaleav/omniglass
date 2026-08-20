@@ -166,6 +166,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0125](#adr-0125-a-band-shows-the-locations-recorded-verdict-not-the-consoles-fold) | 2026-08-15 | Accepted | A fleet band's verdict chip renders the location's server-recorded verdict, the same row its detail page reads, never the console's fold over in-scope clusters; the fold remains as a named derivation. A band disagreeing with its own detail one click apart is a visible contradiction, and the fold covers only what the caller may read |
 | [ADR-0126](#adr-0126-the-zoom-face-is-a-url-fact-on-the-identity-routes) | 2026-08-15 | Accepted | The deeper zooms render at the identity routes behind a query param (`/locations/{id}?zoom=1`), the inventory detail staying the default face: ADR-0120's mode-rides-the-URL precedent applied to the fork where "the zoom is a function of which entity the URL names" and "the four tables stay live and untouched" collided at one address. The param may become the default later, and the table face may retire once the medium is judged |
 | [ADR-0127](#adr-0127-operator-surfaces-carry-tooltips-not-prose-and-the-system-body-goes-components-first) | 2026-08-20 | Accepted | Operator surfaces carry no inline explanatory prose (explainers ride the label's tooltip: `InfoTip`, `Eyebrow`); the system body renders components-first, role as a badge, role chrome only where it earns it (quorum > 1, short, or unstaffed) |
+| [ADR-0128](#adr-0128-the-standard-declares-the-room-map-normalized-and-display-only) | 2026-08-20 | Accepted | A standard may declare a room map: one validated jsonb value (aspect + normalized 1-based role positions) on `standard`, display-only, rendered by every conforming system's Map tab; JSON null clears; the visual editor stays out of v1 |
 
 ## Entries
 
@@ -6016,3 +6017,21 @@ interface create form, since that name is the platform's to mint.
   ("this is an operator's view") and the role-shaped body misrepresents the fleet's common
   case. The pedagogy doctrine is satisfied by hover; #784 tracks sweeping the remaining
   surfaces onto the same rule.
+
+### ADR-0128: The standard declares the room map, normalized and display-only
+
+- **Date:** 2026-08-20 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [ui](/architecture/ui/)
+- **Decision:** A standard may declare a room map: one jsonb value (`map` on `standard`)
+  holding an aspect ratio and one normalized position per role position (`{role, position,
+  x, y}`, coordinates in [0, 1], positions 1-based to match `position_labels`). Data, not
+  code: every system conforming to the standard renders the same room for free, the join of
+  "where this position sits" and "who holds it" made client-side from the health read.
+  Validated in Go on write (positive aspect, bounds, no duplicate pair); a JSON null clears
+  it; nothing queries into the blob, which is why it is a value and not a table. Render-only
+  in v1: authored through the standard PATCH (or seed YAML), the visual editor deliberately
+  out.
+- **Context:** The system workspace epic (#788) ruled a top-down room view onto the system
+  zoom ("Mic 1 · Shure MXA910" at its wall position, live status on each marker). The map is
+  a property of the DESIGN, not of one room, so it lives on the standard, the same
+  data-not-code guardrail the driver arc carries; a relational table per position would buy
+  queryability nothing displays and cost a migration per shape change.

@@ -8,6 +8,7 @@ import { systemHealthKey, type FleetHealth } from "../lib/health";
 import { systemRolesKey } from "../lib/system_roles";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { systemMetricsKey } from "../lib/system_metrics";
+import { STANDARDS_KEY } from "../lib/standards";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { ME_KEY, type Me } from "../lib/auth";
@@ -94,6 +95,10 @@ const declared = [
     accepted_types: ["display"], pinned_products: [], assigned_to: [], positions: [], position_labels: [],
   },
   {
+    name: "room-mic", label: "Room Microphone", quorum: 2, assigned: 2, impact: "degraded", from_standard: true,
+    accepted_types: ["video-bar"], pinned_products: [], assigned_to: ["videobar-1", "mic-1"], positions: [1, 2], position_labels: [],
+  },
+  {
     name: "conf-bar", label: "Conferencing Bar", quorum: 1, assigned: 1, impact: "outage", from_standard: true,
     accepted_types: ["video-bar"], pinned_products: [], assigned_to: ["videobar-1"], alternate: "conferencing/all-in-one",
     positions: [1], position_labels: [],
@@ -105,17 +110,18 @@ const declared = [
   },
 ] as unknown as EffectiveRole[];
 
-function mount(path = `/web/systems/${uuidFor("szp-sys")}?zoom=1`, healthOverride: FleetHealth = health, metrics: unknown[] = []) {
+function mount(path = `/web/systems/${uuidFor("szp-sys")}?zoom=1`, healthOverride: FleetHealth = health, metrics: unknown[] = [], standards: unknown[] = []) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], me);
-  qc.setQueryData([...SYSTEMS_KEY], []);
+  qc.setQueryData([...SYSTEMS_KEY], [{ id: uuidFor("szp-sys"), name: "boardroom", label: "Boardroom", standard: "huddle-room" }]);
   qc.setQueryData([...LOCATIONS_KEY], []);
   qc.setQueryData([...LOCATION_TYPES_KEY], []);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], healthOverride);
   qc.setQueryData([...systemRolesKey(uuidFor("szp-sys"))], declared);
   qc.setQueryData([...systemMetricsKey(uuidFor("szp-sys"))], metrics);
+  qc.setQueryData([...STANDARDS_KEY], standards);
   window.history.pushState({}, "", path);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -281,5 +287,52 @@ describe("the KPI tiles (#790)", () => {
   it("renders no tile row at all when the standard declares nothing", () => {
     mount();
     expect(screen.queryByTestId("kpi-tiles")).toBeNull();
+  });
+});
+
+describe("the map tab (#791)", () => {
+  const MAPPED = [{
+    id: uuidFor("szp-std"), name: "huddle-room", label: "Huddle Room", official: false,
+    map: { aspect: 1.5, positions: [
+      { role: "room-mic", position: 1, x: 0.32, y: 0.52 },
+      { role: "room-mic", position: 2, x: 0.68, y: 0.52 },
+      { role: "main-display", position: 1, x: 0.5, y: 0.06 },
+    ] },
+  }];
+
+  it("a standard with a map yields the tab rail; without one there is no rail at all", () => {
+    mount(undefined, health, [], MAPPED);
+    expect(screen.getByTestId("tab-rail")).toBeTruthy();
+    cleanup();
+    mount();
+    expect(screen.queryByTestId("tab-rail")).toBeNull();
+  });
+
+  it("the map tab renders one marker per declared position of the build in use, occupants solid and gaps hollow", () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=map`, health, [], MAPPED);
+    const map = screen.getByTestId("system-map");
+    const markers = within(map).getAllByTestId(/^mapmarker-/);
+    expect(markers).toHaveLength(3);
+    expect(within(map).getByText(/Room Microphone 2 · mic-1/)).toBeTruthy();
+    expect(within(map).getByText(/Main Display · empty/)).toBeTruthy();
+  });
+
+  it("clicking an occupied marker opens the leaf, keeping the zoom", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=map`, health, [], MAPPED);
+    fireEvent.click(screen.getByTestId(`mapmarker-room-mic-2`));
+    const page = await screen.findByTestId("component-page");
+    expect(page.textContent).toContain(`/web/components/${uuidFor("szp-c-mic")}`);
+  });
+});
+
+describe("the name-shaped address (#759's rule)", () => {
+  it("keeps every search param through the uuid resolve, the tab included", async () => {
+    mount(`/web/systems/boardroom?zoom=1&tab=map`, health, [], [
+      { id: uuidFor("szp-std"), name: "huddle-room", label: "Huddle Room", official: false,
+        map: { aspect: 1.5, positions: [{ role: "room-mic", position: 1, x: 0.3, y: 0.5 }] } },
+    ]);
+    await screen.findByTestId("system-map");
+    expect(window.location.search).toContain("tab=map");
+    expect(window.location.pathname).toContain(uuidFor("szp-sys"));
   });
 });

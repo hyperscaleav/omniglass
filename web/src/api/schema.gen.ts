@@ -6914,6 +6914,8 @@ export interface components {
             /** @description The standard's uuid, the stable handle that survives a rename */
             id: string;
             label: string;
+            /** @description The standard's room layout: aspect (width over height) and one normalized position per role position; absent when undeclared */
+            map?: unknown;
             /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
@@ -7499,6 +7501,8 @@ export interface components {
             readonly $schema?: string;
             /** @description A new operator-facing label */
             label?: string;
+            /** @description The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair */
+            map?: unknown;
             /** @description A new variant parent, by handle or uuid */
             parent_standard_id?: string;
         };

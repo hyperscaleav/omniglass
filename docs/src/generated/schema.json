@@ -482,6 +482,11 @@
       "name": "label_rule",
       "type": "text",
       "nullable": true
+     },
+     {
+      "name": "map",
+      "type": "jsonb",
+      "nullable": true
      }
     ],
     "uniques": [

@@ -5098,6 +5098,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fLabel string
+				var fMap string
 				var fParentStandardId string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
@@ -5111,6 +5112,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
+						if cmd.Flags().Changed("map") {
+							body["map"] = jsonOrString(fMap)
+						}
 						if cmd.Flags().Changed("parent-standard-id") {
 							body["parent_standard_id"] = fParentStandardId
 						}
@@ -5118,6 +5122,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
+				cmd.Flags().StringVar(&fMap, "map", "", "The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair")
 				cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "A new variant parent, by handle or uuid")
 				return cmd
 			}()

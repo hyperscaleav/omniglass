@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createMemo } from "solid-js";
-import { useNavigate, useParams } from "@solidjs/router";
+import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
@@ -14,6 +14,10 @@ import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/flee
 import { systemHealth, systemHealthKey } from "../lib/health";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
 import { systemMetrics, systemMetricsKey } from "../lib/system_metrics";
+import { STANDARDS_KEY, listStandards } from "../lib/standards";
+import { mapMarkers, parseStandardMap } from "../lib/system_map";
+import SystemMap from "../components/SystemMap";
+import TabRail from "../components/TabRail";
 import { alarmRows, componentCards, sinceOf, systemZoomVM, type ComponentCard } from "../lib/system_zoom";
 import { vitalRows } from "../lib/component_leaf";
 import { slotStrip } from "../lib/slot_strip";
@@ -50,7 +54,7 @@ export default function SystemZoom() {
   createEffect(() => {
     if (!view.data || system()) return;
     const matches = (view.data.systems ?? []).filter((s) => s.name === id());
-    if (matches.length === 1) navigate(`/systems/${matches[0].id}?zoom=1`, { replace: true });
+    if (matches.length === 1) navigate(`/systems/${matches[0].id}${window.location.search}`, { replace: true });
   });
 
   const strip = createMemo(() => (health.data ? slotStrip(health.data) : undefined));
@@ -66,6 +70,17 @@ export default function SystemZoom() {
   const bodyOf = createMemo(() => (vm() ? componentCards(vm()!) : undefined));
   const metricsQ = useQuery(() => ({ queryKey: systemMetricsKey(id()), queryFn: () => systemMetrics(id()) }));
   const kpis = createMemo(() => vitalRows(metricsQ.data ?? []));
+  const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
+  const mapDecl = createMemo(() => {
+    const std = (standards.data ?? []).find((x) => x.name === standard());
+    const raw = (std as { map?: unknown } | undefined)?.map;
+    return parseStandardMap(raw === undefined ? undefined : JSON.stringify(raw));
+  });
+  const [search] = useSearchParams();
+  const tab = () => {
+    const t = Array.isArray(search.tab) ? search.tab[0] : search.tab;
+    return t === "map" && mapDecl() ? "map" : "overview";
+  };
   const comps = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const prods = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
   const productOf = (componentId: string): string | undefined => {
@@ -144,7 +159,11 @@ export default function SystemZoom() {
           <Show when={vm()}>
             {(z) => (
               <div class="flex min-w-0 flex-1 flex-col">
-                <div class="flex flex-col gap-5 p-4">
+                <TabRail tabs={mapDecl() ? [{ key: "overview", label: "Overview" }, { key: "map", label: "Map" }] : [{ key: "overview", label: "Overview" }]} />
+                <Show when={tab() === "map" && mapDecl()}>
+                  {(decl) => <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} />}
+                </Show>
+                <div class="flex flex-col gap-5 p-4" classList={{ hidden: tab() !== "overview" }}>
                   {/* Cause before arithmetic (#785): what is wrong, on which
                       component, impairing which role, since when. */}
                   <Show when={alarms().length > 0}>

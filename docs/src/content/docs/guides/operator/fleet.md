@@ -34,6 +34,13 @@ screenshots:
       - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
       - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
       - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
+  - id: fleet-map
+    path: /web/systems/huddle?zoom=1&tab=map
+    alt: "The Map tab: the standard's declared room rendered top-down, one marker per role position, solid where staffed and hollow where not."
+    # The header's since-line ages with the capture (baseline only; the docs
+    # embed the clean render).
+    mask:
+      - "[data-testid=since-line]"
   - id: fleet-location
     path: /web/locations/east?zoom=1
     alt: "The location zoom: the breadcrumb, the verdict header with the needs-attention chip, a band per child location, system cards with slot strips, and the allowed child types."
@@ -128,6 +135,16 @@ last recorded change and its age). Below it, cause before arithmetic:
   vocabulary, not an operator's.
 - A shared occupant is badged with the other system it serves; a member filling no role
   is a card with a "no role" badge, and that is a normal state.
+
+## The map
+
+A standard may declare the room's layout: where each role position sits, top-down. Every
+system built to that standard gets the **Map** tab for free, one marker per declared
+position: solid in the occupant's state (click it to open the leaf), hollow where nobody
+is staffed. The label is the role, its position number when the role wants several, and
+the component holding it.
+
+::screenshot{#fleet-map}
 
 ## The component leaf
 

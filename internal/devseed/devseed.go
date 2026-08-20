@@ -615,6 +615,46 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	if err := seedStandardMetrics(ctx, gw, sysIDs); err != nil {
 		return err
 	}
+	// The room maps (#791, ADR-0128): every conforming system's Map tab
+	// renders from its standard's declaration, so both example standards
+	// carry one. Present is the sentinel: the write audits, so a re-run
+	// must not repeat it.
+	if err := seedStandardMaps(ctx, gw, actorID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// standardMaps are the example rooms' layouts, drawn the way an integrator
+// sketches one: front wall at the top, the table in the middle distance.
+var standardMaps = map[string]string{
+	"meeting-room": `{"aspect":1.5,"positions":[
+		{"role":"main-display","position":1,"x":0.5,"y":0.06},
+		{"role":"room-mic","position":1,"x":0.32,"y":0.52},
+		{"role":"room-mic","position":2,"x":0.68,"y":0.52}]}`,
+	"huddle-room": `{"aspect":1.3,"positions":[
+		{"role":"conf-bar","position":1,"x":0.5,"y":0.08},
+		{"role":"conf-codec","position":1,"x":0.12,"y":0.9},
+		{"role":"conf-camera","position":1,"x":0.5,"y":0.16},
+		{"role":"conf-dsp","position":1,"x":0.24,"y":0.9},
+		{"role":"conf-amp","position":1,"x":0.36,"y":0.9},
+		{"role":"conf-mic","position":1,"x":0.5,"y":0.55}]}`,
+}
+
+func seedStandardMaps(ctx context.Context, gw storage.Gateway, actorID string) error {
+	for std, decl := range standardMaps {
+		st, err := gw.GetStandard(ctx, std)
+		if err != nil {
+			return fmt.Errorf("devseed: read standard %q: %w", std, err)
+		}
+		if st.Map != nil {
+			continue
+		}
+		raw := json.RawMessage(decl)
+		if _, err := gw.UpdateStandard(ctx, actorID, std, storage.StandardPatch{Map: &raw}); err != nil {
+			return fmt.Errorf("devseed: declare the %s map: %w", std, err)
+		}
+	}
 	return nil
 }
 

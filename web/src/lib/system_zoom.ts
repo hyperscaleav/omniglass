@@ -38,6 +38,9 @@ export type SlotOccupant = {
   sharedWith: string[];
   // The declared position label, where the role labels its positions.
   positionLabel?: string;
+  // The declared 1-based slot number this occupant holds, defaulting to its
+  // assignment order when the role declares none: the map join key (#791).
+  position: number;
 };
 
 export type SlotVM = {
@@ -98,9 +101,11 @@ export function systemZoomVM(health: FleetHealth, declared: EffectiveRole[], vie
       const dot = dotsByName.get(name);
       const pos = positions[i];
       const positionLabel = pos !== undefined && labels[pos - 1] ? labels[pos - 1] : undefined;
+      const position = pos ?? i + 1;
       return {
         name,
         componentId: dot?.component ?? "",
+        position,
         down: (r.down ?? []).includes(name),
         sharedWith: dot ? sharedWith(dot.component) : [],
         positionLabel,

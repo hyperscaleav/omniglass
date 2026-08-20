@@ -5524,6 +5524,8 @@ components:
           type: string
         label:
           type: string
+        map:
+          description: "The standard's room layout: aspect (width over height) and one normalized position per role position; absent when undeclared"
         name:
           description: The name an operator reads and types; renameable
           type: string
@@ -6491,6 +6493,8 @@ components:
         label:
           description: A new operator-facing label
           type: string
+        map:
+          description: "The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair"
         parent_standard_id:
           description: A new variant parent, by handle or uuid
           type: string
