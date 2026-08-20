@@ -642,7 +642,11 @@ var standardMaps = map[string]string{
 }
 
 func seedStandardMaps(ctx context.Context, gw storage.Gateway, actorID string) error {
-	for std, decl := range standardMaps {
+	// Fixed order: the writes audit, and a Go map's random iteration order
+	// swapped the two audit rows between seeds, which the shot gate reads
+	// as drift (the #780 class).
+	for _, std := range []string{"meeting-room", "huddle-room"} {
+		decl := standardMaps[std]
 		st, err := gw.GetStandard(ctx, std)
 		if err != nil {
 			return fmt.Errorf("devseed: read standard %q: %w", std, err)
@@ -694,11 +698,21 @@ func seedStandardMetrics(ctx context.Context, gw storage.Gateway, sysIDs map[str
 			return nil
 		}
 	}
+	// A day of temperature (a morning ramp, an afternoon peak) and a working
+	// day of occupancy, newest last: enough shape for the Data tab's chart
+	// to be judged, ending on the values the KPI tiles show.
 	now := time.Now()
-	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
-		{OwnerKind: "system", OwnerID: sysID, Key: "room-temperature", Value: 23.5, Source: "devseed", TS: now.Add(-4 * time.Minute)},
-		{OwnerKind: "system", OwnerID: sysID, Key: "occupancy-count", Value: 0, Source: "devseed", TS: now.Add(-4 * time.Minute)},
-	}); err != nil {
+	writes := []storage.MetricSampleWrite{}
+	temps := []float64{21.8, 21.6, 21.9, 22.4, 23.1, 23.8, 24.2, 23.9, 23.5}
+	occ := []float64{0, 0, 4, 6, 6, 2, 5, 1, 0}
+	for i := range temps {
+		ts := now.Add(-time.Duration(len(temps)-1-i) * 3 * time.Hour).Add(-4 * time.Minute)
+		writes = append(writes,
+			storage.MetricSampleWrite{OwnerKind: "system", OwnerID: sysID, Key: "room-temperature", Value: temps[i], Source: "devseed", TS: ts},
+			storage.MetricSampleWrite{OwnerKind: "system", OwnerID: sysID, Key: "occupancy-count", Value: occ[i], Source: "devseed", TS: ts},
+		)
+	}
+	if err := gw.InsertMetricSamples(ctx, writes); err != nil {
 		return fmt.Errorf("devseed: write KPI samples: %w", err)
 	}
 	return nil

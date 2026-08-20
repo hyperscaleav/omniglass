@@ -819,3 +819,11 @@ func (UnimplementedGateway) ListSystemEvents(context.Context, string, time.Durat
 func (UnimplementedGateway) ListSystemLogs(context.Context, string, time.Duration, int) ([]LogLine, error) {
 	return nil, nil
 }
+
+func (UnimplementedGateway) ListMetricSeries(context.Context, string, string, string, time.Duration, int) ([]MetricSample, error) {
+	return nil, nil
+}
+
+func (UnimplementedGateway) ListPropertySeries(context.Context, string, string, string, time.Duration, int) ([]PropertySample, error) {
+	return nil, nil
+}

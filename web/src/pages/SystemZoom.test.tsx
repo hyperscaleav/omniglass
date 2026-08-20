@@ -10,6 +10,7 @@ import { SYSTEMS_KEY } from "../lib/systems";
 import { systemMetricsKey } from "../lib/system_metrics";
 import { componentAlarmsKey } from "../lib/alarms";
 import { systemEventsKey, systemLogsKey } from "../lib/system_activity";
+import { metricSeriesKey } from "../lib/series";
 import { STANDARDS_KEY } from "../lib/standards";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
@@ -399,5 +400,27 @@ describe("the events and logs tabs (#793)", () => {
     const r2 = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=logs`);
     r2.qc.setQueryData([...systemLogsKey(uuidFor("szp-sys"))], []);
     expect(await screen.findByText(/No lines in the window/)).toBeTruthy();
+  });
+});
+
+describe("the data tab (#794)", () => {
+  const METRICS = [
+    { metric_type_name: "room-temperature", label: "Room Temperature", data_type: "float", value: 23.5, is_sampled: true, from_contract: true, required: false },
+    { metric_type_name: "occupancy-count", label: "Occupancy Count", data_type: "int", value: 0, is_sampled: false, from_contract: true, required: false },
+  ];
+
+  it("offers one picker chip per declared metric, charts the chosen series, and hides the tab with nothing to chart", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=data`, health, METRICS);
+    r.qc.setQueryData([...metricSeriesKey("systems", uuidFor("szp-sys"), "room-temperature", 24)], [
+      { ts: "2026-08-20T10:00:00Z", value: 22.9, provenance: "observed" },
+      { ts: "2026-08-20T14:00:00Z", value: 23.5, provenance: "observed" },
+    ]);
+    const tab = screen.getByTestId("data-tab");
+    expect(within(tab).getByRole("button", { name: /Room Temperature/ })).toBeTruthy();
+    expect(within(tab).getByRole("button", { name: /Occupancy Count/ })).toBeTruthy();
+    expect(await within(tab).findByTestId("timeseries-chart")).toBeTruthy();
+    cleanup();
+    mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=data`, health, []);
+    expect(screen.queryByRole("tab", { name: "Data" })).toBeNull();
   });
 });

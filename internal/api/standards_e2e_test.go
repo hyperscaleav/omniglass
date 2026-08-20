@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/api"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
@@ -189,5 +191,48 @@ func TestStandardMapOnTheWire(t *testing.T) {
 	}
 	if len(cleared.Map) != 0 && string(cleared.Map) != "null" {
 		t.Fatalf("cleared map still on the wire: %s", cleared.Map)
+	}
+}
+
+// The series reads on the wire (#794): raw samples newest first for both
+// owner arcs, sharing the effective reads' route grammar.
+func TestSeriesReadsOnTheWire(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "series-probe"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	now := time.Now().UTC()
+	if err := gw.InsertMetricSamples(ctx, []storage.MetricSampleWrite{
+		{OwnerKind: "component", OwnerID: "series-probe", Key: "icmp-rtt-avg", Value: 5.0, Source: "t", TS: now.Add(-2 * time.Hour)},
+		{OwnerKind: "component", OwnerID: "series-probe", Key: "icmp-rtt-avg", Value: 6.1, Source: "t", TS: now},
+	}); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	var got struct {
+		Samples []struct {
+			Value float64 `json:"value"`
+		} `json:"samples"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/series-probe/metrics/icmp-rtt-avg/samples?hours=24", nil, http.StatusOK), &got); err != nil {
+		t.Fatalf("read series: %v", err)
+	}
+	if len(got.Samples) != 2 || got.Samples[0].Value != 6.1 {
+		t.Fatalf("series = %+v, want two samples newest first", got.Samples)
 	}
 }

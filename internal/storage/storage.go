@@ -505,6 +505,12 @@ type Gateway interface {
 	// ListSystemEvents merges the system's own events with its members',
 	// newest first, each row naming its owner (#793).
 	ListSystemEvents(ctx context.Context, systemID string, window time.Duration, limit int) ([]Event, error)
+	// ListMetricSeries returns one metric series' raw samples newest first,
+	// windowed and capped: the rows behind the effective read (#794).
+	ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key string, window time.Duration, limit int) ([]MetricSample, error)
+	// ListPropertySeries mirrors ListMetricSeries over the property lane:
+	// the change history behind the effective value (#794).
+	ListPropertySeries(ctx context.Context, ownerKind, ownerRef, key string, window time.Duration, limit int) ([]PropertySample, error)
 
 	// The raw-log lane (ADR-0066): log lines are untyped arrival, not events, so
 	// neither insert has a registry gate. log_line is component-owned (#589);

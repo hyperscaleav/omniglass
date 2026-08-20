@@ -30,6 +30,8 @@ import { durationText } from "../lib/timeline";
 import { componentAlarms, componentAlarmsKey, severityRank } from "../lib/alarms";
 import { incidentRows, markerX, type MemberAlarms } from "../lib/system_history";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey } from "../lib/system_activity";
+import { metricSeries, metricSeriesKey } from "../lib/series";
+import TimeseriesChart from "../components/TimeseriesChart";
 
 // The system zoom (#636): the typed slots a system needs filled, at the
 // identity route behind ?zoom=1 (ADR-0126). One card per role with the
@@ -78,6 +80,11 @@ export default function SystemZoom() {
     const raw = (std as { map?: unknown } | undefined)?.map;
     return parseStandardMap(raw === undefined ? undefined : JSON.stringify(raw));
   });
+  // Every declared metric, sampled or not: the Data tab's pickable series.
+  const kpiMetrics = createMemo(() => (metricsQ.data ?? []).filter((m) => m.from_contract || m.is_sampled));
+  const [seriesPick, setSeriesPick] = createSignal<string | undefined>(undefined);
+  const pickedMetric = () => seriesPick() ?? kpiMetrics()[0]?.metric_type_name;
+
   const [search] = useSearchParams();
   const tabs = createMemo(() => [
     { key: "overview", label: "Overview" },
@@ -85,6 +92,7 @@ export default function SystemZoom() {
     { key: "history", label: "History" },
     { key: "events", label: "Events" },
     { key: "logs", label: "Logs" },
+    ...(kpiMetrics().length > 0 ? [{ key: "data", label: "Data" }] : []),
   ]);
   const tab = () => {
     const t = Array.isArray(search.tab) ? search.tab[0] : search.tab;
@@ -106,6 +114,11 @@ export default function SystemZoom() {
     })),
   }));
   // Pinned once, like pageNow: incident ages must not re-age mid-render.
+  const seriesQ = useQuery(() => ({
+    queryKey: metricSeriesKey("systems", id(), pickedMetric() ?? "", 24),
+    queryFn: () => metricSeries("systems", id(), pickedMetric()!, 24),
+    enabled: tab() === "data" && !!pickedMetric(),
+  }));
   const eventsQ = useQuery(() => ({ queryKey: systemEventsKey(id()), queryFn: () => systemEvents(id()), enabled: tab() === "events" }));
   const logsQ = useQuery(() => ({ queryKey: systemLogsKey(id()), queryFn: () => systemLogs(id()), enabled: tab() === "logs" }));
   const incidents = createMemo(() => {
@@ -231,6 +244,26 @@ export default function SystemZoom() {
                         </For>
                       </div>
                     </Show>
+                  </section>
+                </Show>
+                <Show when={tab() === "data"}>
+                  <section data-testid="data-tab" class="flex flex-col gap-3 p-4">
+                    <Eyebrow label="Data" hint="The samples behind the KPI tiles: one series at a time over the last 24 hours, newest at the right. The chart draws raw samples, capped; a series with only its contract default has nothing to chart yet." />
+                    <div class="flex flex-wrap gap-1.5">
+                      <For each={kpiMetrics()}>
+                        {(m) => (
+                          <button
+                            type="button"
+                            class="badge cursor-pointer"
+                            classList={{ "badge-primary badge-soft": pickedMetric() === m.metric_type_name, "badge-ghost": pickedMetric() !== m.metric_type_name }}
+                            onClick={() => setSeriesPick(m.metric_type_name)}
+                          >
+                            {entityLabel({ name: m.metric_type_name, label: m.label })}
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                    <TimeseriesChart samples={seriesQ.data ?? []} now={pageNow} windowMs={24 * 3600_000} />
                   </section>
                 </Show>
                 <Show when={tab() === "history"}>

@@ -58,6 +58,17 @@ screenshots:
       - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
       - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
       - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
+  - id: fleet-data
+    path: /web/systems/huddle?zoom=1&tab=data
+    steps:
+      - action: click
+        selector: "role=button[name='Room Temperature']"
+    alt: "The Data tab: the room-temperature series charted over the last day, the latest sample emphasized, one picker chip per declared metric."
+    # The since-line ages with the capture; the chart's x positions divide
+    # seed offsets by the capture's own clock (sub-pixel, but the endpoint
+    # label and axis are data-stable, so only the header masks).
+    mask:
+      - "[data-testid=since-line]"
   - id: fleet-location
     path: /web/locations/east?zoom=1
     alt: "The location zoom: the breadcrumb, the verdict header with the needs-attention chip, a band per child location, system cards with slot strips, and the allowed child types."
@@ -178,6 +189,14 @@ The **Events** tab is the room's story on the event lane: the system's own event
 members', newest first, each row labeled by the owner that raised it. The **Logs** tab is
 the members' raw lines merged, each naming the component that wrote it. Both cover the
 last 24 hours, capped; both scope to what you can read.
+
+## The data
+
+The **Data** tab charts the samples behind the KPI tiles: pick a series, see the last 24
+hours, newest at the right, the latest value emphasized. Raw samples, capped; a series
+still on its contract default has nothing to chart yet, and says so.
+
+::screenshot{#fleet-data}
 
 ## The component leaf
 

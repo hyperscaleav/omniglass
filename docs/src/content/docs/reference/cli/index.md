@@ -737,6 +737,31 @@ Example:
 omniglass component metric list <name>
 ```
 
+#### `omniglass component metric sample`
+
+Commands for the sample resource
+
+##### `omniglass component metric sample list`
+
+Read one metric series' raw samples
+
+```
+omniglass component metric sample list <name> <metric> [flags]
+```
+
+The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--hours` | int | `0` | The window in hours, counted back from now; 24 when unset |
+| `--limit` | int | `0` | The row cap, newest kept; 500 when unset |
+
+Example:
+
+```sh
+omniglass component metric sample list <name> <metric>
+```
+
 ### `omniglass component move`
 
 Move a component
@@ -808,6 +833,31 @@ Example:
 
 ```sh
 omniglass component property list <name>
+```
+
+#### `omniglass component property sample`
+
+Commands for the sample resource
+
+##### `omniglass component property sample list`
+
+Read one property series' change history
+
+```
+omniglass component property sample list <name> <property> [flags]
+```
+
+The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--hours` | int | `0` | The window in hours, counted back from now; 24 when unset |
+| `--limit` | int | `0` | The row cap, newest kept; 500 when unset |
+
+Example:
+
+```sh
+omniglass component property sample list <name> <property>
 ```
 
 #### `omniglass component property update`
@@ -4222,6 +4272,31 @@ Example:
 omniglass system metric list <name>
 ```
 
+#### `omniglass system metric sample`
+
+Commands for the sample resource
+
+##### `omniglass system metric sample list`
+
+Read one metric series' raw samples
+
+```
+omniglass system metric sample list <name> <metric> [flags]
+```
+
+The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--hours` | int | `0` | The window in hours, counted back from now; 24 when unset |
+| `--limit` | int | `0` | The row cap, newest kept; 500 when unset |
+
+Example:
+
+```sh
+omniglass system metric sample list <name> <metric>
+```
+
 ### `omniglass system move`
 
 Move a system
@@ -4293,6 +4368,31 @@ Example:
 
 ```sh
 omniglass system property list <name>
+```
+
+#### `omniglass system property sample`
+
+Commands for the sample resource
+
+##### `omniglass system property sample list`
+
+Read one property series' change history
+
+```
+omniglass system property sample list <name> <property> [flags]
+```
+
+The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--hours` | int | `0` | The window in hours, counted back from now; 24 when unset |
+| `--limit` | int | `0` | The row cap, newest kept; 500 when unset |
+
+Example:
+
+```sh
+omniglass system property sample list <name> <property>
 ```
 
 #### `omniglass system property update`
