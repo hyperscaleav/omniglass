@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chartLayout } from "./chart";
+import { chartLayout, nearestPoint } from "./chart";
 
 // The timeseries chart's pure core (#794): samples to plot geometry, no DOM.
 // X is time against the window's right-edge-now axis; Y is a padded nice
@@ -53,5 +53,25 @@ describe("the endpoint label", () => {
     const l = chartLayout([at(0.1, 100)], opts);
     expect(l.endLabel.x).toBeLessThanOrEqual(opts.width - opts.padRight);
     expect(l.endLabel.y).toBeGreaterThanOrEqual(9);
+  });
+});
+
+describe("the x axis and the crosshair (#795 review)", () => {
+  const opts = { width: 640, height: 160, padLeft: 40, padRight: 12, padY: 18, now, windowMs: 24 * 3600_000 };
+
+  it("emits four x ticks spanning the window, oldest at the left edge and now at the right", () => {
+    const l = chartLayout([at(20, 5), at(0, 6)], opts);
+    expect(l.xTicks).toHaveLength(4);
+    expect(l.xTicks[0].x).toBeCloseTo(40, 3);
+    expect(l.xTicks[3].x).toBeCloseTo(628, 3);
+    expect(Date.parse(l.xTicks[3].ts) - Date.parse(l.xTicks[0].ts)).toBe(24 * 3600_000);
+  });
+
+  it("nearestPoint resolves a plot x to the closest SAMPLE, never an interpolation", () => {
+    const l = chartLayout([at(24, 5), at(12, 6), at(0, 7)], opts);
+    const mid = l.points[1];
+    expect(nearestPoint(l, mid.x + 3)).toBe(mid);
+    expect(nearestPoint(l, 0)).toBe(l.points[0]);
+    expect(nearestPoint(chartLayout([], opts), 100)).toBeNull();
   });
 });

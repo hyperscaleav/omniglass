@@ -28,6 +28,10 @@ export type ChartLayout = {
   // Where the newest sample's value floats: centered above its dot,
   // intersecting the line's territory, clamped into the frame.
   endLabel: { x: number; y: number };
+  // Four time ticks spanning the window, oldest at the left plot edge and
+  // now at the right: the x axis (#795 review; a chart with no time axis
+  // says nothing about timing).
+  xTicks: { x: number; ts: string }[];
 };
 
 export function chartLayout(samples: ChartSample[], o: ChartOpts): ChartLayout {
@@ -35,7 +39,11 @@ export function chartLayout(samples: ChartSample[], o: ChartOpts): ChartLayout {
     .map((s) => ({ t: Date.parse(s.ts), value: s.value, ts: s.ts }))
     .filter((s) => Number.isFinite(s.t))
     .sort((a, b) => a.t - b.t);
-  if (rows.length === 0) return { points: [], yMin: 0, yMax: 1, yTicks: [], linePath: "", areaPath: "", endLabel: { x: 0, y: 0 } };
+  const xTicks = [0, 1 / 3, 2 / 3, 1].map((f) => ({
+    x: o.padLeft + f * (o.width - o.padLeft - o.padRight),
+    ts: new Date(o.now - (1 - f) * o.windowMs).toISOString(),
+  }));
+  if (rows.length === 0) return { points: [], yMin: 0, yMax: 1, yTicks: [], linePath: "", areaPath: "", endLabel: { x: 0, y: 0 }, xTicks };
 
   let lo = Math.min(...rows.map((r) => r.value));
   let hi = Math.max(...rows.map((r) => r.value));
@@ -62,5 +70,21 @@ export function chartLayout(samples: ChartSample[], o: ChartOpts): ChartLayout {
     x: Math.min(Math.max(end.x, o.padLeft + 14), o.width - o.padRight),
     y: Math.max(end.y - 9, 9),
   };
-  return { points, yMin: lo, yMax: hi, yTicks, linePath, areaPath, endLabel };
+  return { points, yMin: lo, yMax: hi, yTicks, linePath, areaPath, endLabel, xTicks };
+}
+
+// nearestPoint resolves a plot-space x to the closest SAMPLE, never an
+// interpolation: the crosshair reads what was measured, and between two
+// samples it snaps to the nearer one.
+export function nearestPoint(l: ChartLayout, x: number): ChartPoint | null {
+  let best: ChartPoint | null = null;
+  let bestDist = Infinity;
+  for (const p of l.points) {
+    const d = Math.abs(p.x - x);
+    if (d < bestDist) {
+      bestDist = d;
+      best = p;
+    }
+  }
+  return best;
 }
