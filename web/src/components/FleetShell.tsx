@@ -4,7 +4,7 @@ import Donut from "./Donut";
 import ListShell from "./ListShell";
 import { ChevronDown, ChevronLeft } from "./icons";
 import type { Chip, FilterKey } from "../lib/predicate";
-import type { FleetTiles } from "../lib/fleet_tiles";
+import type { TileSpec } from "../lib/fleet_tiles";
 import type { SystemCluster } from "../lib/fleet";
 
 // The fleet pages' shared frame (#630, ruled 2026-08-18): the same layout at
@@ -26,7 +26,7 @@ const tileBox = "flex h-full w-full min-w-0 flex-col gap-2 rounded-box border bo
 
 export default function FleetShell(props: {
   storageKey: string;
-  tiles: FleetTiles | undefined;
+  tiles: TileSpec | undefined;
   rows: SystemCluster[];
   filterKeys: FilterKey<SystemCluster>[];
   chips: Accessor<Chip[]>;
@@ -55,6 +55,7 @@ export default function FleetShell(props: {
 
   const segs = () => VERDICTS.map((v) => ({ key: v, label: v, value: props.tiles?.ratio[v] ?? 0, color: COLOR[v] }));
   const total = () => props.tiles?.ratio.total ?? 0;
+  const subject = () => props.tiles?.subject ?? "";
   const attention = () => props.tiles?.attention.total ?? 0;
   const ATTENTION = ["outage", "degraded", "incomplete"];
   const attentionOn = () => ATTENTION.some(facetActive) && !facetActive("healthy");
@@ -80,27 +81,23 @@ export default function FleetShell(props: {
                       <span class="inline-flex h-2 w-13 flex-none overflow-hidden rounded-full">
                         <For each={segs().filter((s) => s.value)}>{(s) => <span style={{ width: `${(s.value / Math.max(1, total())) * 52}px`, background: s.color }} />}</For>
                       </span>
-                      <span class="tnum text-sm font-semibold">{t().systems}</span>
-                      <span class="text-[11.5px] text-base-content/60">systems</span>
+                      <span class="tnum text-sm font-semibold">{total()}</span>
+                      <span class="text-[11.5px] text-base-content/60">{subject()}</span>
                     </button>
                     {/* Need attention: one click, three verdicts. */}
-                    <button data-testid="badge-attention" class={badgeCls(attentionOn())} onClick={toggleAttention} title="Filter to systems needing attention">
+                    <button data-testid="badge-attention" class={badgeCls(attentionOn())} onClick={toggleAttention} title="Filter to what needs attention">
                       <span class="h-1.5 w-1.5 flex-none rounded-full" style={{ background: attention() ? (t().attention.outage ? COLOR.outage : t().attention.degraded ? COLOR.degraded : COLOR.incomplete) : COLOR.healthy }} />
                       <span class="tnum text-sm font-semibold">{attention()}</span>
                       <span class="text-[11.5px] text-base-content/60">need attention</span>
                     </button>
-                    <span class={badgeCls(false)} title="Locations with no system">
-                      <span class="tnum text-sm font-semibold">{t().gaps}</span>
-                      <span class="text-[11.5px] text-base-content/60">{t().gaps === 1 ? "gap" : "gaps"}</span>
-                    </span>
-                    <span class={badgeCls(false)}>
-                      <span class="tnum text-sm font-semibold">{t().components}</span>
-                      <span class="text-[11.5px] text-base-content/60">components</span>
-                    </span>
-                    <span class={badgeCls(false)}>
-                      <span class="tnum text-sm font-semibold">{t().roots}</span>
-                      <span class="text-[11.5px] text-base-content/60">{t().roots === 1 ? "root" : "roots"}</span>
-                    </span>
+                    <For each={t().counts}>
+                      {(c) => (
+                        <span class={badgeCls(false)} title={c.sub}>
+                          <span class="tnum text-sm font-semibold">{String(c.value)}</span>
+                          <span class="text-[11.5px] text-base-content/60">{c.label}</span>
+                        </span>
+                      )}
+                    </For>
                   </div>
                   <Button square icon={ChevronLeft} title="Expand summary" label="Expand summary" class="flex-none" onClick={() => setSummaryOpen(true)} />
                 </div>
@@ -120,7 +117,7 @@ export default function FleetShell(props: {
                       thickness={11}
                       onSelect={(k) => toggleFacet(k)}
                       active={(k) => facetActive(k)}
-                      center={<><span class="tnum text-base font-semibold">{total()}</span><span class="text-[9px] text-base-content/50">systems</span></>}
+                      center={<><span class="tnum text-base font-semibold">{total()}</span><span class="text-[9px] text-base-content/50">{subject()}</span></>}
                     />
                     <ul class="flex flex-col gap-1 text-xs">
                       <For each={segs()}>
@@ -137,27 +134,17 @@ export default function FleetShell(props: {
                     </ul>
                   </div>
                 </div>
-                <div class="min-w-50 max-w-sm flex-[1_1_220px]">
-                  <div class={tileBox}>
-                    <span class="eyebrow">Gaps</span>
-                    <span class="tnum text-2xl font-semibold">{t().gaps}</span>
-                    <span class="text-xs text-base-content/60">{t().gaps === 1 ? "location with no system" : "locations with no system"}</span>
-                  </div>
-                </div>
-                <div class="min-w-50 max-w-sm flex-[1_1_220px]">
-                  <div class={tileBox}>
-                    <span class="eyebrow">Components</span>
-                    <span class="tnum text-2xl font-semibold">{t().components}</span>
-                    <span class="text-xs text-base-content/60">across {t().systems} systems</span>
-                  </div>
-                </div>
-                <div class="min-w-50 max-w-sm flex-[1_1_220px]">
-                  <div class={tileBox}>
-                    <span class="eyebrow">Roots</span>
-                    <span class="tnum text-2xl font-semibold">{t().roots}</span>
-                    <span class="text-xs text-base-content/60">{t().depth.min === t().depth.max ? `${t().depth.max} levels deep` : `${t().depth.min} to ${t().depth.max} levels deep`}</span>
-                  </div>
-                </div>
+                <For each={t().counts}>
+                  {(c) => (
+                    <div class="min-w-50 max-w-sm flex-[1_1_220px]">
+                      <div class={tileBox}>
+                        <span class="eyebrow">{c.label}</span>
+                        <span class="tnum text-2xl font-semibold">{String(c.value)}</span>
+                        <Show when={c.sub}><span class="text-xs text-base-content/60">{c.sub}</span></Show>
+                      </div>
+                    </div>
+                  )}
+                </For>
               </div>
             </Show>
           </div>

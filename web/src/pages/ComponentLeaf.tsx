@@ -5,7 +5,7 @@ import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
 import FleetShell from "../components/FleetShell";
-import { fleetTiles } from "../lib/fleet_tiles";
+import { componentTileSpec } from "../lib/fleet_tiles";
 import { createSignal } from "solid-js";
 import type { Chip } from "../lib/predicate";
 import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/fleet";
@@ -100,7 +100,11 @@ export default function ComponentLeaf() {
   const rows = createMemo(() => (view.data && memberships.data ? membershipRows(memberships.data, view.data) : []));
   const nodeByName = createMemo(() => new Map((nodes.data ?? []).map((n) => [n.name, n])));
 
-  const tiles = createMemo(() => (view.data ? fleetTiles(view.data) : undefined));
+  const tiles = createMemo(() =>
+    view.data && component()
+      ? componentTileSpec(view.data, component()!.id, activeAlarms().length, (reach.data?.interfaces ?? []).length)
+      : undefined,
+  );
   const [filterChips, setFilterChips] = createSignal<Chip[]>([]);
 
   const chain = createMemo(() => (view.data && component()?.location_id ? ancestors(component()!.location_id!, locationIndex(view.data)) : []));

@@ -134,7 +134,7 @@ describe("the fleet zoom's bands", () => {
     // Expanding shows the verdict donut with its legend and the count tiles.
     fireEvent.click(within(rail).getByRole("button", { name: /expand summary/i }));
     expect(within(rail).getByText("Summary")).toBeTruthy();
-    expect(within(rail).getByText("Gaps")).toBeTruthy();
+    expect(within(rail).getByText(/locations? with no system/)).toBeTruthy();
     expect(within(rail).getByText(/levels deep/)).toBeTruthy();
   });
 

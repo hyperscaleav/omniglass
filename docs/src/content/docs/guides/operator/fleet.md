@@ -92,10 +92,11 @@ need you and how many.
 
 ## Reading the page
 
-- **The summary rail** on top, the same shape as the inventory pages: badges for systems (with
-  a verdict mix bar), how many need attention (click to show only those), gaps, components,
-  and roots. Expand it for the verdict donut with a clickable legend and the count tiles.
-  The summary is fleet-wide on every zoom.
+- **The summary rail** on top, the same shape as the inventory pages: a verdict mix bar,
+  how many need attention (click to show only those), and the counts. Expand it for the
+  verdict donut with a clickable legend and the count tiles. **The summary reflects the
+  page it is on**: the fleet page counts the fleet, a location its own subtree, a system
+  its own components (slots, alarms, shared members), the leaf itself.
 - **The filter bar** narrows the canvas by verdict, system name, or room, with the same chips
   the inventory pages use.
 - **A band is a root location.** Its chip shows the location's recorded verdict. The subtitle

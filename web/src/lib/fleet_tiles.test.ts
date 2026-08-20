@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fleetTiles, systemMarks } from "./fleet_tiles";
+import { componentTileSpec, fleetTileSpec, fleetTiles, locationTileSpec, systemMarks, systemTileSpec } from "./fleet_tiles";
 import type { FleetView } from "./fleet";
 import { uuidFor } from "./testids";
 
@@ -79,5 +79,65 @@ describe("systemMarks", () => {
     // the operator sees it was filtered rather than missing.
     const depot = only.find((b) => b.key === uuidFor("ft-depot"))!;
     expect(depot.clusters).toEqual([]);
+  });
+});
+
+// The summary reflects the page it is on (#795 review): each scope builds its
+// own TileSpec, so a system's rail talks about ITS components, never the
+// whole fleet's numbers.
+describe("the scoped tile specs", () => {
+  it("the fleet spec carries the fleet-wide numbers under the systems subject", () => {
+    const spec = fleetTileSpec(view);
+    expect(spec.subject).toBe("systems");
+    expect(spec.ratio.total).toBe(4);
+    expect(spec.counts.map((c) => c.key)).toEqual(["gaps", "components", "roots"]);
+  });
+
+  it("a location's spec counts only its own subtree", () => {
+    const spec = locationTileSpec(view, uuidFor("ft-b1"));
+    expect(spec.subject).toBe("systems");
+    // b1 holds r1 (S1 outage, S3 incomplete) and r2 (S2 healthy); the depot's
+    // S4 never appears.
+    expect(spec.ratio.total).toBe(3);
+    expect(spec.attention.total).toBe(2);
+    expect(spec.counts.find((c) => c.key === "components")!.value).toBe(6);
+    expect(spec.counts.find((c) => c.key === "children")!.value).toBe(2);
+  });
+
+  it("a system's spec talks about its components: mix, attention, slots, alarms", () => {
+    const health = {
+      verdict: "degraded",
+      roles: [
+        { name: "r", label: "R", quorum: 2, satisfying: 1, short: 1, spare: 0, impact: "degraded", impaired: true, active: true,
+          assigned_to: ["c0", "c1"], down: ["c1"],
+          alarms: [{ id: "a1", component: uuidFor("ft-s1-c1"), severity: "critical", message: "m", raised_at: "2026-08-20T00:00:00Z" }] },
+      ],
+      systems: [], transitions: [],
+    };
+    const withDown = {
+      ...view,
+      systems: [{ ...((view.systems ?? [])[0] as object), dots: [
+        { component: uuidFor("ft-s1-c0"), name: "c0", verdict: "healthy", primary: true, shared: false },
+        { component: uuidFor("ft-s1-c1"), name: "c1", verdict: "outage", primary: true, shared: true },
+      ] }],
+    };
+    const spec = systemTileSpec(withDown as never, health as never, uuidFor("ft-s1"));
+    expect(spec.subject).toBe("components");
+    expect(spec.ratio.total).toBe(2);
+    expect(spec.ratio.outage).toBe(1);
+    expect(spec.attention.total).toBe(1);
+    expect(spec.counts.find((c) => c.key === "slots")!.value).toBe("1 of 2");
+    expect(spec.counts.find((c) => c.key === "alarms")!.value).toBe(1);
+    expect(spec.counts.find((c) => c.key === "shared")!.value).toBe(1);
+  });
+
+  it("a component's spec is its own story: state, memberships, alarms, interfaces", () => {
+    const spec = componentTileSpec(view, uuidFor("ft-s4-c0"), 2, 1);
+    expect(spec.subject).toBe("component");
+    expect(spec.ratio.total).toBe(1);
+    expect(spec.ratio.healthy).toBe(1);
+    expect(spec.counts.find((c) => c.key === "systems")!.value).toBe(1);
+    expect(spec.counts.find((c) => c.key === "alarms")!.value).toBe(2);
+    expect(spec.counts.find((c) => c.key === "interfaces")!.value).toBe(1);
   });
 });

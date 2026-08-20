@@ -6,7 +6,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
 import SystemCard from "../components/SystemCard";
 import FleetShell from "../components/FleetShell";
-import { fleetTiles } from "../lib/fleet_tiles";
+import { locationTileSpec } from "../lib/fleet_tiles";
 import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
 import {
   FLEET_VIEW_KEY,
@@ -44,7 +44,7 @@ export default function LocationZoom() {
   const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
 
   const anchor = createMemo(() => (view.data ? locationIndex(view.data).get(id()) : undefined));
-  const tiles = createMemo(() => (view.data ? fleetTiles(view.data) : undefined));
+  const tiles = createMemo(() => (view.data && anchor() ? locationTileSpec(view.data, anchor()!.id) : undefined));
   const [chips, setChips] = createSignal<Chip[]>([]);
   const filterKeys: FilterKey<SystemCluster>[] = [
     { key: "verdict", type: "string", hint: "exact", get: (c) => c.verdict ?? "unknown", values: () => ["outage", "degraded", "incomplete", "healthy"] },

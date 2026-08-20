@@ -260,3 +260,15 @@ describe("the location zoom", () => {
     expect(screen.queryByTestId("zoom-ladder")).toBeNull();
   });
 });
+
+// The summary reflects the page (#795 review): this location's subtree, never
+// the fleet's numbers.
+describe("the scoped summary", () => {
+  it("counts this subtree: hq holds all three systems here, and the mix subject stays systems", () => {
+    mount();
+    const rail = screen.getByTestId("fleet-summary");
+    expect(within(rail).getByText("systems")).toBeTruthy();
+    expect(within(rail).getAllByText("3").length).toBeGreaterThan(0);
+    expect(within(rail).getByText("children")).toBeTruthy();
+  });
+});

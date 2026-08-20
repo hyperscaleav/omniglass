@@ -442,3 +442,14 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
     expect(screen.queryByRole("tab", { name: "Data" })).toBeNull();
   });
 });
+
+describe("the scoped summary (#795 review)", () => {
+  it("talks about THIS system's components: mix subject, slots, alarms", () => {
+    mount();
+    const rail = screen.getByTestId("fleet-summary");
+    expect(within(rail).getByText("components")).toBeTruthy();
+    expect(within(rail).queryByText("roots")).toBeNull();
+    expect(within(rail).getByText("slots filled")).toBeTruthy();
+    expect(within(rail).getByText(/active alarms?/)).toBeTruthy();
+  });
+});

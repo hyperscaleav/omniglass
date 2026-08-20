@@ -10,7 +10,7 @@ import Button from "../components/Button";
 import SystemHealthPanel from "../components/HealthPanel";
 import { BladesContext, createBladeController, type BladeDef } from "../lib/blades";
 import { FLEET_VIEW_KEY, fleetView, holesByRoot, type Band, type FleetView, type SystemCluster } from "../lib/fleet";
-import { fleetTiles, systemMarks } from "../lib/fleet_tiles";
+import { fleetTileSpec, systemMarks } from "../lib/fleet_tiles";
 import { entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
@@ -28,7 +28,7 @@ export default function Fleet() {
   const [chips, setChips] = createSignal<Chip[]>([]);
   const [worstFirst] = createSignal(true);
 
-  const tiles = createMemo(() => (view.data ? fleetTiles(view.data) : undefined));
+  const tiles = createMemo(() => (view.data ? fleetTileSpec(view.data) : undefined));
 
   // The filter runs over SYSTEMS (clusters), the unit this zoom is about.
   const filterKeys: FilterKey<SystemCluster>[] = [

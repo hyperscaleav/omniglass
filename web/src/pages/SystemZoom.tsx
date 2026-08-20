@@ -7,7 +7,7 @@ import HealthBadge from "../components/HealthBadge";
 import HealthHistory from "../components/HealthHistory";
 import Eyebrow from "../components/Eyebrow";
 import FleetShell from "../components/FleetShell";
-import { fleetTiles } from "../lib/fleet_tiles";
+import { systemTileSpec } from "../lib/fleet_tiles";
 import { createSignal } from "solid-js";
 import type { Chip } from "../lib/predicate";
 import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/fleet";
@@ -143,7 +143,7 @@ export default function SystemZoom() {
     const pr = c?.product ? (prods.data ?? []).find((p) => p.name === c.product) : undefined;
     return pr ? entityLabel(pr) : c?.product ?? undefined;
   };
-  const tiles = createMemo(() => (view.data ? fleetTiles(view.data) : undefined));
+  const tiles = createMemo(() => (view.data && system() ? systemTileSpec(view.data, health.data, system()!.id) : undefined));
   const [chips, setChips] = createSignal<Chip[]>([]);
 
   const crumbs = createMemo(() => {

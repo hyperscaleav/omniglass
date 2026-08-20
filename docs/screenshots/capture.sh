@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # Capture the docs screenshots against the real console (never mocked), fully in
 # Docker so it runs the same on a laptop and in CI with no host-networking
 # assumptions: Postgres, the server (the built binary), and the Playwright capture

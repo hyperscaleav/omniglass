@@ -5644,3 +5644,9 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   point emphasized) and the workspace's Data tab, one picker chip per declared metric;
   the dev seed grows a day of temperature and occupancy on the huddle so the chart is
   judgeable. The chart primitive is dashboards' seed (primitive first).
+- **The summary reflects the page it is on** (#795 review). The rail stops repeating the
+  fleet's numbers on every zoom: each scope builds its own tile spec (the fleet over
+  systems; a location over its subtree with a children count; a system over its own
+  components with slots, active alarms, and shared members; the leaf over itself), and
+  `FleetShell` renders the spec without knowing the scope. A summary identical on every
+  page was chrome, not information.
