@@ -84,15 +84,17 @@ Each is a gate; a red one blocks the ship.
    logged-in browser, e.g. an unattended loop run) defaults to this committed path rather
    than `gh image`.
 
-   **Docs screenshots are a generated resource.** The images embedded *on the docs pages*
-   (not the PR body) are declared in each page's `screenshots` frontmatter and captured by
-   `make docs-shots` from the real console, never hand-added. A slice that changes an
-   operator-facing surface **re-runs `make docs-shots` and commits the refreshed PNGs**;
-   `make docs-shots-check` recaptures and fails if a shot drifts beyond a small tolerance
-   (the dev seed's random UUIDs move a fraction of a percent; a real change moves far more),
-   the visual sibling of the `make gen` drift check, so a stale screenshot cannot merge.
-   Adding a new one is a frontmatter entry plus a `::screenshot{#id}` directive in the prose,
-   not a code change.
+   **Docs screenshots are a generated resource, in two renders.** The images embedded *on
+   the docs pages* are declared in each page's `screenshots` frontmatter and captured by
+   `make docs-shots` from the real console, never hand-added; each capture writes the CLEAN
+   shot (`docs/public/screenshots/`, every region live) and its masked BASELINE twin
+   (`docs/screenshots/baseline/`), and `make docs-shots-check` recaptures and diffs the
+   baselines at zero tolerance, the visual sibling of the `make gen` drift check, so a stale
+   screenshot cannot merge. A slice that changes an operator-facing surface **re-runs
+   `make docs-shots` and commits both sets**. Adding a new shot is a frontmatter entry plus a
+   `::screenshot{#id}` directive in the prose, not a code change. **PR bodies, comments, and
+   issues embed the clean renders, never the baselines** (a masked strip teaches nothing);
+   the baselines exist only for the gate.
 10. **Audit coverage.** Every privileged **mutation** and every **auth event** the slice adds
    writes an `audit_log` row: a fleet or IAM mutation through `writeAuditRes` **in the same
    transaction** as the change (a committed change without its audit row is a red gate), and an

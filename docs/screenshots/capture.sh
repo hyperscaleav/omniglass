@@ -17,7 +17,8 @@
 # each page's frontmatter; the freshness gate (docs-shots-diff.mjs) then compares
 # at zero tolerance, any unmasked pixel change failing it (#398, #623).
 #
-# Env: DOCS_SHOTS_OUT overrides the output dir (default docs/public/screenshots).
+# Env: DOCS_SHOTS_OUT overrides the clean-shot dir (default docs/public/screenshots);
+# DOCS_SHOTS_BASELINE the masked-baseline dir (default docs/screenshots/baseline).
 # DOCS_SHOTS_TZ moves the capture browser's clock (an IANA zone), which is how the
 # masks are validated: they must cover boxes whose size does not depend on the text
 # they hide, so the proof is a recapture whose rendered timestamps have a different
@@ -35,6 +36,7 @@ PWIMG=mcr.microsoft.com/playwright:v1.61.1-jammy
 APPIMG=debian:stable-slim
 DSN="postgres://omniglass:omniglass@ogshots-pg:5432/omniglass?sslmode=disable"
 OUT="${DOCS_SHOTS_OUT:-docs/public/screenshots}"
+BASELINE="${DOCS_SHOTS_BASELINE:-docs/screenshots/baseline}"
 
 cleanup() {
   docker stop ogshots-srv ogshots-pg >/dev/null 2>&1 || true
@@ -71,9 +73,9 @@ sec() { docker run --rm --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" 
 sec secret create --name device-basic --secret-type basic-auth --owner-kind platform --fields '{"username":"admin","password":"s3cret-pw"}'
 sec secret create --name core-snmp --secret-type snmp-community --owner-kind platform --fields '{"community":"public"}'
 
-mkdir -p "$OUT"
+mkdir -p "$OUT" "$BASELINE"
 docker run --rm --network "$NET" -v "$ROOT:/w" -w /w \
   --user "$(id -u):$(id -g)" -e HOME=/tmp -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
-  -e OG_TOKEN="$TOK" -e OG_E2E_BASE="http://ogshots-srv:8080" -e DOCS_SHOTS_OUT="$OUT" \
+  -e OG_TOKEN="$TOK" -e OG_E2E_BASE="http://ogshots-srv:8080" -e DOCS_SHOTS_OUT="$OUT" -e DOCS_SHOTS_BASELINE="$BASELINE" \
   -e DOCS_SHOTS_TZ="${DOCS_SHOTS_TZ:-}" \
   "$PWIMG" node web/e2e/docs-shots.mjs

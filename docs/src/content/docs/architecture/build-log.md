@@ -5576,3 +5576,27 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   label does not (a system named for its room is the field's commonest naming). The leaf
   screenshot is captured the way an operator reaches it, by clicking the huddle's occupant,
   because component names repeat across rooms (#630).
+- **The system zoom answers why and since when**
+  ([#785](https://github.com/hyperscaleav/omniglass/issues/785)). The header names the last
+  recorded edge and its age; active alarms lead worst first (severity, message, the down
+  component as a link to its leaf, the impaired role, the alarm's age), read from the
+  health wire the page already fetched; the verdict history strip renders the transitions;
+  a role holding more occupants than quorum says so ("+ 1 spare"). And incomplete
+  de-emphasizes: a deployed room fills every role, so slot arithmetic appears only while
+  something is missing, and the dev seed rebalances to a deployed fleet (volume rooms
+  staffed to quorum; the commissioning pair and the quorum-short room stay as the named
+  teaching cases, pinned by a fixture guard).
+- **The component leaf carries the dispatch facts**
+  ([#786](https://github.com/hyperscaleav/omniglass/issues/786)). The leaf opens with the
+  verdict and a since-line from the worst active alarm (a component has no recorded edges,
+  so what took it down is the age that matters), lists the active alarms with their ack
+  state, folds every contract-resolved property into the identity panel (model, serial,
+  firmware: the RMA facts), adds a Vitals card over the effective metrics with the
+  live-series marker, and grows the collection card's layer rungs so device-versus-path
+  reads at a glance. Three component reads the console already had routes for and never
+  called; no API change.
+- **The location header matches the system zoom**
+  ([#787](https://github.com/hyperscaleav/omniglass/issues/787)). The location zoom's
+  header gains the verdict badge, the since-line from the location health read's
+  transitions, and a needs-attention count for this subtree whose click applies the
+  existing worst-first verdict filter. No new API.

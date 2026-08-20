@@ -17,6 +17,7 @@
 import type { components } from "../api/schema.gen";
 import type { FleetView } from "./fleet";
 import { entityLabel } from "./entities";
+import { sortAlarms } from "./alarms";
 
 export type FleetHealth = components["schemas"]["FleetHealthOutputBody"];
 export type HealthRole = components["schemas"]["HealthRoleBody"];
@@ -45,6 +46,8 @@ export type SlotVM = {
   quorum: number;
   satisfying: number;
   short: number;
+  // Occupants beyond quorum: the redundancy an operator wants to see racked.
+  spare: number;
   impact: string;
   impaired: boolean;
   active: boolean;
@@ -110,6 +113,7 @@ export function systemZoomVM(health: FleetHealth, declared: EffectiveRole[], vie
       quorum: r.quorum,
       satisfying: r.satisfying,
       short: r.short,
+      spare: r.spare ?? 0,
       impact: r.impact,
       impaired: r.impaired,
       active: r.active,
@@ -153,4 +157,61 @@ export function systemZoomVM(health: FleetHealth, declared: EffectiveRole[], vie
     .map((d) => ({ componentId: d.component, name: d.name, sharedWith: sharedWith(d.component) }));
 
   return { unconditional, choices, noRole };
+}
+
+// One active alarm on the system, joined for the strip (#785): the health
+// read already carries every alarm on a down occupant per role; this flattens
+// the ACTIVE roles' alarms (an inactive alternate's alarms did not move the
+// verdict, and rendering one would contradict the header), joins the role's
+// label and the component's uuid (via the projection's dots, names repeat
+// across rooms), and orders worst first.
+export type AlarmRow = {
+  id: string;
+  severity: string;
+  message: string;
+  component: string;
+  componentId: string | null;
+  roleLabel: string;
+  raisedAt: string;
+};
+
+export function alarmRows(health: FleetHealth, view: FleetView, systemId: string): AlarmRow[] {
+  const self = (view.systems ?? []).find((s) => s.id === systemId);
+  // The alarm wire names its component by UUID (healthAlarmBody carries
+  // a.ComponentID); the projection's dots translate it to the name an
+  // operator recognises. An alarm on a component the projection does not
+  // carry keeps the raw id as its text and renders unlinked.
+  const nameById = new Map((self?.dots ?? []).map((d) => [d.component, d.name]));
+  const rows: AlarmRow[] = [];
+  for (const r of health.roles ?? []) {
+    if (!r.active) continue;
+    for (const a of r.alarms ?? []) {
+      const known = nameById.has(a.component);
+      rows.push({
+        id: a.id,
+        severity: a.severity,
+        message: a.message,
+        component: nameById.get(a.component) ?? a.component,
+        componentId: known ? a.component : null,
+        roleLabel: entityLabel(r),
+        raisedAt: a.raised_at,
+      });
+    }
+  }
+  // The wire repeats an alarm under every role its down component staffs;
+  // the strip is a list of alarms, not of role pairings, so the first
+  // occurrence after the worst-first sort wins.
+  const sorted = sortAlarms(rows.map((r) => ({ ...r, raised_at: r.raisedAt }))).map(({ raised_at: _, ...r }) => r as AlarmRow);
+  const seen = new Set<string>();
+  return sorted.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)));
+}
+
+// The header's since-when (#785): the last recorded edge and its age. Null
+// when nothing was ever recorded, and the header then says nothing rather
+// than inventing a duration.
+export function sinceOf(health: FleetHealth, now: number): { ts: string; ms: number } | null {
+  const t = health.transitions ?? [];
+  if (t.length === 0) return null;
+  const last = t[t.length - 1];
+  return { ts: last.ts, ms: now - Date.parse(last.ts) };
 }

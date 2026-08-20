@@ -7,6 +7,9 @@ import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, type Component } from "../lib/components";
 import { componentSystemsKey } from "../lib/members";
 import { REACHABILITY_KEY, type Reachability } from "../lib/reachability";
+import { componentAlarmsKey } from "../lib/alarms";
+import { effectivePropertiesKey } from "../lib/component_properties";
+import { effectiveMetricsKey } from "../lib/component_metrics";
 import { NODES_KEY, type Node } from "../lib/nodes";
 import { PRODUCTS_KEY } from "../lib/products";
 import { LOCATIONS_KEY } from "../lib/locations";
@@ -28,7 +31,7 @@ const view: FleetView = {
     { id: uuidFor("cf-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", location_type_id: uuidFor("cft-room"), parent: uuidFor("cf-hq"), verdict: "healthy" },
   ],
   systems: [
-    { id: uuidFor("cf-s-a"), name: "boardroom", label: "Boardroom System", location: uuidFor("cf-room"), verdict: "healthy", dots: [] },
+    { id: uuidFor("cf-s-a"), name: "boardroom", label: "Boardroom System", location: uuidFor("cf-room"), verdict: "degraded", dots: [{ component: uuidFor("cf-c-bar"), name: "videobar-1", verdict: "outage", primary: true, shared: false }] },
     { id: uuidFor("cf-s-b"), name: "overflow", label: "Overflow", location: null, verdict: "healthy", dots: [] },
   ],
 } as unknown as FleetView;
@@ -49,7 +52,10 @@ const reach: Reachability = {
   component: "videobar-1",
   interfaces: [
     // A stale sample: last verdict long ago, but the node below is alive.
-    { interface: "ssh", interface_type: "ssh", node: "edge-1", verdict: { value: "up", ts: iso(600) }, layers: [], history: [] },
+    { interface: "ssh", interface_type: "ssh", node: "edge-1", verdict: { value: "up", ts: iso(600) }, layers: [
+      { layer: "ping", check: "icmp-reachable", value: 1, ts: iso(600) },
+      { layer: "port", check: "tcp-open", value: 1, ts: iso(600) },
+    ], history: [] },
   ],
 } as unknown as Reachability;
 
@@ -70,6 +76,18 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}?zoom=1`, membershi
     { component: "videobar-1", system: "overflow", primary: false, system_count: 2 },
   ]);
   qc.setQueryData([...REACHABILITY_KEY(uuidFor("cf-c-bar"))], reach);
+  qc.setQueryData([...componentAlarmsKey(uuidFor("cf-c-bar"))], [
+    { id: "al-1", component: "videobar-1", severity: "critical", message: "No route to host", raised_at: iso(9600), active: true, acknowledged: false },
+    { id: "al-0", component: "videobar-1", severity: "warning", message: "Cleared last week", raised_at: iso(600000), active: false, acknowledged: true },
+  ]);
+  qc.setQueryData([...effectivePropertiesKey(uuidFor("cf-c-bar"))], [
+    { property_type_name: "serial-number", label: "Serial Number", value: "SN-1183", is_set: true, from_contract: true },
+    { property_type_name: "firmware-version", value: "2.1.4", is_set: false, from_contract: true },
+    { property_type_name: "mac-address", value: null, is_set: false, from_contract: true },
+  ]);
+  qc.setQueryData([...effectiveMetricsKey(uuidFor("cf-c-bar"))], [
+    { metric_type_name: "icmp-rtt-avg", label: "RTT avg", data_type: "float", value: 6.1, is_sampled: true, from_contract: false, required: false },
+  ]);
   window.history.pushState({}, "", path);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -140,5 +158,45 @@ describe("the component leaf", () => {
     mount(`/web/components/${uuidFor("cf-c-bar")}?zoom=1`, []);
     expect(screen.getByText(/Not in any system yet/)).toBeTruthy();
     expect(screen.getByTestId("leaf-collection")).toBeTruthy();
+  });
+});
+
+describe("the leaf's dispatch facts (#786)", () => {
+  it("the header wears the component's verdict and since-when from the worst active alarm", () => {
+    mount();
+    const header = screen.getByTestId("leaf-header");
+    expect(within(header).getByText("outage")).toBeTruthy();
+    expect(within(header).getByText(/since/)).toBeTruthy();
+  });
+
+  it("renders the active alarms with severity, message and ack state, and never the cleared history", () => {
+    mount();
+    const card = screen.getByTestId("leaf-alarms");
+    expect(within(card).getByText("No route to host")).toBeTruthy();
+    expect(within(card).getByText(/unacknowledged/)).toBeTruthy();
+    expect(within(card).queryByText("Cleared last week")).toBeNull();
+  });
+
+  it("the identity panel carries the resolved properties: serial and firmware beside product, vendor, driver", () => {
+    mount();
+    const card = screen.getByTestId("leaf-identity");
+    expect(within(card).getByText("SN-1183")).toBeTruthy();
+    expect(within(card).getByText("2.1.4")).toBeTruthy();
+    // A property with no value is not a row.
+    expect(within(card).queryByText(/mac-address/)).toBeNull();
+  });
+
+  it("vitals list the effective metrics that carry a value, marking the live series", () => {
+    mount();
+    const card = screen.getByTestId("leaf-vitals");
+    expect(within(card).getByText("RTT avg")).toBeTruthy();
+    expect(within(card).getByText("6.1")).toBeTruthy();
+  });
+
+  it("the collection card shows each interface's layer rungs", () => {
+    mount();
+    const card = screen.getByTestId("leaf-collection");
+    expect(within(card).getByText("ping up")).toBeTruthy();
+    expect(within(card).getByText("port open")).toBeTruthy();
   });
 });

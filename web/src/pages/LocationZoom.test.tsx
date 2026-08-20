@@ -4,7 +4,7 @@ import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Locations from "./Locations";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
-import { systemHealthKey, type FleetHealth } from "../lib/health";
+import { locationHealthKey, systemHealthKey, type FleetHealth } from "../lib/health";
 import { LOCATION_TYPES_KEY, type LocationType } from "../lib/location_types";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { SYSTEMS_KEY } from "../lib/systems";
@@ -111,6 +111,15 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}?zoom=1`) {
   qc.setQueryData([...SYSTEMS_KEY], []);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...systemHealthKey(uuidFor("lz-s-lobby"))], lobbyHealth);
+  qc.setQueryData([...locationHealthKey(uuidFor("lz-hq"))], {
+    verdict: "degraded",
+    roles: [],
+    systems: [],
+    transitions: [
+      { ts: "2026-08-01T09:00:00Z", verdict: "healthy" },
+      { ts: "2026-08-15T14:20:00Z", verdict: "degraded" },
+    ],
+  } as unknown as FleetHealth);
   window.history.pushState({}, "", path);
   return render(() => (
     <QueryClientProvider client={qc}>
@@ -172,6 +181,24 @@ describe("the location zoom", () => {
     // The healthy Yard AV card is filtered out of this zoom; the others stay.
     expect(screen.queryByTestId(`syscard-${uuidFor("lz-s-yard")}`)).toBeNull();
     expect(screen.getByTestId(`syscard-${uuidFor("lz-s-lobby")}`)).toBeTruthy();
+  });
+
+  // #787: the location header matches the system zoom's shape.
+  it("the header wears the location's verdict, the since-line, and this subtree's needs-attention count", () => {
+    mount();
+    const header = screen.getByTestId("location-header");
+    expect(within(header).getByText("degraded")).toBeTruthy();
+    expect(within(header).getByText(/since/)).toBeTruthy();
+    // Fixture: signage incomplete + boardroom degraded + horn healthy = 2.
+    expect(within(header).getByText(/2 need attention/)).toBeTruthy();
+  });
+
+  it("clicking the needs-attention chip applies the worst-first verdict filter to this zoom's cards", () => {
+    mount();
+    expect(screen.getByTestId(`syscard-${uuidFor("lz-s-yard")}`)).toBeTruthy();
+    fireEvent.click(within(screen.getByTestId("location-header")).getByRole("button", { name: /need attention/ }));
+    expect(screen.queryByTestId(`syscard-${uuidFor("lz-s-yard")}`)).toBeNull();
+    expect(screen.getByTestId(`syscard-${uuidFor("lz-s-board")}`)).toBeTruthy();
   });
 
   it("clicking a child band drills deeper, carrying the zoom param", async () => {

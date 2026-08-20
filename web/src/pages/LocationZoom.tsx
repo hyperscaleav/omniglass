@@ -22,7 +22,10 @@ import {
 } from "../lib/fleet";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { entityLabel } from "../lib/entities";
-import { describeError } from "../lib/format";
+import { durationText } from "../lib/timeline";
+import { sinceOf } from "../lib/system_zoom";
+import { describeError, fmtTime } from "../lib/format";
+import { locationHealth, locationHealthKey } from "../lib/health";
 
 // The location zoom (#635): the same canvas one level down, at the identity
 // route behind ?zoom=1 (ADR-0126). One band per direct child whatever its
@@ -35,6 +38,9 @@ export default function LocationZoom() {
   const navigate = useNavigate();
   const id = () => params.id;
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
+  const locHealth = useQuery(() => ({ queryKey: locationHealthKey(id()), queryFn: () => locationHealth(id()) }));
+  // Pinned at setup, like the system zoom's: a moving now re-ages the line.
+  const pageNow = Date.now();
   const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
 
   const anchor = createMemo(() => (view.data ? locationIndex(view.data).get(id()) : undefined));
@@ -62,6 +68,21 @@ export default function LocationZoom() {
     return bandsOf(view.data, byChildOfLocation(id())).map((b) => ({ ...b, clusters: b.clusters.filter(pred) }));
   });
   const holes = createMemo(() => (view.data ? holesUnder(id(), view.data) : new Map()));
+  // This subtree's own attention count, unfiltered: what the header chip
+  // reports and the chip's click narrows the cards to.
+  const ATTENTION = ["outage", "degraded", "incomplete"];
+  const attention = createMemo(() => {
+    if (!view.data) return 0;
+    return bandsOf(view.data, byChildOfLocation(id())).reduce(
+      (n, b) => n + b.clusters.filter((c) => c.verdict !== null && c.verdict !== "healthy").length,
+      0,
+    );
+  });
+  const attentionOn = () => chips().some((c) => c.key === "verdict" && c.values.some((v) => ATTENTION.includes(v)));
+  const toggleAttention = () => {
+    const rest = chips().filter((c) => c.key !== "verdict");
+    setChips(attentionOn() ? rest : [...rest, { key: "verdict", op: "eq", values: ATTENTION }]);
+  };
 
   const crumbs = createMemo(() => {
     if (!view.data) return [];
@@ -108,6 +129,25 @@ export default function LocationZoom() {
             chips={chips}
             onChips={setChips}
             placeholder="Filter by verdict or system…"
+            header={
+              <div data-testid="location-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                <HealthBadge verdict={anchor()?.verdict ?? undefined} size="sm" />
+                <Show when={locHealth.data && sinceOf(locHealth.data, pageNow)}>
+                  {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
+                </Show>
+                <Show when={attention() > 0}>
+                  <button
+                    type="button"
+                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-field border px-2 py-0.5 text-xs"
+                    classList={{ "border-primary bg-primary/10": attentionOn(), "border-base-300": !attentionOn() }}
+                    onClick={toggleAttention}
+                  >
+                    <span class="h-1.5 w-1.5 flex-none rounded-full bg-warning" />
+                    {attention()} need attention
+                  </button>
+                </Show>
+              </div>
+            }
           >
             <div class="flex flex-col divide-y divide-base-300">
               <For each={bands()}>{(band) => <ZoomBand band={band} view={view.data!} />}</For>
