@@ -73,7 +73,12 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 		where ($2 = '' or a.resource = $2)
 		  and ($3 = '' or a.verb = $3)
 		  and ($4 = '' or a.ts < $4::timestamptz)
-		order by a.ts desc, a.id desc
+		-- id (uuidv7) is the true write sequence; ts is a display fact. The
+		-- two can invert across transactions (a tx stamps its audit row
+		-- before slower work commits after a later tx's row), and ordering
+		-- by ts made the page's row order flap between two reads of the
+		-- same trail (#780's audit half).
+		order by a.id desc
 		limit $1`,
 		limit, f.Resource, f.Verb, f.Before)
 	if err != nil {
