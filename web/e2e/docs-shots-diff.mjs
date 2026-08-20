@@ -1,14 +1,17 @@
-// Pixel-freshness gate: compare a freshly captured screenshot dir against the
-// committed images and fail on ANY unmasked difference. The tolerance is zero
-// (#398, #623): every nondeterministic region a capture can render (v7-uuid
-// text, now-relative timestamps) is masked at capture time through the page's
-// `screenshots` frontmatter, painted as constant-color boxes into the PNG
-// itself, so byte-stable rasters from the pinned browser container leave no
-// legitimate residual diff. The old percentage ceiling passed exactly the
-// changes the gate exists to catch (a renamed label at 0.033%, a collapsed
-// rail at 0.13%); see web/src/shotdiff-gate.test.ts for the pinned contract.
+// Pixel-freshness gate: compare freshly captured BASELINE screenshots (the
+// masked twins) against the committed baselines and fail on ANY difference.
+// The tolerance is zero (#398, #623): every nondeterministic region a capture
+// can render (v7-uuid text, now-relative timestamps, the history strip's
+// weights) is masked in the baseline through the page's `screenshots`
+// frontmatter, painted as constant-color boxes, so byte-stable rasters from
+// the pinned browser container leave no legitimate residual diff. The CLEAN
+// shots under docs/public/screenshots are what the docs embed and are not
+// diffed: their masked-region pixels legitimately differ every capture (#789
+// review). The old percentage ceiling passed exactly the changes the gate
+// exists to catch (a renamed label at 0.033%, a collapsed rail at 0.13%); see
+// web/src/shotdiff-gate.test.ts for the pinned contract.
 //
-// Usage: node web/e2e/docs-shots-diff.mjs <fresh-dir> [committed-dir]
+// Usage: node web/e2e/docs-shots-diff.mjs <fresh-baseline-dir> [committed-baseline-dir]
 // DOCS_SHOTS_MAX_RATIO overrides the tolerance for unpinned local browsers
 // only; CI runs the pinned container and the zero default.
 import { readFileSync } from 'node:fs';
@@ -17,7 +20,7 @@ import { readdir } from 'node:fs/promises';
 import { compareShot, DEFAULT_MAX_RATIO } from './shotdiff.mjs';
 
 const fresh = process.argv[2];
-const committed = process.argv[3] ?? 'docs/public/screenshots';
+const committed = process.argv[3] ?? 'docs/screenshots/baseline';
 const MAX_RATIO = process.env.DOCS_SHOTS_MAX_RATIO ? Number(process.env.DOCS_SHOTS_MAX_RATIO) : DEFAULT_MAX_RATIO;
 
 if (!fresh) {

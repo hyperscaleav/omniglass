@@ -11,6 +11,7 @@ import { join } from 'node:path';
 
 const CONTENT = 'docs/src/content/docs';
 const SHOTS = 'docs/public/screenshots';
+const BASELINE = 'docs/screenshots/baseline';
 
 async function walk(dir) {
   const files = [];
@@ -49,6 +50,25 @@ for (const [id, page] of declared) {
 for (const id of onDisk) {
   if (!declared.has(id)) {
     errors.push(`orphan image ${SHOTS}/${id}.png has no screenshots frontmatter entry; remove it or declare it`);
+  }
+}
+
+// Every clean shot has its masked baseline twin, and no baseline outlives its
+// shot: the pair is captured by one run, so a missing half means a partial
+// capture or a hand-deleted file, and the gate would silently diff nothing.
+const baselines = new Set(
+  (await readdir(BASELINE).catch(() => []))
+    .filter((f) => f.endsWith('.png'))
+    .map((f) => f.replace(/\.png$/, '')),
+);
+for (const id of onDisk) {
+  if (!baselines.has(id)) {
+    errors.push(`shot "${id}" has no masked baseline at ${BASELINE}/${id}.png; run 'make docs-shots'`);
+  }
+}
+for (const id of baselines) {
+  if (!onDisk.has(id)) {
+    errors.push(`orphan baseline ${BASELINE}/${id}.png has no clean shot; run 'make docs-shots'`);
   }
 }
 

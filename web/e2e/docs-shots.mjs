@@ -22,6 +22,9 @@ const CONTENT = 'docs/src/content/docs';
 // Output dir is overridable so the freshness gate can capture into a temp dir and
 // diff it against the committed images (see docs-shots-diff.mjs).
 const OUT = process.env.DOCS_SHOTS_OUT ?? 'docs/public/screenshots';
+// The gate's baselines live beside the capture tooling, never under public/:
+// they are measurement artifacts (masked twins of each shot), not content.
+const BASELINE = process.env.DOCS_SHOTS_BASELINE ?? 'docs/screenshots/baseline';
 // There is no font proxy here any more. DOCS_SHOTS_PROXY existed because the
 // console fetched its typefaces from a font CDN, so a capture host that could not
 // reach fonts.gstatic.com rendered every shot in fallback metrics; the escape
@@ -77,6 +80,7 @@ for (const s of specs) {
 }
 
 await mkdir(OUT, { recursive: true });
+await mkdir(BASELINE, { recursive: true });
 const browser = await chromium.launch();
 
 for (const spec of specs) {
@@ -142,21 +146,30 @@ for (const spec of specs) {
     );
     mask.push(locator);
   }
+  // Two renders of the same settled page (#789 review): the CLEAN shot is what
+  // the docs embed, every region live, because a masked strip teaches nothing;
+  // the MASKED twin is the gate's baseline, where the capture-relative regions
+  // (ages, dates, strip weights) are painted over so the zero-tolerance diff
+  // measures only what is deterministic. The blind spot is explicit: a real UI
+  // change entirely inside a masked region is invisible to the gate, exactly as
+  // it was when the masked render was the only render.
   await page.screenshot({
     path: join(OUT, `${spec.id}.png`),
     animations: 'disabled',
     caret: 'hide',
+  });
+  await page.screenshot({
+    path: join(BASELINE, `${spec.id}.png`),
+    animations: 'disabled',
+    caret: 'hide',
     mask,
-    // A DELIBERATE redaction panel, not an attempt to hide that a mask is there.
-    // This is the console's own neutral surface (--color-neutral in web/src/app.css),
-    // one step lighter than the card behind it, so a masked cell reads as a block
-    // placed over the value rather than as a column that failed to render. Painting
-    // the background instead would publish an empty When column with nothing to say
-    // why, and would need a hardcoded copy of a theme token to stay invisible.
+    // A DELIBERATE redaction panel over the baseline, the console's own neutral
+    // surface (--color-neutral in web/src/app.css), so a diff artifact viewed by
+    // a human still reads as a block placed over a value.
     maskColor: '#1a2336',
   });
   await ctx.close();
-  console.log('wrote', join(OUT, `${spec.id}.png`), `(${spec.path})`);
+  console.log('wrote', join(OUT, `${spec.id}.png`), `+ baseline (${spec.path})`);
 }
 
 await browser.close();

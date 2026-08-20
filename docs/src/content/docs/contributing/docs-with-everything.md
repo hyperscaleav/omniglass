@@ -126,17 +126,21 @@ capture list and the embed cannot drift, a `#id` with no frontmatter entry (or n
 image) **fails the build**, and adding a screenshot is a frontmatter edit, not a code change.
 
 Because the images track the live UI, they are refreshed like any generated artifact: a change
-to an operator surface **re-runs `make docs-shots` and commits the new PNGs**, and
-`make docs-shots-check` recaptures against the real console and fails on **any unmasked pixel
-difference**, the visual sibling of the `make gen` drift check. The regions a capture cannot
-render deterministically (a v7-uuid id subtext, a seed-time timestamp) are masked in the
-page's `screenshots` frontmatter and painted as constant boxes, so the pinned browser's
-rasters are byte-stable and the tolerance is zero: the old percentage ceiling passed exactly
-the changes the gate exists to catch, a renamed label or a collapsed rail repainting fewer
-pixels than seed jitter (#398, #623). One caveat, tracked as #774: the comparison counts the
-pixels pixelmatch judges different at its default perceptual threshold, so a change confined to
-near-identical dark tones can still score zero. Where byte stability is the claim, compare the
-bytes.
+to an operator surface **re-runs `make docs-shots` and commits the new PNGs**. Each capture
+writes **two renders of the same settled page**: the clean shot under
+`docs/public/screenshots/`, every region live, which is what the docs embed (a masked history
+strip teaches nothing); and its masked twin under `docs/screenshots/baseline/`, where the
+regions a capture cannot render deterministically (a v7-uuid id subtext, a seed-time
+timestamp, a history strip whose weights divide by the capture's own clock) are painted as
+constant boxes. `make docs-shots-check` recaptures and diffs **the baselines only**, at zero
+tolerance, the visual sibling of the `make gen` drift check: the pinned browser's masked
+rasters are byte-stable, so any diff is a real, un-recaptured UI change. The old percentage
+ceiling passed exactly the changes the gate exists to catch, a renamed label or a collapsed
+rail repainting fewer pixels than seed jitter (#398, #623). Two caveats: the comparison counts
+the pixels pixelmatch judges different at its default perceptual threshold, so a change
+confined to near-identical dark tones can still score zero (#774), and a real UI change that
+falls entirely inside a masked region is invisible to the gate, which is the price of masking
+and the reason a mask names the smallest element that moves.
 
 ### A mask covers the cell, and says that it is there
 
@@ -151,11 +155,10 @@ changed no UI. So a mask over text whose width can change names the **cell**, by
 over text of fixed width (a uuid in a monospace face) stays on the text, which is also the
 only correct answer when the enclosing cell holds something the shot exists to show (#773).
 
-The fill is **deliberately visible**: the console's own neutral surface, one step lighter than
-the card behind it. A masked cell reads as a block placed over a value rather than as a column
-that failed to render, and the page's `alt` says which cells are masked and why. Painting the
-background instead would publish an empty column with nothing to explain it, and would need a
-hardcoded copy of a theme token to stay invisible.
+The fill is **deliberately visible** in the baseline: the console's own neutral surface, one
+step lighter than the card behind it, so a human reading a diff artifact sees a block placed
+over a value rather than a column that failed to render. The published docs never show the
+fill; they embed the clean render.
 
 Prove a mask holds by recapturing **with the clock moved**, never by capturing twice a few
 minutes apart: two captures in the same hour of the same day are structurally blind to exactly

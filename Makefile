@@ -198,16 +198,18 @@ docs-shots:
 	bash docs/screenshots/capture.sh
 
 # Freshness gate for the screenshots, the visual sibling of `make gen`: recapture
-# into a temp dir and fail on ANY unmasked pixel difference (#398/#623): the
-# nondeterministic regions a capture renders (v7-uuid text, seed-time stamps)
-# are masked in each page's frontmatter, so the pinned browser's rasters are
-# byte-stable and a nonzero diff is a real, un-recaptured UI change.
-# The temp dir is repo-relative so it lands inside the capture container's mount.
+# and diff the masked BASELINES only (#398/#623/#789): the nondeterministic
+# regions a capture renders (v7-uuid text, seed-time stamps, strip weights) are
+# masked in the baseline through each page's frontmatter, so the pinned
+# browser's rasters are byte-stable and a nonzero diff is a real,
+# un-recaptured UI change. The clean shots the docs embed are not diffed;
+# their masked regions legitimately move every capture.
+# The temp dirs are repo-relative so they land inside the capture container's mount.
 docs-shots-check:
-	@tmp=.docs-shots-tmp; mkdir -p $$tmp; \
-	  DOCS_SHOTS_OUT=$$tmp bash docs/screenshots/capture.sh && \
-	  node web/e2e/docs-shots-diff.mjs $$tmp docs/public/screenshots; \
-	  rc=$$?; if [ $$rc -eq 0 ]; then rm -f $$tmp/*.png; rmdir $$tmp 2>/dev/null || true; fi; exit $$rc
+	@tmp=.docs-shots-tmp; mkdir -p $$tmp/clean $$tmp/baseline; \
+	  DOCS_SHOTS_OUT=$$tmp/clean DOCS_SHOTS_BASELINE=$$tmp/baseline bash docs/screenshots/capture.sh && \
+	  node web/e2e/docs-shots-diff.mjs $$tmp/baseline docs/screenshots/baseline; \
+	  rc=$$?; if [ $$rc -eq 0 ]; then rm -f $$tmp/clean/*.png $$tmp/baseline/*.png; rmdir $$tmp/clean $$tmp/baseline $$tmp 2>/dev/null || true; fi; exit $$rc
 
 # Structural gate for the screenshots (no browser, fully deterministic): every
 # `screenshots` frontmatter entry has a committed PNG, every PNG is declared, and
