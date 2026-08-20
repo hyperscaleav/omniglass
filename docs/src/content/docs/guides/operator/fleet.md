@@ -62,13 +62,16 @@ screenshots:
     path: /web/systems/huddle?zoom=1&tab=data
     steps:
       - action: click
-        selector: "role=button[name='Room Temperature']"
-    alt: "The Data tab: the room-temperature series charted over the last day, the latest sample emphasized, one picker chip per declared metric."
-    # The since-line ages with the capture; the chart's x positions divide
-    # seed offsets by the capture's own clock (sub-pixel, but the endpoint
-    # label and axis are data-stable, so only the header masks).
+        selector: "[data-testid=metric-row-room-temperature]"
+    alt: "The Data tab: every declared metric stacked with a sparkline and its latest value, the temperature row expanded to the full chart."
+    # The since-line ages with the capture, and every chart x-position
+    # divides seed-to-shoot latency by the window (CI proved it crosses a
+    # pixel boundary), so the plots mask in the BASELINE while the docs
+    # embed them live (the two-render pipeline).
     mask:
       - "[data-testid=since-line]"
+      - "[data-testid=timeseries-chart]"
+      - "[data-testid=sparkline]"
   - id: fleet-location
     path: /web/locations/east?zoom=1
     alt: "The location zoom: the breadcrumb, the verdict header with the needs-attention chip, a band per child location, system cards with slot strips, and the allowed child types."
@@ -192,9 +195,11 @@ last 24 hours, capped; both scope to what you can read.
 
 ## The data
 
-The **Data** tab charts the samples behind the KPI tiles: pick a series, see the last 24
-hours, newest at the right, the latest value emphasized. Raw samples, capped; a series
-still on its contract default has nothing to chart yet, and says so.
+The **Data** tab stacks every metric the standard declares: a sparkline of the last 24
+hours beside the latest value, one row per series, so the room's numbers read together.
+Click a row for the full chart, newest at the right, the latest sample's value floating
+on its dot. Raw samples, capped; a series still on its contract default has nothing to
+chart yet, and says so.
 
 ::screenshot{#fleet-data}
 

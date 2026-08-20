@@ -82,8 +82,9 @@ export default function SystemZoom() {
   });
   // Every declared metric, sampled or not: the Data tab's pickable series.
   const kpiMetrics = createMemo(() => (metricsQ.data ?? []).filter((m) => m.from_contract || m.is_sampled));
+  // The expanded row's metric, if any: the table is the view, the full
+  // chart an accordion under its row.
   const [seriesPick, setSeriesPick] = createSignal<string | undefined>(undefined);
-  const pickedMetric = () => seriesPick() ?? kpiMetrics()[0]?.metric_type_name;
 
   const [search] = useSearchParams();
   const tabs = createMemo(() => [
@@ -114,11 +115,17 @@ export default function SystemZoom() {
     })),
   }));
   // Pinned once, like pageNow: incident ages must not re-age mid-render.
-  const seriesQ = useQuery(() => ({
-    queryKey: metricSeriesKey("systems", id(), pickedMetric() ?? "", 24),
-    queryFn: () => metricSeries("systems", id(), pickedMetric()!, 24),
-    enabled: tab() === "data" && !!pickedMetric(),
+  // One series query per declared metric, alive only on the Data tab: the
+  // stacked table draws every sparkline at once (#795 review), so the
+  // fan-out is the tab's whole read.
+  const seriesQueries = useQueries(() => ({
+    queries: kpiMetrics().map((m) => ({
+      queryKey: metricSeriesKey("systems", id(), m.metric_type_name, 24),
+      queryFn: () => metricSeries("systems", id(), m.metric_type_name, 24),
+      enabled: tab() === "data",
+    })),
   }));
+  const metricSeriesData = () => kpiMetrics().map((_, i) => seriesQueries[i]?.data);
   const eventsQ = useQuery(() => ({ queryKey: systemEventsKey(id()), queryFn: () => systemEvents(id()), enabled: tab() === "events" }));
   const logsQ = useQuery(() => ({ queryKey: systemLogsKey(id()), queryFn: () => systemLogs(id()), enabled: tab() === "logs" }));
   const incidents = createMemo(() => {
@@ -248,22 +255,46 @@ export default function SystemZoom() {
                 </Show>
                 <Show when={tab() === "data"}>
                   <section data-testid="data-tab" class="flex flex-col gap-3 p-4">
-                    <Eyebrow label="Data" hint="The samples behind the KPI tiles: one series at a time over the last 24 hours, newest at the right. The chart draws raw samples, capped; a series with only its contract default has nothing to chart yet." />
-                    <div class="flex flex-wrap gap-1.5">
-                      <For each={kpiMetrics()}>
-                        {(m) => (
-                          <button
-                            type="button"
-                            class="badge cursor-pointer"
-                            classList={{ "badge-primary badge-soft": pickedMetric() === m.metric_type_name, "badge-ghost": pickedMetric() !== m.metric_type_name }}
-                            onClick={() => setSeriesPick(m.metric_type_name)}
-                          >
-                            {entityLabel({ name: m.metric_type_name, label: m.label })}
-                          </button>
-                        )}
-                      </For>
+                    <Eyebrow label="Data" hint="Every metric the standard declares, stacked: the last 24 hours as a sparkline beside the latest value. Click a row for the full chart. Raw samples, capped; a series still on its contract default has nothing to chart yet." />
+                    <div class="overflow-x-auto rounded-box border border-base-300">
+                      <table class="table table-sm">
+                        <thead>
+                          <tr>
+                            <th>Metric</th>
+                            <th>Last 24h</th>
+                            <th class="text-right">Latest</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <For each={kpiMetrics()}>
+                            {(m, i) => (
+                              <>
+                                <tr
+                                  data-testid={`metric-row-${m.metric_type_name}`}
+                                  class="cursor-pointer hover:bg-base-content/5"
+                                  onClick={() => setSeriesPick(seriesPick() === m.metric_type_name ? undefined : m.metric_type_name)}
+                                >
+                                  <td>{entityLabel({ name: m.metric_type_name, label: m.label })}</td>
+                                  <td>
+                                    <TimeseriesChart spark samples={metricSeriesData()[i()] ?? []} now={pageNow} windowMs={24 * 3600_000} />
+                                  </td>
+                                  <td class="text-right font-mono tabular-nums">{m.value === null || m.value === undefined ? "" : String(m.value)}</td>
+                                  <td class="text-right text-[10px] text-base-content/45">{m.is_sampled ? "sampled" : "contract default"}</td>
+                                </tr>
+                                <Show when={seriesPick() === m.metric_type_name}>
+                                  <tr>
+                                    <td colspan="4" class="bg-base-200/40">
+                                      <TimeseriesChart samples={metricSeriesData()[i()] ?? []} now={pageNow} windowMs={24 * 3600_000} />
+                                    </td>
+                                  </tr>
+                                </Show>
+                              </>
+                            )}
+                          </For>
+                        </tbody>
+                      </table>
                     </div>
-                    <TimeseriesChart samples={seriesQ.data ?? []} now={pageNow} windowMs={24 * 3600_000} />
                   </section>
                 </Show>
                 <Show when={tab() === "history"}>

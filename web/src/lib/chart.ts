@@ -25,6 +25,9 @@ export type ChartLayout = {
   // the baseline.
   linePath: string;
   areaPath: string;
+  // Where the newest sample's value floats: centered above its dot,
+  // intersecting the line's territory, clamped into the frame.
+  endLabel: { x: number; y: number };
 };
 
 export function chartLayout(samples: ChartSample[], o: ChartOpts): ChartLayout {
@@ -32,7 +35,7 @@ export function chartLayout(samples: ChartSample[], o: ChartOpts): ChartLayout {
     .map((s) => ({ t: Date.parse(s.ts), value: s.value, ts: s.ts }))
     .filter((s) => Number.isFinite(s.t))
     .sort((a, b) => a.t - b.t);
-  if (rows.length === 0) return { points: [], yMin: 0, yMax: 1, yTicks: [], linePath: "", areaPath: "" };
+  if (rows.length === 0) return { points: [], yMin: 0, yMax: 1, yTicks: [], linePath: "", areaPath: "", endLabel: { x: 0, y: 0 } };
 
   let lo = Math.min(...rows.map((r) => r.value));
   let hi = Math.max(...rows.map((r) => r.value));
@@ -54,5 +57,10 @@ export function chartLayout(samples: ChartSample[], o: ChartOpts): ChartLayout {
   // Three ticks: bottom, middle, top of the padded domain, rounded for the
   // label without leaving the domain.
   const yTicks = [lo, (lo + hi) / 2, hi];
-  return { points, yMin: lo, yMax: hi, yTicks, linePath, areaPath };
+  const end = points[points.length - 1];
+  const endLabel = {
+    x: Math.min(Math.max(end.x, o.padLeft + 14), o.width - o.padRight),
+    y: Math.max(end.y - 9, 9),
+  };
+  return { points, yMin: lo, yMax: hi, yTicks, linePath, areaPath, endLabel };
 }

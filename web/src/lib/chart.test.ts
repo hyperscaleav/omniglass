@@ -37,3 +37,21 @@ describe("chartLayout", () => {
     expect(chartLayout([], opts).points).toHaveLength(0);
   });
 });
+
+describe("the endpoint label", () => {
+  const opts = { width: 640, height: 160, padLeft: 40, padRight: 12, padY: 18, now, windowMs: 24 * 3600_000 };
+
+  it("floats centered above the newest sample's dot, intersecting the line's territory", () => {
+    const l = chartLayout([at(4, 5), at(0, 6.1)], opts);
+    const end = l.points[l.points.length - 1];
+    expect(l.endLabel.x).toBeCloseTo(end.x, 5);
+    expect(l.endLabel.y).toBeLessThan(end.y);
+    expect(end.y - l.endLabel.y).toBeLessThanOrEqual(14);
+  });
+
+  it("clamps into the frame when the newest sample sits at an edge", () => {
+    const l = chartLayout([at(0.1, 100)], opts);
+    expect(l.endLabel.x).toBeLessThanOrEqual(opts.width - opts.padRight);
+    expect(l.endLabel.y).toBeGreaterThanOrEqual(9);
+  });
+});

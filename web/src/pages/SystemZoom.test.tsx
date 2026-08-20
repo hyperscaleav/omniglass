@@ -403,23 +403,41 @@ describe("the events and logs tabs (#793)", () => {
   });
 });
 
-describe("the data tab (#794)", () => {
+describe("the data tab (#794, stacked per the #795 review)", () => {
   const METRICS = [
     { metric_type_name: "room-temperature", label: "Room Temperature", data_type: "float", value: 23.5, is_sampled: true, from_contract: true, required: false },
     { metric_type_name: "occupancy-count", label: "Occupancy Count", data_type: "int", value: 0, is_sampled: false, from_contract: true, required: false },
   ];
-
-  it("offers one picker chip per declared metric, charts the chosen series, and hides the tab with nothing to chart", async () => {
-    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=data`, health, METRICS);
-    r.qc.setQueryData([...metricSeriesKey("systems", uuidFor("szp-sys"), "room-temperature", 24)], [
+  const seedSeries = (qc: QueryClient) => {
+    qc.setQueryData([...metricSeriesKey("systems", uuidFor("szp-sys"), "room-temperature", 24)], [
       { ts: "2026-08-20T10:00:00Z", value: 22.9, provenance: "observed" },
       { ts: "2026-08-20T14:00:00Z", value: 23.5, provenance: "observed" },
     ]);
+    qc.setQueryData([...metricSeriesKey("systems", uuidFor("szp-sys"), "occupancy-count", 24)], []);
+  };
+
+  it("stacks every declared metric as a table row: label, sparkline, the latest value; no picker to hunt through", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=data`, health, METRICS);
+    seedSeries(r.qc);
     const tab = screen.getByTestId("data-tab");
-    expect(within(tab).getByRole("button", { name: /Room Temperature/ })).toBeTruthy();
-    expect(within(tab).getByRole("button", { name: /Occupancy Count/ })).toBeTruthy();
-    expect(await within(tab).findByTestId("timeseries-chart")).toBeTruthy();
-    cleanup();
+    const temp = within(tab).getByTestId("metric-row-room-temperature");
+    expect(await within(temp).findByTestId("sparkline")).toBeTruthy();
+    expect(within(temp).getByText("23.5")).toBeTruthy();
+    const occ = within(tab).getByTestId("metric-row-occupancy-count");
+    expect(within(occ).getByText(/contract default/)).toBeTruthy();
+    expect(within(tab).queryByTestId("timeseries-chart")).toBeNull();
+  });
+
+  it("a row expands to the full chart and collapses back", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=data`, health, METRICS);
+    seedSeries(r.qc);
+    fireEvent.click(screen.getByTestId("metric-row-room-temperature"));
+    expect(await screen.findByTestId("timeseries-chart")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("metric-row-room-temperature"));
+    expect(screen.queryByTestId("timeseries-chart")).toBeNull();
+  });
+
+  it("hides the tab with nothing declared", () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=data`, health, []);
     expect(screen.queryByRole("tab", { name: "Data" })).toBeNull();
   });
