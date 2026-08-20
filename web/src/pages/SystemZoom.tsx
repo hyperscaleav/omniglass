@@ -1,6 +1,6 @@
 import { For, Show, createEffect, createMemo } from "solid-js";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
-import { useQuery } from "@tanstack/solid-query";
+import { useQueries, useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
@@ -27,7 +27,8 @@ import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { entityLabel } from "../lib/entities";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
-import { severityRank } from "../lib/alarms";
+import { componentAlarms, componentAlarmsKey, severityRank } from "../lib/alarms";
+import { incidentRows, markerX, type MemberAlarms } from "../lib/system_history";
 
 // The system zoom (#636): the typed slots a system needs filled, at the
 // identity route behind ?zoom=1 (ADR-0126). One card per role with the
@@ -77,10 +78,39 @@ export default function SystemZoom() {
     return parseStandardMap(raw === undefined ? undefined : JSON.stringify(raw));
   });
   const [search] = useSearchParams();
+  const tabs = createMemo(() => [
+    { key: "overview", label: "Overview" },
+    ...(mapDecl() ? [{ key: "map", label: "Map" }] : []),
+    { key: "history", label: "History" },
+  ]);
   const tab = () => {
     const t = Array.isArray(search.tab) ? search.tab[0] : search.tab;
-    return t === "map" && mapDecl() ? "map" : "overview";
+    return t && tabs().some((x) => x.key === t) ? t : "overview";
   };
+  // Every member's alarm history, cleared ones included: the causes beside
+  // the verdict spans. Fan-out per component (rooms are small); each query
+  // shares the leaf's cache key, so walking to a leaf is warm.
+  const memberIds = createMemo(() => {
+    const b = bodyOf();
+    if (!b) return [] as { name: string; componentId: string }[];
+    const all = [...b.cards, ...b.groups.flatMap((g) => g.memberCards)];
+    return all.map((c) => ({ name: c.name, componentId: c.componentId }));
+  });
+  const alarmHistories = useQueries(() => ({
+    queries: memberIds().map((m) => ({
+      queryKey: componentAlarmsKey(m.componentId),
+      queryFn: () => componentAlarms(m.componentId),
+    })),
+  }));
+  // Pinned once, like pageNow: incident ages must not re-age mid-render.
+  const incidents = createMemo(() => {
+    const members: MemberAlarms[] = memberIds().map((m, i) => ({
+      component: m.name,
+      componentId: m.componentId,
+      alarms: alarmHistories[i]?.data ?? [],
+    }));
+    return incidentRows(members, pageNow, 30 * 24);
+  });
   const comps = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const prods = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
   const productOf = (componentId: string): string | undefined => {
@@ -159,9 +189,54 @@ export default function SystemZoom() {
           <Show when={vm()}>
             {(z) => (
               <div class="flex min-w-0 flex-1 flex-col">
-                <TabRail tabs={mapDecl() ? [{ key: "overview", label: "Overview" }, { key: "map", label: "Map" }] : [{ key: "overview", label: "Overview" }]} />
+                <TabRail tabs={tabs()} />
                 <Show when={tab() === "map" && mapDecl()}>
                   {(decl) => <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} />}
+                </Show>
+                <Show when={tab() === "history"}>
+                  <section data-testid="history-tab" class="flex flex-col gap-4 p-4">
+                    <div data-testid="health-history-full">
+                      <HealthHistory transitions={health.data?.transitions ?? []} verdict={health.data?.verdict} />
+                      {/* The causes on the same axis: one marker per raise in
+                          the window, under the strip the spans painted. */}
+                      <div class="relative mt-1 h-2">
+                        <For each={incidents()}>
+                          {(inc) => (
+                            <span
+                              data-testid={`incident-marker-${inc.id}`}
+                              class="absolute top-0 h-0 w-0 -translate-x-1/2 border-x-4 border-b-6 border-x-transparent"
+                              classList={{ "border-b-error": inc.severity === "critical", "border-b-warning": inc.severity !== "critical" }}
+                              style={{ left: `${markerX(inc.raisedAt, pageNow, 30 * 24 * 3600_000) * 100}%` }}
+                              title={`${inc.message} · ${inc.component}`}
+                            />
+                          )}
+                        </For>
+                      </div>
+                    </div>
+                    <div>
+                      <Eyebrow label="What went wrong" hint="Every alarm any member raised inside the window, cleared ones included: the causes behind the spans above. Ongoing first, then newest." />
+                      <Show when={incidents().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window.</p>}>
+                        <ul class="mt-2 divide-y divide-base-300 rounded-box border border-base-300 text-sm">
+                          <For each={incidents()}>
+                            {(inc) => (
+                              <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-2">
+                                <span class="badge badge-sm" classList={{ "badge-error badge-soft": inc.severity === "critical", "badge-warning badge-soft": inc.severity !== "critical" }}>{inc.severity}</span>
+                                <span>{inc.message}</span>
+                                <button type="button" class="cursor-pointer font-mono text-xs text-base-content/70 hover:underline" onClick={() => navigate(`/components/${inc.componentId}?zoom=1`)}>{inc.component}</button>
+                                <span class="ml-auto text-xs tabular-nums text-base-content/50">
+                                  {fmtTime(inc.raisedAt)}
+                                  {" · "}
+                                  <Show when={inc.ongoing} fallback={<>held {durationText(Date.parse(inc.clearedAt!) - Date.parse(inc.raisedAt))}</>}>
+                                    <span class="text-warning">ongoing · {durationText(pageNow - Date.parse(inc.raisedAt))}</span>
+                                  </Show>
+                                </span>
+                              </li>
+                            )}
+                          </For>
+                        </ul>
+                      </Show>
+                    </div>
+                  </section>
                 </Show>
                 <div class="flex flex-col gap-5 p-4" classList={{ hidden: tab() !== "overview" }}>
                   {/* Cause before arithmetic (#785): what is wrong, on which

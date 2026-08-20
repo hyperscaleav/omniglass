@@ -8,6 +8,7 @@ import { systemHealthKey, type FleetHealth } from "../lib/health";
 import { systemRolesKey } from "../lib/system_roles";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { systemMetricsKey } from "../lib/system_metrics";
+import { componentAlarmsKey } from "../lib/alarms";
 import { STANDARDS_KEY } from "../lib/standards";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
@@ -123,7 +124,8 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}?zoom=1`, healthOverrid
   qc.setQueryData([...systemMetricsKey(uuidFor("szp-sys"))], metrics);
   qc.setQueryData([...STANDARDS_KEY], standards);
   window.history.pushState({}, "", path);
-  return render(() => (
+  const r = render(() => (
+
     <QueryClientProvider client={qc}>
       <Router base="/web">
         <Route path="/systems/:id" component={Systems} />
@@ -139,6 +141,7 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}?zoom=1`, healthOverrid
       </Router>
     </QueryClientProvider>
   ));
+  return Object.assign(r, { qc });
 }
 
 afterEach(cleanup);
@@ -300,12 +303,13 @@ describe("the map tab (#791)", () => {
     ] },
   }];
 
-  it("a standard with a map yields the tab rail; without one there is no rail at all", () => {
+  it("a standard with a map yields the Map tab; without one the tab is absent (History keeps the rail)", () => {
     mount(undefined, health, [], MAPPED);
-    expect(screen.getByTestId("tab-rail")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Map" })).toBeTruthy();
     cleanup();
     mount();
-    expect(screen.queryByTestId("tab-rail")).toBeNull();
+    expect(screen.getByTestId("tab-rail")).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Map" })).toBeNull();
   });
 
   it("the map tab renders one marker per declared position of the build in use, occupants solid and gaps hollow", () => {
@@ -334,5 +338,35 @@ describe("the name-shaped address (#759's rule)", () => {
     await screen.findByTestId("system-map");
     expect(window.location.search).toContain("tab=map");
     expect(window.location.pathname).toContain(uuidFor("szp-sys"));
+  });
+});
+
+describe("the history tab (#792)", () => {
+  function seedAlarms(qc: QueryClient) {
+    qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-mic"))], [
+      { id: "hal-1", component: uuidFor("szp-c-mic"), severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true, acknowledged: false },
+    ]);
+    qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-bar"))], [
+      { id: "hal-0", component: uuidFor("szp-c-bar"), severity: "warning", message: "Fan speed high", raised_at: "2026-08-09T09:12:00Z", cleared_at: "2026-08-09T09:53:00Z", active: false, acknowledged: true },
+    ]);
+    qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-power"))], []);
+  }
+
+  it("is always on the rail, and renders the verdict spans with every member alarm beneath, cleared ones included", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=history`);
+    seedAlarms(r.qc);
+    expect(screen.getByRole("tab", { name: "History" })).toBeTruthy();
+    const tab = screen.getByTestId("history-tab");
+    expect(within(tab).getByTestId("health-history-full")).toBeTruthy();
+    expect(await within(tab).findByText("No route to host")).toBeTruthy();
+    expect(within(tab).getByText("Fan speed high")).toBeTruthy();
+    expect(within(tab).getByText(/ongoing/)).toBeTruthy();
+  });
+
+  it("marks each raise on the strip's axis", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=history`);
+    seedAlarms(r.qc);
+    await screen.findByText("No route to host");
+    expect(screen.getAllByTestId(/^incident-marker-/)).toHaveLength(2);
   });
 });

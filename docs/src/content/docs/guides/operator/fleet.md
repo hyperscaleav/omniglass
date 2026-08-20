@@ -41,6 +41,23 @@ screenshots:
     # embed the clean render).
     mask:
       - "[data-testid=since-line]"
+  # The auditorium (reached through its band) carries the fleet's live
+  # critical alarm, so the history tab has something real to say.
+  - id: fleet-history
+    path: /web/locations/east?zoom=1
+    steps:
+      - action: click
+        selector: "text=Auditorium"
+      - action: click
+        selector: "role=tab[name='History']"
+    alt: "The History tab: the verdict spans over the window, raise markers under the strip, and the what-went-wrong list with the ongoing critical alarm."
+    mask:
+      - "[data-testid=since-line]"
+      - "text=/ongoing/ >> xpath=ancestor::li[1]"
+      - ".og-statestrip"
+      - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
+      - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
+      - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
   - id: fleet-location
     path: /web/locations/east?zoom=1
     alt: "The location zoom: the breadcrumb, the verdict header with the needs-attention chip, a band per child location, system cards with slot strips, and the allowed child types."
@@ -145,6 +162,15 @@ is staffed. The label is the role, its position number when the role wants sever
 the component holding it.
 
 ::screenshot{#fleet-map}
+
+## The history
+
+Every system carries the **History** tab: the verdict over the window as spans, and under
+the same axis the causes: one marker per alarm raise, and **What went wrong**, every alarm
+any member raised inside the window, cleared ones included, ongoing first. A room that
+flaps weekly and a room that failed once look different here, which is the point.
+
+::screenshot{#fleet-history}
 
 ## The component leaf
 
