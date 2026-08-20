@@ -57,7 +57,6 @@ screenshots:
       - "[data-testid=since-line]"
       - "[data-testid=uptime-kpi]"
       - "text=/ongoing/ >> xpath=ancestor::li[1]"
-      - "text=/held /  >> xpath=ancestor::li[1]"
       - "text=/\\u2192/ >> xpath=ancestor::li[1]"
       - ".og-statestrip"
       - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"

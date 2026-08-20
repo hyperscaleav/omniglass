@@ -46,6 +46,10 @@ export default function HealthHistory(props: {
   verdict?: string;
   // What the window covers, in the API's terms.
   window?: string;
+  // Strip only, no per-span rows: for a surface that narrates the spans
+  // itself (the history tab's incident list) and would otherwise say
+  // everything twice.
+  compact?: boolean;
 }) {
   // Pinned at setup, like the availability strip: a strip whose "now" moved under
   // it would re-weight every segment on an unrelated re-render.
@@ -66,15 +70,20 @@ export default function HealthHistory(props: {
       <Eyebrow
         label="History"
         hint={`One entry per change, never a sample: ${props.window ?? "the recorded edges over the last 30 days"}. This is what answers "when exactly did it go unhealthy", read back weeks later.`}
-        right={<span class="shrink-0 text-[10.5px] text-base-content/40">30 days</span>}
+        right={<Show when={!props.compact}><span class="shrink-0 text-[10.5px] text-base-content/40">30 days</span></Show>}
       />
 
+      {/* In compact form the surface beside this strip owns the number (the
+          history tab's uptime card), so the trailing hint would say it twice. */}
       <StateStrip segments={list()} tone={tone} height="h-2.5" title="Verdict over the recorded window">
-        <Show when={healthy() !== null} fallback={<span class="text-[11px] text-base-content/40">no data</span>}>
-          <span class="w-20 shrink-0 text-right text-[11px] tabular-nums text-base-content/60">{healthy()}% healthy</span>
+        <Show when={!props.compact}>
+          <Show when={healthy() !== null} fallback={<span class="text-[11px] text-base-content/40">no data</span>}>
+            <span class="w-20 shrink-0 text-right text-[11px] tabular-nums text-base-content/60">{healthy()}% healthy</span>
+          </Show>
         </Show>
       </StateStrip>
 
+      <Show when={!props.compact}>
       <Show
         when={edges().length}
         fallback={
@@ -108,6 +117,7 @@ export default function HealthHistory(props: {
             }}
           </For>
         </div>
+      </Show>
       </Show>
     </div>
   );

@@ -134,6 +134,12 @@ export default function SystemZoom() {
   );
   const uptime = createMemo(() => uptimePct(verdictSpans()));
   const incidentList = createMemo(() => incidentsOf(verdictSpans(), pageNow));
+  const uptimeTone = () => {
+    const u = uptime();
+    if (u === null) return "none";
+    const v = Number(u);
+    return v >= 99 ? "good" : v >= 95 ? "warn" : "bad";
+  };
   const [openIncident, setOpenIncident] = createSignal<number | null>(null);
   const incidents = createMemo(() => {
     const members: MemberAlarms[] = memberIds().map((m, i) => ({
@@ -310,16 +316,23 @@ export default function SystemZoom() {
                 </Show>
                 <Show when={tab() === "history"}>
                   <section data-testid="history-tab" class="flex flex-col gap-4 p-4">
-                    <div class="flex flex-wrap items-end gap-6">
-                      <div data-testid="uptime-kpi" class="flex flex-col">
+                    <div class="flex flex-wrap items-stretch gap-3">
+                      <div data-testid="uptime-kpi" class="flex min-w-36 flex-col justify-between gap-1 rounded-box border border-base-300 bg-base-100 p-3.5">
                         <Eyebrow label="Uptime" hint="The healthy share of the recorded window: the health KPI over time, the number a status page leads with. The timeline beside it is the same record drawn out." />
-                        <span class="font-mono text-3xl tabular-nums" classList={{ "text-success": (incidentList().length === 0), "text-base-content": incidentList().length > 0 }}>
+                        <span
+                          class="font-mono text-3xl tabular-nums"
+                          classList={{
+                            "text-success": uptimeTone() === "good",
+                            "text-warning": uptimeTone() === "warn",
+                            "text-error": uptimeTone() === "bad",
+                          }}
+                        >
                           {uptime() ?? "–"}<span class="text-lg">%</span>
                         </span>
-                        <span class="text-[10px] text-base-content/45">last 30 days</span>
+                        <span class="text-[10px] text-base-content/45">of the last 30 days</span>
                       </div>
-                      <div class="min-w-0 flex-1" data-testid="health-history-full">
-                        <HealthHistory transitions={health.data?.transitions ?? []} verdict={health.data?.verdict} />
+                      <div class="flex min-w-60 flex-1 flex-col justify-center rounded-box border border-base-300 bg-base-100 p-3.5" data-testid="health-history-full">
+                        <HealthHistory compact transitions={health.data?.transitions ?? []} verdict={health.data?.verdict} />
                         <div class="relative mt-1 h-2">
                           <For each={incidents()}>
                             {(inc) => (
@@ -372,6 +385,9 @@ export default function SystemZoom() {
                                   </button>
                                   <Show when={open()}>
                                     <div class="border-t border-base-300 px-3 py-2 text-sm">
+                                      {/* One span is the header row said again: list the
+                                          inside only when the stretch actually changed. */}
+                                      <Show when={inc.spans.length > 1}>
                                       <ul class="flex flex-col gap-1 text-xs text-base-content/70">
                                         <For each={[...inc.spans].reverse()}>
                                           {(sp) => (
@@ -383,6 +399,7 @@ export default function SystemZoom() {
                                           )}
                                         </For>
                                       </ul>
+                                      </Show>
                                       <Show
                                         when={reasons().length > 0}
                                         fallback={<p class="mt-2 text-xs text-base-content/50">No alarm overlaps this stretch: a commissioning gap (a role nobody staffed), not a failure.</p>}

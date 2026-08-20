@@ -64,4 +64,13 @@ describe("HealthHistory", () => {
     expect(container.textContent).not.toContain("One entry per change");
     expect(screen.getByRole("button", { name: /More about History/ })).toBeTruthy();
   });
+
+  it("compact draws the strip only: no span rows and never the no-change fallback", () => {
+    const { container, queryByText } = render(() => (
+      <HealthHistory compact transitions={[at(ago(3600_000), "healthy"), at(ago(60_000), "degraded")]} verdict="degraded" />
+    ));
+    expect(container.querySelector(".og-statestrip")).toBeTruthy();
+    expect(queryByText(/No change recorded/)).toBeNull();
+    expect(queryByText(/held/)).toBeNull();
+  });
 });
