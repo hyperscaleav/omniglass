@@ -5595,3 +5595,8 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   live-series marker, and grows the collection card's layer rungs so device-versus-path
   reads at a glance. Three component reads the console already had routes for and never
   called; no API change.
+- **The location header matches the system zoom**
+  ([#787](https://github.com/hyperscaleav/omniglass/issues/787)). The location zoom's
+  header gains the verdict badge, the since-line from the location health read's
+  transitions, and a needs-attention count for this subtree whose click applies the
+  existing worst-first verdict filter. No new API.

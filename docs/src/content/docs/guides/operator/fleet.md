@@ -36,7 +36,10 @@ screenshots:
       - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
   - id: fleet-location
     path: /web/locations/east?zoom=1
-    alt: "The location zoom: the breadcrumb, a band per child location, system cards with slot strips, and the allowed child types."
+    alt: "The location zoom: the breadcrumb, the verdict header with the needs-attention chip, a band per child location, system cards with slot strips, and the allowed child types."
+    # The since-line ages with the capture.
+    mask:
+      - "[data-testid=since-line]"
   - id: fleet
     path: /web/fleet
     alt: "The fleet zoom: the summary rail, the filter bar, a band per root location with one round mark per system, and dashed holes."
@@ -86,8 +89,10 @@ the same address shows the inventory detail.
 
 ::screenshot{#fleet-location}
 
-One zoom down, marks are **square components** inside a **system outline** (the outline is
-the system's verdict, quiet when healthy). One band per direct child, whatever its type, plus a **placed here** band for systems
+One zoom down, the header repeats the shape the system zoom set: the location's verdict,
+since when, and a **needs-attention count** for this subtree that applies the worst-first
+filter on click. Marks are **square components** inside a **system outline** (the outline
+is the system's verdict, quiet when healthy). One band per direct child, whatever its type, plus a **placed here** band for systems
 attached to this location itself. Each system is a card: a status dot and border, the room
 and standard, a **slot strip** (one square per slot the standard wants: filled squares in
 the occupant's state, empty squares outlined), and a line saying how many required slots
