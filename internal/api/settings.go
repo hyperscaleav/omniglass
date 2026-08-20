@@ -38,7 +38,7 @@ type settingsNamespaceInput struct {
 // (merge-patch a namespace, restore a namespace, factory reset). Every write acts
 // on the platform scope, the same scope the resolver reads, so all three carry
 // platform:update on top of settings:update: a settings override is install-wide
-// by definition, never scoped to part of the estate.
+// by definition, never scoped to part of the fleet.
 func registerSettingsRoutes(api huma.API, a *authenticator, gw storage.Gateway, svc *settings.Service) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "get-settings",

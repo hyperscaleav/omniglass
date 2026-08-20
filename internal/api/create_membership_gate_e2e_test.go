@@ -128,7 +128,7 @@ func TestCreatingAComponentIntoASystemNeedsTheMembershipPermission(t *testing.T)
 // permission test above cannot see: a principal holding system:update somewhere
 // must not bind a system it may only READ. The narrow principal here holds the
 // all-scoped viewer floor, so before this slice the bind resolved in a
-// system:read scope covering the whole estate and the create was served.
+// system:read scope covering the whole fleet and the create was served.
 func TestTheCreatesSystemBindResolvesInTheUpdateScope(t *testing.T) {
 	f := newPlacementFixture(t)
 

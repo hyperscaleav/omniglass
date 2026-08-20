@@ -42,6 +42,7 @@ import PropertiesPanel, { propertyResolutionBlade, propertyBladeId } from "../co
 import ResolutionPanel from "../components/ResolutionPanel";
 import AlarmsPanel from "../components/AlarmsPanel";
 import { hueFor } from "../lib/system_color";
+import ComponentLeaf from "./ComponentLeaf";
 
 // Components: the device inventory, the first page built on the generic TreeList.
 // Components form a tree (parent_id) and each is bound to a primary system and a
@@ -81,6 +82,11 @@ export const componentsDescriptor: PageDescriptor = {
 };
 
 export default function Components() {
+  // The zoom face is a URL fact (ADR-0126): ?zoom=1 renders the component
+  // leaf, and the inventory detail stays the default.
+  const [zoomSearch] = useSearchParams();
+  const zoomParams = useParams();
+  if (zoomParams.id && zoomSearch.zoom === "1") return <ComponentLeaf />;
   const params = useParams();
   const [search] = useSearchParams();
   const navigate = useNavigate();
@@ -121,7 +127,7 @@ export default function Components() {
   // A row whose parent is not itself bindable is promoted to a root here rather
   // than dropped: its parentId would name a node no longer in the list, and the
   // tree flattener would lose the row entirely. What the picker shows is the set
-  // of legal choices, not the shape of the estate.
+  // of legal choices, not the shape of the fleet.
   const bindableSystemItems = createMemo<TreeNode[]>(() => {
     const rows = (systems.data ?? []).filter((s) => s.actions?.includes("update"));
     const present = new Set(rows.map((s) => s.id));
@@ -492,7 +498,7 @@ export default function Components() {
           onAdd={can(me.data, "interface", "create") ? () => ctx.openBlade({ kind: "interface-create", id: n().raw.id }) : undefined}
           onOpenInterface={can(me.data, "interface", "read") ? (id) => ctx.openBlade({ kind: "interface", id }) : undefined}
         />
-        {/* What is wrong with this component, and how badly. This is where estate
+        {/* What is wrong with this component, and how badly. This is where fleet
             health starts: an alarm takes the component's own verdict down, and
             any role it fills stops counting it toward quorum while it stays
             down. Raising and clearing write immediately (like tags), so the

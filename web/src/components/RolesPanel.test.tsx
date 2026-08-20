@@ -7,7 +7,7 @@ import { COMPONENTS_KEY, type Component as Comp } from "../lib/components";
 import { SYSTEMS_KEY, type System } from "../lib/systems";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
-import { systemHealthKey, type EstateHealth } from "../lib/health";
+import { systemHealthKey, type FleetHealth } from "../lib/health";
 
 // The panel resolves a system's roles: what its standard declares plus what the
 // system declares of its own, each with the typed-slot guard (#626) it enforces
@@ -76,7 +76,7 @@ const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], g
 // short, and spare replace assigned/understaffed once health has loaded (#626
 // Task 9). table-mic is short one occupant beyond its assignment count would
 // suggest, which is the case understaffed alone cannot express.
-const health: EstateHealth = {
+const health: FleetHealth = {
   owner_kind: "system",
   owner: "boardroom",
   verdict: "degraded",
@@ -105,7 +105,7 @@ function json(body: unknown, status = 200, type = "application/json") {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": type } });
 }
 
-function mount(opts: { rows?: EffectiveRole[]; canUpdate?: boolean; health?: EstateHealth | null } = {}) {
+function mount(opts: { rows?: EffectiveRole[]; canUpdate?: boolean; health?: FleetHealth | null } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...systemRolesKey("boardroom")], opts.rows ?? roles);
   qc.setQueryData([...COMPONENTS_KEY], components);
@@ -160,7 +160,7 @@ describe("RolesPanel", () => {
     // main-display's sole assignee carries a critical alarm: the roles read
     // would still call it fully staffed (understaffed 0), but health's
     // satisfying/short is occupancy-aware and must win on screen.
-    const degradedMainDisplay: EstateHealth = {
+    const degradedMainDisplay: FleetHealth = {
       ...health,
       roles: health.roles!.map((r) =>
         r.name === "main-display"
@@ -184,7 +184,7 @@ describe("RolesPanel", () => {
   // contradiction commit 5472723 fixed on HealthPanel; task 9 review, finding
   // C5, caught it reintroduced here.
   it("does not render short/spare/impact for a role whose alternate lost its choice", () => {
-    const withInactiveChoice: EstateHealth = {
+    const withInactiveChoice: FleetHealth = {
       ...health,
       roles: health.roles!.map((r) =>
         r.name === "table-mic"
@@ -210,7 +210,7 @@ describe("RolesPanel", () => {
   // the one signal that would tell them the unbuilt alternate has a real
   // fault, not just an unstaffed slot (task 9 re-review, over-correction of C5).
   it("still marks a down occupant on a role whose alternate lost its choice", () => {
-    const inactiveWithDownOccupant: EstateHealth = {
+    const inactiveWithDownOccupant: FleetHealth = {
       ...health,
       roles: health.roles!.map((r) =>
         r.name === "table-mic"
@@ -257,7 +257,7 @@ describe("RolesPanel", () => {
     const picker = getByLabelText("Component to fill table-mic") as HTMLSelectElement;
     // Options carry the component's uuid, not its name (#627 review, the
     // pre-existing surface: staffing a role resolves the component
-    // estate-wide via scopedByName, ADR-0062, so a duplicate-named component
+    // fleet-wide via scopedByName, ADR-0062, so a duplicate-named component
     // 409s on a bare name regardless of scope; the picker must submit the
     // unambiguous uuid to keep the promise Task 15 already made elsewhere).
     expect(Array.from(picker.options).map((o) => o.value)).toEqual(["", uuidFor("c-3"), uuidFor("c-2")]);

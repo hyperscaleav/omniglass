@@ -20,11 +20,11 @@ describe("can", () => {
     expect(can(me(["location:create"]), "location", "read")).toBe(true);
     expect(can(me(["alarm:ack,snooze"]), "location", "update")).toBe(false);
   });
-  // Topic-pattern parity with the server rbac core: `>` is the whole-estate tail
+  // Topic-pattern parity with the server rbac core: `>` is the whole-fleet tail
   // (owner), `*` matches exactly one token, and a two-token pattern cannot reach a
   // three-token `:admin` permission. Regression: owner's only grant is `>`, and a
   // splitting matcher left every gated nav tab hidden for the owner.
-  it("treats `>` as the whole-estate superuser (owner)", () => {
+  it("treats `>` as the whole-fleet superuser (owner)", () => {
     expect(can(me([">"]), "principal", "read")).toBe(true);
     expect(can(me([">"]), "role", "read")).toBe(true);
     expect(can(me([">"]), "audit", "read", "admin")).toBe(true);
@@ -47,7 +47,7 @@ describe("can", () => {
     expect(can(me(["location:"]), "location", "read")).toBe(false);
   });
   // `platform` is in the sensitive set on the server (internal/rbac/rbac.go): it is
-  // install-wide AUTHORITY, not estate reach, so a bare resource wildcard must not
+  // install-wide AUTHORITY, not fleet reach, so a bare resource wildcard must not
   // name it. The console mirrors that set, or it would offer the tier controls to a
   // principal the server refuses.
   it("keeps a bare resource wildcard away from the install-wide platform permission", () => {

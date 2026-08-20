@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// healthFixture is the estate the health tests reason over: a location tree with
+// healthFixture is the fleet the health tests reason over: a location tree with
 // a system in its deepest room, a standard that wants one table mic, and a room
 // bar staffing it. Everything below asserts on how an alarm travels this chain.
 type healthFixture struct {
@@ -297,8 +297,8 @@ func TestHealthReportNamesTheCause(t *testing.T) {
 	// wanted nothing yet), degraded when the role was declared with nobody filling
 	// it, healthy once the bar was assigned, degraded again now. Four writes, four
 	// edges, no samples in between.
-	if got := verdictSeq(rep.Transitions); !sameSeq(got, []string{"healthy", "degraded", "healthy", "degraded"}) {
-		t.Fatalf("transitions = %v, want healthy (created), degraded (role declared unstaffed), healthy (staffed), degraded (alarm)", got)
+	if got := verdictSeq(rep.Transitions); !sameSeq(got, []string{"healthy", "incomplete", "healthy", "degraded"}) {
+		t.Fatalf("transitions = %v, want healthy (created), incomplete (role declared unstaffed), healthy (staffed), degraded (alarm)", got)
 	}
 
 	// The location report is the drill-down: it names the system at fault rather
@@ -386,8 +386,8 @@ func TestHealthMovesOnUnassign(t *testing.T) {
 	if err := f.gw.UnassignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all); err != nil {
 		t.Fatalf("unassign: %v", err)
 	}
-	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "degraded" {
-		t.Fatalf("system after unassigning the only component = %q, want degraded", v)
+	if _, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "incomplete" {
+		t.Fatalf("system after unassigning the only component = %q, want incomplete (unstaffed, not broken)", v)
 	}
 	// Staffing it again recovers, which is the same trigger in the other direction.
 	if err := f.gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all); err != nil {
@@ -527,18 +527,18 @@ func TestHealthReportOfAFreshSystem(t *testing.T) {
 	if len(rep.Roles) != 1 || !rep.Roles[0].Impaired || rep.Roles[0].Impact != "outage" {
 		t.Fatalf("roles = %+v, want the one inherited mic role, impaired at impact outage", rep.Roles)
 	}
-	if rep.Verdict != "outage" {
-		t.Fatalf("verdict = %q, want outage: an unstaffed outage-impact role is not healthy", rep.Verdict)
+	if rep.Verdict != "incomplete" {
+		t.Fatalf("verdict = %q, want incomplete: an unstaffed outage-impact role is not healthy, and not broken either (#631)", rep.Verdict)
 	}
 	mustAgree(t, rep)
 
 	// Creating it recorded the opening edge, so the history has a defined start
 	// rather than beginning at whatever later write happened to notice.
 	n, v := f.recorded(t, ctx, "system", "fresh")
-	if n != 1 || v != "outage" {
-		t.Fatalf("recorded = %d rows / %q, want exactly 1 / outage (the opening verdict)", n, v)
+	if n != 1 || v != "incomplete" {
+		t.Fatalf("recorded = %d rows / %q, want exactly 1 / incomplete (the opening verdict)", n, v)
 	}
-	if got := verdictSeq(rep.Transitions); !sameSeq(got, []string{"outage"}) {
+	if got := verdictSeq(rep.Transitions); !sameSeq(got, []string{"incomplete"}) {
 		t.Fatalf("transitions = %v, want the single opening edge", got)
 	}
 	// The opening verdict climbed to the room the system was created in, and the
@@ -547,11 +547,11 @@ func TestHealthReportOfAFreshSystem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("location health: %v", err)
 	}
-	if loc.Verdict != "outage" {
-		t.Fatalf("location verdict = %q, want outage", loc.Verdict)
+	if loc.Verdict != "incomplete" {
+		t.Fatalf("location verdict = %q, want incomplete", loc.Verdict)
 	}
-	if _, v := f.recorded(t, ctx, "location", "hq"); v != "outage" {
-		t.Errorf("campus = %q, want outage: the opening verdict rolls up like any other", v)
+	if _, v := f.recorded(t, ctx, "location", "hq"); v != "incomplete" {
+		t.Errorf("campus = %q, want incomplete: the opening verdict rolls up like any other", v)
 	}
 }
 
@@ -612,8 +612,8 @@ func TestHealthMovesOnStandardChange(t *testing.T) {
 		t.Fatalf("create system: %v", err)
 	}
 	before, v := f.recorded(t, ctx, "system", "fresh")
-	if v != "outage" {
-		t.Fatalf("opening verdict = %q, want outage", v)
+	if v != "incomplete" {
+		t.Fatalf("opening verdict = %q, want incomplete", v)
 	}
 
 	plain := "health-plain"
@@ -776,7 +776,7 @@ func TestHealthMovesOnLocationMove(t *testing.T) {
 	ctx := context.Background()
 
 	// north-campus > north-b1 > mover-room (the room that moves, holding a
-	// degraded system), and south-campus > south-b1 > anchor-room (a healthy
+	// incomplete system), and south-campus > south-b1 > anchor-room (a healthy
 	// system, so the arrival branch has a RECORDED healthy verdict to move off
 	// of rather than no history at all).
 	f.mustLocation(t, ctx, "north-campus", "campus", nil)
@@ -793,7 +793,7 @@ func TestHealthMovesOnLocationMove(t *testing.T) {
 		t.Fatalf("create anchor system: %v", err)
 	}
 	// Conforming to the fixture's standard with nobody staffing its role is
-	// what makes this system degraded, with no alarm needed.
+	// what makes this system incomplete, with no alarm needed.
 	std, moverRoom := "health-huddle", "mover-room"
 	if _, err := f.gw.CreateSystem(ctx, "", storage.SystemSpec{
 		Name: "mover-sys", StandardID: &std, LocationName: &moverRoom,
@@ -802,7 +802,7 @@ func TestHealthMovesOnLocationMove(t *testing.T) {
 	}
 
 	for _, tc := range []struct{ name, want string }{
-		{"mover-room", "degraded"}, {"north-b1", "degraded"}, {"north-campus", "degraded"},
+		{"mover-room", "incomplete"}, {"north-b1", "incomplete"}, {"north-campus", "incomplete"},
 		{"anchor-room", "healthy"}, {"south-b1", "healthy"}, {"south-campus", "healthy"},
 	} {
 		if _, v := f.recorded(t, ctx, "location", tc.name); v != tc.want {
@@ -826,26 +826,26 @@ func TestHealthMovesOnLocationMove(t *testing.T) {
 	}
 	// The chain it joined takes the verdict on, to the same depth.
 	for _, name := range []string{"south-b1", "south-campus"} {
-		if _, v := f.recorded(t, ctx, "location", name); v != "degraded" {
-			t.Errorf("%s = %q after the room arrived, want degraded: the ancestors of the NEW parent must be recomputed too (series %v)",
+		if _, v := f.recorded(t, ctx, "location", name); v != "incomplete" {
+			t.Errorf("%s = %q after the room arrived, want incomplete: the ancestors of the NEW parent must be recomputed too (series %v)",
 				name, v, f.healthSeries(t, ctx, "location", name))
 		}
 	}
 	// The moved room's own verdict folds its own subtree, which travelled with
 	// it, so nothing about it changed and nothing may be written for it. Same
 	// for the room that never moved.
-	if n, v := f.recorded(t, ctx, "location", "mover-room"); n != moverRows || v != "degraded" {
-		t.Errorf("mover-room = %d rows / %q, want %d / degraded: its own subtree did not change", n, v, moverRows)
+	if n, v := f.recorded(t, ctx, "location", "mover-room"); n != moverRows || v != "incomplete" {
+		t.Errorf("mover-room = %d rows / %q, want %d / incomplete: its own subtree did not change", n, v, moverRows)
 	}
 	if n, v := f.recorded(t, ctx, "location", "anchor-room"); n != anchorRows || v != "healthy" {
 		t.Errorf("anchor-room = %d rows / %q, want %d / healthy: an unrelated room must not be rewritten", n, v, anchorRows)
 	}
 
 	// The record and the report agree on both ends: a location cannot read
-	// healthy over a system it itself lists as degraded.
+	// healthy over a system it itself lists as incomplete.
 	for _, tc := range []struct{ name, want string }{
 		{"north-b1", "healthy"}, {"north-campus", "healthy"},
-		{"south-b1", "degraded"}, {"south-campus", "degraded"},
+		{"south-b1", "incomplete"}, {"south-campus", "incomplete"},
 	} {
 		rep, err := f.gw.LocationHealth(ctx, tc.name, 0, f.all)
 		if err != nil {

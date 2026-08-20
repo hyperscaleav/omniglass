@@ -57,7 +57,7 @@ type factsInterfaceType struct {
 
 // factsLabelRule is one global label rule (#682) as the docs render it: the
 // entity kind and the template this release ships for it. An operator's own
-// override is estate data and is deliberately not a shipped fact.
+// override is fleet data and is deliberately not a shipped fact.
 type factsLabelRule struct {
 	EntityKind string `json:"entity_kind"`
 	Template   string `json:"template"`

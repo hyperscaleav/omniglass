@@ -29,7 +29,7 @@ label_rules:
     # second reads "Boardroom 2" beside `boardroom-2`.
     #
     # A shipped rule change restamps nothing by itself (ADR-0100, ADR-0102). A
-    # new estate gets this at create; an existing one keeps both halves reading
+    # new fleet gets this at create; an existing one keeps both halves reading
     # "Boardroom" until an operator runs /systems:recomputeLabels.
     template: "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}"
 
@@ -37,7 +37,7 @@ label_rules:
     # The location's own name, read as words and title-cased.
     #
     # A location kind carries only two facts: the type ("Room", for every room in
-    # the estate) or the name. So any rule here is either a CONSTANT or a
+    # the fleet) or the name. So any rule here is either a CONSTANT or a
     # RESTATEMENT, and the constant is still refused for the reason it always
     # was: labelling every room "Room" is worse than the name it would replace.
     #
@@ -53,6 +53,6 @@ label_rules:
     # prettified version of it.
     #
     # A shipped rule change restamps nothing by itself (ADR-0100, ADR-0102). A
-    # new estate gets this at create; an existing one keeps its raw names until
+    # new fleet gets this at create; an existing one keeps its raw names until
     # an operator runs /locations:recomputeLabels.
     template: "{{title (words .Name)}}"

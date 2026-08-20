@@ -16,7 +16,7 @@
 // `resource:action:admin` (three tokens). Because `*` is a single token, a
 // two-token pattern like `*:read` (viewer) or `*:*` structurally cannot match a
 // three-token `:admin` permission: sensitivity is a deeper token, not a special
-// case. The whole-estate superuser is `>`.
+// case. The whole-fleet superuser is `>`.
 package rbac
 
 import (
@@ -115,7 +115,7 @@ func parse(p string) ([]pattern, error) {
 	}
 	if len(segs) == 1 {
 		if segs[0] == ">" {
-			return []pattern{{">"}}, nil // the whole-estate superuser pattern
+			return []pattern{{">"}}, nil // the whole-fleet superuser pattern
 		}
 		return nil, fmt.Errorf("rbac: permission %q needs an action", p)
 	}
@@ -158,7 +158,7 @@ var sensitiveResources = map[string]bool{
 	"settings": true,
 	// platform is not a resource anyone reads, it is install-wide AUTHORITY: the
 	// right to write at the cascade's least-specific tier, the value that applies to
-	// the whole install. Full-estate REACH must not confer it (that is the whole
+	// the whole install. Full-fleet REACH must not confer it (that is the whole
 	// point of the second gate), and a bare resource wildcard is reach, so it does
 	// not name the tier. Only a literal grant, a `platform:*`, or owner's `>` does.
 	"platform": true,

@@ -23,10 +23,10 @@ import (
 // referenceFields maps a uuid field to the name field that must accompany it, per
 // response schema. A schema listed here must carry both.
 //
-// The registry references join the estate references here now that every registry
+// The registry references join the fleet references here now that every registry
 // has a uuid primary key and a renameable `name` (epic #262, ADR-0062). A product,
 // a vendor, a driver, a standard, and their parents are addressed the same way an
-// estate entity is: the id is the handle, the name is the label, and a response
+// fleet entity is: the id is the handle, the name is the label, and a response
 // carries both.
 var referenceFields = map[string]string{
 	"parent_id":          "parent",

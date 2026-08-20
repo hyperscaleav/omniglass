@@ -1,6 +1,6 @@
-# Dev-only example estate, applied by `make dev` (via `omniglass seed-dev`) so a
+# Dev-only example fleet, applied by `make dev` (via `omniglass seed-dev`) so a
 # fresh dev environment comes up populated instead of empty: a few campuses (a
-# multi-site estate), a few users, and their grants. Idempotent: re-running leaves
+# multi-site fleet), a few users, and their grants. Idempotent: re-running leaves
 # anything that already exists untouched.
 #
 # This is NOT the boot seed (internal/seed, ship-with reference data that runs on
@@ -13,7 +13,7 @@
 # Every location, component and system carries a `key`. The key is LOCAL to this
 # document: it is how one fixture row references another (`parent: west`,
 # `location: boardroom`), it is never written to the database, and it is NOT the
-# row's name. It cannot be, because most of this estate does not know its own
+# row's name. It cannot be, because most of this fleet does not know its own
 # name until the platform mints one.
 #
 # `name` is optional, and its absence is the whole point of this fixture (#657):
@@ -38,13 +38,13 @@
 # 2" and so on, from the shipped component rule over its resolved type and the
 # ordinal the generator allocated.
 #
-# The estate is a FOREST: three unparented tops (hq, east, airport), never one
+# The fleet is a FOREST: three unparented tops (hq, east, airport), never one
 # root. There is no root location and no "bind this to every location", so a
 # binding at hq covers hq and nothing else, and a fourth site added next year
 # starts uncovered. The install-wide `platform` tier is the only rung that reaches
 # all of them, which is why the seed places devices under two different tops (see
 # components, below): with everything under one top, a binding there would look
-# like it covered the estate.
+# like it covered the fleet.
 #
 # LABELS. The shipped location rule reads a location's own name as words and
 # titles it (#657), so most of these rows need no label at all: a room
@@ -70,7 +70,7 @@ locations:
     type: building
     parent: hq
   # A floor is named by the operator, like every other place here. It carried
-  # the estate's one generated location name for two slices, `1`, under a
+  # the fleet's one generated location name for two slices, `1`, under a
   # positional `floor` rule; ADR-0103 reversed that, because a floor's
   # designation is B2, LG, G, M, 12A, and an ordinal cannot spell any of them.
   # This one's designation is Level 2, so its NAME is level-2 and the shipped
@@ -83,15 +83,24 @@ locations:
     name: level-2
     type: floor
     parent: west
-  # A room's name is ground truth an operator knows, so the fixture types it. It
-  # needs no ancestry in it: names are unique within their parent (not across the
-  # estate), so `boardroom` under this floor is a complete name and
-  # `hq.west.level-2.boardroom` is the address that disambiguates it.
+  # Boardroom A and B are the two halves of a divisible space, and they are two
+  # ROOMS, not two systems sharing one. An air wall splits a room into rooms;
+  # nothing in a fleet has two boardrooms inside one boardroom. The shared bar
+  # lives physically in A and serves both (components, below), which is what
+  # actually happens when the wall opens, and it is why membership has to be
+  # many-valued.
   #
-  # No label: the shipped rule renders "Boardroom" from this name, and a
-  # pin restating it would only hide which of the two produced it.
-  - key: boardroom
-    name: boardroom
+  # A room's name is ground truth an operator knows, so the fixture types it. It
+  # needs no ancestry in it: names are unique within their parent (not across
+  # the fleet). No labels: the shipped rule renders "Boardroom A" and
+  # "Boardroom B" from these names, the halves' real-world signage (ADR-0103's
+  # designation case).
+  - key: boardroom-a
+    name: boardroom-a
+    type: room
+    parent: west-l2
+  - key: boardroom-b
+    name: boardroom-b
     type: room
     parent: west-l2
   # Pinned: "Huddle" is not what anybody calls the room, and the noun is not in
@@ -101,6 +110,15 @@ locations:
     label: Huddle Room
     type: room
     parent: west-l2
+  # Ground-floor lobby, holding a signage endpoint nobody has commissioned into
+  # a system yet (components, below): a display on the wall and no system above
+  # it is an ordinary state, and the fleet canvas draws it as a hole rather
+  # than hiding it. No label: the rule renders "Lobby", and the building above
+  # it already says which one.
+  - key: lobby
+    name: lobby
+    type: room
+    parent: west
 
   # East Campus: a second site.
   #
@@ -154,14 +172,200 @@ locations:
     type: room
     parent: annex
 
+  # Service Depot: a fourth top of a deliberately DIFFERENT shape. It is a
+  # building at the root with rooms hanging straight off it, no campus above and
+  # no floor between, which the seeded type registry allows and the model has
+  # never required. Three tops shaped campus -> building -> floor -> room taught
+  # a fixed ladder that does not exist, and a fleet canvas read against only
+  # that shape would let a fixed-ladder assumption ship green (#630).
+  #
+  # Pinned: the rule renders "Depot", and "Service Depot" is what the site is
+  # called; the qualifying word is not in the name.
+  - key: depot
+    name: depot
+    label: Service Depot
+    type: building
+  # No label: the rule renders "Bay 1", the designation case (ADR-0103), so the
+  # name carries it and the rule titles it.
+  - key: bay-1
+    name: bay-1
+    type: room
+    parent: depot
+  # Bay 2 holds no system on purpose: a leaf nobody has commissioned is the
+  # dashed hole the fleet canvas draws, and naming a gap is half of what it
+  # is for.
+  - key: bay-2
+    name: bay-2
+    type: room
+    parent: depot
+
+
+  # Volume rows (mass for the canvas; no teaching purpose beyond size).
+  - key: harbor
+    name: harbor
+    label: Harbor Point
+    type: campus
+  - key: pav-a
+    name: pavilion-a
+    type: building
+    parent: harbor
+  - key: pav-b
+    name: pavilion-b
+    type: building
+    parent: harbor
+  - key: west-l3
+    name: level-3
+    type: floor
+    parent: west
+  - key: wl3-r1
+    name: meeting-301
+    type: room
+    parent: west-l3
+  - key: wl3-r2
+    name: meeting-302
+    type: room
+    parent: west-l3
+  - key: wl3-r3
+    name: meeting-303
+    type: room
+    parent: west-l3
+  - key: wl3-r4
+    name: meeting-304
+    type: room
+    parent: west-l3
+  - key: wl3-r5
+    name: meeting-305
+    type: room
+    parent: west-l3
+  - key: wl3-r6
+    name: meeting-306
+    type: room
+    parent: west-l3
+  - key: west-l4
+    name: level-4
+    type: floor
+    parent: west
+  - key: wl4-r1
+    name: meeting-401
+    type: room
+    parent: west-l4
+  - key: wl4-r2
+    name: meeting-402
+    type: room
+    parent: west-l4
+  - key: wl4-r3
+    name: meeting-403
+    type: room
+    parent: west-l4
+  - key: wl4-r4
+    name: meeting-404
+    type: room
+    parent: west-l4
+  - key: wl4-r5
+    name: meeting-405
+    type: room
+    parent: west-l4
+  - key: hall-l2
+    name: mezzanine
+    type: floor
+    parent: hall
+  - key: hl2-r1
+    name: class-201
+    type: room
+    parent: hall-l2
+  - key: hl2-r2
+    name: class-202
+    type: room
+    parent: hall-l2
+  - key: hl2-r3
+    name: class-203
+    type: room
+    parent: hall-l2
+  - key: hl2-r4
+    name: class-204
+    type: room
+    parent: hall-l2
+  - key: hl2-r5
+    name: class-205
+    type: room
+    parent: hall-l2
+  - key: hl2-r6
+    name: class-206
+    type: room
+    parent: hall-l2
+  - key: pava-r1
+    name: suite-a1
+    type: room
+    parent: pav-a
+  - key: pava-r2
+    name: suite-a2
+    type: room
+    parent: pav-a
+  - key: pava-r3
+    name: suite-a3
+    type: room
+    parent: pav-a
+  - key: pava-r4
+    name: suite-a4
+    type: room
+    parent: pav-a
+  - key: pava-r5
+    name: suite-a5
+    type: room
+    parent: pav-a
+  - key: pavb-r1
+    name: suite-b1
+    type: room
+    parent: pav-b
+  - key: pavb-r2
+    name: suite-b2
+    type: room
+    parent: pav-b
+  - key: pavb-r3
+    name: suite-b3
+    type: room
+    parent: pav-b
+  - key: pavb-r4
+    name: suite-b4
+    type: room
+    parent: pav-b
+  - key: pavb-r5
+    name: suite-b5
+    type: room
+    parent: pav-b
+  - key: ann-r1
+    name: brief-2
+    type: room
+    parent: annex
+  - key: ann-r2
+    name: brief-3
+    type: room
+    parent: annex
+  - key: ann-r3
+    name: brief-4
+    type: room
+    parent: annex
+  - key: dep-r1
+    name: bay-3
+    type: room
+    parent: depot
+  - key: dep-r2
+    name: bay-4
+    type: room
+    parent: depot
+  - key: dep-r3
+    name: bay-5
+    type: room
+    parent: depot
+
 users:
   # Username convention: a user limited to a region carries that region in its name
-  # (viewer-hq, tech-east); an estate-wide user carries none (operator). No `-dev`
+  # (viewer-hq, tech-east); a fleet-wide user carries none (operator). No `-dev`
   # suffix, since this fixture only ever seeds a dev environment. All share the
   # password `dev`.
 
   # A broad operator, all-scoped across every site: no region, since the grant is
-  # estate-wide. The everyday driver for demos.
+  # fleet-wide. The everyday driver for demos.
   - username: operator
     password: dev
     label: Operator
@@ -190,7 +394,7 @@ users:
         scope_op: subtree_excl_root
 
 # Platform example variables (macros), so the Variables directory comes up
-# populated. Scoped variables are added once the dev estate seeds systems and
+# populated. Scoped variables are added once the dev fleet seeds systems and
 # components; these platform ones need no owner.
 variables:
   - name: poll-interval
@@ -250,7 +454,7 @@ files:
     content: "CONFIDENTIAL competitive bid, integrator A"
     sensitive: true
 
-# Product contract lines: one property the dev estate adds to the Samsung QM55's
+# Product contract lines: one property the dev fleet adds to the Samsung QM55's
 # declared-property contract, on top of the ones the boot seed ships
 # (serial-number, firmware-version, and model-number with a default). It shows an
 # operator-extended contract in the editor, and `mac-address` carries no default,
@@ -260,7 +464,7 @@ product_properties:
   - product: samsung-qm55
     property: mac-address
 
-# Components: example devices placed in the estate, so the Components directory
+# Components: example devices placed in the fleet, so the Components directory
 # comes up populated. Not one of them names itself: each asks the platform for a
 # name, which mints it from the product's resolved component_type stem and the
 # lowest free ordinal in its own room. So the huddle display, the first boardroom
@@ -275,23 +479,31 @@ product_properties:
 # outside the west binding's subtree, so its environment resolves to the platform
 # value (prod) while the huddle display reads staging. Same key, two rungs,
 # because a binding at a top covers that top only and no location binding can
-# cover the whole estate.
+# cover the whole fleet.
 components:
   - key: huddle-display
     product: samsung-qm55
     location: huddle
+  # The lobby's signage endpoint, deliberately in no system: the display is on
+  # the wall and nobody has commissioned it, so the canvas draws the room as a
+  # hole with a device already waiting in it.
+  - key: lobby-display
+    product: samsung-qm55
+    location: lobby
+  # The shared bar lives physically in room A and serves both halves of the
+  # divisible boardroom (assignments, below).
   - key: shared-bar
     product: cisco-room-bar
-    location: boardroom
+    location: boardroom-a
   - key: bar-a
     product: cisco-room-bar
-    location: boardroom
+    location: boardroom-a
   - key: panel-a
     product: samsung-qm55
-    location: boardroom
+    location: boardroom-a
   - key: panel-b
     product: samsung-qm55
-    location: boardroom
+    location: boardroom-b
   # No product on purpose: it classifies as generic-device, a type no role's
   # accepted_types names, so no role can want it. It is in the room and
   # accounted for, and nothing more, which is exactly the case membership
@@ -301,10 +513,338 @@ components:
   # are the only thing that says what the box is.
   - key: power
     label: Power Conditioner
-    location: boardroom
+    location: boardroom-a
   - key: auditorium-display
     product: samsung-qm55
     location: auditorium
+  - key: auditorium-display-b
+    product: samsung-qm55
+    location: auditorium
+  - key: auditorium-bar
+    product: cisco-room-bar
+    location: auditorium
+  - key: auditorium-bar-b
+    product: cisco-room-bar
+    location: auditorium
+  - key: auditorium-mic
+    product: shure-mxa920
+    location: auditorium
+  - key: auditorium-touch
+    product: crestron-tss-1070
+    location: auditorium
+
+  # The huddle room's bar staffs the video-bar leg of the choice-bearing
+  # huddle-room standard (systems, below); the touch panel is in the room and
+  # accounted for, filling no role.
+  - key: huddle-bar
+    product: cisco-room-bar
+    location: huddle
+  - key: huddle-touch
+    product: crestron-tss-1070
+    location: huddle
+
+  - key: briefing-bar
+    product: cisco-room-bar
+    location: briefing
+  - key: briefing-bar-b
+    product: cisco-room-bar
+    location: briefing
+  - key: briefing-display
+    product: samsung-qm55
+    location: briefing
+
+  - key: bay-1-bar
+    product: cisco-room-bar
+    location: bay-1
+  - key: bay-1-bar-b
+    product: cisco-room-bar
+    location: bay-1
+  - key: bay-1-display
+    product: samsung-qm55
+    location: bay-1
+  - key: bay-1-mic
+    product: shure-mxa920
+    location: bay-1
+
+  # A central recording service, a member of systems in TWO different tops. A
+  # shared box inside one room already had a fixture (the shared bar); this is
+  # the case the fleet canvas exists to show, where two bands an operator
+  # would never read together depend on one thing. It draws once as owned in
+  # its primary cluster and as a ghost in the other, so the fleet never
+  # counts it twice. No location: it is a service, not a box in a room.
+  - key: recording-service
+    label: Fleet Recording Service
+    product: generic-service
+
+
+  # Volume devices (mass for the canvas).
+  - key: wl3-c1a
+    product: cisco-room-bar
+    location: wl3-r1
+  - key: wl3-c1d
+    product: samsung-qm55
+    location: wl3-r1
+  - key: wl3-c1b
+    product: cisco-room-bar
+    location: wl3-r1
+  - key: wl3-c2a
+    product: cisco-room-bar
+    location: wl3-r2
+  - key: wl3-c2d
+    product: samsung-qm55
+    location: wl3-r2
+  - key: wl3-c2b
+    product: cisco-room-bar
+    location: wl3-r2
+  - key: wl3-c3a
+    product: cisco-room-bar
+    location: wl3-r3
+  - key: wl3-c3d
+    product: samsung-qm55
+    location: wl3-r3
+  - key: wl3-c3b
+    product: cisco-room-bar
+    location: wl3-r3
+  - key: wl3-c4a
+    product: cisco-room-bar
+    location: wl3-r4
+  - key: wl3-c4d
+    product: samsung-qm55
+    location: wl3-r4
+  - key: wl3-c4b
+    product: cisco-room-bar
+    location: wl3-r4
+  - key: wl3-c5a
+    product: cisco-room-bar
+    location: wl3-r5
+  - key: wl3-c5d
+    product: samsung-qm55
+    location: wl3-r5
+  - key: wl3-c5b
+    product: cisco-room-bar
+    location: wl3-r5
+  - key: wl3-c6a
+    product: cisco-room-bar
+    location: wl3-r6
+  - key: wl3-c6d
+    product: samsung-qm55
+    location: wl3-r6
+  - key: wl3-c6b
+    product: cisco-room-bar
+    location: wl3-r6
+  - key: wl4-c1a
+    product: cisco-room-bar
+    location: wl4-r1
+  - key: wl4-c1d
+    product: samsung-qm55
+    location: wl4-r1
+  - key: wl4-c2a
+    product: cisco-room-bar
+    location: wl4-r2
+  - key: wl4-c2d
+    product: samsung-qm55
+    location: wl4-r2
+  - key: wl4-c3a
+    product: cisco-room-bar
+    location: wl4-r3
+  - key: wl4-c3d
+    product: samsung-qm55
+    location: wl4-r3
+  - key: wl4-c4a
+    product: cisco-room-bar
+    location: wl4-r4
+  - key: wl4-c4d
+    product: samsung-qm55
+    location: wl4-r4
+  - key: wl4-c5a
+    product: cisco-room-bar
+    location: wl4-r5
+  - key: wl4-c5d
+    product: samsung-qm55
+    location: wl4-r5
+  - key: hl2-c1a
+    product: cisco-room-bar
+    location: hl2-r1
+  - key: hl2-c1d
+    product: samsung-qm55
+    location: hl2-r1
+  - key: hl2-c1b
+    product: cisco-room-bar
+    location: hl2-r1
+  - key: hl2-c2a
+    product: cisco-room-bar
+    location: hl2-r2
+  - key: hl2-c2d
+    product: samsung-qm55
+    location: hl2-r2
+  - key: hl2-c2b
+    product: cisco-room-bar
+    location: hl2-r2
+  - key: hl2-c3a
+    product: cisco-room-bar
+    location: hl2-r3
+  - key: hl2-c3d
+    product: samsung-qm55
+    location: hl2-r3
+  - key: hl2-c3b
+    product: cisco-room-bar
+    location: hl2-r3
+  - key: hl2-c4a
+    product: cisco-room-bar
+    location: hl2-r4
+  - key: hl2-c4d
+    product: samsung-qm55
+    location: hl2-r4
+  - key: hl2-c4b
+    product: cisco-room-bar
+    location: hl2-r4
+  - key: hl2-c5a
+    product: cisco-room-bar
+    location: hl2-r5
+  - key: hl2-c5d
+    product: samsung-qm55
+    location: hl2-r5
+  - key: hl2-c5b
+    product: cisco-room-bar
+    location: hl2-r5
+  - key: hl2-c6a
+    product: cisco-room-bar
+    location: hl2-r6
+  - key: hl2-c6d
+    product: samsung-qm55
+    location: hl2-r6
+  - key: hl2-c6b
+    product: cisco-room-bar
+    location: hl2-r6
+  - key: pava-c1a
+    product: cisco-room-bar
+    location: pava-r1
+  - key: pava-c1d
+    product: samsung-qm55
+    location: pava-r1
+  - key: pava-c1b
+    product: cisco-room-bar
+    location: pava-r1
+  - key: pava-c2a
+    product: cisco-room-bar
+    location: pava-r2
+  - key: pava-c2d
+    product: samsung-qm55
+    location: pava-r2
+  - key: pava-c2b
+    product: cisco-room-bar
+    location: pava-r2
+  - key: pava-c3a
+    product: cisco-room-bar
+    location: pava-r3
+  - key: pava-c3d
+    product: samsung-qm55
+    location: pava-r3
+  - key: pava-c3b
+    product: cisco-room-bar
+    location: pava-r3
+  - key: pava-c4a
+    product: cisco-room-bar
+    location: pava-r4
+  - key: pava-c4d
+    product: samsung-qm55
+    location: pava-r4
+  - key: pava-c4b
+    product: cisco-room-bar
+    location: pava-r4
+  - key: pava-c5a
+    product: cisco-room-bar
+    location: pava-r5
+  - key: pava-c5d
+    product: samsung-qm55
+    location: pava-r5
+  - key: pava-c5b
+    product: cisco-room-bar
+    location: pava-r5
+  - key: pavb-c1a
+    product: cisco-room-bar
+    location: pavb-r1
+  - key: pavb-c1d
+    product: samsung-qm55
+    location: pavb-r1
+  - key: pavb-c2a
+    product: cisco-room-bar
+    location: pavb-r2
+  - key: pavb-c2d
+    product: samsung-qm55
+    location: pavb-r2
+  - key: pavb-c3a
+    product: cisco-room-bar
+    location: pavb-r3
+  - key: pavb-c3d
+    product: samsung-qm55
+    location: pavb-r3
+  - key: pavb-c4a
+    product: cisco-room-bar
+    location: pavb-r4
+  - key: pavb-c4d
+    product: samsung-qm55
+    location: pavb-r4
+  - key: pavb-c5a
+    product: cisco-room-bar
+    location: pavb-r5
+  - key: pavb-c5d
+    product: samsung-qm55
+    location: pavb-r5
+  - key: ann-c1a
+    product: cisco-room-bar
+    location: ann-r1
+  - key: ann-c1d
+    product: samsung-qm55
+    location: ann-r1
+  - key: ann-c1b
+    product: cisco-room-bar
+    location: ann-r1
+  - key: ann-c2a
+    product: cisco-room-bar
+    location: ann-r2
+  - key: ann-c2d
+    product: samsung-qm55
+    location: ann-r2
+  - key: ann-c2b
+    product: cisco-room-bar
+    location: ann-r2
+  - key: ann-c3a
+    product: cisco-room-bar
+    location: ann-r3
+  - key: ann-c3d
+    product: samsung-qm55
+    location: ann-r3
+  - key: ann-c3b
+    product: cisco-room-bar
+    location: ann-r3
+  - key: dep-c1a
+    product: cisco-room-bar
+    location: dep-r1
+  - key: dep-c1d
+    product: samsung-qm55
+    location: dep-r1
+  - key: dep-c1b
+    product: cisco-room-bar
+    location: dep-r1
+  - key: dep-c2a
+    product: cisco-room-bar
+    location: dep-r2
+  - key: dep-c2d
+    product: samsung-qm55
+    location: dep-r2
+  - key: dep-c2b
+    product: cisco-room-bar
+    location: dep-r2
+  - key: dep-c3a
+    product: cisco-room-bar
+    location: dep-r3
+  - key: dep-c3d
+    product: samsung-qm55
+    location: dep-r3
+  - key: dep-c3b
+    product: cisco-room-bar
+    location: dep-r3
 
 # Property values: two overrides the huddle display declares over its product's
 # contract, so the effective-properties panel teaches direct-vs-inherited.
@@ -318,38 +858,213 @@ property_values:
     property: firmware-version
     value: 2.1.4
 
-# Two systems in one room: a divisible boardroom with an air wall down the middle.
-# This is the case a single system pointer on a component could never express, and
-# it is why membership is many-valued: the shared room bar feeds BOTH halves and is a
-# member of each, while the mics and displays belong to one half only.
+# The two halves of a divisible boardroom, one system per ROOM. The shared room
+# bar sits physically in A and feeds BOTH halves, so it is a member of each: the
+# case a single system pointer on a component could never express, and the
+# reason membership is many-valued. The other mics and displays belong to one
+# half only.
 #
-# Neither names itself either: both are `board` systems in the same room, so the
-# platform mints `boardroom` for the first (the first of its stem in a bucket
-# carries no ordinal, ADR-0101) and `boardroom-2` for the second.
-#
-# Neither LABELS itself either, and that is new (#693). Both were pinned
-# "Boardroom A" and "Boardroom B" for two slices, because the shipped system rule
-# read the type alone and rendered "Boardroom" for both halves: a pin was the
-# only thing that told them apart on the surface an operator reads. The rule
-# reads the ordinal now, so it renders "Boardroom" and "Boardroom 2" from the
-# same facts the names came from, and a pin here would be the hand-typed copy of
-# the rule's own output that this file exists to avoid. Released, both of them:
-# they are the estate's only same-type siblings, so they are the only rows that
-# can demonstrate the thing the rule was changed to do.
-#
-# The air wall's own signage would earn a pin back (a room whose halves are
-# signed A and B is ADR-0103's designation case, the same argument that pins
-# "Level 2" onto a floor). This estate has no such signage to state, and
-# inventing one to keep the pin would be pinning a fact the fixture made up.
+# Neither system names itself: each is the first `board` system in its own room,
+# so the platform mints `boardroom` in each bucket (the first of its stem in a
+# bucket carries no ordinal, ADR-0101). Same name, two rooms, which is the
+# placement-scoped name index doing for systems what display-1-per-room does
+# for components. The same-BUCKET siblings that demonstrate the ordinal (#693)
+# live in the media lab now (below), since an air wall makes two rooms, not two
+# boardrooms inside one.
 systems:
   - key: boardroom-a
     standard: meeting-room
     system_type: board
-    location: boardroom
+    location: boardroom-a
   - key: boardroom-b
     standard: meeting-room
     system_type: board
-    location: boardroom
+    location: boardroom-b
+
+  # A huddle room on the choice-bearing standard: it is built all-in-one, so
+  # the component-build alternate stays unstaffed WITHOUT impairing the room
+  # (#626): a losing alternate's roles contribute nothing.
+  - key: huddle-north
+    standard: huddle-room
+    system_type: huddle
+    location: huddle
+
+  # Fully staffed and quiet, until an alarm (below) knocks one of its two
+  # microphones out: a REAL failure beside the commissioning gaps, which is the
+  # contrast the fleet canvas exists to draw.
+  - key: auditorium-av
+    standard: meeting-room
+    system_type: meeting
+    location: auditorium
+
+  # Racked, cabled, and not yet commissioned: two training pods conforming to a
+  # standard with nothing assigned to any role either declares. Both read
+  # INCOMPLETE, the verdict #631 added, and nothing in this seed produced it
+  # before. Most of a real fleet looks like this for months, which is the
+  # whole reason that verdict is not outage.
+  #
+  # They are also the fleet's same-BUCKET same-type siblings, the pair that
+  # demonstrates the ordinal the system rule reads (#693): two `class` systems
+  # in one room mint `classroom` and `classroom-2`, rendering "Classroom" and
+  # "Classroom 2". The divisible boardroom used to carry this demo and cannot
+  # any more, its halves being two rooms now (one bucket each).
+  - key: lab-pod-a
+    standard: meeting-room
+    system_type: class
+    location: lab
+  - key: lab-pod-b
+    standard: meeting-room
+    system_type: class
+    location: lab
+
+  # One microphone short of its quorum of two, with the one it has healthy
+  # (assignments, below): short-staffed, not broken, so it reads incomplete.
+  - key: briefing-av
+    standard: meeting-room
+    system_type: meeting
+    location: briefing
+
+  # Fully staffed, and the room its warning-level alarm (below) does NOT
+  # impair: the component degrades and keeps its slot.
+  - key: bay-1-av
+    standard: meeting-room
+    system_type: meeting
+    location: bay-1
+
+
+  # Volume systems (mass for the canvas). The partial blocks read incomplete.
+  - key: wl3-s1
+    standard: meeting-room
+    system_type: meeting
+    location: wl3-r1
+  - key: wl3-s2
+    standard: meeting-room
+    system_type: meeting
+    location: wl3-r2
+  - key: wl3-s3
+    standard: meeting-room
+    system_type: meeting
+    location: wl3-r3
+  - key: wl3-s4
+    standard: meeting-room
+    system_type: meeting
+    location: wl3-r4
+  - key: wl3-s5
+    standard: meeting-room
+    system_type: meeting
+    location: wl3-r5
+  - key: wl3-s6
+    standard: meeting-room
+    system_type: meeting
+    location: wl3-r6
+  - key: wl4-s1
+    standard: meeting-room
+    system_type: meeting
+    location: wl4-r1
+  - key: wl4-s2
+    standard: meeting-room
+    system_type: meeting
+    location: wl4-r2
+  - key: wl4-s3
+    standard: meeting-room
+    system_type: meeting
+    location: wl4-r3
+  - key: wl4-s4
+    standard: meeting-room
+    system_type: meeting
+    location: wl4-r4
+  - key: wl4-s5
+    standard: meeting-room
+    system_type: meeting
+    location: wl4-r5
+  - key: hl2-s1
+    standard: meeting-room
+    system_type: meeting
+    location: hl2-r1
+  - key: hl2-s2
+    standard: meeting-room
+    system_type: meeting
+    location: hl2-r2
+  - key: hl2-s3
+    standard: meeting-room
+    system_type: meeting
+    location: hl2-r3
+  - key: hl2-s4
+    standard: meeting-room
+    system_type: meeting
+    location: hl2-r4
+  - key: hl2-s5
+    standard: meeting-room
+    system_type: meeting
+    location: hl2-r5
+  - key: hl2-s6
+    standard: meeting-room
+    system_type: meeting
+    location: hl2-r6
+  - key: pava-s1
+    standard: meeting-room
+    system_type: meeting
+    location: pava-r1
+  - key: pava-s2
+    standard: meeting-room
+    system_type: meeting
+    location: pava-r2
+  - key: pava-s3
+    standard: meeting-room
+    system_type: meeting
+    location: pava-r3
+  - key: pava-s4
+    standard: meeting-room
+    system_type: meeting
+    location: pava-r4
+  - key: pava-s5
+    standard: meeting-room
+    system_type: meeting
+    location: pava-r5
+  - key: pavb-s1
+    standard: meeting-room
+    system_type: conference
+    location: pavb-r1
+  - key: pavb-s2
+    standard: meeting-room
+    system_type: conference
+    location: pavb-r2
+  - key: pavb-s3
+    standard: meeting-room
+    system_type: conference
+    location: pavb-r3
+  - key: pavb-s4
+    standard: meeting-room
+    system_type: conference
+    location: pavb-r4
+  - key: pavb-s5
+    standard: meeting-room
+    system_type: conference
+    location: pavb-r5
+  - key: ann-s1
+    standard: meeting-room
+    system_type: meeting
+    location: ann-r1
+  - key: ann-s2
+    standard: meeting-room
+    system_type: meeting
+    location: ann-r2
+  - key: ann-s3
+    standard: meeting-room
+    system_type: meeting
+    location: ann-r3
+  - key: dep-s1
+    standard: meeting-room
+    system_type: training
+    location: dep-r1
+  - key: dep-s2
+    standard: meeting-room
+    system_type: training
+    location: dep-r2
+  - key: dep-s3
+    standard: meeting-room
+    system_type: training
+    location: dep-r3
 
 # Membership without a job. The shared bar staffs the microphone role in both halves
 # (below, through assignment), but the power conditioner fills no declared role at
@@ -358,10 +1073,22 @@ systems:
 members:
   - system: boardroom-a
     component: power
+  # One service, two tops. No role wants it, so it is membership and nothing
+  # more, which is exactly what the many-valued binding is for.
+  - system: auditorium-av
+    component: recording-service
+  - system: briefing-av
+    component: recording-service
+  # In the room and accounted for, filling no role.
+  - system: huddle-north
+    component: huddle-touch
+  - system: auditorium-av
+    component: auditorium-touch
 
 # Staffing, which creates the membership as a side effect. boardroom-a is fully
 # staffed and reads healthy; boardroom-b is one microphone short of its quorum of
-# two, so it reads degraded and the Health panel names the reason.
+# two with the one it has healthy, so it reads incomplete (#631: a box nobody
+# installed, not a box that broke) and the Health panel names the reason.
 role_assignments:
   - system: boardroom-a
     role: room-mic
@@ -378,3 +1105,335 @@ role_assignments:
   - system: boardroom-b
     role: main-display
     component: panel-b
+
+  # Huddle North, built all-in-one: the video-bar alternate is staffed and the
+  # component build is left alone, so the room reads healthy on one leg.
+  - system: huddle-north
+    role: conf-bar
+    component: huddle-bar
+
+  # The auditorium is fully staffed. The critical alarm (below) takes one of
+  # its two microphones down, so the room drops on a real failure.
+  - system: auditorium-av
+    role: room-mic
+    component: auditorium-bar
+  - system: auditorium-av
+    role: room-mic
+    component: auditorium-bar-b
+  - system: auditorium-av
+    role: main-display
+    component: auditorium-display
+
+  # The briefing room is one microphone short of its quorum of two, with the
+  # one it has healthy: short-staffed, not broken.
+  - system: briefing-av
+    role: room-mic
+    component: briefing-bar
+  - system: briefing-av
+    role: main-display
+    component: briefing-display
+
+  # Bay 1 is fully staffed.
+  - system: bay-1-av
+    role: room-mic
+    component: bay-1-bar
+  - system: bay-1-av
+    role: room-mic
+    component: bay-1-bar-b
+  - system: bay-1-av
+    role: main-display
+    component: bay-1-display
+
+
+  # Volume staffing.
+  - system: wl3-s1
+    role: room-mic
+    component: wl3-c1a
+  - system: wl3-s1
+    role: main-display
+    component: wl3-c1d
+  - system: wl3-s1
+    role: room-mic
+    component: wl3-c1b
+  - system: wl3-s2
+    role: room-mic
+    component: wl3-c2a
+  - system: wl3-s2
+    role: main-display
+    component: wl3-c2d
+  - system: wl3-s2
+    role: room-mic
+    component: wl3-c2b
+  - system: wl3-s3
+    role: room-mic
+    component: wl3-c3a
+  - system: wl3-s3
+    role: main-display
+    component: wl3-c3d
+  - system: wl3-s3
+    role: room-mic
+    component: wl3-c3b
+  - system: wl3-s4
+    role: room-mic
+    component: wl3-c4a
+  - system: wl3-s4
+    role: main-display
+    component: wl3-c4d
+  - system: wl3-s4
+    role: room-mic
+    component: wl3-c4b
+  - system: wl3-s5
+    role: room-mic
+    component: wl3-c5a
+  - system: wl3-s5
+    role: main-display
+    component: wl3-c5d
+  - system: wl3-s5
+    role: room-mic
+    component: wl3-c5b
+  - system: wl3-s6
+    role: room-mic
+    component: wl3-c6a
+  - system: wl3-s6
+    role: main-display
+    component: wl3-c6d
+  - system: wl3-s6
+    role: room-mic
+    component: wl3-c6b
+  - system: wl4-s1
+    role: room-mic
+    component: wl4-c1a
+  - system: wl4-s1
+    role: main-display
+    component: wl4-c1d
+  - system: wl4-s2
+    role: room-mic
+    component: wl4-c2a
+  - system: wl4-s2
+    role: main-display
+    component: wl4-c2d
+  - system: wl4-s3
+    role: room-mic
+    component: wl4-c3a
+  - system: wl4-s3
+    role: main-display
+    component: wl4-c3d
+  - system: wl4-s4
+    role: room-mic
+    component: wl4-c4a
+  - system: wl4-s4
+    role: main-display
+    component: wl4-c4d
+  - system: wl4-s5
+    role: room-mic
+    component: wl4-c5a
+  - system: wl4-s5
+    role: main-display
+    component: wl4-c5d
+  - system: hl2-s1
+    role: room-mic
+    component: hl2-c1a
+  - system: hl2-s1
+    role: main-display
+    component: hl2-c1d
+  - system: hl2-s1
+    role: room-mic
+    component: hl2-c1b
+  - system: hl2-s2
+    role: room-mic
+    component: hl2-c2a
+  - system: hl2-s2
+    role: main-display
+    component: hl2-c2d
+  - system: hl2-s2
+    role: room-mic
+    component: hl2-c2b
+  - system: hl2-s3
+    role: room-mic
+    component: hl2-c3a
+  - system: hl2-s3
+    role: main-display
+    component: hl2-c3d
+  - system: hl2-s3
+    role: room-mic
+    component: hl2-c3b
+  - system: hl2-s4
+    role: room-mic
+    component: hl2-c4a
+  - system: hl2-s4
+    role: main-display
+    component: hl2-c4d
+  - system: hl2-s4
+    role: room-mic
+    component: hl2-c4b
+  - system: hl2-s5
+    role: room-mic
+    component: hl2-c5a
+  - system: hl2-s5
+    role: main-display
+    component: hl2-c5d
+  - system: hl2-s5
+    role: room-mic
+    component: hl2-c5b
+  - system: hl2-s6
+    role: room-mic
+    component: hl2-c6a
+  - system: hl2-s6
+    role: main-display
+    component: hl2-c6d
+  - system: hl2-s6
+    role: room-mic
+    component: hl2-c6b
+  - system: pava-s1
+    role: room-mic
+    component: pava-c1a
+  - system: pava-s1
+    role: main-display
+    component: pava-c1d
+  - system: pava-s1
+    role: room-mic
+    component: pava-c1b
+  - system: pava-s2
+    role: room-mic
+    component: pava-c2a
+  - system: pava-s2
+    role: main-display
+    component: pava-c2d
+  - system: pava-s2
+    role: room-mic
+    component: pava-c2b
+  - system: pava-s3
+    role: room-mic
+    component: pava-c3a
+  - system: pava-s3
+    role: main-display
+    component: pava-c3d
+  - system: pava-s3
+    role: room-mic
+    component: pava-c3b
+  - system: pava-s4
+    role: room-mic
+    component: pava-c4a
+  - system: pava-s4
+    role: main-display
+    component: pava-c4d
+  - system: pava-s4
+    role: room-mic
+    component: pava-c4b
+  - system: pava-s5
+    role: room-mic
+    component: pava-c5a
+  - system: pava-s5
+    role: main-display
+    component: pava-c5d
+  - system: pava-s5
+    role: room-mic
+    component: pava-c5b
+  - system: pavb-s1
+    role: room-mic
+    component: pavb-c1a
+  - system: pavb-s1
+    role: main-display
+    component: pavb-c1d
+  - system: pavb-s2
+    role: room-mic
+    component: pavb-c2a
+  - system: pavb-s2
+    role: main-display
+    component: pavb-c2d
+  - system: pavb-s3
+    role: room-mic
+    component: pavb-c3a
+  - system: pavb-s3
+    role: main-display
+    component: pavb-c3d
+  - system: pavb-s4
+    role: room-mic
+    component: pavb-c4a
+  - system: pavb-s4
+    role: main-display
+    component: pavb-c4d
+  - system: pavb-s5
+    role: room-mic
+    component: pavb-c5a
+  - system: pavb-s5
+    role: main-display
+    component: pavb-c5d
+  - system: ann-s1
+    role: room-mic
+    component: ann-c1a
+  - system: ann-s1
+    role: main-display
+    component: ann-c1d
+  - system: ann-s1
+    role: room-mic
+    component: ann-c1b
+  - system: ann-s2
+    role: room-mic
+    component: ann-c2a
+  - system: ann-s2
+    role: main-display
+    component: ann-c2d
+  - system: ann-s2
+    role: room-mic
+    component: ann-c2b
+  - system: ann-s3
+    role: room-mic
+    component: ann-c3a
+  - system: ann-s3
+    role: main-display
+    component: ann-c3d
+  - system: ann-s3
+    role: room-mic
+    component: ann-c3b
+  - system: dep-s1
+    role: room-mic
+    component: dep-c1a
+  - system: dep-s1
+    role: main-display
+    component: dep-c1d
+  - system: dep-s1
+    role: room-mic
+    component: dep-c1b
+  - system: dep-s2
+    role: room-mic
+    component: dep-c2a
+  - system: dep-s2
+    role: main-display
+    component: dep-c2d
+  - system: dep-s2
+    role: room-mic
+    component: dep-c2b
+  - system: dep-s3
+    role: room-mic
+    component: dep-c3a
+  - system: dep-s3
+    role: main-display
+    component: dep-c3d
+  - system: dep-s3
+    role: room-mic
+    component: dep-c3b
+
+# Something actually wrong, so the fleet is not all healthy-and-incomplete. A
+# CRITICAL alarm takes its component's own verdict to outage, which stops it
+# occupying the roles it fills (#626); a lesser one degrades the component while
+# it keeps its slot. Both appear here because the difference is exactly what an
+# operator has to be able to read off a screen.
+#
+# auditorium-bar going down leaves the auditorium's room-mic role holding one of
+# the two it wants, so the room drops to degraded on a REAL failure, beside the
+# briefing room sitting at incomplete on a gap. Same arithmetic, different
+# cause, different colour: that contrast is the fleet canvas's whole argument.
+alarms:
+  - component: auditorium-bar
+    severity: critical
+    message: No route to host on the primary interface
+    dedup_key: unreachable
+  # A warning that costs nothing structural: the component reads degraded and
+  # keeps its slot, so the room above it stays healthy. Worth seeding because
+  # "this box is unhappy but the room is fine" is a state operators distrust
+  # until they have seen the platform draw it correctly.
+  - component: bay-1-display
+    severity: warning
+    message: Lamp hours approaching end of life
+    dedup_key: lamp-hours

@@ -71,7 +71,7 @@ func recomputeHarness(t *testing.T) (*apiClient, string, string, func()) {
 }
 
 // A rule edit, previewed, applied, and applied again: the whole verb, on the
-// wire, with the estate checked between each step.
+// wire, with the fleet checked between each step.
 func TestRuleChangePreviewsThenAppliesOverHTTP(t *testing.T) {
 	c, tok, _, stop := recomputeHarness(t)
 	defer stop()
@@ -93,7 +93,7 @@ func TestRuleChangePreviewsThenAppliesOverHTTP(t *testing.T) {
 	c.do(tok, http.MethodPatch, "/component-types/display",
 		map[string]any{"label_rule": "{{.LocationLabel}} {{.TypeName}} {{.Ordinal}}"}, http.StatusOK)
 
-	// Nothing has moved yet: editing a rule does not silently rewrite the estate.
+	// Nothing has moved yet: editing a rule does not silently rewrite the fleet.
 	before := decodePen(t, "before", c.do(tok, http.MethodGet, "/components/display-1", nil, http.StatusOK))
 	if before.Label != "Display 1" {
 		t.Fatalf("a rule edit rewrote a label on its own: %q", before.Label)
@@ -199,7 +199,7 @@ func TestAViewerCannotPreviewOrRecomputeLabels(t *testing.T) {
 		c.do(viewerTok, http.MethodPost, collection+":previewLabels", nil, http.StatusForbidden)
 		c.do(viewerTok, http.MethodPost, collection+":recomputeLabels", nil, http.StatusForbidden)
 	}
-	// And the estate is untouched, which is the half a 403 alone does not say.
+	// And the fleet is untouched, which is the half a 403 alone does not say.
 	loc := decodePen(t, "hq", c.do(tok, http.MethodGet, "/locations/hq", nil, http.StatusOK))
 	if loc.Name != "hq" {
 		t.Fatalf("hq = %+v", loc)
@@ -237,7 +237,7 @@ func TestAPreviewIsBoundedByTheUpdateScopeJustAsTheApplyIs(t *testing.T) {
 	c.do(tok, http.MethodPatch, "/component-types/display",
 		map[string]any{"label_rule": "{{.LocationLabel}} {{.TypeName}}"}, http.StatusOK)
 
-	// Reads the whole estate, may update exactly one component.
+	// Reads the whole fleet, may update exactly one component.
 	mineID := decodeID(t, c.do(tok, http.MethodGet, "/components/mine", nil, http.StatusOK))
 	narrowTok := principalWithGrants(t, ctx, dsn, "narrow-writer", []grant{
 		{role: "viewer", scopeKind: "all"},

@@ -112,8 +112,12 @@ func TestSpareOccupantAbsorbsOneDown(t *testing.T) {
 }
 
 func TestImpactMapping(t *testing.T) {
+	// Impaired by a DOWN occupant, not by an empty slot: since #631 impact
+	// describes what a failure means, and an uninstalled box has not failed
+	// (it reads incomplete instead, tested separately).
 	impaired := func(impact string) health.Verdict {
-		return health.Role{Name: "r", Quorum: 1, Impact: impact}.Contributes()
+		return health.Role{Name: "r", Quorum: 1, Impact: impact,
+			Assigned: []health.Component{down("a", health.Outage)}}.Contributes()
 	}
 	if got := impaired("outage"); got != health.Outage {
 		t.Fatalf("outage impact = %v", got)
@@ -140,8 +144,11 @@ func TestImpactMapping(t *testing.T) {
 
 func TestSystemVerdictWorstWins(t *testing.T) {
 	fine := health.Role{Name: "ok", Quorum: 1, Impact: "outage", Assigned: []health.Component{healthy("a")}}
-	deg := health.Role{Name: "deg", Quorum: 1, Impact: "degraded"}
-	out := health.Role{Name: "out", Quorum: 1, Impact: "outage"}
+	// deg and out are staffed and DOWN, so they contribute their declared
+	// impact. An unstaffed role would contribute incomplete instead (#631),
+	// which is a different claim, tested separately.
+	deg := health.Role{Name: "deg", Quorum: 1, Impact: "degraded", Assigned: []health.Component{down("d", health.Outage)}}
+	out := health.Role{Name: "out", Quorum: 1, Impact: "outage", Assigned: []health.Component{down("o", health.Outage)}}
 	harmless := health.Role{Name: "meh", Quorum: 1, Impact: "none"}
 
 	if got := health.SystemVerdict(nil); got != health.Healthy {
@@ -260,8 +267,20 @@ func TestChoiceContributesActiveAlternateOwnImpact(t *testing.T) {
 	}}
 	loser := health.Alternate{Name: "all-in-one", Roles: []health.Role{{Name: "bar", Quorum: 1, Impact: "outage"}}}
 	c := health.Choice{Name: "conferencing", Alternates: []health.Alternate{winner, loser}}
-	if got := c.Contributes(); got != health.Degraded {
-		t.Fatalf("contributes = %v, want degraded: the winning alternate's own short role still counts", got)
+	// Incomplete rather than the camera role's declared degraded: the camera
+	// was never installed, so this is a commissioning gap in the alternate the
+	// room WAS built to (#631). The claim under test is unchanged, that the
+	// winning alternate's own short role is not immune to itself.
+	if got := c.Contributes(); got != health.Incomplete {
+		t.Fatalf("contributes = %v, want incomplete: the winning alternate's own short role still counts", got)
+	}
+
+	// The same alternate, short because its camera is ALARMING rather than
+	// missing, contributes what the role declared instead.
+	winner.Roles[1].Assigned = []health.Component{down("cam-1", health.Outage)}
+	broken := health.Choice{Name: "conferencing", Alternates: []health.Alternate{winner, loser}}
+	if got := broken.Contributes(); got != health.Degraded {
+		t.Fatalf("contributes = %v, want degraded: the camera is installed and down, which is a failure, not a gap", got)
 	}
 }
 
@@ -289,9 +308,12 @@ func TestSystemVerdictWithChoices(t *testing.T) {
 
 	// An unconditional role beside the same satisfied choice still counts on
 	// its own: the choice grouping does not swallow every role in the system.
+	// Incomplete, not its declared degraded: the screen was never installed
+	// (#631). The claim under test is unchanged, that the choice grouping does
+	// not swallow an unconditional role beside it.
 	mandatory := health.Role{Name: "screen", Quorum: 1, Impact: "degraded"}
-	if got := health.SystemVerdictWith([]health.Role{mandatory}, []health.Choice{choice}); got != health.Degraded {
-		t.Fatalf("an unstaffed mandatory role beside a satisfied choice = %v, want degraded", got)
+	if got := health.SystemVerdictWith([]health.Role{mandatory}, []health.Choice{choice}); got != health.Incomplete {
+		t.Fatalf("an unstaffed mandatory role beside a satisfied choice = %v, want incomplete", got)
 	}
 
 	roles := []health.Role{
@@ -304,7 +326,7 @@ func TestSystemVerdictWithChoices(t *testing.T) {
 }
 
 // The recorded string round-trips, since the transition log stores it as text and
-// a misread would silently change an estate's history.
+// a misread would silently change a fleet's history.
 func TestVerdictRoundTrip(t *testing.T) {
 	for _, v := range []health.Verdict{health.Healthy, health.Degraded, health.Outage} {
 		if got := health.ParseVerdict(v.String()); got != v {
@@ -312,6 +334,129 @@ func TestVerdictRoundTrip(t *testing.T) {
 		}
 	}
 	if got := health.ParseVerdict("garbage"); got != health.Healthy {
-		t.Fatalf("unrecognized recorded value = %v, want healthy (a stray row cannot break an estate)", got)
+		t.Fatalf("unrecognized recorded value = %v, want healthy (a stray row cannot break a fleet)", got)
+	}
+}
+
+// unstaffed is a role nobody ever assigned a component to: the commissioning
+// gap the Incomplete verdict exists to name.
+func unstaffed(quorum int, impact string) health.Role {
+	return health.Role{Name: "r", Quorum: quorum, Impact: impact}
+}
+
+// A role short of quorum because nobody installed the hardware is a
+// COMMISSIONING GAP, not a failure. No alarm will ever fire for it, and
+// collapsing it into the role's declared impact paints a half-commissioned
+// fleet entirely red, which is the state most real fleets are in while they
+// are being built. Incomplete is what tells the two apart.
+func TestIncompleteIsACommissioningGapNotAFailure(t *testing.T) {
+	t.Run("a role nobody staffed reads incomplete, not its impact", func(t *testing.T) {
+		r := unstaffed(1, "outage")
+		if got := r.Contributes(); got != health.Incomplete {
+			t.Fatalf("contributes = %v, want incomplete: nothing was ever installed, so nothing can be alarming", got)
+		}
+	})
+
+	t.Run("a fully staffed role with one occupant down reads its impact", func(t *testing.T) {
+		r := health.Role{Name: "r", Quorum: 3, Impact: "outage",
+			Assigned: []health.Component{healthy("a"), healthy("b"), down("c", health.Outage)}}
+		if got := r.Contributes(); got != health.Outage {
+			t.Fatalf("contributes = %v, want outage: the hardware is installed and one of it is alarming", got)
+		}
+	})
+
+	t.Run("a part-staffed role with nothing down reads incomplete", func(t *testing.T) {
+		r := health.Role{Name: "r", Quorum: 3, Impact: "outage",
+			Assigned: []health.Component{healthy("a"), healthy("b")}}
+		if got := r.Contributes(); got != health.Incomplete {
+			t.Fatalf("contributes = %v, want incomplete: the third box was never installed", got)
+		}
+	})
+
+	t.Run("a part-staffed role with an occupant down reads its impact, the worse of the two", func(t *testing.T) {
+		r := health.Role{Name: "r", Quorum: 3, Impact: "degraded",
+			Assigned: []health.Component{healthy("a"), down("b", health.Outage)}}
+		if got := r.Contributes(); got != health.Degraded {
+			t.Fatalf("contributes = %v, want degraded: a live failure outranks the missing box", got)
+		}
+	})
+
+	t.Run("a spare absorbing a failure contributes nothing", func(t *testing.T) {
+		r := health.Role{Name: "r", Quorum: 3, Impact: "outage",
+			Assigned: []health.Component{healthy("a"), healthy("b"), healthy("c"), down("d", health.Outage)}}
+		if got := r.Contributes(); got != health.Healthy {
+			t.Fatalf("contributes = %v, want healthy: quorum is still met, which is what a spare is for", got)
+		}
+	})
+
+	// A role declared harmless is harmless empty as well as broken. Reporting
+	// a gap here would mark every confidence monitor nobody ever intends to
+	// staff as permanently incomplete, which is the saturation this verdict
+	// exists to prevent.
+	t.Run("an unstaffed role declared harmless contributes nothing", func(t *testing.T) {
+		if got := unstaffed(1, "none").Contributes(); got != health.Healthy {
+			t.Fatalf("contributes = %v, want healthy: impact none says an empty slot here is not a gap worth reporting", got)
+		}
+	})
+
+	// A bad impact value must not become a way to hide a gap, the same reason
+	// ImpactVerdict refuses to read one as harmless.
+	t.Run("an unstaffed role with an unrecognized impact still reads incomplete", func(t *testing.T) {
+		if got := unstaffed(1, "nonsense").Contributes(); got != health.Incomplete {
+			t.Fatalf("contributes = %v, want incomplete: only an explicit none opts out", got)
+		}
+	})
+}
+
+// Incomplete ranks between healthy and degraded: a commissioning gap is worth
+// surfacing above a clean system and worth burying under anything actually
+// broken. Rollup is worst-wins over the same ordering everywhere.
+func TestIncompleteRanksBetweenHealthyAndDegraded(t *testing.T) {
+	if health.Worse(health.Healthy, health.Incomplete) != health.Incomplete {
+		t.Fatal("incomplete must outrank healthy")
+	}
+	if health.Worse(health.Incomplete, health.Degraded) != health.Degraded {
+		t.Fatal("degraded must outrank incomplete: something broken beats something missing")
+	}
+	if health.Worse(health.Incomplete, health.Outage) != health.Outage {
+		t.Fatal("outage must outrank incomplete")
+	}
+	if got := health.RollUp([]health.Verdict{health.Incomplete, health.Degraded}); got != health.Degraded {
+		t.Fatalf("rollup = %v, want degraded: a location holding one incomplete and one degraded system reads degraded", got)
+	}
+	if got := health.RollUp([]health.Verdict{health.Healthy, health.Incomplete}); got != health.Incomplete {
+		t.Fatalf("rollup = %v, want incomplete", got)
+	}
+}
+
+// An unstaffed role inside a LOSING alternate contributes nothing at all, not
+// even incomplete. The whole point of a choice is that the alternate the room
+// was not built to is not outstanding work: an all-in-one room must not read
+// incomplete for the five component-built roles it deliberately never filled.
+func TestLosingAlternateContributesNoIncomplete(t *testing.T) {
+	allInOne := health.Alternate{Name: "all-in-one", Roles: []health.Role{
+		{Name: "video-bar", Quorum: 1, Impact: "outage", Assigned: []health.Component{healthy("bar")}},
+	}}
+	componentBuilt := health.Alternate{Name: "component-system", Roles: []health.Role{
+		unstaffed(1, "outage"), unstaffed(1, "outage"), unstaffed(3, "degraded"),
+	}}
+	c := health.Choice{Name: "conferencing", Alternates: []health.Alternate{allInOne, componentBuilt}}
+
+	if got := c.Contributes(); got != health.Healthy {
+		t.Fatalf("choice contributes = %v, want healthy: the room is built all-in-one, so the roles it never filled are not a gap", got)
+	}
+	if got := health.SystemVerdictWith(nil, []health.Choice{c}); got != health.Healthy {
+		t.Fatalf("system verdict = %v, want healthy", got)
+	}
+}
+
+// The verdict a system reads when its only shortfall is uninstalled hardware.
+func TestSystemVerdictIncomplete(t *testing.T) {
+	got := health.SystemVerdict([]health.Role{
+		{Name: "display", Quorum: 1, Impact: "outage", Assigned: []health.Component{healthy("d")}},
+		unstaffed(2, "outage"),
+	})
+	if got != health.Incomplete {
+		t.Fatalf("system verdict = %v, want incomplete: one role is staffed and the other was never installed", got)
 	}
 }

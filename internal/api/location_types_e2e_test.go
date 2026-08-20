@@ -127,7 +127,7 @@ func TestLocationTypeCRUDAPI(t *testing.T) {
 	c.do(ownerTok, http.MethodPatch, "/location-types/wing",
 		map[string]any{"label": "West Wing"}, http.StatusOK)
 
-	// A shipped type is editable: the estate shapes its own place vocabulary,
+	// A shipped type is editable: the fleet shapes its own place vocabulary,
 	// through a fork since #703. TestLocationTypeForkAndClearAPI holds what the
 	// fork does on the wire.
 	c.do(ownerTok, http.MethodPatch, "/location-types/campus",

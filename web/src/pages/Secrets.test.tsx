@@ -13,7 +13,7 @@ import { uuidFor } from "../lib/testids";
 
 // A secret at the `platform` tier is install-wide, so the server gates the write on
 // `platform:<action>` on top of `secret:<action>`. The console must gate the same
-// way: an estate writer (every secret action, at the all scope) holds full estate
+// way: a fleet writer (every secret action, at the all scope) holds full fleet
 // reach and no install-wide authority, so it must not be offered the Platform scope
 // on the create form nor Edit / Delete on a tier row, and it should read which
 // capability it is missing rather than earn a 403. Same treatment as the Settings
@@ -28,7 +28,7 @@ const seed: Secret[] = [
 ];
 
 const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const estateWriter: Me = { principal: { id: "u-est", kind: "human" }, human: { username: "sam" }, permissions: ["secret:>"], grants: [] };
+const fleetWriter: Me = { principal: { id: "u-est", kind: "human" }, human: { username: "sam" }, permissions: ["secret:>"], grants: [] };
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
@@ -94,8 +94,8 @@ describe("Secrets page platform-tier authority", () => {
     expect((screen.getByLabelText("Scope") as HTMLSelectElement).value).toBe("platform");
   });
 
-  it("withholds the Platform scope from an estate writer and names the missing capability", async () => {
-    mount(estateWriter);
+  it("withholds the Platform scope from a fleet writer and names the missing capability", async () => {
+    mount(fleetWriter);
     expect(await screen.findByText("poll_community")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /new secret/i }));
     expect(scopeOptions()).not.toContain("platform");
@@ -103,8 +103,8 @@ describe("Secrets page platform-tier authority", () => {
     expect(screen.getByText(/platform:create/)).toBeInTheDocument();
   });
 
-  it("hides Edit and Delete on a platform-tier row from an estate writer and says why", async () => {
-    mount(estateWriter);
+  it("hides Edit and Delete on a platform-tier row from a fleet writer and says why", async () => {
+    mount(fleetWriter);
     expect(await screen.findByText("poll_community")).toBeInTheDocument();
     const blade = await openBlade("poll_community");
     expect(within(blade).queryByLabelText("Edit")).not.toBeInTheDocument();
@@ -113,8 +113,8 @@ describe("Secrets page platform-tier authority", () => {
     expect(within(blade).getByText(/platform:delete/)).toBeInTheDocument();
   });
 
-  it("keeps Edit and Delete on a row below the tier for the same estate writer", async () => {
-    mount(estateWriter);
+  it("keeps Edit and Delete on a row below the tier for the same fleet writer", async () => {
+    mount(fleetWriter);
     expect(await screen.findByText("room_community")).toBeInTheDocument();
     const blade = await openBlade("room_community");
     expect(within(blade).getByLabelText("Edit")).toBeInTheDocument();

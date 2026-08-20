@@ -192,7 +192,7 @@ type Gateway interface {
 	WriteAuthEvent(ctx context.Context, actorID, verb string) error
 	// UpsertLocationType installs or updates a shipped (official) location type
 	// by name, the boot-seed phase's write. Idempotent and AUTHORITATIVE, so a
-	// value a release withdraws is withdrawn from an estate that already seeded
+	// value a release withdraws is withdrawn from a fleet that already seeded
 	// it (#703); an operator's version of the row lives in registry_shadow and
 	// is resolved over it, never stomped by this.
 	UpsertLocationType(ctx context.Context, lt LocationType) error
@@ -358,7 +358,7 @@ type Gateway interface {
 
 	// The bulk recompute (#685), the verb a rule change is applied through.
 	// PreviewLabelRecompute lists exactly the rows an apply would change and
-	// leaves the estate as it found it; RecomputeLabels applies and returns
+	// leaves the fleet as it found it; RecomputeLabels applies and returns
 	// what it changed. Both take the same two scopes, because a preview that
 	// selected on a wider one would promise rows the apply then refuses, and a
 	// location recompute reports the components and systems its new location
@@ -430,7 +430,7 @@ type Gateway interface {
 	ListTasks(ctx context.Context, read scope.Set) ([]Task, error)
 	GetTask(ctx context.Context, id string, read scope.Set) (*Task, error)
 
-	// The collection registries: estate-wide reference data (no scope.Set),
+	// The collection registries: fleet-wide reference data (no scope.Set),
 	// seeded official and operator-extensible at org/template scope later.
 	UpsertPropertyType(ctx context.Context, prop PropertyType) error
 	ListPropertyTypes(ctx context.Context) ([]PropertyType, error)
@@ -513,7 +513,7 @@ type Gateway interface {
 	ListNodeLogs(ctx context.Context, nodeName string, window time.Duration, limit int) ([]LogLine, error)
 
 	// The node tier: the edge runtime's enrollment lifecycle and worklist. A node
-	// is estate-wide (all-scope create/enroll/read, like a principal). The claim,
+	// is fleet-wide (all-scope create/enroll/read, like a principal). The claim,
 	// authenticate, heartbeat, and worklist paths are the node's own lane (gated by
 	// the enrollment token or the node's NATS subject grant, not RBAC scope).
 	//
@@ -565,7 +565,7 @@ type Gateway interface {
 	DeleteVariable(ctx context.Context, actorID, id string, read, action scope.Set, canPlatform bool) error
 	ResolveVariables(ctx context.Context, componentID string, read scope.Set) ([]ResolvedVariable, error)
 
-	// The declared-property tier, the fold of the fields feature onto the estate
+	// The declared-property tier, the fold of the fields feature onto the fleet
 	// model. product_property is the product's contract (which properties it declares
 	// and their defaults); property_value is the value store on the shared owner arc.
 	// EffectiveProperties resolves a component against its product's contract
@@ -700,6 +700,15 @@ type Gateway interface {
 	SystemVerdicts(ctx context.Context, read scope.Set) ([]SystemVerdict, error)
 	LocationHealth(ctx context.Context, locationName string, window time.Duration, read scope.Set) (*HealthReport, error)
 
+	// FleetProjection is the read behind the fleet canvas: the whole in-scope
+	// place tree, the systems on it, and one dot per component in each system.
+	// Deliberately not a component list (a dot needs an id, a verdict and two
+	// flags), and deliberately flat, so the client owns how the fleet is
+	// gathered into bands. The three scope sets are separate because they answer
+	// three different permissions: a principal who may read the place tree but
+	// not its components sees the shape of their fleet with no contents.
+	FleetProjection(ctx context.Context, locRead, sysRead, compRead scope.Set) (*FleetView, error)
+
 	// The tag tier: the governed key vocabulary and the per-entity value
 	// bindings. Minting a key (tag:create) is a tenant-wide governance action;
 	// binding a value is the owner's own write, so the binding methods take the
@@ -720,7 +729,7 @@ type Gateway interface {
 	EffectiveTags(ctx context.Context, kind string, ownerIDs []string) (map[string]map[string]string, error)
 
 	// The file tier: a searchable metadata handle over the content-addressed blob
-	// store. A file has no estate placement (tenant-wide), so these methods take no
+	// store. A file has no fleet placement (tenant-wide), so these methods take no
 	// scope; canAdmin gates the per-file sensitive flag (the :admin tier), mirroring
 	// the secret sensitivity axis. CreateFile stores the upload as a deduplicated
 	// blob and points the handle at it; DeleteFile drops the handle but leaves the
@@ -731,7 +740,7 @@ type Gateway interface {
 	DownloadFile(ctx context.Context, id string, canAdmin bool) (*File, []byte, error)
 	DeleteFile(ctx context.Context, actorID, id string, canAdmin bool) error
 
-	// The settings engine (unscoped: platform config, not estate data, so no ABAC
+	// The settings engine (unscoped: platform config, not fleet data, so no ABAC
 	// scope applies; the route gates on settings:<action> only). The single
 	// setting_override table holds only what an operator changed at a cascade level;
 	// the base layers (the type's declared defaults, the operator file) live in

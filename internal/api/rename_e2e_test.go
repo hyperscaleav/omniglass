@@ -24,7 +24,7 @@ import (
 // <resource>:rename, and the PATCH body no longer takes a name at all.
 
 // renameable is one entity that carries the :rename custom method: how to create
-// one, and the path segment the rename addresses it by (a name for the estate
+// one, and the path segment the rename addresses it by (a name for the fleet
 // entities, a uuid for a principal group).
 type renameable struct {
 	resource string // the permission resource: "component", "principal_group", ...

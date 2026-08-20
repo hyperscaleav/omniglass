@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// Node-layer sentinel errors. A node is the edge runtime; it is estate-wide
+// Node-layer sentinel errors. A node is the edge runtime; it is fleet-wide
 // (not tree-scoped), so its create/enroll/read paths require an all scope,
 // mirroring principals.
 var (
@@ -51,7 +51,7 @@ type NodeSpec struct {
 }
 
 // NodePatch is the update input: a nil field is left unchanged. Name is not
-// patchable (it is the immutable estate address and enrollment identity). A
+// patchable (it is the immutable fleet address and enrollment identity). A
 // LocationName pointing at "" clears the placement.
 type NodePatch struct {
 	Label        *string
@@ -99,7 +99,7 @@ func scanNode(row pgx.Row) (*Node, error) {
 
 // CreateNode inserts a node as a kind='node' principal plus its detail row,
 // writing the audit row in the same transaction (mirroring the human/service
-// create). A node is estate-wide, so creation requires an all create scope (like
+// create). A node is fleet-wide, so creation requires an all create scope (like
 // a principal, unlike a tree-scoped location/system/component).
 func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, create, locationRead scope.Set) (*Node, error) {
 	if !create.All {
@@ -140,8 +140,8 @@ func (p *PG) CreateNode(ctx context.Context, actorID string, spec NodeSpec, crea
 
 // UpdateNode patches a node's label, description, and location (a nil
 // field is left unchanged; a LocationName of "" clears the placement). name is
-// not patched: it is the immutable estate address and enrollment identity. A
-// node is estate-wide, so the update requires an all scope, like create. An
+// not patched: it is the immutable fleet address and enrollment identity. A
+// node is fleet-wide, so the update requires an all scope, like create. An
 // unknown name is ErrNodeNotFound; an unknown location is ErrLocationNotFound.
 func (p *PG) UpdateNode(ctx context.Context, actorID, name string, patch NodePatch, read, action, locationRead scope.Set) (*Node, error) {
 	if err := RejectAddressForm("node", name); err != nil {
@@ -192,7 +192,7 @@ func (p *PG) UpdateNode(ctx context.Context, actorID, name string, patch NodePat
 // which cascades the node detail row and, through it, everything keyed to the
 // node, its interfaces and their derived tasks, its node-owned samples and tag
 // bindings, and its enrollment credential (every referencing FK is ON DELETE
-// CASCADE). A node is estate-wide, so this requires an all scope, like create. An
+// CASCADE). A node is fleet-wide, so this requires an all scope, like create. An
 // unknown name is ErrNodeNotFound. Audited before the row is gone; the actor is
 // the deleter (unaffected by the cascade) and audit_log.resource_id is plain
 // text, not a foreign key, so the deleted node's principal id survives there.
@@ -402,7 +402,7 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 }
 
 // GetNode reads one node by name. Requires an all read scope (a node is
-// estate-wide reference, not a subtree row); an unknown name is ErrNodeNotFound.
+// fleet-wide reference, not a subtree row); an unknown name is ErrNodeNotFound.
 func (p *PG) GetNode(ctx context.Context, name string, read scope.Set) (*Node, error) {
 	if err := RejectAddressForm("node", name); err != nil {
 		return nil, err

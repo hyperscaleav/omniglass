@@ -10,7 +10,7 @@ import (
 )
 
 // TestNodeTags covers node as a taggable owner kind (N2): the applies_to gate,
-// the all-scope requirement (a node is estate-wide), effective tags = platform +
+// the all-scope requirement (a node is fleet-wide), effective tags = platform +
 // node-direct (direct wins), the direct-only list, and unbind. The ON DELETE
 // CASCADE of a node's bindings is declared in the migration and exercised by
 // DeleteNode (N3).
@@ -34,7 +34,7 @@ func TestNodeTags(t *testing.T) {
 	if _, err := gw.SetTagBinding(ctx, "", "room-only", "node", strptr("edge-1"), "x", all, all); !errors.Is(err, storage.ErrTagKindNotAllowed) {
 		t.Fatalf("bind component-only key to node: want ErrTagKindNotAllowed, got %v", err)
 	}
-	// Estate-wide: a node bind without all-scope is forbidden; an unknown node is not found.
+	// Fleet-wide: a node bind without all-scope is forbidden; an unknown node is not found.
 	if _, err := gw.SetTagBinding(ctx, "", "rack", "node", strptr("edge-1"), "r7", scope.Set{}, scope.Set{}); !errors.Is(err, storage.ErrNodeForbidden) {
 		t.Fatalf("bind without all-scope: want ErrNodeForbidden, got %v", err)
 	}

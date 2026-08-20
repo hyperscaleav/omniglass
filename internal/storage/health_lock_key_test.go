@@ -5,7 +5,7 @@ import "testing"
 // TestTheHealthLockKeyPartitionsByID pins the fact ADR-0056 documented wrongly
 // until #717: the health advisory lock hashes the owner's ID, not its name.
 //
-// The two halves of that are one fact. A lock partitions the estate only while
+// The two halves of that are one fact. A lock partitions the fleet only while
 // its key does, and the identity epic (#627) scoped a location's name uniqueness
 // to its PLACEMENT, so two rooms under different buildings may both be `415a`.
 // A name-keyed lock hashes those two unrelated owners to one key, which is a

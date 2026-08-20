@@ -30,29 +30,29 @@ import { entityLabel } from "./entities";
 // impaired list that flatly disagrees with it), so every derivation below
 // filters through activeRoles rather than the raw list.
 
-export type Verdict = "healthy" | "degraded" | "outage";
+export type Verdict = "healthy" | "incomplete" | "degraded" | "outage";
 export type HealthRole = components["schemas"]["HealthRoleBody"];
 export type HealthAlarm = components["schemas"]["HealthAlarmBody"];
 export type HealthSystem = components["schemas"]["HealthSystemBody"];
 export type HealthTransition = components["schemas"]["HealthTransitionBody"];
-export type EstateHealth = components["schemas"]["EstateHealthOutputBody"];
+export type FleetHealth = components["schemas"]["FleetHealthOutputBody"];
 
 // One cache namespace per arc, so a system and a location that share a name never
 // collide.
 export const systemHealthKey = (name: string) => ["system-health", name] as const;
 export const locationHealthKey = (name: string) => ["location-health", name] as const;
 
-export async function systemHealth(name: string): Promise<EstateHealth> {
+export async function systemHealth(name: string): Promise<FleetHealth> {
   const { data, error } = await api.GET("/systems/{name}/health", { params: { path: { name } } });
   if (error) throw error;
-  return data as EstateHealth;
+  return data as FleetHealth;
 }
 
 // The BULK verdict read (#653). One request carrying the one fact a list's
 // health column renders, for every system the caller can see.
 //
 // Its own cache namespace, deliberately NOT the per-system one: those entries
-// hold a full EstateHealth report that the panels read roles and transitions out
+// hold a full FleetHealth report that the panels read roles and transitions out
 // of, and seeding them from this read would put a verdict-only object behind a
 // key whose readers expect the whole report. A write that changes a verdict
 // invalidates both, which is why SYSTEM_VERDICTS_KEY sits beside systemHealthKey
@@ -65,21 +65,25 @@ export async function systemVerdicts(): Promise<Map<string, string>> {
   return new Map((data?.verdicts ?? []).map((v) => [v.system, v.verdict] as const));
 }
 
-export async function locationHealth(name: string): Promise<EstateHealth> {
+export async function locationHealth(name: string): Promise<FleetHealth> {
   const { data, error } = await api.GET("/locations/{name}/health", { params: { path: { name } } });
   if (error) throw error;
-  return data as EstateHealth;
+  return data as FleetHealth;
 }
 
-// verdictOf narrows whatever the API sent to the three states the console knows.
+// verdictOf narrows whatever the API sent to the four states the console knows.
 // Anything else (an unread query, a state a newer server introduces) is null, which
 // the badge renders as unknown rather than guessing.
 export function verdictOf(v: string | null | undefined): Verdict | null {
-  return v === "healthy" || v === "degraded" || v === "outage" ? v : null;
+  return v === "healthy" || v === "incomplete" || v === "degraded" || v === "outage" ? v : null;
 }
 
 // Worst wins, everywhere: a role over its system, a system over its location.
-const RANK: Record<Verdict, number> = { healthy: 0, degraded: 1, outage: 2 };
+// The order is the severity ranking, matching internal/health's Verdict enum
+// exactly. incomplete sits between healthy and degraded: a commissioning gap is
+// worth surfacing above a clean system and worth burying under anything that is
+// actually broken.
+const RANK: Record<Verdict, number> = { healthy: 0, incomplete: 1, degraded: 2, outage: 3 };
 
 export function verdictRank(v: Verdict): number {
   return RANK[v];
@@ -94,9 +98,9 @@ export function worstVerdict(list: (string | null | undefined)[]): Verdict | nul
   return worst;
 }
 
-export const roles = (h: EstateHealth | undefined): HealthRole[] => h?.roles ?? [];
-export const systems = (h: EstateHealth | undefined): HealthSystem[] => h?.systems ?? [];
-export const transitions = (h: EstateHealth | undefined): HealthTransition[] => h?.transitions ?? [];
+export const roles = (h: FleetHealth | undefined): HealthRole[] => h?.roles ?? [];
+export const systems = (h: FleetHealth | undefined): HealthSystem[] => h?.systems ?? [];
+export const transitions = (h: FleetHealth | undefined): HealthTransition[] => h?.transitions ?? [];
 
 // activeRoles is every role whose own figures actually counted toward the
 // verdict: unconditional roles (no choice) plus the role of whichever
@@ -105,7 +109,7 @@ export const transitions = (h: EstateHealth | undefined): HealthTransition[] => 
 // impairment as part of "why this system reads what it does" is exactly the
 // contradiction active exists to catch, so every other derivation here reads
 // through this rather than the raw roles list.
-export function activeRoles(h: EstateHealth | undefined): HealthRole[] {
+export function activeRoles(h: FleetHealth | undefined): HealthRole[] {
   return roles(h).filter((r) => r.active);
 }
 
@@ -113,14 +117,14 @@ export function activeRoles(h: EstateHealth | undefined): HealthRole[] {
 // that lost. Surfaced separately (not silently dropped) so an operator can
 // still see what the unbuilt alternate would need, without it reading as a
 // current impairment.
-export function inactiveRoles(h: EstateHealth | undefined): HealthRole[] {
+export function inactiveRoles(h: FleetHealth | undefined): HealthRole[] {
   return roles(h).filter((r) => !r.active);
 }
 
 // The roles that explain the verdict, worst impact first, so the reconciliation
 // panel leads with the role that took the system down rather than the one that
 // merely dented it.
-export function impairedRoles(h: EstateHealth | undefined): HealthRole[] {
+export function impairedRoles(h: FleetHealth | undefined): HealthRole[] {
   return activeRoles(h)
     .filter((r) => r.impaired)
     .sort((a, b) => impactRank(a.impact) - impactRank(b.impact) || entityLabel(a).localeCompare(entityLabel(b)));
@@ -129,7 +133,7 @@ export function impairedRoles(h: EstateHealth | undefined): HealthRole[] {
 // The roles that are holding: named too, because "which roles are fine" is half of
 // why a system is only degraded and not out. An inactive role is neither
 // impaired nor holding here: it is not in play, so it belongs to neither list.
-export function holdingRoles(h: EstateHealth | undefined): HealthRole[] {
+export function holdingRoles(h: FleetHealth | undefined): HealthRole[] {
   return activeRoles(h).filter((r) => !r.impaired);
 }
 

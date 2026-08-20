@@ -97,7 +97,7 @@ type createGroupGrantInput struct {
 	ID   string `path:"id" doc:"The group's id (uuid)"`
 	Body struct {
 		Role      string `json:"role" minLength:"1" doc:"A role id (viewer, operator, admin, owner, or a custom role)"`
-		ScopeKind string `json:"scope_kind" enum:"all,location,system,component" doc:"The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)"`
+		ScopeKind string `json:"scope_kind" enum:"all,location,system,component" doc:"The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)"`
 		ScopeID   string `json:"scope_id,omitempty" doc:"The scope root id; omit for the all scope"`
 		ScopeOp   string `json:"scope_op,omitempty" enum:"subtree,subtree_excl_root,self" doc:"How the scope root matches the tree; moot for the all scope"`
 	}

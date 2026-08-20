@@ -126,6 +126,17 @@ var Banned = []BannedTerm{
 		Origin:      "ADR-0118",
 	},
 	{
+		// The totality-of-managed-things noun, renamed by ADR-0123: the word an
+		// operator's whole managed environment goes by is FLEET (a fleet of
+		// systems, stationed across locations), and estate is retired with it.
+		// The word boundary keeps the restate family (restate, restated,
+		// restatement) out of reach, which is the only English family that
+		// carries the old noun as a substring.
+		Pattern:     regexp.MustCompile(`(?i)\bestates?\b|\bestate-wide\b`),
+		Replacement: "fleet (the systems an operator runs, stationed across locations), or fleet-wide",
+		Origin:      "ADR-0123",
+	},
+	{
 		// The stored function that resolved a principal to its identifier, dropped
 		// by ADR-0110. It is a retired schema OBJECT, so a page naming it is telling
 		// a contributor to call something that is not there; and it is a retired
@@ -155,7 +166,7 @@ var Banned = []BannedTerm{
 		Origin:      "internal/storage/registries.go",
 	},
 
-	// The estate-model wave. Each of these was retired by an ADR that shipped
+	// The fleet-model wave. Each of these was retired by an ADR that shipped
 	// without its denylist entry, which is why the terms survived in the docs
 	// long enough for the 2026-07-30 audit to find them.
 	//

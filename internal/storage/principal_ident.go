@@ -68,12 +68,12 @@ import "strconv"
 // The node's own `name` is the identifier, for the same reason the other two
 // columns are. It is the only operator-visible handle the row has, it is unique
 // (`node_name_key`, beside `human_username_key` and `service_name_key`,
-// ADR-0111), and it is already the estate address and the NATS subject token, so
+// ADR-0111), and it is already the fleet address and the NATS subject token, so
 // it is the string an operator would recognise in a trail. `label` is a
 // label and cannot be one: it is optional and it is not unique, and the audit
 // trail denormalizes this string as bare text where nothing survives beside it.
 //
-// Nothing seeds a node principal with a grant today, so no shipped estate
+// Nothing seeds a node principal with a grant today, so no shipped fleet
 // reaches this; the resolution is what a node acting WOULD read as, and the
 // arithmetic of adding a third source (one more LEFT JOIN per resolution, one
 // more correlated sub-select on the two positions a join cannot reach) is the

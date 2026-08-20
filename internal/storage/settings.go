@@ -22,7 +22,7 @@ type SettingOverride struct {
 }
 
 // GetSettingOverrides returns every platform override row at a scope. Unscoped:
-// platform settings describe the platform, not the estate, so no ABAC scope
+// platform settings describe the platform, not the fleet, so no ABAC scope
 // applies; the route gates on settings:read.
 func (p *PG) GetSettingOverrides(ctx context.Context, scope string) ([]SettingOverride, error) {
 	return settingOverridesOn(ctx, p.pool, scope)

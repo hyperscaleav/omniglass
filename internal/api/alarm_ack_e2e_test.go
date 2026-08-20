@@ -23,7 +23,7 @@ import (
 // The two layers are separate, and the fixture separates them: `alarm:acknowledge`
 // is the capability (a fast reject in middleware), and the component tier the
 // grant is scoped at is the reach. A principal can hold the capability everywhere
-// and the reach nowhere, or read a component estate-wide and acknowledge on none
+// and the reach nowhere, or read a component fleet-wide and acknowledge on none
 // of it, and both must refuse.
 
 type ackFixture struct {
@@ -32,7 +32,7 @@ type ackFixture struct {
 	// responder holds operator (which carries alarm:acknowledge) scoped to ONE
 	// component, beside the all-scoped viewer floor a real principal carries. The
 	// floor is what makes the test meaningful: it can READ every component in the
-	// estate and must be able to acknowledge on only one of them.
+	// fleet and must be able to acknowledge on only one of them.
 	responder string
 	// watcher holds the viewer floor alone: it sees both alarms and holds no
 	// acknowledgement at all, so it is refused before scope is ever consulted.
@@ -178,7 +178,7 @@ func TestAcknowledgeRefusesWithoutTheCapability(t *testing.T) {
 
 // TestAcknowledgeRefusesOutsideTheScope is the ABAC layer, and the one a fixture
 // driven by an owner cannot see. The responder HOLDS alarm:acknowledge (so the
-// middleware admits it) and can read every component in the estate through its
+// middleware admits it) and can read every component in the fleet through its
 // viewer floor, and its acknowledgement reaches exactly one component.
 //
 // The far component is therefore READABLE and not actionable, and #736 changed

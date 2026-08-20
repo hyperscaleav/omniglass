@@ -6,7 +6,7 @@ import { byLabel } from "./entities";
 // space a system is (ADR-0096), a boardroom, a classroom, a video wall. It is
 // the system-side counterpart of component_type and it is NOT the standard: the
 // type says what kind of space this is, the standard says which blueprint it is
-// built to, and one estate can hold ten signage standards under one coarse
+// built to, and one fleet can hold ten signage standards under one coarse
 // type. It nests by parent_id/parent name (av over room over board), and each
 // identity fact (stem, abbrev, icon) inherits down the tree, overridable at any
 // node: empty on a child means "inherit the nearest ancestor's".

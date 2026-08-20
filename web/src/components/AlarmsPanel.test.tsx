@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import AlarmsPanel from "./AlarmsPanel";
 import { componentAlarmsKey, type Alarm } from "../lib/alarms";
 
-// The alarms panel is where estate health starts: a condition on this component
+// The alarms panel is where fleet health starts: a condition on this component
 // that impairs its own verdict wholesale (#626). Rows are seeded into the query
 // cache so no server is needed; the raise / clear writes are faked where a test
 // drives one.

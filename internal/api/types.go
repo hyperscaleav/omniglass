@@ -106,7 +106,7 @@ func errNoGeneratedName(msg string) error {
 // contract shared by three tiers rather than three similar ones.
 //
 // The conflict is a 409 and not a 422: the request is well formed and was legal
-// when it was composed, and the estate simply moved underneath it, which is the
+// when it was composed, and the fleet simply moved underneath it, which is the
 // definition of a conflict. It names both the name the form was shown and the
 // one this create would produce, because "try again" is not the recovery, "here
 // is what you would get instead" is. The message deliberately does not assert

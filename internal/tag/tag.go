@@ -70,7 +70,7 @@ func ValueAllowed(allowed []string, value string) bool {
 	return false
 }
 
-// EntityKind is a kind of entity a tag can be bound to. These are the estate
+// EntityKind is a kind of entity a tag can be bound to. These are the fleet
 // tiers on the exclusive arc that carry bindings; a key's applies_to narrows a
 // key to a subset of them.
 type EntityKind string

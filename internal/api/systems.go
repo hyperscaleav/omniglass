@@ -172,7 +172,7 @@ type renameSystemInput struct {
 // checkNameInput is the request for the collection-level :checkName advisory.
 // Shared across the systems/components/locations name checks; declared once
 // here. Parent and Location mirror the create body's own placement fields
-// (#627: name uniqueness is scoped to placement, not the whole estate), so the
+// (#627: name uniqueness is scoped to placement, not the whole fleet), so the
 // availability check runs against the same bucket a create would actually
 // land in. A parent wins over a location, matching CreateComponent's and
 // CreateSystem's own resolution order; the location route ignores Location
@@ -191,7 +191,7 @@ type checkNameInput struct {
 type checkNameOutput struct {
 	Body struct {
 		Valid     bool   `json:"valid" doc:"Whether the name matches the slug rule"`
-		Available bool   `json:"available" doc:"Whether the name is free within the checked placement (parent/location); a name taken elsewhere in the estate is still available here"`
+		Available bool   `json:"available" doc:"Whether the name is free within the checked placement (parent/location); a name taken elsewhere in the fleet is still available here"`
 		Reason    string `json:"reason,omitempty" doc:"Human explanation when not valid or not available"`
 	}
 }

@@ -104,7 +104,7 @@ func mapSystemTypeWriteErr(err error) error {
 // UpsertSystemType installs or updates a system_type by name, the boot-seed
 // phase's write. Authoritative (ON CONFLICT DO UPDATE) like component_type's,
 // not seed-if-absent like location_type's example content: the coarse taxonomy
-// is shipped reference data an estate reads, not content it owns. Idempotent:
+// is shipped reference data a fleet reads, not content it owns. Idempotent:
 // re-seeding the same name updates it in place, id stable.
 func (p *PG) UpsertSystemType(ctx context.Context, st SystemType) error {
 	_, err := p.pool.Exec(ctx, `

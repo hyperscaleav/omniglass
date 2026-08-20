@@ -25,7 +25,7 @@ import (
 // a key when #627 scoped name uniqueness to placement: two rooms under
 // different buildings can both be 415a, and a tie has no defined order at all.
 //
-// lockOrderFixture is the smallest estate that makes both halves visible. The
+// lockOrderFixture is the smallest fleet that makes both halves visible. The
 // id order and the name order are deliberately reverses of each other (uuidv7
 // is time-ordered, so creation order IS id order), and two rooms share a name,
 // each holding a system so the chain can be reached down either arm of

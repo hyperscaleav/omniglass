@@ -42,7 +42,7 @@ func TestResolveSecretArcKinds(t *testing.T) {
 // Pushed telemetry is owned on the same exclusive arc, so an arc-tier grant can
 // contain its owner. This is the fence on POST /telemetry:push, and it is resolved
 // from telemetry:push rather than component:read on purpose: a principal routinely
-// holds a wide read and a narrow write (viewer over the estate plus operator on one
+// holds a wide read and a narrow write (viewer over the fleet plus operator on one
 // component), so resolving the read scope would let it push anywhere it can see.
 func TestResolveTelemetryArcKinds(t *testing.T) {
 	idx := index()
@@ -332,7 +332,7 @@ func TestResolveAlarmResolvesOnTheComponentTierFromItsOwnAction(t *testing.T) {
 	idx := rbac.NewRoleIndex([]rbac.Role{
 		// A responder may acknowledge and read, and may not touch the component.
 		{ID: "responder", Permissions: []string{"alarm:acknowledge"}},
-		// An estate-wide reader may see everything and acknowledge nothing.
+		// A fleet-wide reader may see everything and acknowledge nothing.
 		{ID: "viewer", Permissions: []string{"*:read"}},
 	})
 
@@ -379,7 +379,7 @@ func TestResolveCommandResolvesOnTheComponentTierFromItsOwnAction(t *testing.T) 
 	idx := rbac.NewRoleIndex([]rbac.Role{
 		// An issuer may command and read, and may not edit the component.
 		{ID: "issuer", Permissions: []string{"command:issue"}},
-		// An estate-wide reader may see everything and command nothing.
+		// A fleet-wide reader may see everything and command nothing.
 		{ID: "viewer", Permissions: []string{"*:read"}},
 	})
 

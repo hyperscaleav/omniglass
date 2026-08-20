@@ -218,21 +218,21 @@ export type PageDescriptor = {
 // to be" with the real font, the tree indent, the chevron slot and the longer of
 // the two stacked lines all accounted for by layout rather than by arithmetic;
 // the cell's own horizontal padding is added, because that is part of the
-// column. Driven against the dev estate at a 1280 viewport, the same run
+// column. Driven against the dev fleet at a 1280 viewport, the same run
 // measures each row twice, once with the chip's exact markup injected back into
 // the clone, so the difference is the chip and nothing else.
 //
 // What it said. The chip cost a UNIFORM 69px on all 20 rows of the three pages,
-// which stands to reason: it is one fixed word. The widest cell in the estate
+// which stands to reason: it is one fixed word. The widest cell in the fleet
 // (a depth-3 location, "Auditorium") wanted 256px with its chip and wants 187px
-// without it, and the old floor of 260 was the estate's widest row plus four
+// without it, and the old floor of 260 was the fleet's widest row plus four
 // pixels. "Boardroom 2" measured 203px with its chip, reproducing the 200px this
 // comment used to record, which is how the method was checked before the number
 // was moved.
 //
 // So the new floor is the old one minus the chip: 260 - 69 = 191. That is not a
 // rounding of anything, and it deliberately is not the "about 200" this was
-// estimated at. The point of deriving it this way rather than from the estate's
+// estimated at. The point of deriving it this way rather than from the fleet's
 // widest row is that the LABELS did not change, only the thing beside them, so
 // the floor should carry exactly the labels it carried before and no more.
 //
@@ -642,7 +642,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                   IdentityCell right up until a label became something a RULE could
                   render: a generated label differs from the key exactly as an
                   operator's does, so the hand-written copy would have repeated the
-                  key under every platform-labelled row in the estate. */}
+                  key under every platform-labelled row in the fleet. */}
               {/* No pen chip here since #693: see IdentityCell's own comment for
                   why the label pen's badge left every list and became the lock on
                   the label field of the edit blade. hasLabel below

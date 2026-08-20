@@ -48,7 +48,7 @@ func (f *healthFixture) healthSeries(t *testing.T, ctx context.Context, ownerKin
 func (f *healthFixture) assertTransitionOnly(t *testing.T, ctx context.Context) {
 	t.Helper()
 	type row struct{ owner, kind, value string }
-	// The three estate arcs store ids and the node arc still stores a name, so the
+	// The three fleet arcs store ids and the node arc still stores a name, so the
 	// owner resolves back to a NAME here: the invariant groups by owner, and a
 	// failure message naming the entity is worth more than one printing a uuid.
 	rows, err := f.conn.Query(ctx, `
@@ -103,8 +103,8 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 	}, f.all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
-	if got := f.healthSeries(t, ctx, "system", "hq-boardroom"); !sameSeq(got, []string{"degraded"}) {
-		t.Fatalf("after create = %v, want the one opening degraded (both roles unstaffed)", got)
+	if got := f.healthSeries(t, ctx, "system", "hq-boardroom"); !sameSeq(got, []string{"incomplete"}) {
+		t.Fatalf("after create = %v, want the one opening incomplete (both roles unstaffed, a commissioning gap)", got)
 	}
 
 	bar, panel := "cisco-room-bar", "samsung-qm55"
@@ -123,8 +123,8 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 	// room-mic below its quorum of 2, two bars satisfy it but main-display is still
 	// empty, and only the panel makes the system whole.
 	steps := []struct{ role, component, want string }{
-		{"room-mic", "bar-a", "degraded"},
-		{"room-mic", "bar-b", "degraded"},
+		{"room-mic", "bar-a", "incomplete"},
+		{"room-mic", "bar-b", "incomplete"},
 		{"main-display", "panel-a", "healthy"},
 	}
 	for _, s := range steps {
@@ -136,8 +136,8 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 		}
 	}
 
-	if got := f.healthSeries(t, ctx, "system", "hq-boardroom"); !sameSeq(got, []string{"degraded", "healthy"}) {
-		t.Errorf("series = %v, want [degraded healthy]: the staffing steps that changed no verdict must record nothing",
+	if got := f.healthSeries(t, ctx, "system", "hq-boardroom"); !sameSeq(got, []string{"incomplete", "healthy"}) {
+		t.Errorf("series = %v, want [incomplete healthy]: the staffing steps that changed no verdict must record nothing",
 			got)
 	}
 	f.assertTransitionOnly(t, ctx)
@@ -197,9 +197,9 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 		t.Fatalf("create system: %v", err)
 	}
 	// Before anything is staffed, both alternates are at zero: the choice
-	// contributes its best-satisfied (tied, so position-1) alternate's
-	// impact.
-	f.mustAgreeWithRecord(t, ctx, "choice-room", "outage")
+	// contributes through its best-satisfied (tied, so position-1) alternate,
+	// whose unstaffed roles are a commissioning gap (#631), not their impact.
+	f.mustAgreeWithRecord(t, ctx, "choice-room", "incomplete")
 
 	bar := "cisco-room-bar"
 	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "choice-bar-1", ProductName: &bar}, f.all, all, all, all); err != nil {
@@ -270,21 +270,35 @@ func TestAlternateTieBreaksByPosition(t *testing.T) {
 	}
 
 	// Neither role is ever staffed: both alternates sit at fraction 0,
-	// tied. Position 1 (b-alt, degraded) must win, not position 2 (a-alt,
-	// outage), and it must stay that way across repeated reads: a removed
-	// sort would make this flip depending on Go's map iteration, which
-	// varies from call to call, not just from process to process.
+	// tied. Position 1 (b-alt) must win, not position 2 (a-alt), and it must
+	// stay that way across repeated reads: a removed sort would make this
+	// flip depending on Go's map iteration, which varies from call to call,
+	// not just from process to process.
+	//
+	// The verdict no longer reveals the winner: an active alternate's
+	// unstaffed role contributes incomplete (#631) whatever its impact, so
+	// both outcomes read the same string. The winner is asserted from the
+	// roles' OWN active flags instead, which is the tie-break decision
+	// stated directly rather than through its verdict.
 	for i := 0; i < 8; i++ {
 		rep, err := f.gw.SystemHealth(ctx, "tie-room", 0, f.all)
 		if err != nil {
 			t.Fatalf("system health read %d: %v", i, err)
 		}
-		if rep.Verdict != "degraded" {
-			t.Fatalf("read %d: verdict = %q, want degraded (position-1 b-alt must win the tie over a-alt's outage)",
+		if rep.Verdict != "incomplete" {
+			t.Fatalf("read %d: verdict = %q, want incomplete (the winning alternate's unstaffed role is a gap, not its impact)",
 				i, rep.Verdict)
 		}
+		active := map[string]bool{}
+		for _, r := range rep.Roles {
+			active[r.Name] = r.Active
+		}
+		if !active["b-role"] || active["a-role"] {
+			t.Fatalf("read %d: active = %v, want b-role active and a-role not (position-1 b-alt must win the tie)",
+				i, active)
+		}
 	}
-	f.mustAgreeWithRecord(t, ctx, "tie-room", "degraded")
+	f.mustAgreeWithRecord(t, ctx, "tie-room", "incomplete")
 }
 
 // TestHealthRecordsEveryRealChange is the mirror of the duplicate: a verdict that
@@ -339,8 +353,8 @@ func TestHealthRecordsEveryRealChange(t *testing.T) {
 	f.mustAgreeWithRecord(t, ctx, "hq-boardroom", "healthy")
 
 	if got := f.healthSeries(t, ctx, "system", "hq-boardroom"); !sameSeq(got,
-		[]string{"degraded", "healthy", "degraded", "healthy"}) {
-		t.Errorf("series = %v, want [degraded healthy degraded healthy]", got)
+		[]string{"incomplete", "healthy", "degraded", "healthy"}) {
+		t.Errorf("series = %v, want [incomplete healthy degraded healthy]: the opening gap is incomplete, the alarm is degraded", got)
 	}
 	f.assertTransitionOnly(t, ctx)
 }
@@ -352,7 +366,7 @@ func TestHealthRecordsEveryRealChange(t *testing.T) {
 // and makes the overlap the point of the test rather than a coin toss.
 const concurrentRooms = 8
 
-// staffPair builds one room of the estate the race proofs need: a system
+// staffPair builds one room of the fleet the race proofs need: a system
 // conforming to a shared standard whose single role sits at quorum 2, staffed by
 // two room bars, so the system reads healthy and EITHER bar failing drops the
 // role below quorum. Two writes that move the same system are what the record has
@@ -429,7 +443,7 @@ func runTogether(t *testing.T, writes ...func() error) {
 // the live database holds.
 //
 // Nothing about the sequence is exotic: two alarms on two components in one room
-// is a normal minute in an estate, and a console that saves a panel fires its
+// is a normal minute in a fleet, and a console that saves a panel fires its
 // writes together. The locations above the rooms make the same point harder,
 // since every one of these writes rolls up through the same three of them.
 func TestHealthConcurrentWritesRecordOneEdge(t *testing.T) {
@@ -501,7 +515,7 @@ func TestHealthConcurrentOppositeWritesLeaveNoStaleRecord(t *testing.T) {
 		// A standing critical alarm on one bar puts the room degraded. Clearing it
 		// is the write that says healthy, and a critical alarm on the other bar is
 		// the write that says degraded: run together, they disagree about what
-		// the estate is.
+		// the fleet is.
 		standing, err := f.gw.RaiseAlarm(ctx, "", a, storage.AlarmSpec{
 			Severity: "critical", Message: "mic array not responding",
 		})
@@ -634,7 +648,7 @@ func TestHealthInvariantAcrossEveryTrigger(t *testing.T) {
 	// second alarm still holds sweep-a down, so the role is one occupant short of
 	// its quorum, and the system created at the end has nobody in it at all.
 	f.mustAgreeWithRecord(t, ctx, "sweep-sys", "degraded")
-	f.mustAgreeWithRecord(t, ctx, "sweep-sys-2", "degraded")
+	f.mustAgreeWithRecord(t, ctx, "sweep-sys-2", "incomplete")
 }
 
 // A delete is a health event for everything upstream of the deleted row, and the

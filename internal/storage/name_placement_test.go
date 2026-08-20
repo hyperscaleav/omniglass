@@ -270,7 +270,7 @@ func TestNodeNameStaysGlobal(t *testing.T) {
 // TestNameAmbiguousGloballyButUniqueToCallerResolvesCleanly is the first half
 // of the architect ruling "scope decides before ambiguity does": scope narrows
 // the candidate set BEFORE ambiguity is decided, so a name that collides
-// estate-wide but not within the caller's own scope is not refused. Without
+// fleet-wide but not within the caller's own scope is not refused. Without
 // that ordering, a caller scoped to room-b would be refused for a name unique
 // in their own room, solely because room-a (which they cannot even read) also
 // holds one, and the old behavior (resolve globally, then scope-check the
@@ -293,13 +293,13 @@ func TestNameAmbiguousGloballyButUniqueToCallerResolvesCleanly(t *testing.T) {
 		t.Fatalf("display-1 under zone-a: %v", err)
 	}
 	// An unrelated "display-1", entirely outside zone-a's subtree (root,
-	// unplaced): the row that makes the bare name ambiguous estate-wide.
+	// unplaced): the row that makes the bare name ambiguous fleet-wide.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1"}, all, all, all, all); err != nil {
 		t.Fatalf("display-1 outside zone-a: %v", err)
 	}
 
 	// A caller scoped ONLY to zone-a's subtree: "display-1" is ambiguous
-	// estate-wide (two rows), but unique within this caller's own read
+	// fleet-wide (two rows), but unique within this caller's own read
 	// scope, so it must resolve cleanly to zone-a's row, not refuse.
 	readZoneA := scope.Set{IDs: []string{zoneA.ID}}
 	got, err := gw.GetComponent(ctx, "display-1", readZoneA)
@@ -333,7 +333,7 @@ func TestOwnerScopedReadsResolveAmbiguousNameWithinScope(t *testing.T) {
 	// scope-check against the system tree); sysInZone is its child, named
 	// "shared" (system_parent_name_key). An unrelated root system, also
 	// named "shared" (system_orphan_name_key), is what makes the bare name
-	// ambiguous estate-wide.
+	// ambiguous fleet-wide.
 	zoneA, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "zone-a"}, all, all)
 	if err != nil {
 		t.Fatalf("zone-a: %v", err)
@@ -393,7 +393,7 @@ func TestOwnerScopedReadsResolveAmbiguousNameWithinScope(t *testing.T) {
 	// ResolveActionTarget at the route, and the pair of double resolves this test
 	// was written for is gone rather than made scoped. The ruling-2 property for
 	// that route is asserted where the resolve now lives (resolveScoped, driven
-	// per route by TestAuthzConformance). Kept in this test because the estate
+	// per route by TestAuthzConformance). Kept in this test because the fleet
 	// still holds two systems named "shared": a wrong-row landing would show up as
 	// the by-id assertion below finding nothing.
 	if _, err := gw.IssueCommand(ctx, actor, "system", sysInZone.ID, "set-load", "", []byte(`5`), nil); err != nil {
@@ -699,12 +699,12 @@ func TestResolveTagsSystemBandSurvivesScopedCaller(t *testing.T) {
 // UnassignRole no longer shares this shape (#627 review round 3, closing
 // #645): it used to be code-identical to resolveMembershipEnds (the same
 // scopedByName-plus-withoutCandidates call), which is why a prior round
-// drove it through the same estate-wide-ambiguous fixture below and got the
+// drove it through the same fleet-wide-ambiguous fixture below and got the
 // same ErrAmbiguousName. It now resolves the component within THIS role's
-// current occupants instead, so an estate-wide-ambiguous name that occupies
+// current occupants instead, so a fleet-wide-ambiguous name that occupies
 // nothing here is ErrAssignmentMissing, a cleaner and more honest answer
 // than a 409 over a component that was never actually a candidate for this
-// call. TestUnassignRoleResolvesEstateWideDuplicateWithinOccupancy and
+// call. TestUnassignRoleResolvesFleetWideDuplicateWithinOccupancy and
 // TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole below
 // cover UnassignRole's own new shape; this test keeps proving AssignRole and
 // AddMember, which did not change this round.
@@ -758,13 +758,13 @@ func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 	}
 
 	// UnassignRole resolves within the role's own occupants now (#645):
-	// "dup-seat" is estate-wide ambiguous but occupies nothing here (no
+	// "dup-seat" is fleet-wide ambiguous but occupies nothing here (no
 	// assignment exists), so this is the honest, more specific
 	// ErrAssignmentMissing, not the ambiguity 409 it used to raise over a
 	// component that was never actually a candidate for this call.
 	err = gw.UnassignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope)
 	if !errors.Is(err, storage.ErrAssignmentMissing) {
-		t.Fatalf("unassign role with an unassigned, estate-wide-ambiguous component = %v, want ErrAssignmentMissing", err)
+		t.Fatalf("unassign role with an unassigned, fleet-wide-ambiguous component = %v, want ErrAssignmentMissing", err)
 	}
 
 	// AddMember drives resolveMembershipEnds directly: no role or assignment
@@ -779,15 +779,15 @@ func TestAssignRoleComponentAmbiguityNeverLeaksCandidates(t *testing.T) {
 	}
 }
 
-// TestUnassignRoleResolvesEstateWideDuplicateWithinOccupancy is the epic's
+// TestUnassignRoleResolvesFleetWideDuplicateWithinOccupancy is the epic's
 // headline promise, closed for the last remaining write (#627 review round
 // 3, #645): an operator who can staff a role with a duplicate-named
 // component must also be able to unstaff it, not get in with no way back
-// out. "dup-seat" is ambiguous estate-wide (two components, two placements),
+// out. "dup-seat" is ambiguous fleet-wide (two components, two placements),
 // but only the nested one occupies "seat" here, so UnassignRole resolves it
 // from the bare name alone, exactly the string the wire's own AssignedTo
 // gives a caller (internal/api's EffectiveRoleBody.AssignedTo, names only).
-func TestUnassignRoleResolvesEstateWideDuplicateWithinOccupancy(t *testing.T) {
+func TestUnassignRoleResolvesFleetWideDuplicateWithinOccupancy(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -841,11 +841,11 @@ func TestUnassignRoleResolvesEstateWideDuplicateWithinOccupancy(t *testing.T) {
 		t.Fatalf("roles after assign = %+v, want one role with one occupant", roles)
 	}
 
-	// Unassigned by the bare, estate-wide-ambiguous name: the wire has no
+	// Unassigned by the bare, fleet-wide-ambiguous name: the wire has no
 	// uuid to give here (AssignedTo is names only), so this is the case the
 	// fix exists for.
 	if err := gw.UnassignRole(ctx, "", sys.Name, "seat", "dup-seat", sysScope, sysScope); err != nil {
-		t.Fatalf("unassign estate-wide-ambiguous but uniquely-occupying component = %v, want ok", err)
+		t.Fatalf("unassign fleet-wide-ambiguous but uniquely-occupying component = %v, want ok", err)
 	}
 	roles, err = gw.EffectiveRoles(ctx, sys.Name, sysScope)
 	if err != nil {
@@ -921,13 +921,13 @@ func TestUnassignRoleStillRefusesWhenBothDuplicatesOccupyTheSameRole(t *testing.
 	}
 }
 
-// TestRemoveMemberResolvesEstateWideDuplicateWithinMembership is
-// TestUnassignRoleResolvesEstateWideDuplicateWithinOccupancy's membership
+// TestRemoveMemberResolvesFleetWideDuplicateWithinMembership is
+// TestUnassignRoleResolvesFleetWideDuplicateWithinOccupancy's membership
 // counterpart (#627 review round 3, #645): a duplicate-named component that
 // is a member of this system removes cleanly by its bare name, the only
 // form SystemMemberBody.component gives a caller (internal/api/members.go),
-// even though the same name is ambiguous estate-wide.
-func TestRemoveMemberResolvesEstateWideDuplicateWithinMembership(t *testing.T) {
+// even though the same name is ambiguous fleet-wide.
+func TestRemoveMemberResolvesFleetWideDuplicateWithinMembership(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -971,11 +971,11 @@ func TestRemoveMemberResolvesEstateWideDuplicateWithinMembership(t *testing.T) {
 		t.Fatalf("members after add = %+v, want one", members)
 	}
 
-	// Removed by the bare, estate-wide-ambiguous name: the wire has no uuid
+	// Removed by the bare, fleet-wide-ambiguous name: the wire has no uuid
 	// to give here (SystemMemberBody.component is a name), so this is the
 	// case the fix exists for.
 	if err := gw.RemoveMember(ctx, "", sys.Name, "dup-member", sysScope, sysScope); err != nil {
-		t.Fatalf("remove estate-wide-ambiguous but uniquely-member component = %v, want ok", err)
+		t.Fatalf("remove fleet-wide-ambiguous but uniquely-member component = %v, want ok", err)
 	}
 	members, err = gw.ListMembers(ctx, sys.Name, sysScope)
 	if err != nil {

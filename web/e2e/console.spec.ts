@@ -29,7 +29,7 @@ test.describe("operator console", () => {
     // carries no name rule, so the operator types the name: the other half of
     // the same form is proven by the component case below.
     const name = `e2e-${Date.now()}`;
-    // What the LIST will show for it. A shipped estate renders every location's
+    // What the LIST will show for it. A shipped fleet renders every location's
     // label from its own name ({{title (words .Name)}}, ADR-0105), and a row
     // whose label is generated shows that label and no second line, so the raw
     // name is on the detail and the label is on the list. Derived from the name
@@ -155,7 +155,7 @@ test.describe("operator console", () => {
   // and jsdom will not measure a column, which is exactly how a Name column
   // measuring zero pixels sat on main behind a green suite.
   //
-  // The numbers this replaced were measured on the dev estate at a 1280 viewport,
+  // The numbers this replaced were measured on the dev fleet at a 1280 viewport,
   // where the list card offers 973px: Components' Name column was 0px wide (890px
   // of declared columns plus 150px of actions, with nothing left), Systems' was
   // 0px (960 declared), and Locations' was 173px (650 declared), which is why one
@@ -179,4 +179,74 @@ test.describe("operator console", () => {
       }
     });
   }
+
+  test("the fleet zoom: bands render, a band click lands on the location by uuid, back returns", async ({ page }) => {
+    // Arrange through the API with the session the login already minted: the
+    // e2e database starts with the boot seed only, so the fleet under test is
+    // this test's own. A campus holding one system, and an empty building
+    // beside it: one band, one hole.
+    const stamp = Date.now();
+    const campus = `e2e-fleet-${stamp}`;
+    const hole = `e2e-hole-${stamp}`;
+    const mk = async (path: string, body: Record<string, unknown>) => {
+      const res = await page.request.post(`/api/v1${path}`, { data: body });
+      expect(res.status(), `POST ${path} ${await res.text()}`).toBe(201);
+      return (await res.json()) as { id: string };
+    };
+    const root = await mk("/locations", { name: campus, location_type: "campus" });
+    await mk("/locations", { name: hole, location_type: "building", parent: campus });
+    await mk("/systems", { name: `e2e-sys-${stamp}`, location: campus });
+
+    await page.goto("/web/fleet");
+
+    // The chrome: title, ladder, inspector, breadcrumb.
+    await expect(page.getByRole("heading", { name: "Fleet" })).toBeVisible();
+    await expect(page.getByTestId("fleet-summary")).toBeVisible();
+
+    // The band for this test's own root, and the canvas element inside it
+    // (role img so the pixels have an accessible name). The system holds no
+    // components yet, so the raster itself is proven by the screenshot step
+    // against the seeded dev fleet, not here.
+    const band = page.getByTestId(`band-${root.id}`);
+    await expect(band).toBeVisible();
+    await expect(band.getByText(/1 system/)).toBeVisible();
+    await expect(band.locator("canvas")).toHaveAttribute("role", "img");
+
+    // The empty building renders as a dashed hole, named.
+    const holeLabel = hole.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+    await expect(page.getByText(holeLabel).first()).toBeVisible();
+
+    // The summary is on top, badges by default; expanding it shows the tile
+    // board that carries what the right rail carried (design ruling
+    // 2026-08-18), and no right rail exists.
+    await expect(page.getByTestId("fleet-tiles")).toHaveCount(0);
+    await page.getByRole("button", { name: "Expand summary" }).first().click();
+    await expect(page.getByTestId("fleet-tiles")).toBeVisible();
+    await page.getByRole("button", { name: "Collapse" }).click();
+    await expect(page.getByTestId("zoom-rail")).toHaveCount(0);
+
+    // Clicking a system mark on the canvas opens the blade with the health
+    // panel; the mark is the system. This test's system has no components,
+    // so its round mark is the band's only one: click the canvas centre-left.
+    // The mark sits at the canvas origin plus padY (a round 10px mark).
+    await band.locator("canvas").click({ position: { x: 5, y: 7 } });
+    const blade = page.locator("aside[data-blade]").last();
+    await expect(blade).toBeVisible();
+    await expect(blade).toContainText(/e2e-sys/);
+    await page.keyboard.press("Escape");
+    await expect(page.locator("aside[data-blade]")).toHaveCount(0);
+
+    // A band click navigates to the root location BY UUID, and the browser
+    // back button returns to the fleet zoom (#633 acceptance).
+    await band.getByRole("button").first().click();
+    await page.waitForURL(new RegExp(`/web/locations/${root.id}\\?zoom=1`));
+    // The zoom face renders at the identity route (ADR-0126): the breadcrumb
+    // walks back to the fleet, and the summary rail is the same one.
+    await expect(page.getByTestId("breadcrumb")).toBeVisible();
+    await expect(page.getByTestId("fleet-summary")).toBeVisible();
+    await page.goBack();
+    await page.waitForURL(/\/web\/fleet/);
+    await expect(page.getByTestId("fleet-summary")).toBeVisible();
+  });
+
 });

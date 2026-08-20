@@ -81,19 +81,19 @@ type healthTransitionBody struct {
 	Verdict string    `json:"verdict"`
 }
 
-type estateHealthOutput struct {
+type fleetHealthOutput struct {
 	Body struct {
 		OwnerKind   string                 `json:"owner_kind"`
 		Owner       string                 `json:"owner"`
-		Verdict     string                 `json:"verdict" doc:"healthy, degraded, or outage: the rollup of the roles or systems served beside it"`
+		Verdict     string                 `json:"verdict" doc:"healthy, incomplete, degraded, or outage: the rollup of the roles or systems served beside it. incomplete is a commissioning gap, a role short because the hardware was never installed rather than because installed hardware is failing, and it ranks between healthy and degraded"`
 		Roles       []healthRoleBody       `json:"roles" doc:"The contributing roles; empty for a location"`
 		Systems     []healthSystemBody     `json:"systems" doc:"The systems beneath a location with their verdicts; empty for a system"`
 		Transitions []healthTransitionBody `json:"transitions" doc:"The recorded edges over the window, oldest first: one entry per change, never a sample"`
 	}
 }
 
-func toHealthOutput(rep *storage.HealthReport) *estateHealthOutput {
-	out := &estateHealthOutput{}
+func toHealthOutput(rep *storage.HealthReport) *fleetHealthOutput {
+	out := &fleetHealthOutput{}
 	out.Body.OwnerKind = rep.OwnerKind
 	out.Body.Owner = rep.OwnerID
 	out.Body.Verdict = rep.Verdict
@@ -153,7 +153,7 @@ func nonNil(s []string) []string {
 
 // systemVerdictsOutput is the BULK health read's body: one verdict per system the
 // caller can see, keyed by uuid because that is what a list row holds and because
-// a system name is scoped to its placement rather than unique estate-wide.
+// a system name is scoped to its placement rather than unique fleet-wide.
 //
 // Deliberately not a list of health REPORTS. The report is the read a system's
 // panel opens; this is the read a list paints a column from, and the whole point
@@ -177,7 +177,7 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:        "/systems/{name}/health",
 		Summary:     "Read a system's health",
 		Description: "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
-	}, "system", "read"), func(ctx context.Context, in *systemPathInput) (*estateHealthOutput, error) {
+	}, "system", "read"), func(ctx context.Context, in *systemPathInput) (*fleetHealthOutput, error) {
 		rep, err := gw.SystemHealth(ctx, in.Name, healthHistoryWindow, a.scopeFor(ctx, "system", "read"))
 		if err != nil {
 			return nil, mapSystemErr(err)
@@ -210,7 +210,7 @@ func registerHealthRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Path:        "/locations/{name}/health",
 		Summary:     "Read a location's health",
 		Description: "The location's current verdict, worst-wins over every system placed anywhere beneath it, with those systems and their verdicts as the drill-down (the system health read names the role, which occupant is down, and the alarm). Transitions are the recorded edges over the last 30 days. Gated by location:read; an out-of-scope location is a non-disclosing 404.",
-	}, "location", "read"), func(ctx context.Context, in *locationPathInput) (*estateHealthOutput, error) {
+	}, "location", "read"), func(ctx context.Context, in *locationPathInput) (*fleetHealthOutput, error) {
 		rep, err := gw.LocationHealth(ctx, in.Name, healthHistoryWindow, a.scopeFor(ctx, "location", "read"))
 		if err != nil {
 			return nil, mapLocationErr(err)

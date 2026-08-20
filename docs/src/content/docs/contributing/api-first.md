@@ -83,12 +83,12 @@ fails, every client has to fetch a second collection and join by uuid to render 
 slightly differently.
 
 One exception, narrow: **an entity addressed by id**, either because nobody names it (a stored
-property value, an audit row, a grant, a principal) or because its name is not unique estate-wide
+property value, an audit row, a grant, a principal) or because its name is not unique fleet-wide
 (an interface, named after its interface_type and unique only within its component). A **registry**
 used to be a second exception, a slug-keyed catalog whose id *was* its
 name (`product_id: "cisco-room-bar"`); that is gone. Every registry now has a uuid primary key and
 a renameable `name` ([ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)),
-so it obeys the rule like any estate entity.
+so it obeys the rule like any fleet entity.
 
 **Every foreign key stores the target's primary key**, a uuid, with no exception: a rename then
 has nothing to rewrite, because nothing points at the friendly name. A `_id` column holding a

@@ -2,19 +2,19 @@ import { describe, it, expect } from "vitest";
 import { render } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
-import { systemHealthKey, locationHealthKey, type EstateHealth } from "../lib/health";
+import { systemHealthKey, locationHealthKey, type FleetHealth } from "../lib/health";
 
 // The badge is the one health chip: three distinct states, each carrying the WORD,
 // so the verdict never depends on hue alone. It reads either a verdict the caller
 // already holds or one it fetches itself (the systems list has no bulk health read,
 // so each row's badge owns its query and shares the panel's cache key).
-function mount(el: () => unknown, seed?: { key: readonly unknown[]; data: EstateHealth }) {
+function mount(el: () => unknown, seed?: { key: readonly unknown[]; data: FleetHealth }) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   if (seed) qc.setQueryData([...seed.key], seed.data);
   return render(() => <QueryClientProvider client={qc}>{el() as never}</QueryClientProvider>);
 }
 
-const health = (verdict: string, owner: string): EstateHealth => ({
+const health = (verdict: string, owner: string): FleetHealth => ({
   owner,
   owner_kind: "system",
   verdict,
@@ -25,23 +25,40 @@ const health = (verdict: string, owner: string): EstateHealth => ({
 
 describe("HealthBadge", () => {
   it("names each verdict in words, not colour alone", () => {
-    for (const v of ["healthy", "degraded", "outage"]) {
+    for (const v of ["healthy", "incomplete", "degraded", "outage"]) {
       const { getByText, unmount } = mount(() => <HealthBadge verdict={v} />);
       expect(getByText(v)).toBeTruthy();
       unmount();
     }
   });
 
-  it("gives each verdict its own semantic hue, so the three read as distinct states", () => {
+  it("gives each verdict its own semantic hue, so the four read as distinct states", () => {
     const seen = new Set<string>();
-    for (const v of ["healthy", "degraded", "outage"]) {
+    for (const v of ["healthy", "incomplete", "degraded", "outage"]) {
       const { getByText, unmount } = mount(() => <HealthBadge verdict={v} />);
       const cls = getByText(v).className;
-      expect(cls).toMatch(/badge-(success|warning|error)/);
-      seen.add(cls.match(/badge-(success|warning|error)/)![0]);
+      expect(cls).toMatch(/badge-(success|incomplete|warning|error)/);
+      seen.add(cls.match(/badge-(success|incomplete|warning|error)/)![0]);
       unmount();
     }
-    expect(seen.size).toBe(3); // never one accent for "not fine"
+    expect(seen.size).toBe(4); // never one accent for "not fine"
+  });
+
+  // incomplete is a commissioning gap, not a fault, and its glyph has to say so
+  // as loudly as its hue does: a reader in greyscale must not mistake a room
+  // nobody has finished building for a room that is broken.
+  it("gives incomplete its own glyph, distinct from the two failure verdicts", () => {
+    const glyph = (v: string) => {
+      const { getByText, unmount } = mount(() => <HealthBadge verdict={v} />);
+      const svg = getByText(v).parentElement?.querySelector("svg")?.innerHTML ?? "";
+      unmount();
+      return svg;
+    };
+    const incomplete = glyph("incomplete");
+    expect(incomplete).not.toBe("");
+    expect(incomplete).not.toBe(glyph("degraded"));
+    expect(incomplete).not.toBe(glyph("outage"));
+    expect(incomplete).not.toBe(glyph("healthy"));
   });
 
   it("reads a system's verdict from the cache the panel shares", () => {

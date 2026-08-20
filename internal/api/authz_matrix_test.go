@@ -66,7 +66,7 @@ type actionRoute struct {
 	// carry that role's narrow grant rather than the viewer floor's reach:
 	// alarm:acknowledge resolves its scope from the acknowledgement, and a
 	// principal holding it at root only must not be able to acknowledge
-	// estate-wide just because it can read estate-wide.
+	// fleet-wide just because it can read fleet-wide.
 	needs []string
 	// prepare runs as the OWNER against one target before the split is driven,
 	// and returns whatever path segment its work produced (an alarm id, a

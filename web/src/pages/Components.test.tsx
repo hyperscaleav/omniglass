@@ -59,7 +59,7 @@ const room: Location = { id: uuidFor("l-room"), name: "boardroom", label: "Board
 // same per-action scope the gateway enforces, so "which systems may this caller
 // bind" is data the console filters, never a scope it resolves. board carries
 // update; annex is readable and not writable, which is what a location-scoped
-// deploy grant beside the viewer floor produces for every system in the estate.
+// deploy grant beside the viewer floor produces for every system in the fleet.
 const systems: System[] = [
   { id: uuidFor("s-board"), name: "board", label: "Boardroom AV", member_count: 0, actions: ["create", "update", "delete"] },
   { id: uuidFor("s-annex"), name: "annex", label: "Annex AV", member_count: 0, actions: [] },
@@ -336,7 +336,7 @@ describe("Components create-as-route", () => {
   // rooms can legally both be called "415a". Addressing the precheck's location
   // by name therefore cannot say which one is meant: the request errors and the
   // catch swallows it into silence, so the operator loses the live "this name is
-  // taken" hint for exactly the estates where duplicate names are normal. The
+  // taken" hint for exactly the fleets where duplicate names are normal. The
   // row already carries the uuid, and :checkName dual-accepts one (ADR-0062).
   it("addresses the name precheck's placement by uuid, not by a placement-scoped name", async () => {
     const locID = uuidFor("loc-415a");
@@ -796,7 +796,7 @@ describe("Components create-as-route", () => {
   });
 });
 
-// #627 scopes name uniqueness to placement, not the whole estate: two
+// #627 scopes name uniqueness to placement, not the whole fleet: two
 // components under different parents may now legally share a name. The tree
 // builder used to key its construction-time map on the bare name
 // (byId.set(c.name, ...)), so the second same-named row silently overwrote
@@ -1144,7 +1144,7 @@ describe("Components create offers a system only to a principal who may bind one
   // is not a corner case: applicableKinds("system") is {"system"} alone and the
   // cross-tier expansion is unbuilt (#10), so a location-scoped deploy grant
   // resolves system:update to the empty set while the viewer floor beside it
-  // reads every system in the estate. Every row comes back readable and none
+  // reads every system in the fleet. Every row comes back readable and none
   // writable, which is what the actions array says.
   const deployMe: Me = {
     principal: { id: "u-dep", kind: "human" },

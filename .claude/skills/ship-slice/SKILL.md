@@ -61,7 +61,7 @@ Each is a gate; a red one blocks the ship.
    for it), it adds example rows for that entity to the dev seed (`internal/devseed/fixtures.yaml`),
    so `make dev` comes up populated and nobody hand-creates locations, users, or grants to exercise
    the feature. The seed stays idempotent: a re-run of `make dev` changes nothing. `n/a` when the
-   slice adds no new entity. This is the dev-only example estate, never the boot seed
+   slice adds no new entity. This is the dev-only example fleet, never the boot seed
    (`internal/seed`, ship-with reference data that also runs in production).
 7. **Review.** A reviewer pass over the diff (`/adversarial-review` for loop-built slices and
    any diff wanting the anti-pattern sweep; `code-review` or `cavecrew-reviewer` otherwise),
@@ -94,7 +94,7 @@ Each is a gate; a red one blocks the ship.
    Adding a new one is a frontmatter entry plus a `::screenshot{#id}` directive in the prose,
    not a code change.
 10. **Audit coverage.** Every privileged **mutation** and every **auth event** the slice adds
-   writes an `audit_log` row: an estate or IAM mutation through `writeAuditRes` **in the same
+   writes an `audit_log` row: a fleet or IAM mutation through `writeAuditRes` **in the same
    transaction** as the change (a committed change without its audit row is a red gate), and an
    auth event (login, logout, a denied sign-in) through `WriteAuthEvent` on the read/no-tx path.
    Grep the diff for new gateway writes and new handlers; each names an actor (and, under

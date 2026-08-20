@@ -85,7 +85,7 @@ func (p *PG) UpsertMetricType(ctx context.Context, mt MetricType) error {
 }
 
 // ListMetricTypes returns every registered metric type (official and custom). No
-// scope.Set: the registry is estate-wide reference data, not a scoped resource.
+// scope.Set: the registry is fleet-wide reference data, not a scoped resource.
 func (p *PG) ListMetricTypes(ctx context.Context) ([]MetricType, error) {
 	rows, err := p.pool.Query(ctx, `select `+metricTypeCols+` from metric_type`)
 	if err != nil {
@@ -103,7 +103,7 @@ func (p *PG) ListMetricTypes(ctx context.Context) ([]MetricType, error) {
 	return out, rows.Err()
 }
 
-// GetMetricType returns one metric type by name. The registry is estate-wide
+// GetMetricType returns one metric type by name. The registry is fleet-wide
 // reference data, so there is no scope injection.
 func (p *PG) GetMetricType(ctx context.Context, name string) (*MetricType, error) {
 	if err := RejectAddressForm("metric_type", name); err != nil {

@@ -10,7 +10,7 @@ import (
 
 // The draft identity render (#699, #702): what a create form asks so it can
 // show the name and the label the platform is about to write, in locked fields,
-// before the row exists. One custom method per estate collection, three
+// before the row exists. One custom method per fleet collection, three
 // operations.
 //
 // # Why the answer carries the name, and what the form does with it
@@ -36,7 +36,7 @@ import (
 // called": it exists to be acted on by the create beside it, and an operator who
 // cannot create has no use for the answer. So it is gated by the entity's own
 // <kind>:create, the same permission the POST it precedes needs, which also
-// makes "a viewer cannot probe the estate through the create form" one fact
+// makes "a viewer cannot probe the fleet through the create form" one fact
 // rather than two. It is deliberately NOT :update: nothing here reads or touches
 // an existing row.
 //
@@ -66,7 +66,7 @@ import (
 //
 // A LOCATION draft takes no READ scope. Its data map is the location's own name
 // and its type's label (labels.go keeps placement off that tier
-// deliberately), so there is no other estate row's label in the answer to guard.
+// deliberately), so there is no other fleet row's label in the answer to guard.
 // It takes the create scope like the other two, because the ordinal is read from
 // a placement bucket either way.
 //
@@ -208,7 +208,7 @@ func registerSystemLabelDraft(api huma.API, a *authenticator, gw storage.Gateway
 // It injects one scope where it used to inject none, and the one it injects is
 // the create's rather than a read scope. A location's label data map carries
 // its own name and its type's label and nothing about where it sits, so
-// the RENDER still contains no fact from another estate row to leak; what the
+// the RENDER still contains no fact from another fleet row to leak; what the
 // scope guards is the parent whose bucket the ordinal is read from, which is
 // the same reference the create resolves in the same set.
 func registerLocationLabelDraft(api huma.API, a *authenticator, gw storage.Gateway) {
@@ -217,7 +217,7 @@ func registerLocationLabelDraft(api huma.API, a *authenticator, gw storage.Gatew
 		Method:      http.MethodPost,
 		Path:        "/locations:renderLabel",
 		Summary:     "Draft the name and label a location create would store",
-		Description: "The location tier of :renderLabel on components. Drafts the name and the label a location create would stamp, allocating nothing. A shipped estate answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create; the parent resolves within the caller's location:create scope, because a location's two placement buckets are under a parent or at the root and that is where the ordinal is read from. Omitting parent is the ROOT bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403) rather than reporting which names the estate root already holds.",
+		Description: "The location tier of :renderLabel on components. Drafts the name and the label a location create would stamp, allocating nothing. A shipped fleet answers from the global location rule, which reads the location's own name as words and titles it, so a location named north-wing drafts as North Wing; an empty label means no rule resolves at any tier, and the surface falls back to the name. Omitting name refuses (422) a location_type with no name rule, the same refusal a nameless create gives. Gated by location:create; the parent resolves within the caller's location:create scope, because a location's two placement buckets are under a parent or at the root and that is where the ordinal is read from. Omitting parent is the ROOT bucket, which a create refuses without an all-scoped grant, so the draft refuses it too (403) rather than reporting which names the fleet root already holds.",
 	}, "location", "create"), func(ctx context.Context, in *renderLocationLabelInput) (*draftLabelOutput, error) {
 		d, err := gw.RenderLocationDraftLabel(ctx, storage.LocationLabelDraft{
 			LocationTypeRef: in.Body.LocationType,

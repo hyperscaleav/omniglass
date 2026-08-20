@@ -4,7 +4,7 @@ description: "The Products catalog: a concrete SKU binding a vendor, a driver, a
 ---
 
 **Catalog, under Components: Products** (`/products`, with `product:read`, covered by every viewer's `*:read` floor)
-is the directory of **products**: the concrete SKUs the estate is built from, on the same
+is the directory of **products**: the concrete SKUs the fleet is built from, on the same
 flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/). A product is
 a specific model (a **Cisco Room Bar**, a **Samsung QM55**), not an organization and not an installed
 unit. It is where the two leaf catalogs converge: the [vendor](/guides/admin/vendors/) that makes
@@ -22,7 +22,7 @@ component-level `component_type` retired in the fields fold; the registry return
 above the product rather than beside the component, so a component's genus is read through the product
 it is, never stored on the component itself. The system side has the same arrangement one level up: a
 system conforms to a [standard](/guides/admin/standards/), which is the blueprint's counterpart of a
-product. See [core entities](/architecture/core-entities/) for where both registries sit in the estate
+product. See [core entities](/architecture/core-entities/) for where both registries sit in the fleet
 model.
 
 - **Kind** classifies what the product is: a **device** (a physical unit), an **app** (software), or a

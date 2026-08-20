@@ -388,7 +388,7 @@ describe("LocationTypes page", () => {
   });
 
   // An empty stem is the POSITIONAL type, whose ordinal genuinely is its name.
-  // It has to be settable, since it is the one shape a shipped estate has no
+  // It has to be settable, since it is the one shape a shipped fleet has no
   // example of and the parking-deck case the capability was built for.
   it("sets a positional rule, with an empty stem, without falling back to no rule", async () => {
     let sent: unknown;

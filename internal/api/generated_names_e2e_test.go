@@ -135,7 +135,7 @@ func TestLocationResetNameRefusesAPI(t *testing.T) {
 	// A FLOOR answers the same way, which is the acceptance of ADR-0103's
 	// reversal on the one type that used to answer differently. The refusal has
 	// to name the missing fact rather than 500 or silently no-op, since this is
-	// now the only answer a shipped estate ever gets from this verb.
+	// now the only answer a shipped fleet ever gets from this verb.
 	c.do(ownerTok, http.MethodPost, "/locations",
 		map[string]any{"name": "17c", "location_type": "building", "parent": "reset-room"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/locations",

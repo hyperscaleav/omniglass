@@ -5431,3 +5431,148 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   silently; `DOCS_SHOTS_PROXY` retires with the dependency it worked around. The ten shots recapture
   byte-identical, which is the proof the vendored files are the same faces the browser was fetching
   (ADR-0121, #775).
+
+- **A commissioning gap is not a failure**
+  ([#631](https://github.com/hyperscaleav/omniglass/issues/631)). The verdict domain gains a
+  fourth value: a role short because its hardware was never installed reads `incomplete`, ranked
+  between healthy and degraded, and its declared `impact` describes failure only. Without it the
+  fleet canvas would paint a half-commissioned fleet entirely red, which is the single thing that
+  would make the medium useless on the fleets it serves. A pure enum insertion in
+  `internal/health` plus the seeded property enum; the console's badge gained the fourth look and
+  `--og-incomplete` in both themes ([ADR-0122](/architecture/decisions/)).
+
+- **The fleet reads itself in one projection**
+  ([#632](https://github.com/hyperscaleav/omniglass/issues/632)). `GET /views/fleet` returns the
+  whole in-scope fleet as the canvas draws it: every location flat with its parent and recorded
+  verdict, every system with its location and verdict, and one dot per component
+  (`{component, verdict, primary, shared}`), never a component row. Each tier is scoped on its
+  own read, so a caller who may read places but not systems gets the shape with no contents and
+  an out-of-scope root is absent rather than empty. Found in review: the per-location and
+  per-system verdict subqueries planned as sequential scans of the telemetry lane; the location
+  arc's owner index landed with the slice (the system arc's arrived independently as #725), and
+  the guard asks the planner with `enable_seqscan = off` rather than the catalog.
+
+- **A fleet worth looking at**
+  ([#634](https://github.com/hyperscaleav/omniglass/issues/634)). The dev seed grew the shapes
+  the canvas is judged against: a fourth top of a deliberately different shape (a building at
+  the root with rooms straight off it), leaves nobody commissioned, a system with nothing
+  assigned reading incomplete, a room one microphone short, a real alarm dropping a staffed room
+  to degraded beside the gaps, and a recording service shared across two tops for the ghost
+  rule. The divisible boardroom became two sibling ROOMS with one system each and the shared bar
+  physically in A serving both: an air wall splits a room into rooms, and nothing in a fleet has
+  two boardrooms inside one boardroom.
+
+- **The fleet zoom**
+  ([#633](https://github.com/hyperscaleav/omniglass/issues/633)). The first pixels of the one
+  canvas: `/fleet` renders one band per root location (recorded-verdict chip, type, counts with
+  the subtree depth), each system a wrapping cluster of dots painted on a per-band canvas, the
+  holes as dashed inert cards, the four-chip zoom ladder, and the inspector aside. The pure core
+  (layout, state buffer, paint grouping, hit test, ladder resolution, breadcrumb arithmetic)
+  decides everything an operator could dispute and unit-tests with no DOM; the canvas shell does
+  I/O in one paint function. On the canvas, health colour is exceptional and identity colour is
+  the ground ([ADR-0125](/architecture/decisions/)); a band chip renders the location's recorded
+  verdict, never a client fold ([ADR-0125](/architecture/decisions/)). The lab layout ported
+  with its three placement bugs fixed and pinned; its transient heat lanes are cut until an
+  event channel exists to feed them (#631, #632, #633, #634).
+
+- **The location zoom**
+  ([#635](https://github.com/hyperscaleav/omniglass/issues/635)). The same canvas one level
+  down, at the identity route behind `?zoom=1` (ADR-0126, the fork the loop stopped on: the
+  zoom was ruled onto the identity routes as a URL fact, the inventory detail staying the
+  default face until the medium is judged). `byChildOfLocation` proves the grouping seam with
+  a second real grouping (a factory over the anchor: one band per direct child whatever its
+  type, the placed-here band keyed by the anchor itself and ordered first); `holesUnder`
+  scopes the holes to the subtree under the child that contains each. Systems render as cards
+  with the server's own quorum arithmetic per impaired role, fetched per card at
+  location-bounded fan-out; an unstaffed role reads incomplete, pinned in jsdom. The allowed
+  child types are named beneath, the no-fixed-ladder lesson made operable (#635).
+
+- **The system zoom**
+  ([#636](https://github.com/hyperscaleav/omniglass/issues/636)). The typed slots a system
+  needs filled, at the identity route behind `?zoom=1`. The view model merges the two reads
+  that each carry half the story (the health read's figures and choice grouping, the roles
+  read's accepted types, pinned products and position labels) by role name, and computes
+  nothing: a card's every figure is the server's own. A commissioning gap and a failure gap
+  wear different marks from the same arithmetic; an inactive alternate renders as the legal
+  build it is, its figures never presented as verdict reasons; a shared occupant is chipped
+  with the other system it serves; the no-role members get their own strip as a state, not an
+  error. The one-label-renderer guard caught the view model hand-rolling a label fallback,
+  which is exactly what that guard is for (#636).
+
+- **The component leaf**
+  ([#637](https://github.com/hyperscaleav/omniglass/issues/637)). The end of the walk: what a
+  component is (product, vendor, driver off the cached catalog), the memberships with the
+  primary marked and the location-from-primary note, and collection in context, the one place
+  a node appears to an operator. The collection card's derivation is pure and pinned: a stale
+  sample under a live node reads "the device or the path, not collection", a dead node reads
+  as the node, a fresh down answer as the device, which is the sentence that spares nodes a
+  zoom of their own. Membership rows resolve a unique system name to its uuid for the drill
+  and refuse to guess at an ambiguous one (#637).
+
+- **The fleet pages match the design they were built from**
+  ([#630](https://github.com/hyperscaleav/omniglass/issues/630)). A fidelity pass after the
+  architect compared the shipped zooms with the approved prototype: the right rail lands on
+  every zoom as one primitive (`ZoomRail` over a pure `railModel`: headline, a per-verdict
+  ratio bar over the components in scope, the location types present, a worst-first attention
+  list, the gaps footer); the location zoom's system cards become the design's card (status
+  border, room and standard, a slot strip computed over the active roles' quorum with the gap
+  line in the design's words); the ladder is a stepper with an arrow between levels and a
+  per-zoom hint; the inert `+ Top-level location`, `+ Location` and `+ System` cards mark
+  where a thing would go, per the epic's ruling that mutation renders as a hole; the leaf gains
+  the what-it-is and where-it-sits panels, the type path, and the sample age; the dot field
+  densifies. The dev fleet grows to a size the canvas can be judged at (57 locations, 41
+  systems, 112 components). One wire change rode along: a membership now carries both ends'
+  uuids beside their names (`system_id`, `component_id`), because a shared component's
+  memberships can legally name two systems that share a bare name, and a console that could
+  only address by name either guessed or refused (#645's class, now closed for this read).
+
+- **A dot is a component's verdict, an outline is its system's**
+  ([#630](https://github.com/hyperscaleav/omniglass/issues/630)). The architect's second look
+  at the canvas: the identity-hue scheme (ADR-0124) made one colour mean two things, and the
+  design never had it. Reversed: every dot wears its own component verdict, the cluster
+  outline wears the system's (neutral when healthy), and the system zoom shows only the
+  build in use for a choice, the alternate a room did not choose being the standard editor's
+  fact and not an operator's. Cards on the location zoom order worst-first. The canvas
+  raster is deterministic per seed now, so the shot gate stops masking it (#630).
+
+- **The fleet zoom shows systems, one round mark each**
+  ([#630](https://github.com/hyperscaleav/omniglass/issues/630)). Ruled from an options
+  artefact (four marks painted from the seed shape): the fleet zoom's question is which
+  systems need you and how many, and component dots at the top were the wrong grain (a
+  carpet is not a count). One round mark per system, coloured by the system's verdict,
+  worst first per root; square component marks live one zoom down inside the system outline,
+  so the shape is the grain everywhere it appears. The right rail goes: summary tiles on top
+  carry its facts over SYSTEMS (systems, need-attention as a filtering tile, gaps, a health
+  bar, roots), the console's chip filter bar narrows the canvas, and a mark click opens the
+  system in the blade drawer with its health panel and open actions. The canvas core is
+  unchanged (clusters of one) plus one round paint path (#630).
+
+- **The fleet pages wear the inventory pages' shell**
+  ([#630](https://github.com/hyperscaleav/omniglass/issues/630)). Ruled after a look at the
+  Locations list: every zoom shares one layout, `FleetShell`, taken from `TreeList`'s summary
+  rail (badges that expand to a tile board with a verdict donut and facet legend, every badge
+  a filter toggle, open state persisted per page) over the console's `ListShell` (filter bar
+  and card) around the zoom's own body. The summary is fleet-wide at every zoom; right-hand
+  drawers exist only as detail blades. The tiles the previous cut had introduced are folded
+  into the rail's badges and board (#630).
+
+- **The breadcrumb is the walk; the ladder goes**
+  ([#630](https://github.com/hyperscaleav/omniglass/issues/630)). The zoom ladder duplicated
+  what the console's breadcrumb already does, and the fleet pages now use plain breadcrumbs:
+  the trail ends at the parent (the current page is the title, never repeated as the last
+  crumb), and a component's trail runs Fleet, its places, its primary system. Titles stop
+  repeating what the body says (a location's type chip, a component's product panel).
+  `ZoomLadder` and `lib/zoom` are deleted; the glossary's zoom-ladder term retires (#630).
+
+- **The drilldown reaches the leaf, and the pages stop repeating themselves**
+  ([#630](https://github.com/hyperscaleav/omniglass/issues/630)). A design pass over live
+  captures. An occupant on the system zoom (and a no-role member) is now a link to the
+  component leaf, by uuid, keeping the zoom: the last step of fleet, location, system,
+  component was missing. The band label column is one line wide (a wider column, truncated
+  name, no depth count: depth is a summary tile). A system card's room reads in the sans face
+  with the standard as a mono aside. The leaf's identity panel drops the slug sentence that
+  restated its own rows, the type path becomes each crumb's tooltip (the direction #784
+  sets), and a membership row names the room only when the room says something the system's
+  label does not (a system named for its room is the field's commonest naming). The leaf
+  screenshot is captured the way an operator reaches it, by clicking the huddle's occupant,
+  because component names repeat across rooms (#630).

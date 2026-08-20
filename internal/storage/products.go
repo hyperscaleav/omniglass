@@ -42,7 +42,7 @@ func validProductKind(s string) bool {
 	return false
 }
 
-// Product is a registry row naming a concrete SKU in the estate model (e.g.
+// Product is a registry row naming a concrete SKU in the fleet model (e.g.
 // "Cisco Room Bar"): a stable id, the official flag, a label, a kind
 // (device/app/service), the component_type it is classified under (the
 // taxonomy above product; mic, camera, wireless-mic...), an optional icon
@@ -51,7 +51,7 @@ func validProductKind(s string) bool {
 // registry lists alphabetically by label; there is no ordering field.
 type Product struct {
 	// ID is the uuid primary key, Name the renameable name. Its two
-	// references carry both forms for the same reason the estate bodies do: the
+	// references carry both forms for the same reason the fleet bodies do: the
 	// id is what the row points at, the name is what an operator reads and types.
 	ID                string
 	Name              string

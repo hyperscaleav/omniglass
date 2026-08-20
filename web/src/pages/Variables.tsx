@@ -350,7 +350,7 @@ function CreateVariableForm(p: { onCreated: (v: Variable) => void }): JSX.Elemen
         </FieldRow>
         <FieldRow
           label="Scope"
-          info="The estate scope this variable attaches to. It cascades down onto the components below it: platform, or a location, system, or component."
+          info="The fleet scope this variable attaches to. It cascades down onto the components below it: platform, or a location, system, or component."
           docHref="https://docs.omniglass.hyperscaleav.com/architecture/variables/"
           hint={tierGap().length > 0 ? platformAuthorityHint("A variable", tierGap()) : undefined}
         >

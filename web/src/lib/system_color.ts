@@ -11,13 +11,13 @@
 // whose leading 48 bits are a millisecond timestamp. Devseed mints every
 // system in one boot, so a hash reading only a PREFIX of the id would land
 // every seeded system within the same few hundred milliseconds at nearly the
-// same hue: exactly the estate the /ship-slice screenshots show. hueFor
+// same hue: exactly the fleet the /ship-slice screenshots show. hueFor
 // hashes the WHOLE string (FNV-1a, the same hash tagHue uses) so the random
 // tail, not the shared timestamp prefix, drives the hue.
 //
 // tagcolor.ts's curated TAG_HUES ramp is deliberately not reused here: it has
 // only 12 entries, five of which fall inside the reserved bands below,
-// leaving too few for an estate-sized set of systems to stay distinguishable.
+// leaving too few for a fleet-sized set of systems to stay distinguishable.
 // A system walks the full 0-359 wheel instead, stepping past any band it
 // lands in.
 //

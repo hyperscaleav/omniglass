@@ -206,7 +206,7 @@ func TestMoveComponentAudited(t *testing.T) {
 // A move never renames, so a real repro needs two components ALREADY sharing
 // the literal name "dup" in different placement buckets (#627: uniqueness is
 // scoped to placement, so this is legal), one moving into the other's bucket.
-// With both under an all-scoped caller, "dup" is ambiguous estate-wide before
+// With both under an all-scoped caller, "dup" is ambiguous fleet-wide before
 // the move is ever attempted (ErrAmbiguousName, proving nothing about the
 // collision this test targets), so the mover is addressed with a READ scope
 // narrowed to its own bucket (mover-root's subtree, where only one "dup"

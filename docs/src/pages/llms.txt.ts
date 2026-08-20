@@ -13,7 +13,7 @@ export const GET: APIRoute = () => {
   const out = [
     '# Omniglass',
     '',
-    '> Open, AV-native observability and control plane for AV and IT estates: one Go binary over PostgreSQL. A proposed, forward-looking architecture, published ahead of the code.',
+    '> Open, AV-native observability and control plane for AV and IT fleets: one Go binary over PostgreSQL. A proposed, forward-looking architecture, published ahead of the code.',
     '',
     'The full documentation as one file: [/llms-full.txt](/llms-full.txt).',
   ];

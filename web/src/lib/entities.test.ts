@@ -56,7 +56,7 @@ describe("labelIsName", () => {
 // only while every label was operator-typed. #682 made a label something a rule
 // can render, and a rendered label differs from the name just as an operator's
 // does, so the string comparison would have grown a second identifier line under
-// every row in the estate. The pen (label_generated) is the fact that was
+// every row in the fleet. The pen (label_generated) is the fact that was
 // missing, and #683 put it on the wire.
 //
 // The string comparison survives as the second half of a conjunction rather than

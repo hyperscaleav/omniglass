@@ -124,7 +124,7 @@ function TargetSelect(p: { value: string; onChange: (v: string) => void }): JSX.
   // The RENDERED label, not the raw column, so this is deliberately NOT
   // lib/entities' byLabel: entityLabel falls back to the name, so an unlabelled
   // catalog row sorts among the labelled ones under its own name rather than at
-  // the end of the list. Both rules are defensible on a picker of estate-wide
+  // the end of the list. Both rules are defensible on a picker of fleet-wide
   // vocabulary, where nearly every row is labelled; what is not defensible is
   // two different things called byLabel, so this one says which label it means.
   const byRenderedLabel = (a: { label?: string; name: string }, b: { label?: string; name: string }) =>

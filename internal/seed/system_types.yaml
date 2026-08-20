@@ -1,7 +1,7 @@
 # The system_type taxonomy: the coarse registry that says what KIND OF SPACE a
 # system is (ADR-0096). It is the system-side counterpart of component_type, and
 # it is not `standard`: a standard is the blueprint a system is built to, and one
-# estate can hold ten signage standards and six classroom standards under a
+# fleet can hold ten signage standards and six classroom standards under a
 # single coarse type here. Official (ON CONFLICT DO UPDATE, authoritative),
 # like component_types.yaml and unlike location_types.yaml's seed-if-absent
 # example content.

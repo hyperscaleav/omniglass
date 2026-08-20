@@ -1,7 +1,7 @@
 import { Show, type Component } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useQuery } from "@tanstack/solid-query";
-import { CircleCheck, OctagonX, TriangleAlert } from "./icons";
+import { CircleCheck, CircleDashed, OctagonX, TriangleAlert } from "./icons";
 import {
   locationHealth,
   locationHealthKey,
@@ -11,11 +11,18 @@ import {
   type Verdict,
 } from "../lib/health";
 
-// HealthBadge is the console's one health chip. Three verdicts, three distinct
-// states, never a single accent shade of "not fine": healthy, degraded, and outage
-// each get their own semantic hue AND their own glyph AND the word itself, so the
-// state survives a colour-blind reader, a greyscale screenshot, and a printout. The
-// word is the primary carrier; the colour and the shape only reinforce it.
+// HealthBadge is the console's one health chip. Four verdicts, four distinct
+// states, never a single accent shade of "not fine": healthy, incomplete,
+// degraded, and outage each get their own semantic hue AND their own glyph AND
+// the word itself, so the state survives a colour-blind reader, a greyscale
+// screenshot, and a printout. The word is the primary carrier; the colour and the
+// shape only reinforce it.
+//
+// incomplete is deliberately the odd one out in both hue and glyph: a dashed ring
+// on a cool indigo, against the solid warm glyphs the two failure verdicts wear.
+// A room nobody has finished building has not broken, and an operator scanning a
+// half-commissioned fleet must be able to tell the two apart at a glance without
+// reading a word of it.
 //
 // It reads its verdict either from a value the caller already has (a location's
 // system row, a health panel header, the systems list's bulk verdict map) or by
@@ -31,6 +38,7 @@ import {
 
 const LOOK: Record<Verdict, { badge: string; icon: Component<{ size?: number }>; hint: string }> = {
   healthy: { badge: "badge-success", icon: CircleCheck, hint: "Every role this system needs is filled." },
+  incomplete: { badge: "badge-incomplete", icon: CircleDashed, hint: "A role is short because its hardware was never installed. A commissioning gap, not a fault: no alarm will ever fire for it." },
   degraded: { badge: "badge-warning", icon: TriangleAlert, hint: "A role is impaired, but the system is still up." },
   outage: { badge: "badge-error", icon: OctagonX, hint: "An impaired role takes this out of service." },
 };

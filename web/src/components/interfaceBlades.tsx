@@ -65,7 +65,7 @@ export const interfaceBlade: BladeDef = {
 // The heading is the label, falling back to the derived name in the data face,
 // through the one blade-heading primitive. It was a bare span until the entity
 // gained a label (#613), which is the moment #581 said to switch, and it matters
-// more here than anywhere: every SSH interface in the estate is named `ssh`, so
+// more here than anywhere: every SSH interface in the fleet is named `ssh`, so
 // without a label two blades on two components are titled identically.
 function InterfaceBladeTitle(props: { id: string }): JSX.Element {
   const iface = useInterfaceById(props.id);

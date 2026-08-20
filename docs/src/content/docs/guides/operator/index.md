@@ -1,9 +1,9 @@
 ---
 title: Operator guide
-description: "Operating an Omniglass estate day to day: signing in, finding things, working with entities, and the scope that decides what you see."
+description: "Operating an Omniglass fleet day to day: signing in, finding things, working with entities, and the scope that decides what you see."
 ---
 
-This is the how-to for **operating the estate**: reading and running the inventory of locations,
+This is the how-to for **operating the fleet**: reading and running the inventory of locations,
 systems, and components you are responsible for. It is a different job from **administering the
 platform** (managing who can sign in and what they can do), which is the [admin
 guide](/guides/admin/), and from **standing the platform up**, which is
@@ -20,7 +20,9 @@ There are two ways to operate, and they are the same API with the same checks be
 
 - **[Sign in and your profile](/guides/operator/sign-in/)**: getting in with a password or a
   bearer token, and managing your own label, picture, and password.
-- **[Find things in your estate](/guides/operator/inventory/)**: the inventory pages, the chip
+- **[Explore your fleet](/guides/operator/fleet/)**: every system as a cluster of dots on
+  one page, grouped by location, with zoom pages down to a single component.
+- **[Find things in your fleet](/guides/operator/inventory/)**: the inventory pages, the chip
   filter, and the tree, list, and column controls.
 - **[Work with an entity](/guides/operator/entities/)**: opening a blade, drilling into
   children, and creating, editing, or deleting.
@@ -31,7 +33,7 @@ There are two ways to operate, and they are the same API with the same checks be
 
 - The **sidebar** is the information architecture: sections grouped into Inventory, Values,
   Catalog, and Admin. **Catalog is a single entry** opening the catalog area: a subrail on the
-  left groups the registries by the estate noun they serve (Telemetry, Actions, Components,
+  left groups the registries by the fleet noun they serve (Telemetry, Actions, Components,
   Systems, Locations, Metadata), and clicking an entry opens that registry's own page beside it,
   at its own URL. A guide path names the group and the entry: **Catalog, under Locations: Types**.
   A live entry is full strength with its live row count; one whose backend has not landed yet is

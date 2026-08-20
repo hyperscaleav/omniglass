@@ -8,7 +8,7 @@ sidebar:
 ---
 
 :::note[Built today]
-An AI tool authenticates with a **bearer token or password as a `human` or `service` principal** (OAuth/OIDC is deferred, [ADR-0004](/architecture/decisions/#adr-0004-credentials-ship-bearer-only)) and acts with exactly that principal's grants, so it reaches the estate through the same seams every caller uses, never a private lane ([identity and access](/architecture/identity-access/)). Everything below this note is the target design.
+An AI tool authenticates with a **bearer token or password as a `human` or `service` principal** (OAuth/OIDC is deferred, [ADR-0004](/architecture/decisions/#adr-0004-credentials-ship-bearer-only)) and acts with exactly that principal's grants, so it reaches the fleet through the same seams every caller uses, never a private lane ([identity and access](/architecture/identity-access/)). Everything below this note is the target design.
 :::
 
 :::design[Target design (ADR-0001): AI as a governed capability]
@@ -27,7 +27,7 @@ From assistive toward operational:
 
 ## AI acts through the same seams as any principal
 
-AI is **not a side channel**. It reaches the estate through the same three seams every actor uses: the **API** (no private back door, no direct database path), **IAM permissions** (`<resource>:<action>` on every route), and the **Storage Gateway scope** (the ABAC visible-set on every applicable query). What stops a human stops the AI; there is no elevated AI lane.
+AI is **not a side channel**. It reaches the fleet through the same three seams every actor uses: the **API** (no private back door, no direct database path), **IAM permissions** (`<resource>:<action>` on every route), and the **Storage Gateway scope** (the ABAC visible-set on every applicable query). What stops a human stops the AI; there is no elevated AI lane.
 
 The richest seam is the **generated [MCP server](/architecture/api/)**: an MCP tool call is a call to a real API operation, carrying the **acting user or service principal's** credential through the same routes, permissions, scope, and [audit](/architecture/audit/) as the SPA or the CLI. A generated client like the others: a curated tool catalog, the [views](/architecture/views/) exposed as search tools, not a raw one-method-per-tool dump.
 

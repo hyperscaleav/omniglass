@@ -327,14 +327,14 @@ func TestStemlessAllocationWorks(t *testing.T) {
 
 // TestStoredOrdinalsRecomputeToThemselves is the recompute-and-compare
 // invariant: for every component the platform named, re-running allocation
-// against the live estate (excluding the row's own name from the bucket, as
+// against the live fleet (excluding the row's own name from the bucket, as
 // every recompute site does) must return the number and the name the row
 // already carries. A stored ordinal that has gone stale, or a name that no
 // longer matches the number recorded beside it, fails here rather than
 // surviving unnoticed until a label is printed from it.
 //
-// What it does NOT assert is that stored equals recompute in any estate. It
-// holds for the estate built below, and it is narrower than "an ordinal never
+// What it does NOT assert is that stored equals recompute in any fleet. It
+// holds for the fleet built below, and it is narrower than "an ordinal never
 // changes": a name and its number are minted once and nothing cascades a
 // re-mint onto a live row (ADR-0101), so any act that frees a LOWER number in a
 // bucket, or moves the stem out from under a name already minted, leaves a
@@ -353,9 +353,9 @@ func TestStemlessAllocationWorks(t *testing.T) {
 //     TestComponentTypeStemEditDoesNotRecomputeExistingNames), so the edited
 //     row's own stored name drifts from its recompute at once.
 //
-// The estate below therefore contains no delete and no stem edit, and the one
+// The fleet below therefore contains no delete and no stem edit, and the one
 // :rename it leaves in place frees the TOP number of its bucket (frozen is
-// display-4) rather than a low one. That is what entitles a whole-estate sweep
+// display-4) rather than a low one. That is what entitles a whole-fleet sweep
 // to be exact here, and it is why this catches a write path that forgot to
 // re-record an ordinal (a move, a reclassify, a reset) rather than any of the
 // three acts above. Widening it to cover them is a separate question, since it
@@ -435,7 +435,7 @@ func TestStoredOrdinalsRecomputeToThemselves(t *testing.T) {
 		t.Fatalf("list: %v", err)
 	}
 	if len(components) == 0 {
-		t.Fatal("the estate under test is empty, so this invariant proves nothing")
+		t.Fatal("the fleet under test is empty, so this invariant proves nothing")
 	}
 	checked := 0
 	for _, c := range components {
@@ -472,7 +472,7 @@ func TestStoredOrdinalsRecomputeToThemselves(t *testing.T) {
 	// carry no ordinal and are not among them, which is the point of counting
 	// rather than trusting the loop ran.
 	if checked != 8 {
-		t.Fatalf("%d platform-named components were checked, want 8: the estate did not build as intended", checked)
+		t.Fatalf("%d platform-named components were checked, want 8: the fleet did not build as intended", checked)
 	}
 }
 

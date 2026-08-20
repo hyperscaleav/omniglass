@@ -44,7 +44,7 @@ var fourWantOrder = []string{fourLabelledA, fourLabelledZ, fourUnlabelled}
 
 func assertLabelOrder(t *testing.T, got []string) {
 	t.Helper()
-	// The seeded estate carries rows of its own, so the assertion is on the
+	// The seeded fleet carries rows of its own, so the assertion is on the
 	// relative order of the three this case made, not on the whole list.
 	var seen []string
 	for _, name := range got {
@@ -437,8 +437,8 @@ func TestASecretsLabelReachesEveryProjectionThatCarriesItsName(t *testing.T) {
 // the unique index is (component, name) and the name IS the protocol. The
 // three-`ssh`-interfaces case the epic argued from is not reachable, and the
 // conflict is pinned below so the claim cannot quietly become true either way.
-// What IS true today is narrower and enough: every SSH interface in the estate
-// reads `ssh`, on its component and in the estate-wide list, so the label is the
+// What IS true today is narrower and enough: every SSH interface in the fleet
+// reads `ssh`, on its component and in the fleet-wide list, so the label is the
 // only place an operator can say which device role this connection plays.
 //
 // It is settable AT CREATE for the same reason. An interface that can only be

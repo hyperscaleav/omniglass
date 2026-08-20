@@ -39,7 +39,7 @@ func TestEffectiveTagsOnListBodies(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// Estate: a system placed in a room, a codec under both.
+	// Fleet: a system placed in a room, a codec under both.
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "campus", "location_type": "campus"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "room", "location_type": "room", "parent": "campus"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "av", "location": "room"}, http.StatusCreated)

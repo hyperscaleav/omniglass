@@ -78,7 +78,7 @@ func TestFixturesShape(t *testing.T) {
 		}
 	}
 
-	// Components place a device in the estate; a component that names a location must
+	// Components place a device in the fleet; a component that names a location must
 	// name one declared in this document (the seed resolves the placement by key).
 	seenComp := map[string]bool{}
 	for _, c := range doc.Components {
@@ -134,7 +134,25 @@ func TestFixturesShape(t *testing.T) {
 	}
 }
 
-// TestFixturesLetThePlatformNameTheEstate is the pure guard on what this estate
+// TestFixtureLocationNamesAreUniqueFleetWide is the pure guard on a seed
+// footgun the volume rows tripped twice: the seed tolerates an existing
+// location by BARE NAME, so two fixture rows sharing a name under different
+// parents make the second one silently resolve to the first, and the fleet
+// comes up one location short with every count test pointing at the wrong
+// place. Names are legally placement-scoped in the model, but this fixture
+// keeps them fleet-unique so the lookup cannot be fooled.
+func TestFixtureLocationNamesAreUniqueFleetWide(t *testing.T) {
+	doc := fixturesDoc(t)
+	seen := map[string]string{}
+	for _, l := range doc.Locations {
+		if prev, ok := seen[l.Name]; ok {
+			t.Errorf("location name %q is used by keys %q and %q; the seed resolves existing rows by bare name, so the second silently becomes the first", l.Name, prev, l.Key)
+		}
+		seen[l.Name] = l.Key
+	}
+}
+
+// TestFixturesLetThePlatformNameTheFleet is the pure guard on what this fleet
 // is FOR: it demonstrates the name generator, so a fixture row must not hand the
 // platform a name it was supposed to mint. It is the test that fails the moment
 // somebody goes back to hand-writing names, which is the failure that otherwise
@@ -148,12 +166,12 @@ func TestFixturesShape(t *testing.T) {
 // is refused outright), and nothing else in the fixture may carry one.
 //
 // The location half was the other way around for two slices, when `floor` shipped
-// positional and the two floors were the estate's only generated location names.
+// positional and the two floors were the fleet's only generated location names.
 // ADR-0103 reversed that: a floor's designation is B2, LG, 12A, not an ordinal.
 // So the location tier's generator ships DORMANT, demonstrated by nothing in a
-// shipped estate, and this test now asserts the absence rather than papering over
+// shipped fleet, and this test now asserts the absence rather than papering over
 // it by inventing a positional type to keep the demo alive.
-func TestFixturesLetThePlatformNameTheEstate(t *testing.T) {
+func TestFixturesLetThePlatformNameTheFleet(t *testing.T) {
 	doc, err := devseed.Fixtures()
 	if err != nil {
 		t.Fatalf("parse fixtures: %v", err)
@@ -195,10 +213,12 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 		t.Fatalf("parse fixtures: %v", err)
 	}
 
-	// The one component with no product: with no classification to read, the
+	// The component with no product: with no classification to read, the
 	// component rule can only render "Generic Device 1", so the operator's own
-	// words are the only thing that says what the box is.
-	wantComponentLabels := map[string]bool{"power": true}
+	// words are the only thing that says what the box is. The recording service
+	// is pinned for the fleet-wide fact its generic-service classification
+	// cannot render: "Service 1" says nothing about what depends on it.
+	wantComponentLabels := map[string]bool{"power": true, "recording-service": true}
 	for _, c := range doc.Components {
 		if (c.Label != "") != wantComponentLabels[c.Key] {
 			t.Errorf("component %q label = %q, want set = %v (everything else lets the shipped component rule render)",
@@ -238,10 +258,15 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 	// that this test exists to catch. Released.
 	//
 	// boardroom, auditorium, annex, the media lab and the two floors carry none,
-	// which is what makes the estate demonstrate the rule instead of masking it.
+	// which is what makes the fleet demonstrate the rule instead of masking it.
 	wantLocationLabels := map[string]bool{
 		"hq": true, "west": true, "east": true, "airport": true,
 		"huddle": true, "briefing": true, "hall": true,
+		// depot: the rule renders "Depot"; the qualifying word ("Service
+		// Depot") is what the site is called and is not in the name.
+		"depot": true,
+		// harbor: same shape ("Harbor Point" vs the rule's "Harbor").
+		"harbor": true,
 	}
 	for _, l := range doc.Locations {
 		if (l.Label != "") != wantLocationLabels[l.Key] {
@@ -251,13 +276,13 @@ func TestFixturesKeepLabelsOnlyWhereTheOverrideIsThePoint(t *testing.T) {
 	}
 }
 
-// TestFixturesEstateIsAForest is a pure check that the example estate teaches the
+// TestFixturesFleetIsAForest is a pure check that the example fleet teaches the
 // no-root-location rule: the location tree is a forest with more than one
 // unparented top, and devices sit under more than one of those tops. With every
 // device under a single top, a binding at that top looks like it covers the
-// estate, and the reason the install-wide `platform` tier exists (it is the only
+// fleet, and the reason the install-wide `platform` tier exists (it is the only
 // rung that reaches all of them) is invisible in the console.
-func TestFixturesEstateIsAForest(t *testing.T) {
+func TestFixturesFleetIsAForest(t *testing.T) {
 	doc, err := devseed.Fixtures()
 	if err != nil {
 		t.Fatalf("parse fixtures: %v", err)
@@ -295,7 +320,7 @@ func TestFixturesEstateIsAForest(t *testing.T) {
 	}
 }
 
-// TestRunIdempotent proves devseed.Run lands the example estate (and the worked
+// TestRunIdempotent proves devseed.Run lands the example fleet (and the worked
 // reachability check) through the Storage Gateway and that a second run neither
 // duplicates nor errors: make dev runs it on every start. Reference data (roles,
 // location types, sample types) must exist first, so the boot seed runs ahead of
@@ -326,55 +351,86 @@ func TestRunIdempotent(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	// Counts prove idempotency: the second Run added nothing. They are the
-	// assertion that catches a seed which cannot recognise its own
-	// platform-named rows, because that failure doubles the estate rather than
-	// erroring.
+	// Counts prove idempotency: the second Run added nothing. The expected
+	// number is DERIVED from the fixture rather than written here as a literal.
+	// A literal has to be edited every time the example fleet grows, which
+	// makes a fixture change look like a test failure and invites bumping the
+	// number without reading why it moved. Derived, it asserts something
+	// stronger anyway: everything the fixture declares landed, and the second
+	// run added none of it twice. It is also the assertion that catches a seed
+	// which cannot recognise its own platform-named rows, because that failure
+	// doubles the fleet rather than erroring.
+	fixtures, err := devseed.Fixtures()
+	if err != nil {
+		t.Fatalf("parse fixtures: %v", err)
+	}
 	var locs, humans, grants int
 	if err := conn.QueryRow(ctx, `select count(*) from location`).Scan(&locs); err != nil {
 		t.Fatalf("count locations: %v", err)
 	}
-	if locs != 13 {
-		t.Errorf("locations = %d, want 13 (seed not idempotent or incomplete)", locs)
+	if locs != len(fixtures.Locations) {
+		t.Errorf("locations = %d, want %d (seed not idempotent or incomplete)", locs, len(fixtures.Locations))
 	}
-	var comps, systems int
+	var comps, systems, alarms int
 	if err := conn.QueryRow(ctx, `select count(*) from component`).Scan(&comps); err != nil {
 		t.Fatalf("count components: %v", err)
 	}
-	if comps != 8 {
-		t.Errorf("components = %d, want 8 (7 fixture devices, all platform-named, plus the operator-named DSP)", comps)
+	if want := len(fixtures.Components) + 1; comps != want {
+		t.Errorf("components = %d, want %d (the fixture devices, all platform-named, plus the operator-named DSP)", comps, want)
 	}
 	if err := conn.QueryRow(ctx, `select count(*) from system`).Scan(&systems); err != nil {
 		t.Fatalf("count systems: %v", err)
 	}
-	if systems != 2 {
-		t.Errorf("systems = %d, want 2 (the two halves of the divisible boardroom)", systems)
+	if systems != len(fixtures.Systems) {
+		t.Errorf("systems = %d, want %d (seed not idempotent or incomplete)", systems, len(fixtures.Systems))
+	}
+	// Alarms matter most and were the ones going unchecked: the fixtures
+	// section leans entirely on RaiseAlarm's dedup_key to be idempotent, with
+	// no read-before-write of its own, and devseed runs on every `make dev`
+	// start. An untested dedup would stack one more alarm per restart and drag
+	// the seeded verdicts along with it.
+	if err := conn.QueryRow(ctx, `select count(*) from alarm`).Scan(&alarms); err != nil {
+		t.Fatalf("count alarms: %v", err)
+	}
+	if alarms != len(fixtures.Alarms) {
+		t.Errorf("alarms = %d, want %d: a second run re-raised instead of finding the standing condition", alarms, len(fixtures.Alarms))
 	}
 	// Membership and staffing are counted too, because they are where a resolver
-	// that zipped the fixture onto the estate in the wrong order shows up: every
+	// that zipped the fixture onto the fleet in the wrong order shows up: every
 	// name and label would still be right, and the second Run would staff a
-	// second device into a role the first Run already filled.
+	// second device into a role the first Run already filled. The expected
+	// membership count is the distinct (system, component) pairs the fixture
+	// implies: an assignment creates the membership as a side effect, so a
+	// component both listed and staffed in one system is one row, and the
+	// shared bar staffed in both halves is two.
+	pairs := map[string]bool{}
+	for _, m := range fixtures.Members {
+		pairs[m.System+"\x00"+m.Component] = true
+	}
+	for _, ra := range fixtures.RoleAssignments {
+		pairs[ra.System+"\x00"+ra.Component] = true
+	}
 	var members, assignments int
 	if err := conn.QueryRow(ctx, `select count(*) from system_member`).Scan(&members); err != nil {
 		t.Fatalf("count members: %v", err)
 	}
-	if members != 6 {
-		t.Errorf("system members = %d, want 6 (four in the first half including the unstaffed conditioner, two in the second, the shared bar in both)", members)
+	if members != len(pairs) {
+		t.Errorf("system members = %d, want %d (the distinct system-component pairs the fixture implies)", members, len(pairs))
 	}
 	if err := conn.QueryRow(ctx, `select count(*) from system_role_assignment`).Scan(&assignments); err != nil {
 		t.Fatalf("count role assignments: %v", err)
 	}
-	if assignments != 5 {
-		t.Errorf("role assignments = %d, want 5 (the fixture's five, unchanged by the second Run)", assignments)
+	if assignments != len(fixtures.RoleAssignments) {
+		t.Errorf("role assignments = %d, want %d (the fixture's own, unchanged by the second Run)", assignments, len(fixtures.RoleAssignments))
 	}
 
-	// A multi-site estate: three campuses, not one.
+	// A multi-site fleet: three campuses, not one.
 	var campuses int
 	if err := conn.QueryRow(ctx, `select count(*) from location where location_type = (select id from location_type where name = 'campus')`).Scan(&campuses); err != nil {
 		t.Fatalf("count campuses: %v", err)
 	}
-	if campuses != 3 {
-		t.Errorf("campuses = %d, want 3 (hq, east, airport)", campuses)
+	if campuses != 4 {
+		t.Errorf("campuses = %d, want 4 (hq, east, airport, harbor)", campuses)
 	}
 	if err := conn.QueryRow(ctx, `select count(*) from principal where kind = 'human'`).Scan(&humans); err != nil {
 		t.Fatalf("count humans: %v", err)
@@ -405,8 +461,8 @@ func TestRunIdempotent(t *testing.T) {
 		select count(*) from component where location_id = (select id from location where name = 'huddle')`).Scan(&huddleComps); err != nil {
 		t.Fatalf("count huddle components: %v", err)
 	}
-	if huddleComps != 1 {
-		t.Errorf("huddle room components = %d, want 1 (the display carrying the property overrides)", huddleComps)
+	if huddleComps != 3 {
+		t.Errorf("huddle room components = %d, want 3 (the display carrying the property overrides, the bar staffing the all-in-one leg, and the idle touch panel)", huddleComps)
 	}
 	if err := conn.QueryRow(ctx, `
 		select count(*) from property
@@ -421,7 +477,7 @@ func TestRunIdempotent(t *testing.T) {
 
 	// The tree links resolve: the west building hangs under the hq campus, and
 	// its name carries no ancestry, because a location's name is unique within
-	// its parent rather than across the estate.
+	// its parent rather than across the fleet.
 	var parentName string
 	if err := conn.QueryRow(ctx, `
 		select p.name from location c join location p on p.id = c.parent_id
@@ -459,7 +515,7 @@ func TestRunIdempotent(t *testing.T) {
 	all := scope.Set{All: true}
 
 	// The component the checks hang on, placed under the boardroom. It is the one
-	// component in the estate an operator named, so it is addressable by that
+	// component in the fleet an operator named, so it is addressable by that
 	// name where its platform-named siblings are not.
 	var reachComps int
 	if err := conn.QueryRow(ctx, `select count(*) from component where name = 'dsp'`).Scan(&reachComps); err != nil {
@@ -618,12 +674,12 @@ func TestRunIdempotent(t *testing.T) {
 
 // huddleDisplaySQL and barSQL address two platform-named components the way
 // anything outside the seed has to: by placement plus the name the generator
-// minted, since a bare `display-1` matches three rows in this estate.
+// minted, since a bare `display-1` matches three rows in this fleet.
 const (
 	huddleDisplaySQL = `(select id from component where name = 'display-1'
 		and location_id = (select id from location where name = 'huddle'))`
 	barSQL = `(select id from component where name = 'videobar-2'
-		and location_id = (select id from location where name = 'boardroom'))`
+		and location_id = (select id from location where name = 'boardroom-a'))`
 )
 
 // TestSeededNamesComeFromTheGenerator is the acceptance this slice exists for.
@@ -641,7 +697,7 @@ const (
 // fixture that quietly went back to letting the platform name a floor fails on
 // the pen.
 func TestSeededNamesComeFromTheGenerator(t *testing.T) {
-	ctx, conn, _ := seededEstate(t)
+	ctx, conn, _ := seededFleet(t)
 
 	for _, tc := range []struct {
 		what      string
@@ -660,18 +716,24 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 		// Components: the stem comes from the product's component_type, the
 		// ordinal from the room.
 		{what: "the huddle display", table: "component", place: "huddle", name: "display-1", ordinal: 1, generated: true},
-		{what: "the shared video bar", table: "component", place: "boardroom", name: "videobar-1", ordinal: 1, generated: true},
-		{what: "the second video bar", table: "component", place: "boardroom", name: "videobar-2", ordinal: 2, generated: true},
-		{what: "the first boardroom panel", table: "component", place: "boardroom", name: "display-1", ordinal: 1, generated: true},
-		{what: "the second boardroom panel", table: "component", place: "boardroom", name: "display-2", ordinal: 2, generated: true},
-		{what: "the power conditioner", table: "component", place: "boardroom", name: "device-1", ordinal: 1, generated: true},
+		{what: "the shared video bar", table: "component", place: "boardroom-a", name: "videobar-1", ordinal: 1, generated: true},
+		{what: "the second video bar", table: "component", place: "boardroom-a", name: "videobar-2", ordinal: 2, generated: true},
+		{what: "room A's panel", table: "component", place: "boardroom-a", name: "display-1", ordinal: 1, generated: true},
+		// Room B's panel is the first display in ITS room: the ordinal resets
+		// across the air wall because the bucket is the room.
+		{what: "room B's panel", table: "component", place: "boardroom-b", name: "display-1", ordinal: 1, generated: true},
+		{what: "the power conditioner", table: "component", place: "boardroom-a", name: "device-1", ordinal: 1, generated: true},
 		{what: "the auditorium display", table: "component", place: "auditorium", name: "display-1", ordinal: 1, generated: true},
-		{what: "the DSP", table: "component", place: "boardroom", name: "dsp", generated: false},
+		{what: "the DSP", table: "component", place: "boardroom-a", name: "dsp", generated: false},
 
 		// Systems: the first of its stem in a bucket carries no ordinal while
-		// storing one.
-		{what: "the first boardroom half", table: "system", place: "boardroom", name: "boardroom", ordinal: 1, generated: true},
-		{what: "the second boardroom half", table: "system", place: "boardroom", name: "boardroom-2", ordinal: 2, generated: true},
+		// storing one. The boardroom halves are one bucket each now, so both
+		// mint plain `boardroom`; the lab pods share a bucket and show the
+		// ordinal.
+		{what: "the first boardroom half", table: "system", place: "boardroom-a", name: "boardroom", ordinal: 1, generated: true},
+		{what: "the second boardroom half", table: "system", place: "boardroom-b", name: "boardroom", ordinal: 1, generated: true},
+		{what: "the first lab pod", table: "system", place: "media-lab", name: "classroom", ordinal: 1, generated: true},
+		{what: "the second lab pod", table: "system", place: "media-lab", name: "classroom-2", ordinal: 2, generated: true},
 	} {
 		placeCol := "location_id"
 		if tc.table == "location" {
@@ -700,7 +762,7 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 	// The whole location chain is the operator's: `boardroom` sits under the
 	// floor they called `level-2`, under the building they called `west`. The
 	// join is kept (it used to prove a typed name nesting under a minted one)
-	// because it is what catches a fixture resolver that reparented the estate.
+	// because it is what catches a fixture resolver that reparented the fleet.
 	var roomGenerated bool
 	var roomOrdinal *int
 	if err := conn.QueryRow(ctx, `
@@ -708,21 +770,31 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 		from location r
 		join location f on f.id = r.parent_id
 		join location b on b.id = f.parent_id
-		where r.name = 'boardroom' and f.name = 'level-2' and b.name = 'west'`).Scan(&roomGenerated, &roomOrdinal); err != nil {
-		t.Fatalf("read the boardroom under the west building's floor: %v", err)
+		where r.name = 'boardroom-a' and f.name = 'level-2' and b.name = 'west'`).Scan(&roomGenerated, &roomOrdinal); err != nil {
+		t.Fatalf("read boardroom A under the west building's floor: %v", err)
 	}
 	if roomGenerated || roomOrdinal != nil {
 		t.Errorf("the boardroom reads (generated %v, ordinal %v), want (false, absent): a room's name is ground truth the platform cannot mint", roomGenerated, roomOrdinal)
 	}
 
-	// A bare `display-1` is three rows, which is the direct proof that the
-	// fixture could not have used a generated name as its own identity.
+	// A bare `display-1` is seven rows, one per room that holds a first
+	// display, which is the direct proof that the fixture could not have used
+	// a generated name as its own identity. The count is derived from the
+	// fixture (the rooms holding at least one display-classified device)
+	// rather than restated, so the fleet can grow without this reading as a
+	// failure.
+	roomsWithDisplay := map[string]bool{}
+	for _, c := range fixturesDoc(t).Components {
+		if c.Product == "samsung-qm55" && c.Location != "" {
+			roomsWithDisplay[c.Location] = true
+		}
+	}
 	var displays int
 	if err := conn.QueryRow(ctx, `select count(*) from component where name = 'display-1'`).Scan(&displays); err != nil {
 		t.Fatalf("count display-1: %v", err)
 	}
-	if displays != 3 {
-		t.Errorf("components named display-1 = %d, want 3 (one per room; a name is unique within its placement, not across the estate)", displays)
+	if displays != len(roomsWithDisplay) {
+		t.Errorf("components named display-1 = %d, want %d (one per room holding a display; a name is unique within its placement, not across the fleet)", displays, len(roomsWithDisplay))
 	}
 }
 
@@ -733,7 +805,7 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 // carries was minted from that. A stem edited in the boot seed moves this
 // assertion with it, where a hand-written list of names would drift.
 func TestASeededComponentNameAgreesWithItsProductsStem(t *testing.T) {
-	ctx, conn, _ := seededEstate(t)
+	ctx, conn, _ := seededFleet(t)
 
 	rows, err := conn.Query(ctx, `
 		with recursive chain as (
@@ -776,8 +848,15 @@ func TestASeededComponentNameAgreesWithItsProductsStem(t *testing.T) {
 	if err := rows.Err(); err != nil {
 		t.Fatalf("iterate component stems: %v", err)
 	}
-	if seen != 7 {
-		t.Errorf("platform-named components with a resolvable stem = %d, want 7 (every fixture device)", seen)
+	fixtures, err := devseed.Fixtures()
+	if err != nil {
+		t.Fatalf("parse fixtures: %v", err)
+	}
+	// Every fixture component counts, the deliberately product-free power
+	// conditioner included: a component created with no product classifies as
+	// the generic-device product, so its stem resolves like any other row's.
+	if seen != len(fixtures.Components) {
+		t.Errorf("platform-named components with a resolvable stem = %d, want %d (every fixture device)", seen, len(fixtures.Components))
 	}
 }
 
@@ -785,10 +864,10 @@ func TestASeededComponentNameAgreesWithItsProductsStem(t *testing.T) {
 // A component's label comes from the shipped rule over its resolved type and the
 // ordinal the generator allocated, so it reads back what the thing is and which
 // one it is without anybody typing it. The rows that DO carry a typed label are
-// asserted to still own it, since that is the other half of what the estate
+// asserted to still own it, since that is the other half of what the fleet
 // teaches.
 func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
-	ctx, conn, _ := seededEstate(t)
+	ctx, conn, _ := seededFleet(t)
 
 	for _, tc := range []struct {
 		table    string
@@ -798,28 +877,34 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		platform bool
 	}{
 		{table: "component", place: "huddle", name: "display-1", label: "Display 1", platform: true},
-		{table: "component", place: "boardroom", name: "videobar-1", label: "Video Bar 1", platform: true},
-		{table: "component", place: "boardroom", name: "videobar-2", label: "Video Bar 2", platform: true},
-		{table: "component", place: "boardroom", name: "display-1", label: "Display 1", platform: true},
-		{table: "component", place: "boardroom", name: "display-2", label: "Display 2", platform: true},
+		{table: "component", place: "boardroom-a", name: "videobar-1", label: "Video Bar 1", platform: true},
+		{table: "component", place: "boardroom-a", name: "videobar-2", label: "Video Bar 2", platform: true},
+		{table: "component", place: "boardroom-a", name: "display-1", label: "Display 1", platform: true},
+		// Room B's panel is the first display in ITS room, so it reads
+		// display-1 too: the placement-scoped name index doing its job across
+		// the air wall.
+		{table: "component", place: "boardroom-b", name: "display-1", label: "Display 1", platform: true},
 		{table: "component", place: "auditorium", name: "display-1", label: "Display 1", platform: true},
 		// The unclassified box: the rule can only say "Generic Device 1", so
 		// the operator's words win and keep the pen.
-		{table: "component", place: "boardroom", name: "device-1", label: "Power Conditioner", platform: false},
-		{table: "component", place: "boardroom", name: "dsp", label: "Boardroom DSP", platform: false},
-		// The two halves of the divisible room, and the estate's only same-type
-		// siblings. The shipped rule reads the type AND the ordinal (#693), and
-		// the ordinal is the one the name carries, so the first half reads
-		// "Boardroom" beside its `boardroom` name and the second "Boardroom 2"
-		// beside `boardroom-2`. Both were pinned ("Boardroom A", "Boardroom B")
-		// while the rule could only render one string for the pair.
-		{table: "system", place: "boardroom", name: "boardroom", label: "Boardroom", platform: true},
-		{table: "system", place: "boardroom", name: "boardroom-2", label: "Boardroom 2", platform: true},
+		{table: "component", place: "boardroom-a", name: "device-1", label: "Power Conditioner", platform: false},
+		{table: "component", place: "boardroom-a", name: "dsp", label: "Boardroom DSP", platform: false},
+		// The two halves of the divisible room are two ROOMS now, so each half
+		// is the first `board` system in its own bucket and both mint plain
+		// `boardroom` (ADR-0101): same name, two rooms.
+		{table: "system", place: "boardroom-a", name: "boardroom", label: "Boardroom", platform: true},
+		{table: "system", place: "boardroom-b", name: "boardroom", label: "Boardroom", platform: true},
+		// The same-BUCKET same-type siblings live in the media lab: the shipped
+		// rule reads the type AND the ordinal (#693), so the first pod reads
+		// "Classroom" beside its `classroom` name and the second "Classroom 2"
+		// beside `classroom-2`.
+		{table: "system", place: "media-lab", name: "classroom", label: "Classroom", platform: true},
+		{table: "system", place: "media-lab", name: "classroom-2", label: "Classroom 2", platform: true},
 		// The two floors, which used to be here as PINS over a generated name
 		// (`1` labelled Level 2). They are named for their designations now, so
 		// the rule renders those designations and the platform holds the pen.
 		// Looked up under their parent because a floor's name is unique within
-		// its building rather than across the estate.
+		// its building rather than across the fleet.
 		{table: "location", place: "west", name: "level-2", label: "Level 2", platform: true},
 		{table: "location", place: "hall", name: "level-1", label: "Level 1", platform: true},
 	} {
@@ -845,18 +930,20 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 	}
 
 	// The locations the shipped rule labels (#657), addressed by name alone
-	// because each of these is estate-unique (the two floors above are looked up
+	// because each of these is fleet-unique (the two floors above are looked up
 	// under their parent instead, since a floor's name is unique only within its
 	// building). This is the half of the demonstration that would otherwise be
 	// asserted by nothing: releasing a pin leaves no test behind unless the
 	// rendered value is pinned instead.
 	for _, tc := range []struct{ name, label string }{
-		{"boardroom", "Boardroom"},
 		{"auditorium", "Auditorium"},
 		{"annex", "Annex"},
 		// The two-word ones: the rule reads the separator as a space, which is
-		// the whole of what `words` does. `media-lab` was the only such row
-		// until the floors were named for their designations.
+		// the whole of what `words` does. The boardroom halves are the
+		// designation case: the name carries the signage (ADR-0103) and the
+		// rule titles it.
+		{"boardroom-a", "Boardroom A"},
+		{"boardroom-b", "Boardroom B"},
 		{"media-lab", "Media Lab"},
 	} {
 		var label string
@@ -876,32 +963,36 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 // TestSeededStaffingLandsOnTheRightDevices proves the fixture's references still
 // point where they say they do now that the keys and the names have come apart.
 // It is the assertion that catches a resolver which zips the fixture onto the
-// estate in the wrong order: every name and label would still be right, and the
+// fleet in the wrong order: every name and label would still be right, and the
 // wrong panel would be staffing the wrong half of the room.
 //
-// The staffing is also the estate's health story: boardroom-a holds two mics and
+// The staffing is also the fleet's health story: boardroom-a holds two mics and
 // a display and reads healthy; boardroom-b is one mic short of its quorum of two
-// and reads degraded, with the shared bar in both.
+// and reads incomplete, with the shared bar in both.
 func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
-	ctx, conn, _ := seededEstate(t)
+	ctx, conn, _ := seededFleet(t)
 
 	for _, tc := range []struct {
-		system string
-		want   map[string]string // role -> the component names filling it, joined
+		room string
+		want map[string]string // role -> the component names filling it, joined
 	}{
-		{system: "boardroom", want: map[string]string{"room-mic": "videobar-1,videobar-2", "main-display": "display-1"}},
-		{system: "boardroom-2", want: map[string]string{"room-mic": "videobar-1", "main-display": "display-2"}},
+		// Both halves mint `boardroom` in their own rooms, so the room is the
+		// address here. The shared bar staffs room-mic in BOTH, from its
+		// physical home in A.
+		{room: "boardroom-a", want: map[string]string{"room-mic": "videobar-1,videobar-2", "main-display": "display-1"}},
+		{room: "boardroom-b", want: map[string]string{"room-mic": "videobar-1", "main-display": "display-1"}},
 	} {
 		rows, err := conn.Query(ctx, `
 			select r.name, c.name
 			from system_role_assignment a
 			join system s on s.id = a.system_id
+			join location l on l.id = s.location_id
 			join system_role r on r.id = a.role_id
 			join component c on c.id = a.component_id
-			where s.name = $1
-			order by r.name, c.name`, tc.system)
+			where l.name = $1
+			order by r.name, c.name`, tc.room)
 		if err != nil {
-			t.Fatalf("read staffing for %q: %v", tc.system, err)
+			t.Fatalf("read staffing for %q: %v", tc.room, err)
 		}
 		got := map[string]string{}
 		for rows.Next() {
@@ -920,11 +1011,11 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 		rows.Close()
 		for role, want := range tc.want {
 			if got[role] != want {
-				t.Errorf("system %q role %q is filled by %q, want %q", tc.system, role, got[role], want)
+				t.Errorf("the system in %q: role %q is filled by %q, want %q", tc.room, role, got[role], want)
 			}
 		}
 		if len(got) != len(tc.want) {
-			t.Errorf("system %q staffing = %v, want %v", tc.system, got, tc.want)
+			t.Errorf("the system in %q: staffing = %v, want %v", tc.room, got, tc.want)
 		}
 	}
 
@@ -946,7 +1037,7 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 }
 
 // TestAFloorIsNamedForItsDesignation is what ADR-0103's worked example became
-// when the architect reversed it. The estate used to ship two floors both named
+// when the architect reversed it. The fleet used to ship two floors both named
 // `1`, one labelled Level 1 and one Level 2, to teach that a positional name is
 // ALLOCATION ORDER rather than a designation. The sharper reading is that a
 // floor's designation is not an integer at all (B2, LG, G, M, 12A), so an
@@ -957,7 +1048,7 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 // the two AGREE because they are one fact rather than two. This test is the
 // statement of that, and it fails if a floor ever goes back to being minted.
 func TestAFloorIsNamedForItsDesignation(t *testing.T) {
-	ctx, conn, _ := seededEstate(t)
+	ctx, conn, _ := seededFleet(t)
 
 	rows, err := conn.Query(ctx, `
 		select p.name, f.name, coalesce(f.label, ''), f.name_generated, f.ordinal, f.label_generated
@@ -983,7 +1074,7 @@ func TestAFloorIsNamedForItsDesignation(t *testing.T) {
 		if !labelGenerated {
 			t.Errorf("the floor under %q holds the label pen; the shipped rule renders its designation from its name, so a pin would be a hand-typed copy of that output", building)
 		}
-		got[building] = [2]string{name, label}
+		got[building+"/"+name] = [2]string{name, label}
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatalf("iterate floors: %v", err)
@@ -991,30 +1082,30 @@ func TestAFloorIsNamedForItsDesignation(t *testing.T) {
 
 	// Name and label say the same thing, which is the whole change: the name is
 	// the designation in kebab, the label is what the rule renders from it.
+	// The two floors that carry the argument, keyed by building and name
+	// since a building holds several floors now (the volume rows add more, all
+	// held to the same rule by the loop above).
 	want := map[string][2]string{
-		"hall": {"level-1", "Level 1"},
-		"west": {"level-2", "Level 2"},
+		"hall/level-1": {"level-1", "Level 1"},
+		"west/level-2": {"level-2", "Level 2"},
 	}
-	for building, w := range want {
-		if got[building] != w {
-			t.Errorf("the floor under %q reads (name %q, label %q), want (name %q, label %q)",
-				building, got[building][0], got[building][1], w[0], w[1])
+	for key, w := range want {
+		if got[key] != w {
+			t.Errorf("the floor %q reads (name %q, label %q), want (name %q, label %q)",
+				key, got[key][0], got[key][1], w[0], w[1])
 		}
-	}
-	if len(got) != len(want) {
-		t.Errorf("seeded floors = %d %v, want %d", len(got), got, len(want))
 	}
 }
 
-// TestSeededEstateTeachesPlatformReach carries the forest into the database and
-// proves what it is there to teach: the seeded estate has as many unparented tops
+// TestSeededFleetTeachesPlatformReach carries the forest into the database and
+// proves what it is there to teach: the seeded fleet has as many unparented tops
 // as the fixture declares (no row stands in for a root), and the platform binding
 // is the only rung that reaches all of them. The component under the HQ subtree
 // reads that subtree's location override, while the component under a different
 // top falls back to the install-wide `platform` value, which is the case a
 // synthetic root location would have hidden.
-func TestSeededEstateTeachesPlatformReach(t *testing.T) {
-	ctx, conn, gw := seededEstate(t)
+func TestSeededFleetTeachesPlatformReach(t *testing.T) {
+	ctx, conn, gw := seededFleet(t)
 
 	doc, err := devseed.Fixtures()
 	if err != nil {
@@ -1053,11 +1144,11 @@ func TestSeededEstateTeachesPlatformReach(t *testing.T) {
 	}
 }
 
-// seededEstate brings up a database with the boot seed and one devseed Run, and
+// seededFleet brings up a database with the boot seed and one devseed Run, and
 // hands back the raw connection and the gateway. One Run rather than two: the
 // idempotency property has its own test, and every other case here is about what
-// the estate IS.
-func seededEstate(t *testing.T) (context.Context, *pgx.Conn, storage.Gateway) {
+// the fleet IS.
+func seededFleet(t *testing.T) (context.Context, *pgx.Conn, storage.Gateway) {
 	t.Helper()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -1083,7 +1174,7 @@ func seededEstate(t *testing.T) (context.Context, *pgx.Conn, storage.Gateway) {
 
 // componentIn resolves a component by its room and its platform-minted name, and
 // then reads it back through the gateway by ID. The two steps are the point: a
-// bare `display-1` is ambiguous by design in this estate, so the id is the
+// bare `display-1` is ambiguous by design in this fleet, so the id is the
 // reference, exactly as devseed itself resolves one.
 func componentIn(t *testing.T, ctx context.Context, conn *pgx.Conn, gw storage.Gateway, room, name string) *storage.Component {
 	t.Helper()
@@ -1129,4 +1220,283 @@ func assertGrant(t *testing.T, conn *pgx.Conn, ctx context.Context, username, ro
 	if gotScopeID == nil || *gotScopeID != wantID {
 		t.Errorf("%s grant scope_id = %v, want %s (%s)", username, gotScopeID, wantID, scopeName)
 	}
+}
+
+// TestFixturesMakeAnFleetWorthLookingAt guards what the fleet canvas (#630)
+// needs from the dev fleet, which is a different bar from what the earlier
+// fixtures were built to clear. Those existed to teach one thing each (a shared
+// component, a member with no role, the platform-reach lesson) and a handful of
+// rows says all of that. A canvas is judged on whether an operator can read a
+// real fleet in it, and a dozen dots in one room cannot answer that either way.
+//
+// These are fixture-shape assertions, deliberately pure: they parse the YAML and
+// reason about it, so the whole guard runs with no Postgres and cannot rot into a
+// slow test nobody runs.
+func TestFixturesMakeAnFleetWorthLookingAt(t *testing.T) {
+	doc, err := devseed.Fixtures()
+	if err != nil {
+		t.Fatalf("parse fixtures: %v", err)
+	}
+
+	parentOf := map[string]string{}
+	typeOf := map[string]string{}
+	for _, l := range doc.Locations {
+		parentOf[l.Key] = l.Parent
+		typeOf[l.Key] = l.Type
+	}
+	depth := func(name string) int {
+		n := 1
+		for parentOf[name] != "" {
+			name = parentOf[name]
+			n++
+		}
+		return n
+	}
+	topOf := func(name string) string {
+		for parentOf[name] != "" {
+			name = parentOf[name]
+		}
+		return name
+	}
+
+	// No two roots alike. The location tree is arbitrary-depth by design and
+	// nothing in the model requires a building or a floor, but a seed whose
+	// every root is campus > building > floor > room quietly teaches the
+	// opposite and lets a fixed-ladder assumption ship green.
+	rootTypes := map[string]bool{}
+	for _, l := range doc.Locations {
+		if l.Parent == "" {
+			rootTypes[l.Type] = true
+		}
+	}
+	if len(rootTypes) < 2 {
+		t.Errorf("every root is the same type %v, so the seed teaches a fixed ladder the model does not have", rootTypes)
+	}
+	depths := map[int]bool{}
+	for name := range parentOf {
+		depths[depth(name)] = true
+	}
+	if len(depths) < 3 {
+		t.Errorf("leaf depths %v, want at least three distinct depths so the canvas is read against an uneven fleet", depths)
+	}
+
+	// Enough to paint. A dot grid is the fleet zoom's whole claim, and it
+	// cannot be judged on a handful of squares in one room.
+	if len(doc.Systems) < 6 {
+		t.Errorf("systems = %d, want at least 6 spread across the fleet", len(doc.Systems))
+	}
+	if len(doc.Components) < 20 {
+		t.Errorf("components = %d, want at least 20 so a cluster reads as a cluster", len(doc.Components))
+	}
+	placed := map[string]bool{}
+	for _, s := range doc.Systems {
+		if s.Location != "" {
+			placed[topOf(s.Location)] = true
+		}
+	}
+	if len(placed) < 3 {
+		t.Errorf("systems occupy %d roots, want at least 3 so the fleet zoom has bands to compare", len(placed))
+	}
+
+	// A hole: a leaf nobody has put a system in. The canvas draws these, and
+	// naming a gap is half of what it is for.
+	hasChild := map[string]bool{}
+	for _, l := range doc.Locations {
+		if l.Parent != "" {
+			hasChild[l.Parent] = true
+		}
+	}
+	withSystem := map[string]bool{}
+	for _, s := range doc.Systems {
+		withSystem[s.Location] = true
+	}
+	holes := 0
+	for _, l := range doc.Locations {
+		if !hasChild[l.Key] && !withSystem[l.Key] {
+			holes++
+		}
+	}
+	if holes == 0 {
+		t.Error("no leaf is without a system, so the canvas has no hole to draw")
+	}
+
+	// Every verdict the domain has must appear somewhere, incomplete above all:
+	// it landed in #631 and nothing in the seed produced it, so the colour that
+	// un-saturates a commissioning fleet had never been seen on screen.
+	var anyUnstaffed bool
+	for _, s := range doc.Systems {
+		// A system with a standard but no assignment at all cannot satisfy any
+		// role it declares, which is the commissioning gap in its purest form.
+		if s.Standard == "" {
+			continue
+		}
+		any := false
+		for _, a := range doc.RoleAssignments {
+			if a.System == s.Key {
+				any = true
+				break
+			}
+		}
+		if !any {
+			anyUnstaffed = true
+		}
+	}
+	if !anyUnstaffed {
+		t.Error("no system is left entirely unstaffed, so nothing in the seed reads incomplete")
+	}
+
+	// A component shared across two DIFFERENT roots. Sharing inside one room
+	// already had a fixture; the fleet zoom's ring-and-ghost rule is about a
+	// box two bands apart depending on each other, which is the case an
+	// operator cannot see any other way.
+	rootsOf := map[string]map[string]bool{}
+	systemRoot := map[string]string{}
+	for _, s := range doc.Systems {
+		systemRoot[s.Key] = topOf(s.Location)
+	}
+	note := func(component, system string) {
+		if rootsOf[component] == nil {
+			rootsOf[component] = map[string]bool{}
+		}
+		rootsOf[component][systemRoot[system]] = true
+	}
+	for _, m := range doc.Members {
+		note(m.Component, m.System)
+	}
+	for _, a := range doc.RoleAssignments {
+		note(a.Component, a.System)
+	}
+	crossRoot := false
+	for _, roots := range rootsOf {
+		if len(roots) > 1 {
+			crossRoot = true
+		}
+	}
+	if !crossRoot {
+		t.Error("no component is shared across two roots, so the fleet zoom's ghost rule is never exercised")
+	}
+}
+
+// TestSeededFleetShowsEveryVerdict traces the example fleet through the real
+// health rollup rather than trusting the fixture's shape. The fixture guard
+// above proves a system was left unstaffed; only this proves that the platform
+// then reads it as INCOMPLETE, which is the claim the fleet canvas is coloured
+// by and is a different fact from "no assignment row exists".
+//
+// It is also the regression that catches a seed drifting into monochrome. The
+// canvas's whole argument is that an operator can tell a commissioning gap from
+// an outage at a glance, and a dev fleet where every room reads healthy
+// demonstrates nothing and hides a broken rollup behind a green screen.
+func TestSeededFleetShowsEveryVerdict(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("boot seed: %v", err)
+	}
+	if err := devseed.Run(ctx, gw, ""); err != nil {
+		t.Fatalf("devseed: %v", err)
+	}
+
+	all := scope.Set{All: true}
+	verdictOf := func(system string) string {
+		t.Helper()
+		rep, err := gw.SystemHealth(ctx, system, 0, all)
+		if err != nil {
+			t.Fatalf("system health %s: %v", system, err)
+		}
+		return rep.Verdict
+	}
+
+	// Systems are platform-named, so the fixture key is not an address, and a
+	// minted name is not one either: both boardroom halves mint plain
+	// `boardroom` in their own rooms, so the bare name is ambiguous
+	// fleet-wide. A system is resolved to its uuid through the room that
+	// holds it instead, and a room may hold more than one (the lab's two
+	// pods), so the verdict is asserted over every system in the room.
+	conn2, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn2.Close(ctx)
+	systemsIn := func(room string) []string {
+		t.Helper()
+		rows, err := conn2.Query(ctx,
+			`select s.id from system s join location l on s.location_id = l.id where l.name = $1 order by s.name`,
+			room)
+		if err != nil {
+			t.Fatalf("resolve systems in room %q: %v", room, err)
+		}
+		defer rows.Close()
+		var ids []string
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				t.Fatalf("scan system id in room %q: %v", room, err)
+			}
+			ids = append(ids, id)
+		}
+		if len(ids) == 0 {
+			t.Fatalf("no system in room %q", room)
+		}
+		return ids
+	}
+
+	for _, tc := range []struct{ room, want, why string }{
+		{"media-lab", "incomplete", "two pods conforming to a standard with nothing assigned to any role: commissioning gaps, and no alarm will ever fire for them"},
+		{"boardroom-a", "healthy", "fully staffed, the shared bar counted where it physically sits"},
+		{"boardroom-b", "incomplete", "one of the two microphones it wants, and that one is fine: the shortfall is a box nobody installed, not a box that broke"},
+		{"briefing", "incomplete", "same shape as the second boardroom half: short a microphone nobody has installed"},
+		{"auditorium", "degraded", "fully staffed, but a critical alarm took one of its two microphones down: a real failure, not a gap"},
+		{"bay-1", "healthy", "fully staffed and quiet"},
+		{"huddle", "healthy", "built all-in-one, so the component-build alternate it never staffed does not impair it"},
+	} {
+		for _, id := range systemsIn(tc.room) {
+			if got := verdictOf(id); got != tc.want {
+				t.Errorf("a system in %s reads %q, want %q: %s", tc.room, got, tc.want, tc.why)
+			}
+		}
+	}
+
+	// The fleet must not be monochrome: an operator judging the canvas needs
+	// more than one colour on it.
+	seen := map[string]bool{}
+	for _, room := range []string{"media-lab", "boardroom-a", "boardroom-b", "auditorium", "huddle", "bay-1", "briefing"} {
+		for _, id := range systemsIn(room) {
+			seen[verdictOf(id)] = true
+		}
+	}
+	if len(seen) < 3 {
+		t.Errorf("the seeded fleet shows %d distinct verdicts (%v), want at least 3 so the canvas is judged against a real spread", len(seen), seen)
+	}
+}
+
+// fixturesDoc parses the embedded fixtures, failing the test on error, so a
+// derived expectation reads as one call.
+func fixturesDoc(t *testing.T) devseed.Doc {
+	t.Helper()
+	doc, err := devseed.Fixtures()
+	if err != nil {
+		t.Fatalf("parse fixtures: %v", err)
+	}
+	return doc
+}
+
+// fixtureComponentNames is the fixture's own component list, for counting only
+// the rows the fixture declares: seedReachability creates one of its own beside
+// them, and a bare count(*) would fold the two together and stop meaning
+// "everything declared landed exactly once".
+func fixtureComponentNames(doc devseed.Doc) []string {
+	out := make([]string, 0, len(doc.Components))
+	for _, c := range doc.Components {
+		out = append(out, c.Name)
+	}
+	return out
 }

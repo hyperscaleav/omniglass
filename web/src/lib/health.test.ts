@@ -10,7 +10,7 @@ import {
   verdictRank,
   worstAlarm,
   worstVerdict,
-  type EstateHealth,
+  type FleetHealth,
   type HealthRole,
 } from "./health";
 
@@ -33,6 +33,7 @@ const role = (over: Partial<HealthRole>): HealthRole => ({
 describe("verdictOf", () => {
   it("narrows to the three states the console knows", () => {
     expect(verdictOf("healthy")).toBe("healthy");
+    expect(verdictOf("incomplete")).toBe("incomplete");
     expect(verdictOf("degraded")).toBe("degraded");
     expect(verdictOf("outage")).toBe("outage");
   });
@@ -47,6 +48,8 @@ describe("worstVerdict", () => {
   it("takes the worst, which is how a location rolls up its systems", () => {
     expect(worstVerdict(["healthy", "outage", "degraded"])).toBe("outage");
     expect(worstVerdict(["healthy", "degraded"])).toBe("degraded");
+    expect(worstVerdict(["incomplete", "degraded"])).toBe("degraded");
+    expect(worstVerdict(["healthy", "incomplete"])).toBe("incomplete");
     expect(worstVerdict(["healthy", "healthy"])).toBe("healthy");
   });
   it("ignores states it cannot read, and is null when nothing is readable", () => {
@@ -55,7 +58,10 @@ describe("worstVerdict", () => {
   });
   it("ranks outage above degraded above healthy", () => {
     expect(verdictRank("outage")).toBeGreaterThan(verdictRank("degraded"));
-    expect(verdictRank("degraded")).toBeGreaterThan(verdictRank("healthy"));
+    // incomplete sits between healthy and degraded: worth surfacing above a
+    // clean system, worth burying under anything actually broken.
+    expect(verdictRank("degraded")).toBeGreaterThan(verdictRank("incomplete"));
+    expect(verdictRank("incomplete")).toBeGreaterThan(verdictRank("healthy"));
   });
 });
 
@@ -67,7 +73,7 @@ describe("impairedRoles", () => {
       role({ name: "display", label: "Main display", impaired: true, impact: "outage" }),
       role({ name: "panel", label: "Touch panel", impaired: false, impact: "none" }),
     ],
-  } as unknown as EstateHealth;
+  } as unknown as FleetHealth;
 
   it("keeps only the impaired ones, worst impact first", () => {
     expect(impairedRoles(h).map((r) => r.name)).toEqual(["display", "mic"]);
@@ -96,7 +102,7 @@ describe("impairedRoles", () => {
       role({ name: "codec", label: "Codec", impaired: true, impact: "outage", active: false, choice: "conferencing", alternate: "component-built" }),
       role({ name: "camera", label: "Camera", impaired: true, impact: "outage", active: false, choice: "conferencing", alternate: "component-built" }),
     ],
-  } as unknown as EstateHealth;
+  } as unknown as FleetHealth;
 
   it("excludes an impaired role whose alternate lost the choice: it did not move the verdict", () => {
     expect(impairedRoles(withInactiveChoice)).toEqual([]);

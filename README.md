@@ -1,6 +1,6 @@
 # Omniglass
 
-**Omniglass is an open observability and control plane for AV and IT estates, and a
+**Omniglass is an open observability and control plane for AV and IT fleets, and a
 place to learn how one is built.** It is a single Go binary over a BYO PostgreSQL
 database: collect telemetry from devices, type it into owned properties, model health
 across systems and locations, alarm on it, and act.

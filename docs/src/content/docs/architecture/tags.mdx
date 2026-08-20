@@ -62,7 +62,7 @@ Minting a key and setting a value are **two different permissions**, deliberatel
 - **Setting a value is the ordinary entity write**: binding `environment: prod` onto a component is a
   **`component:update`** (system and location likewise), no new permission. A **platform** binding has no
   owning entity, so it takes `tag:update` plus the install-wide
-  [`platform:update`](/architecture/identity-access/#install-wide-authority-is-not-estate-scope).
+  [`platform:update`](/architecture/identity-access/#install-wide-authority-is-not-fleet-scope).
 
 The vocabulary stays curated while tagging stays routine; reading rides the viewer floor (`tag:read`,
 `component:read`).
@@ -109,7 +109,7 @@ be one the component belongs to.
 
 **Systems and locations resolve too.** A **location** resolves `platform` plus its own location tree; a
 **system** resolves `platform`, its own system tree, and **the location it is placed at** (its `location_id`
-tree), so a system in a PCI building surfaces `compliance: pci`; a **node** is estate-wide, resolving
+tree), so a system in a PCI building surfaces `compliance: pci`; a **node** is fleet-wide, resolving
 `platform` plus its own direct bindings only. This is the read behind the directory **Tags column**: the list
 routes (`GET /components`, `/systems`, `/locations`, `/nodes`) each carry an **`effective_tags`** map (key to
 winning value, winners only) per row, resolved for the whole page in **one batched query** (a

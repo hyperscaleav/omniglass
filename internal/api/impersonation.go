@@ -154,7 +154,7 @@ var (
 // permission set covering the target's. The scope-blind cover in checkTakeoverGuard
 // is not enough for a FULL-authority takeover (act-as impersonation, password reset):
 // the acting principal resolves scope from the target, so a capability the caller
-// holds only at a narrow scope must not become estate-wide by taking the target over.
+// holds only at a narrow scope must not become fleet-wide by taking the target over.
 // A capability held only through a scoped grant does not count. view-as does not need
 // this (read-only, grants no authority).
 func (a *authenticator) allScopeCovers(ctx context.Context, actor, target *storage.Principal) (bool, error) {

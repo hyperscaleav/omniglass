@@ -27,7 +27,7 @@ Gateway is the only path to the database, coordination rides NATS, collection ru
 two ways, no fork:
 
 - **All-in-one (the modular monolith).** One process runs every role, with **Postgres and NATS embedded**
-  (below), against nothing external. The small-estate case: download, run, done.
+  (below), against nothing external. The small-fleet case: download, run, done.
 - **Split by run mode (Kubernetes).** The same binary launched **per mode** as separate Deployments,
   against an **external** Postgres and an external NATS cluster. A Helm chart wires it up, and each role
   scales independently.
@@ -170,8 +170,8 @@ Configuration is **two tiers**, and platform settings are deliberately **central
   into a second authoritative copy
   ([ADR-0033](/architecture/decisions/#adr-0033-settings-persist-only-the-override-level-base-layers-are-recomputed-in-memory)).
 
-This is distinct from estate [config and variables](/architecture/variables/), which describe the
-*estate* and resolve down the cascade; the settings store describes the **platform itself**.
+This is distinct from fleet [config and variables](/architecture/variables/), which describe the
+*fleet* and resolve down the cascade; the settings store describes the **platform itself**.
 
 :::note[Partial: the settings engine's platform level]
 The settings store is built at the **platform** level (the install-wide rung, renamed from `global` by

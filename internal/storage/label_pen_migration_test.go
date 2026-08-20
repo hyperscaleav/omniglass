@@ -12,7 +12,7 @@ import (
 // (20260810110000_label_pen_backfill.sql) against rows the migration set can
 // never produce on its own, the same shape TestComponentOrdinalBackfill uses:
 // it stands the database one migration back (the pen column exists, the
-// backfill has not run), writes the shapes an upgraded estate holds, then
+// backfill has not run), writes the shapes an upgraded fleet holds, then
 // migrates forward over them. The REAL migration file runs, not a copy of its
 // SQL, so the two cannot drift and deleting a statement from the file turns
 // this red.
@@ -21,7 +21,7 @@ import (
 // row that predates the column stays inert forever. The stamp returns at its
 // first line when the pen is false, and #685's bulk recompute cannot repair it
 // either, since a recompute only touches rows the platform already owns. On an
-// upgraded estate the whole feature would apply to rows created after the
+// upgraded fleet the whole feature would apply to rows created after the
 // upgrade and to nothing else.
 func TestLabelPenBackfill(t *testing.T) {
 	dsn := storagetest.NewDSN(t)

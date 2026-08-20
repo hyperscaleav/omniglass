@@ -67,7 +67,7 @@ component tree        chassis -> card -> ...                   (deepest wins, = 
 - **`platform` is the least-specific rung, not a floor under the chain**: an admin's decision for
   the **whole install**, one rung like any other, written only with the install-wide
   `platform:<action>` permission on top of the resource's own
-  ([identity and access](/architecture/identity-access/#install-wide-authority-is-not-estate-scope)).
+  ([identity and access](/architecture/identity-access/#install-wide-authority-is-not-fleet-scope)).
 - **There is no root location.** The location tree is a forest with N unparented tops, and a top is
   an ordinary location: binding at `earth` misses `mars`, and a top added next quarter starts
   uncovered. A tier above today's tops is a new `location_type` and a real node, never a magic one;
@@ -204,8 +204,8 @@ view explains both override (variables / tags) and accumulation (rules).
 ## Worked example
 
 RM204 codec (Room Kit Pro, fw 11.2) at Room RM204 -> Floor 3 -> HQ Building -> HQ Campus, in the
-Huddle Room AV system. The estate has three unparented tops (HQ Campus, East Campus, Airport
-Office), so HQ Campus is a **top, not a root**. Member of two groups: **Old-firmware Room Kits**
+Huddle Room AV system. The fleet has four unparented tops (HQ Campus, East Campus, Airport
+Office, Service Depot), so HQ Campus is a **top, not a root**. Member of two groups: **Old-firmware Room Kits**
 (weight 450) and **PCI-scope** (weight 250). Specificity bands are illustrative (`0` platform,
 `100/200` templates, `300s` location by depth, `400s` system by depth, `500` the instance), a
 presentation flattening of the segmented key `(segment_rank, depth, group_weight, creation_order)`,
@@ -244,12 +244,18 @@ The three columns are the point:
   through to the declaration: `3` is not a `platform` binding and shadowed nothing, it is what the
   type says a retry limit is.
 
-Binding `credential` at **HQ Campus** covers HQ and nothing else: East Campus and Airport Office
-are separate tops, and a fourth site added next year starts uncovered; only the install-wide `60s`
-at **`platform`** reaches all of them, which is why the tier exists rather than a synthetic root
-location.
+Binding `credential` at **HQ Campus** covers HQ and nothing else: East Campus, Airport Office and
+Service Depot are separate tops, and a fifth site added next year starts uncovered; only the
+install-wide `60s` at **`platform`** reaches all of them, which is why the tier exists rather than a
+synthetic root location.
 
-`make dev` seeds this estate, so the rule is inspectable rather than illustrative: three unparented
+Service Depot is that argument made concrete rather than hypothetical. It was added to the seed
+later than the other three, it is a **building** at the top with rooms straight off it (no campus
+above, no floor between, which the type registry allows and the model has never required), and it
+came up covered by exactly one thing: the `platform` binding. Every location-tier binding written
+before it existed still misses it.
+
+`make dev` seeds this fleet, so the rule is inspectable rather than illustrative: four unparented
 tops with a device under two of them, one carrying the `staging` tag its subtree's binding sets and
 the other the `prod` the `platform` binding sets.
 

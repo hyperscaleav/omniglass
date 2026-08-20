@@ -154,7 +154,7 @@ type auditDiffEvent struct {
 }
 
 // TestAuditDiffRoundTrip pins the second half of "who changed this, and to
-// what?": the audit read carries the old/new images every estate mutation has
+// what?": the audit read carries the old/new images every fleet mutation has
 // always written (#473). A node create/update round-trips through GET
 // /audit-log as a one-sided create image plus a full before/after pair, and a
 // secret create's audit body carries metadata only, never the sealed field

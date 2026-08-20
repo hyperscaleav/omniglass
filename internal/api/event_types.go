@@ -62,7 +62,7 @@ type updateEventTypeInput struct {
 	}
 }
 
-// registerEventTypeRoutes wires the event_type catalog: the estate-wide occurrence
+// registerEventTypeRoutes wires the event_type catalog: the fleet-wide occurrence
 // keyspace (no scope injection, it is reference data) and its custom-type CRUD. Read
 // rides the viewer floor; create/update/delete are gated by event_type:create /
 // event_type:update / event_type:delete. Official (seed-owned) event types are
@@ -73,7 +73,7 @@ func registerEventTypeRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		Method:      http.MethodGet,
 		Path:        "/event-types",
 		Summary:     "List event types",
-		Description: "Lists every registered event type (official and custom). The catalog is estate-wide reference data. Gated by event_type:read.",
+		Description: "Lists every registered event type (official and custom). The catalog is fleet-wide reference data. Gated by event_type:read.",
 	}, "event_type", "read"), func(ctx context.Context, _ *struct{}) (*listEventTypesOutput, error) {
 		ets, err := gw.ListEventTypes(ctx)
 		if err != nil {

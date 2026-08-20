@@ -36,6 +36,9 @@ export const Package: Component<P> = (p) => (
 export const Layers: Component<P> = (p) => (
   <Svg size={p.size}><path d="m12 3 9 5-9 5-9-5z" /><path d="m3 13 9 5 9-5" /></Svg>
 );
+export const Grid: Component<P> = (p) => (
+  <Svg size={p.size}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></Svg>
+);
 export const Compass: Component<P> = (p) => (
   <Svg size={p.size}><circle cx="12" cy="12" r="9" /><path d="m15 9-2 6-4 2 2-6z" /></Svg>
 );
@@ -181,6 +184,14 @@ export const TriangleAlert: Component<P> = (p) => (
 );
 export const OctagonX: Component<P> = (p) => (
   <Svg size={p.size}><path d="M8.6 2.6h6.8l4.8 4.8v6.8l-4.8 4.8H8.6l-4.8-4.8V7.4z" /><path d="m9.5 9.5 5 5M14.5 9.5l-5 5" /></Svg>
+);
+// CircleDashed is the incomplete verdict: the outline of a thing that is not
+// there yet. Dashed rather than solid on purpose, so a commissioning gap reads
+// as unfinished rather than broken even in greyscale, where its indigo cannot
+// help. The dash array is on the element because the shared Svg wrapper sets
+// only the stroke properties every other icon needs.
+export const CircleDashed: Component<P> = (p) => (
+  <Svg size={p.size}><circle cx="12" cy="12" r="9" stroke-dasharray="3.6 3.2" /></Svg>
 );
 export const Siren: Component<P> = (p) => (
   <Svg size={p.size}><path d="M7 18v-6a5 5 0 0 1 10 0v6" /><path d="M3 21h18" /><path d="M12 2v1M4.5 5.5l.7.7M19.5 5.5l-.7.7" /></Svg>

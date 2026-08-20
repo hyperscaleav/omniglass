@@ -251,7 +251,7 @@ line.
 **A pen states itself beside the field it owns, never in a list.** The platform's label used to wear
 a `Generated` chip in the cell. It charged the Name column the width of the word on every
 platform-labelled row of every list, to say something an operator could not act on where they were
-reading it; and the estate-wide question it half-answered, which rows a rule edit would rewrite, is
+reading it; and the fleet-wide question it half-answered, which rows a rule edit would rewrite, is
 answered whole by `<entity> previewLabels` rather than one row at a time. The fact is now the
 **lock** on the label field of the edit blade (`components/LabelPenField.tsx`), the same
 affordance the create form carries (`components/PenToggle.tsx` is the one copy of the button, its
@@ -326,7 +326,7 @@ The predicates live in `lib/entities` and nowhere else: `labelIsName` (which fac
 `hasLabel` (did a human choose this). The second used to be the string comparison
 `entityLabel(e) !== e.name`, and that was the same question only while a label was only ever
 operator-typed; unchanged, a generated label would have put a second identifier line under every row
-in the estate. A third, `labelGenerated`, retired with the chip that was its only caller: it asked
+in the fleet. A third, `labelGenerated`, retired with the chip that was its only caller: it asked
 "is there a rendered label here to mark", and a field asks "who holds the pen", which answers
 differently for a row whose rule rendered nothing and must still open locked.
 
@@ -377,7 +377,7 @@ an operator types and stops the moment they edit the name by hand, and an edit f
 the existing name so relabelling can never rewrite a live address. That path belongs to the
 registries, whose names have no generator and stay globally unique.
 
-The three estate entities do not wire it. A component, a system, and a location get their names
+The three fleet entities do not wire it. A component, a system, and a location get their names
 from the platform, minted from the resolved type stem and the placement bucket, so deriving a name
 from whatever prose an operator typed would claim the pen on their behalf the moment they typed a
 label. Their create forms ask what and where first, then show the name the row will actually get

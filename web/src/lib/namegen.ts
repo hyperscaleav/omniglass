@@ -20,11 +20,11 @@ import { createSignal } from "solid-js";
 // posts it back as the create's expected_name and a create that would land a
 // different name is refused rather than renumbered.
 
-// EstateKind is the three entities whose names the platform can own. The
+// FleetKind is the three entities whose names the platform can own. The
 // registry pages (products, vendors, types, users) are not here: their names
 // have no generator and stay globally unique, so a create form there derives the
 // name from the label instead (lib/entities.ts's createIdentity).
-export type EstateKind = "component" | "system" | "location";
+export type FleetKind = "component" | "system" | "location";
 
 // ordinalNote is the sentence that travels with a drafted name. It says the one
 // thing the value itself cannot: that it is true right now rather than reserved.
@@ -65,14 +65,14 @@ export function nameBucket(parentID: string, locationID = ""): NameBucket {
 // `hq-west-2-boardroom`), and rendering the path into the field would put back
 // the redundancy the scoping removed. The path is context; the name is the
 // address within it.
-export function bucketPhrase(kind: EstateKind, bucket: NameBucket, path: string[]): string {
+export function bucketPhrase(kind: FleetKind, bucket: NameBucket, path: string[]): string {
   switch (bucket.under) {
     case "parent":
       return path.length ? `under ${path.join(" / ")}` : "under the chosen parent";
     case "location":
       return path.length ? `at ${path.join(" / ")}` : "at the chosen location";
     default:
-      return kind === "location" ? "at the estate root" : `among the unplaced ${kind}s`;
+      return kind === "location" ? "at the fleet root" : `among the unplaced ${kind}s`;
   }
 }
 

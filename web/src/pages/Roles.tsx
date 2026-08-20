@@ -30,7 +30,7 @@ const columns: FlatColumn<Role>[] = [
     cell: (r) => <span class="tnum text-base-content/60">{effectivePerms(r).length}</span>,
   },
   // Origin rides its own column now that the name cell is the shared identity
-  // treatment. It is the fact that separates a seeded role from one this estate
+  // treatment. It is the fact that separates a seeded role from one this fleet
   // wrote, which is what an operator is looking for once custom roles exist, so
   // it stays on the row rather than retiring with the old name cell.
   {

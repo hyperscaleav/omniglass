@@ -43,7 +43,7 @@ func TestCreateGeneratesFromTypeStem(t *testing.T) {
 	}
 
 	// A DIFFERENT placement bucket restarts the ordinal at 1: the scope is
-	// per-placement, not estate-wide.
+	// per-placement, not fleet-wide.
 	root := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "namegen-root"}, all)
 	third, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, ParentName: &root.Name}, all, all, all, all)
 	if err != nil {

@@ -160,6 +160,11 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0119](#adr-0119-a-table-an-operator-names-carries-a-label-or-declares-why-it-does-not) | 2026-08-14 | Accepted | The identity declaration (`internal/storage/identity_shape.go`) grows the third column of the triad: a table an operator NAMES carries a `label`, or declares in `TableIdentity.NoLabel` why it does not, and a guard checks the claim against the generated schema both ways (a declared label the schema lacks fails; a reason on a table that has the column fails as stale). A table nobody names carries none at all, there being no name for an unset one to fall back to. Written RED it named exactly `tag`, `variable`, `secret` and `interface`, the four key-bearing tables that had gone without one, which is why the declaration is the fix rather than the four columns: the gap existed because the shape said what the identifier was and nothing about the friendly string beside it. All four gain the column (text, nullable, no default, unset is SQL NULL per [ADR-0118](#adr-0118-the-friendly-string-an-operator-reads-is-a-label-and-unset-is-sql-null)), with no backfill and no uniqueness, pattern or reserved words. **`interface` is included** ([D2](https://github.com/hyperscaleav/omniglass/issues/613)) and is the strongest of the four: its name is SERVER-derived from its type, so an interface's only string says which protocol it speaks and nothing about what it is FOR, and the label is settable **at create** rather than only on a following patch, an interface labelled by a following call being unlabelled at the moment it is made. The premise D2 was argued from is corrected here and pinned by a test: a component holds at most ONE interface per protocol today (the unique index is `(component, name)` and the name IS the protocol), so the three-`ssh`-interfaces case is not reachable, and the narrower fact carries the decision on its own, every SSH interface in the estate reading `ssh`. Its declared name exemption in `KeyProvedElsewhere` STAYS: the name really is derived, which is the argument for the label rather than something the label replaces. Four exemptions are declared with reasons: `interface_type` (retires with the `interface.type` FK, [ADR-0073](#adr-0073-a-driver-consumes-transports-and-the-interface-type-table-retires)), `file` (its name is already the label; [#755](https://github.com/hyperscaleav/omniglass/issues/755) may revisit), `service` (`principalIdent` resolves a service principal to `service.name`, which a label may not be) and `blob` (no operator surface of its own). Lists order by the rendered label, `order by label nulls last, name` ([D4](https://github.com/hyperscaleav/omniglass/issues/613)), matching the console's one comparator; the two CASCADE projections keep ordering by name, where the name is the cascade key grouping a winner with the candidates it shadows rather than a display order. `LabelledTables()` makes the declaration the only copy of the list the schema guard and the unset sweep read |
 | [ADR-0120](#adr-0120-the-edit-face-is-a-url-fact) | 2026-08-14 | Accepted | `?edit=1` beside a detail address (or a blade's id param, `?u=<id>&edit=1`) is how the console expresses edit mode: deep links, refresh, and the create/row-pencil handoffs all carry the mode in the URL, behind the same `<resource>:update` the footer Edit is behind, and leaving edit strips the param via history replace. The one-shot in-memory handoffs (`pendingedit`, `openPrincipalInEdit`) are retired for one hook (`web/src/lib/editurl.ts`); the param is a consume-once intent (deriving the mode would re-enter edit in the Cancel gap), a blade honors it only when the URL also names it, and the name-to-uuid redirect keeps its query string. The groups blade keeps its one-shot until it gains an id deep link |
 | [ADR-0121](#adr-0121-the-console-ships-its-own-typefaces) | 2026-08-15 | Accepted | The console serves IBM Plex Sans and JetBrains Mono from its own origin (vendored under `web/public/fonts/`, embedded in the binary, declared by a generated `web/src/fonts.css`) instead of linking a font CDN: rendering correctly stops depending on reaching a third party, which is the deployment this product targets and was also the cause of a docs capture writing fallback-font PNGs the zero-tolerance freshness gate reported as UI drift. Every script the CDN served is vendored (54 files, 1,005,028 bytes) so no operator string renders differently than before; `font-display: block` replaces `swap`; the capture now aborts rather than photograph a fallback render; `DOCS_SHOTS_PROXY` retires |
+| [ADR-0122](#adr-0122-a-commissioning-gap-is-not-a-failure-so-the-verdict-domain-gains-incomplete) | 2026-08-09 | Accepted | The verdict domain gains a fourth value: a role short because its hardware was never installed reads `incomplete` (ranked between healthy and degraded) rather than its declared `impact`, which now describes failure only; `impact: none` stays healthy when empty and a losing alternate's roles contribute nothing. No migration. Amends ADR-0050 |
+| [ADR-0123](#adr-0123-the-word-for-everything-an-install-manages-is-fleet) | 2026-08-14 | Accepted | The totality-of-managed-things noun becomes **fleet**, everywhere at once (code identifiers, routes, docs prose, glossary, scope grammar, nav): a fleet of SYSTEMS, uniform units maintained at scale against a standard, stationed across the location tree. The old noun retires to the docs denylist. Ruled all-in rather than surface-only: two words for one referent is a permanent translation tax |
+| [ADR-0124](#adr-0124-on-the-fleet-canvas-health-colour-is-exceptional-and-identity-colour-is-the-ground) | 2026-08-15 | Superseded | A healthy dot on the fleet canvas wears its system's identity hue (the `.og-system-dot` OKLCH recipe over `hueFor`); incomplete, degraded and outage dots wear the semantic verdict colours; an unnarrowed verdict wears `--og-unknown`. Healthy is the wallpaper and the wallpaper is identity, so failures are the only status-coloured pixels. Diverges from the prototype, which had no per-system hue |
+| [ADR-0125](#adr-0125-a-band-shows-the-locations-recorded-verdict-not-the-consoles-fold) | 2026-08-15 | Accepted | A fleet band's verdict chip renders the location's server-recorded verdict, the same row its detail page reads, never the console's fold over in-scope clusters; the fold remains as a named derivation. A band disagreeing with its own detail one click apart is a visible contradiction, and the fold covers only what the caller may read |
+| [ADR-0126](#adr-0126-the-zoom-face-is-a-url-fact-on-the-identity-routes) | 2026-08-15 | Accepted | The deeper zooms render at the identity routes behind a query param (`/locations/{id}?zoom=1`), the inventory detail staying the default face: ADR-0120's mode-rides-the-URL precedent applied to the fork where "the zoom is a function of which entity the URL names" and "the four tables stay live and untouched" collided at one address. The param may become the default later, and the table face may retire once the medium is judged |
 
 ## Entries
 
@@ -5875,3 +5880,120 @@ interface create form, since that name is the platform's to mint.
   The screenshots recaptured **byte-identical**, which is the check on the vendoring: the files
   served are the same faces at the same version the browser had been fetching, so this changed no
   pixel of the console.
+### ADR-0122: A commissioning gap is not a failure, so the verdict domain gains `incomplete`
+
+- **Date:** 2026-08-09 | **Status:** Accepted | **Pages:** [health](/architecture/health/),
+  [glossary](/architecture/glossary/)
+- **Decision:** the verdict domain becomes **`healthy` < `incomplete` < `degraded` < `outage`**.
+  A role short of quorum because its assigned hardware is **failing** contributes its declared
+  `impact`, unchanged; a role short because the hardware was **never installed** contributes
+  `incomplete`. A role that is both reads its `impact`, the worse of the two by rank. A role
+  declaring `impact: none` reads `healthy` when empty rather than `incomplete`, because a slot
+  whose failure does not matter has an absence that does not matter either. A role inside a
+  choice whose alternate did not win contributes nothing at all, `incomplete` included. No
+  migration: the enum lives in `internal/health` and the value persists as a string, so the only
+  storage-side change is the `health` property type's seeded `validation.enum`, which is boot-seed
+  reference data. Amends [ADR-0050](#adr-0050-health-is-a-recorded-transition-computed-from-the-alarm-capability-role-chain)'s
+  three-value domain; its transition-only recording, pure-package judgement, and worst-wins rollup
+  stand unrevised.
+- **Context:** the estate canvas ([#630](https://github.com/hyperscaleav/omniglass/issues/630))
+  paints one dot per component across the whole estate, and it was the surface that made the
+  three-value domain untenable. Most of a real estate is mid-commissioning for months, and under
+  the old rule every unstaffed role contributed its declared `impact`, so a half-built site
+  rendered as a wall of red indistinguishable from a site on fire. A colour an operator learns to
+  ignore is worse than no colour. Ranking the new value between `healthy` and `degraded` is what
+  makes it useful in both directions: a gap is visible above a finished room and invisible beneath
+  anything actually broken, so neither reading is drowned by the other. The `impact: none` carve-out
+  came out of the existing suite rather than the design: `TestImpactMapping` and
+  `TestSystemVerdictWorstWins` both asserted that an unstaffed harmless role stays harmless, and
+  they were right, since reporting a gap there would put a permanent `incomplete` on every
+  confidence monitor nobody ever intends to staff, reintroducing the saturation this decision
+  exists to remove. Rejected: a separate non-health field for commissioning state (two axes to
+  roll up, two badges to reconcile, and the estate view would have to render both to answer one
+  question); and reusing `unknown`, which already means "no health has been read" and would
+  conflate never-measured with never-installed.
+- **Tracked under** epic [#630](https://github.com/hyperscaleav/omniglass/issues/630), slice
+  [#631](https://github.com/hyperscaleav/omniglass/issues/631).
+### ADR-0123: The word for everything an install manages is `fleet`
+
+- **Date:** 2026-08-14 | **Status:** Accepted | **Pages:** [glossary](/architecture/glossary/),
+  [ui](/architecture/ui/), [health](/architecture/health/), [identity and access](/architecture/identity-access/)
+- **Decision:** the totality an install manages is a **fleet**: the systems are the fleet's
+  units, the components staff them, and the location tree is the geography they are stationed
+  across. The rename is all-in, in one sweep: Go identifiers (`FleetProjection`, `FleetView`),
+  the view route (`/views/fleet`), the console surface and its nav entry, docs prose, the
+  glossary, and the scope grammar (`fleet-wide`). The old noun joins the docs denylist; the
+  decision log and build log keep it as the historical record they are.
+- **Context:** the product's differentiation is the SYSTEM model: every competitor manages
+  rooms or devices, and none can say "a fleet of systems" because none has one. A fleet is
+  uniform units maintained at scale against a type, which is exactly a standard-conforming
+  system: standard as airframe type, system as tail number, slots as parts, verdict as
+  maintenance state, location as base. The old word was accurate and industry-anchored
+  (UK/enterprise IT usage) but reads as property and governance rather than operation, and the
+  surface being named is operated daily. Two costs are accepted with eyes open: in
+  observability vocabulary a fleet often means the COLLECTOR fleet (Elastic Fleet, Datadog
+  Fleet Automation), so the word will occasionally be misread as node management; and the noun
+  names the units better than the buildings, which the location tree keeps first-class
+  regardless. Surface-only renaming (a fresh label over the old domain word) was rejected as a
+  permanent translation tax between nav, glossary, and API vocabulary.
+- **Tracked under** epic [#630](https://github.com/hyperscaleav/omniglass/issues/630), ahead of
+  slice [#633](https://github.com/hyperscaleav/omniglass/issues/633).
+### ADR-0124: On the fleet canvas, health colour is exceptional and identity colour is the ground
+
+- **Date:** 2026-08-15 | **Status:** Superseded (2026-08-16, by the amendment below) | **Pages:** [ui](/architecture/ui/), [health](/architecture/health/)
+- **Amendment (2026-08-16):** reversed for operator clarity, on the architect's review of the
+  shipped canvas against the design it was built from. A dot's colour is its component's
+  verdict and nothing else (one channel, one meaning; a healthy dot is green), and the
+  system's verdict rides the **cluster outline**, neutral when healthy and tinted when not,
+  which is what the design's per-system card border was. Identity hue was this decision's
+  own invention, not the design's, and it made a colour mean two things. A side effect: the
+  canvas raster is now deterministic per seed, so the screenshot gate no longer masks it.
+  `hueFor` stays for the surfaces that use it as identity (list rows, health panels).
+- **Decision:** a **healthy** component dot wears its system's identity hue, through the exact
+  recipe the DOM's `.og-system-dot` already uses (`oklch(var(--tag-l) var(--tag-c) <hueFor>)`),
+  so a canvas dot and a DOM dot can never drift. **Incomplete, degraded and outage** dots wear
+  the semantic verdict colours (`--og-incomplete`, `--color-warning`, `--color-error`); a verdict
+  the console cannot narrow wears `--og-unknown` and never a substituted word. `hueFor`'s
+  reserved OKLCH bands already guarantee an identity hue cannot land inside a status band, which
+  is the invariant that makes the mixture legible.
+- **Context:** the slice inherited a contradiction: "coloured by state" beside "takes its hue
+  from `system_color`", and the prototype resolved it a third way (no per-system hue at all).
+  Ruled during definition true-up: a healthy fleet should read as identity-coloured wallpaper
+  with the clusters telling themselves apart, and anything not healthy should be the only
+  status-coloured pixels on screen, which is what makes a failure pop at fleet scale. The paint
+  plan (`paintGroups`) pins the rule at the unit tier per group, not per pixel.
+- **Tracked under** epic [#630](https://github.com/hyperscaleav/omniglass/issues/630), slice
+  [#633](https://github.com/hyperscaleav/omniglass/issues/633).
+
+### ADR-0125: A band shows the location's recorded verdict, not the console's fold
+
+- **Date:** 2026-08-15 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/), [health](/architecture/health/)
+- **Decision:** a fleet band's verdict chip renders `FleetLocationBody.verdict`, the location's
+  own server-recorded row, resolved through the grouping's optional `recordedVerdict` seam. The
+  console's fold over in-scope clusters (`Band.verdict`, worst-wins) stays available, named for
+  what it is, and no chip renders it.
+- **Context:** the band navigates to `/locations/{id}`, whose badge reads the same recorded row;
+  a band that says healthy beside a detail page that says outage, one click apart, is a visible
+  contradiction. The fold also covers only the clusters the caller may read, so under a narrow
+  scope it is not the location's verdict at all. The console-computes-no-verdict rule
+  (`web/src/lib/health.ts`) already pointed here; this records the band as a consumer of it.
+- **Tracked under** epic [#630](https://github.com/hyperscaleav/omniglass/issues/630), slice
+  [#633](https://github.com/hyperscaleav/omniglass/issues/633).
+### ADR-0126: The zoom face is a URL fact on the identity routes
+
+- **Date:** 2026-08-15 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/)
+- **Decision:** the location, system and component zooms render at the identity routes the epic
+  already ruled (`/locations/{id}`, `/systems/{id}`, `/components/{id}`) behind a query param
+  (`?zoom=1`), with the inventory detail remaining each route's default face. A fleet-canvas
+  drill carries the param; deep links, refresh and the back button behave as ADR-0120
+  established for the edit face, which is this decision's precedent verbatim.
+- **Context:** the epic ruled both "the zoom is a function of which entity the URL names" and
+  "the four tables stay live and untouched while the medium is explored", and the two collided
+  at one address: the inventory detail owns `/locations/{id}` today. The architect's ruling
+  (2026-08-15): the zoom was originally intended to replace the old views, and the param is the
+  right first step; it may become the default later, with the table face retiring entirely once
+  the medium is judged. Rejected: a location param under `/fleet` (a second address for the same
+  row, which the epic forbids) and replacing the detail now (falsifies the tables-stay ruling
+  mid-exploration).
+- **Tracked under** epic [#630](https://github.com/hyperscaleav/omniglass/issues/630), ahead of
+  slice [#635](https://github.com/hyperscaleav/omniglass/issues/635).

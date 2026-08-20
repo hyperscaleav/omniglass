@@ -25,7 +25,7 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // Event Types: the occurrence-key catalog (Catalog > Events), the twin of the
 // Properties catalog. An event type names a discrete happening (call-started,
 // cable-unplugged) that an occurrence is typed by. Official event types
-// are read-only; custom ones are operator-created. Estate-wide reference data, not scoped.
+// are read-only; custom ones are operator-created. Fleet-wide reference data, not scoped.
 
 function originBadge(official: boolean): JSX.Element {
   return official

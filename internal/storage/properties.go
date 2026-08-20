@@ -44,7 +44,7 @@ func scanPropertyType(row pgx.Row) (*PropertyType, error) {
 	return &prop, nil
 }
 
-// GetPropertyType returns one property by name. The registry is estate-wide reference
+// GetPropertyType returns one property by name. The registry is fleet-wide reference
 // data, so there is no scope injection.
 func (p *PG) GetPropertyType(ctx context.Context, name string) (*PropertyType, error) {
 	if err := RejectAddressForm("property_type", name); err != nil {

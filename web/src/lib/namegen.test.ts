@@ -66,7 +66,7 @@ describe("bucketPhrase", () => {
   it("says which parentless bucket it is, per kind", () => {
     expect(bucketPhrase("component", { under: "none", id: "" }, [])).toBe("among the unplaced components");
     expect(bucketPhrase("system", { under: "none", id: "" }, [])).toBe("among the unplaced systems");
-    expect(bucketPhrase("location", { under: "none", id: "" }, [])).toBe("at the estate root");
+    expect(bucketPhrase("location", { under: "none", id: "" }, [])).toBe("at the fleet root");
   });
 
   it("falls back to the bucket kind when the path cannot be resolved", () => {

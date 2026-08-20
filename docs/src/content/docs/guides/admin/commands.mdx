@@ -6,8 +6,8 @@ description: "The Commands catalog and the invocations behind it: the canonical 
 import SeededSet from '../../../../components/SeededSet.astro';
 
 **Catalog, under Actions: Commands** (with `command_type:read`, covered by every viewer's `*:read` floor) is
-the estate's **"do" catalog**: the directory of what a component can be **told**. The other
-catalogs name what the estate knows (a [property](/guides/admin/properties/) is a value, a
+the fleet's **"do" catalog**: the directory of what a component can be **told**. The other
+catalogs name what the fleet knows (a [property](/guides/admin/properties/) is a value, a
 [metric](/guides/admin/metrics/) is a quantity) and what happened (an
 [event](/guides/admin/events/) is an occurrence); a **command type** names an instruction
 (`set-input`, `reboot`) and carries the two facts that belong to the driver, not the abstract
@@ -22,7 +22,7 @@ The console page lives at `/command-types`, and the nav says why: the address re
 `/commands` for the command history surface when it lands, so the catalog keeps the type-named
 route.
 
-The catalog is estate-wide reference data, not a scoped resource, so every command type is
+The catalog is fleet-wide reference data, not a scoped resource, so every command type is
 visible to every reader; the write gates decide who may change it.
 
 - The directory lists every command type sorted by name, each showing its **name** (the

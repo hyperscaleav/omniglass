@@ -28,7 +28,7 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // of the Properties page. A metric type is a canonical numeric series a sample
 // measures, carrying the facts the property lane never holds: a unit and a
 // precision. Official rows are read-only; custom rows are
-// operator-created. The catalog is estate-wide reference data, not a scoped
+// operator-created. The catalog is fleet-wide reference data, not a scoped
 // resource, and every affordance gates on metric_type, the resource the API
 // stamps.
 

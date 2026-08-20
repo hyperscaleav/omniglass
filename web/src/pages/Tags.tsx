@@ -137,7 +137,7 @@ function TagBladeBody(p: { name: string }): JSX.Element {
   async function removeTag() {
     const t = tag();
     if (!t) return;
-    if (!confirm(`Delete tag "${t.name}"? Its bindings across the estate are removed too.`)) return;
+    if (!confirm(`Delete tag "${t.name}"? Its bindings across the fleet are removed too.`)) return;
     setErr(null);
     try {
       await deleteTag(t.name);

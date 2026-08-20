@@ -120,7 +120,7 @@ type createGrantInput struct {
 	ID   string `path:"id" doc:"The principal, addressed by its uuid or a human username"`
 	Body struct {
 		Role      string `json:"role" minLength:"1" doc:"A role id (viewer, operator, admin, owner, or a custom role)"`
-		ScopeKind string `json:"scope_kind" enum:"all,location,system,component" doc:"The scope kind; 'all' confers the whole estate (group-as-scope is unbuilt and not offered)"`
+		ScopeKind string `json:"scope_kind" enum:"all,location,system,component" doc:"The scope kind; 'all' confers the whole fleet (group-as-scope is unbuilt and not offered)"`
 		ScopeID   string `json:"scope_id,omitempty" doc:"The scope root id; omit for the all scope"`
 		ScopeOp   string `json:"scope_op,omitempty" enum:"subtree,subtree_excl_root,self" doc:"How the scope root matches the tree: subtree (root + descendants, the default), subtree_excl_root (descendants only for update/delete, root kept for read/create), or self (the root row only). Moot for the all scope."`
 	}
@@ -446,7 +446,7 @@ func registerPrincipalRoutes(api huma.API, a *authenticator, gw storage.Gateway)
 		}
 		// Scope guard (like act-as): a reset yields the target's authority resolved from
 		// the target, so the caller's ALL-SCOPE grants alone must cover the target; a
-		// capability held only at a narrow scope must not become estate-wide via a reset.
+		// capability held only at a narrow scope must not become fleet-wide via a reset.
 		actor, _ := principalFrom(ctx)
 		if ok, err := a.allScopeCovers(ctx, actor, target); err != nil {
 			return nil, huma.Error500InternalServerError("reset password")

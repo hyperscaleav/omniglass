@@ -107,7 +107,7 @@ export async function moveLocation(name: string, parent: string): Promise<Locati
 export type NameCheck = { valid: boolean; available: boolean; reason?: string };
 
 // checkLocationName checks availability against a placement bucket (#627:
-// name uniqueness is scoped to placement, not the whole estate): under the
+// name uniqueness is scoped to placement, not the whole fleet): under the
 // given parent, or among roots when parent is omitted. A rename check
 // passes the location's OWN current parent, since a rename does not move it.
 export async function checkLocationName(name: string, parent?: string): Promise<NameCheck> {

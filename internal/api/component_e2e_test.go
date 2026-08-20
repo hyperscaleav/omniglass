@@ -311,7 +311,7 @@ func TestGetComponentByAmbiguousNameIs409(t *testing.T) {
 // ruling 2 (scope decides before ambiguity) over the CREATE path, not just
 // the read path TestGetComponentByAmbiguousNameIs409 already covers: a
 // deploy principal scoped to one component's subtree posts a bare parent
-// name that is ambiguous ESTATE-WIDE but unique within its own scope, and the
+// name that is ambiguous FLEET-WIDE but unique within its own scope, and the
 // create must resolve to the in-scope row cleanly (not 409, not a coin-flip
 // onto the wrong "shared") rather than the pre-fix scope-blind resolve that
 // would either land on the wrong parent or refuse a create that should
@@ -376,7 +376,7 @@ func TestComponentCreateResolvesParentWithinScopeAndNeverLeaksCandidates(t *test
 	c.do(deployTok, http.MethodGet, "/components/"+outOfScopeShared.ID, nil, http.StatusNotFound)
 
 	// One in-scope "shared" (wingA/shared): the bare name is ambiguous
-	// estate-wide (this one plus the out-of-scope root), but unique within
+	// fleet-wide (this one plus the out-of-scope root), but unique within
 	// the caller's own scope, so the create resolves cleanly onto it.
 	var leaf struct {
 		ID       string `json:"id"`

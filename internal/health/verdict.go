@@ -1,4 +1,4 @@
-// Package health computes an estate's health verdict from resolved inputs. The
+// Package health computes a fleet's health verdict from resolved inputs. The
 // rollup is a pure function on purpose: the subtle cases (quorum boundaries, a
 // role nobody staffed, a component an alarm has taken down) are where this
 // gets quietly wrong, and they are far easier to pin down in a unit test than
@@ -10,8 +10,20 @@ package health
 // nothing wrong needs no special casing.
 type Verdict int
 
+// The order IS the severity ranking: Worse and RollUp compare these values
+// directly, so a new verdict is inserted at its rank rather than appended.
+// Incomplete sits between Healthy and Degraded because a commissioning gap is
+// worth surfacing above a clean system and worth burying under anything
+// actually broken.
 const (
 	Healthy Verdict = iota
+	// Incomplete is a role short of quorum because the hardware was never
+	// installed, rather than because installed hardware is failing. No alarm
+	// will ever fire for it: nothing exists yet to alarm. It is deliberately
+	// not a failure, because most of a real fleet is mid-commissioning for
+	// months and folding that into Outage paints the whole canvas red and
+	// teaches an operator to ignore it.
+	Incomplete
 	Degraded
 	Outage
 )
@@ -22,19 +34,23 @@ func (v Verdict) String() string {
 		return "outage"
 	case Degraded:
 		return "degraded"
+	case Incomplete:
+		return "incomplete"
 	default:
 		return "healthy"
 	}
 }
 
 // ParseVerdict reads a recorded verdict back. An unrecognized value is Healthy,
-// so a stray row cannot make an estate look broken.
+// so a stray row cannot make a fleet look broken.
 func ParseVerdict(s string) Verdict {
 	switch s {
 	case "outage":
 		return Outage
 	case "degraded":
 		return Degraded
+	case "incomplete":
+		return Incomplete
 	default:
 		return Healthy
 	}
@@ -139,13 +155,38 @@ func (r Role) Spare() int {
 	return 0
 }
 
-// Contributes is the verdict this role hands its system: its declared impact
-// when impaired, nothing when satisfied.
+// Down counts the assigned components that are not currently occupying the
+// role, which after #626 is exactly those whose own verdict is Outage.
+func (r Role) Down() int {
+	return len(r.Assigned) - r.Satisfying()
+}
+
+// Contributes is the verdict this role hands its system, and it distinguishes
+// two different ways of being short.
+//
+// A role whose assigned hardware is FAILING contributes what the role declared
+// that failure means: its Impact. A role that is short because the hardware was
+// never installed contributes Incomplete instead. Impact answers "what does it
+// mean when this breaks", and an empty slot has not broken; treating the two
+// alike would let a room that was never commissioned page somebody.
+//
+// The failing case is tested first, so a role that is BOTH under-installed and
+// partly alarming reports the live failure. That is the worse of the two by
+// rank, and the actionable one: somebody is already on their way to the missing
+// box, and nobody is on their way to the dead one.
+// A role that declares its own failure harmless (impact none) declares its own
+// absence harmless too: reporting Incomplete for one would put a permanent
+// commissioning gap on every confidence monitor nobody ever intends to staff,
+// which is the same saturation Incomplete exists to prevent. An unrecognized
+// impact still reads as a gap rather than harmless, matching ImpactVerdict.
 func (r Role) Contributes() Verdict {
-	if !r.Impaired() {
-		return Healthy
+	if r.Down() > 0 && r.Impaired() {
+		return ImpactVerdict(r.Impact)
 	}
-	return ImpactVerdict(r.Impact)
+	if len(r.Assigned) < r.want() && ImpactVerdict(r.Impact) != Healthy {
+		return Incomplete
+	}
+	return Healthy
 }
 
 // Alternate is one way a choice can be satisfied: a named group of roles that

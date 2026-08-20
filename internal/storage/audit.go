@@ -42,7 +42,7 @@ const auditMaxLimit = 500
 
 // ListAuditLog returns recent audit rows, newest first, resolving each actor to
 // its identifier. It is the read side of the audit trail; writes go through
-// writeAuditRes (estate mutations, in the caller's tx) and WriteAuthEvent (auth
+// writeAuditRes (fleet mutations, in the caller's tx) and WriteAuthEvent (auth
 // events, no tx).
 //
 // Live first, then the snapshot the write denormalized. The live resolution is

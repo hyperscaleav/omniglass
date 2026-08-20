@@ -717,7 +717,7 @@ func resolveTypeFacts(ctx context.Context, q querier, id uuid.UUID) (stem, icon,
 }
 
 // TypeIsWithin reports whether id is ancestor itself or a descendant of it,
-// walking parent_id toward the root: self-inclusive, matching the estate
+// walking parent_id toward the root: self-inclusive, matching the fleet
 // tree's other descendant checks (e.g. locationIsDescendant).
 func (p *PG) TypeIsWithin(ctx context.Context, id, ancestor uuid.UUID) (bool, error) {
 	cur := id

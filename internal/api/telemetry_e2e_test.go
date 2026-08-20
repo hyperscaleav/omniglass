@@ -286,7 +286,7 @@ func TestTelemetryPushAPI(t *testing.T) {
 	}, http.StatusAccepted)
 
 	// PRIVILEGE ESCALATION, pinned closed. A principal can easily hold a WIDE read
-	// and a NARROW push: viewer over the whole estate plus operator on one component
+	// and a NARROW push: viewer over the whole fleet plus operator on one component
 	// is an ordinary shape. If the route fenced the write with the component:read
 	// scope, this caller could push telemetry to any component it can see, which is
 	// everything. The fence must be the scope that actually confers telemetry:push.

@@ -17,7 +17,7 @@ import (
 // so it satisfies `^[a-z0-9][a-z0-9-]*$` exactly.
 func TestNamesCannotBeUUIDShaped(t *testing.T) {
 	uuids := []string{
-		"019f8754-461f-7b82-b5f2-fc4bbe1c3765", // a real one from the dev estate
+		"019f8754-461f-7b82-b5f2-fc4bbe1c3765", // a real one from the dev fleet
 		"00000000-0000-0000-0000-000000000000", // the nil uuid
 		"019F8754-461F-7B82-B5F2-FC4BBE1C3765", // uppercase, already rejected by the slug rule
 	}
@@ -30,7 +30,7 @@ func TestNamesCannotBeUUIDShaped(t *testing.T) {
 }
 
 // The rule has to be narrow. Hyphenated hex-looking names are ordinary in an AV
-// estate and must keep working; only the exact uuid shape is refused.
+// fleet and must keep working; only the exact uuid shape is refused.
 func TestHexLookingNamesAreStillFine(t *testing.T) {
 	fine := []string{
 		"boardroom-a",

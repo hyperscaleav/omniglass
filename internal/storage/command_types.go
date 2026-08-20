@@ -90,7 +90,7 @@ func (p *PG) UpsertCommandType(ctx context.Context, ct CommandType) error {
 	return nil
 }
 
-// ListCommandTypes returns every registered command type. Estate-wide reference data.
+// ListCommandTypes returns every registered command type. Fleet-wide reference data.
 func (p *PG) ListCommandTypes(ctx context.Context) ([]CommandType, error) {
 	rows, err := p.pool.Query(ctx, `select `+commandTypeCols+` from command_type`)
 	if err != nil {

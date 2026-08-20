@@ -8,7 +8,7 @@ import { ROUTE_MANIFEST } from "../src/lib/routemanifest";
 // through the well-formed-unknown uuid, which is a render worth having.
 //
 // Console noise policy (no silent caps): a resource-load failure line
-// ("Failed to load resource ...") is NOT collected, because an empty estate
+// ("Failed to load resource ...") is NOT collected, because an empty fleet
 // legitimately 404s optional fetches (an avatar, an empty registry); every
 // filtered line is printed so a sweep of the output still sees it. Everything
 // else that reaches the console as an error, and every uncaught page error,

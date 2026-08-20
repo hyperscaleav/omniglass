@@ -370,10 +370,10 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
                 const holder = heldElsewhere(c);
                 return (
                   // The uuid, not the name (#627 review, the pre-existing
-                  // surface): assignRole resolves the component estate-wide
+                  // surface): assignRole resolves the component fleet-wide
                   // via scopedByName (internal/storage/roles.go), which
                   // dual-accepts a uuid unambiguously (ADR-0062) but 409s an
-                  // estate-wide-ambiguous name regardless of this system's
+                  // fleet-wide-ambiguous name regardless of this system's
                   // own scope. A bare name here would contradict the
                   // duplicate-named-component promise Task 15 already made
                   // on every other write in this console.

@@ -16,11 +16,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// estateWriterPerms is the estate authority both principals in the platform-tier
+// fleetWriterPerms is the fleet authority both principals in the platform-tier
 // test hold: everything needed to write a variable, a secret, a tag value, and a
 // settings namespace. The only difference between the two roles built from it is
 // platform:*, which is exactly what the tier gate turns on.
-var estateWriterPerms = []string{
+var fleetWriterPerms = []string{
 	"variable:*",
 	"secret:>",
 	"tag:*",
@@ -29,8 +29,8 @@ var estateWriterPerms = []string{
 }
 
 // TestPlatformTierNeedsItsOwnPermission pins the separation the platform tier
-// exists for: an ALL scope is full-estate reach, not install-wide authority. A
-// principal holding every estate permission at the all scope must be refused at
+// exists for: an ALL scope is full-fleet reach, not install-wide authority. A
+// principal holding every fleet permission at the all scope must be refused at
 // the least-specific tier (variables, secrets, tag bindings, settings) and
 // allowed everywhere below it; the same principal plus platform:* is allowed at
 // the tier too. Without the second gate, the first half of every pair passes,
@@ -49,18 +49,18 @@ func TestPlatformTierNeedsItsOwnPermission(t *testing.T) {
 
 	// Both custom roles must exist before the first authenticated request, which
 	// is what loads the role index (lazy, once per handler).
-	insertRole(t, ctx, dsn, "estate-writer", estateWriterPerms)
-	insertRole(t, ctx, dsn, "install-writer", append(append([]string{}, estateWriterPerms...), "platform:*"))
+	insertRole(t, ctx, dsn, "fleet-writer", fleetWriterPerms)
+	insertRole(t, ctx, dsn, "install-writer", append(append([]string{}, fleetWriterPerms...), "platform:*"))
 
 	ownerTok := bootstrapOwnerTok(t, ctx, gw)
-	estateTok := principalWithGrants(t, ctx, dsn, "estate-writer-svc", []grant{{role: "estate-writer", scopeKind: "all"}})
+	fleetTok := principalWithGrants(t, ctx, dsn, "fleet-writer-svc", []grant{{role: "fleet-writer", scopeKind: "all"}})
 	installTok := principalWithGrants(t, ctx, dsn, "install-writer-svc", []grant{{role: "install-writer", scopeKind: "all"}})
 
 	srv := httptest.NewServer(api.NewHandler(gw))
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	// The estate the below-tier writes land on, and a tag key to bind.
+	// The fleet the below-tier writes land on, and a tag key to bind.
 	c.do(ownerTok, http.MethodPost, "/locations", map[string]any{"name": "ceres", "location_type": "campus"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/tags", map[string]any{"name": "environment"}, http.StatusCreated)
 	// A tier variable and a tier secret the update and delete legs act on, placed
@@ -71,36 +71,36 @@ func TestPlatformTierNeedsItsOwnPermission(t *testing.T) {
 		secretReq("tier-auth", "platform", "", "public"), http.StatusCreated))
 
 	// Refused at the tier: create, update, and delete of a variable.
-	c.do(estateTok, http.MethodPost, "/variables", varReq("denied-at-tier", "string", "platform", "", "x"), http.StatusForbidden)
-	c.do(estateTok, http.MethodPatch, "/variables/"+tierVarID, map[string]any{"value": 99}, http.StatusForbidden)
-	c.do(estateTok, http.MethodDelete, "/variables/"+tierVarID, nil, http.StatusForbidden)
+	c.do(fleetTok, http.MethodPost, "/variables", varReq("denied-at-tier", "string", "platform", "", "x"), http.StatusForbidden)
+	c.do(fleetTok, http.MethodPatch, "/variables/"+tierVarID, map[string]any{"value": 99}, http.StatusForbidden)
+	c.do(fleetTok, http.MethodDelete, "/variables/"+tierVarID, nil, http.StatusForbidden)
 
-	// Allowed below the tier: the same principal owns the estate outright.
-	belowID := createdID(t, c.do(estateTok, http.MethodPost, "/variables",
+	// Allowed below the tier: the same principal owns the fleet outright.
+	belowID := createdID(t, c.do(fleetTok, http.MethodPost, "/variables",
 		varReq("allowed-below", "string", "location", "ceres", "x"), http.StatusCreated))
-	c.do(estateTok, http.MethodPatch, "/variables/"+belowID, map[string]any{"value": "y"}, http.StatusOK)
-	c.do(estateTok, http.MethodDelete, "/variables/"+belowID, nil, http.StatusNoContent)
+	c.do(fleetTok, http.MethodPatch, "/variables/"+belowID, map[string]any{"value": "y"}, http.StatusOK)
+	c.do(fleetTok, http.MethodDelete, "/variables/"+belowID, nil, http.StatusNoContent)
 
 	// The same split on secrets, across all three verbs: the tier gate on update and
 	// delete lives in the Gateway (only the stored row knows its tier), so it needs
 	// its own coverage rather than riding on the create leg.
-	c.do(estateTok, http.MethodPost, "/secrets", secretReq("tier-snmp", "platform", "", "public"), http.StatusForbidden)
-	c.do(estateTok, http.MethodPatch, "/secrets/"+tierSecretID, secretFieldsReq("rotated"), http.StatusForbidden)
-	c.do(estateTok, http.MethodDelete, "/secrets/"+tierSecretID, nil, http.StatusForbidden)
+	c.do(fleetTok, http.MethodPost, "/secrets", secretReq("tier-snmp", "platform", "", "public"), http.StatusForbidden)
+	c.do(fleetTok, http.MethodPatch, "/secrets/"+tierSecretID, secretFieldsReq("rotated"), http.StatusForbidden)
+	c.do(fleetTok, http.MethodDelete, "/secrets/"+tierSecretID, nil, http.StatusForbidden)
 
 	// Allowed below the tier, on the same three verbs: the gate is about the tier,
 	// not about the principal.
-	belowSecretID := createdID(t, c.do(estateTok, http.MethodPost, "/secrets",
+	belowSecretID := createdID(t, c.do(fleetTok, http.MethodPost, "/secrets",
 		secretReq("below-snmp", "location", "ceres", "public"), http.StatusCreated))
-	c.do(estateTok, http.MethodPatch, "/secrets/"+belowSecretID, secretFieldsReq("rotated"), http.StatusOK)
-	c.do(estateTok, http.MethodDelete, "/secrets/"+belowSecretID, nil, http.StatusNoContent)
+	c.do(fleetTok, http.MethodPatch, "/secrets/"+belowSecretID, secretFieldsReq("rotated"), http.StatusOK)
+	c.do(fleetTok, http.MethodDelete, "/secrets/"+belowSecretID, nil, http.StatusNoContent)
 
-	c.do(estateTok, http.MethodPost, "/tags/environment:setPlatform", map[string]any{"value": "prod"}, http.StatusForbidden)
-	c.do(estateTok, http.MethodPost, "/tags/environment:clearPlatform", nil, http.StatusForbidden)
-	c.do(estateTok, http.MethodPost, "/locations/ceres:setTag", map[string]any{"key": "environment", "value": "prod"}, http.StatusOK)
-	c.do(estateTok, http.MethodPatch, "/settings/ui", map[string]any{"theme": "omniglass-light"}, http.StatusForbidden)
-	c.do(estateTok, http.MethodDelete, "/settings/ui", nil, http.StatusForbidden)
-	c.do(estateTok, http.MethodPost, "/settings:restoreDefaults", nil, http.StatusForbidden)
+	c.do(fleetTok, http.MethodPost, "/tags/environment:setPlatform", map[string]any{"value": "prod"}, http.StatusForbidden)
+	c.do(fleetTok, http.MethodPost, "/tags/environment:clearPlatform", nil, http.StatusForbidden)
+	c.do(fleetTok, http.MethodPost, "/locations/ceres:setTag", map[string]any{"key": "environment", "value": "prod"}, http.StatusOK)
+	c.do(fleetTok, http.MethodPatch, "/settings/ui", map[string]any{"theme": "omniglass-light"}, http.StatusForbidden)
+	c.do(fleetTok, http.MethodDelete, "/settings/ui", nil, http.StatusForbidden)
+	c.do(fleetTok, http.MethodPost, "/settings:restoreDefaults", nil, http.StatusForbidden)
 
 	// platform:* opens every one of them, with no other change to the grant.
 	c.do(installTok, http.MethodPost, "/variables", varReq("allowed-at-tier", "string", "platform", "", "x"), http.StatusCreated)

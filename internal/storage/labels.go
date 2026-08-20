@@ -69,7 +69,7 @@ import (
 // LocationLabel is the location's READ LADDER, the label an operator typed or
 // the platform rendered, else the location's own name, not the raw column. A
 // location rule ships now (#657), so most rows carry a label; the ladder is
-// still what a rule reads, because an estate that predates the rule and has not
+// still what a rule reads, because a fleet that predates the rule and has not
 // run :recomputeLabels has none, and reading the column alone would render
 // placement as blank for every row in it.
 //
@@ -80,7 +80,7 @@ import (
 // now, and it was weaker than it looked even then: TypeName, ProductName,
 // VendorName, Stem and TypeAbbrev were already columns on OTHER rows (a
 // registry's), and so was the rule itself. What placement changes is that the
-// other row is now an ESTATE row an operator edits daily rather than a catalog
+// other row is now an FLEET row an operator edits daily rather than a catalog
 // row they edit rarely.
 //
 // The set of acts is therefore derived from the map rather than asserted, and
@@ -91,7 +91,7 @@ import (
 //     a location's rename or relabel or reclassify (the rows AT it), a system's
 //     reclassify (its member components), and every act that moves a
 //     component's primary membership.
-//   - Bounded only by the estate, so left to the preview-then-apply verb: a
+//   - Bounded only by the fleet, so left to the preview-then-apply verb: a
 //     rule changing at any tier, a classification row's label, stem or
 //     abbrev changing, and the acronym list changing. Rewriting 15,000 rows as
 //     a side effect of one catalog edit is exactly what the epic refuses to do
@@ -414,7 +414,7 @@ func componentLabelChain(ctx context.Context, q querier, productID string) (comp
 	// key, so it is free, and reading it unconditionally beats reading it only
 	// when the two more specific tiers turn out empty. This is a WRITE path
 	// every component create, rename, move, reclassify and reset goes through,
-	// and the estate this epic exists for has 15,000 components in it.
+	// and the fleet this epic exists for has 15,000 components in it.
 	var global string
 	err := q.QueryRow(ctx, `
 		select p.label, coalesce(v.label, ''), p.label_rule, p.component_type_id,

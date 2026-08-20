@@ -16,7 +16,7 @@ import (
 // the gateway's list paths query p.pool directly, so a counter wrapped around an
 // argument sees none of them and reports a flat, fictional number forever. A
 // zero here (or a one that turns out to be the ping) is the tell. ListLocations
-// against an empty estate is the tightest possible case: one scoped-list query,
+// against an empty fleet is the tightest possible case: one scoped-list query,
 // and no path attach at all, because attachPaths is skipped for an empty page.
 // If that reads 1, the tracer is on the connection the gateway actually used.
 func TestNewCountingDBObservesTheListPath(t *testing.T) {
@@ -37,7 +37,7 @@ func TestNewCountingDBObservesTheListPath(t *testing.T) {
 		t.Fatalf("a fresh database has %d locations, want none: this test's exact count assumes an empty page", len(locs))
 	}
 	if n := counter.N(); n != 1 {
-		t.Fatalf("ListLocations on an empty estate cost %d statements, want exactly 1: %q", n, counter.Summary())
+		t.Fatalf("ListLocations on an empty fleet cost %d statements, want exactly 1: %q", n, counter.Summary())
 	}
 	// Read against the RAW statement rather than the Summary, which truncates at
 	// a fixed width: this matched the summary's tail until a column was added to

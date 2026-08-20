@@ -366,7 +366,7 @@ func TestTheRenderedLabelStopsAtTheCallersReadScope(t *testing.T) {
 
 // TestTheRenderedLabelNeedsTheCreatePermission pins the gate itself. A viewer
 // holds read everywhere and create nowhere, so it can already see every label
-// in the estate; what it must not have is the create form's own route, because
+// in the fleet; what it must not have is the create form's own route, because
 // the gate has to be one fact the spec publishes rather than a judgement call
 // per route.
 func TestTheRenderedLabelNeedsTheCreatePermission(t *testing.T) {
@@ -413,7 +413,7 @@ func TestTheRenderedLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
-	// An unclassified system, and a room: the two states a shipped estate can
+	// An unclassified system, and a room: the two states a shipped fleet can
 	// reach through the pickers. EVERY shipped location type is in the second
 	// state now (ADR-0103), a floor included, so the location arm of this route
 	// answers 422 for the whole shipped vocabulary.
@@ -436,12 +436,12 @@ func TestTheRenderedLabelRefusesWhatANamelessCreateRefuses(t *testing.T) {
 	c.do(owner, http.MethodPost, "/locations:renderLabel", map[string]any{"location_type": "deck"}, http.StatusOK)
 }
 
-// TestTheRenderedLocationLabelIsTheShippedRulesInAShippedEstate documents the
+// TestTheRenderedLocationLabelIsTheShippedRulesInAShippedFleet documents the
 // state every location create form opens in, over the wire and end to end. It
 // used to be the empty one; #657 ships a location rule, so the form now shows
 // the label the create is about to store, and the two are asserted to be the
 // same string rather than assumed to be.
-func TestTheRenderedLocationLabelIsTheShippedRulesInAShippedEstate(t *testing.T) {
+func TestTheRenderedLocationLabelIsTheShippedRulesInAShippedFleet(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, dsn)
@@ -481,7 +481,7 @@ func TestTheRenderedLocationLabelIsTheShippedRulesInAShippedEstate(t *testing.T)
 //
 // It is a disclosure and not only an inconsistency. The answer carries the
 // lowest free ordinal, read from the bucket's sibling NAMES, so it reports which
-// names in the estate root are taken. The probe is chosen rather than fixed: a
+// names in the fleet root are taken. The probe is chosen rather than fixed: a
 // forked location type's name rule (ordinary since #703, and reachable with
 // location_type:create alone) supplies whatever stem the caller wants asked
 // about.

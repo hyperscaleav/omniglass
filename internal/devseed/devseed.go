@@ -1,4 +1,4 @@
-// Package devseed installs a small example estate (locations, users, grants, and a
+// Package devseed installs a small example fleet (locations, users, grants, and a
 // worked reachability check) for a dev environment, applied by `make dev` through the
 // trusted direct-DB lane. It is idempotent: rows that already exist are left untouched,
 // so it runs safely on every start.
@@ -41,6 +41,7 @@ type Doc struct {
 	Systems           []System          `yaml:"systems"`
 	Members           []Member          `yaml:"members"`
 	RoleAssignments   []RoleAssignment  `yaml:"role_assignments"`
+	Alarms            []Alarm           `yaml:"alarms"`
 	PropertyValues    []Property        `yaml:"property_values"`
 }
 
@@ -59,7 +60,7 @@ type System struct {
 	Location   string `yaml:"location"`
 }
 
-// Member binds a component into a system without giving it a job. The dev estate
+// Member binds a component into a system without giving it a job. The dev fleet
 // needs the case explicitly, because it is the one an assignment cannot produce: a
 // component that is in the room and accounted for while filling no declared role.
 // Both ends are fixture KEYS.
@@ -78,7 +79,7 @@ type RoleAssignment struct {
 	Component string `yaml:"component"`
 }
 
-// ProductProperty is one line the dev estate adds to a product's declared-property
+// ProductProperty is one line the dev fleet adds to a product's declared-property
 // contract: the schema half of the property primitive. Property names a row in the
 // boot-seed property catalog (which owns the data type and validation). Default is
 // decoded from YAML and, when present, re-encoded to jsonb (like a Variable); an
@@ -91,7 +92,7 @@ type ProductProperty struct {
 	Required bool   `yaml:"required"`
 }
 
-// Component is one example device placed in the estate. Key is the
+// Component is one example device placed in the fleet. Key is the
 // fixture-local identity; Name is optional and its absence asks the platform to
 // mint one from the product's resolved component_type stem. Location names a
 // fixture location BY KEY, resolved to its id at seed time (empty for an
@@ -104,6 +105,23 @@ type Component struct {
 	Label    string `yaml:"label"`
 	Product  string `yaml:"product"`
 	Location string `yaml:"location"`
+}
+
+// Alarm is one example condition standing open against a component, so a fresh
+// dev fleet has something actually wrong in it. Without one, every shortfall in
+// the seed is a commissioning gap and no surface ever renders a failure: the
+// fleet reads healthy and incomplete and nothing else, which teaches an
+// operator (and a reviewer looking at a screenshot) that the platform cannot
+// show a fault.
+//
+// DedupKey is the condition identity, so a re-raise on a second devseed run
+// returns the alarm already standing rather than a duplicate. That is what makes
+// this section idempotent without a read-before-write of its own.
+type Alarm struct {
+	Component string `yaml:"component"`
+	Severity  string `yaml:"severity"`
+	Message   string `yaml:"message"`
+	DedupKey  string `yaml:"dedup_key"`
 }
 
 // PropertyValue is one example literal a component declares over its product's
@@ -195,7 +213,7 @@ func Fixtures() (Doc, error) {
 	return doc, nil
 }
 
-// Run installs the example estate idempotently through the Storage Gateway.
+// Run installs the example fleet idempotently through the Storage Gateway.
 // actorID is the audit actor for the created rows (empty for a system actor). The
 // trusted lane grants the all scope; callers are the direct-DB commands, never a
 // request handler.
@@ -245,7 +263,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		}
 		// An empty Name asks the platform to name the row, which only a
 		// positional location_type can answer (#687), and no shipped one is
-		// (ADR-0103). So every location in this estate carries a name and the
+		// (ADR-0103). So every location in this fleet carries a name and the
 		// spec below always supplies one; the components and the systems are
 		// what demonstrate the generator.
 		spec := storage.LocationSpec{Name: l.Name, Label: l.Label, LocationType: l.Type}
@@ -370,7 +388,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 			return fmt.Errorf("devseed: create file %q: %w", f.Name, err)
 		}
 	}
-	// Product contract lines: an extra property the dev estate declares on a catalog
+	// Product contract lines: an extra property the dev fleet declares on a catalog
 	// product, so the contract editor comes up with an operator-added line beside the
 	// boot-seed ones. The product and the property catalog must already be seeded (the
 	// boot seed runs first). A default is encoded to jsonb like a variable; an omitted
@@ -390,7 +408,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		}
 	}
 
-	// Components: an example device placed in the estate, so the Components directory
+	// Components: an example device placed in the fleet, so the Components directory
 	// comes up populated. Locations and products must already be seeded (above, and the
 	// boot seed) for the placement and the product binding to resolve. None of them
 	// names itself, so none can be looked up by name on a second run: each is
@@ -526,6 +544,25 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 		}
 	}
 
+	// Alarms: raised last of the fleet writes, since the component must exist and
+	// be staffed for the alarm to reach anything above it. RaiseAlarm recomputes
+	// health in the same transaction, so the verdicts the console reads are moved
+	// by this the moment it lands, exactly as they would be by a real condition.
+	// The fixture references the component BY KEY, resolved to its uuid here:
+	// most components are platform-named, so the minted name is not the fixture's
+	// to know, and a bare name could be ambiguous across rooms anyway.
+	for _, a := range doc.Alarms {
+		compID, ok := compIDs[a.Component]
+		if !ok {
+			return fmt.Errorf("devseed: alarm references unknown component key %q", a.Component)
+		}
+		if _, err := gw.RaiseAlarm(ctx, actorID, compID, storage.AlarmSpec{
+			Severity: a.Severity, Message: a.Message, DedupKey: a.DedupKey,
+		}); err != nil {
+			return fmt.Errorf("devseed: raise alarm on %q: %w", a.Component, err)
+		}
+	}
+
 	// Property values: an override a component declares over its product's contract
 	// (last, since both the component and the contract line must exist first), so the
 	// effective-properties panel teaches direct-vs-inherited. The value is encoded to
@@ -553,7 +590,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	// id its fixture key resolved to: the bar's name is the platform's.
 	barID, ok := compIDs[eventComponent]
 	if !ok {
-		return fmt.Errorf("devseed: the event fixture component %q is not in the estate", eventComponent)
+		return fmt.Errorf("devseed: the event fixture component %q is not in the fleet", eventComponent)
 	}
 	if err := seedEvents(ctx, gw, barID); err != nil {
 		return err
@@ -562,7 +599,7 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	// (the ingest lane, ADR-0066) comes up populated. These are logs, not events.
 	displayID, ok := compIDs[logComponent]
 	if !ok {
-		return fmt.Errorf("devseed: the log fixture component %q is not in the estate", logComponent)
+		return fmt.Errorf("devseed: the log fixture component %q is not in the fleet", logComponent)
 	}
 	if err := seedLogs(ctx, gw, displayID); err != nil {
 		return err
@@ -697,16 +734,16 @@ func seedNodeLogs(ctx context.Context, gw storage.Gateway) error {
 // task and enough samples for the panel to render a live verdict + availability
 // strip.
 // reachComponent is a NAME the operator typed, and the one component in the
-// estate that is not platform-named: there is no DSP product in the shipped
+// fleet that is not platform-named: there is no DSP product in the shipped
 // catalog, so the generator would classify this box as a generic device and call
 // it device-2, which says less than the operator's own word for it. It is
-// therefore also the estate's worked example of the name pen's other state,
+// therefore also the fleet's worked example of the name pen's other state,
 // sitting beside six generated siblings. It needs no ancestry in it, because a
-// component's name is unique within its room rather than across the estate.
+// component's name is unique within its room rather than across the fleet.
 // reachLocation and reachNodeLocation are fixture KEYS.
 const (
 	reachComponent    = "dsp"
-	reachLocation     = "boardroom"
+	reachLocation     = "boardroom-a"
 	reachNodeLocation = "west"
 	reachNode         = "edge-hq"
 	reachHost         = "10.20.4.12"
@@ -741,11 +778,11 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string, l
 	all := scope.Set{All: true}
 	roomID, ok := locIDs[reachLocation]
 	if !ok {
-		return fmt.Errorf("devseed: the reachability location key %q is not in the estate", reachLocation)
+		return fmt.Errorf("devseed: the reachability location key %q is not in the fleet", reachLocation)
 	}
 	closetID, ok := locIDs[reachNodeLocation]
 	if !ok {
-		return fmt.Errorf("devseed: the reachability node location key %q is not in the estate", reachNodeLocation)
+		return fmt.Errorf("devseed: the reachability node location key %q is not in the fleet", reachNodeLocation)
 	}
 
 	// Sentinel: the first interface. Present means this block ran on an earlier start.

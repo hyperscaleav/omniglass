@@ -16,7 +16,7 @@ import (
 // in the property series like any other, distinguished by provenance='declared',
 // and its current value is the latest row per (type, owner arc, instance,
 // provenance). It carries the same owner exclusive-arc as metric and event:
-// OwnerKind picks the arc, OwnerID is the estate address (the owner's name).
+// OwnerKind picks the arc, OwnerID is the fleet address (the owner's name).
 type Property struct {
 	ID               string
 	OwnerKind        string
@@ -253,7 +253,7 @@ type ownerContract struct {
 	contractKeyCol string // the contract column matching the classifier
 	arcCol         string // the property arc column for this owner kind
 	// arcMatch is the instance column the arc points AT: the primary key for the
-	// three estate kinds, and still the name for a node until the collection tier
+	// three fleet kinds, and still the name for a node until the collection tier
 	// converts. Naming it here keeps the query shape identical across kinds.
 	arcMatch string
 	notFound error
@@ -416,10 +416,10 @@ func (p *PG) EffectiveProperties(ctx context.Context, ownerKind, ownerID string,
 // ownerInScope reports whether the named owner exists and falls within the given
 // scope, for any owner kind on the arc. An absent owner is that kind's not-found
 // sentinel (nothing to disclose); an existing but out-of-scope owner returns
-// inScope=false so each caller picks its own sentinel. A node is estate-wide (not
+// inScope=false so each caller picks its own sentinel. A node is fleet-wide (not
 // scope-tree scoped, like a principal), so it is in scope once it exists.
 // ownerArcValue resolves an owner reference to the value its arc column stores.
-// For every kind that is the entity's primary key: a uuid for the three estate
+// For every kind that is the entity's primary key: a uuid for the three fleet
 // kinds, principal_id for a node, so a rename never touches the arc.
 //
 // The reference itself may be either form, since scopedByName resolves a uuid or
@@ -459,7 +459,7 @@ func (p *PG) ownerArcValue(ctx context.Context, q querier, ownerKind, ownerRef s
 }
 
 // ownerArcValueInScope is ownerArcValue's scope-aware twin: ambiguity is
-// judged within s, not estate-wide (ruling 2, #627). Every caller that has
+// judged within s, not fleet-wide (ruling 2, #627). Every caller that has
 // already scope-checked the same (ownerKind, ownerRef) via ownerInScope must
 // resolve the arc value through THIS,
 // not the scope-blind ownerArcValue: ownerInScope narrowing to scope first
@@ -467,7 +467,7 @@ func (p *PG) ownerArcValue(ctx context.Context, q querier, ownerKind, ownerRef s
 // scope-blind, which is exactly how EffectiveProperties, EffectiveMetrics,
 // SetProperty, ClearProperty, IssueCommand, and CommandSettlement each
 // leaked an out-of-scope row's uuid on a name unique to the caller's own
-// scope but ambiguous estate-wide, even after ownerInScope's own fix.
+// scope but ambiguous fleet-wide, even after ownerInScope's own fix.
 // Nodes have no scope tree (node_name_key stays a plain global unique
 // constraint, so a bare node name is never ambiguous); this delegates to the
 // scope-blind resolve for that one kind.
@@ -518,7 +518,7 @@ func isOwnerNotFound(err error) bool {
 // The three tree kinds resolve through scopedByNameInScope, not
 // scopedByName-then-inScopeTree: architect ruling 2 (#627, "scope decides
 // before ambiguity does") requires ambiguity to be judged inside s, not
-// estate-wide, because ownerInScope's own read scope s is right here to
+// fleet-wide, because ownerInScope's own read scope s is right here to
 // filter with. errAsNotFound preserves the exact external contract (false,
 // nil for "exists but outside s", matching the pre-#627 shape every caller
 // already converts to its own not-found sentinel) while still letting a

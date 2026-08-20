@@ -41,7 +41,7 @@ Pin a commit first (`git rev-parse HEAD`); every cluster audits the same tree.
 Run one subagent per cluster, in parallel, each with the same posture: **read the page,
 then read the code it describes, and believe the code.** The clusters:
 
-1. **Estate + catalogs**: core-entities, groups, tags, glossary vs `internal/storage`,
+1. **Fleet + catalogs**: core-entities, groups, tags, glossary vs `internal/storage`,
    the seed YAMLs, and the migrations.
 2. **Values + config**: variables, settings, files, cascade vs `internal/storage`,
    `internal/settings`, `internal/blob`.

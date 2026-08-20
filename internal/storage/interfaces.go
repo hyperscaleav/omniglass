@@ -129,7 +129,7 @@ func componentInScope(ctx context.Context, q querier, componentID *string, set s
 // interfaceComponentID resolves an optional component reference (a name or a
 // uuid) to the component id the arc stores, within the caller's create scope
 // (resolveScopedRef, ruling 2, #627: ambiguity is judged inside create, not
-// estate-wide, so its one caller no longer needs a separate inScopeTree check
+// fleet-wide, so its one caller no longer needs a separate inScopeTree check
 // afterward, and never learns an out-of-scope component's uuid from a
 // collision). A nil reference stays nil (a server-hosted interface owns no
 // component); an absent one is the 422 not-found sentinel, one that exists

@@ -1,6 +1,6 @@
 ---
 title: Health, KPIs, and service levels
-description: "Health as a verdict rolled up from alarms through occupied slots and roles, recorded as a transition so the edges are accurate, plus the KPIs every estate should track and SLI / SLO / SLA."
+description: "Health as a verdict rolled up from alarms through occupied slots and roles, recorded as a transition so the edges are accurate, plus the KPIs every fleet should track and SLI / SLO / SLA."
 sidebar:
   badge:
     text: Partial
@@ -34,7 +34,7 @@ the alarms that took them down, and thirty days of recorded transitions. It is w
 into, and it is expensive by design, because explaining is the job.
 
 `GET /systems:health` is the **verdict**, in bulk: one word per system in the caller's read scope, in
-one statement whatever the estate size. It is what a list paints its health column from.
+one statement whatever the fleet size. It is what a list paints its health column from.
 
 The rule is that **a list never pays for an explanation it does not render**. Before #653 the systems
 list had no bulk read available and so took the explanation once per row, which cost a page of two
@@ -95,14 +95,36 @@ separate vocabulary.
 
 ## The verdict vocabulary
 
-A verdict is one of three values, ordered so "worst" has a meaning:
+A verdict is one of four values, ordered so "worst" has a meaning:
 
 ```text
-healthy  <  degraded  <  outage
+healthy  <  incomplete  <  degraded  <  outage
 ```
 
 **`outage`, not `down`**: a device is down, a room has an outage, the reasoning that once picked
 `ok` over `up` ([ADR-0003](/architecture/decisions/#adr-0003-health-reads-ok-not-up)).
+
+**`incomplete` is a commissioning gap, not a fault.** A role can be short of quorum two ways, and
+they are not the same event. Its assigned hardware can be **failing**, which is what `impact`
+describes and what an alarm fires for. Or the hardware was **never installed**, which no alarm
+will ever fire for, because nothing exists yet to alarm. A role short for the second reason reads
+`incomplete`.
+
+The distinction earns its place on the fleet view. Most of a real fleet is mid-commissioning
+for months at a time, and folding an empty slot into `outage` paints the whole canvas red and
+teaches an operator to ignore the colour. Ranked between `healthy` and `degraded`, a gap is
+visible above a finished room and invisible beneath anything actually broken.
+
+Two consequences follow from `impact` describing failure rather than absence:
+
+- A role that is **both** under-installed and partly alarming reads its `impact`, the worse of the
+  two by rank and the one somebody is not already on their way to fix.
+- A role declaring `impact: none` reads `healthy` when empty, not `incomplete`. A slot whose
+  failure does not matter has an absence that does not matter either, and reporting one would
+  leave a permanent gap on every confidence monitor nobody intends to staff.
+
+A role inside a **choice** whose alternate did not win contributes nothing at all, `incomplete`
+included: the build the room was not made to is not outstanding work.
 
 Health is **distinct from severity**: severity is an alarm's alert importance
 ([alarms and actions](/architecture/alarms-actions/)), health an entity's operational state; a
@@ -118,7 +140,7 @@ Two defaults are deliberate safety calls pointing in **opposite** directions:
 
 - An **unrecognized impact reads `degraded`**, never `healthy`: a bad value must not make an impaired
   role silently harmless.
-- An **unrecognized recorded value reads `healthy`**: one stray row must not paint an estate broken.
+- An **unrecognized recorded value reads `healthy`**: one stray row must not paint a fleet broken.
 
 The rule behind both: **fail loud about a judgement, fail quiet about a record.** Two more defaults
 follow: a **system with no roles is `healthy`** (nothing claimed about it), and a **quorum below
@@ -172,7 +194,7 @@ the system **left** explicitly, because its rollup may have just **improved** (a
 as real as a failure; **deleting** a system is the same shape). A component's **product** (and so its
 `component_type`) governs the typed-slot guard checked once at **assignment**; changing it after the
 fact does not, by itself, move any assigned role's health (#626: the guard is not part of the health
-chain, so this row that used to reach the whole estate on a catalog edit is retired along with it).
+chain, so this row that used to reach the whole fleet on a catalog edit is retired along with it).
 
 A **location move** is the relocation shape one tier up
 ([ADR-0092](/architecture/decisions/#adr-0092-a-location-move-recomputes-both-ancestor-chains)): a
@@ -195,7 +217,7 @@ than over the state it is replacing. Two recomputes whose chains overlap therefo
 only thing that keeps contention from becoming **deadlock** is that both visit their owners in the
 same order: **components, then systems, then locations, each ascending by id**.
 
-The key has to be the **id**, and the reason is a change one tier away. Names were unique estate-wide
+The key has to be the **id**, and the reason is a change one tier away. Names were unique fleet-wide
 once, so ordering locations by name was the same order; #627 scoped uniqueness to **placement**, and
 two rooms under different buildings may both be `415a`. A comparison that leaves two owners tied is
 not an order at all: it hands their relative order to the query plan, and the plan reads its input,
@@ -285,10 +307,10 @@ How `unknown` composes upward. A required role whose only component is unmeasure
 but calling the system an outage overstates it.
 :::
 
-### The `global` estate top
+### The `global` fleet top
 
 The rollup ends at a location today; the design adds the singleton **`global`** owner above every
-location for the estate-wide verdict and KPIs. The **owner** gives a reading its level: one `health`
+location for the fleet-wide verdict and KPIs. The **owner** gives a reading its level: one `health`
 key serves component, system, location, and global without cross-triggering.
 
 ::::
@@ -334,7 +356,7 @@ Windowing is the SLI's concern: a **rolling** window (last 30d) for trends, a **
 The SLA calendar-window boundaries and timezone, co-designed with the time primitive.
 :::
 
-## KPIs: what every estate should track
+## KPIs: what every fleet should track
 
 A **KPI** is a derived property (a calc or SLI), registered as canonical and owned at the level it
 describes (system, location, or **global**). Omniglass ships an opinionated **default set**, plus

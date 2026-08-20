@@ -55,7 +55,7 @@ function toNameRuleRead(r: { stem: string; bare_first?: boolean; examples?: stri
 
 export type LocationType = {
   // The uuid, the stable handle that survives a rename; name is the kebab
-  // handle the rest of the estate stores and compares (ADR-0062), so
+  // handle the rest of the fleet stores and compares (ADR-0062), so
   // allowed_parent_types members are names and joins go through name.
   id: string;
   name: string;

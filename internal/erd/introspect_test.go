@@ -10,7 +10,7 @@ import (
 )
 
 // TestIntrospectRealSchema runs Introspect against the real, migrated schema and
-// pins load-bearing facts: the estate's component table exists, the property series
+// pins load-bearing facts: the fleet's component table exists, the property series
 // carries a foreign key to its property_type catalog, and the Subsystems cluster
 // map covers exactly the live tables (no unmapped table, no stale map entry). The
 // last check is what keeps the ERD legible: a new table with no home surfaces here.

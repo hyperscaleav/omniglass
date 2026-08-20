@@ -56,7 +56,7 @@ type createNodeInput struct {
 }
 
 // updateNodeInput is the PATCH body: a nil field is left unchanged. Name is not
-// patchable (the immutable estate address). A Location of "" clears the placement.
+// patchable (the immutable fleet address). A Location of "" clears the placement.
 type updateNodeInput struct {
 	Name string `path:"name"`
 	Body struct {
@@ -98,7 +98,7 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 		Method:      http.MethodGet,
 		Path:        "/nodes",
 		Summary:     "List nodes",
-		Description: "Lists the edge nodes. A node is estate-wide, so listing requires an all-scope read. Gated by node:read.",
+		Description: "Lists the edge nodes. A node is fleet-wide, so listing requires an all-scope read. Gated by node:read.",
 	}, "node", "read"), func(ctx context.Context, _ *struct{}) (*listNodesOutput, error) {
 		nodes, err := gw.ListNodes(ctx, a.scopeFor(ctx, "node", "read"))
 		if err != nil {

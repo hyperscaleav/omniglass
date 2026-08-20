@@ -582,7 +582,7 @@ func TestResolveTagsSurvivesDuplicateSystemNames(t *testing.T) {
 // re-resolved that name through scopedByName. A standard-owned role
 // declaration re-derived an id from a name on every recompute, so the moment
 // a conforming system shared its name with an unrelated system anywhere in
-// the estate (the two need not even conform to the same standard),
+// the fleet (the two need not even conform to the same standard),
 // SetSystemRole and DeleteSystemRole failed with an unmapped
 // *storage.ErrAmbiguousName on a declaration that was never actually
 // ambiguous, and the whole write (including its audit row) rolled back.
@@ -643,14 +643,14 @@ func TestStandardOwnedRoleDeclarationSurvivesDuplicateSystemNames(t *testing.T) 
 	if len(repA.Roles) != 1 || repA.Roles[0].Name != "seat" {
 		t.Fatalf("sysA roles = %+v, want one role named seat", repA.Roles)
 	}
-	// The RECORDED side: sysA must show a NEW transition to degraded (an
-	// unstaffed quorum-1 role, default impact), proving recordHealth actually
-	// wrote for sysA's own id. rep.Roles above says nothing about which id
-	// the write landed on; this does.
+	// The RECORDED side: sysA must show a NEW transition to incomplete (an
+	// unstaffed quorum-1 role is a commissioning gap, #631), proving
+	// recordHealth actually wrote for sysA's own id. rep.Roles above says
+	// nothing about which id the write landed on; this does.
 	if n := len(repA.Transitions); n == 0 {
 		t.Fatalf("sysA transitions = %+v, want at least one recorded edge", repA.Transitions)
-	} else if last := repA.Transitions[n-1]; last.Value != "degraded" {
-		t.Fatalf("sysA latest transition = %+v, want degraded (an unstaffed quorum-1 role)", last)
+	} else if last := repA.Transitions[n-1]; last.Value != "incomplete" {
+		t.Fatalf("sysA latest transition = %+v, want incomplete (an unstaffed quorum-1 role)", last)
 	}
 
 	repB, err := gw.SystemHealth(ctx, sysB.ID, 0, all)

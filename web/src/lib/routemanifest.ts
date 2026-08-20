@@ -33,6 +33,7 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/login", shell: "public", page: "Login", auth: false, smoke: "/login" },
 
   { path: "/", shell: "protected", page: "Home", smoke: "/" },
+  { path: "/fleet", shell: "protected", page: "Fleet", smoke: "/fleet" },
   // Inventory pages on the generic TreeList. The :id route opens the same page
   // focused on one entity (the addressable full-page detail), addressed by uuid
   // (#627 Task 15c: name uniqueness is scoped to placement, so a name alone is

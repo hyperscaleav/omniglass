@@ -1,0 +1,340 @@
+import { describe, it, expect } from "vitest";
+import {
+  ancestors,
+  bandsOf,
+  byChildOfLocation,
+  byRootLocation,
+  childrenIndex,
+  fleetTotals,
+  holesByRoot,
+  holesUnder,
+  locationIndex,
+  locationsWithoutSystems,
+  rootOf,
+  subtreeDepth,
+  toCluster,
+  type FleetView,
+  type Grouping,
+} from "./fleet";
+import { uuidFor } from "./testids";
+
+// The fixture is the fleet the canvas has to survive: two roots of different
+// depth, no level in common below the root, and one component shared between
+// two systems in DIFFERENT roots, which is the case every count below is really
+// testing.
+// Ids are uuids post-ADR-0062, so fixtures mint them from a handle rather than
+// putting the handle in the id slot: a fixture that fakes the shape lets a real
+// join break ship green (registry-fixture-guard).
+const loc = (handle: string, name: string, type: string, parent?: string) => ({
+  id: uuidFor(handle),
+  name,
+  label: "",
+  location_type: type,
+  location_type_id: uuidFor(`type-${type}`),
+  parent: parent ? uuidFor(parent) : "",
+  verdict: "healthy",
+});
+
+const dot = (component: string, name: string, verdict: string, primary: boolean, shared: boolean) => ({
+  component,
+  name,
+  verdict,
+  primary,
+  shared,
+});
+
+// hq's own recorded verdict deliberately DISAGREES with the fold over its
+// in-scope clusters (healthy vs degraded): the band chip renders the recorded
+// row (a band that contradicts its own detail page one click away is a
+// visible bug), and the fold stays available as what it is.
+const view: FleetView = {
+  locations: [
+    loc("l-hq", "hq", "campus"),
+    loc("l-b1", "hq-b1", "building", "l-hq"),
+    loc("l-r1", "hq-r1", "room", "l-b1"),
+    loc("l-r2", "hq-r2", "room", "l-b1"),
+    loc("l-depot", "depot", "building"),
+    loc("l-dr1", "depot-r1", "room", "l-depot"),
+  ],
+  systems: [
+    {
+      id: uuidFor("s-hq"),
+      name: "hq-huddle",
+      label: "HQ Huddle",
+      location: uuidFor("l-r1"),
+      verdict: "degraded",
+      dots: [dot(uuidFor("c-bar"), "bar-1", "healthy", true, true), dot(uuidFor("c-mic"), "mic-1", "degraded", true, false)],
+    },
+    {
+      id: uuidFor("s-depot"),
+      name: "depot-huddle",
+      label: "",
+      location: uuidFor("l-dr1"),
+      verdict: "outage",
+      // The same physical box, a ghost here: owned by hq-huddle.
+      dots: [dot(uuidFor("c-bar"), "bar-1", "healthy", false, true)],
+    },
+  ],
+} as unknown as FleetView;
+
+describe("rootOf", () => {
+  it("walks an arbitrary-depth tree to its root", () => {
+    const index = locationIndex(view);
+    expect(rootOf(uuidFor("l-r1"), index)?.id).toBe(uuidFor("l-hq"));
+    expect(rootOf(uuidFor("l-dr1"), index)?.id).toBe(uuidFor("l-depot"));
+    // A root is its own root, and no level is required on the way: depot holds
+    // a room directly, hq goes campus, building, room.
+    expect(rootOf(uuidFor("l-hq"), index)?.id).toBe(uuidFor("l-hq"));
+  });
+
+  it("does not hang on a parent cycle", () => {
+    const cyclic = {
+      locations: [loc("cyc-a", "a", "room", "cyc-b"), loc("cyc-b", "b", "room", "cyc-a")],
+      systems: [],
+    } as unknown as FleetView;
+    expect(() => rootOf(uuidFor("cyc-a"), locationIndex(cyclic))).not.toThrow();
+  });
+
+  it("is null for a system placed nowhere", () => {
+    expect(rootOf(null, locationIndex(view))).toBeNull();
+  });
+});
+
+describe("ancestors", () => {
+  it("reads root first, which is the order the breadcrumb renders", () => {
+    expect(ancestors(uuidFor("l-r1"), locationIndex(view)).map((l) => l.name)).toEqual(["hq", "hq-b1", "hq-r1"]);
+  });
+});
+
+describe("toCluster", () => {
+  it("carries the ring-and-ghost flags through to the dot", () => {
+    const c = toCluster(view.systems![1]);
+    expect(c.dots[0]).toMatchObject({ componentId: uuidFor("c-bar"), owned: false, shared: true });
+  });
+
+  it("labels a system by its display name, falling back to the name", () => {
+    expect(toCluster(view.systems![0]).label).toBe("HQ Huddle");
+    expect(toCluster(view.systems![1]).label).toBe("depot-huddle");
+  });
+});
+
+describe("bandsOf", () => {
+  it("gathers one band per root location", () => {
+    const bands = bandsOf(view);
+    expect(bands.map((b) => b.label)).toEqual(["depot", "hq"]);
+  });
+
+  it("rolls a band up worst-wins over its systems", () => {
+    const bands = bandsOf(view);
+    expect(bands.find((b) => b.label === "hq")?.verdict).toBe("degraded");
+    expect(bands.find((b) => b.label === "depot")?.verdict).toBe("outage");
+  });
+
+  // The count a shared component makes wrong. bar-1 is one box in two systems
+  // in two different roots; each band counts it once, and the fleet total
+  // counts it once overall.
+  it("counts a component once per band, not once per dot", () => {
+    const hq = bandsOf(view).find((b) => b.label === "hq")!;
+    expect(hq.componentCount).toBe(2);
+    expect(hq.systemCount).toBe(1);
+  });
+
+  it("carries the type as the band's sublabel, for its chip", () => {
+    expect(bandsOf(view).find((b) => b.label === "hq")?.sublabel).toBe("campus");
+  });
+
+  // The seam. A second grouping must land the same dots in different rows with
+  // no change to anything that renders them.
+  it("regroups the same dots on a different axis", () => {
+    const byVerdict: Grouping = {
+      name: "verdict",
+      bandFor: (s) => s.verdict ?? null,
+      label: (k) => k,
+      sublabel: () => "",
+      order: (keys) => [...keys].sort(),
+    };
+    const bands = bandsOf(view, byVerdict);
+    expect(bands.map((b) => b.label)).toEqual(["degraded", "outage"]);
+    // Same dots, different rows: nothing was dropped or duplicated by regrouping.
+    const before = bandsOf(view).flatMap((b) => b.clusters.flatMap((c) => c.dots.map((d) => d.componentId)));
+    const after = bands.flatMap((b) => b.clusters.flatMap((c) => c.dots.map((d) => d.componentId)));
+    expect(after.sort()).toEqual(before.sort());
+  });
+
+  it("drops a system its grouping cannot place, rather than inventing a band", () => {
+    const orphan = {
+      ...view,
+      systems: [...view.systems!, { id: uuidFor("s-none"), name: "floating", label: "", location: "", verdict: "healthy", dots: [] }],
+    } as unknown as FleetView;
+    expect(bandsOf(orphan).length).toBe(2);
+  });
+});
+
+describe("locationsWithoutSystems", () => {
+  // A leaf holding nothing is the dashed hole the canvas draws. A branch is not
+  // a hole: its rooms are where systems belong, and drawing one at every level
+  // above them would bury the real gaps.
+  it("names empty leaves and not their parents", () => {
+    expect(locationsWithoutSystems(view).map((l) => l.name)).toEqual(["hq-r2"]);
+  });
+
+  // The system tier is scoped independently of the place tree, so a view can
+  // arrive with locations and no systems because the caller may not read them.
+  // Claiming every leaf is a hole there would tell a scoped operator their
+  // commissioned fleet is empty, and nothing here can tell that case from a
+  // genuinely empty one, so it claims nothing.
+  it("claims no holes when it cannot see the systems at all", () => {
+    const noSystems = { ...view, systems: [] } as unknown as FleetView;
+    expect(locationsWithoutSystems(noSystems)).toEqual([]);
+  });
+});
+
+describe("fleetTotals", () => {
+  it("counts a shared component once across the whole fleet", () => {
+    expect(fleetTotals(view)).toEqual({ systems: 2, components: 2, roots: 2 });
+  });
+});
+
+describe("byRootLocation", () => {
+  it("names itself, so a future picker has something to show", () => {
+    expect(byRootLocation.name).toBe("location");
+  });
+});
+
+describe("drawing order", () => {
+  // The projection sends SETS (no ORDER BY rides the scoped tree query), so
+  // the view model owns the drawing order: without this, the canvas would
+  // reshuffle its clusters on every refresh.
+  it("orders a band's clusters worst-first, then by label, whatever order the wire sent", () => {
+    const shuffled = { ...view, systems: [...view.systems!].reverse() } as unknown as FleetView;
+    const a = bandsOf(view).map((b) => b.clusters.map((c) => c.label));
+    const b = bandsOf(shuffled).map((b2) => b2.clusters.map((c) => c.label));
+    expect(b).toEqual(a);
+  });
+
+  it("orders a cluster's dots by name whatever order the wire sent", () => {
+    const sys = view.systems![0];
+    const shuffled = { ...sys, dots: [...sys.dots!].reverse() };
+    expect(toCluster(shuffled as never).dots.map((d) => d.name)).toEqual(toCluster(sys).dots.map((d) => d.name));
+  });
+});
+
+describe("childrenIndex and subtreeDepth", () => {
+  it("measures each root's own depth, which is the variable-depth fact the canvas teaches", () => {
+    const children = childrenIndex(view);
+    expect(subtreeDepth(uuidFor("l-hq"), children)).toBe(3);
+    expect(subtreeDepth(uuidFor("l-depot"), children)).toBe(2);
+  });
+
+  it("a leaf is depth one", () => {
+    expect(subtreeDepth(uuidFor("l-r1"), childrenIndex(view))).toBe(1);
+  });
+
+  it("does not hang on a parent cycle", () => {
+    const cyclic = {
+      locations: [loc("cyd-a", "a", "room", "cyd-b"), loc("cyd-b", "b", "room", "cyd-a")],
+      systems: [],
+    } as unknown as FleetView;
+    expect(() => subtreeDepth(uuidFor("cyd-a"), childrenIndex(cyclic))).not.toThrow();
+  });
+});
+
+describe("holesByRoot", () => {
+  it("groups the holes under their root band", () => {
+    const holes = holesByRoot(view);
+    expect(holes.get(uuidFor("l-hq"))?.map((l) => l.name)).toEqual(["hq-r2"]);
+    expect(holes.get(uuidFor("l-depot"))).toBeUndefined();
+  });
+
+  it("claims nothing when the systems tier is out of scope, like its source", () => {
+    const noSystems = { ...view, systems: [] } as unknown as FleetView;
+    expect(holesByRoot(noSystems).size).toBe(0);
+  });
+});
+
+describe("byChildOfLocation", () => {
+  // The location zoom's grouping: one band per DIRECT child of the anchored
+  // location (whatever its type), plus a placed-here band (keyed by the
+  // location itself) for systems attached directly, ordered first. The same
+  // canvas renders it: the seam the epic promised, proven with a second real
+  // grouping.
+  const zoomView: FleetView = {
+    locations: [
+      loc("z2-hq", "hq", "campus"),
+      loc("z2-b1", "b1", "building", "z2-hq"),
+      loc("z2-b2", "b2", "building", "z2-hq"),
+      loc("z2-r1", "r1", "room", "z2-b1"),
+      // A leaf directly under the anchor with no system: its own hole.
+      loc("z2-r0", "r0", "room", "z2-hq"),
+      // A sibling tree the anchor must not see.
+      loc("z2-other", "other", "campus"),
+      loc("z2-or1", "or1", "room", "z2-other"),
+    ],
+    systems: [
+      // Attached to the anchor itself: the placed-here band.
+      { id: uuidFor("z2-s-here"), name: "here", label: "Here", location: uuidFor("z2-hq"), verdict: "healthy", dots: [] },
+      // Deep under b1: lands in b1's band.
+      { id: uuidFor("z2-s-deep"), name: "deep", label: "Deep", location: uuidFor("z2-r1"), verdict: "degraded", dots: [] },
+      // Directly at b2: b2's band.
+      { id: uuidFor("z2-s-b2"), name: "atb2", label: "At B2", location: uuidFor("z2-b2"), verdict: "healthy", dots: [] },
+      // Outside the subtree: dropped.
+      { id: uuidFor("z2-s-out"), name: "out", label: "Out", location: uuidFor("z2-or1"), verdict: "outage", dots: [] },
+    ],
+  } as unknown as FleetView;
+
+  it("bands every direct child whatever its type, and the placed-here band first", () => {
+    const bands = bandsOf(zoomView, byChildOfLocation(uuidFor("z2-hq")));
+    expect(bands.map((b) => b.key)).toEqual([uuidFor("z2-hq"), uuidFor("z2-b1"), uuidFor("z2-b2")]);
+    expect(bands[0].clusters.map((c) => c.label)).toEqual(["Here"]);
+    expect(bands[1].clusters.map((c) => c.label)).toEqual(["Deep"]);
+  });
+
+  it("drops a system outside the anchored subtree rather than inventing a band", () => {
+    const bands = bandsOf(zoomView, byChildOfLocation(uuidFor("z2-hq")));
+    expect(bands.flatMap((b) => b.clusters.map((c) => c.label))).not.toContain("Out");
+  });
+
+  it("carries each child's recorded verdict and depth like any band", () => {
+    const bands = bandsOf(zoomView, byChildOfLocation(uuidFor("z2-hq")));
+    expect(bands[1].recordedVerdict).toBe("healthy");
+    expect(bands[1].depth).toBe(2);
+  });
+
+  it("groups the subtree's holes under their direct-child band, and a bare leaf under the anchor itself", () => {
+    const holes = holesUnder(uuidFor("z2-hq"), zoomView);
+    expect(holes.get(uuidFor("z2-hq"))?.map((l) => l.name)).toEqual(["r0"]);
+    // r1 holds a system, so b1 contributes no hole; the sibling tree's or1 is
+    // not this anchor's business.
+    expect([...holes.values()].flat().map((l) => l.name)).toEqual(["r0"]);
+  });
+});
+
+describe("band verdicts and depth", () => {
+  it("carries the location's recorded verdict beside the in-scope fold, and they may disagree", () => {
+    const hq = bandsOf(view).find((b) => b.label === "hq")!;
+    // The fold over what the caller can see says degraded; the location's own
+    // recorded row says healthy. The chip renders the record; the fold stays
+    // named for what it is.
+    expect(hq.verdict).toBe("degraded");
+    expect(hq.recordedVerdict).toBe("healthy");
+  });
+
+  it("measures the band's subtree depth for the subtitle", () => {
+    const bands = bandsOf(view);
+    expect(bands.find((b) => b.label === "hq")?.depth).toBe(3);
+    expect(bands.find((b) => b.label === "depot")?.depth).toBe(2);
+  });
+
+  it("a grouping without the optional facts yields a null record and depth zero", () => {
+    const byVerdict: Grouping = {
+      name: "verdict",
+      bandFor: (s) => s.verdict ?? null,
+      label: (k) => k,
+      sublabel: () => "",
+      order: (keys) => [...keys].sort(),
+    };
+    const bands = bandsOf(view, byVerdict);
+    expect(bands[0].recordedVerdict).toBeNull();
+    expect(bands[0].depth).toBe(0);
+  });
+});

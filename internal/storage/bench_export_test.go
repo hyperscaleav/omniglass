@@ -11,7 +11,7 @@ import (
 // This shim is declared in a _test.go file, so it exists only in the test binary
 // and ships in nothing.
 //
-// It exists so the walk can be measured on the SAME estate as the list that
+// It exists so the walk can be measured on the SAME fleet as the list that
 // calls it. A list is the scoped-list query PLUS this walk, and only one of the
 // two is the recursive CTE #648 rewrote; measured separately, the two numbers
 // subtract, and a plan regression in the walk shows here at full strength where

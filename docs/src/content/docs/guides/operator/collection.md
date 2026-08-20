@@ -3,7 +3,7 @@ title: Nodes and reachability
 description: "Enrolling a collection node, adding a protocol-named interface to a component, and reading the per-interface reachability and the log events a node reports."
 ---
 
-Collection is how the estate learns whether a device is reachable and what it reports. An **edge
+Collection is how the fleet learns whether a device is reachable and what it reports. An **edge
 node** runs the probes, a component's **interface** is the API the node reaches for, the component's
 **Reachability** panel shows the verdict, and its **Events** and **Logs** panels show recent occurrences
 the node ships back. This page walks the console surfaces; the model behind them is
@@ -13,22 +13,22 @@ the node ships back. This page walks the console surfaces; the model behind them
 ## Nodes
 
 **Inventory > Nodes** (with `node:read`, which must be **all-scope**, since a node is
-estate-wide, so a location-scoped operator cannot list nodes) is the collection-daemon
+fleet-wide, so a location-scoped operator cannot list nodes) is the collection-daemon
 inventory. Each row reads the way every list in the console reads: the node's **label** on the
 first line and its **name** beneath it (shown only when the two differ), then a **liveness pill** (up,
 down, or never, derived from its last heartbeat against the server's down window), the relative
 last-heartbeat time, and its tags. A row opens the node's detail.
 
 - With `node:create` and `node:enroll`, **New node** registers a node (the name is its
-  estate address) and mints its **enrollment token**. The form also takes an optional
+  fleet address) and mints its **enrollment token**. The form also takes an optional
   **label** and **location**. The token is a secret shown **once**, in a
   copy-to-clipboard field with a "shown once, cannot be retrieved again" warning. Copy it now
   and hand it to the node deployment; the node presents it to claim its NATS credential. The
   server stores only a hash of the token and never logs it.
 - The detail is **read-edit-save**, like a component or location. With `node:update`, **Edit**
   changes the node's **label**, **description**, and **location** (a descriptive
-  placement picked from the estate's locations, not a scope); the **name is immutable** (it is
-  the estate address and enrollment identity). The location clears if that location is deleted.
+  placement picked from the fleet's locations, not a scope); the **name is immutable** (it is
+  the fleet address and enrollment identity). The location clears if that location is deleted.
 - The detail carries a **Tags** panel: with `node:update`, edit mode adds and removes governed
   [tags](/guides/operator/inventory/) (keys whose vocabulary allows nodes), the same tag editor the
   component and location details use. The node list shows a Tags column and filters by any tag key.
@@ -52,7 +52,7 @@ the interface takes that protocol as its name, unique within its component, so o
 have one `tcp` and one `http`, and a second interface of a protocol it already has is refused.
 Because you never type that name, the **label** is the one string on an interface that is yours:
 give it one ("Control processor") to say what the connection is FOR, since `ssh` only says how it is
-reached and reads the same on every component in the estate. It is optional, and an interface
+reached and reads the same on every component in the fleet. It is optional, and an interface
 without one reads its protocol name exactly.
 
 - With `interface:create`, **Add interface** on the component detail creates one: give it a

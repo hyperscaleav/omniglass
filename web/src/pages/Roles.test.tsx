@@ -16,7 +16,7 @@ import { uuidFor } from "../lib/testids";
 const UNIVERSE = ["audit:read:admin", "component:create", "component:delete", "component:read", "platform:update", "system:read"];
 const seed: Role[] = [
   { id: uuidFor("owner"), name: "owner", official: true, label: "Owner", description: "Full control, break-glass.", permissions: [">"], inherits: [], effective_permissions: [">"], permission_universe: UNIVERSE, held: UNIVERSE },
-  { id: uuidFor("admin"), name: "admin", official: true, label: "Administrator", description: "Manage the estate.", permissions: ["audit:read:admin"], inherits: ["operator"], effective_permissions: ["*:read", "principal:*", "audit:read:admin"], permission_universe: UNIVERSE, held: UNIVERSE },
+  { id: uuidFor("admin"), name: "admin", official: true, label: "Administrator", description: "Manage the fleet.", permissions: ["audit:read:admin"], inherits: ["operator"], effective_permissions: ["*:read", "principal:*", "audit:read:admin"], permission_universe: UNIVERSE, held: UNIVERSE },
   { id: uuidFor("operator"), name: "operator", official: true, label: "Operator", description: "Day-to-day ops.", permissions: ["component:create"], inherits: ["viewer"], effective_permissions: ["*:read", "component:create"], permission_universe: UNIVERSE, held: ["component:create", "component:read", "system:read"] },
   { id: uuidFor("viewer"), name: "viewer", official: true, label: "Viewer", description: "Read only.", permissions: ["*:read"], inherits: [], effective_permissions: ["*:read"], permission_universe: UNIVERSE, held: ["component:read", "system:read"] },
 ];
@@ -90,7 +90,7 @@ describe("Roles page", () => {
   it("lights the install-wide platform capability on a role that holds it", async () => {
     mount();
     fireEvent.click(screen.getByText("Administrator"));
-    await screen.findByText("Manage the estate.");
+    await screen.findByText("Manage the fleet.");
     // Held mode, rendered as the raw capability string like every other one: the
     // tier permission is not special-cased or relabelled in the grid.
     expect(await screen.findByText("platform:update")).toBeTruthy();

@@ -42,7 +42,7 @@ drift no lint can see gets the periodic `/docs-audit` pass (#429).
   documents, and the current decisions. Each official term is defined once in the
   [glossary](/architecture/glossary/) and not redefined in the leaves.
 - **Guides** (`/guides/`) are how-to pages for someone *using* the product, split by
-  audience: the **operator guide** (running the estate from the console and the CLI), the
+  audience: the **operator guide** (running the fleet from the console and the CLI), the
   **admin guide** (managing accounts, access, audit, and config), and **deployment**
   (standing the platform up). **A slice that ships or changes a user-facing surface ships or
   updates its guide in the same PR**, not just the architecture page, filed under the section

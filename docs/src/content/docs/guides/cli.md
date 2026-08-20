@@ -16,14 +16,14 @@ command, its flags, and an example, see the **[CLI reference](/reference/cli/)**
 
 `make dev` brings up the whole stack for a browser session: a dev Postgres (docker
 compose, matching the default DSN), the migrations and boot seed, a bootstrapped `dev`
-owner whose token is printed once, a dev example estate (a few campuses with rooms, a few
+owner whose token is printed once, a dev example fleet (a few campuses with rooms, a few
 sign-in-able users, and their grants, so the console is not empty), and the server with
 the operator console at `http://localhost:8080/web`. Ctrl-C stops the server; `make down` stops Postgres (the
 named volume persists data between runs; `docker compose down -v` wipes it and re-mints a
 token next run). `make up` / `make down` manage just the database. Tests never touch this
 stack: they spin their own ephemeral Postgres via testcontainers.
 
-The example estate deliberately types almost none of its own names: its devices and its
+The example fleet deliberately types almost none of its own names: its devices and its
 systems all ask the platform to name them, so what you sign in to is the name generator's
 own output (`display-1` in three different rooms, `boardroom` and `boardroom-2` for the
 two halves of one) rather than a list somebody wrote out. The rows that do carry a typed
@@ -467,7 +467,7 @@ non-disclosing 404 on the read and on the write. The registry and its contract s
 - **Hand-written** (`internal/cli/api_hooks.go` and the run-mode files): the client
   runtime the generated tree calls, plus commands that are not API operations, the
   `server`, `node run`, and `migrate` run modes, the trusted direct-DB owner lane
-  (`bootstrap`, `token`, `set-password`), and the idempotent dev-estate seeder
+  (`bootstrap`, `token`, `set-password`), and the idempotent dev-fleet seeder
   (`seed-dev`, the same trusted lane, never for production).
 
 To add a hand-written command, write a `newXxxCmd()` returning a `*cobra.Command` and add

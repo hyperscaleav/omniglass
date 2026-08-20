@@ -100,7 +100,7 @@
   {
    "id": "admin",
    "label": "Administrator",
-   "description": "Manages the estate, users, roles, and grants: full create, update, and delete on locations, systems, and components, and on principals, credentials, grants, and roles. Deliberately NOT the superuser: it cannot grant a role above its own tier, so it cannot make itself owner. Inherits Operator.",
+   "description": "Manages the fleet, users, roles, and grants: full create, update, and delete on locations, systems, and components, and on principals, credentials, grants, and roles. Deliberately NOT the superuser: it cannot grant a role above its own tier, so it cannot make itself owner. Inherits Operator.",
    "inherits": [
     "operator"
    ],
@@ -245,7 +245,7 @@
    "name": "health",
    "data_type": "string",
    "label": "Health",
-   "description": "The rolled-up health verdict for a component, system, or location, worst-wins over its inputs (a component's active alarms, a system's roles, the systems under a location). Recorded transition-only, so the series is the edges: when it broke and when it came back, not a sample per check."
+   "description": "The rolled-up health verdict for a component, system, or location, worst-wins over its inputs (a component's active alarms, a system's roles, the systems under a location). Recorded transition-only, so the series is the edges: when it broke and when it came back, not a sample per check. incomplete ranks between healthy and degraded and means a commissioning gap: a role short because its hardware was never installed, which no alarm will ever fire for."
   },
   {
    "name": "video-input",

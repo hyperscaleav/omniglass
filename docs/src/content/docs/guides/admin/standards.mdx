@@ -24,7 +24,7 @@ sitting under the shared type registry
 **A standard is not a system type.** They are two axes and a system can carry either, both, or
 neither. The **[system type](/architecture/core-entities/#catalog-reference-data-system_type)**
 (Catalog, under Systems: Types) is the coarse genus of what kind of space a system **is**, a
-boardroom, a classroom, a video wall; the standard is the blueprint it is **built to**. One estate
+boardroom, a classroom, a video wall; the standard is the blueprint it is **built to**. One fleet
 holds ten signage standards and six classroom standards under a single coarse type, which is why the
 classifier is its own registry rather than a use of a standard's own parent-variant chain
 ([ADR-0096](/architecture/decisions/#adr-0096-the-system_type-name-returns-as-the-coarse-space-taxonomy)).
@@ -58,7 +58,7 @@ you do not run. The shipped set, rendered from the seed itself:
 <SeededSet kind="standards" />
 
 This is deliberate. A standard is **forked from a template that lives in the code**, once, with **no
-inheritance**: nothing in your estate points back at that template afterwards. So Omniglass can improve
+inheritance**: nothing in your fleet points back at that template afterwards. So Omniglass can improve
 its templates in any release without ever touching your rows, and your edits are never reverted by a
 restart, because the boot seed installs a standard **only if it is absent**. The thing the vendor
 updates and the thing you own are two different objects, which is the whole point.
@@ -143,7 +143,7 @@ types and pinned products each **replace** the previous set wholesale (drop one 
 **Withdrawing** a role (with `standard:delete`, from edit mode like every contract control) also removes
 every assignment conforming systems made to it, so withdraw only when the slot itself is gone, not when
 one room's component changed. Changing a quorum or an impact **re-evaluates every conforming system
-immediately**, so a retune shows up in the estate's health without waiting for anything to poll.
+immediately**, so a retune shows up in the fleet's health without waiting for anything to poll.
 
 Two shipped roles come with **Meeting Room**, and they are the worked example: **Room Microphone**
 (accepts `video-bar`, quorum **2**) and **Main Display** (accepts `display`). Like the standards

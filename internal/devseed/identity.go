@@ -12,7 +12,7 @@ import (
 // How a fixture row is identified, and why it cannot be by name.
 //
 // The fixture keys everything on `key`, a string local to the document that is
-// never written to the database, because most of this estate does not know its
+// never written to the database, because most of this fleet does not know its
 // own name: a row with no `name` asks the platform to mint one (#657), and the
 // platform picks it from the row's classification and the lowest free ordinal in
 // its placement bucket. So a reference (`location: boardroom`, `component:
@@ -23,14 +23,14 @@ import (
 // would be a refusal listing three candidates.
 //
 // The second half of the problem is recognising a row on a LATER run, which is
-// what keeps `make dev` from stacking a second estate on every start. A row the
+// what keeps `make dev` from stacking a second fleet on every start. A row the
 // fixture names is found by its name, the way it always was. A row the PLATFORM
 // named is found by its position: among the platform-named rows of the same
 // classification in the same bucket, in the order the generator allocated them,
-// the fixture's k-th such row is the estate's k-th. That is the fixture's real
+// the fixture's k-th such row is the fleet's k-th. That is the fixture's real
 // claim anyway. It does not say "there is a display called display-2 in the
 // boardroom", it says "the boardroom holds three displays", and the seed's job
-// is to make the estate match.
+// is to make the fleet match.
 //
 // Two consequences worth stating rather than discovering:
 //
@@ -40,7 +40,7 @@ import (
 //   - The classification has to partition the ordinal space. Two DIFFERENT
 //     products classified under one component_type would share a stem and
 //     therefore one run of ordinals, and grouping by product would then zip the
-//     fixture onto the estate in the wrong order. No such pair is in the
+//     fixture onto the fleet in the wrong order. No such pair is in the
 //     fixture, and devseed_test asserts every seeded name by value, so a pair
 //     added later fails loudly rather than silently mis-assigning.
 
@@ -51,21 +51,21 @@ type genSlot struct {
 	class  string
 }
 
-// genRow is one platform-named row already in the estate.
+// genRow is one platform-named row already in the fleet.
 type genRow struct {
 	slot    genSlot
 	ordinal int
 	id      string
 }
 
-// genIndex hands a fixture row the estate row that already stands for it, or
-// nothing when the estate is short of one and the caller must create it.
+// genIndex hands a fixture row the fleet row that already stands for it, or
+// nothing when the fleet is short of one and the caller must create it.
 type genIndex struct {
 	rows map[genSlot][]string
 	next map[genSlot]int
 }
 
-// newGenIndex groups the estate's platform-named rows into their ordinal spaces,
+// newGenIndex groups the fleet's platform-named rows into their ordinal spaces,
 // each in allocation order. Sorting on the stored ordinal rather than on the
 // name is the same choice ADR-0097 makes for allocation itself: the number is a
 // fact the platform recorded, and picking it back out of a name would have to
@@ -83,7 +83,7 @@ func newGenIndex(rows []genRow) *genIndex {
 }
 
 // take claims this slot's next row for the fixture row being seeded, returning
-// its id, or "" when the estate holds fewer rows in this slot than the fixture
+// its id, or "" when the fleet holds fewer rows in this slot than the fixture
 // declares and the caller must create one.
 //
 // It advances the slot on EVERY call, including the ones that answer nothing,
@@ -118,7 +118,7 @@ func bucketOf(parentID, locationID string) string {
 // productClass is the classification a component's ordinal space is grouped by.
 // An omitted product is not "no classification": the gateway resolves it to the
 // generic device, which is what the row then reports and what its name is minted
-// from, so the fixture and the estate have to spell it the same way.
+// from, so the fixture and the fleet have to spell it the same way.
 func productClass(product string) string {
 	if product == "" {
 		return "generic-device"
@@ -126,17 +126,17 @@ func productClass(product string) string {
 	return product
 }
 
-// existingRowID answers "is this fixture row already in the estate", by the one
+// existingRowID answers "is this fixture row already in the fleet", by the one
 // question that fits it. A row the fixture NAMES is looked up by name, the way
 // every seed loop here always has. A row the PLATFORM names has no name for the
 // fixture to ask about, so it claims the next row of its own classification in
-// its own bucket, and an empty answer means the estate is short of one and the
+// its own bucket, and an empty answer means the fleet is short of one and the
 // caller must create it.
 //
 // The two are one function rather than two branches at each of the three call
 // sites, because the choice is a property of the fixture row (does it carry a
 // name) and not of the entity kind, and a call site that got it backwards would
-// either duplicate the estate on every start or silently stop exercising the
+// either duplicate the fleet on every start or silently stop exercising the
 // generator.
 func existingRowID(name, key string, slot genSlot, idx *genIndex, byName func(string) (string, error)) (string, error) {
 	if name != "" {
@@ -152,7 +152,7 @@ func existingRowID(name, key string, slot genSlot, idx *genIndex, byName func(st
 	return idx.take(slot), nil
 }
 
-// locationGenIndex reads the platform-named locations already in the estate,
+// locationGenIndex reads the platform-named locations already in the fleet,
 // grouped into the ordinal space each was allocated in: the parent bucket (a
 // location has no located-at column, so its buckets are two, not three) and the
 // location_type whose name rule minted it.
@@ -217,7 +217,7 @@ func systemGenIndex(ctx context.Context, gw storage.Gateway, read scope.Set) (*g
 }
 
 // memberEnds resolves a membership's two fixture keys to the ids the gateway is
-// handed. Both ends by id, never by name: three rooms in this estate each hold a
+// handed. Both ends by id, never by name: three rooms in this fleet each hold a
 // component called display-1, so a bare name is a refusal listing candidates
 // rather than a lookup.
 func memberEnds(sysIDs, compIDs map[string]string, systemKey, componentKey string) (string, string, error) {
