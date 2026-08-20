@@ -50,10 +50,15 @@ screenshots:
         selector: "text=Auditorium"
       - action: click
         selector: "role=tab[name='History']"
-    alt: "The History tab: the verdict spans over the window, raise markers under the strip, and the what-went-wrong list with the ongoing critical alarm."
+      - action: click
+        selector: "[data-testid=incident-0] button"
+    alt: "The History tab, statuspage style: the window's uptime, the timeline, and the ongoing incident expanded to the alarm that explains it."
     mask:
       - "[data-testid=since-line]"
+      - "[data-testid=uptime-kpi]"
       - "text=/ongoing/ >> xpath=ancestor::li[1]"
+      - "text=/held /  >> xpath=ancestor::li[1]"
+      - "text=/\\u2192/ >> xpath=ancestor::li[1]"
       - ".og-statestrip"
       - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
       - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
@@ -180,10 +185,13 @@ the component holding it.
 
 ## The history
 
-Every system carries the **History** tab: the verdict over the window as spans, and under
-the same axis the causes: one marker per alarm raise, and **What went wrong**, every alarm
-any member raised inside the window, cleared ones included, ongoing first. A room that
-flaps weekly and a room that failed once look different here, which is the point.
+Every system carries the **History** tab, read the way a status page reads: the window's
+**uptime** up top (the health KPI over time), the timeline beside it with one marker per
+alarm raise, then **incidents**: one entry per contiguous stretch away from healthy,
+ongoing first, each expanding to the verdict changes inside it and the alarms that explain
+them. An alarm the room absorbed without going unhealthy lists under **other alarms**. A
+room that flaps weekly and a room that failed once look different here, which is the
+point.
 
 ::screenshot{#fleet-history}
 

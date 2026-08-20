@@ -5650,3 +5650,9 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   components with slots, active alarms, and shared members; the leaf over itself), and
   `FleetShell` renders the spec without knowing the scope. A summary identical on every
   page was chrome, not information.
+- **The history tab reads like a status page** (#795 refinement). Uptime over the window
+  leads (the health KPI over time), the timeline beside it; the transitions group into
+  INCIDENTS, one entry per contiguous stretch away from healthy, ongoing first, each
+  expanding to its verdict changes and the alarms whose lifetimes overlap the stretch;
+  a stretch no alarm explains names itself a commissioning gap; alarms the room absorbed
+  list separately.

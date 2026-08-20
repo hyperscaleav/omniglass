@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { incidentRows, markerX } from "./system_history";
+import { incidentReasons, incidentRows, incidentsOf, markerX, uptimePct } from "./system_history";
 import type { Alarm } from "./alarms";
 
 // The history tab's pure core (#792): the verdict spans come from the health
@@ -59,5 +59,72 @@ describe("markerX", () => {
     const windowMs = 30 * 24 * 3600_000;
     expect(markerX(iso(15 * 24), now, windowMs)).toBeCloseTo(0.5, 5);
     expect(markerX(iso(40 * 24), now, windowMs)).toBe(0);
+  });
+});
+
+// The statuspage read (#795 refinement): the window's uptime as the health
+// KPI, and the transitions grouped into INCIDENTS, each a contiguous
+// unhealthy stretch with the alarms that explain it.
+import type { Span } from "./timeline";
+const span = (value: string, fromH: number, toH: number): Span<string> =>
+  ({ value, from: now - fromH * 3600_000, to: now - toH * 3600_000, weight: (fromH - toH) / (30 * 24) }) as Span<string>;
+
+describe("uptimePct", () => {
+  it("is the healthy share of the window, one decimal, statuspage style", () => {
+    const spans = [span("healthy", 720, 72), span("degraded", 72, 0)];
+    expect(uptimePct(spans)).toBe("90.0");
+    expect(uptimePct([span("healthy", 720, 0)])).toBe("100");
+    expect(uptimePct([])).toBeNull();
+  });
+});
+
+describe("incidentsOf", () => {
+  it("groups consecutive unhealthy spans into one incident carrying the worst verdict and its sub-spans", () => {
+    const spans = [
+      span("healthy", 720, 200),
+      span("degraded", 200, 190),
+      span("outage", 190, 180),
+      span("healthy", 180, 72),
+      span("incomplete", 72, 0),
+    ];
+    const inc = incidentsOf(spans, now);
+    expect(inc).toHaveLength(2);
+    // Ongoing first, then newest.
+    expect(inc[0].ongoing).toBe(true);
+    expect(inc[0].worst).toBe("incomplete");
+    expect(inc[1].worst).toBe("outage");
+    expect(inc[1].spans.map((s) => s.value)).toEqual(["degraded", "outage"]);
+    expect(inc[1].ongoing).toBe(false);
+    expect(inc[1].to - inc[1].from).toBe(20 * 3600_000);
+  });
+
+  it("a fully healthy window has no incidents", () => {
+    expect(incidentsOf([span("healthy", 720, 0)], now)).toHaveLength(0);
+  });
+});
+
+describe("incidentReasons", () => {
+  const rows = incidentRows(
+    [
+      alarms("videobar-1", "c-bar", [
+        { id: "a1", severity: "critical", message: "No route to host", raised_at: iso(195), cleared_at: iso(185), active: false },
+        { id: "a2", severity: "warning", message: "Unrelated, later", raised_at: iso(10), active: true },
+      ]),
+    ],
+    now,
+    30 * 24,
+  );
+
+  it("keeps only the alarms overlapping the incident's stretch", () => {
+    const spans = [span("healthy", 720, 200), span("degraded", 200, 180), span("healthy", 180, 0)];
+    const inc = incidentsOf(spans, now)[0];
+    const reasons = incidentReasons(inc, rows);
+    expect(reasons.map((r) => r.id)).toEqual(["a1"]);
+  });
+
+  it("an ongoing alarm overlaps an ongoing incident", () => {
+    const spans = [span("healthy", 720, 12), span("degraded", 12, 0)];
+    const inc = incidentsOf(spans, now)[0];
+    expect(incidentReasons(inc, rows).map((r) => r.id)).toEqual(["a2"]);
   });
 });

@@ -354,15 +354,42 @@ describe("the history tab (#792)", () => {
     qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-power"))], []);
   }
 
-  it("is always on the rail, and renders the verdict spans with every member alarm beneath, cleared ones included", async () => {
+  // #795 refinement: the tab reads like a status page: uptime up top, the
+  // timeline, then each unhealthy stretch as an incident whose reasoning
+  // expands. The old flat what-went-wrong assertions live on inside the
+  // incident form below.
+  it("leads with the window's uptime beside the timeline", () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=history`);
+    const tab = screen.getByTestId("history-tab");
+    const uptime = within(tab).getByTestId("uptime-kpi");
+    expect(uptime.textContent).toMatch(/\d+(\.\d)?%/);
+    expect(within(tab).getByTestId("health-history-full")).toBeTruthy();
+  });
+
+  it("renders the ongoing unhealthy stretch as the first incident, expandable to the alarms that explain it", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=history`);
+    seedAlarms(r.qc);
+    const list = screen.getByTestId("incident-list");
+    const first = within(list).getAllByTestId(/^incident-/)[0];
+    expect(within(first).getByText(/ongoing/)).toBeTruthy();
+    fireEvent.click(within(first).getByRole("button", { name: /expand/ }));
+    expect(await within(first).findByText("No route to host")).toBeTruthy();
+    expect(within(first).getAllByText(/degraded/).length).toBeGreaterThan(0);
+  });
+
+  it("an alarm outside every incident still shows, under other alarms", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=history`);
+    seedAlarms(r.qc);
+    const tab = screen.getByTestId("history-tab");
+    expect(await within(tab).findByText("Fan speed high")).toBeTruthy();
+  });
+
+  it("is always on the rail, with the timeline and raise markers", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=history`);
     seedAlarms(r.qc);
     expect(screen.getByRole("tab", { name: "History" })).toBeTruthy();
-    const tab = screen.getByTestId("history-tab");
-    expect(within(tab).getByTestId("health-history-full")).toBeTruthy();
-    expect(await within(tab).findByText("No route to host")).toBeTruthy();
-    expect(within(tab).getByText("Fan speed high")).toBeTruthy();
-    expect(within(tab).getByText(/ongoing/)).toBeTruthy();
+    expect(screen.getByTestId("health-history-full")).toBeTruthy();
+    await screen.findByText("Fan speed high");
   });
 
   it("marks each raise on the strip's axis", async () => {

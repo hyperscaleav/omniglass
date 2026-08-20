@@ -28,7 +28,8 @@ import { entityLabel } from "../lib/entities";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
 import { componentAlarms, componentAlarmsKey, severityRank } from "../lib/alarms";
-import { incidentRows, markerX, type MemberAlarms } from "../lib/system_history";
+import { incidentReasons, incidentRows, incidentsOf, markerX, uptimePct, type MemberAlarms } from "../lib/system_history";
+import { spans as timelineSpans } from "../lib/timeline";
 import { systemEvents, systemEventsKey, systemLogs, systemLogsKey } from "../lib/system_activity";
 import { metricSeries, metricSeriesKey } from "../lib/series";
 import TimeseriesChart from "../components/TimeseriesChart";
@@ -128,6 +129,12 @@ export default function SystemZoom() {
   const metricSeriesData = () => kpiMetrics().map((_, i) => seriesQueries[i]?.data);
   const eventsQ = useQuery(() => ({ queryKey: systemEventsKey(id()), queryFn: () => systemEvents(id()), enabled: tab() === "events" }));
   const logsQ = useQuery(() => ({ queryKey: systemLogsKey(id()), queryFn: () => systemLogs(id()), enabled: tab() === "logs" }));
+  const verdictSpans = createMemo(() =>
+    timelineSpans((health.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.verdict })), health.data?.verdict ?? null, pageNow),
+  );
+  const uptime = createMemo(() => uptimePct(verdictSpans()));
+  const incidentList = createMemo(() => incidentsOf(verdictSpans(), pageNow));
+  const [openIncident, setOpenIncident] = createSignal<number | null>(null);
   const incidents = createMemo(() => {
     const members: MemberAlarms[] = memberIds().map((m, i) => ({
       component: m.name,
@@ -135,6 +142,10 @@ export default function SystemZoom() {
       alarms: alarmHistories[i]?.data ?? [],
     }));
     return incidentRows(members, pageNow, 30 * 24);
+  });
+  const otherAlarms = createMemo(() => {
+    const inIncident = new Set(incidentList().flatMap((inc) => incidentReasons(inc, incidents()).map((r) => r.id)));
+    return incidents().filter((r) => !inIncident.has(r.id));
   });
   const comps = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const prods = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
@@ -299,47 +310,125 @@ export default function SystemZoom() {
                 </Show>
                 <Show when={tab() === "history"}>
                   <section data-testid="history-tab" class="flex flex-col gap-4 p-4">
-                    <div data-testid="health-history-full">
-                      <HealthHistory transitions={health.data?.transitions ?? []} verdict={health.data?.verdict} />
-                      {/* The causes on the same axis: one marker per raise in
-                          the window, under the strip the spans painted. */}
-                      <div class="relative mt-1 h-2">
-                        <For each={incidents()}>
-                          {(inc) => (
-                            <span
-                              data-testid={`incident-marker-${inc.id}`}
-                              class="absolute top-0 h-0 w-0 -translate-x-1/2 border-x-4 border-b-6 border-x-transparent"
-                              classList={{ "border-b-error": inc.severity === "critical", "border-b-warning": inc.severity !== "critical" }}
-                              style={{ left: `${markerX(inc.raisedAt, pageNow, 30 * 24 * 3600_000) * 100}%` }}
-                              title={`${inc.message} · ${inc.component}`}
-                            />
-                          )}
-                        </For>
+                    <div class="flex flex-wrap items-end gap-6">
+                      <div data-testid="uptime-kpi" class="flex flex-col">
+                        <Eyebrow label="Uptime" hint="The healthy share of the recorded window: the health KPI over time, the number a status page leads with. The timeline beside it is the same record drawn out." />
+                        <span class="font-mono text-3xl tabular-nums" classList={{ "text-success": (incidentList().length === 0), "text-base-content": incidentList().length > 0 }}>
+                          {uptime() ?? "–"}<span class="text-lg">%</span>
+                        </span>
+                        <span class="text-[10px] text-base-content/45">last 30 days</span>
                       </div>
-                    </div>
-                    <div>
-                      <Eyebrow label="What went wrong" hint="Every alarm any member raised inside the window, cleared ones included: the causes behind the spans above. Ongoing first, then newest." />
-                      <Show when={incidents().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window.</p>}>
-                        <ul class="mt-2 divide-y divide-base-300 rounded-box border border-base-300 text-sm">
+                      <div class="min-w-0 flex-1" data-testid="health-history-full">
+                        <HealthHistory transitions={health.data?.transitions ?? []} verdict={health.data?.verdict} />
+                        <div class="relative mt-1 h-2">
                           <For each={incidents()}>
                             {(inc) => (
-                              <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-2">
-                                <span class="badge badge-sm" classList={{ "badge-error badge-soft": inc.severity === "critical", "badge-warning badge-soft": inc.severity !== "critical" }}>{inc.severity}</span>
-                                <span>{inc.message}</span>
-                                <button type="button" class="cursor-pointer font-mono text-xs text-base-content/70 hover:underline" onClick={() => navigate(`/components/${inc.componentId}?zoom=1`)}>{inc.component}</button>
-                                <span class="ml-auto text-xs tabular-nums text-base-content/50">
-                                  {fmtTime(inc.raisedAt)}
-                                  {" · "}
-                                  <Show when={inc.ongoing} fallback={<>held {durationText(Date.parse(inc.clearedAt!) - Date.parse(inc.raisedAt))}</>}>
-                                    <span class="text-warning">ongoing · {durationText(pageNow - Date.parse(inc.raisedAt))}</span>
-                                  </Show>
-                                </span>
-                              </li>
+                              <span
+                                data-testid={`incident-marker-${inc.id}`}
+                                class="absolute top-0 h-0 w-0 -translate-x-1/2 border-x-4 border-b-6 border-x-transparent"
+                                classList={{ "border-b-error": inc.severity === "critical", "border-b-warning": inc.severity !== "critical" }}
+                                style={{ left: `${markerX(inc.raisedAt, pageNow, 30 * 24 * 3600_000) * 100}%` }}
+                                title={`${inc.message} · ${inc.component}`}
+                              />
                             )}
+                          </For>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <Eyebrow label="Incidents" hint="One entry per contiguous stretch away from healthy, however many verdict changes it contained, ongoing first. Expand an entry for the transitions inside it and the alarms that explain them." />
+                      <Show when={incidentList().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window. The room held healthy the whole way.</p>}>
+                        <ul data-testid="incident-list" class="mt-2 flex flex-col gap-2">
+                          <For each={incidentList()}>
+                            {(inc, idx) => {
+                              const reasons = () => incidentReasons(inc, incidents());
+                              const open = () => openIncident() === idx();
+                              return (
+                                <li
+                                  data-testid={`incident-${idx()}`}
+                                  class="rounded-box border"
+                                  classList={{
+                                    "border-error/45 bg-error/5": inc.worst === "outage",
+                                    "border-warning/45 bg-warning/5": inc.worst === "degraded",
+                                    "border-incomplete/45": inc.worst === "incomplete",
+                                    "border-base-300": inc.worst === "healthy",
+                                  }}
+                                >
+                                  <button type="button" class="flex w-full cursor-pointer flex-wrap items-baseline gap-x-3 gap-y-1 px-3 py-2 text-left text-sm" onClick={() => setOpenIncident(open() ? null : idx())}>
+                                    <HealthBadge verdict={inc.worst} size="xs" />
+                                    <span class="font-medium">
+                                      {inc.worst === "incomplete" ? "Commissioning" : inc.worst === "outage" ? "Outage" : "Degraded"}
+                                      {inc.ongoing ? " · ongoing" : ""}
+                                    </span>
+                                    <span class="text-xs tabular-nums text-base-content/60">
+                                      {fmtTime(new Date(inc.from).toISOString())}
+                                      {" → "}
+                                      {inc.ongoing ? "now" : fmtTime(new Date(inc.to).toISOString())}
+                                      {" · "}
+                                      {durationText((inc.ongoing ? pageNow : inc.to) - inc.from)}
+                                    </span>
+                                    <span class="ml-auto text-xs text-base-content/40">{open() ? "collapse" : "expand"}</span>
+                                  </button>
+                                  <Show when={open()}>
+                                    <div class="border-t border-base-300 px-3 py-2 text-sm">
+                                      <ul class="flex flex-col gap-1 text-xs text-base-content/70">
+                                        <For each={[...inc.spans].reverse()}>
+                                          {(sp) => (
+                                            <li class="flex flex-wrap items-baseline gap-2">
+                                              <HealthBadge verdict={sp.value} size="xs" />
+                                              <span class="tabular-nums">{fmtTime(new Date(sp.from).toISOString())}</span>
+                                              <span class="text-base-content/45">held {durationText(sp.to - sp.from)}</span>
+                                            </li>
+                                          )}
+                                        </For>
+                                      </ul>
+                                      <Show
+                                        when={reasons().length > 0}
+                                        fallback={<p class="mt-2 text-xs text-base-content/50">No alarm overlaps this stretch: a commissioning gap (a role nobody staffed), not a failure.</p>}
+                                      >
+                                        <ul class="mt-2 flex flex-col gap-1">
+                                          <For each={reasons()}>
+                                            {(r) => (
+                                              <li class="flex flex-wrap items-baseline gap-x-2 text-xs">
+                                                <span class="badge badge-xs" classList={{ "badge-error badge-soft": r.severity === "critical", "badge-warning badge-soft": r.severity !== "critical" }}>{r.severity}</span>
+                                                <span>{r.message}</span>
+                                                <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={(e) => { e.stopPropagation(); navigate(`/components/${r.componentId}?zoom=1`); }}>{r.component}</button>
+                                                <span class="text-base-content/45 tabular-nums">
+                                                  {fmtTime(r.raisedAt)} → {r.clearedAt ? fmtTime(r.clearedAt) : "ongoing"}
+                                                </span>
+                                              </li>
+                                            )}
+                                          </For>
+                                        </ul>
+                                      </Show>
+                                    </div>
+                                  </Show>
+                                </li>
+                              );
+                            }}
                           </For>
                         </ul>
                       </Show>
                     </div>
+
+                    <Show when={otherAlarms().length > 0}>
+                      <div>
+                        <Eyebrow label="Other alarms" hint="Alarms in the window that never overlapped an unhealthy stretch: the component complained, and the room absorbed it." />
+                        <ul class="mt-2 divide-y divide-base-300 rounded-box border border-base-300 text-sm">
+                          <For each={otherAlarms()}>
+                            {(r) => (
+                              <li class="flex flex-wrap items-baseline gap-x-2 px-3 py-1.5 text-xs">
+                                <span class="badge badge-xs" classList={{ "badge-error badge-soft": r.severity === "critical", "badge-warning badge-soft": r.severity !== "critical" }}>{r.severity}</span>
+                                <span>{r.message}</span>
+                                <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={() => navigate(`/components/${r.componentId}?zoom=1`)}>{r.component}</button>
+                                <span class="ml-auto text-base-content/45 tabular-nums">{fmtTime(r.raisedAt)}</span>
+                              </li>
+                            )}
+                          </For>
+                        </ul>
+                      </div>
+                    </Show>
                   </section>
                 </Show>
                 <div class="flex flex-col gap-5 p-4" classList={{ hidden: tab() !== "overview" }}>
