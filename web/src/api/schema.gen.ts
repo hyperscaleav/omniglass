@@ -3124,6 +3124,26 @@ export interface paths {
         patch: operations["update-system"];
         trace?: never;
     };
+    "/systems/{name}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a system's recent events, members included
+         * @description Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         */
+        get: operations["list-system-events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems/{name}/health": {
         parameters: {
             query?: never;
@@ -3136,6 +3156,26 @@ export interface paths {
          * @description The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
          */
         get: operations["get-system-health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a system's members' recent log lines
+         * @description Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         */
+        get: operations["list-system-logs"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7025,6 +7065,78 @@ export interface components {
             system_type?: string;
             /** @description The system_type's uuid; the stable form of system_type */
             system_type_id?: string;
+        };
+        SystemEventBody: {
+            /** @description Structured attributes, when the occurrence carried a JSON payload */
+            attributes?: unknown;
+            /** @description The event_type's uuid, the stable form of key */
+            event_type_id: string;
+            /** @description The series discriminator (e.g. the interface), when set */
+            instance?: string;
+            /** @description The event_type name of the occurrence (e.g. call-started) */
+            key: string;
+            /** @description The occurrence message */
+            message: string;
+            /** @description How the occurrence arrived (caught/caused/derived/scheduled) */
+            origin: string;
+            /** @description The owning row's name (the system's, or the member component's) */
+            owner: string;
+            /** @description Which arc raised the occurrence: system or component */
+            owner_kind: string;
+            /** @description The lineage of the occurrence (observed for direct collection) */
+            provenance: string;
+            /** @description The interface type that produced the occurrence */
+            source?: string;
+            /**
+             * Format: date-time
+             * @description When the occurrence happened
+             */
+            ts: string;
+        };
+        SystemEventsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemEventsOutputBody.json
+             */
+            readonly $schema?: string;
+            events: components["schemas"]["SystemEventBody"][] | null;
+            system: string;
+        };
+        SystemLogBody: {
+            /** @description Structured fields parsed from the line, when present */
+            attributes?: unknown;
+            /** @description The member component that wrote the line */
+            component: string;
+            /** @description Threads related lines and their derived events */
+            correlation_id?: string;
+            /** @description The line's facility, when classified */
+            facility?: string;
+            /** @description The series discriminator, when set */
+            instance?: string;
+            /** @description Freeform classification labels, when present */
+            labels?: unknown;
+            /** @description The raw log text */
+            message: string;
+            /** @description The line's severity, when classified */
+            severity?: string;
+            /** @description The channel the line arrived on (e.g. syslog) */
+            source?: string;
+            /**
+             * Format: date-time
+             * @description When the line arrived
+             */
+            ts: string;
+        };
+        SystemLogsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemLogsOutputBody.json
+             */
+            readonly $schema?: string;
+            logs: components["schemas"]["SystemLogBody"][] | null;
+            system: string;
         };
         SystemMemberBody: {
             /** @description Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
@@ -14543,6 +14655,38 @@ export interface operations {
             };
         };
     };
+    "list-system-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemEventsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "get-system-health": {
         parameters: {
             query?: never;
@@ -14562,6 +14706,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FleetHealthOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemLogsOutputBody"];
                 };
             };
             /** @description Error */

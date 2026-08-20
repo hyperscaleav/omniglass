@@ -9,6 +9,7 @@ import { systemRolesKey } from "../lib/system_roles";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { systemMetricsKey } from "../lib/system_metrics";
 import { componentAlarmsKey } from "../lib/alarms";
+import { systemEventsKey, systemLogsKey } from "../lib/system_activity";
 import { STANDARDS_KEY } from "../lib/standards";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
@@ -368,5 +369,35 @@ describe("the history tab (#792)", () => {
     seedAlarms(r.qc);
     await screen.findByText("No route to host");
     expect(screen.getAllByTestId(/^incident-marker-/)).toHaveLength(2);
+  });
+});
+
+describe("the events and logs tabs (#793)", () => {
+  it("the events tab lists the room's story newest first, each row labeled by its owner", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=events`);
+    r.qc.setQueryData([...systemEventsKey(uuidFor("szp-sys"))], [
+      { ts: "2026-08-18T15:53:00Z", key: "call-started", event_type_id: "et-1", origin: "caught", message: "call started", provenance: "observed", owner_kind: "component", owner: "videobar-1" },
+      { ts: "2026-08-18T15:50:00Z", key: "occupancy-changed", event_type_id: "et-2", origin: "derived", message: "0 to 6", provenance: "derived", owner_kind: "system", owner: "boardroom" },
+    ]);
+    const tab = screen.getByTestId("events-tab");
+    expect(await within(tab).findByText("call started")).toBeTruthy();
+    expect(within(tab).getByText("videobar-1")).toBeTruthy();
+    expect(within(tab).getByText("occupancy-changed")).toBeTruthy();
+    expect(within(tab).getByText("boardroom")).toBeTruthy();
+  });
+
+  it("the logs tab renders the members' lines with severity colouring the row, and an empty room says so", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=logs`);
+    r.qc.setQueryData([...systemLogsKey(uuidFor("szp-sys"))], [
+      { ts: "2026-08-18T16:45:02Z", severity: "error", message: "connect timeout", component: "videobar-1" },
+      { ts: "2026-08-18T16:42:11Z", severity: "info", message: "qrc poll ok", component: "dsp" },
+    ]);
+    const tab = screen.getByTestId("logs-tab");
+    expect(await within(tab).findByText(/connect timeout/)).toBeTruthy();
+    expect(within(tab).getByText(/qrc poll ok/)).toBeTruthy();
+    cleanup();
+    const r2 = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=logs`);
+    r2.qc.setQueryData([...systemLogsKey(uuidFor("szp-sys"))], []);
+    expect(await screen.findByText(/No lines in the window/)).toBeTruthy();
   });
 });

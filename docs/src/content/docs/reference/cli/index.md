@@ -4026,6 +4026,26 @@ Example:
 omniglass system delete <name>
 ```
 
+### `omniglass system event`
+
+Commands for the event resource
+
+#### `omniglass system event list`
+
+List a system's recent events, members included
+
+```
+omniglass system event list <name>
+```
+
+Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system event list <name>
+```
+
 ### `omniglass system get`
 
 Get a system
@@ -4092,6 +4112,26 @@ Example:
 
 ```sh
 omniglass system listTags <name>
+```
+
+### `omniglass system log`
+
+Commands for the log resource
+
+#### `omniglass system log list`
+
+List a system's members' recent log lines
+
+```
+omniglass system log list <name>
+```
+
+Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+
+Example:
+
+```sh
+omniglass system log list <name>
 ```
 
 ### `omniglass system member`

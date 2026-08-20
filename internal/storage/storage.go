@@ -502,6 +502,9 @@ type Gateway interface {
 	// before the write. ListComponentEvents backs the component event log panel.
 	InsertEvents(ctx context.Context, evs []EventWrite) error
 	ListComponentEvents(ctx context.Context, componentName string, window time.Duration, limit int) ([]Event, error)
+	// ListSystemEvents merges the system's own events with its members',
+	// newest first, each row naming its owner (#793).
+	ListSystemEvents(ctx context.Context, systemID string, window time.Duration, limit int) ([]Event, error)
 
 	// The raw-log lane (ADR-0066): log lines are untyped arrival, not events, so
 	// neither insert has a registry gate. log_line is component-owned (#589);
@@ -510,6 +513,9 @@ type Gateway interface {
 	InsertLogLines(ctx context.Context, lines []LogLineWrite) error
 	InsertNodeLogs(ctx context.Context, lines []NodeLogWrite) error
 	ListComponentLogs(ctx context.Context, componentName string, window time.Duration, limit int) ([]LogLine, error)
+	// ListSystemLogs merges the members' raw log lines newest first, each
+	// naming its writer (#793).
+	ListSystemLogs(ctx context.Context, systemID string, window time.Duration, limit int) ([]LogLine, error)
 	ListNodeLogs(ctx context.Context, nodeName string, window time.Duration, limit int) ([]LogLine, error)
 
 	// The node tier: the edge runtime's enrollment lifecycle and worklist. A node

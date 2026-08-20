@@ -29,6 +29,7 @@ import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
 import { componentAlarms, componentAlarmsKey, severityRank } from "../lib/alarms";
 import { incidentRows, markerX, type MemberAlarms } from "../lib/system_history";
+import { systemEvents, systemEventsKey, systemLogs, systemLogsKey } from "../lib/system_activity";
 
 // The system zoom (#636): the typed slots a system needs filled, at the
 // identity route behind ?zoom=1 (ADR-0126). One card per role with the
@@ -82,6 +83,8 @@ export default function SystemZoom() {
     { key: "overview", label: "Overview" },
     ...(mapDecl() ? [{ key: "map", label: "Map" }] : []),
     { key: "history", label: "History" },
+    { key: "events", label: "Events" },
+    { key: "logs", label: "Logs" },
   ]);
   const tab = () => {
     const t = Array.isArray(search.tab) ? search.tab[0] : search.tab;
@@ -103,6 +106,8 @@ export default function SystemZoom() {
     })),
   }));
   // Pinned once, like pageNow: incident ages must not re-age mid-render.
+  const eventsQ = useQuery(() => ({ queryKey: systemEventsKey(id()), queryFn: () => systemEvents(id()), enabled: tab() === "events" }));
+  const logsQ = useQuery(() => ({ queryKey: systemLogsKey(id()), queryFn: () => systemLogs(id()), enabled: tab() === "logs" }));
   const incidents = createMemo(() => {
     const members: MemberAlarms[] = memberIds().map((m, i) => ({
       component: m.name,
@@ -192,6 +197,41 @@ export default function SystemZoom() {
                 <TabRail tabs={tabs()} />
                 <Show when={tab() === "map" && mapDecl()}>
                   {(decl) => <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} />}
+                </Show>
+                <Show when={tab() === "events"}>
+                  <section data-testid="events-tab" class="flex flex-col gap-2 p-4">
+                    <Eyebrow label="Events" hint="The room's story on the event lane: the system's own events and its members', newest first, each row labeled by the owner that raised it. The last 24 hours, capped." />
+                    <Show when={(eventsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No events in the window.</p>}>
+                      <ul class="divide-y divide-base-300 rounded-box border border-base-300 text-sm">
+                        <For each={eventsQ.data ?? []}>
+                          {(e) => (
+                            <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-2">
+                              <span class="text-xs tabular-nums text-base-content/50">{fmtTime(e.ts)}</span>
+                              <span class="font-mono text-xs text-base-content/70">{e.owner}</span>
+                              <span class="font-mono text-xs">{e.key}</span>
+                              <span class="min-w-0 flex-1 truncate text-base-content/80">{e.message}</span>
+                            </li>
+                          )}
+                        </For>
+                      </ul>
+                    </Show>
+                  </section>
+                </Show>
+                <Show when={tab() === "logs"}>
+                  <section data-testid="logs-tab" class="flex flex-col gap-2 p-4">
+                    <Eyebrow label="Logs" hint="The members' raw log lines merged newest first, each naming the component that wrote it. The last 24 hours, capped; a node's own logs live on the node." />
+                    <Show when={(logsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No lines in the window.</p>}>
+                      <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100 p-2 font-mono text-[11.5px] leading-relaxed">
+                        <For each={logsQ.data ?? []}>
+                          {(l) => (
+                            <div class="whitespace-pre" classList={{ "text-error": l.severity === "error" || l.severity === "critical", "text-warning": l.severity === "warning", "text-base-content/70": !l.severity || l.severity === "info" }}>
+                              {`${fmtTime(l.ts)}  ${(l.component ?? "").padEnd(12)} ${(l.severity ?? "").padEnd(7)} ${l.message}`}
+                            </div>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
+                  </section>
                 </Show>
                 <Show when={tab() === "history"}>
                   <section data-testid="history-tab" class="flex flex-col gap-4 p-4">

@@ -52,8 +52,12 @@ type NodeLogWrite struct {
 // Severity, Facility, and CorrelationID come back "" when NULL; Instance stays
 // "" on a node row (node_log has no instance column).
 type LogLine struct {
-	ID            int64
-	TS            time.Time
+	ID int64
+	TS time.Time
+	// Component is the writing component's NAME, populated by the
+	// system-scoped read (#793) where one list mixes writers; the
+	// single-component read leaves it empty.
+	Component     string
 	Instance      string
 	Source        string
 	Severity      string
@@ -227,4 +231,35 @@ func (p *PG) ListNodeLogs(ctx context.Context, nodeName string, window time.Dura
 		return nil, fmt.Errorf("storage: iterate node logs %s: %w", nodeName, err)
 	}
 	return out, nil
+}
+
+// ListSystemLogs returns the members' raw log lines merged newest first
+// (#793), each naming the component that wrote it: the workspace's Logs tab.
+// Mirrors ListSystemEvents; log lines are component-owned (#589), so the
+// system's own arc contributes nothing here.
+func (p *PG) ListSystemLogs(ctx context.Context, systemID string, window time.Duration, limit int) ([]LogLine, error) {
+	bound, args := tsSince("ts", window, systemID, limit)
+	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
+		select log_line.id, ts,
+			coalesce((select c.name from component c where c.id = log_line.component_id), ''),
+			instance, source,
+			coalesce(severity, ''), coalesce(facility, ''), message, attributes, labels, coalesce(correlation_id, '')
+		from log_line
+		where log_line.component_id in (select m.component_id from system_member m where m.system_id = $1::uuid)
+		  and %s
+		order by ts desc
+		limit $2`, bound), args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list system logs %s: %w", systemID, err)
+	}
+	defer rows.Close()
+	var out []LogLine
+	for rows.Next() {
+		var l LogLine
+		if err := rows.Scan(&l.ID, &l.TS, &l.Component, &l.Instance, &l.Source, &l.Severity, &l.Facility, &l.Message, &l.Attributes, &l.Labels, &l.CorrelationID); err != nil {
+			return nil, fmt.Errorf("storage: scan system log line: %w", err)
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
 }

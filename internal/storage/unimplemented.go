@@ -811,3 +811,11 @@ func (UnimplementedGateway) LocationHealth(context.Context, string, time.Duratio
 func (UnimplementedGateway) FleetProjection(context.Context, scope.Set, scope.Set, scope.Set) (*FleetView, error) {
 	return nil, nil
 }
+
+func (UnimplementedGateway) ListSystemEvents(context.Context, string, time.Duration, int) ([]Event, error) {
+	return nil, nil
+}
+
+func (UnimplementedGateway) ListSystemLogs(context.Context, string, time.Duration, int) ([]LogLine, error) {
+	return nil, nil
+}

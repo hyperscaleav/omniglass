@@ -144,3 +144,49 @@ func TestInsertNodeLogs(t *testing.T) {
 		t.Fatal("insert with unknown node: want error, got nil")
 	}
 }
+
+// The system-scoped log read (#793): the members' raw lines merged newest
+// first, each naming the component that wrote it. Mirrors ListSystemEvents.
+func TestListSystemLogs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	all := scope.Set{All: true}
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "room-b"}, all, all)
+	if err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	for _, n := range []string{"disp-9", "stray-9"} {
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: n}, all, all, all, all); err != nil {
+			t.Fatalf("create %s: %v", n, err)
+		}
+	}
+	if err := gw.AddMember(ctx, "", "room-b", "disp-9", all, all); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+	now := time.Now().UTC()
+	if err := gw.InsertLogLines(ctx, []storage.LogLineWrite{
+		{OwnerKind: "component", OwnerID: "disp-9", Message: "link up", Severity: "info", TS: now.Add(-1 * time.Minute)},
+		{OwnerKind: "component", OwnerID: "stray-9", Message: "not ours", Severity: "info", TS: now},
+	}); err != nil {
+		t.Fatalf("insert logs: %v", err)
+	}
+
+	got, err := gw.ListSystemLogs(ctx, sys.ID, time.Hour, 10)
+	if err != nil {
+		t.Fatalf("list system logs: %v", err)
+	}
+	if len(got) != 1 || got[0].Message != "link up" || got[0].Component != "disp-9" {
+		t.Fatalf("got %+v, want only the member's line, named", got)
+	}
+}

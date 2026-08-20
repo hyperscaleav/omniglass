@@ -76,3 +76,60 @@ func TestInsertEvents(t *testing.T) {
 		t.Fatal("insert with unknown owner: want error, got nil")
 	}
 }
+
+// The system-scoped event read (#793): the system's own events AND its
+// members', one list newest first, each row saying which owner raised it.
+// The workspace's Events tab renders exactly this.
+func TestListSystemEvents(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	all := scope.Set{All: true}
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "room-a"}, all, all)
+	if err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1"}, all, all, all, all); err != nil {
+		t.Fatalf("create member: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "stray-1"}, all, all, all, all); err != nil {
+		t.Fatalf("create stray: %v", err)
+	}
+	if err := gw.AddMember(ctx, "", "room-a", "bar-1", all, all); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+
+	now := time.Now().UTC()
+	if err := gw.InsertEvents(ctx, []storage.EventWrite{
+		{OwnerKind: "component", OwnerID: "bar-1", Key: "call-started", Message: "member event", Source: "xapi", TS: now.Add(-2 * time.Minute)},
+		{OwnerKind: "system", OwnerID: sys.ID, Key: "call-started", Message: "system event", Source: "seed", TS: now.Add(-1 * time.Minute)},
+		{OwnerKind: "component", OwnerID: "stray-1", Key: "call-started", Message: "someone else's", Source: "xapi", TS: now},
+	}); err != nil {
+		t.Fatalf("insert events: %v", err)
+	}
+
+	got, err := gw.ListSystemEvents(ctx, sys.ID, time.Hour, 10)
+	if err != nil {
+		t.Fatalf("list system events: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d events, want 2 (member + system, never the stray): %+v", len(got), got)
+	}
+	// Newest first; each row names its owner.
+	if got[0].Message != "system event" || got[0].OwnerKind != "system" || got[0].Owner != "room-a" {
+		t.Errorf("row 0 = %+v, want the system's own event labeled system/room-a", got[0])
+	}
+	if got[1].Message != "member event" || got[1].OwnerKind != "component" || got[1].Owner != "bar-1" {
+		t.Errorf("row 1 = %+v, want the member's event labeled component/bar-1", got[1])
+	}
+}

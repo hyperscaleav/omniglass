@@ -172,6 +172,13 @@ flaps weekly and a room that failed once look different here, which is the point
 
 ::screenshot{#fleet-history}
 
+## The events and the logs
+
+The **Events** tab is the room's story on the event lane: the system's own events and its
+members', newest first, each row labeled by the owner that raised it. The **Logs** tab is
+the members' raw lines merged, each naming the component that wrote it. Both cover the
+last 24 hours, capped; both scope to what you can read.
+
 ## The component leaf
 
 The leaf opens the way every zoom does: the verdict, and since-when. A component has no
