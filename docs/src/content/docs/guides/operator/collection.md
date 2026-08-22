@@ -12,7 +12,7 @@ the node ships back. This page walks the console surfaces; the model behind them
 
 ## Nodes
 
-**Inventory > Nodes** (with `node:read`, which must be **all-scope**, since a node is
+**Nodes** in the sidebar (with `node:read`, which must be **all-scope**, since a node is
 fleet-wide, so a location-scoped operator cannot list nodes) is the collection-daemon
 inventory. Each row reads the way every list in the console reads: the node's **label** on the
 first line and its **name** beneath it (shown only when the two differ), then a **liveness pill** (up,
@@ -44,8 +44,9 @@ gated by `node:read`): the node's own recent operational log lines, newest first
 ## Interfaces
 
 An interface is an **API on a component** that a node reaches for, and it lives **on the
-component**: there is no standalone Interfaces surface. Open a component from **Inventory >
-Components** (with `interface:read`) and its interfaces read as a panel on the detail, each
+component**: there is no standalone Interfaces surface. Open a component from the Fleet
+list's **Components** tab (with `interface:read`) and its interfaces read as a panel on the
+detail, each
 showing the interface's **label** over its protocol name, its reachability, its node placement, and
 its probed target. An interface is **named by its protocol**: you pick a **type** (the transport) and
 the interface takes that protocol as its name, unique within its component, so one component can
@@ -76,7 +77,7 @@ A task is the **collection work** a node runs, and it is **derived**, not author
 interface creates its one poll task. A task has **no name**: it is a binding, a **function**
 running over an **interface**, so it reads as its interface (the anchor) plus that function,
 never a redundant label. There is no standalone Tasks surface. A node's derived tasks read as a
-**panel on the node's detail** (open a node from **Inventory > Nodes**, with `task:read`): each
+**panel on the node's detail** (open a node from **Nodes**, with `task:read`): each
 shows its interface, the function it runs (today the built-in **reachability** check, with a
 provisional marker since named collection functions arrive with device drivers), and an
 **enabled** state; the node it runs on follows its interface's placement. To change what a node
