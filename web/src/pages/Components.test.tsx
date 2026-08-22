@@ -312,7 +312,7 @@ describe("Components create-as-route", () => {
   });
 
   it("shows an existing component read-only in view: no tag add control, an Edit affordance", async () => {
-    mount("/components/mic-2");
+    mount("/components/mic-2?view=detail");
     // The detail resolves and renders the read-only facts.
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     // No in-body mutation control in view: the TagAdder add row is absent.
@@ -322,7 +322,7 @@ describe("Components create-as-route", () => {
   });
 
   it("edit mode exposes an editable name with a check button", async () => {
-    mount("/components/mic-2");
+    mount("/components/mic-2?view=detail");
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     // The name becomes an editable input seeded from the row.
@@ -350,7 +350,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
-    window.history.pushState({}, "", "/components/mic-2");
+    window.history.pushState({}, "", "/components/mic-2?view=detail");
     render(() => (
       <QueryClientProvider client={qc}>
         <Router>
@@ -386,7 +386,7 @@ describe("Components create-as-route", () => {
   });
 
   it("a fresh detail view keeps the name read-only", async () => {
-    mount("/components/mic-2");
+    mount("/components/mic-2?view=detail");
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     // No check button until edit begins: the name is a read-only fact.
     expect(screen.queryByLabelText("Check name")).toBeNull();
@@ -413,7 +413,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
-    window.history.pushState({}, "", "/components/mic-2");
+    window.history.pushState({}, "", "/components/mic-2?view=detail");
     render(() => (
       <QueryClientProvider client={qc}>
         <Router>
@@ -426,7 +426,7 @@ describe("Components create-as-route", () => {
   });
 
   it("shows no tracking chip on an operator-typed name", async () => {
-    mount("/components/mic-2"); // comp.name_generated is unset (falsy)
+    mount("/components/mic-2?view=detail"); // comp.name_generated is unset (falsy)
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     expect(screen.queryByText("Generated")).toBeNull();
   });
@@ -451,7 +451,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...ME_KEY], limitedMe);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
-    window.history.pushState({}, "", "/components/mic-2");
+    window.history.pushState({}, "", "/components/mic-2?view=detail");
     render(() => (
       <QueryClientProvider client={qc}>
         <Router>
@@ -468,7 +468,7 @@ describe("Components create-as-route", () => {
   });
 
   it("the reset affordance calls :resetName and updates the name field from the response", async () => {
-    mount("/components/mic-2");
+    mount("/components/mic-2?view=detail");
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     await screen.findByDisplayValue("mic-2");
@@ -518,7 +518,7 @@ describe("Components create-as-route", () => {
     // The route already carries twinA's uuid (#627 Task 15c); the ambiguity
     // is only in what the detail page's own writes address by, not in which
     // row opens.
-    window.history.pushState({}, "", `/components/${twinA.id}`);
+    window.history.pushState({}, "", `/components/${twinA.id}?view=detail`);
     render(() => (
       <QueryClientProvider client={qc}>
         <Router>
@@ -604,7 +604,7 @@ describe("Components create-as-route", () => {
   // uuid (replace); a rename afterward must leave that URL alone, since the
   // id it addresses never changes.
   it("redirects a name-shaped deep link to the resolved uuid, and a rename leaves the route where it is", async () => {
-    mount("/components/mic-2");
+    mount("/components/mic-2?view=detail");
     await waitFor(() => expect(window.location.pathname).toBe(`/components/${comp.id}`));
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
@@ -648,7 +648,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("component", "mic-2")], []);
-    window.history.pushState({}, "", "/web/components/mic-2");
+    window.history.pushState({}, "", "/web/components/mic-2?view=detail");
     render(() => (
       <QueryClientProvider client={qc}>
         <Router base="/web">
@@ -663,7 +663,7 @@ describe("Components create-as-route", () => {
   });
 
   it("renders an explicit not-found state for an address that matches no component, not the old silent list fallback", async () => {
-    mount("/components/no-such-widget");
+    mount("/components/no-such-widget?view=detail");
     expect(await screen.findByText(/No such component/)).toBeTruthy();
     expect(screen.getByText(/old address/)).toBeTruthy();
     expect(screen.queryByText("Ceiling Mic 2")).toBeNull();
@@ -682,7 +682,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
-    window.history.pushState({}, "", "/components/mic-2");
+    window.history.pushState({}, "", "/components/mic-2?view=detail");
     render(() => (
       <QueryClientProvider client={qc}>
         <Router>
@@ -704,7 +704,7 @@ describe("Components create-as-route", () => {
   // pins #332 on this surface: the create form's action sits on the blade's footer
   // rail, and the form itself renders no buttons.
   it("opens the new-interface blade, with its action on the blade rail and none in the form", async () => {
-    mount("/components/mic-2");
+    mount("/components/mic-2?view=detail");
     await waitFor(() => expect(screen.getByText("Add interface")).toBeTruthy());
     fireEvent.click(screen.getByText("Add interface"));
 
@@ -723,7 +723,7 @@ describe("Components create-as-route", () => {
   // read-only Component field kept rendering that raw uuid verbatim instead
   // of resolving the component's readable label.
   it("shows the owning component's label, not its uuid, in the new-interface blade's read-only Component field", async () => {
-    mount("/components/mic-2");
+    mount("/components/mic-2?view=detail");
     await waitFor(() => expect(screen.getByText("Add interface")).toBeTruthy());
     fireEvent.click(screen.getByText("Add interface"));
     await waitFor(() => expect(screen.getByText(/An API on a component/)).toBeTruthy());
@@ -756,7 +756,7 @@ describe("Components create-as-route", () => {
       component: comp.id,
       interfaces: [{ interface: iface.name, interface_type: iface.interface_type, verdict: null, layers: [], history: [] }],
     });
-    window.history.pushState({}, "", "/components/mic-2");
+    window.history.pushState({}, "", "/components/mic-2?view=detail");
     render(() => (
       <QueryClientProvider client={qc}>
         <Router>
@@ -1290,7 +1290,7 @@ describe("Components edit blade carries the label pen (#693)", () => {
   }
 
   it("opens the label locked on a row the platform labelled, with the name's own chip still beside the name", async () => {
-    mount(`/components/${gen.id}`, me, systems, [gen]);
+    mount(`/components/${gen.id}?view=detail`, me, systems, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     // The NAME's pen, in the read state, is the precedent the label's lock
     // matches: a pen states itself beside its own field, on the blade.
@@ -1304,7 +1304,7 @@ describe("Components edit blade carries the label pen (#693)", () => {
 
   it("does not claim the pen when the blade is saved untouched", async () => {
     const bodies = patchBodies();
-    mount(`/components/${gen.id}`, me, systems, [gen]);
+    mount(`/components/${gen.id}?view=detail`, me, systems, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     await screen.findByLabelText("Label");
@@ -1315,7 +1315,7 @@ describe("Components edit blade carries the label pen (#693)", () => {
 
   it("posts the operator's words once they take the pen", async () => {
     const bodies = patchBodies();
-    mount(`/components/${gen.id}`, me, systems, [gen]);
+    mount(`/components/${gen.id}?view=detail`, me, systems, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const label = (await screen.findByLabelText("Label")) as HTMLInputElement;

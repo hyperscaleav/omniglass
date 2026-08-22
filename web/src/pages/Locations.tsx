@@ -71,10 +71,12 @@ export const locationsDescriptor: PageDescriptor = {
 
 export default function Locations() {
   const params = useParams();
-  // The zoom face is a URL fact (ADR-0126): ?zoom=1 on the identity route
-  // renders the location zoom, and the inventory detail stays the default.
   const [search] = useSearchParams();
-  if (params.id && search.zoom === "1") return <LocationZoom />;
+  // The zoom face IS the default (ADR-0129): the identity route renders the
+  // location zoom; the classic detail face survives at ?view=detail (and
+  // under a legacy ?edit=1) until edit-in-blade lands.
+  const wantsDetail = () => params.id === "create" || search.view === "detail" || search.edit === "1";
+  if (params.id && !wantsDetail()) return <LocationZoom />;
   const navigate = useNavigate();
   const qc = useQueryClient();
   const me = useMe();

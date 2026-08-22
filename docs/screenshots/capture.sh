@@ -59,8 +59,11 @@ sleep 2
 app() { docker run --rm --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" -e OMNIGLASS_DSN="$DSN" "$APPIMG" /omniglass "$@"; }
 
 app migrate
+# Idempotent by intent, but a swallowed TRANSIENT failure here drops audited
+# rows (credential creates) and shifts the audit page (#780): tolerate only
+# the already-exists case by checking the outcome, never by ignoring failure.
 app bootstrap dev --password dev >/dev/null 2>&1 || true
-app set-password dev dev >/dev/null 2>&1 || true
+app set-password dev dev >/dev/null
 app seed-dev
 
 docker run -d --name ogshots-srv --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" \

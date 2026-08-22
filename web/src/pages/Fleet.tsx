@@ -53,11 +53,11 @@ export default function Fleet() {
       },
       Body: (p) => (
         <div class="flex flex-col gap-4">
-          <SystemHealthPanel system={p.id} onOpenComponent={(name) => navigate(`/components/${encodeURIComponent(name)}?zoom=1`)} />
+          <SystemHealthPanel system={p.id} onOpenComponent={(name) => navigate(`/components/${encodeURIComponent(name)}`)} />
           <div class="flex gap-2">
-            <Button intent="action" size="sm" onClick={() => { blades.close(); navigate(`/systems/${p.id}?zoom=1`); }}>Open system</Button>
+            <Button intent="action" size="sm" onClick={() => { blades.close(); navigate(`/systems/${p.id}`); }}>Open system</Button>
             <Show when={view.data?.systems?.find((s) => s.id === p.id)?.location}>
-              {(loc) => <Button size="sm" onClick={() => { blades.close(); navigate(`/locations/${loc()}?zoom=1`); }}>Open location</Button>}
+              {(loc) => <Button size="sm" onClick={() => { blades.close(); navigate(`/locations/${loc()}`); }}>Open location</Button>}
             </Show>
           </div>
         </div>
@@ -88,7 +88,7 @@ export default function Fleet() {
               trailing={<span class="text-xs text-base-content/40">{worstFirst() ? "Worst first" : ""}</span>}
             >
               <div class="flex flex-col divide-y divide-base-300">
-                <For each={bands()}>{(band) => <FleetBand band={band} view={view.data!} onOpen={(id) => navigate(`/locations/${encodeURIComponent(id)}?zoom=1`)} />}</For>
+                <For each={bands()}>{(band) => <FleetBand band={band} view={view.data!} onOpen={(id) => navigate(`/locations/${encodeURIComponent(id)}`)} />}</For>
                 <Show when={bands().length === 0}>
                   <p class="px-4 py-6 text-sm text-base-content/60">Nothing in scope yet.</p>
                 </Show>

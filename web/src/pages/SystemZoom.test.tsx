@@ -22,7 +22,7 @@ import type { EffectiveRole } from "../lib/system_zoom";
 // The system zoom's chrome (#636): one card per role with the server's own
 // arithmetic, choices grouped with the active alternate marked and the losing
 // build quiet, shared occupants chipped, and the no-role strip a state rather
-// than an error. Rendered at the identity route behind ?zoom=1 (ADR-0126).
+// than an error. The identity route's default face (ADR-0129).
 
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 
@@ -113,7 +113,7 @@ const declared = [
   },
 ] as unknown as EffectiveRole[];
 
-function mount(path = `/web/systems/${uuidFor("szp-sys")}?zoom=1`, healthOverride: FleetHealth = health, metrics: unknown[] = [], standards: unknown[] = []) {
+function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: FleetHealth = health, metrics: unknown[] = [], standards: unknown[] = []) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], me);
@@ -179,7 +179,7 @@ describe("the system zoom", () => {
     mount();
     fireEvent.click(screen.getByTestId(`compcard-${uuidFor("szp-c-power")}`));
     const page = await screen.findByTestId("component-page");
-    expect(page.textContent).toBe(`/web/components/${uuidFor("szp-c-power")}?zoom=1`);
+    expect(page.textContent).toBe(`/web/components/${uuidFor("szp-c-power")}`);
   });
 
   it("a spare beyond quorum reads on the group header", () => {
@@ -227,9 +227,14 @@ describe("the system zoom", () => {
     expect(screen.getByTestId("health-history")).toBeTruthy();
   });
 
-  it("without the zoom param the route renders the inventory detail, untouched", () => {
-    mount(`/web/systems/${uuidFor("szp-sys")}`);
-    expect(screen.queryByTestId("zoom-ladder")).toBeNull();
+  it("a legacy ?zoom=1 deep link still lands on the workspace: old links never break", () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1`);
+    expect(screen.getByTestId("system-header")).toBeTruthy();
+  });
+
+  it("the classic detail face survives at ?view=detail until edit-in-blade lands", () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?view=detail`);
+    expect(screen.queryByTestId("system-header")).toBeNull();
   });
 });
 
@@ -269,11 +274,11 @@ describe("the components-first body (#790)", () => {
     expect(screen.queryByTestId("no-role-strip")).toBeNull();
   });
 
-  it("clicking a card opens the component leaf, keeping the zoom", async () => {
+  it("clicking a card opens the component leaf, at its canonical address", async () => {
     mount();
     fireEvent.click(screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`));
     const page = await screen.findByTestId("component-page");
-    expect(page.textContent).toBe(`/web/components/${uuidFor("szp-c-bar")}?zoom=1`);
+    expect(page.textContent).toBe(`/web/components/${uuidFor("szp-c-bar")}`);
   });
 });
 
@@ -315,7 +320,7 @@ describe("the map tab (#791)", () => {
   });
 
   it("the map tab renders one marker per declared position of the build in use, occupants solid and gaps hollow", () => {
-    mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=map`, health, [], MAPPED);
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
     const map = screen.getByTestId("system-map");
     const markers = within(map).getAllByTestId(/^mapmarker-/);
     expect(markers).toHaveLength(3);
@@ -323,8 +328,8 @@ describe("the map tab (#791)", () => {
     expect(within(map).getByText(/Main Display · empty/)).toBeTruthy();
   });
 
-  it("clicking an occupied marker opens the leaf, keeping the zoom", async () => {
-    mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=map`, health, [], MAPPED);
+  it("clicking an occupied marker opens the leaf, at its canonical address", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
     fireEvent.click(screen.getByTestId(`mapmarker-room-mic-2`));
     const page = await screen.findByTestId("component-page");
     expect(page.textContent).toContain(`/web/components/${uuidFor("szp-c-mic")}`);
@@ -333,7 +338,7 @@ describe("the map tab (#791)", () => {
 
 describe("the name-shaped address (#759's rule)", () => {
   it("keeps every search param through the uuid resolve, the tab included", async () => {
-    mount(`/web/systems/boardroom?zoom=1&tab=map`, health, [], [
+    mount(`/web/systems/boardroom?tab=map`, health, [], [
       { id: uuidFor("szp-std"), name: "huddle-room", label: "Huddle Room", official: false,
         map: { aspect: 1.5, positions: [{ role: "room-mic", position: 1, x: 0.3, y: 0.5 }] } },
     ]);
@@ -359,7 +364,7 @@ describe("the history tab (#792)", () => {
   // expands. The old flat what-went-wrong assertions live on inside the
   // incident form below.
   it("leads with the window's uptime beside the timeline", () => {
-    mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=history`);
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     const tab = screen.getByTestId("history-tab");
     const uptime = within(tab).getByTestId("uptime-kpi");
     expect(uptime.textContent).toMatch(/\d+(\.\d)?%/);
@@ -367,7 +372,7 @@ describe("the history tab (#792)", () => {
   });
 
   it("renders the ongoing unhealthy stretch as the first incident, expandable to the alarms that explain it", async () => {
-    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=history`);
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);
     const list = screen.getByTestId("incident-list");
     const first = within(list).getAllByTestId(/^incident-/)[0];
@@ -378,14 +383,14 @@ describe("the history tab (#792)", () => {
   });
 
   it("an alarm outside every incident still shows, under other alarms", async () => {
-    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=history`);
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);
     const tab = screen.getByTestId("history-tab");
     expect(await within(tab).findByText("Fan speed high")).toBeTruthy();
   });
 
   it("is always on the rail, with the timeline and raise markers", async () => {
-    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=history`);
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);
     expect(screen.getByRole("tab", { name: "History" })).toBeTruthy();
     expect(screen.getByTestId("health-history-full")).toBeTruthy();
@@ -393,7 +398,7 @@ describe("the history tab (#792)", () => {
   });
 
   it("marks each raise on the strip's axis", async () => {
-    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=history`);
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);
     await screen.findByText("No route to host");
     expect(screen.getAllByTestId(/^incident-marker-/)).toHaveLength(2);
@@ -402,7 +407,7 @@ describe("the history tab (#792)", () => {
 
 describe("the events and logs tabs (#793)", () => {
   it("the events tab lists the room's story newest first, each row labeled by its owner", async () => {
-    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=events`);
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=events`);
     r.qc.setQueryData([...systemEventsKey(uuidFor("szp-sys"))], [
       { ts: "2026-08-18T15:53:00Z", key: "call-started", event_type_id: "et-1", origin: "caught", message: "call started", provenance: "observed", owner_kind: "component", owner: "videobar-1" },
       { ts: "2026-08-18T15:50:00Z", key: "occupancy-changed", event_type_id: "et-2", origin: "derived", message: "0 to 6", provenance: "derived", owner_kind: "system", owner: "boardroom" },
@@ -415,7 +420,7 @@ describe("the events and logs tabs (#793)", () => {
   });
 
   it("the logs tab renders the members' lines with severity colouring the row, and an empty room says so", async () => {
-    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=logs`);
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=logs`);
     r.qc.setQueryData([...systemLogsKey(uuidFor("szp-sys"))], [
       { ts: "2026-08-18T16:45:02Z", severity: "error", message: "connect timeout", component: "videobar-1" },
       { ts: "2026-08-18T16:42:11Z", severity: "info", message: "qrc poll ok", component: "dsp" },
@@ -424,7 +429,7 @@ describe("the events and logs tabs (#793)", () => {
     expect(await within(tab).findByText(/connect timeout/)).toBeTruthy();
     expect(within(tab).getByText(/qrc poll ok/)).toBeTruthy();
     cleanup();
-    const r2 = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=logs`);
+    const r2 = mount(`/web/systems/${uuidFor("szp-sys")}?tab=logs`);
     r2.qc.setQueryData([...systemLogsKey(uuidFor("szp-sys"))], []);
     expect(await screen.findByText(/No lines in the window/)).toBeTruthy();
   });
@@ -444,7 +449,7 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
   };
 
   it("stacks every declared metric as a table row: label, sparkline, the latest value; no picker to hunt through", async () => {
-    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=data`, health, METRICS);
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=data`, health, METRICS);
     seedSeries(r.qc);
     const tab = screen.getByTestId("data-tab");
     const temp = within(tab).getByTestId("metric-row-room-temperature");
@@ -456,7 +461,7 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
   });
 
   it("a row expands to the full chart and collapses back", async () => {
-    const r = mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=data`, health, METRICS);
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=data`, health, METRICS);
     seedSeries(r.qc);
     fireEvent.click(screen.getByTestId("metric-row-room-temperature"));
     expect(await screen.findByTestId("timeseries-chart")).toBeTruthy();
@@ -465,7 +470,7 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
   });
 
   it("hides the tab with nothing declared", () => {
-    mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1&tab=data`, health, []);
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=data`, health, []);
     expect(screen.queryByRole("tab", { name: "Data" })).toBeNull();
   });
 });

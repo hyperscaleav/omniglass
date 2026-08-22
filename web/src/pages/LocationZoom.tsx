@@ -28,7 +28,7 @@ import { describeError, fmtTime } from "../lib/format";
 import { locationHealth, locationHealthKey } from "../lib/health";
 
 // The location zoom (#635): the same canvas one level down, at the identity
-// route behind ?zoom=1 (ADR-0126). One band per direct child whatever its
+// route, the DEFAULT face since ADR-0129. One band per direct child whatever its
 // type, the placed-here band first with this location's own systems as cards,
 // the subtree's holes dashed under the child that contains them, and the
 // allowed child types named beneath: a child can be any type this one allows,
@@ -94,7 +94,7 @@ export default function LocationZoom() {
       ...chain.slice(0, -1).map((l) => ({
         key: l.id,
         label: entityLabel(l),
-        onClick: () => navigate(`/locations/${l.id}?zoom=1`),
+        onClick: () => navigate(`/locations/${l.id}`),
       })),
     ];
   });
@@ -191,7 +191,7 @@ export default function LocationZoom() {
             <button
               type="button"
               class="block w-full cursor-pointer rounded-lg p-1 text-left hover:bg-base-content/5"
-              onClick={() => navigate(`/locations/${props.band.key}?zoom=1`)}
+              onClick={() => navigate(`/locations/${props.band.key}`)}
             >
               <div class="flex items-center gap-2">
                 <HealthBadge verdict={props.band.recordedVerdict ?? undefined} size="xs" />
@@ -208,7 +208,7 @@ export default function LocationZoom() {
         </div>
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap gap-2">
-            <For each={props.band.clusters}>{(cluster) => <SystemCard cluster={cluster} view={props.view} onOpen={(sid) => navigate(`/systems/${sid}?zoom=1`)} />}</For>
+            <For each={props.band.clusters}>{(cluster) => <SystemCard cluster={cluster} view={props.view} onOpen={(sid) => navigate(`/systems/${sid}`)} />}</For>
             <For each={bandHoles()}>
               {(hole) => (
                 <div class="flex w-40 flex-none flex-col justify-center gap-0.5 rounded-md border border-dashed border-primary/40 px-2 py-2 text-xs text-base-content/50">

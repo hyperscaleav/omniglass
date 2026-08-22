@@ -49,7 +49,7 @@ export default function SystemMap(props: { decl: StandardMapDecl; markers: MapMa
                     data-testid={`mapmarker-${m.role}-${m.position}`}
                     class="absolute flex -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-base-content/10"
                     style={{ left: `${m.x * 100}%`, top: `${m.y * 100}%` }}
-                    onClick={() => navigate(`/components/${occ().componentId}?zoom=1`)}
+                    onClick={() => navigate(`/components/${occ().componentId}`)}
                   >
                     <span class="h-2.5 w-2.5 flex-none rounded-full" classList={{ "bg-error": occ().down, "bg-success": !occ().down }} />
                     <span class="whitespace-nowrap text-[11px]" classList={{ "text-error": occ().down }}>{label()}</span>

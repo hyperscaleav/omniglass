@@ -109,7 +109,7 @@ describe("Systems create-as-route", () => {
   });
 
   it("shows the system's type by label beside its standard", async () => {
-    mount("/systems/boardroom");
+    mount("/systems/boardroom?view=detail");
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     expect(screen.getByText("Type")).toBeTruthy();
     // The registry's label, not the raw handle the row carries.
@@ -127,7 +127,7 @@ describe("Systems create-as-route", () => {
       }
       return new Response(JSON.stringify({}), { status: 200, headers: { "Content-Type": "application/json" } });
     });
-    mount("/systems/boardroom");
+    mount("/systems/boardroom?view=detail");
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const picker = (await waitFor(() => screen.getByLabelText("Type"))) as HTMLSelectElement;
@@ -148,7 +148,7 @@ describe("Systems create-as-route", () => {
   });
 
   it("shows an existing system read-only in view: no tag add control, an Edit affordance", async () => {
-    mount("/systems/boardroom");
+    mount("/systems/boardroom?view=detail");
     // The detail resolves and renders the read-only facts.
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     // No in-body mutation control in view: the TagAdder add row is absent.
@@ -158,7 +158,7 @@ describe("Systems create-as-route", () => {
   });
 
   it("edit mode exposes an editable name with a check button", async () => {
-    mount("/systems/boardroom");
+    mount("/systems/boardroom?view=detail");
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     // The name becomes an editable input seeded from the row.
@@ -169,14 +169,14 @@ describe("Systems create-as-route", () => {
   });
 
   it("a fresh detail view keeps the name read-only", async () => {
-    mount("/systems/boardroom");
+    mount("/systems/boardroom?view=detail");
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     // No check button until edit begins: the name is a read-only fact.
     expect(screen.queryByLabelText("Check name")).toBeNull();
   });
 
   it("shows the system's standard by label, not its id", async () => {
-    mount("/systems/boardroom");
+    mount("/systems/boardroom?view=detail");
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     expect(screen.getAllByText("Meeting room").length).toBeGreaterThan(0);
   });
@@ -186,7 +186,7 @@ describe("Systems create-as-route", () => {
   // uuid (replace); a rename afterward must leave that URL alone, since the
   // id it addresses never changes.
   it("redirects a name-shaped deep link to the resolved uuid, and a rename leaves the route where it is", async () => {
-    mount("/systems/boardroom");
+    mount("/systems/boardroom?view=detail");
     await waitFor(() => expect(window.location.pathname).toBe(`/systems/${sys.id}`));
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
@@ -212,7 +212,7 @@ describe("Systems create-as-route", () => {
   });
 
   it("renders an explicit not-found state for an address that matches no system, not the old silent list fallback", async () => {
-    mount("/systems/no-such-system");
+    mount("/systems/no-such-system?view=detail");
     expect(await screen.findByText(/No such system/)).toBeTruthy();
     expect(screen.getByText(/old address/)).toBeTruthy();
     expect(screen.queryByText("Boardroom")).toBeNull();
@@ -235,7 +235,7 @@ describe("Systems create-as-route", () => {
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("system", twinA.id)], []);
-    window.history.pushState({}, "", `/systems/${twinA.id}`);
+    window.history.pushState({}, "", `/systems/${twinA.id}?view=detail`);
     render(() => (
       <QueryClientProvider client={qc}>
         <Router>
@@ -470,7 +470,7 @@ describe("Systems properties panel", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
   it("resolves the standard's contract on the detail, off-contract values apart", async () => {
-    mount("/systems/boardroom");
+    mount("/systems/boardroom?view=detail");
     await waitFor(() => expect(screen.getByText("Properties")).toBeTruthy());
     expect(screen.getByText("the standard contract, resolved")).toBeTruthy();
     // The inherited contract default reads muted, with no override dot.
@@ -504,7 +504,7 @@ describe("Systems properties panel", () => {
       });
     });
 
-    mount("/systems/boardroom");
+    mount("/systems/boardroom?view=detail");
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
 
@@ -724,7 +724,7 @@ describe("Systems edit blade carries the label pen (#693)", () => {
   }
 
   it("opens the label locked on a row the platform labelled", async () => {
-    mount(`/systems/${gen.id}`, [gen]);
+    mount(`/systems/${gen.id}?view=detail`, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
@@ -741,7 +741,7 @@ describe("Systems edit blade carries the label pen (#693)", () => {
   // row stopped following its rule and nothing on screen said so.
   it("does not claim the pen when another field is saved", async () => {
     const bodies = patchBodies();
-    mount(`/systems/${gen.id}`, [gen]);
+    mount(`/systems/${gen.id}?view=detail`, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     await screen.findByLabelText("Label");
@@ -756,7 +756,7 @@ describe("Systems edit blade carries the label pen (#693)", () => {
 
   it("posts the operator's words once they take the pen, seeded with what was on screen", async () => {
     const bodies = patchBodies();
-    mount(`/systems/${gen.id}`, [gen]);
+    mount(`/systems/${gen.id}?view=detail`, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
@@ -772,7 +772,7 @@ describe("Systems edit blade carries the label pen (#693)", () => {
 
   it("opens editable on a row the operator labelled, and hands it back on restore", async () => {
     const bodies = patchBodies();
-    mount(`/systems/${sys.id}`);
+    mount(`/systems/${sys.id}?view=detail`);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const label = (await screen.findByLabelText("Label")) as HTMLInputElement;

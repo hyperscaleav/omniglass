@@ -101,13 +101,13 @@ describe("the fleet zoom's bands", () => {
     expect(within(depot).getByText("healthy")).toBeTruthy();
   });
 
-  it("clicking a band label navigates to the root location by uuid, carrying the zoom face (ADR-0126)", async () => {
+  it("clicking a band label navigates to the root location by uuid, the default face (ADR-0129)", async () => {
     mount();
     const hq = screen.getByTestId(`band-${uuidFor("fp-hq")}`);
     fireEvent.click(within(hq).getByRole("button", { name: /Headquarters/ }));
     expect(await screen.findByTestId("location-page")).toBeTruthy();
     expect(window.location.pathname).toBe(`/web/locations/${uuidFor("fp-hq")}`);
-    expect(window.location.search).toContain("zoom=1");
+    expect(window.location.search).toBe("");
   });
 
   it("renders a dashed hole naming the empty room, inert: clicking navigates nowhere", () => {

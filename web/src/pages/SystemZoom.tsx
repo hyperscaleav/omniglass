@@ -35,7 +35,7 @@ import { metricSeries, metricSeriesKey } from "../lib/series";
 import TimeseriesChart from "../components/TimeseriesChart";
 
 // The system zoom (#636): the typed slots a system needs filled, at the
-// identity route behind ?zoom=1 (ADR-0126). One card per role with the
+// identity route, the DEFAULT face since ADR-0129. One card per role with the
 // server's own arithmetic, roles grouped by choice with the active alternate
 // marked and the losing build rendered as the legal alternative it is, the
 // shared occupants chipped with the other system they serve, and the members
@@ -171,7 +171,7 @@ export default function SystemZoom() {
       ...chain.map((l) => ({
         key: l.id,
         label: entityLabel(l),
-        onClick: () => navigate(`/locations/${l.id}?zoom=1`),
+        onClick: () => navigate(`/locations/${l.id}`),
       })),
     ];
   });
@@ -221,7 +221,7 @@ export default function SystemZoom() {
                   {(loc) => (
                     <>
                       <span class="text-base-content/30">·</span>
-                      <button type="button" class="cursor-pointer text-xs text-primary hover:underline" onClick={() => navigate(`/locations/${loc()}?zoom=1`)}>Open location</button>
+                      <button type="button" class="cursor-pointer text-xs text-primary hover:underline" onClick={() => navigate(`/locations/${loc()}`)}>Open location</button>
                     </>
                   )}
                 </Show>
@@ -410,7 +410,7 @@ export default function SystemZoom() {
                                               <li class="flex flex-wrap items-baseline gap-x-2 text-xs">
                                                 <span class="badge badge-xs" classList={{ "badge-error badge-soft": r.severity === "critical", "badge-warning badge-soft": r.severity !== "critical" }}>{r.severity}</span>
                                                 <span>{r.message}</span>
-                                                <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={(e) => { e.stopPropagation(); navigate(`/components/${r.componentId}?zoom=1`); }}>{r.component}</button>
+                                                <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={(e) => { e.stopPropagation(); navigate(`/components/${r.componentId}`); }}>{r.component}</button>
                                                 <span class="text-base-content/45 tabular-nums">
                                                   {fmtTime(r.raisedAt)} → {r.clearedAt ? fmtTime(r.clearedAt) : "ongoing"}
                                                 </span>
@@ -438,7 +438,7 @@ export default function SystemZoom() {
                               <li class="flex flex-wrap items-baseline gap-x-2 px-3 py-1.5 text-xs">
                                 <span class="badge badge-xs" classList={{ "badge-error badge-soft": r.severity === "critical", "badge-warning badge-soft": r.severity !== "critical" }}>{r.severity}</span>
                                 <span>{r.message}</span>
-                                <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={() => navigate(`/components/${r.componentId}?zoom=1`)}>{r.component}</button>
+                                <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={() => navigate(`/components/${r.componentId}`)}>{r.component}</button>
                                 <span class="ml-auto text-base-content/45 tabular-nums">{fmtTime(r.raisedAt)}</span>
                               </li>
                             )}
@@ -460,7 +460,7 @@ export default function SystemZoom() {
                             <span class="badge badge-sm" classList={{ "badge-error badge-soft": a.severity === "critical", "badge-warning badge-soft": a.severity !== "critical" }}>{a.severity}</span>
                             <span>{a.message}</span>
                             <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
-                              <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => navigate(`/components/${a.componentId}?zoom=1`)}>{a.component}</button>
+                              <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => navigate(`/components/${a.componentId}`)}>{a.component}</button>
                             </Show>
                             <span class="text-xs text-base-content/50">impairs {a.roleLabel} · {durationText(pageNow - Date.parse(a.raisedAt))}</span>
                           </div>
@@ -543,7 +543,7 @@ export default function SystemZoom() {
         data-testid={`compcard-${c().componentId}`}
         class="flex cursor-pointer flex-col gap-1 rounded-md border p-2.5 text-left hover:border-primary/50"
         classList={{ "border-error/50 bg-error/5": c().down, "border-base-300 bg-base-100": !c().down }}
-        onClick={() => navigate(`/components/${c().componentId}?zoom=1`)}
+        onClick={() => navigate(`/components/${c().componentId}`)}
       >
         <div class="flex items-center gap-1.5">
           <span class="h-1.5 w-1.5 flex-none rounded-full" classList={{ "bg-error": c().down, "bg-success": !c().down }} />

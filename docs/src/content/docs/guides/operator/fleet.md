@@ -7,7 +7,7 @@ screenshots:
   # the degraded auditorium, then through the alarm strip to the component the
   # alarm names. The dispatch walk, exactly.
   - id: fleet-component
-    path: /web/locations/east?zoom=1
+    path: /web/locations/east
     steps:
       - action: click
         selector: "text=Auditorium"
@@ -20,7 +20,7 @@ screenshots:
       - "text=/unacknowledged/ >> xpath=ancestor::div[1]"
       - "text=/acknowledged/ >> xpath=ancestor::div[1]"
   - id: fleet-system
-    path: /web/systems/huddle?zoom=1
+    path: /web/systems/huddle
     alt: "The system zoom: one card per role with the reported arithmetic, choices grouped with the build in use marked, and the no-role list."
     # The since-line and the history rows age with the capture (edge stamps
     # are seed-run times, the relative ages count from the capture's own
@@ -35,7 +35,7 @@ screenshots:
       - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
       - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
   - id: fleet-map
-    path: /web/systems/huddle?zoom=1&tab=map
+    path: /web/systems/huddle?tab=map
     alt: "The Map tab: the standard's declared room rendered top-down, one marker per role position, solid where staffed and hollow where not."
     # The header's since-line ages with the capture (baseline only; the docs
     # embed the clean render).
@@ -44,7 +44,7 @@ screenshots:
   # The auditorium (reached through its band) carries the fleet's live
   # critical alarm, so the history tab has something real to say.
   - id: fleet-history
-    path: /web/locations/east?zoom=1
+    path: /web/locations/east
     steps:
       - action: click
         selector: "text=Auditorium"
@@ -63,7 +63,7 @@ screenshots:
       - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
       - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
   - id: fleet-data
-    path: /web/systems/huddle?zoom=1&tab=data
+    path: /web/systems/huddle?tab=data
     steps:
       - action: click
         selector: "[data-testid=metric-row-room-temperature]"
@@ -77,7 +77,7 @@ screenshots:
       - "[data-testid=timeseries-chart]"
       - "[data-testid=sparkline]"
   - id: fleet-location
-    path: /web/locations/east?zoom=1
+    path: /web/locations/east
     alt: "The location zoom: the breadcrumb, the verdict header with the needs-attention chip, a band per child location, system cards with slot strips, and the allowed child types."
     # The since-line ages with the capture.
     mask:
@@ -127,8 +127,9 @@ The dashed **+** cards mark where a location or a system would go. They do nothi
 
 ## Zoom into a location
 
-Clicking a band opens the location at its own address with `?zoom=1`. Without the param,
-the same address shows the inventory detail.
+Clicking a band opens the location at its own address: the zoom **is** the identity
+route's face. The classic detail face stays reachable at `?view=detail` while editing
+still lives there; it retires when edit moves into the blades.
 
 ::screenshot{#fleet-location}
 

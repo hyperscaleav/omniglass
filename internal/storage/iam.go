@@ -839,7 +839,7 @@ func (p *PG) ListPrincipals(ctx context.Context, read scope.Set, includeArchived
 	if !read.All {
 		return nil, ErrPrincipalForbidden
 	}
-	rows, err := p.pool.Query(ctx, `select id, kind, active, archived_at from principal where ($1 or archived_at is null) order by created_at`, includeArchived)
+	rows, err := p.pool.Query(ctx, `select id, kind, active, archived_at from principal where ($1 or archived_at is null) order by created_at, kind, id`, includeArchived)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list principals: %w", err)
 	}

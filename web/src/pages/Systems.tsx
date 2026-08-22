@@ -69,11 +69,13 @@ export const systemsDescriptor: PageDescriptor = {
 };
 
 export default function Systems() {
-  // The zoom face is a URL fact (ADR-0126): ?zoom=1 on the identity route
-  // renders the system zoom, and the inventory detail stays the default.
+  // The zoom face IS the default (ADR-0129): the identity route renders the
+  // system workspace; the classic detail face survives at ?view=detail (and
+  // under a legacy ?edit=1) until edit-in-blade lands.
   const [zoomSearch] = useSearchParams();
   const zoomParams = useParams();
-  if (zoomParams.id && zoomSearch.zoom === "1") return <SystemZoom />;
+  const wantsDetail = () => zoomParams.id === "create" || zoomSearch.view === "detail" || zoomSearch.edit === "1";
+  if (zoomParams.id && !wantsDetail()) return <SystemZoom />;
   const params = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();

@@ -167,6 +167,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0126](#adr-0126-the-zoom-face-is-a-url-fact-on-the-identity-routes) | 2026-08-15 | Accepted | The deeper zooms render at the identity routes behind a query param (`/locations/{id}?zoom=1`), the inventory detail staying the default face: ADR-0120's mode-rides-the-URL precedent applied to the fork where "the zoom is a function of which entity the URL names" and "the four tables stay live and untouched" collided at one address. The param may become the default later, and the table face may retire once the medium is judged |
 | [ADR-0127](#adr-0127-operator-surfaces-carry-tooltips-not-prose-and-the-system-body-goes-components-first) | 2026-08-20 | Accepted | Operator surfaces carry no inline explanatory prose (explainers ride the label's tooltip: `InfoTip`, `Eyebrow`); the system body renders components-first, role as a badge, role chrome only where it earns it (quorum > 1, short, or unstaffed) |
 | [ADR-0128](#adr-0128-the-standard-declares-the-room-map-normalized-and-display-only) | 2026-08-20 | Accepted | A standard may declare a room map: one validated jsonb value (aspect + normalized 1-based role positions) on `standard`, display-only, rendered by every conforming system's Map tab; JSON null clears; the visual editor stays out of v1 |
+| [ADR-0129](#adr-0129-the-zoom-face-becomes-the-identity-routes-default-one-way-to-look) | 2026-08-21 | Accepted | The zoom/workspace/leaf render at the identity routes by default (`?zoom=1` tolerated, never written); the classic detail face survives at `?view=detail` only until edit-in-blade lands; the ruled target: one altitude rule, edit in blades, tables as a list-density toggle |
 
 ## Entries
 
@@ -6035,3 +6036,21 @@ interface create form, since that name is the platform's to mint.
   a property of the DESIGN, not of one room, so it lives on the standard, the same
   data-not-code guardrail the driver arc carries; a relational table per position would buy
   queryability nothing displays and cost a migration per shape change.
+
+### ADR-0129: The zoom face becomes the identity routes' default; one way to look
+
+- **Date:** 2026-08-21 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/)
+- **Decision:** The fleet faces stop being a query-param variant: `/locations/{id}`,
+  `/systems/{id}`, and `/components/{id}` render the zoom, workspace, and leaf by default,
+  and `?zoom=1` is tolerated but no longer written. The classic detail face survives at
+  `?view=detail` (and under a legacy `?edit=1`) solely because editing still lives there;
+  it retires when edit-in-blade lands. The reconciliation's target, ruled with this: one
+  altitude rule (locations drill, systems open full screen, components open in a blade
+  that can expand to its route), every entity edits in its blade, flat tables survive as a
+  list-density toggle for bulk work, and the parallel inventory faces go away.
+- **Context:** ADR-0126 parked the zoom behind a param precisely so the table faces could
+  stay alive until the medium was judged. Judged: the console had become two products (an
+  inventory world that edits and a fleet world that observes), with browse, detail, and
+  edit each existing twice. The architect ruled the merge on the #795 review; this entry
+  flips the default (stage 1), and the remaining stages (entity blades, edit-in-blade,
+  operate absorption, classic retirement) follow as their own body of work.

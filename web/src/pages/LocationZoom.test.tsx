@@ -12,7 +12,7 @@ import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
 
-// The location zoom (#635), rendered at the identity route behind ?zoom=1
+// The location zoom (#635), the identity route's default face (ADR-0129)
 // (ADR-0126): the inventory detail stays the route's default face, and the
 // param renders the canvas one level down. Child bands for every direct
 // child whatever its type, the placed-here band first, system cards with the
@@ -101,7 +101,7 @@ const types: LocationType[] = [
   { id: uuidFor("lzt-room"), name: "room", label: "Room", icon: "door-open", official: true, forked: false, allowed_parent_types: ["building", "floor"] },
 ] as unknown as LocationType[];
 
-function mount(path = `/web/locations/${uuidFor("lz-hq")}?zoom=1`) {
+function mount(path = `/web/locations/${uuidFor("lz-hq")}`) {
   localStorage.removeItem("fleet-sumopen");
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...FLEET_VIEW_KEY], view);
@@ -201,12 +201,12 @@ describe("the location zoom", () => {
     expect(screen.getByTestId(`syscard-${uuidFor("lz-s-board")}`)).toBeTruthy();
   });
 
-  it("clicking a child band drills deeper, carrying the zoom param", async () => {
+  it("clicking a child band drills deeper, at its canonical address", async () => {
     mount();
     const west = screen.getByTestId(`zoomband-${uuidFor("lz-b1")}`);
     fireEvent.click(within(west).getByRole("button", { name: /West Building/ }));
     await waitFor(() => expect(window.location.pathname).toBe(`/web/locations/${uuidFor("lz-b1")}`));
-    expect(window.location.search).toContain("zoom=1");
+    expect(window.location.search).toBe("");
   });
 
   it("clicking a system card walks inward to the system zoom", async () => {
@@ -214,7 +214,7 @@ describe("the location zoom", () => {
     // The whole card is the button now.
     fireEvent.click(screen.getByTestId(`syscard-${uuidFor("lz-s-lobby")}`));
     await waitFor(() => expect(window.location.pathname).toBe(`/web/systems/${uuidFor("lz-s-lobby")}`));
-    expect(window.location.search).toContain("zoom=1");
+    expect(window.location.search).toBe("");
   });
 
   it("a systemless leaf in the subtree renders as an inert + System hole naming it", () => {
@@ -237,7 +237,7 @@ describe("the location zoom", () => {
   });
 
   it("the breadcrumb walks the ancestor chain to the parent; the page itself is the title, not a crumb", () => {
-    mount(`/web/locations/${uuidFor("lz-room")}?zoom=1`);
+    mount(`/web/locations/${uuidFor("lz-room")}`);
     const trail = screen.getByTestId("breadcrumb");
     expect(within(trail).getByText("Fleet")).toBeTruthy();
     expect(within(trail).getByText("Headquarters")).toBeTruthy();
@@ -249,9 +249,9 @@ describe("the location zoom", () => {
   });
 
   it("a name-shaped zoom link resolves to the uuid, keeping the param (#759's rule)", async () => {
-    mount(`/web/locations/west?zoom=1`);
+    mount(`/web/locations/west`);
     await waitFor(() => expect(window.location.pathname).toBe(`/web/locations/${uuidFor("lz-b1")}`));
-    expect(window.location.search).toContain("zoom=1");
+    expect(window.location.search).toBe("");
     expect(screen.getByTestId(`zoomband-${uuidFor("lz-room")}`)).toBeTruthy();
   });
 

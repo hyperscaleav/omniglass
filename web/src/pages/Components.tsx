@@ -82,11 +82,14 @@ export const componentsDescriptor: PageDescriptor = {
 };
 
 export default function Components() {
-  // The zoom face is a URL fact (ADR-0126): ?zoom=1 renders the component
-  // leaf, and the inventory detail stays the default.
+  // The zoom face IS the default (ADR-0129, reversing ADR-0126's parking):
+  // the identity route renders the leaf; the classic detail face survives at
+  // ?view=detail (and under a legacy ?edit=1) until edit-in-blade lands. A
+  // legacy ?zoom=1 deep link still resolves here, one face either way.
   const [zoomSearch] = useSearchParams();
   const zoomParams = useParams();
-  if (zoomParams.id && zoomSearch.zoom === "1") return <ComponentLeaf />;
+  const wantsDetail = () => zoomParams.id === "create" || zoomSearch.view === "detail" || zoomSearch.edit === "1";
+  if (zoomParams.id && !wantsDetail()) return <ComponentLeaf />;
   const params = useParams();
   const [search] = useSearchParams();
   const navigate = useNavigate();
