@@ -126,7 +126,7 @@ describe("Locations create-as-route", () => {
   });
 
   it("shows an existing location read-only in view: no tag add control, an Edit affordance", async () => {
-    mount("/locations/hq");
+    mount("/locations/hq?view=detail");
     // The detail resolves and renders the read-only facts.
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     // No in-body mutation control in view: the TagAdder add row is absent.
@@ -136,7 +136,7 @@ describe("Locations create-as-route", () => {
   });
 
   it("edit mode narrows the parent picker to the type's allowed_parent_types and excludes the node's own subtree", async () => {
-    mount("/locations/hq-b1");
+    mount("/locations/hq-b1?view=detail");
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     // building's allowed_parent_types is [root, campus]: both campuses (HQ, Lab)
@@ -151,7 +151,7 @@ describe("Locations create-as-route", () => {
   });
 
   it("offers only the current-root placeholder when the type's allowed set has no real matching location", async () => {
-    mount("/locations/hq");
+    mount("/locations/hq?view=detail");
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     // campus's allowed_parent_types is [root]: no location is of type "root" (it
@@ -163,7 +163,7 @@ describe("Locations create-as-route", () => {
   });
 
   it("selecting a different parent updates the picker's value, seeded from the current parent", async () => {
-    mount("/locations/hq-b1");
+    mount("/locations/hq-b1?view=detail");
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
@@ -182,7 +182,7 @@ describe("Locations create-as-route", () => {
     // though b2 is currently root, not filtered out just because there is no current
     // parent to compare against.
     const b2: Location = { id: uuidFor("l-b2"), name: "b2", label: "B2", location_type: "building", effective_tags: {} };
-    mount("/locations/b2", [b2]);
+    mount("/locations/b2?view=detail", [b2]);
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
@@ -217,7 +217,7 @@ describe("Locations create-as-route", () => {
   });
 
   it("saving a rejected move surfaces the 422 through the existing inline alert and stays in edit mode", async () => {
-    mount("/locations/hq-b1");
+    mount("/locations/hq-b1?view=detail");
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
@@ -248,7 +248,7 @@ describe("Locations create-as-route", () => {
     // still keeps the node and its own subtree out.
     const area1: Location = { id: uuidFor("l-area1"), name: "area1", label: "Area 1", location_type: "area", effective_tags: {} };
     const area2: Location = { id: uuidFor("l-area2"), name: "area2", label: "Area 2", location_type: "area", parent: "area1", parent_id: area1.id, effective_tags: {} };
-    mount("/locations/area1", [area1, area2]);
+    mount("/locations/area1?view=detail", [area1, area2]);
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
@@ -266,7 +266,7 @@ describe("Locations create-as-route", () => {
     // is selectable on its own.
     const annexA: Location = { id: uuidFor("l-annex-a"), name: "annex", label: "Annex", location_type: "campus", effective_tags: {} };
     const annexB: Location = { id: uuidFor("l-annex-b"), name: "annex", label: "Annex", location_type: "campus", effective_tags: {} };
-    mount("/locations/hq-b1", [annexA, annexB]);
+    mount("/locations/hq-b1?view=detail", [annexA, annexB]);
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
@@ -319,7 +319,7 @@ describe("Locations create-as-route", () => {
   });
 
   it("edit mode exposes an editable name with a check button", async () => {
-    mount("/locations/hq");
+    mount("/locations/hq?view=detail");
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     // The name becomes an editable input seeded from the row.
@@ -330,7 +330,7 @@ describe("Locations create-as-route", () => {
   });
 
   it("a fresh detail view keeps the name read-only", async () => {
-    mount("/locations/hq");
+    mount("/locations/hq?view=detail");
     await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
     // No check button until edit begins: the name is a read-only fact.
     expect(screen.queryByLabelText("Check name")).toBeNull();
@@ -342,7 +342,7 @@ describe("Locations create-as-route", () => {
   // address bar to the uuid (replace, not push); a rename afterward must
   // leave that URL alone, since the id it addresses never changes.
   it("redirects a name-shaped deep link to the resolved uuid, and a rename leaves the route where it is", async () => {
-    mount("/locations/hq");
+    mount("/locations/hq?view=detail");
     await waitFor(() => expect(window.location.pathname).toBe(`/locations/${hq.id}`));
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
@@ -373,7 +373,7 @@ describe("Locations create-as-route", () => {
   });
 
   it("renders an explicit not-found state for an address that matches no location, not the old silent list fallback", async () => {
-    mount("/locations/no-such-place");
+    mount("/locations/no-such-place?view=detail");
     expect(await screen.findByText(/No such location/)).toBeTruthy();
     expect(screen.getByText(/old address/)).toBeTruthy();
     // Not the pre-15c behavior: the unfiltered list is not what renders.
@@ -394,7 +394,7 @@ describe("Locations create-as-route", () => {
     qc.setQueryData([...TAGS_KEY], []);
     qc.setQueryData([...entityTagsKey("location", twinA.id)], []);
     qc.setQueryData([...ownerPropertiesKey("location", twinA.id)], []);
-    window.history.pushState({}, "", `/locations/${twinA.id}`);
+    window.history.pushState({}, "", `/locations/${twinA.id}?view=detail`);
     render(() => (
       <QueryClientProvider client={qc}>
         <Router>
@@ -458,7 +458,7 @@ describe("Locations properties panel", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
   it("resolves the location type's contract on the detail, off-contract values apart", async () => {
-    mount("/locations/hq");
+    mount("/locations/hq?view=detail");
     await waitFor(() => expect(screen.getByText("Properties")).toBeTruthy());
     expect(screen.getByText("the location type contract, resolved")).toBeTruthy();
     expect(screen.getByText("Time zone")).toBeTruthy();
@@ -469,7 +469,7 @@ describe("Locations properties panel", () => {
   });
 
   it("says where a location's properties come from when nothing is declared or set", async () => {
-    mount("/locations/lab");
+    mount("/locations/lab?view=detail");
     await waitFor(() => expect(screen.getByText("Properties")).toBeTruthy());
     expect(screen.getByText(/come from its location type/)).toBeTruthy();
   });
@@ -493,7 +493,7 @@ describe("Locations properties panel", () => {
       });
     });
 
-    mount("/locations/hq");
+    mount("/locations/hq?view=detail");
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
 
@@ -875,7 +875,7 @@ describe("Locations edit blade carries the label pen (#693)", () => {
   }
 
   it("opens the label locked on a row the platform labelled", async () => {
-    mount(`/locations/${gen.id}`, [gen]);
+    mount(`/locations/${gen.id}?view=detail`, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
@@ -892,7 +892,7 @@ describe("Locations edit blade carries the label pen (#693)", () => {
   // field posts the empty string, which is how the API says "still yours".
   it("does not claim the pen when an unrelated field is saved", async () => {
     const { bodies } = patchBodies();
-    mount(`/locations/${gen.id}`, [gen]);
+    mount(`/locations/${gen.id}?view=detail`, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     await screen.findByLabelText("Label");
@@ -903,7 +903,7 @@ describe("Locations edit blade carries the label pen (#693)", () => {
 
   it("posts the operator's words once they take the pen", async () => {
     const { bodies } = patchBodies();
-    mount(`/locations/${gen.id}`, [gen]);
+    mount(`/locations/${gen.id}?view=detail`, [gen]);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
@@ -916,7 +916,7 @@ describe("Locations edit blade carries the label pen (#693)", () => {
 
   it("opens editable, and hands the label back on restore, for a row the operator labelled", async () => {
     const { bodies } = patchBodies();
-    mount(`/locations/${hq.id}`);
+    mount(`/locations/${hq.id}?view=detail`);
     await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
     fireEvent.click(screen.getByText("Edit"));
     const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
@@ -941,13 +941,13 @@ describe("edit as a URL fact", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
   it("opens the detail in edit when the URL carries ?edit=1", async () => {
-    mount(`/locations/${hq.id}?edit=1`);
+    mount(`/locations/${hq.id}?edit=1&view=detail`);
     await waitFor(() => expect(screen.getByText("Save changes")).toBeTruthy());
   });
 
   it("lands read-only when ?edit=1 arrives without the update permission", async () => {
     const reader: Me = { principal: { id: "u-read", kind: "human" }, human: { username: "reader" }, permissions: ["location:read"], grants: [] };
-    mount(`/locations/${hq.id}?edit=1`, [], reader);
+    mount(`/locations/${hq.id}?edit=1&view=detail`, [], reader);
     // The detail renders (the name is on the read-only face) with no edit surface
     // and no error.
     await waitFor(() => expect(screen.getByText("hq")).toBeTruthy());
@@ -955,7 +955,7 @@ describe("edit as a URL fact", () => {
   });
 
   it("strips the param on Cancel, so the URL no longer requests edit", async () => {
-    mount(`/locations/${hq.id}?edit=1`);
+    mount(`/locations/${hq.id}?edit=1&view=detail`);
     await waitFor(() => expect(screen.getByText("Save changes")).toBeTruthy());
     fireEvent.click(screen.getByText("Cancel"));
     await waitFor(() => expect(screen.queryByText("Save changes")).toBeNull());
@@ -969,7 +969,7 @@ describe("edit as a URL fact", () => {
     // A name-shaped deep link resolves to the uuid route (#627); the query string
     // must survive that replace, or a shared edit link to a named entity opens
     // read-only.
-    mount(`/locations/hq?edit=1`);
+    mount(`/locations/hq?edit=1&view=detail`);
     await waitFor(() => expect(screen.getByText("Save changes")).toBeTruthy());
     expect(window.location.pathname.endsWith(hq.id)).toBe(true);
   });

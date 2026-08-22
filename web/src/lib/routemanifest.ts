@@ -39,11 +39,13 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   // (#627 Task 15c: name uniqueness is scoped to placement, so a name alone is
   // not a reliable route param); TreeList's focus effect resolves a name-shaped
   // link through a byAddr fallback, keeping the query string (#759).
-  { path: "/locations", shell: "protected", page: "Locations", smoke: "/locations" },
+  // The bare index addresses redirect into the fleet list face (#798); the
+  // :id detail routes below still render their pages.
+  { path: "/locations", shell: "protected", page: "FleetRedirect", smoke: "/locations" },
   { path: "/locations/:id", shell: "protected", page: "Locations", smoke: `/locations/${UNKNOWN_UUID}` },
-  { path: "/systems", shell: "protected", page: "Systems", smoke: "/systems" },
+  { path: "/systems", shell: "protected", page: "FleetRedirect", smoke: "/systems" },
   { path: "/systems/:id", shell: "protected", page: "Systems", smoke: `/systems/${UNKNOWN_UUID}` },
-  { path: "/components", shell: "protected", page: "Components", smoke: "/components" },
+  { path: "/components", shell: "protected", page: "FleetRedirect", smoke: "/components" },
   { path: "/components/:id", shell: "protected", page: "Components", smoke: `/components/${UNKNOWN_UUID}` },
   { path: "/nodes", shell: "protected", page: "Nodes", smoke: "/nodes" },
   { path: "/files", shell: "protected", page: "Files", smoke: "/files" },

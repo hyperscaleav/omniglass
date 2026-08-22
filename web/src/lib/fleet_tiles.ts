@@ -5,7 +5,9 @@
 // down where there is room to read them. The tiles carry what the rail
 // carried, counted over systems at this zoom. Pure; no verdict is computed.
 
-import { bandsOf, byRootLocation, holeOnlyBands, locationsWithoutSystems, type Band, type FleetView } from "./fleet";
+import { bandsOf, byChildOfLocation, byRootLocation, holeOnlyBands, holesUnder, locationsWithoutSystems, type Band, type FleetView } from "./fleet";
+import { slotStrip } from "./slot_strip";
+import type { FleetHealth } from "./system_zoom";
 import { verdictOf, verdictRank, type Verdict } from "./health";
 import { entityLabel } from "./entities";
 
@@ -88,4 +90,117 @@ export function markLabel(band: Band, systemId: string, view: FleetView): string
   if (!c) return "";
   const room = c.locationId ? (view.locations ?? []).find((l) => l.id === c.locationId) : undefined;
   return room ? `${c.label} · ${entityLabel(room)}` : c.label;
+}
+
+// ---------------------------------------------------------------------------
+// The scoped tile specs (#795 review): the summary reflects the page it is
+// on. Each scope builds one TileSpec, and FleetShell renders it without
+// knowing the scope: a fleet summarizes systems, a location its subtree, a
+// system its components, a leaf itself. Same rail, honest numbers.
+
+export type TileCount = { key: string; label: string; value: number | string; sub?: string };
+export type TileSpec = {
+  // What the mix counts: the donut's centre noun and the first badge's.
+  subject: string;
+  ratio: { healthy: number; incomplete: number; degraded: number; outage: number; total: number };
+  attention: { outage: number; degraded: number; incomplete: number; total: number };
+  counts: TileCount[];
+};
+
+function mixOf(verdicts: (string | null | undefined)[]): TileSpec["ratio"] {
+  const ratio = { healthy: 0, incomplete: 0, degraded: 0, outage: 0, total: 0 };
+  for (const v of verdicts) {
+    ratio.total++;
+    if (v && v in ratio) ratio[v as keyof typeof ratio]++;
+  }
+  return ratio;
+}
+
+function attentionOf(ratio: TileSpec["ratio"]): TileSpec["attention"] {
+  return { outage: ratio.outage, degraded: ratio.degraded, incomplete: ratio.incomplete, total: ratio.outage + ratio.degraded + ratio.incomplete };
+}
+
+export function fleetTileSpec(view: FleetView): TileSpec {
+  const t = fleetTiles(view);
+  return {
+    subject: "systems",
+    ratio: t.ratio,
+    attention: t.attention,
+    counts: [
+      { key: "gaps", label: t.gaps === 1 ? "gap" : "gaps", value: t.gaps, sub: t.gaps === 1 ? "location with no system" : "locations with no system" },
+      { key: "components", label: "components", value: t.components, sub: `across ${t.systems} systems` },
+      {
+        key: "roots",
+        label: t.roots === 1 ? "root" : "roots",
+        value: t.roots,
+        sub: t.depth.min === t.depth.max ? `${t.depth.max} levels deep` : `${t.depth.min} to ${t.depth.max} levels deep`,
+      },
+    ],
+  };
+}
+
+export function locationTileSpec(view: FleetView, locationId: string): TileSpec {
+  const clusters = bandsOf(view, byChildOfLocation(locationId)).flatMap((b) => b.clusters);
+  const ratio = mixOf(clusters.map((c) => c.verdict));
+  const distinct = new Set<string>();
+  for (const c of clusters) for (const d of c.dots) distinct.add(d.componentId);
+  const gaps = [...holesUnder(locationId, view).values()].reduce((n, v) => n + v.length, 0);
+  const children = (view.locations ?? []).filter((l) => l.parent === locationId).length;
+  return {
+    subject: "systems",
+    ratio,
+    attention: attentionOf(ratio),
+    counts: [
+      { key: "gaps", label: gaps === 1 ? "gap" : "gaps", value: gaps, sub: gaps === 1 ? "location with no system" : "locations with no system" },
+      { key: "components", label: "components", value: distinct.size, sub: `across ${ratio.total} systems` },
+      { key: "children", label: "children", value: children, sub: "direct locations" },
+    ],
+  };
+}
+
+export function systemTileSpec(view: FleetView, health: FleetHealth | undefined, systemId: string): TileSpec {
+  const self = (view.systems ?? []).find((s) => s.id === systemId);
+  const dots = self?.dots ?? [];
+  const ratio = mixOf(dots.map((d) => d.verdict));
+  const strip = health ? slotStrip(health) : undefined;
+  const alarmIds = new Set<string>();
+  for (const r of health?.roles ?? []) {
+    if (!r.active) continue;
+    for (const a of r.alarms ?? []) alarmIds.add(a.id);
+  }
+  const shared = dots.filter((d) => d.shared).length;
+  return {
+    subject: "components",
+    ratio,
+    attention: attentionOf(ratio),
+    counts: [
+      { key: "slots", label: "slots filled", value: strip ? `${strip.filled} of ${strip.total}` : "", sub: "of the standard's slots" },
+      { key: "alarms", label: alarmIds.size === 1 ? "active alarm" : "active alarms", value: alarmIds.size, sub: "on members, now" },
+      { key: "shared", label: "shared", value: shared, sub: "serving another system too" },
+    ],
+  };
+}
+
+export function componentTileSpec(view: FleetView, componentId: string, activeAlarms: number, interfaces: number): TileSpec {
+  let verdict: string | null = null;
+  let memberships = 0;
+  for (const s of view.systems ?? []) {
+    for (const d of s.dots ?? []) {
+      if (d.component === componentId) {
+        verdict = d.verdict ?? verdict;
+        memberships++;
+      }
+    }
+  }
+  const ratio = mixOf(verdict === null && memberships === 0 ? [null] : [verdict]);
+  return {
+    subject: "component",
+    ratio,
+    attention: attentionOf(ratio),
+    counts: [
+      { key: "systems", label: memberships === 1 ? "system" : "systems", value: memberships, sub: "slots it fills" },
+      { key: "alarms", label: activeAlarms === 1 ? "active alarm" : "active alarms", value: activeAlarms, sub: "on this component, now" },
+      { key: "interfaces", label: interfaces === 1 ? "interface" : "interfaces", value: interfaces, sub: "collection paths" },
+    ],
+  };
 }

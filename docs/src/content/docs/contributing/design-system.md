@@ -153,6 +153,14 @@ bending `ListShell`.
 
 Three primitives cover every labelled thing on a detail surface, and nothing else may render one.
 
+**Tooltips, not prose.** An operator surface carries no inline explanatory text: what a field or
+a section means rides its label's `(i)` tooltip (`InfoTip`, portalled Kobalte), never a sentence
+in the flow. `Eyebrow` is the section form of the rule: the section label with an optional
+`hint`, so pedagogy is one hover away and the page itself stays scannable. Long descriptive
+prose on an operator page is a defect; the standard-editor's vocabulary (choices, alternates,
+accepted types) never leads an operator view. Ruled 2026-08-20 (#790); the platform-wide sweep
+of the remaining pages is #784.
+
 - **`KVStacked`** is a **fact**: an eyebrow label above a value. It is what a detail grid cell is,
   and it is also the read state of a field.
 - **`FieldRow`** is a **form field**: the same eyebrow label above a control, with an optional

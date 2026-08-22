@@ -392,8 +392,10 @@ func TestRunIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from alarm`).Scan(&alarms); err != nil {
 		t.Fatalf("count alarms: %v", err)
 	}
-	if alarms != len(fixtures.Alarms) {
-		t.Errorf("alarms = %d, want %d: a second run re-raised instead of finding the standing condition", alarms, len(fixtures.Alarms))
+	// The breadth block adds one raised-then-cleared pair (#796) beside the
+	// fixture's standing alarms; a second run must add nothing to either.
+	if alarms != len(fixtures.Alarms)+1 {
+		t.Errorf("alarms = %d, want %d: a second run re-raised instead of finding the standing condition", alarms, len(fixtures.Alarms)+1)
 	}
 	// Membership and staffing are counted too, because they are where a resolver
 	// that zipped the fixture onto the fleet in the wrong order shows up: every
@@ -1527,16 +1529,87 @@ func TestFixtureFleetReadsDeployed(t *testing.T) {
 		}
 		staffed[ra.System][ra.Role]++
 	}
+	// The archetype quorums (#796): what "deployed" means per standard.
+	quorums := map[string]map[string]int{
+		"meeting-room": {"room-mic": 2, "main-display": 1},
+		"classroom":    {"class-display": 1, "instructor-mic": 1},
+		"auditorium":   {"projection": 1, "stage-mic": 2, "conference": 1},
+		"signage":      {"panel": 1},
+	}
 	for _, s := range doc.Systems {
-		if s.Standard != "meeting-room" {
+		want, known := quorums[s.Standard]
+		if !known {
 			continue
 		}
 		if _, ok := teaching[s.Key]; ok {
 			continue
 		}
 		got := staffed[s.Key]
-		if got["room-mic"] < 2 || got["main-display"] < 1 {
-			t.Errorf("system %q is staffed mic %d/2 display %d/1; a deployed room fills every role (#785), and only the named teaching cases stay short", s.Key, got["room-mic"], got["main-display"])
+		for role, q := range want {
+			if got[role] < q {
+				t.Errorf("system %q (%s) staffs %s %d/%d; a deployed room fills every role (#785), and only the named teaching cases stay short", s.Key, s.Standard, role, got[role], q)
+			}
+		}
+	}
+
+	// The archetype coherence guard (#796): a space's standard matches its
+	// type, so no auditorium ever renders as a meeting room again.
+	pair := map[string]string{"meeting": "meeting-room", "conference": "meeting-room", "board": "meeting-room", "training": "meeting-room", "huddle": "huddle-room", "class": "classroom", "auditorium": "auditorium", "sign": "signage"}
+	for _, s := range doc.Systems {
+		if want, ok := pair[s.SystemType]; ok && s.Standard != want {
+			t.Errorf("system %q is a %q on the %q standard; the archetype pairs %q", s.Key, s.SystemType, s.Standard, want)
+		}
+	}
+}
+
+// The KPI contract (#790): the standards declare the room series, the huddle
+// carries live samples, and every other conforming room reads the contract
+// unsampled. Pinned here because the system zoom's tiles render exactly this
+// read and nothing else.
+func TestSeededStandardsDeclareTheRoomKPIs(t *testing.T) {
+	ctx, conn, gw := seededFleet(t)
+	all := scope.Set{All: true}
+
+	var huddleID string
+	if err := conn.QueryRow(ctx, `
+		select s.id::text from system s join location l on l.id = s.location_id
+		 where l.name = 'huddle'`).Scan(&huddleID); err != nil {
+		t.Fatalf("resolve the huddle system: %v", err)
+	}
+	eff, err := gw.EffectiveMetrics(ctx, "system", huddleID, all)
+	if err != nil {
+		t.Fatalf("effective system metrics: %v", err)
+	}
+	got := map[string]bool{}
+	for _, m := range eff {
+		got[m.MetricTypeName] = m.IsSampled
+	}
+	for name, wantSampled := range map[string]bool{"room-temperature": true, "occupancy-count": true} {
+		sampled, ok := got[name]
+		if !ok {
+			t.Errorf("the huddle system's effective metrics lack %q; the standard should declare it", name)
+			continue
+		}
+		if sampled != wantSampled {
+			t.Errorf("%q sampled = %v, want %v", name, sampled, wantSampled)
+		}
+	}
+
+	// Every occupied-room archetype carries the contract; the signage bays do
+	// not (a display board measures neither occupancy nor temperature).
+	var bayID string
+	if err := conn.QueryRow(ctx, `
+		select s.id::text from system s join location l on l.id = s.location_id
+		 where l.name = 'bay-1'`).Scan(&bayID); err != nil {
+		t.Fatalf("resolve the bay system: %v", err)
+	}
+	eff, err = gw.EffectiveMetrics(ctx, "system", bayID, all)
+	if err != nil {
+		t.Fatalf("effective bay metrics: %v", err)
+	}
+	for _, m := range eff {
+		if m.MetricTypeName == "room-temperature" {
+			t.Errorf("the signage bay declares room-temperature; a display board measures neither room metric (#796)")
 		}
 	}
 }

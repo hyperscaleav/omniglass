@@ -427,7 +427,9 @@ func (p *PG) recomputeMovedLocation(ctx context.Context, q txQuerier, moved owne
 // and a slow transaction would stamp its edge before edges that were recorded
 // while it ran, which is exactly backwards for a record whose whole job is saying
 // WHEN something changed. With that, ts and the identity id agree on the order,
-// and the reads below take the id: it is the true write sequence.
+// and the reads below take the id. TODO(#801): the uuidv7 id is still a clock;
+// a stepped wall clock (the #780 root cause) can invert it across transactions,
+// and the durable fix is a DB-assigned sequence like the audit trail's.
 //
 // The first value for an owner is always recorded, even Healthy. An owner whose
 // history starts at its first health-relevant write has a defined beginning; the

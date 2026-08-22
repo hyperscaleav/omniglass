@@ -2,6 +2,7 @@ package storage_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -163,5 +164,66 @@ func TestSystemStandardOptional(t *testing.T) {
 	}
 	if cleared.Label != display {
 		t.Fatalf("clearing the standard also changed label to %q", cleared.Label)
+	}
+}
+
+// The standard's map declaration (#791, ADR-0128): normalized 2D positions
+// per role position against a declared aspect, data on the standard so every
+// conforming system renders the same room for free. The map is a display
+// declaration, validated in Go (bounds, duplicate positions), stored as one
+// jsonb value, nil when the standard declares none.
+func TestStandardMapDeclaration(t *testing.T) {
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	st, err := gw.CreateStandard(ctx, "", storage.Standard{Name: "mapped-room", Label: "Mapped Room"})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if st.Map != nil {
+		t.Fatalf("a new standard declares no map, got %s", st.Map)
+	}
+
+	mapJSON := json.RawMessage(`{"aspect":1.6,"positions":[{"role":"room-mic","position":1,"x":0.3,"y":0.5},{"role":"room-mic","position":2,"x":0.7,"y":0.5},{"role":"main-display","position":1,"x":0.5,"y":0.05}]}`)
+	patched, err := gw.UpdateStandard(ctx, "", st.ID, storage.StandardPatch{Map: &mapJSON})
+	if err != nil {
+		t.Fatalf("declare map: %v", err)
+	}
+	var m storage.StandardMap
+	if err := json.Unmarshal(patched.Map, &m); err != nil {
+		t.Fatalf("read back map: %v", err)
+	}
+	if m.Aspect != 1.6 || len(m.Positions) != 3 || m.Positions[1].X != 0.7 {
+		t.Fatalf("map round-trip = %+v", m)
+	}
+
+	// Out-of-bounds coordinates and duplicate (role, position) pairs are
+	// refused as validation, not stored garbage.
+	for _, bad := range []string{
+		`{"aspect":1.6,"positions":[{"role":"r","position":1,"x":1.2,"y":0.5}]}`,
+		`{"aspect":0,"positions":[{"role":"r","position":1,"x":0.5,"y":0.5}]}`,
+		`{"aspect":1,"positions":[{"role":"r","position":1,"x":0.1,"y":0.1},{"role":"r","position":1,"x":0.2,"y":0.2}]}`,
+	} {
+		b := json.RawMessage(bad)
+		if _, err := gw.UpdateStandard(ctx, "", st.ID, storage.StandardPatch{Map: &b}); !errors.Is(err, storage.ErrStandardMapInvalid) {
+			t.Fatalf("bad map %s err = %v, want ErrStandardMapInvalid", bad, err)
+		}
+	}
+
+	// Explicit null clears the declaration; a patch that says nothing leaves it.
+	null := json.RawMessage(`null`)
+	cleared, err := gw.UpdateStandard(ctx, "", st.ID, storage.StandardPatch{Map: &null})
+	if err != nil {
+		t.Fatalf("clear map: %v", err)
+	}
+	if cleared.Map != nil {
+		t.Fatalf("cleared map still present: %s", cleared.Map)
 	}
 }

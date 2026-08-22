@@ -81,3 +81,35 @@ standards:
     label: Digital Signage
   - id: control-room
     label: Control Room
+  # The archetype standards (#796): a space's standard matches what the space
+  # is, so no auditorium ever renders as a meeting room. Same seeded-if-absent
+  # contract as the two above; illustrative until standards fork from
+  # templates (#317).
+  - id: classroom
+    label: Classroom
+    roles:
+      - name: class-display
+        label: Main Display
+        accepted_types: [display]
+      - name: instructor-mic
+        label: Instructor Microphone
+        accepted_types: [ceiling-mic, video-bar]
+  - id: auditorium
+    label: Auditorium
+    roles:
+      - name: projection
+        label: Projection
+        accepted_types: [display, projector]
+      - name: stage-mic
+        label: Stage Microphone
+        quorum: 2
+        accepted_types: [ceiling-mic]
+      - name: conference
+        label: Conferencing
+        accepted_types: [video-bar]
+  - id: signage
+    label: Signage
+    roles:
+      - name: panel
+        label: Panel
+        accepted_types: [display]

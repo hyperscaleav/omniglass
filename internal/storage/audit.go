@@ -73,7 +73,13 @@ func (p *PG) ListAuditLog(ctx context.Context, f AuditFilter) ([]AuditEntry, err
 		where ($2 = '' or a.resource = $2)
 		  and ($3 = '' or a.verb = $3)
 		  and ($4 = '' or a.ts < $4::timestamptz)
-		order by a.ts desc, a.id desc
+		-- seq (the DB-assigned identity) is the true write sequence; ts is a
+		-- display fact, and the uuidv7 id is a clock in disguise. Both stamp
+		-- kinds invert across transactions (a slow tx commits after a later
+		-- one, or the wall clock itself steps mid-run, WSL2 NTP corrections
+		-- being the reproduced case), and each in turn made the page's row
+		-- order flap between two reads of the same trail (#780).
+		order by a.seq desc
 		limit $1`,
 		limit, f.Resource, f.Verb, f.Before)
 	if err != nil {

@@ -684,6 +684,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/components/{name}/metrics/{metric}/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one metric series' raw samples
+         * @description The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+         */
+        get: operations["list-component-metric-series"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/components/{name}/properties": {
         parameters: {
             query?: never;
@@ -723,6 +743,26 @@ export interface paths {
          * @description Removes the component's declared value, so the property falls back to the product contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the component never set is a 404. Gated by component:update; read and update scopes drive the 404 versus 403 split.
          */
         delete: operations["clear-component-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/components/{name}/properties/{property}/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one property series' change history
+         * @description The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+         */
+        get: operations["list-component-property-series"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3124,6 +3164,26 @@ export interface paths {
         patch: operations["update-system"];
         trace?: never;
     };
+    "/systems/{name}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a system's recent events, members included
+         * @description Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         */
+        get: operations["list-system-events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems/{name}/health": {
         parameters: {
             query?: never;
@@ -3136,6 +3196,26 @@ export interface paths {
          * @description The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404.
          */
         get: operations["get-system-health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a system's members' recent log lines
+         * @description Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+         */
+        get: operations["list-system-logs"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3228,6 +3308,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/systems/{name}/metrics/{metric}/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one metric series' raw samples
+         * @description The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+         */
+        get: operations["list-system-metric-series"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems/{name}/properties": {
         parameters: {
             query?: never;
@@ -3267,6 +3367,26 @@ export interface paths {
          * @description Removes the system's declared value, so the property falls back to the standard contract's default (or leaves the effective read entirely when it was off-contract). Clearing a property the system never set is a 404. Gated by system:update; read and update scopes drive the 404 versus 403 split.
          */
         delete: operations["clear-system-property"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/systems/{name}/properties/{property}/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one property series' change history
+         * @description The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+         */
+        get: operations["list-system-property-series"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -5946,6 +6066,34 @@ export interface components {
             name?: string;
             principal_id: string;
         };
+        MetricSampleBody: {
+            /** @description The series discriminator, when set */
+            instance?: string;
+            /** @description observed, or calculated for a derived row */
+            provenance: string;
+            source?: string;
+            /**
+             * Format: date-time
+             * @description When the sample was observed
+             */
+            ts: string;
+            /** Format: double */
+            value: number;
+        };
+        MetricSeriesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/MetricSeriesOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The series' metric_type name */
+            metric: string;
+            /** @description The owner's name */
+            owner: string;
+            /** @description Newest first */
+            samples: components["schemas"]["MetricSampleBody"][] | null;
+        };
         MetricTypeBody: {
             /**
              * Format: uri
@@ -6181,6 +6329,33 @@ export interface components {
             official: boolean;
             /** @description A JSON Schema fragment constraining the value */
             validation?: unknown;
+        };
+        PropertySampleBody: {
+            /** @description The series discriminator, when set */
+            instance?: string;
+            /** @description observed, declared, or calculated */
+            provenance: string;
+            source?: string;
+            /**
+             * Format: date-time
+             * @description When the value was observed
+             */
+            ts: string;
+            value: string;
+        };
+        PropertySeriesOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/PropertySeriesOutputBody.json
+             */
+            readonly $schema?: string;
+            /** @description The owner's name */
+            owner: string;
+            /** @description The series' property_type name */
+            property: string;
+            /** @description Newest first: the change history behind the effective value */
+            samples: components["schemas"]["PropertySampleBody"][] | null;
         };
         PushEvent: {
             /** @description Discriminates many occurrences of one name on one owner */
@@ -6914,6 +7089,8 @@ export interface components {
             /** @description The standard's uuid, the stable handle that survives a rename */
             id: string;
             label: string;
+            /** @description The standard's room layout: aspect (width over height) and one normalized position per role position; absent when undeclared */
+            map?: unknown;
             /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
@@ -7023,6 +7200,78 @@ export interface components {
             system_type?: string;
             /** @description The system_type's uuid; the stable form of system_type */
             system_type_id?: string;
+        };
+        SystemEventBody: {
+            /** @description Structured attributes, when the occurrence carried a JSON payload */
+            attributes?: unknown;
+            /** @description The event_type's uuid, the stable form of key */
+            event_type_id: string;
+            /** @description The series discriminator (e.g. the interface), when set */
+            instance?: string;
+            /** @description The event_type name of the occurrence (e.g. call-started) */
+            key: string;
+            /** @description The occurrence message */
+            message: string;
+            /** @description How the occurrence arrived (caught/caused/derived/scheduled) */
+            origin: string;
+            /** @description The owning row's name (the system's, or the member component's) */
+            owner: string;
+            /** @description Which arc raised the occurrence: system or component */
+            owner_kind: string;
+            /** @description The lineage of the occurrence (observed for direct collection) */
+            provenance: string;
+            /** @description The interface type that produced the occurrence */
+            source?: string;
+            /**
+             * Format: date-time
+             * @description When the occurrence happened
+             */
+            ts: string;
+        };
+        SystemEventsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemEventsOutputBody.json
+             */
+            readonly $schema?: string;
+            events: components["schemas"]["SystemEventBody"][] | null;
+            system: string;
+        };
+        SystemLogBody: {
+            /** @description Structured fields parsed from the line, when present */
+            attributes?: unknown;
+            /** @description The member component that wrote the line */
+            component: string;
+            /** @description Threads related lines and their derived events */
+            correlation_id?: string;
+            /** @description The line's facility, when classified */
+            facility?: string;
+            /** @description The series discriminator, when set */
+            instance?: string;
+            /** @description Freeform classification labels, when present */
+            labels?: unknown;
+            /** @description The raw log text */
+            message: string;
+            /** @description The line's severity, when classified */
+            severity?: string;
+            /** @description The channel the line arrived on (e.g. syslog) */
+            source?: string;
+            /**
+             * Format: date-time
+             * @description When the line arrived
+             */
+            ts: string;
+        };
+        SystemLogsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/SystemLogsOutputBody.json
+             */
+            readonly $schema?: string;
+            logs: components["schemas"]["SystemLogBody"][] | null;
+            system: string;
         };
         SystemMemberBody: {
             /** @description Name of the component, or a dotted address (e.g. boi.17c.415a.$comp.display-1) */
@@ -7499,6 +7748,8 @@ export interface components {
             readonly $schema?: string;
             /** @description A new operator-facing label */
             label?: string;
+            /** @description The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair */
+            map?: unknown;
             /** @description A new variant parent, by handle or uuid */
             parent_standard_id?: string;
         };
@@ -9026,6 +9277,45 @@ export interface operations {
             };
         };
     };
+    "list-component-metric-series": {
+        parameters: {
+            query?: {
+                /** @description The window in hours, counted back from now; 24 when unset */
+                hours?: number;
+                /** @description The row cap, newest kept; 500 when unset */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description The owner's name or uuid */
+                name: string;
+                /** @description The metric_type name of the series */
+                metric: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricSeriesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-component-properties": {
         parameters: {
             query?: never;
@@ -9116,6 +9406,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-component-property-series": {
+        parameters: {
+            query?: {
+                /** @description The window in hours, counted back from now; 24 when unset */
+                hours?: number;
+                /** @description The row cap, newest kept; 500 when unset */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description The owner's name or uuid */
+                name: string;
+                /** @description The property_type name of the series */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PropertySeriesOutputBody"];
+                };
             };
             /** @description Error */
             default: {
@@ -14539,6 +14868,38 @@ export interface operations {
             };
         };
     };
+    "list-system-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemEventsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "get-system-health": {
         parameters: {
             query?: never;
@@ -14558,6 +14919,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FleetHealthOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The system's name, or a dotted address (e.g. boi.17c.$sys.av) */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemLogsOutputBody"];
                 };
             };
             /** @description Error */
@@ -14731,6 +15124,45 @@ export interface operations {
             };
         };
     };
+    "list-system-metric-series": {
+        parameters: {
+            query?: {
+                /** @description The window in hours, counted back from now; 24 when unset */
+                hours?: number;
+                /** @description The row cap, newest kept; 500 when unset */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description The owner's name or uuid */
+                name: string;
+                /** @description The metric_type name of the series */
+                metric: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetricSeriesOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-system-properties": {
         parameters: {
             query?: never;
@@ -14821,6 +15253,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-system-property-series": {
+        parameters: {
+            query?: {
+                /** @description The window in hours, counted back from now; 24 when unset */
+                hours?: number;
+                /** @description The row cap, newest kept; 500 when unset */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description The owner's name or uuid */
+                name: string;
+                /** @description The property_type name of the series */
+                property: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PropertySeriesOutputBody"];
+                };
             };
             /** @description Error */
             default: {
