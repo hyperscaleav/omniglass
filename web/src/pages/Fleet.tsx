@@ -1,12 +1,18 @@
 import { For, Show, createMemo, createSignal } from "solid-js";
-import { useNavigate } from "@solidjs/router";
+import { Dynamic } from "solid-js/web";
+import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import HealthBadge from "../components/HealthBadge";
 import BandCanvas from "../components/BandCanvas";
 import BladeStack from "../components/BladeStack";
 import FleetShell from "../components/FleetShell";
+import TabRail from "../components/TabRail";
 import Button from "../components/Button";
+import LocationsPage from "./Locations";
+import SystemsPage from "./Systems";
+import ComponentsPage from "./Components";
+import { can, useMe } from "../lib/auth";
 import SystemHealthPanel from "../components/HealthPanel";
 import { BladesContext, createBladeController, type BladeDef } from "../lib/blades";
 import { FLEET_VIEW_KEY, fleetView, holesByRoot, type Band, type FleetView, type SystemCluster } from "../lib/fleet";
@@ -24,6 +30,23 @@ export default function Fleet() {
   const navigate = useNavigate();
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const blades = createBladeController();
+  const me = useMe();
+  const [search] = useSearchParams();
+
+  // The list face (#798): the classic index pages re-homed as kind tabs. Each
+  // tab mounts the old page component; with no :id in the route it renders its
+  // index list exactly as it did at its old address. Tabs a principal cannot
+  // read are dropped, mirroring the sidebar entries they replaced.
+  const KINDS = [
+    { key: "locations", label: "Locations", resource: "location", Face: LocationsPage },
+    { key: "systems", label: "Systems", resource: "system", Face: SystemsPage },
+    { key: "components", label: "Components", resource: "component", Face: ComponentsPage },
+  ];
+  const kinds = createMemo(() => KINDS.filter((k) => can(me.data, k.resource, "read")));
+  const activeKind = createMemo(() => {
+    const raw = Array.isArray(search.kind) ? search.kind[0] : search.kind;
+    return kinds().find((k) => k.key === raw) ?? kinds()[0];
+  });
 
   const [chips, setChips] = createSignal<Chip[]>([]);
   const [worstFirst] = createSignal(true);
@@ -79,6 +102,16 @@ export default function Fleet() {
           >
             <FleetShell
               storageKey="fleet"
+              list={
+                <div data-testid="fleet-list-face" class="flex flex-col gap-3">
+                  <div class="card overflow-hidden border border-base-300 bg-base-200 pb-3">
+                    <TabRail param="kind" tabs={kinds().map((k) => ({ key: k.key, label: k.label }))} />
+                    <div class="px-3 pt-3">
+                      <Show when={activeKind()}>{(k) => <Dynamic component={k().Face} />}</Show>
+                    </div>
+                  </div>
+                </div>
+              }
               tiles={tiles()}
               rows={bands().flatMap((b) => b.clusters)}
               filterKeys={filterKeys}

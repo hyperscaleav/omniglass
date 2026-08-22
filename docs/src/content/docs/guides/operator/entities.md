@@ -3,7 +3,7 @@ title: Work with an entity
 description: "Opening an entity's blade, drilling into its children, and creating, editing, or deleting through the footer action bar."
 screenshots:
   - id: entity-blade
-    path: /web/locations
+    path: /web/fleet?view=list
     alt: "A location's blade slides in from the right with its details and a footer action bar."
     steps:
       - action: click

@@ -6,6 +6,7 @@ import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
 import SystemCard from "../components/SystemCard";
 import FleetShell from "../components/FleetShell";
+import FleetRows from "../components/FleetRows";
 import { locationTileSpec } from "../lib/fleet_tiles";
 import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
 import {
@@ -124,6 +125,7 @@ export default function LocationZoom() {
           <FleetShell
             storageKey="fleet"
             tiles={tiles()}
+            list={<div class="card overflow-hidden border border-base-300 bg-base-200 p-0"><FleetRows rows={bands().flatMap((b) => b.clusters)} view={view.data!} onOpen={(sid) => navigate(`/systems/${sid}`)} /></div>}
             rows={bands().flatMap((b) => b.clusters)}
             filterKeys={filterKeys}
             chips={chips}

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, fireEvent, within, cleanup } from "@solidjs/testing-library";
+import { render, screen, fireEvent, waitFor, within, cleanup } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Fleet from "./Fleet";
@@ -181,5 +181,63 @@ describe("the fleet zoom's bands", () => {
     mount();
     expect(within(screen.getByTestId(`band-${uuidFor("fp-hq")}`)).getByText("Headquarters")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Fleet" })).toBeTruthy();
+  });
+});
+
+// The density toggle (#798, ADR-0129's "tables survive as a list-density
+// toggle"): the fleet is one door with two densities. The canvas is the
+// default; ?view=list swaps the body for the classic index faces under kind
+// tabs (Locations, Systems, Components), the old index pages re-homed. The
+// view is a URL fact like ?tab= (the #763 deep-link rule).
+describe("the fleet density toggle", () => {
+  it("defaults to the canvas and offers the list toggle", async () => {
+    mount();
+    expect(screen.getByTestId(`band-${uuidFor("fp-hq")}`)).toBeTruthy();
+    const toggle = screen.getByTestId("view-toggle");
+    fireEvent.click(within(toggle).getByRole("button", { name: /list/i }));
+    await waitFor(() => expect(window.location.search).toContain("view=list"));
+  });
+
+  it("?view=list renders the kind tabs and mounts the locations face first, canvas gone", async () => {
+    localStorage.removeItem("fleet-sumopen");
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...FLEET_VIEW_KEY], view);
+    qc.setQueryData([...ME_KEY], me);
+    window.history.pushState({}, "", "/web/fleet?view=list");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router base="/web">
+          <Route path="/fleet" component={Fleet} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    const rail = screen.getByTestId("tab-rail");
+    expect(within(rail).getByRole("tab", { name: "Locations" }).getAttribute("aria-selected")).toBe("true");
+    expect(within(rail).getByRole("tab", { name: "Systems" })).toBeTruthy();
+    expect(within(rail).getByRole("tab", { name: "Components" })).toBeTruthy();
+    expect(screen.getByTestId("fleet-list-face")).toBeTruthy();
+    expect(screen.queryByTestId(`band-${uuidFor("fp-hq")}`)).toBeNull();
+    // The toggle points back: leaving the list clears view and kind together.
+    const toggle = screen.getByTestId("view-toggle");
+    fireEvent.click(within(toggle).getByRole("button", { name: /canvas/i }));
+    await waitFor(() => expect(window.location.search).not.toContain("view=list"));
+  });
+
+  it("?kind=systems selects the systems tab and its face", () => {
+    localStorage.removeItem("fleet-sumopen");
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...FLEET_VIEW_KEY], view);
+    qc.setQueryData([...ME_KEY], me);
+    window.history.pushState({}, "", "/web/fleet?view=list&kind=systems");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router base="/web">
+          <Route path="/fleet" component={Fleet} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    const rail = screen.getByTestId("tab-rail");
+    expect(within(rail).getByRole("tab", { name: "Systems" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByTestId("fleet-list-face")).toBeTruthy();
   });
 });

@@ -39,6 +39,12 @@ export type NavItem = {
   issue?: number;
   resource?: string;
   perm?: string;
+  // An any-of gate: the entry (and its route) opens for a principal who can
+  // read ANY of these resources. For the one entry that replaced several
+  // sidebar doors (#798: Fleet swallowed the Components/Systems/Locations
+  // entries), a single resource would silently lock a reader of only one kind
+  // out of the whole page; the faces inside permission-filter themselves.
+  anyResource?: string[];
   children?: NavChild[];
 };
 
@@ -47,21 +53,16 @@ export const navItems: NavItem[] = [
   // The fleet zoom (#633): the whole fleet on one canvas, systems as dot
   // clusters under their root locations. Gated like the place tree it draws;
   // the projection scopes each tier on its own read underneath.
-  { label: "Fleet", path: "/fleet", icon: Icons.Grid, live: true, resource: "location", hint: "Every system as a cluster of dots on one page, grouped by location and coloured by status." },
+  { label: "Fleet", path: "/fleet", icon: Icons.Grid, live: true, anyResource: ["location", "system", "component"], hint: "Every system as a cluster of dots on one page, grouped by location and coloured by status." },
   { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
   { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering sample." },
-  {
-    label: "Inventory", icon: Icons.Package, hint: "The monitored fleet: components, systems, locations, and the collection nodes, each addressable with its health and configuration.",
-    children: [
-      { label: "Components", path: "/components", live: true, resource: "component", hint: "The component inventory, with declared config, props, and tags. Device interfaces are a panel on the component." },
-      { label: "Systems", path: "/systems", live: true, resource: "system", hint: "Location and system trees, navigable, with health at each level." },
-      { label: "Locations", path: "/locations", live: true, resource: "location", hint: "The place tree: campuses, buildings, floors, and rooms." },
-      // An interface is an API on a component, named by its protocol, so it surfaces
-      // as a panel on the component detail, not a separate nav entry. The tasks a
-      // node runs are likewise a panel on the node.
-      { label: "Nodes", path: "/nodes", live: true, resource: "node", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
-    ],
-  },
+  // The fleet has ONE door (#798, the reconciliation ruled on the #795 review):
+  // the Inventory group dissolved into the Fleet entry above; the old index
+  // pages live on as the fleet list face's kind tabs, and their bare URLs
+  // redirect there. Their detail routes, gates, and top-bar identities survive
+  // through OFF_RAIL below, the same move the catalog registries made (#608).
+  // Nodes is infrastructure, not fleet inventory, so it keeps its own door.
+  { label: "Nodes", path: "/nodes", icon: Icons.Server, live: true, resource: "node", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
   {
     label: "Values", icon: Icons.Sliders, hint: "Operator-set values and content: interpolation variables, encrypted secrets, and reconciled component config, each resolved down the scope cascade, plus the files kept with the fleet.",
     children: [
@@ -104,8 +105,12 @@ export const navItems: NavItem[] = [
 // route regardless; this hides what the caller cannot use. `allow` takes the token
 // path so a sensitive tab can require a deeper tier (e.g. `audit:read:admin`).
 export function filterNav(items: NavItem[], allow: (tokens: string[]) => boolean): NavItem[] {
-  const ok = (n: { resource?: string; perm?: string }) =>
-    n.perm ? allow(n.perm.split(":")) : !n.resource || allow([n.resource, "read"]);
+  const ok = (n: { resource?: string; perm?: string; anyResource?: string[] }) =>
+    n.anyResource
+      ? n.anyResource.some((r) => allow([r, "read"]))
+      : n.perm
+        ? allow(n.perm.split(":"))
+        : !n.resource || allow([n.resource, "read"]);
   const out: NavItem[] = [];
   for (const item of items) {
     if (item.children) {
@@ -129,6 +134,12 @@ export function filterNav(items: NavItem[], allow: (tokens: string[]) => boolean
 // not-yet-built page's tracking issue rides here too, shown on its stub
 // through navByPath exactly as a rail entry's would be.
 export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string; issue?: number }[] = [
+  // The re-homed index pages (#798): each renders as a kind tab inside the
+  // fleet's list face, and its bare URL redirects there, but the detail routes
+  // (/locations/{id} and friends) still resolve identity and gate here.
+  { path: "/components", label: "Components", resource: "component", hint: "The component inventory, with declared config, props, and tags. Device interfaces are a panel on the component." },
+  { path: "/systems", label: "Systems", resource: "system", hint: "Location and system trees, navigable, with health at each level." },
+  { path: "/locations", label: "Locations", resource: "location", hint: "The place tree: campuses, buildings, floors, and rooms." },
   { path: "/products", label: "Products", resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the component type it is classified under." },
   { path: "/vendors", label: "Vendors", resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },
   { path: "/drivers", label: "Drivers", resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },
@@ -217,12 +228,13 @@ export function sectionLabel(pathname: string): string {
 // entries. An ungated path (Home, Profile, the stubs) is absent. This is the
 // single source both the sidebar (hide the button) and the route guard (block
 // the URL) read, so the two can never diverge.
-const navPerms: Record<string, string[]> = (() => {
-  const m: Record<string, string[]> = {};
-  const add = (n: { path?: string; resource?: string; perm?: string }) => {
+const navPerms: Record<string, string[][]> = (() => {
+  const m: Record<string, string[][]> = {};
+  const add = (n: { path?: string; resource?: string; perm?: string; anyResource?: string[] }) => {
     if (!n.path) return;
-    if (n.perm) m[n.path] = n.perm.split(":");
-    else if (n.resource) m[n.path] = [n.resource, "read"];
+    if (n.anyResource) m[n.path] = n.anyResource.map((r) => [r, "read"]);
+    else if (n.perm) m[n.path] = [n.perm.split(":")];
+    else if (n.resource) m[n.path] = [[n.resource, "read"]];
   };
   for (const item of navItems) {
     add(item);
@@ -239,15 +251,29 @@ const navPerms: Record<string, string[]> = (() => {
 // authority, this only keeps the console from rendering a page the caller cannot
 // use (and, under impersonation, from painting stale cross-principal data).
 export function routeTokens(pathname: string): string[] | null {
+  const alts = routeAlternatives(pathname);
+  return alts ? alts[0] : null;
+}
+
+// routeAllowed is the guard's question: may this principal open this route?
+// True for an ungated route; for a gated one, true when `allow` passes ANY of
+// the route's alternatives (a simple gate has exactly one). Built on the same
+// nav map as routeTokens and the sidebar, so the three cannot diverge.
+export function routeAllowed(pathname: string, allow: (tokens: string[]) => boolean): boolean {
+  const alts = routeAlternatives(pathname);
+  return !alts || alts.some(allow);
+}
+
+function routeAlternatives(pathname: string): string[][] | null {
   const path = relative(pathname);
-  let tokens: string[] | null = null;
+  let alts: string[][] | null = null;
   let best = -1;
   for (const [p, need] of Object.entries(navPerms)) {
     const hit = path === p || path.startsWith(`${p}/`);
     if (hit && p.length > best) {
-      tokens = need;
+      alts = need;
       best = p.length;
     }
   }
-  return tokens;
+  return alts;
 }

@@ -272,3 +272,26 @@ describe("the scoped summary", () => {
     expect(within(rail).getByText("children")).toBeTruthy();
   });
 });
+
+// Inside a location, the density toggle lists the subtree as rows (#798): one
+// row per system, verdict first, click opens the system full screen (the
+// altitude rule). The view is a URL fact, so ?view=list deep-links.
+describe("the location list density", () => {
+  it("?view=list renders the subtree as rows and a row opens its system", async () => {
+    mount(`/web/locations/${uuidFor("lz-hq")}?view=list`);
+    const rows = await screen.findByTestId("fleet-rows");
+    expect(within(rows).getByText("Lobby AV")).toBeTruthy();
+    expect(within(rows).getByText("Boardroom")).toBeTruthy();
+    expect(within(rows).getByText("Yard AV")).toBeTruthy();
+    fireEvent.click(within(rows).getByRole("button", { name: /Boardroom/ }));
+    expect(await screen.findByTestId("system-page")).toBeTruthy();
+    expect(window.location.pathname).toBe(`/web/systems/${uuidFor("lz-s-board")}`);
+  });
+
+  it("offers the toggle on the canvas face and points it at the list", async () => {
+    mount();
+    const toggle = screen.getByTestId("view-toggle");
+    fireEvent.click(within(toggle).getByRole("button", { name: /list/i }));
+    await waitFor(() => expect(window.location.search).toContain("view=list"));
+  });
+});

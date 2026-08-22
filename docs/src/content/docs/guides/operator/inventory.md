@@ -3,14 +3,18 @@ title: Find things in your fleet
 description: "The inventory pages, the chip filter, and the tree, list, and column controls for locating a location, system, or component."
 screenshots:
   - id: inventory
-    path: /web/locations
-    alt: "The Locations inventory: a summary board by place type, the chip filter, and the tree of campuses."
+    path: /web/fleet?view=list
+    alt: "The fleet's list view: kind tabs for Locations, Systems, and Components over the chip filter and the tree of campuses."
 ---
 
-Systems, Components, Locations, and Nodes are the live inventory pages. They share one shape, so
-once you know one you know them all. This page is how you **find** something in that
-inventory; [working with an entity](/guides/operator/entities/) is what you do once you have
-opened it.
+The fleet has one door. The [Fleet page](/guides/operator/fleet/) opens on the canvas; the
+**list view** (the toggle at the top right, or `?view=list` in the address) swaps it for
+the index tables, one kind tab each for Locations, Systems, and Components. Nodes keeps
+its own sidebar entry: collection infrastructure, not fleet inventory. The tabs share one shape,
+so once you know one you know them all. This page is how you **find** something in that
+inventory; [working with an entity](/guides/operator/entities/) is what you do once you
+have opened it. The old `/locations`, `/systems`, and `/components` addresses still work:
+each lands on its tab.
 
 ::screenshot{#inventory}
 

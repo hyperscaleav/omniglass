@@ -6,10 +6,14 @@ import { useSearchParams } from "@solidjs/router";
 // on the same view; the default facet carries no param at all, keeping the
 // canonical address clean. One facet is no workspace: the rail renders only
 // once there are two.
-export default function TabRail(props: { tabs: { key: string; label: string }[] }) {
+// The rail's URL fact defaults to `?tab=`; a caller whose facet is a different
+// noun names it (the fleet list's kind tabs ride `?kind=`, #798).
+export default function TabRail(props: { tabs: { key: string; label: string }[]; param?: string }) {
   const [params, setParams] = useSearchParams();
+  const name = () => props.param ?? "tab";
   const active = () => {
-    const t = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+    const raw = params[name()];
+    const t = Array.isArray(raw) ? raw[0] : raw;
     return t && props.tabs.some((x) => x.key === t) ? t : props.tabs[0]?.key;
   };
   return (
@@ -26,7 +30,7 @@ export default function TabRail(props: { tabs: { key: string; label: string }[] 
                 "border border-b-0 border-base-300 bg-base-100 font-medium": active() === t.key,
                 "text-base-content/60 hover:text-base-content": active() !== t.key,
               }}
-              onClick={() => setParams({ tab: t.key === props.tabs[0].key ? undefined : t.key })}
+              onClick={() => setParams({ [name()]: t.key === props.tabs[0].key ? undefined : t.key })}
             >
               {t.label}
             </button>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filterNav, lookupNav, navItems, OFF_RAIL, routeTokens, sectionLabel, STUBS, type NavItem } from "./nav";
+import { filterNav, lookupNav, navItems, OFF_RAIL, routeAllowed, routeTokens, sectionLabel, STUBS, type NavItem } from "./nav";
 import { can, type Me } from "./auth";
 
 const Dummy = () => null;
@@ -41,20 +41,20 @@ describe("filterNav", () => {
     expect(out[0].children!.map((c) => c.label)).toEqual(["Systems"]);
   });
 
-  it("orders the inventory section Components, Systems, Locations, Nodes", () => {
-    const inv = navItems.find((i) => i.label === "Inventory");
-    expect(inv?.children?.map((c) => c.label)).toEqual([
-      "Components", "Systems", "Locations", "Nodes",
-    ]);
+  it("has no Inventory group: Fleet is the estate's one door and Nodes stands top-level (#798)", () => {
+    const labels = navItems.map((i) => i.label);
+    expect(labels).not.toContain("Inventory");
+    expect(labels).toContain("Fleet");
+    expect(labels).toContain("Nodes");
+    // The index entries left the rail but not the app: each keeps its gate and
+    // identity through OFF_RAIL, like the catalog registries before them.
+    for (const top of ["Components", "Systems", "Locations"]) expect(labels).not.toContain(top);
   });
 
-  it("on the real nav, a principal without system/component/location read loses those tabs but keeps the stubs", () => {
-    const out = filterNav(navItems, (tokens) => !["system", "component", "location"].includes(tokens[0]));
-    const inv = out.find((i) => i.label === "Inventory");
-    const labels = inv?.children?.map((c) => c.label) ?? [];
-    expect(labels).not.toContain("Systems");
-    expect(labels).not.toContain("Components");
-    expect(labels).not.toContain("Locations");
+  it("on the real nav, a principal who can read none of the fleet kinds loses Fleet but keeps Nodes", () => {
+    const out = filterNav(navItems, (tokens) => !["location", "system", "component"].includes(tokens[0]));
+    const labels = out.map((i) => i.label);
+    expect(labels).not.toContain("Fleet");
     expect(labels).toContain("Nodes"); // gated on node:read, which this filter allows
   });
 
@@ -174,9 +174,15 @@ describe("routeTokens", () => {
 });
 
 describe("nav IA rework", () => {
-  it("puts the fleet entities under Inventory and the operator-set values under Values", () => {
-    expect(section("Inventory", [">"])).toEqual(["Components", "Systems", "Locations", "Nodes"]);
+  it("keeps the operator-set values under Values and the re-homed index routes gated off-rail", () => {
     expect(section("Values", [">"])).toEqual(["Variables", "Secrets", "Config", "Files"]);
+    // The old index URLs redirect into the fleet's list face, but their detail
+    // routes remain, so the gates and top-bar identities must survive the move.
+    expect(routeTokens("/web/locations")).toEqual(["location", "read"]);
+    expect(routeTokens("/web/systems")).toEqual(["system", "read"]);
+    expect(routeTokens("/web/components")).toEqual(["component", "read"]);
+    expect(sectionLabel("/web/locations/00000000-0000-4000-8000-000000000000")).toBe("Locations");
+    expect(sectionLabel("/web/systems/00000000-0000-4000-8000-000000000000")).toBe("Systems");
   });
 
   it("renames the Settings group to Admin and drops the Settings label", () => {
@@ -276,6 +282,10 @@ describe("Catalog single entry", () => {
       "/notifications": null,
       "/templates": null,
       "/log-types": null,
+      // The re-homed index routes (#798): off the rail, gates unchanged.
+      "/components": ["component", "read"],
+      "/systems": ["system", "read"],
+      "/locations": ["location", "read"],
     };
     for (const [path, need] of Object.entries(expected)) {
       expect(routeTokens(`/web${path}`), path).toEqual(need);
@@ -299,16 +309,44 @@ describe("nav paths bind to routes (#608)", () => {
 });
 
 describe("the fleet rail entry (#633)", () => {
-  it("is a live top-level leaf gated on the place tree it draws", () => {
+  it("is a live top-level leaf gated on the fleet kinds it draws", () => {
     const entry = navItems.find((n) => n.label === "Fleet");
     expect(entry?.live).toBe(true);
     expect(entry?.path).toBe("/fleet");
     expect(entry?.children).toBeUndefined();
+    // The single-gate view of the any-of door (#798): the first alternative.
     expect(routeTokens("/web/fleet")).toEqual(["location", "read"]);
   });
 
-  it("hides from a principal with no location read, like the sidebar promises", () => {
+  it("stays for any fleet-kind reader, like the sidebar promises (#798)", () => {
     expect(rail(["location:read"])).toContain("Fleet");
-    expect(rail(["component:read"])).not.toContain("Fleet");
+    expect(rail(["component:read"])).toContain("Fleet");
+    expect(rail(["node:read"])).not.toContain("Fleet");
+  });
+});
+
+// The fleet door is an any-of gate (#798 review): the one entry replaced three
+// sidebar entries with three different resources, so it must open for a
+// principal who can read ANY of them, or a system-only reader would lose the
+// systems index entirely. The faces inside permission-filter themselves.
+describe("the fleet any-of gate", () => {
+  it("opens for location, system, or component read alone, closes for none", () => {
+    for (const r of ["location", "system", "component"]) {
+      expect(routeAllowed("/web/fleet", (t) => t[0] === r), r).toBe(true);
+    }
+    expect(routeAllowed("/web/fleet", (t) => t[0] === "node")).toBe(false);
+  });
+
+  it("keeps simple gates exact through the same door", () => {
+    expect(routeAllowed("/web/audit", (t) => t.join(":") === "audit:read:admin")).toBe(true);
+    expect(routeAllowed("/web/audit", () => false)).toBe(false);
+    expect(routeAllowed("/web/", () => false)).toBe(true);
+    expect(routeAllowed(`/web/systems/${"00000000-0000-4000-8000-000000000000"}`, (t) => t[0] === "system")).toBe(true);
+    expect(routeAllowed(`/web/systems/${"00000000-0000-4000-8000-000000000000"}`, (t) => t[0] === "location")).toBe(false);
+  });
+
+  it("keeps Fleet in the rail for a system-only reader and drops it for neither", () => {
+    expect(filterNav(navItems, (t) => t[0] === "system").map((i) => i.label)).toContain("Fleet");
+    expect(filterNav(navItems, (t) => t[0] === "node").map((i) => i.label)).not.toContain("Fleet");
   });
 });

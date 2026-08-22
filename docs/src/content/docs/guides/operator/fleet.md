@@ -125,6 +125,16 @@ only as detail blades.
 
 The dashed **+** cards mark where a location or a system would go. They do nothing yet.
 
+## The list view
+
+The toggle at the top right swaps density, not data. On the fleet it replaces the canvas
+with the index tables under three kind tabs, Locations, Systems, and Components: the same
+tree, chip filter, and blades the [inventory guide](/guides/operator/inventory/) teaches.
+Inside a location it lists the subtree one row per system, verdict first; a row opens the
+system full screen, exactly as its card would. The view rides the address (`?view=list`),
+so a pasted link lands on the same face, and the old `/locations`, `/systems`, and
+`/components` addresses land on their tabs.
+
 ## Zoom into a location
 
 Clicking a band opens the location at its own address: the zoom **is** the identity
