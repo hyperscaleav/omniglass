@@ -118,3 +118,80 @@ func TestEventsAPI(t *testing.T) {
 	c.do(viewerTok, http.MethodGet, "/components/disp-1/events", nil, http.StatusNotFound)
 	c.do(viewerTok, http.MethodGet, "/components/other-1/events", nil, http.StatusOK)
 }
+
+// The system-scoped reads on the wire (#793): one call for the room's whole
+// story, rows labeled by owner; a caller without system scope gets the
+// non-disclosing 404 both routes share.
+func TestSystemEventsAndLogsOnTheWire(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ownerTok := bootstrapOwnerTok(t, ctx, gw)
+	srv := httptest.NewServer(api.NewHandler(gw))
+	defer srv.Close()
+	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
+
+	all := scope.Set{All: true}
+	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "wired-room"}, all, all)
+	if err != nil {
+		t.Fatalf("create system: %v", err)
+	}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "wired-bar"}, all, all, all, all); err != nil {
+		t.Fatalf("create member: %v", err)
+	}
+	if err := gw.AddMember(ctx, "", "wired-room", "wired-bar", all, all); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+	now := time.Now().UTC()
+	if err := gw.InsertEvents(ctx, []storage.EventWrite{
+		{OwnerKind: "component", OwnerID: "wired-bar", Key: "call-started", Message: "member event", Source: "xapi", TS: now},
+	}); err != nil {
+		t.Fatalf("insert event: %v", err)
+	}
+	if err := gw.InsertLogLines(ctx, []storage.LogLineWrite{
+		{OwnerKind: "component", OwnerID: "wired-bar", Message: "link up", Severity: "info", TS: now},
+	}); err != nil {
+		t.Fatalf("insert log: %v", err)
+	}
+
+	var ev struct {
+		Events []struct {
+			Owner     string `json:"owner"`
+			OwnerKind string `json:"owner_kind"`
+			Message   string `json:"message"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/"+sys.ID+"/events", nil, http.StatusOK), &ev); err != nil {
+		t.Fatalf("read events: %v", err)
+	}
+	if len(ev.Events) != 1 || ev.Events[0].Owner != "wired-bar" || ev.Events[0].OwnerKind != "component" {
+		t.Fatalf("system events = %+v, want the member's row labeled", ev.Events)
+	}
+
+	var lg struct {
+		Logs []struct {
+			Component string `json:"component"`
+			Message   string `json:"message"`
+		} `json:"logs"`
+	}
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/"+sys.ID+"/logs", nil, http.StatusOK), &lg); err != nil {
+		t.Fatalf("read logs: %v", err)
+	}
+	if len(lg.Logs) != 1 || lg.Logs[0].Component != "wired-bar" || lg.Logs[0].Message != "link up" {
+		t.Fatalf("system logs = %+v, want the member's line named", lg.Logs)
+	}
+
+	// A principal holding no grant at all dies at the permission gate (403,
+	// both routes share the stamp); the scoped-away non-disclosing 404 is the
+	// GetSystem pattern every system read already proves.
+	noneTok := principalWithGrants(t, ctx, dsn, "no-scope-viewer", nil)
+	c.do(noneTok, http.MethodGet, "/systems/"+sys.ID+"/events", nil, http.StatusForbidden)
+	c.do(noneTok, http.MethodGet, "/systems/"+sys.ID+"/logs", nil, http.StatusForbidden)
+}

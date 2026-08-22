@@ -165,6 +165,9 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0124](#adr-0124-on-the-fleet-canvas-health-colour-is-exceptional-and-identity-colour-is-the-ground) | 2026-08-15 | Superseded | A healthy dot on the fleet canvas wears its system's identity hue (the `.og-system-dot` OKLCH recipe over `hueFor`); incomplete, degraded and outage dots wear the semantic verdict colours; an unnarrowed verdict wears `--og-unknown`. Healthy is the wallpaper and the wallpaper is identity, so failures are the only status-coloured pixels. Diverges from the prototype, which had no per-system hue |
 | [ADR-0125](#adr-0125-a-band-shows-the-locations-recorded-verdict-not-the-consoles-fold) | 2026-08-15 | Accepted | A fleet band's verdict chip renders the location's server-recorded verdict, the same row its detail page reads, never the console's fold over in-scope clusters; the fold remains as a named derivation. A band disagreeing with its own detail one click apart is a visible contradiction, and the fold covers only what the caller may read |
 | [ADR-0126](#adr-0126-the-zoom-face-is-a-url-fact-on-the-identity-routes) | 2026-08-15 | Accepted | The deeper zooms render at the identity routes behind a query param (`/locations/{id}?zoom=1`), the inventory detail staying the default face: ADR-0120's mode-rides-the-URL precedent applied to the fork where "the zoom is a function of which entity the URL names" and "the four tables stay live and untouched" collided at one address. The param may become the default later, and the table face may retire once the medium is judged |
+| [ADR-0127](#adr-0127-operator-surfaces-carry-tooltips-not-prose-and-the-system-body-goes-components-first) | 2026-08-20 | Accepted | Operator surfaces carry no inline explanatory prose (explainers ride the label's tooltip: `InfoTip`, `Eyebrow`); the system body renders components-first, role as a badge, role chrome only where it earns it (quorum > 1, short, or unstaffed) |
+| [ADR-0128](#adr-0128-the-standard-declares-the-room-map-normalized-and-display-only) | 2026-08-20 | Accepted | A standard may declare a room map: one validated jsonb value (aspect + normalized 1-based role positions) on `standard`, display-only, rendered by every conforming system's Map tab; JSON null clears; the visual editor stays out of v1 |
+| [ADR-0129](#adr-0129-the-zoom-face-becomes-the-identity-routes-default-one-way-to-look) | 2026-08-21 | Accepted | The zoom/workspace/leaf render at the identity routes by default (`?zoom=1` tolerated, never written); the classic detail face survives at `?view=detail` only until edit-in-blade lands; the ruled target: one altitude rule, edit in blades, tables as a list-density toggle |
 
 ## Entries
 
@@ -5997,3 +6000,57 @@ interface create form, since that name is the platform's to mint.
   mid-exploration).
 - **Tracked under** epic [#630](https://github.com/hyperscaleav/omniglass/issues/630), ahead of
   slice [#635](https://github.com/hyperscaleav/omniglass/issues/635).
+
+### ADR-0127: Operator surfaces carry tooltips, not prose, and the system body goes components-first
+
+- **Date:** 2026-08-20 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/), [design system](/contributing/design-system/)
+- **Decision:** Two console rules, ruled together on the system zoom review. First, an operator
+  surface carries no inline explanatory prose: every explainer rides its label's `(i)` tooltip
+  (`InfoTip`; `Eyebrow` is the section form), and the standard-editor's vocabulary (choices,
+  alternates, accepted types) never leads an operator view. Second, the system body's unit is
+  the COMPONENT, its role a badge on the card; role-level chrome renders only where it says
+  something a badge cannot (quorum beyond one, a shortfall, an unstaffed role), because the
+  overwhelmingly common room is one role to one occupant, and a box around a single card is
+  chrome without information.
+- **Context:** The zoom pages shipped with teaching paragraphs inline (the history strip's
+  pedagogy, per-role arithmetic on healthy 1:1 roles, "built as all-in-one") and one card per
+  role. Reviewing the built page, the architect ruled the prose buries the operator's read
+  ("this is an operator's view") and the role-shaped body misrepresents the fleet's common
+  case. The pedagogy doctrine is satisfied by hover; #784 tracks sweeping the remaining
+  surfaces onto the same rule.
+
+### ADR-0128: The standard declares the room map, normalized and display-only
+
+- **Date:** 2026-08-20 | **Status:** Accepted | **Pages:** [storage](/architecture/storage/), [ui](/architecture/ui/)
+- **Decision:** A standard may declare a room map: one jsonb value (`map` on `standard`)
+  holding an aspect ratio and one normalized position per role position (`{role, position,
+  x, y}`, coordinates in [0, 1], positions 1-based to match `position_labels`). Data, not
+  code: every system conforming to the standard renders the same room for free, the join of
+  "where this position sits" and "who holds it" made client-side from the health read.
+  Validated in Go on write (positive aspect, bounds, no duplicate pair); a JSON null clears
+  it; nothing queries into the blob, which is why it is a value and not a table. Render-only
+  in v1: authored through the standard PATCH (or seed YAML), the visual editor deliberately
+  out.
+- **Context:** The system workspace epic (#788) ruled a top-down room view onto the system
+  zoom ("Mic 1 · Shure MXA910" at its wall position, live status on each marker). The map is
+  a property of the DESIGN, not of one room, so it lives on the standard, the same
+  data-not-code guardrail the driver arc carries; a relational table per position would buy
+  queryability nothing displays and cost a migration per shape change.
+
+### ADR-0129: The zoom face becomes the identity routes' default; one way to look
+
+- **Date:** 2026-08-21 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/)
+- **Decision:** The fleet faces stop being a query-param variant: `/locations/{id}`,
+  `/systems/{id}`, and `/components/{id}` render the zoom, workspace, and leaf by default,
+  and `?zoom=1` is tolerated but no longer written. The classic detail face survives at
+  `?view=detail` (and under a legacy `?edit=1`) solely because editing still lives there;
+  it retires when edit-in-blade lands. The reconciliation's target, ruled with this: one
+  altitude rule (locations drill, systems open full screen, components open in a blade
+  that can expand to its route), every entity edits in its blade, flat tables survive as a
+  list-density toggle for bulk work, and the parallel inventory faces go away.
+- **Context:** ADR-0126 parked the zoom behind a param precisely so the table faces could
+  stay alive until the medium was judged. Judged: the console had become two products (an
+  inventory world that edits and a fleet world that observes), with browse, detail, and
+  edit each existing twice. The architect ruled the merge on the #795 review; this entry
+  flips the default (stage 1), and the remaining stages (entity blades, edit-in-blade,
+  operate absorption, classic retirement) follow as their own body of work.

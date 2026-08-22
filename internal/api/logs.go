@@ -124,3 +124,57 @@ func registerLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		return out, nil
 	})
 }
+
+// The system-scoped read (#793): the members' raw lines merged, each naming
+// its writer. The workspace's Logs tab.
+// Spelled out for the same reason systemEventBody is: Huma does not flatten
+// an embedded struct into the schema.
+type systemLogBody struct {
+	TS            time.Time       `json:"ts" doc:"When the line arrived"`
+	Source        string          `json:"source,omitempty" doc:"The channel the line arrived on (e.g. syslog)"`
+	Severity      string          `json:"severity,omitempty" doc:"The line's severity, when classified"`
+	Facility      string          `json:"facility,omitempty" doc:"The line's facility, when classified"`
+	Instance      string          `json:"instance,omitempty" doc:"The series discriminator, when set"`
+	Message       string          `json:"message" doc:"The raw log text"`
+	Attributes    json.RawMessage `json:"attributes,omitempty" doc:"Structured fields parsed from the line, when present"`
+	Labels        json.RawMessage `json:"labels,omitempty" doc:"Freeform classification labels, when present"`
+	CorrelationID string          `json:"correlation_id,omitempty" doc:"Threads related lines and their derived events"`
+	Component     string          `json:"component" doc:"The member component that wrote the line"`
+}
+
+type systemLogsOutput struct {
+	Body struct {
+		System string          `json:"system"`
+		Logs   []systemLogBody `json:"logs"`
+	}
+}
+
+func registerSystemLogRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
+	huma.Register(api, a.gated(huma.Operation{
+		OperationID: "list-system-logs",
+		Method:      http.MethodGet,
+		Path:        "/systems/{name}/logs",
+		Summary:     "List a system's members' recent log lines",
+		Description: "Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+	}, "system", "read"), func(ctx context.Context, in *systemPathInput) (*systemLogsOutput, error) {
+		sys, err := gw.GetSystem(ctx, in.Name, a.scopeFor(ctx, "system", "read"))
+		if err != nil {
+			return nil, mapSystemErr(err)
+		}
+		rows, err := gw.ListSystemLogs(ctx, sys.ID, logHistoryWindow, logReadLimit)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("read system logs")
+		}
+		out := &systemLogsOutput{}
+		out.Body.System = sys.Name
+		out.Body.Logs = make([]systemLogBody, 0, len(rows))
+		for _, l := range rows {
+			out.Body.Logs = append(out.Body.Logs, systemLogBody{
+				TS: l.TS, Source: l.Source, Severity: l.Severity, Facility: l.Facility, Instance: l.Instance,
+				Message: l.Message, Attributes: l.Attributes, Labels: l.Labels, CorrelationID: l.CorrelationID,
+				Component: l.Component,
+			})
+		}
+		return out, nil
+	})
+}

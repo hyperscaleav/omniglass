@@ -38,6 +38,9 @@ export type SlotOccupant = {
   sharedWith: string[];
   // The declared position label, where the role labels its positions.
   positionLabel?: string;
+  // The declared 1-based slot number this occupant holds, defaulting to its
+  // assignment order when the role declares none: the map join key (#791).
+  position: number;
 };
 
 export type SlotVM = {
@@ -98,9 +101,11 @@ export function systemZoomVM(health: FleetHealth, declared: EffectiveRole[], vie
       const dot = dotsByName.get(name);
       const pos = positions[i];
       const positionLabel = pos !== undefined && labels[pos - 1] ? labels[pos - 1] : undefined;
+      const position = pos ?? i + 1;
       return {
         name,
         componentId: dot?.component ?? "",
+        position,
         down: (r.down ?? []).includes(name),
         sharedWith: dot ? sharedWith(dot.component) : [],
         positionLabel,
@@ -214,4 +219,92 @@ export function sinceOf(health: FleetHealth, now: number): { ts: string; ms: num
   if (t.length === 0) return null;
   const last = t[t.length - 1];
   return { ts: last.ts, ms: now - Date.parse(last.ts) };
+}
+
+// The components-first body (#790): the operator's question is "what is in
+// this room and is it fine", so the unit of the page is the COMPONENT, its
+// role a badge on the card. Role-level structure appears only where it says
+// something a badge cannot: a role that wants more than one occupant, a role
+// that is short, or a role nobody staffed. In the 99% case (one role, one
+// healthy occupant) the room is a flat row of cards.
+export type CardRole = { label: string; position?: string };
+export type ComponentCard = {
+  componentId: string;
+  name: string;
+  down: boolean;
+  shared: string[];
+  roles: CardRole[];
+  noRole: boolean;
+};
+export type RoleGroup = {
+  name: string;
+  label: string;
+  quorum: number;
+  satisfying: number;
+  short: number;
+  spare: number;
+  impact: string;
+  // The occupant names, in position order; empty for an unstaffed role.
+  members: string[];
+  // The occupants' full cards, badges included: a grouped component has ONE
+  // home on the page (inside its group), so a bar that also answers an
+  // ungrouped role renders here wearing both badges.
+  memberCards: ComponentCard[];
+};
+export type SystemBody = { cards: ComponentCard[]; groups: RoleGroup[] };
+
+export function componentCards(vm: SystemZoomVM): SystemBody {
+  // Active slots only: the build not in use stays in the standard editor.
+  const activeSlots: SlotVM[] = [
+    ...vm.unconditional.filter((s) => s.active),
+    ...vm.choices.flatMap((c) => c.alternates.filter((a) => a.active).flatMap((a) => a.roles.filter((r) => r.active))),
+  ];
+
+  const groups: RoleGroup[] = [];
+  const byComponent = new Map<string, ComponentCard>();
+  const card = (o: { componentId: string; name: string; down?: boolean; sharedWith?: string[] }): ComponentCard => {
+    let c = byComponent.get(o.name);
+    if (!c) {
+      c = { componentId: o.componentId, name: o.name, down: o.down ?? false, shared: o.sharedWith ?? [], roles: [], noRole: false };
+      byComponent.set(o.name, c);
+    }
+    return c;
+  };
+
+  for (const slot of activeSlots) {
+    // Grouping earns its chrome: quorum beyond one, or anything short of
+    // whole (an unstaffed or short role is outstanding work the badge
+    // cannot carry).
+    const grouped = slot.quorum > 1 || slot.short > 0 || slot.occupants.length === 0;
+    if (grouped) {
+      groups.push({
+        name: slot.name,
+        label: slot.label,
+        quorum: slot.quorum,
+        satisfying: slot.satisfying,
+        short: slot.short,
+        spare: slot.spare,
+        impact: slot.impact,
+        members: slot.occupants.map((o) => o.name),
+        memberCards: [],
+      });
+    }
+    for (const o of slot.occupants) {
+      const c = card(o);
+      c.down = c.down || o.down;
+      c.shared = [...new Set([...c.shared, ...o.sharedWith])];
+      c.roles.push({ label: slot.label, position: o.positionLabel });
+    }
+  }
+  for (const m of vm.noRole) {
+    const c = card(m);
+    c.noRole = true;
+  }
+  // A grouped role's occupants render inside the group, full card and all
+  // badges; the flat row holds only components whose every role is ungrouped
+  // (plus the no-role members).
+  const groupedNames = new Set(groups.flatMap((g) => g.members));
+  for (const g of groups) g.memberCards = g.members.map((n) => byComponent.get(n)!).filter(Boolean);
+  const cards = [...byComponent.values()].filter((c) => !groupedNames.has(c.name));
+  return { cards, groups };
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -69,12 +70,18 @@ type standardBody struct {
 	ParentStandard   string `json:"parent_standard,omitempty" doc:"The parent standard's handle"`
 	ParentStandardID string `json:"parent_standard_id,omitempty" doc:"The parent standard's uuid; the stable form of parent_standard"`
 	Official         bool   `json:"official"`
+	// The room-layout declaration (#791, ADR-0128): {aspect, positions:[{role,
+	// position, x, y}]}, coordinates normalized to [0, 1] against the aspect.
+	// Absent when the standard declares none; every conforming system's zoom
+	// renders the same room from it.
+	Map json.RawMessage `json:"map,omitempty" doc:"The standard's room layout: aspect (width over height) and one normalized position per role position; absent when undeclared"`
 }
 
 func toStandardBody(st *storage.Standard) standardBody {
 	return standardBody{
 		ID: st.ID, Label: st.Label,
 		Name: st.Name, ParentStandard: derefStr(st.ParentStandardName), ParentStandardID: derefStr(st.ParentStandardID), Official: st.Official,
+		Map: st.Map,
 	}
 }
 
@@ -99,8 +106,9 @@ type createStandardInput struct {
 type updateStandardInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		Label            *string `json:"label,omitempty" doc:"A new operator-facing label"`
-		ParentStandardID *string `json:"parent_standard_id,omitempty" doc:"A new variant parent, by handle or uuid"`
+		Label            *string         `json:"label,omitempty" doc:"A new operator-facing label"`
+		ParentStandardID *string         `json:"parent_standard_id,omitempty" doc:"A new variant parent, by handle or uuid"`
+		Map              json.RawMessage `json:"map,omitempty" doc:"The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair"`
 	}
 }
 
@@ -459,6 +467,9 @@ func mapStandardErr(err error) error {
 	if errors.Is(err, storage.ErrParentStandardNotFound) {
 		return huma.Error422UnprocessableEntity("standard references an unknown parent standard")
 	}
+	if errors.Is(err, storage.ErrStandardMapInvalid) {
+		return huma.Error422UnprocessableEntity(err.Error())
+	}
 	return mapTypeErr(err, "standard")
 }
 
@@ -530,6 +541,9 @@ func registerStandardRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		st, err := gw.UpdateStandard(ctx, actorID(ctx), in.ID, storage.StandardPatch{
 			Label:            in.Body.Label,
 			ParentStandardID: emptyPtrToNil(in.Body.ParentStandardID),
+			// A raw message keeps absent (nil slice) apart from JSON null
+			// ("null" bytes): absent leaves the declaration, null clears it.
+			Map: rawPatch(in.Body.Map),
 		})
 		if err != nil {
 			return nil, mapStandardErr(err)
@@ -550,4 +564,14 @@ func registerStandardRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		}
 		return nil, nil
 	})
+}
+
+// rawPatch adapts a raw JSON body field to the storage patch convention: an
+// absent field (nil slice) becomes a nil pointer (leave unchanged); anything
+// else, JSON null included, passes through for the write to interpret.
+func rawPatch(raw json.RawMessage) *json.RawMessage {
+	if len(raw) == 0 {
+		return nil
+	}
+	return &raw
 }

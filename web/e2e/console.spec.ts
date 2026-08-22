@@ -239,7 +239,7 @@ test.describe("operator console", () => {
     // A band click navigates to the root location BY UUID, and the browser
     // back button returns to the fleet zoom (#633 acceptance).
     await band.getByRole("button").first().click();
-    await page.waitForURL(new RegExp(`/web/locations/${root.id}\\?zoom=1`));
+    await page.waitForURL(new RegExp(`/web/locations/${root.id}$`));
     // The zoom face renders at the identity route (ADR-0126): the breadcrumb
     // walks back to the fleet, and the summary rail is the same one.
     await expect(page.getByTestId("breadcrumb")).toBeVisible();

@@ -5,7 +5,7 @@ import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
 import FleetShell from "../components/FleetShell";
-import { fleetTiles } from "../lib/fleet_tiles";
+import { componentTileSpec } from "../lib/fleet_tiles";
 import { createSignal } from "solid-js";
 import type { Chip } from "../lib/predicate";
 import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/fleet";
@@ -60,7 +60,7 @@ export default function ComponentLeaf() {
   createEffect(() => {
     if (!components.data) return;
     const c = component();
-    if (c && c.id !== id()) navigate(`/components/${c.id}?zoom=1`, { replace: true });
+    if (c && c.id !== id()) navigate(`/components/${c.id}${window.location.search}`, { replace: true });
   });
 
   const memberships = useQuery(() => ({
@@ -100,7 +100,11 @@ export default function ComponentLeaf() {
   const rows = createMemo(() => (view.data && memberships.data ? membershipRows(memberships.data, view.data) : []));
   const nodeByName = createMemo(() => new Map((nodes.data ?? []).map((n) => [n.name, n])));
 
-  const tiles = createMemo(() => (view.data ? fleetTiles(view.data) : undefined));
+  const tiles = createMemo(() =>
+    view.data && component()
+      ? componentTileSpec(view.data, component()!.id, activeAlarms().length, (reach.data?.interfaces ?? []).length)
+      : undefined,
+  );
   const [filterChips, setFilterChips] = createSignal<Chip[]>([]);
 
   const chain = createMemo(() => (view.data && component()?.location_id ? ancestors(component()!.location_id!, locationIndex(view.data)) : []));
@@ -113,8 +117,8 @@ export default function ComponentLeaf() {
     const primary = rows().find((r) => r.primary);
     return [
       { key: "fleet", label: "Fleet", onClick: () => navigate("/fleet") },
-      ...chainList.map((l) => ({ key: l.id, label: entityLabel(l), onClick: () => navigate(`/locations/${l.id}?zoom=1`) })),
-      ...(primary && primary.systemId ? [{ key: primary.systemId, label: primary.label, onClick: () => navigate(`/systems/${primary.systemId}?zoom=1`) }] : []),
+      ...chainList.map((l) => ({ key: l.id, label: entityLabel(l), onClick: () => navigate(`/locations/${l.id}`) })),
+      ...(primary && primary.systemId ? [{ key: primary.systemId, label: primary.label, onClick: () => navigate(`/systems/${primary.systemId}`) }] : []),
     ];
   });
 
@@ -207,7 +211,7 @@ export default function ComponentLeaf() {
                       {(l, i) => (
                         <>
                           <Show when={i() > 0}><span class="text-base-content/30">/</span></Show>
-                          <button type="button" class="cursor-pointer text-primary hover:underline" title={l.location_type} onClick={() => navigate(`/locations/${l.id}?zoom=1`)}>{entityLabel(l)}</button>
+                          <button type="button" class="cursor-pointer text-primary hover:underline" title={l.location_type} onClick={() => navigate(`/locations/${l.id}`)}>{entityLabel(l)}</button>
                         </>
                       )}
                     </For>
@@ -219,7 +223,7 @@ export default function ComponentLeaf() {
                         <dt class="text-base-content/50">System</dt>
                         <dd>
                           <Show when={p().systemId} fallback={p().label}>
-                            <button type="button" class="cursor-pointer text-primary hover:underline" onClick={() => navigate(`/systems/${p().systemId}?zoom=1`)}>{p().label}</button>
+                            <button type="button" class="cursor-pointer text-primary hover:underline" onClick={() => navigate(`/systems/${p().systemId}`)}>{p().label}</button>
                           </Show>
                         </dd>
                       </>
@@ -240,7 +244,7 @@ export default function ComponentLeaf() {
                           when={row.systemId}
                           fallback={<span>{row.label}</span>}
                         >
-                          <button type="button" class="cursor-pointer hover:underline" onClick={() => navigate(`/systems/${row.systemId}?zoom=1`)}>
+                          <button type="button" class="cursor-pointer hover:underline" onClick={() => navigate(`/systems/${row.systemId}`)}>
                             {row.label}
                           </button>
                         </Show>

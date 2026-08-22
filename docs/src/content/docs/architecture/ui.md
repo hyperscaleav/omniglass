@@ -36,6 +36,22 @@ filter, tree/list table, click-row detail blade plus a full detail page, the sum
 click-to-filter is stable. The inventory tier realizes it as the config-driven `ListShell` and its
 primitives ([design system](/contributing/design-system/)); the analytical surfaces will reuse it.
 
+## Tooltips, not prose
+
+An operator surface carries no inline explanatory text (ADR-0127): every explainer rides its
+label's `(i)` tooltip (`InfoTip`; `Eyebrow` for section labels), so the pedagogy doctrine is
+satisfied by hover and the page itself stays scannable. The standard-editor's vocabulary
+(choices, alternates, accepted types) never leads an operator view, and a system's body
+renders components-first: one card per component with its role as a badge, role-level chrome
+only where it says something a badge cannot (a quorum beyond one, a shortfall, an unstaffed
+role). The platform-wide sweep of the older pages is tracked in #784. The system zoom is growing
+into the workspace #788 defines: facets as `?tab=` URL facts (`TabRail`), the Map tab
+rendering the standard's declared room (ADR-0128) with live occupant state on each marker.
+Since ADR-0129 these faces ARE the identity routes' default: one way to look, one altitude
+rule (locations drill, systems open full screen, components open in blades), with the
+classic detail face at `?view=detail` only until edit-in-blade lands and flat tables
+surviving as a list-density toggle for bulk work.
+
 ## One renderer library, two composition modes
 
 ::::design[Target design: the renderer library and composable dashboards, tracked in #523]

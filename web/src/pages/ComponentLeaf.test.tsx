@@ -61,7 +61,7 @@ const reach: Reachability = {
 
 const nodes: Node[] = [{ name: "edge-1", enrolled: true, last_heartbeat_at: iso(5), tags: {} } as Node];
 
-function mount(path = `/web/components/${uuidFor("cf-c-bar")}?zoom=1`, memberships?: unknown[]) {
+function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...COMPONENTS_KEY], [bar]);
@@ -155,7 +155,7 @@ describe("the component leaf", () => {
   });
 
   it("a component filling no role renders without error", () => {
-    mount(`/web/components/${uuidFor("cf-c-bar")}?zoom=1`, []);
+    mount(`/web/components/${uuidFor("cf-c-bar")}`, []);
     expect(screen.getByText(/Not in any system yet/)).toBeTruthy();
     expect(screen.getByTestId("leaf-collection")).toBeTruthy();
   });

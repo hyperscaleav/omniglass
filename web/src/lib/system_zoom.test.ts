@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alarmRows, sinceOf, systemZoomVM } from "./system_zoom";
+import { alarmRows, componentCards, sinceOf, systemZoomVM } from "./system_zoom";
 import type { FleetView } from "./fleet";
 import type { EffectiveRole, FleetHealth } from "./system_zoom";
 import { uuidFor } from "./testids";
@@ -212,5 +212,48 @@ describe("sinceOf", () => {
 
   it("is null when nothing was ever recorded", () => {
     expect(sinceOf({ ...health, transitions: [] } as never, Date.now())).toBeNull();
+  });
+});
+
+// The components-first body (#790): a system shows the things in it, one card
+// per component with a role BADGE; role-level grouping only where it earns it.
+describe("componentCards", () => {
+  const body = () => componentCards(systemZoomVM(health, declared, view, uuidFor("sz-sys")));
+
+  it("gives every component one card with role badges; a grouped component's one home is its group", () => {
+    const { cards, groups } = body();
+    // The bar staffs the grouped mic role AND answers the choice: it renders
+    // inside the group, wearing both badges, and never twice.
+    expect(cards.find((c) => c.name === "videobar-1")).toBeUndefined();
+    const bar = groups.find((g) => g.label === "Room Microphone")!.memberCards.find((c) => c.name === "videobar-1")!;
+    expect(bar.roles.map((r) => r.label).sort()).toEqual(["Conferencing Bar", "Room Microphone"]);
+    expect(bar.roles.find((r) => r.label === "Room Microphone")!.position).toBe("Left");
+    expect(bar.componentId).toBe(uuidFor("sz-c-bar"));
+    const power = cards.find((c) => c.name === "device-1")!;
+    expect(power.roles).toEqual([]);
+    expect(power.noRole).toBe(true);
+  });
+
+  it("groups only where grouping says something: a quorum>1 or short role, never the 1:1 case", () => {
+    const groups = body().groups;
+    // room-mic: quorum 2, short 1 -> grouped with its arithmetic.
+    const mic = groups.find((g) => g.label === "Room Microphone")!;
+    expect(mic.quorum).toBe(2);
+    expect(mic.short).toBe(1);
+    expect(mic.members).toEqual(["videobar-1", "mic-1"]);
+    // conf-bar: quorum 1, whole -> its occupant renders as a plain card, no group.
+    expect(groups.find((g) => g.label === "Conferencing Bar")).toBeUndefined();
+  });
+
+  it("an unstaffed role is an empty group wearing the role badge, never a card", () => {
+    const display = body().groups.find((g) => g.label === "Main Display")!;
+    expect(display.members).toEqual([]);
+    expect(display.short).toBe(1);
+    expect(body().cards.some((c) => c.roles.some((r) => r.label === "Main Display"))).toBe(false);
+  });
+
+  it("never surfaces a role from the build not in use", () => {
+    const all = [...body().cards.flatMap((c) => c.roles.map((r) => r.label)), ...body().groups.map((g) => g.label)];
+    expect(all).not.toContain("conf-codec");
   });
 });

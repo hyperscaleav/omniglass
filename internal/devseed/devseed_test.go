@@ -1540,3 +1540,62 @@ func TestFixtureFleetReadsDeployed(t *testing.T) {
 		}
 	}
 }
+
+// The KPI contract (#790): the standards declare the room series, the huddle
+// carries live samples, and every other conforming room reads the contract
+// unsampled. Pinned here because the system zoom's tiles render exactly this
+// read and nothing else.
+func TestSeededStandardsDeclareTheRoomKPIs(t *testing.T) {
+	ctx, conn, gw := seededFleet(t)
+	all := scope.Set{All: true}
+
+	var huddleID string
+	if err := conn.QueryRow(ctx, `
+		select s.id::text from system s join location l on l.id = s.location_id
+		 where l.name = 'huddle'`).Scan(&huddleID); err != nil {
+		t.Fatalf("resolve the huddle system: %v", err)
+	}
+	eff, err := gw.EffectiveMetrics(ctx, "system", huddleID, all)
+	if err != nil {
+		t.Fatalf("effective system metrics: %v", err)
+	}
+	got := map[string]bool{}
+	for _, m := range eff {
+		got[m.MetricTypeName] = m.IsSampled
+	}
+	for name, wantSampled := range map[string]bool{"room-temperature": true, "occupancy-count": true} {
+		sampled, ok := got[name]
+		if !ok {
+			t.Errorf("the huddle system's effective metrics lack %q; the standard should declare it", name)
+			continue
+		}
+		if sampled != wantSampled {
+			t.Errorf("%q sampled = %v, want %v", name, sampled, wantSampled)
+		}
+	}
+
+	// A meeting room away from the sampled subject still carries the contract,
+	// unsampled: contract first, sample when a source lands.
+	var bayID string
+	if err := conn.QueryRow(ctx, `
+		select s.id::text from system s join location l on l.id = s.location_id
+		 where l.name = 'bay-1'`).Scan(&bayID); err != nil {
+		t.Fatalf("resolve the bay system: %v", err)
+	}
+	eff, err = gw.EffectiveMetrics(ctx, "system", bayID, all)
+	if err != nil {
+		t.Fatalf("effective bay metrics: %v", err)
+	}
+	found := false
+	for _, m := range eff {
+		if m.MetricTypeName == "room-temperature" {
+			found = true
+			if m.IsSampled {
+				t.Errorf("bay-1's room-temperature reads sampled; only the huddle carries samples")
+			}
+		}
+	}
+	if !found {
+		t.Errorf("bay-1's effective metrics lack room-temperature; the meeting-room standard should declare it")
+	}
+}

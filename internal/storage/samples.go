@@ -162,3 +162,42 @@ func (p *PG) LatestMetricInstance(ctx context.Context, componentRef, key, instan
 	}
 	return &dp, nil
 }
+
+// ListMetricSeries returns one series' raw samples newest first: the rows
+// behind the latest value the effective read serves (#794). Raw with a hard
+// cap; downsampling waits for a measured need, not a speculative one. The
+// caller resolves the owner in scope first (the same non-disclosing pattern
+// every lane read shares) and passes the resolved reference.
+func (p *PG) ListMetricSeries(ctx context.Context, ownerKind, ownerRef, key string, window time.Duration, limit int) ([]MetricSample, error) {
+	col, err := ownerColumn(ownerKind)
+	if err != nil {
+		return nil, err
+	}
+	arc, err := p.ownerArcValue(ctx, p.pool, ownerKind, ownerRef)
+	if err != nil {
+		return nil, err
+	}
+	bound, args := tsSince("ts", window, arc, key, limit)
+	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
+		select ts, owner_kind,
+			(select m.name from metric_type m where m.id = metric.metric_type_id), instance, value, provenance, source
+		from metric
+		where %s = $1::uuid
+		  and metric_type_id = (select id from metric_type where name = $2)
+		  and %s
+		order by ts desc
+		limit $3`, col, bound), args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list metric series %s/%s: %w", ownerRef, key, err)
+	}
+	defer rows.Close()
+	var out []MetricSample
+	for rows.Next() {
+		var dp MetricSample
+		if err := rows.Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source); err != nil {
+			return nil, fmt.Errorf("storage: scan metric series: %w", err)
+		}
+		out = append(out, dp)
+	}
+	return out, rows.Err()
+}

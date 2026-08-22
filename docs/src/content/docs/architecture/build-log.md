@@ -5600,3 +5600,66 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   header gains the verdict badge, the since-line from the location health read's
   transitions, and a needs-attention count for this subtree whose click applies the
   existing worst-first verdict filter. No new API.
+- **The system zoom goes components-first, and the prose moves to tooltips**
+  ([#790](https://github.com/hyperscaleav/omniglass/issues/790), the first workspace slice).
+  The room renders as one card per component with its role as a badge; role chrome appears
+  only where it earns it (quorum beyond one, a shortfall, an unstaffed role), the build not
+  in use never renders, and the no-role strip becomes ordinary cards. KPI tiles read the
+  standard's contract metrics (the seed declares room-temperature and occupancy-count on
+  both example standards, sampled on the huddle). The tooltips-not-prose rule lands with
+  its primitives: `Eyebrow` (a section label with its explainer on the (i)) beside the
+  existing `InfoTip`, and the history strip's pedagogy rides the hover. The `TabRail`
+  primitive ships tested, param-driven and deep-linked, mounting once a second facet lands.
+- **The standard declares a map, the system renders it**
+  ([#791](https://github.com/hyperscaleav/omniglass/issues/791), ADR-0128). One jsonb
+  value on `standard` (aspect plus normalized 1-based role positions, validated in Go,
+  cleared by JSON null), carried on the standard wire and patched through the standard
+  API; both example standards declare one in the dev seed. The system zoom grows its
+  first second facet: the Map tab (the `TabRail` mounts), a top-down room with one marker
+  per declared position of the build in use, solid in the occupant's state and linking to
+  its leaf, hollow where nobody is staffed.
+- **The history tab: spans, markers, and what went wrong**
+  ([#792](https://github.com/hyperscaleav/omniglass/issues/792)). Every system's zoom
+  gains the History facet: the verdict spans the health read already carried, one marker
+  per alarm raise on the same axis, and the what-went-wrong list, every member alarm in
+  the window, cleared ones included, ongoing first (fanned out over the members'
+  alarm-history reads; a server rollup waits for a fleet that makes fan-out hurt). No new
+  API.
+- **System-scoped events and logs**
+  ([#793](https://github.com/hyperscaleav/omniglass/issues/793)). Two new reads:
+  `GET /systems/{name}/events` (the system's own events and its members', newest first,
+  each row labeled by owner) and `GET /systems/{name}/logs` (the members' raw lines
+  merged, each naming its writer), both windowed and capped like the component reads,
+  gated by `system:read` with the non-disclosing resolve. The workspace grows its Events
+  and Logs tabs over them. A wire lesson worth keeping: Huma does not flatten an embedded
+  struct into the schema, so the system bodies spell their fields out rather than
+  embedding the component bodies.
+- **The timeseries reads and the Data tab**
+  ([#794](https://github.com/hyperscaleav/omniglass/issues/794)). The platform's first
+  series-history reads: `GET /{components,systems}/{name}/metrics/{metric}/samples` and
+  the property mirror at `.../properties/{property}/samples`, raw rows newest first,
+  windowed (hours) and capped (limit, newest kept), extending the effective reads' route
+  grammar; downsampling waits for a measured need. Over them, the `TimeseriesChart`
+  primitive (a pure `chartLayout` core, one series, area fill, recessive grid, the newest
+  point emphasized) and the workspace's Data tab, one picker chip per declared metric;
+  the dev seed grows a day of temperature and occupancy on the huddle so the chart is
+  judgeable. The chart primitive is dashboards' seed (primitive first).
+- **The summary reflects the page it is on** (#795 review). The rail stops repeating the
+  fleet's numbers on every zoom: each scope builds its own tile spec (the fleet over
+  systems; a location over its subtree with a children count; a system over its own
+  components with slots, active alarms, and shared members; the leaf over itself), and
+  `FleetShell` renders the spec without knowing the scope. A summary identical on every
+  page was chrome, not information.
+- **The history tab reads like a status page** (#795 refinement). Uptime over the window
+  leads (the health KPI over time), the timeline beside it; the transitions group into
+  INCIDENTS, one entry per contiguous stretch away from healthy, ongoing first, each
+  expanding to its verdict changes and the alarms whose lifetimes overlap the stretch;
+  a stretch no alarm explains names itself a commissioning gap; alarms the room absorbed
+  list separately.
+- **The zoom face becomes the default** (ADR-0129, stage 1 of the reconciliation ruled on
+  the #795 review). The identity routes render the fleet faces without any param;
+  `?zoom=1` is tolerated for old links and never written; every in-app address is bare;
+  the classic detail face survives at `?view=detail` (and under legacy `?edit=1`) until
+  edit-in-blade lands. `create` stays a reserved segment. The remaining stages (one
+  entity blade per kind, edit-in-blade, operate absorption, classic retirement) are the
+  follow-up epic.

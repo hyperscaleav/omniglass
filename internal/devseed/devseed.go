@@ -609,6 +609,112 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	if err := seedNodeLogs(ctx, gw); err != nil {
 		return err
 	}
+	// The meeting-room standard's first metric contract, with samples on the
+	// huddle system (#790): the system zoom's KPI tiles render only what the
+	// standard declares, so without this no room would show a tile.
+	if err := seedStandardMetrics(ctx, gw, sysIDs); err != nil {
+		return err
+	}
+	// The room maps (#791, ADR-0128): every conforming system's Map tab
+	// renders from its standard's declaration, so both example standards
+	// carry one. Present is the sentinel: the write audits, so a re-run
+	// must not repeat it.
+	if err := seedStandardMaps(ctx, gw, actorID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// standardMaps are the example rooms' layouts, drawn the way an integrator
+// sketches one: front wall at the top, the table in the middle distance.
+var standardMaps = map[string]string{
+	"meeting-room": `{"aspect":1.5,"positions":[
+		{"role":"main-display","position":1,"x":0.5,"y":0.06},
+		{"role":"room-mic","position":1,"x":0.32,"y":0.52},
+		{"role":"room-mic","position":2,"x":0.68,"y":0.52}]}`,
+	"huddle-room": `{"aspect":1.3,"positions":[
+		{"role":"conf-bar","position":1,"x":0.5,"y":0.08},
+		{"role":"conf-codec","position":1,"x":0.12,"y":0.9},
+		{"role":"conf-camera","position":1,"x":0.5,"y":0.16},
+		{"role":"conf-dsp","position":1,"x":0.24,"y":0.9},
+		{"role":"conf-amp","position":1,"x":0.36,"y":0.9},
+		{"role":"conf-mic","position":1,"x":0.5,"y":0.55}]}`,
+}
+
+func seedStandardMaps(ctx context.Context, gw storage.Gateway, actorID string) error {
+	// Fixed order: the writes audit, and a Go map's random iteration order
+	// swapped the two audit rows between seeds, which the shot gate reads
+	// as drift (the #780 class).
+	for _, std := range []string{"meeting-room", "huddle-room"} {
+		decl := standardMaps[std]
+		st, err := gw.GetStandard(ctx, std)
+		if err != nil {
+			return fmt.Errorf("devseed: read standard %q: %w", std, err)
+		}
+		if st.Map != nil {
+			continue
+		}
+		raw := json.RawMessage(decl)
+		if _, err := gw.UpdateStandard(ctx, actorID, std, storage.StandardPatch{Map: &raw}); err != nil {
+			return fmt.Errorf("devseed: declare the %s map: %w", std, err)
+		}
+	}
+	return nil
+}
+
+// kpiSystem carries the sampled KPI values: the huddle room, the fleet's
+// worked healthy example (and the docs shot's subject). Every other seeded
+// room still carries the tiles' CONTRACT from its standard, unsampled, which
+// is itself the teaching: contract first, sample when the room's build wires
+// a source in.
+const kpiSystem = "huddle-north"
+
+// seedStandardMetrics declares room-temperature and occupancy-count on the
+// meeting-room standard and lands one sample of each on the huddle system.
+// The contract upsert is idempotent by nature; the samples are append-only,
+// so the sampled series is the sentinel: present means this ran, and a
+// re-run writes nothing.
+func seedStandardMetrics(ctx context.Context, gw storage.Gateway, sysIDs map[string]string) error {
+	// Both example standards declare the pair, so every seeded room type
+	// carries the tiles (the huddle is the sampled subject below).
+	for _, std := range []string{"meeting-room", "huddle-room"} {
+		for _, m := range []string{"room-temperature", "occupancy-count"} {
+			if err := gw.UpsertStandardMetric(ctx, std, storage.StandardMetricSpec{MetricTypeName: m}); err != nil {
+				return fmt.Errorf("devseed: declare %s on %s: %w", m, std, err)
+			}
+		}
+	}
+	sysID, ok := sysIDs[kpiSystem]
+	if !ok {
+		return fmt.Errorf("devseed: the KPI fixture system %q is not in the fleet", kpiSystem)
+	}
+	all := scope.Set{All: true}
+	eff, err := gw.EffectiveMetrics(ctx, "system", sysID, all)
+	if err != nil {
+		return fmt.Errorf("devseed: check KPI samples: %w", err)
+	}
+	for _, m := range eff {
+		if m.MetricTypeName == "room-temperature" && m.IsSampled {
+			return nil
+		}
+	}
+	// A day of temperature (a morning ramp, an afternoon peak) and a working
+	// day of occupancy, newest last: enough shape for the Data tab's chart
+	// to be judged, ending on the values the KPI tiles show.
+	now := time.Now()
+	writes := []storage.MetricSampleWrite{}
+	temps := []float64{21.8, 21.6, 21.9, 22.4, 23.1, 23.8, 24.2, 23.9, 23.5}
+	occ := []float64{0, 0, 4, 6, 6, 2, 5, 1, 0}
+	for i := range temps {
+		ts := now.Add(-time.Duration(len(temps)-1-i) * 3 * time.Hour).Add(-4 * time.Minute)
+		writes = append(writes,
+			storage.MetricSampleWrite{OwnerKind: "system", OwnerID: sysID, Key: "room-temperature", Value: temps[i], Source: "devseed", TS: ts},
+			storage.MetricSampleWrite{OwnerKind: "system", OwnerID: sysID, Key: "occupancy-count", Value: occ[i], Source: "devseed", TS: ts},
+		)
+	}
+	if err := gw.InsertMetricSamples(ctx, writes); err != nil {
+		return fmt.Errorf("devseed: write KPI samples: %w", err)
+	}
 	return nil
 }
 
