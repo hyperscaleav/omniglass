@@ -175,11 +175,11 @@ describe("the system zoom", () => {
     expect(within(card).getByText(/also Overflow Room/)).toBeTruthy();
   });
 
-  it("a no-role member's card opens its leaf too", async () => {
+  it("a no-role member's card opens its component blade too (#799)", async () => {
     mount();
     fireEvent.click(screen.getByTestId(`compcard-${uuidFor("szp-c-power")}`));
-    const page = await screen.findByTestId("component-page");
-    expect(page.textContent).toBe(`/web/components/${uuidFor("szp-c-power")}`);
+    const blade = await screen.findByRole("dialog");
+    expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-component-${uuidFor("szp-c-power")}`);
   });
 
   it("a spare beyond quorum reads on the group header", () => {
@@ -274,9 +274,11 @@ describe("the components-first body (#790)", () => {
     expect(screen.queryByTestId("no-role-strip")).toBeNull();
   });
 
-  it("clicking a card opens the component leaf, at its canonical address", async () => {
+  it("clicking a card opens the component blade; Expand promotes to the leaf (#799)", async () => {
     mount();
     fireEvent.click(screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`));
+    const blade = await screen.findByRole("dialog");
+    fireEvent.click(within(blade).getByRole("button", { name: "Expand" }));
     const page = await screen.findByTestId("component-page");
     expect(page.textContent).toBe(`/web/components/${uuidFor("szp-c-bar")}`);
   });
@@ -328,11 +330,11 @@ describe("the map tab (#791)", () => {
     expect(within(map).getByText(/Main Display · empty/)).toBeTruthy();
   });
 
-  it("clicking an occupied marker opens the leaf, at its canonical address", async () => {
+  it("clicking an occupied marker opens its component blade (#799)", async () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
     fireEvent.click(screen.getByTestId(`mapmarker-room-mic-2`));
-    const page = await screen.findByTestId("component-page");
-    expect(page.textContent).toContain(`/web/components/${uuidFor("szp-c-mic")}`);
+    const blade = await screen.findByRole("dialog");
+    expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-component-${uuidFor("szp-c-mic")}`);
   });
 });
 

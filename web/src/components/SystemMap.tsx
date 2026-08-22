@@ -8,7 +8,7 @@ import Eyebrow from "./Eyebrow";
 // this position sits" and "who holds it". Percent positioning against an
 // aspect-ratio box, so the same declaration renders at any width and jsdom
 // can assert it without layout.
-export default function SystemMap(props: { decl: StandardMapDecl; markers: MapMarker[] }) {
+export default function SystemMap(props: { decl: StandardMapDecl; markers: MapMarker[]; onOpen?: (componentId: string) => void }) {
   const navigate = useNavigate();
   return (
     <div class="flex flex-col gap-2 p-4">
@@ -49,7 +49,7 @@ export default function SystemMap(props: { decl: StandardMapDecl; markers: MapMa
                     data-testid={`mapmarker-${m.role}-${m.position}`}
                     class="absolute flex -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-base-content/10"
                     style={{ left: `${m.x * 100}%`, top: `${m.y * 100}%` }}
-                    onClick={() => navigate(`/components/${occ().componentId}`)}
+                    onClick={() => (props.onOpen ? props.onOpen(occ().componentId) : navigate(`/components/${occ().componentId}`))}
                   >
                     <span class="h-2.5 w-2.5 flex-none rounded-full" classList={{ "bg-error": occ().down, "bg-success": !occ().down }} />
                     <span class="whitespace-nowrap text-[11px]" classList={{ "text-error": occ().down }}>{label()}</span>

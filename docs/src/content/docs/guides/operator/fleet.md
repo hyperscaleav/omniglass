@@ -13,6 +13,10 @@ screenshots:
         selector: "text=Auditorium"
       - action: click
         selector: "[data-testid=alarm-strip] button"
+      # The alarm now opens the component's blade (#799); Expand promotes the
+      # walk to the leaf this shot teaches.
+      - action: click
+        selector: "aside[data-blade] button[aria-label=Expand]"
     alt: "The component leaf: the verdict with its since-line, the active alarm, product and identity properties, the memberships, and the collection card."
     # The since-line and the alarm ages count from the capture's own clock.
     mask:

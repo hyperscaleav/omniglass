@@ -1,4 +1,5 @@
 import { entityLabel } from "../lib/entities";
+import { locationBlade, systemBlade, componentBlade } from "../components/EntityBlade";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
@@ -727,7 +728,10 @@ export default function Locations() {
     onEdit: (n) => navigate(`/locations/${encodeURIComponent(n.id)}?edit=1`),
     renderCreate: () => <LocationCreate />,
     renderDetail: (n, ctx) => <LocationDetail node={n} ctx={ctx} />,
-    extraBlades: { "property-resolution": propertyResolutionBlade },
+    // The condensed fleet blade replaces the inventory-era detail blade (#799);
+    // the other fleet kinds register so its drills nest on this page's stack.
+    bladeOverride: locationBlade,
+    extraBlades: { "property-resolution": propertyResolutionBlade, system: systemBlade, component: componentBlade },
   };
 
   return (

@@ -17,6 +17,9 @@ import { systemMetrics, systemMetricsKey } from "../lib/system_metrics";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { mapMarkers, parseStandardMap } from "../lib/system_map";
 import SystemMap from "../components/SystemMap";
+import BladeStack from "../components/BladeStack";
+import { BladesContext, createBladeController } from "../lib/blades";
+import { fleetRegistry } from "../lib/fleetBlades";
 import TabRail from "../components/TabRail";
 import { alarmRows, componentCards, sinceOf, systemZoomVM, type ComponentCard } from "../lib/system_zoom";
 import { vitalRows } from "../lib/component_leaf";
@@ -179,7 +182,14 @@ export default function SystemZoom() {
   const pending = () => view.isPending || health.isPending || declared.isPending;
   const failed = () => view.isError || health.isError || declared.isError;
 
+  // Components open in a blade that can expand to its route (ADR-0129's
+  // altitude rule, wired here in #799): every member, alarm, and map marker
+  // pushes the component blade on this stack instead of leaving the page.
+  const blades = createBladeController();
+  const openComponent = (id: string) => blades.push({ kind: "component", id });
+
   return (
+    <BladesContext.Provider value={blades}>
     <Page
       title={system() ? entityLabel(system()!) : "System"}
       breadcrumb={<Breadcrumb crumbs={crumbs()} />}
@@ -233,7 +243,7 @@ export default function SystemZoom() {
               <div class="flex min-w-0 flex-1 flex-col">
                 <TabRail tabs={tabs()} />
                 <Show when={tab() === "map" && mapDecl()}>
-                  {(decl) => <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} />}
+                  {(decl) => <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} onOpen={openComponent} />}
                 </Show>
                 <Show when={tab() === "events"}>
                   <section data-testid="events-tab" class="flex flex-col gap-2 p-4">
@@ -410,7 +420,7 @@ export default function SystemZoom() {
                                               <li class="flex flex-wrap items-baseline gap-x-2 text-xs">
                                                 <span class="badge badge-xs" classList={{ "badge-error badge-soft": r.severity === "critical", "badge-warning badge-soft": r.severity !== "critical" }}>{r.severity}</span>
                                                 <span>{r.message}</span>
-                                                <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={(e) => { e.stopPropagation(); navigate(`/components/${r.componentId}`); }}>{r.component}</button>
+                                                <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={(e) => { e.stopPropagation(); openComponent(r.componentId); }}>{r.component}</button>
                                                 <span class="text-base-content/45 tabular-nums">
                                                   {fmtTime(r.raisedAt)} → {r.clearedAt ? fmtTime(r.clearedAt) : "ongoing"}
                                                 </span>
@@ -438,7 +448,7 @@ export default function SystemZoom() {
                               <li class="flex flex-wrap items-baseline gap-x-2 px-3 py-1.5 text-xs">
                                 <span class="badge badge-xs" classList={{ "badge-error badge-soft": r.severity === "critical", "badge-warning badge-soft": r.severity !== "critical" }}>{r.severity}</span>
                                 <span>{r.message}</span>
-                                <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={() => navigate(`/components/${r.componentId}`)}>{r.component}</button>
+                                <button type="button" class="cursor-pointer font-mono text-base-content/70 hover:underline" onClick={() => openComponent(r.componentId)}>{r.component}</button>
                                 <span class="ml-auto text-base-content/45 tabular-nums">{fmtTime(r.raisedAt)}</span>
                               </li>
                             )}
@@ -460,7 +470,7 @@ export default function SystemZoom() {
                             <span class="badge badge-sm" classList={{ "badge-error badge-soft": a.severity === "critical", "badge-warning badge-soft": a.severity !== "critical" }}>{a.severity}</span>
                             <span>{a.message}</span>
                             <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/60">{a.component}</span>}>
-                              <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => navigate(`/components/${a.componentId}`)}>{a.component}</button>
+                              {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => openComponent(cid())}>{a.component}</button>}
                             </Show>
                             <span class="text-xs text-base-content/50">impairs {a.roleLabel} · {durationText(pageNow - Date.parse(a.raisedAt))}</span>
                           </div>
@@ -533,6 +543,8 @@ export default function SystemZoom() {
         </Show>
       </Show>
     </Page>
+    <BladeStack controller={blades} registry={fleetRegistry} />
+    </BladesContext.Provider>
   );
 
   function CompCard(props: { card: ComponentCard; inGroup?: boolean }) {
@@ -543,7 +555,7 @@ export default function SystemZoom() {
         data-testid={`compcard-${c().componentId}`}
         class="flex cursor-pointer flex-col gap-1 rounded-md border p-2.5 text-left hover:border-primary/50"
         classList={{ "border-error/50 bg-error/5": c().down, "border-base-300 bg-base-100": !c().down }}
-        onClick={() => navigate(`/components/${c().componentId}`)}
+        onClick={() => openComponent(c().componentId)}
       >
         <div class="flex items-center gap-1.5">
           <span class="h-1.5 w-1.5 flex-none rounded-full" classList={{ "bg-error": c().down, "bg-success": !c().down }} />

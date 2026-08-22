@@ -8,19 +8,12 @@ screenshots:
     steps:
       - action: click
         selector: "text=East Campus"
-    # The health panel the seeded fleet gave this blade renders two regions no
-    # clock or seed can pin: the relative durations beside the recorded edges
-    # ("16s ago", "16s and counting", "held 0s"), which move with capture
-    # timing, and the per-system identity bullets, whose hues derive from
-    # uuids minted fresh by every capture's seed (same class as the fleet
-    # canvas mask). The durations mask their enclosing row so a 9s-vs-16s
-    # width change cannot move the box.
+    # The condensed blade (#799) renders two regions no clock can pin: the
+    # since line's age counts from the capture's own seed-to-shoot latency,
+    # and the 30-day strip weights its spans by that same moving now.
     mask:
-      - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
-      - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
-      - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
+      - "[data-testid=blade-since]"
       - ".og-statestrip"
-      - ".og-system-dot"
   - id: entity-edit-face
     path: /web/locations/east?edit=1
     alt: "A location's full detail page lands directly in edit mode from an ?edit=1 deep link."
@@ -46,6 +39,14 @@ which the create flow uses for its own handoff). Rows are keyboard-operable: Tab
 press Enter to open it.
 
 ::screenshot{#entity-blade}
+
+A fleet entity's blade (a location, a system, a component) is a condensed read of its
+workspace: the verdict and since-when lead, the active alarms say why, the 30-day strip
+shows the shape of its history, and a system lists its members (each opening its own
+component blade on the same stack) with the room vitals as chips. **Expand** in the header
+promotes to the full workspace at the entity's own address. The label edits in place
+through the footer's pencil, and Delete sits on the left behind a confirm, both gated by
+your permissions on that row.
 
 The identity pages (Users, Groups, and Roles) use the same blade, and there drilling crosses entities: from a
 user you open a group's blade over it, and from a group you open a member's user blade, each stacking so you can

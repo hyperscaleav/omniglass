@@ -911,13 +911,16 @@ describe("Components list survives duplicate names across placements (#627)", ()
     expect(portInARow).toBeTruthy();
     fireEvent.click(portInARow!);
 
+    // The blade is the condensed fleet blade now (#799), so the discriminator
+    // is its identity: the aside is labelled by the CLICKED duplicate's uuid,
+    // which only holds when the tree index, blade lookup, and body all key on
+    // the true id end to end.
     const blade = await waitFor(() => {
       const el = document.querySelector("aside[data-blade]") as HTMLElement | null;
-      if (!el || !el.textContent?.includes("Parent")) throw new Error("blade not open yet");
+      if (!el) throw new Error("blade not open yet");
       return el;
     });
-    await waitFor(() => expect(blade.textContent).toContain("rack-a"));
-    expect(blade.textContent).not.toContain("rack-b");
+    expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-component-${uuidFor("c-port-a")}`);
   });
 });
 

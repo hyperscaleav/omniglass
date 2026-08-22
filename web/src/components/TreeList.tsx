@@ -155,6 +155,11 @@ export interface ListConfig<N extends ListNode> {
   // ctx.openBlade), keyed by kind, alongside the page's own entity blade. Used by
   // Components to open a secret's cascade as a nested blade.
   extraBlades?: Record<string, BladeDef>;
+  // Replace the page's own entity blade with a shared cross-page def (#799: the
+  // fleet kinds retire the inventory-era renderDetail blade for the condensed
+  // EntityBlade). The row click, drill, and stack mechanics stay TreeList's;
+  // only what the blade shows (and how it edits) comes from the override.
+  bladeOverride?: BladeDef;
   // The create/edit Drawer body. Optional: a page on the create-as-route model omits
   // it (create is renderCreate at /<entity>/create, edit is inline on the detail
   // accordion), so the Drawer never opens. Pages still on the drawer model provide it.
@@ -508,7 +513,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   // pushing a child blade); Maximize promotes the blade to the addressable full page.
   const bladeRegistry: Record<string, BladeDef> = {
     ...(cfg.extraBlades ?? {}),
-    [cfg.entity.name]: {
+    [cfg.entity.name]: cfg.bladeOverride ?? {
       Title: (p) => <>{index().byId.get(p.id)?.display}</>,
       Body: (p) => <EntityBladeBody id={p.id} />,
       headerExtra: (p) => (
