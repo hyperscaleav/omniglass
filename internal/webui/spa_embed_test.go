@@ -107,3 +107,34 @@ func TestEmbeddedConsoleServesHashedAsset(t *testing.T) {
 		t.Fatalf("asset Cache-Control = %q, want immutable", cc)
 	}
 }
+
+func TestEmbeddedConsole404sAMissingAsset(t *testing.T) {
+	// #778 against the REAL build rather than a fake FS: the asset directories the
+	// miss rule reads are the ones Vite actually emitted, so this is the assertion
+	// that fails if the build output moves and the fake console stops resembling
+	// it. A deep link still has to render the shell, which is the half the
+	// catch-all exists for and the half a too-eager 404 would cost.
+	h := SPA()
+	for _, p := range []string{
+		"/assets/index-00000000.js",
+		"/assets/index-00000000.css",
+		"/fonts/ibm-plex-sans-latin-900.woff2",
+		"/favicon.ico",
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404", p, rec.Code)
+		}
+		if strings.Contains(rec.Body.String(), `id="root"`) {
+			t.Errorf("GET %s served the built shell as the miss", p)
+		}
+	}
+	for _, p := range []string{"/", "/locations/east", "/systems/hq-huddle-01"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `id="root"`) {
+			t.Errorf("GET %s = %d, want 200 and the built shell", p, rec.Code)
+		}
+	}
+}

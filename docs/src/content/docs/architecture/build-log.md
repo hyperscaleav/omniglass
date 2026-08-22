@@ -5600,3 +5600,15 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   header gains the verdict badge, the since-line from the location health read's
   transitions, and a needs-attention count for this subtree whose click applies the
   existing worst-first verdict filter. No new API.
+- **A missing console asset answers 404, not the shell**
+  ([#778](https://github.com/hyperscaleav/omniglass/issues/778)). The SPA catch-all used to answer
+  every miss under `/web` with `index.html` and HTTP 200, so nothing about a broken deploy ever
+  failed: a missing chunk reached the browser as HTML it parsed as JavaScript (a syntax error at
+  line 1, a layer from the cause), a caching layer stored HTML under the asset's URL, and
+  monitoring keyed on 4xx read a healthy origin. Found while self-hosting the typefaces (#775),
+  where it defeated the first version of a guard that watched for failed requests. A path that
+  names a file now 404s and a client route still renders the shell, split on two derived facts
+  rather than a hand-kept prefix list: an extension in the last segment (no client route can carry
+  one) and the top-level directories read out of the build itself, so an asset kind or output
+  directory nobody enumerated is covered on the day it appears
+  ([ADR-0127](/architecture/decisions/)). The unbuilt binary applies the same split.

@@ -437,6 +437,23 @@ Go binary under the `web` build tag, served at `/web`. One artifact serves the A
 console. In dev, `npm run dev` serves the SPA on :5173 with `/api` proxied to a locally-running
 `omniglass server`, so the frontend loop needs no rebuild.
 
+### What a miss under `/web` answers
+
+The handler splits a miss in two ([ADR-0127](/architecture/decisions/)). A path that **names a
+file** the build was supposed to contain answers a real **404**; a path naming one of the console's
+own **client routes** falls back to `index.html` with 200, which is the whole reason the catch-all
+exists (a deep link to `/web/locations/east` must render the SPA). Before this, every miss answered
+the shell with 200: a missing chunk after a partial deploy arrived as HTML the browser parsed as
+JavaScript, a caching layer stored HTML under the asset's URL, and monitoring keyed on 4xx read a
+healthy origin while the console was broken.
+
+Both halves of "names a file" are **derived, so neither can go stale against the build**: an
+extension in the last path segment (a client route cannot carry one, an entity name being
+`^[a-z0-9][a-z0-9-]*$` and its uuid form carrying no dot), or a top-level directory the build
+emitted, read out of the embedded filesystem at handler construction. Adding an asset directory or
+an asset kind to the Vite output needs no change here. A binary built without `-tags web` applies
+the same split: routes get the build-the-console placeholder, file requests get 404.
+
 ## Tests
 
 Component-level tests (Vitest + `@solidjs/testing-library`) cover the interactive widgets and the

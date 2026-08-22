@@ -1,9 +1,10 @@
 // Package webui serves the embedded single-page operator console. The routing
-// logic (serve a real file, else fall back to index.html for the SPA router)
-// lives here against an injected fs.FS so it is unit-testable with a fake
-// filesystem; the real embedded bytes are wired in spa_embed.go under the `web`
-// build tag, and a placeholder is wired in spa_noembed.go without it. So a bare
-// `go build` / `go test ./...` never needs the Vite build to exist.
+// logic (serve a real file, 404 a miss that names one, else fall back to
+// index.html for the SPA router) lives here against an injected fs.FS so it is
+// unit-testable with a fake filesystem; the real embedded bytes are wired in
+// spa_embed.go under the `web` build tag, and a placeholder is wired in
+// spa_noembed.go without it. So a bare `go build` / `go test ./...` never needs
+// the Vite build to exist.
 package webui
 
 import (
@@ -14,17 +15,26 @@ import (
 )
 
 // SPAHandler serves the console from fsys with client-side-routing support: an
-// existing file (index.html, assets/*, favicon) is served as-is; any other path
-// falls back to index.html so the Solid router resolves it. If fsys has no
-// index.html (a binary built without `-tags web`), it serves a build-the-console
-// placeholder.
+// existing file (index.html, assets/*, favicon) is served as-is; a path that
+// names no file falls back to index.html so the Solid router resolves it,
+// unless the path names a FILE rather than a client route, which is a genuine
+// 404 (see namesAFile, #778). If fsys has no index.html (a binary built without
+// `-tags web`), routes get a build-the-console placeholder and file requests
+// still 404.
 func SPAHandler(fsys fs.FS) http.Handler {
+	dirs := buildDirectories(fsys)
 	if _, err := fs.Stat(fsys, "index.html"); err != nil {
-		return http.HandlerFunc(placeholder)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if namesAFile(requestPath(r), dirs) {
+				http.NotFound(w, r)
+				return
+			}
+			placeholder(w, r)
+		})
 	}
 	fileServer := http.FileServer(http.FS(fsys))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+		p := requestPath(r)
 		if p != "" {
 			if _, err := fs.Stat(fsys, p); err == nil {
 				// Vite emits content-hashed asset names, safe to cache forever;
@@ -38,9 +48,82 @@ func SPAHandler(fsys fs.FS) http.Handler {
 				fileServer.ServeHTTP(w, r)
 				return
 			}
+			if namesAFile(p, dirs) {
+				http.NotFound(w, r)
+				return
+			}
 		}
 		serveIndex(w, r, fsys)
 	})
+}
+
+// requestPath is the FS-relative path a request addresses: cleaned (so a
+// traversal attempt resolves inside the embedded FS) and root-relative.
+func requestPath(r *http.Request) string {
+	return strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+}
+
+// namesAFile reports whether a request path names a FILE the console build was
+// supposed to contain, rather than one of the SPA's own client routes. A miss on
+// one is a real 404; a miss on a client route is the deep link the catch-all
+// exists for.
+//
+// Before #778 there was no such split: every miss answered index.html with 200,
+// so a missing chunk after a partial deploy arrived as HTML the browser parsed
+// as JavaScript (a syntax error at line 1, a layer away from the cause), a
+// caching layer stored HTML under the asset's URL, and monitoring keyed on 4xx
+// read a healthy origin while the console was broken. Nothing failed, so a guard
+// that watches for failed requests was blind by construction, which is how the
+// self-hosted typefaces (#775) shipped past their first guard.
+//
+// Two derived halves, neither a hand-kept list:
+//
+//   - The last segment carries an EXTENSION. A console client route cannot: an
+//     entity name is `^[a-z0-9][a-z0-9-]*$` (internal/storage/name.go) and the
+//     uuid form of the same address (ADR-0062) carries no dot either. This half
+//     covers an asset kind nobody enumerated, which is the point of writing it
+//     this way rather than as a list of prefixes or extensions.
+//   - The path sits under a DIRECTORY THE BUILD EMITTED, read from the built
+//     filesystem itself (buildDirectories), so a future Vite output directory is
+//     covered on the day it appears and an extensionless file under one is too.
+//
+// Rejected: keying on the Accept header. A script or fetch request sends
+// `Accept: */*`, which is indistinguishable from a probe of a deep link, and a
+// monitor or curl sends none at all, so the split would land on the client's
+// self-description rather than on what the build actually contains
+// (ADR-0127).
+func namesAFile(p string, buildDirs map[string]struct{}) bool {
+	if p == "" {
+		return false
+	}
+	if strings.Contains(path.Base(p), ".") {
+		return true
+	}
+	first, _, nested := strings.Cut(p, "/")
+	if !nested {
+		return false
+	}
+	_, ok := buildDirs[first]
+	return ok
+}
+
+// buildDirectories is the set of top-level directories the console build emitted
+// (assets/, fonts/, and whatever Vite adds later). Read once at construction:
+// the embedded FS is fixed at compile time, so this is a build fact, not a
+// per-request one. An FS with no readable root (the placeholder build) yields an
+// empty set, leaving namesAFile on its extension half alone.
+func buildDirectories(fsys fs.FS) map[string]struct{} {
+	entries, err := fs.ReadDir(fsys, ".")
+	if err != nil {
+		return nil
+	}
+	dirs := make(map[string]struct{}, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			dirs[e.Name()] = struct{}{}
+		}
+	}
+	return dirs
 }
 
 // contentTypeFor returns the media type this binary states for a console file,

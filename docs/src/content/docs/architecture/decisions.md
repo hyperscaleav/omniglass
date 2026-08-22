@@ -165,6 +165,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0124](#adr-0124-on-the-fleet-canvas-health-colour-is-exceptional-and-identity-colour-is-the-ground) | 2026-08-15 | Superseded | A healthy dot on the fleet canvas wears its system's identity hue (the `.og-system-dot` OKLCH recipe over `hueFor`); incomplete, degraded and outage dots wear the semantic verdict colours; an unnarrowed verdict wears `--og-unknown`. Healthy is the wallpaper and the wallpaper is identity, so failures are the only status-coloured pixels. Diverges from the prototype, which had no per-system hue |
 | [ADR-0125](#adr-0125-a-band-shows-the-locations-recorded-verdict-not-the-consoles-fold) | 2026-08-15 | Accepted | A fleet band's verdict chip renders the location's server-recorded verdict, the same row its detail page reads, never the console's fold over in-scope clusters; the fold remains as a named derivation. A band disagreeing with its own detail one click apart is a visible contradiction, and the fold covers only what the caller may read |
 | [ADR-0126](#adr-0126-the-zoom-face-is-a-url-fact-on-the-identity-routes) | 2026-08-15 | Accepted | The deeper zooms render at the identity routes behind a query param (`/locations/{id}?zoom=1`), the inventory detail staying the default face: ADR-0120's mode-rides-the-URL precedent applied to the fork where "the zoom is a function of which entity the URL names" and "the four tables stay live and untouched" collided at one address. The param may become the default later, and the table face may retire once the medium is judged |
+| [ADR-0127](#adr-0127-a-console-miss-that-names-a-file-is-a-404-not-the-shell) | 2026-08-22 | Accepted | The SPA catch-all answers **404** when the request path names a FILE and the built console does not contain it, and keeps falling back to `index.html` only for the SPA's own client routes. Every miss used to answer the shell with 200, so a missing chunk after a partial deploy arrived as HTML the browser parsed as JavaScript, a caching layer stored HTML under the asset's URL, and monitoring keyed on 4xx read a healthy origin while the console was broken. "Names a file" is **derived, never hand-kept**: an extension in the last segment (no client route can carry one, an entity name being `^[a-z0-9][a-z0-9-]*$` and a uuid carrying no dot), or a top-level directory read out of the build itself at construction. Rejected: keying on `Accept`, which a script request spells `*/*` and a monitor omits |
 
 ## Entries
 
@@ -5997,3 +5998,36 @@ interface create form, since that name is the platform's to mint.
   mid-exploration).
 - **Tracked under** epic [#630](https://github.com/hyperscaleav/omniglass/issues/630), ahead of
   slice [#635](https://github.com/hyperscaleav/omniglass/issues/635).
+### ADR-0127: A console miss that names a file is a 404, not the shell
+
+- **Date:** 2026-08-22 | **Status:** Accepted | **Pages:** [design system](/contributing/design-system/)
+- **Decision:** the SPA handler (`internal/webui/spa.go`) splits a miss in two. A request whose
+  path **names a file** the build was supposed to contain answers **404**; a request naming one of
+  the console's own **client routes** keeps falling back to `index.html` with 200, which is what
+  the catch-all exists for. "Names a file" is decided by two **derived** halves, neither of them a
+  list anybody maintains: the last path segment carries an **extension** (a client route cannot,
+  an entity name being `^[a-z0-9][a-z0-9-]*$` and its uuid form under
+  [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)
+  carrying no dot either), or the path sits under a **top-level directory the build emitted**, read
+  out of the embedded filesystem once at handler construction. A build that starts emitting
+  `media/` or an asset kind nobody enumerated is covered on the day it appears. The binary built
+  without `-tags web` applies the same split: routes get the build-the-console placeholder, file
+  requests get 404, because an unbuilt console answering 200 with HTML is the same false-healthy
+  signal.
+- **Context:** every miss under `/web/*` used to answer `index.html` with **HTTP 200**, found while
+  self-hosting the typefaces ([ADR-0121](#adr-0121-the-console-ships-its-own-typefaces), #775),
+  where it defeated the first version of a guard: pointing a `@font-face` `src` at files that do
+  not exist produced 200 and an HTML body for every one of them, and **no request failed**, so a
+  guard watching for failed requests was blind by construction. The consequences generalize past
+  fonts. A missing JS chunk after a partial deploy is served as HTML, so the browser reports a
+  syntax error at line 1 and the cause sits a layer away from the symptom; a stylesheet or image
+  typo renders silently wrong instead of diagnosably absent; a caching layer stores an HTML body
+  under the asset's URL; and any monitoring keyed on 4xx sees a healthy origin while the app is
+  broken, which is precisely the class of failure this product exists to catch in other people's
+  estates.
+  Rejected: **keying on the `Accept` header**. It follows the request's own stated intent, which is
+  its appeal, but a script or `fetch` request sends `Accept: */*`, indistinguishable from a probe
+  of a deep link, and a monitor or a `curl` sends none at all, so the rule would rest on the
+  client's self-description rather than on what the build actually contains. Rejected too: a
+  **hand-kept list of asset prefixes or extensions**, which is a fact the build already knows,
+  restated where it can drift (#778).
