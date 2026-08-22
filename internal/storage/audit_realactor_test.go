@@ -80,9 +80,11 @@ func TestSelfProfileAuditsRealActor(t *testing.T) {
 	}
 }
 
-// The audit page orders by id, the true write sequence (#780): two rows whose
-// ts stamps inverted across transactions must still list in write order, or
-// the same trail renders differently on two honest reads.
+// The audit page orders by seq, the DB-assigned write sequence (#780): two
+// rows whose ts stamps inverted across transactions must still list in write
+// order, or the same trail renders differently on two honest reads. (The
+// uuidv7 id was the first fix here and turned out to be a clock in disguise;
+// TestAuditOrderSurvivesClockStep covers that half.)
 func TestAuditListOrdersByWriteSequenceNotTS(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")

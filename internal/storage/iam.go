@@ -829,8 +829,13 @@ type HumanSpec struct {
 	PasswordHash string
 }
 
-// ListPrincipals returns every principal with its profile and grants, oldest
-// first. Reads require an all-scope grant (a principal is not scope-tree scoped),
+// ListPrincipals returns every principal, humans before nodes, each kind in
+// creation order. Kind leads so the directory groups people apart from machine
+// identities; within a kind, seq (the DB-assigned identity) is the order,
+// because clock-derived keys (created_at, uuidv7 ids) invert across
+// transactions when the wall clock steps mid-run and flapped the
+// zero-tolerance screenshot gate (#780).
+// Reads require an all-scope grant (a principal is not scope-tree scoped),
 // so a non-all read scope is ErrPrincipalForbidden rather than a silent empty
 // list. Archived (soft-deleted) principals are excluded unless
 // includeArchived is set (the directory's "show archived" view, so a hidden
@@ -839,7 +844,7 @@ func (p *PG) ListPrincipals(ctx context.Context, read scope.Set, includeArchived
 	if !read.All {
 		return nil, ErrPrincipalForbidden
 	}
-	rows, err := p.pool.Query(ctx, `select id, kind, active, archived_at from principal where ($1 or archived_at is null) order by created_at, kind, id`, includeArchived)
+	rows, err := p.pool.Query(ctx, `select id, kind, active, archived_at from principal where ($1 or archived_at is null) order by kind, seq`, includeArchived)
 	if err != nil {
 		return nil, fmt.Errorf("storage: list principals: %w", err)
 	}
