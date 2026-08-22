@@ -15,3 +15,14 @@ event_types:
       A command was issued to a component (the caused event a command records). It
       opens the intended value the command sets and is the lineage cause of that
       intended value.
+  - name: call-ended
+    label: Call Ended
+    description: >-
+      A conferencing endpoint left an active call: call-started's closing half,
+      caught natively or derived. The pair brackets a session for usage reads.
+  - name: input-changed
+    label: Input Changed
+    description: >-
+      A display or switcher moved to a different source input. Caught natively
+      where the device reports it; a frequent, benign occurrence that teaches
+      the event lane's volume without implying a fault.

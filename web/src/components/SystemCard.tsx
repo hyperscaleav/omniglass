@@ -22,7 +22,10 @@ export default function SystemCard(props: { cluster: SystemCluster; view: FleetV
   // cards apart on a grid. The standard rides after it.
   const room = createMemo(() => {
     const r = props.cluster.locationId ? locationIndex(props.view).get(props.cluster.locationId) : undefined;
-    return r ? entityLabel(r) : undefined;
+    const label = r ? entityLabel(r) : undefined;
+    // A system named for its room says the room twice (the leaf's rule,
+    // extended here): the room earns its line only when it adds a fact.
+    return label === props.cluster.label ? undefined : label;
   });
   const standard = createMemo(() => (systems.data ?? []).find((s) => s.id === props.cluster.systemId)?.standard);
   const v = () => props.cluster.verdict;

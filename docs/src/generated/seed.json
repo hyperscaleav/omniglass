@@ -329,6 +329,16 @@
    "name": "command-issued",
    "label": "Command Issued",
    "description": "A command was issued to a component (the caused event a command records). It opens the intended value the command sets and is the lineage cause of that intended value."
+  },
+  {
+   "name": "call-ended",
+   "label": "Call Ended",
+   "description": "A conferencing endpoint left an active call: call-started's closing half, caught natively or derived. The pair brackets a session for usage reads."
+  },
+  {
+   "name": "input-changed",
+   "label": "Input Changed",
+   "description": "A display or switcher moved to a different source input. Caught natively where the device reports it; a frequent, benign occurrence that teaches the event lane's volume without implying a fault."
   }
  ],
  "command_types": [
@@ -649,6 +659,14 @@
    "abbrev": "hud"
   },
   {
+   "id": "auditorium",
+   "label": "Auditorium",
+   "parent_id": "av",
+   "stem": "auditorium",
+   "abbrev": "aud",
+   "icon": "theater"
+  },
+  {
    "id": "sign",
    "label": "Signage",
    "parent_id": "av",
@@ -764,6 +782,74 @@
   {
    "id": "control-room",
    "label": "Control Room"
+  },
+  {
+   "id": "classroom",
+   "label": "Classroom",
+   "roles": [
+    {
+     "name": "class-display",
+     "label": "Main Display",
+     "quorum": 0,
+     "accepted_types": [
+      "display"
+     ]
+    },
+    {
+     "name": "instructor-mic",
+     "label": "Instructor Microphone",
+     "quorum": 0,
+     "accepted_types": [
+      "ceiling-mic",
+      "video-bar"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "auditorium",
+   "label": "Auditorium",
+   "roles": [
+    {
+     "name": "projection",
+     "label": "Projection",
+     "quorum": 0,
+     "accepted_types": [
+      "display",
+      "projector"
+     ]
+    },
+    {
+     "name": "stage-mic",
+     "label": "Stage Microphone",
+     "quorum": 2,
+     "accepted_types": [
+      "ceiling-mic"
+     ]
+    },
+    {
+     "name": "conference",
+     "label": "Conferencing",
+     "quorum": 0,
+     "accepted_types": [
+      "video-bar"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "signage",
+   "label": "Signage",
+   "roles": [
+    {
+     "name": "panel",
+     "label": "Panel",
+     "quorum": 0,
+     "accepted_types": [
+      "display"
+     ]
+    }
+   ]
   }
  ],
  "vendors": [

@@ -532,6 +532,12 @@ components:
   - key: auditorium-mic
     product: shure-mxa920
     location: auditorium
+  - key: aud-mic-1
+    product: shure-mxa920
+    location: auditorium
+  - key: aud-mic-2
+    product: shure-mxa920
+    location: auditorium
   - key: auditorium-touch
     product: crestron-tss-1070
     location: auditorium
@@ -926,8 +932,8 @@ systems:
   # microphones out: a REAL failure beside the commissioning gaps, which is the
   # contrast the fleet canvas exists to draw.
   - key: auditorium-av
-    standard: meeting-room
-    system_type: meeting
+    standard: auditorium
+    system_type: auditorium
     location: auditorium
 
   # Racked, cabled, and not yet commissioned: two training pods conforming to a
@@ -942,11 +948,11 @@ systems:
   # "Classroom 2". The divisible boardroom used to carry this demo and cannot
   # any more, its halves being two rooms now (one bucket each).
   - key: lab-pod-a
-    standard: meeting-room
+    standard: classroom
     system_type: class
     location: lab
   - key: lab-pod-b
-    standard: meeting-room
+    standard: classroom
     system_type: class
     location: lab
 
@@ -960,8 +966,8 @@ systems:
   # Fully staffed, and the room its warning-level alarm (below) does NOT
   # impair: the component degrades and keeps its slot.
   - key: bay-1-av
-    standard: meeting-room
-    system_type: meeting
+    standard: signage
+    system_type: sign
     location: bay-1
 
 
@@ -1013,28 +1019,28 @@ systems:
     system_type: meeting
     location: wl4-r5
   - key: hl2-s1
-    standard: meeting-room
-    system_type: meeting
+    standard: classroom
+    system_type: class
     location: hl2-r1
   - key: hl2-s2
-    standard: meeting-room
-    system_type: meeting
+    standard: classroom
+    system_type: class
     location: hl2-r2
   - key: hl2-s3
-    standard: meeting-room
-    system_type: meeting
+    standard: classroom
+    system_type: class
     location: hl2-r3
   - key: hl2-s4
-    standard: meeting-room
-    system_type: meeting
+    standard: classroom
+    system_type: class
     location: hl2-r4
   - key: hl2-s5
-    standard: meeting-room
-    system_type: meeting
+    standard: classroom
+    system_type: class
     location: hl2-r5
   - key: hl2-s6
-    standard: meeting-room
-    system_type: meeting
+    standard: classroom
+    system_type: class
     location: hl2-r6
   - key: pava-s1
     standard: meeting-room
@@ -1089,16 +1095,16 @@ systems:
     system_type: meeting
     location: ann-r3
   - key: dep-s1
-    standard: meeting-room
-    system_type: training
+    standard: signage
+    system_type: sign
     location: dep-r1
   - key: dep-s2
-    standard: meeting-room
-    system_type: training
+    standard: signage
+    system_type: sign
     location: dep-r2
   - key: dep-s3
-    standard: meeting-room
-    system_type: training
+    standard: signage
+    system_type: sign
     location: dep-r3
 
 # Membership without a job. The shared bar staffs the microphone role in both halves
@@ -1108,6 +1114,25 @@ systems:
 members:
   - system: boardroom-a
     component: power
+  # The depot's service stock: racked in the bays, accounted for, no role.
+  - system: bay-1-av
+    component: bay-1-bar
+  - system: bay-1-av
+    component: bay-1-bar-b
+  - system: bay-1-av
+    component: bay-1-mic
+  - system: dep-s1
+    component: dep-c1a
+  - system: dep-s1
+    component: dep-c1b
+  - system: dep-s2
+    component: dep-c2a
+  - system: dep-s2
+    component: dep-c2b
+  - system: dep-s3
+    component: dep-c3a
+  - system: dep-s3
+    component: dep-c3b
   # One service, two tops. No role wants it, so it is membership and nothing
   # more, which is exactly what the many-valued binding is for.
   - system: auditorium-av
@@ -1119,6 +1144,11 @@ members:
     component: huddle-touch
   - system: auditorium-av
     component: auditorium-touch
+  # The second bar is racked but unassigned: when the critical alarm takes
+  # the conferencing bar down, the hall degrades on a real failure rather
+  # than failing over silently.
+  - system: auditorium-av
+    component: auditorium-bar-b
 
 # Staffing, which creates the membership as a side effect. Both boardroom halves
 # are fully staffed (#785: a deployed room fills every role; the one-mic-short
@@ -1150,17 +1180,25 @@ role_assignments:
     role: conf-bar
     component: huddle-bar
 
-  # The auditorium is fully staffed. The critical alarm (below) takes one of
-  # its two microphones down, so the room drops on a real failure.
+  # The auditorium is fully staffed on ITS OWN standard (#796): projection,
+  # a stage-mic pair, and the conferencing bar. The critical alarm (below)
+  # takes the bar down, so the hall drops on a real failure; the second bar
+  # holds the slot as a spare.
   - system: auditorium-av
-    role: room-mic
-    component: auditorium-bar
-  - system: auditorium-av
-    role: room-mic
-    component: auditorium-bar-b
-  - system: auditorium-av
-    role: main-display
+    role: projection
     component: auditorium-display
+  - system: auditorium-av
+    role: projection
+    component: auditorium-display-b
+  - system: auditorium-av
+    role: stage-mic
+    component: aud-mic-1
+  - system: auditorium-av
+    role: stage-mic
+    component: aud-mic-2
+  - system: auditorium-av
+    role: conference
+    component: auditorium-bar
 
   # The briefing room is one microphone short of its quorum of two, with the
   # one it has healthy: short-staffed, not broken.
@@ -1172,14 +1210,10 @@ role_assignments:
     component: briefing-display
 
   # Bay 1 is fully staffed.
+  # The depot's bays hold signage boards (#796); the bars and mics racked in
+  # bay 1 are the service stock, members with no role.
   - system: bay-1-av
-    role: room-mic
-    component: bay-1-bar
-  - system: bay-1-av
-    role: room-mic
-    component: bay-1-bar-b
-  - system: bay-1-av
-    role: main-display
+    role: panel
     component: bay-1-display
 
 
@@ -1284,59 +1318,41 @@ role_assignments:
     role: room-mic
     component: wl4-c5b
   - system: hl2-s1
-    role: room-mic
-    component: hl2-c1a
-  - system: hl2-s1
-    role: main-display
+    role: class-display
     component: hl2-c1d
   - system: hl2-s1
-    role: room-mic
-    component: hl2-c1b
+    role: instructor-mic
+    component: hl2-c1a
   - system: hl2-s2
-    role: room-mic
-    component: hl2-c2a
-  - system: hl2-s2
-    role: main-display
+    role: class-display
     component: hl2-c2d
   - system: hl2-s2
-    role: room-mic
-    component: hl2-c2b
+    role: instructor-mic
+    component: hl2-c2a
   - system: hl2-s3
-    role: room-mic
-    component: hl2-c3a
-  - system: hl2-s3
-    role: main-display
+    role: class-display
     component: hl2-c3d
   - system: hl2-s3
-    role: room-mic
-    component: hl2-c3b
+    role: instructor-mic
+    component: hl2-c3a
   - system: hl2-s4
-    role: room-mic
-    component: hl2-c4a
-  - system: hl2-s4
-    role: main-display
+    role: class-display
     component: hl2-c4d
   - system: hl2-s4
-    role: room-mic
-    component: hl2-c4b
+    role: instructor-mic
+    component: hl2-c4a
   - system: hl2-s5
-    role: room-mic
-    component: hl2-c5a
-  - system: hl2-s5
-    role: main-display
+    role: class-display
     component: hl2-c5d
   - system: hl2-s5
-    role: room-mic
-    component: hl2-c5b
+    role: instructor-mic
+    component: hl2-c5a
   - system: hl2-s6
-    role: room-mic
-    component: hl2-c6a
-  - system: hl2-s6
-    role: main-display
+    role: class-display
     component: hl2-c6d
   - system: hl2-s6
-    role: room-mic
-    component: hl2-c6b
+    role: instructor-mic
+    component: hl2-c6a
   - system: pava-s1
     role: room-mic
     component: pava-c1a
@@ -1455,32 +1471,14 @@ role_assignments:
     role: room-mic
     component: ann-c3b
   - system: dep-s1
-    role: room-mic
-    component: dep-c1a
-  - system: dep-s1
-    role: main-display
+    role: panel
     component: dep-c1d
-  - system: dep-s1
-    role: room-mic
-    component: dep-c1b
   - system: dep-s2
-    role: room-mic
-    component: dep-c2a
-  - system: dep-s2
-    role: main-display
+    role: panel
     component: dep-c2d
-  - system: dep-s2
-    role: room-mic
-    component: dep-c2b
   - system: dep-s3
-    role: room-mic
-    component: dep-c3a
-  - system: dep-s3
-    role: main-display
+    role: panel
     component: dep-c3d
-  - system: dep-s3
-    role: room-mic
-    component: dep-c3b
 
 # Something actually wrong, so the fleet is not all healthy-and-incomplete. A
 # CRITICAL alarm takes its component's own verdict to outage, which stops it
