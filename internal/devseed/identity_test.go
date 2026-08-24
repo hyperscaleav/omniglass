@@ -33,9 +33,9 @@ func TestGenIndexHandsOutAllocationOrder(t *testing.T) {
 // together are the space, so the same room's displays and video bars are
 // separate runs of ordinals, and the same product in another room is another.
 func TestGenIndexKeepsSlotsApart(t *testing.T) {
-	displays := genSlot{bucket: "location/room-1", class: "samsung-qm55"}
-	bars := genSlot{bucket: "location/room-1", class: "cisco-room-bar"}
-	elsewhere := genSlot{bucket: "location/room-2", class: "samsung-qm55"}
+	displays := genSlot{bucket: "location/room-1", class: "boreal-edge-55"}
+	bars := genSlot{bucket: "location/room-1", class: "kestrel-vroom"}
+	elsewhere := genSlot{bucket: "location/room-2", class: "boreal-edge-55"}
 	idx := newGenIndex([]genRow{
 		{slot: displays, ordinal: 1, id: "display-here"},
 		{slot: bars, ordinal: 1, id: "bar-here"},
@@ -61,7 +61,7 @@ func TestGenIndexKeepsSlotsApart(t *testing.T) {
 // second would resolve to the first and the fleet would come up one short, which
 // a fresh run's counts would never notice.
 func TestGenIndexAdvancesEvenWhenTheFleetIsShort(t *testing.T) {
-	room := genSlot{bucket: "location/room-1", class: "samsung-qm55"}
+	room := genSlot{bucket: "location/room-1", class: "boreal-edge-55"}
 	idx := newGenIndex([]genRow{{slot: room, ordinal: 1, id: "already-here"}})
 	if got, want := idx.take(room), "already-here"; got != want {
 		t.Fatalf("first take = %q, want %q", got, want)
@@ -94,8 +94,8 @@ func TestProductClassSpellsTheGenericTheGatewayResolves(t *testing.T) {
 	if got := productClass(""); got != "generic-device" {
 		t.Errorf("productClass(\"\") = %q, want generic-device (what CreateComponent's own COALESCE resolves)", got)
 	}
-	if got := productClass("samsung-qm55"); got != "samsung-qm55" {
-		t.Errorf("productClass(samsung-qm55) = %q, want it unchanged", got)
+	if got := productClass("boreal-edge-55"); got != "boreal-edge-55" {
+		t.Errorf("productClass(boreal-edge-55) = %q, want it unchanged", got)
 	}
 }
 

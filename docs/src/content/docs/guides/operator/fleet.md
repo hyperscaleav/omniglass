@@ -20,7 +20,7 @@ screenshots:
     alt: "The component leaf: the verdict with its since-line, the active alarm, product and identity properties, the memberships, and the collection card."
     # The since-line and the alarm ages count from the capture's own clock.
     mask:
-      - "[data-testid=since-line]"
+      - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "text=/unacknowledged/ >> xpath=ancestor::div[1]"
       - "text=/acknowledged/ >> xpath=ancestor::div[1]"
   - id: fleet-system
@@ -33,7 +33,7 @@ screenshots:
     # masks too: its span weights divide seed-time gaps by the capture's own
     # age, the breathing #780 measured as a 40px flap on the blade.
     mask:
-      - "[data-testid=since-line]"
+      - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - ".og-statestrip"
       - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
       - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
@@ -44,7 +44,7 @@ screenshots:
     # The header's since-line ages with the capture (baseline only; the docs
     # embed the clean render).
     mask:
-      - "[data-testid=since-line]"
+      - "[data-testid=since-line] >> xpath=ancestor::div[1]"
   # The auditorium (reached through its band) carries the fleet's live
   # critical alarm, so the history tab has something real to say.
   - id: fleet-history
@@ -58,7 +58,7 @@ screenshots:
         selector: "[data-testid=incident-0] button"
     alt: "The History tab, statuspage style: the window's uptime, the timeline, and the ongoing incident expanded to the alarm that explains it."
     mask:
-      - "[data-testid=since-line]"
+      - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=uptime-kpi]"
       - "text=/ongoing/ >> xpath=ancestor::li[1]"
       - "text=/\\u2192/ >> xpath=ancestor::li[1]"
@@ -77,7 +77,7 @@ screenshots:
     # pixel boundary), so the plots mask in the BASELINE while the docs
     # embed them live (the two-render pipeline).
     mask:
-      - "[data-testid=since-line]"
+      - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=timeseries-chart]"
       - "[data-testid=sparkline]"
   - id: fleet-location
@@ -85,7 +85,7 @@ screenshots:
     alt: "The location zoom: the breadcrumb, the verdict header with the needs-attention chip, a band per child location, system cards with slot strips, and the allowed child types."
     # The since-line ages with the capture.
     mask:
-      - "[data-testid=since-line]"
+      - "[data-testid=since-line] >> xpath=ancestor::div[1]"
   - id: fleet
     path: /web/fleet
     alt: "The fleet zoom: the summary rail, the filter bar, a band per root location with one round mark per system, and dashed holes."

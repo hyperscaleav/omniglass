@@ -276,6 +276,13 @@ export const iconByName: Record<string, Component<P>> = {
   box: Box,
   "app-window": AppWindow,
   server: Server,
+  // The OAVC taxonomy types (#802): each maps an existing glyph.
+  grid: Grid,
+  pencil: Pencil,
+  sliders: Sliders,
+  "grip-vertical": GripVertical,
+  clock: Clock,
+  eye: Eye,
 };
 export const resolveIcon = (name: string | undefined | null): Component<P> =>
   (name && iconByName[name]) || MapPin;

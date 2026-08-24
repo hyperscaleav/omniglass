@@ -89,11 +89,15 @@ func TestSeedFactsGroundTruth(t *testing.T) {
 	if got := comps["ceiling-mic"].ParentID; got != "mic" {
 		t.Errorf("component_types: ceiling-mic parent_id = %q, want %q", got, "mic")
 	}
-	if comps["mic"].ParentID != "" {
-		t.Errorf("component_types: mic parent_id = %q, want a root", comps["mic"].ParentID)
+	// The OAVC tree (#802): mic sits under the audio-device category root.
+	if got := comps["mic"].ParentID; got != "audio-device" {
+		t.Errorf("component_types: mic parent_id = %q, want %q", got, "audio-device")
 	}
-	if comps["display"].Stem == "" {
-		t.Error("component_types: display carries no stem; a root has no ancestor to inherit one from")
+	if comps["audio-device"].ParentID != "" {
+		t.Errorf("component_types: audio-device parent_id = %q, want a root", comps["audio-device"].ParentID)
+	}
+	if comps["audio-device"].Stem == "" {
+		t.Error("component_types: audio-device carries no stem; a root has no ancestor to inherit one from")
 	}
 
 	systems := indexTypeNodes(doc.SystemTypes)

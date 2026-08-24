@@ -448,11 +448,11 @@ a create takes the `name`, the response carries the minted uuid, and a reference
 
 What each catalog adds over the shared shape (bodies in the [reference](/reference/api/)):
 
-- A **vendor** (Crestron, Biamp, ...) names an organization, generalizing the former manufacturer-only
+- A **vendor** (Boreal, Polaris, ...) names an organization, generalizing the former manufacturer-only
   `component_make`: a `kind` of `manufacturer` / `integrator` / `developer` (default `manufacturer`, a
   422 otherwise), and a `website` validated to an `http`/`https` scheme on write (a 422 for any other
   scheme, for example `javascript:`).
-- A **driver** (Generic SNMP, Cisco xAPI, ...) names the implementation that gets, emits, or sets a
+- A **driver** (Generic SNMP, Kestrel Device API, ...) names the implementation that gets, emits, or sets a
   product's signals, with an optional `version`.
 - A **component_type** (Mic, Camera, Wireless Mic, ...) is the device-class genus a product is
   classified under, a **hierarchy** (a subtype falls within its ancestor's subtree): what a

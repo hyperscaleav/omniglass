@@ -21,12 +21,12 @@ func TestProductCRUD(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	vendor, driver := "cisco", "cisco-xapi"
+	vendor, driver := "kestrel", "kestrel-api"
 
 	// Create a custom product with a vendor, driver, and kind. It is
 	// official=false.
 	m, err := gw.CreateProduct(ctx, "", storage.Product{
-		Name: "room-bar", Label: "Room Bar",
+		Name: "room-bar", Label: "VRoom",
 		VendorID: &vendor, DriverID: &driver, Kind: "device",
 	})
 	if err != nil {
@@ -39,8 +39,8 @@ func TestProductCRUD(t *testing.T) {
 		t.Fatalf("create kind = %q, want device", m.Kind)
 	}
 	// Both arcs store uuids; the handles come back beside them.
-	if m.VendorName == nil || *m.VendorName != "cisco" || m.DriverName == nil || *m.DriverName != "cisco-xapi" {
-		t.Fatalf("create refs = vendor:%v driver:%v, want cisco/cisco-xapi", m.VendorName, m.DriverName)
+	if m.VendorName == nil || *m.VendorName != "kestrel" || m.DriverName == nil || *m.DriverName != "kestrel-api" {
+		t.Fatalf("create refs = vendor:%v driver:%v, want kestrel/kestrel-api", m.VendorName, m.DriverName)
 	}
 
 	got, err := gw.GetProduct(ctx, "room-bar")
@@ -96,7 +96,7 @@ func TestProductCRUD(t *testing.T) {
 	if upd.Label != "Room Bar Pro" || upd.Kind != "app" {
 		t.Fatalf("update = %+v, want label=Room Bar Pro kind=app", upd)
 	}
-	if upd.VendorName == nil || *upd.VendorName != "cisco" {
+	if upd.VendorName == nil || *upd.VendorName != "kestrel" {
 		t.Fatalf("update vendor = %v, want unchanged cisco", upd.VendorName)
 	}
 

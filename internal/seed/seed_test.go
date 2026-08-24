@@ -112,8 +112,8 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select count(*) from standard`).Scan(&standardCount); err != nil {
 		t.Fatalf("count standards: %v", err)
 	}
-	if standardCount != 6 {
-		t.Errorf("standards = %d, want 6 (seed not idempotent or incomplete)", standardCount)
+	if standardCount != 14 {
+		t.Errorf("standards = %d, want 14 (seed not idempotent or incomplete)", standardCount)
 	}
 	if err := conn.QueryRow(ctx, `select count(*) from standard where official`).Scan(&officialStandards); err != nil {
 		t.Fatalf("count official standards: %v", err)
@@ -148,21 +148,33 @@ func TestSeedRolesIdempotent(t *testing.T) {
 		where owner_kind = 'standard' and standard_id = (select id from standard where name = 'meeting-room')`).Scan(&roleCount); err != nil {
 		t.Fatalf("count meeting-room roles: %v", err)
 	}
-	if roleCount != 2 {
-		t.Errorf("meeting-room roles = %d, want 2 (seed not idempotent or incomplete)", roleCount)
+	if roleCount != 4 {
+		t.Errorf("meeting-room roles = %d, want 4 (seed not idempotent or incomplete)", roleCount)
 	}
+	var barTypes []string
+	if err := conn.QueryRow(ctx, `select array_agg(ct.name order by ct.name)
+		from system_role r join system_role_type rt on rt.role_id = r.id
+		join component_type ct on ct.id = rt.component_type_id
+		where r.standard_id = (select id from standard where name = 'meeting-room') and r.name = 'video-bar'`).Scan(&barTypes); err != nil {
+		t.Fatalf("read video-bar accepted types: %v", err)
+	}
+	if len(barTypes) != 1 || barTypes[0] != "video-bar" {
+		t.Errorf("video-bar accepted types = %v, want [video-bar]", barTypes)
+	}
+	// The divisible pair's mics are typed by FORM FACTOR (#802): the role
+	// accepts the ceiling form, never the conferencing bar.
 	var micTypes []string
 	if err := conn.QueryRow(ctx, `select array_agg(ct.name order by ct.name)
 		from system_role r join system_role_type rt on rt.role_id = r.id
 		join component_type ct on ct.id = rt.component_type_id
-		where r.standard_id = (select id from standard where name = 'meeting-room') and r.name = 'room-mic'`).Scan(&micTypes); err != nil {
+		where r.standard_id = (select id from standard where name = 'divisible-conference') and r.name = 'room-mic'`).Scan(&micTypes); err != nil {
 		t.Fatalf("read room-mic accepted types: %v", err)
 	}
-	if len(micTypes) != 1 || micTypes[0] != "video-bar" {
-		t.Errorf("room-mic accepted types = %v, want [video-bar]", micTypes)
+	if len(micTypes) != 1 || micTypes[0] != "ceiling-mic" {
+		t.Errorf("room-mic accepted types = %v, want [ceiling-mic]", micTypes)
 	}
 	if _, err := conn.Exec(ctx, `update system_role set quorum = 4
-		where standard_id = (select id from standard where name = 'meeting-room') and name = 'room-mic'`); err != nil {
+		where standard_id = (select id from standard where name = 'divisible-conference') and name = 'room-mic'`); err != nil {
 		t.Fatalf("retune seeded role: %v", err)
 	}
 	if err := seed.Run(ctx, gw); err != nil {
@@ -170,7 +182,7 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	}
 	var quorum int
 	if err := conn.QueryRow(ctx, `select quorum from system_role
-		where standard_id = (select id from standard where name = 'meeting-room') and name = 'room-mic'`).Scan(&quorum); err != nil {
+		where standard_id = (select id from standard where name = 'divisible-conference') and name = 'room-mic'`).Scan(&quorum); err != nil {
 		t.Fatalf("read room-mic quorum: %v", err)
 	}
 	if quorum != 4 {
@@ -198,28 +210,28 @@ func TestSeedRolesIdempotent(t *testing.T) {
 	// upserts it rather than duplicating (the contract is keyed by product +
 	// property).
 	var barContract int
-	if err := conn.QueryRow(ctx, `select count(*) from product_property where product_id = (select id from product where name = 'cisco-room-bar')`).Scan(&barContract); err != nil {
-		t.Fatalf("count cisco-room-bar contract: %v", err)
+	if err := conn.QueryRow(ctx, `select count(*) from product_property where product_id = (select id from product where name = 'kestrel-vroom')`).Scan(&barContract); err != nil {
+		t.Fatalf("count kestrel-vroom contract: %v", err)
 	}
 	if barContract != 3 {
-		t.Errorf("cisco-room-bar contract = %d properties, want 3 (seed not idempotent or incomplete)", barContract)
+		t.Errorf("kestrel-vroom contract = %d properties, want 3 (seed not idempotent or incomplete)", barContract)
 	}
 	var barModelDefault string
 	if err := conn.QueryRow(ctx, `select default_value #>> '{}' from product_property
-		where product_id = (select id from product where name = 'cisco-room-bar') and property_type_id = (select id from property_type where name = 'model-number')`).Scan(&barModelDefault); err != nil {
-		t.Fatalf("read cisco-room-bar model-number default: %v", err)
+		where product_id = (select id from product where name = 'kestrel-vroom') and property_type_id = (select id from property_type where name = 'model-number')`).Scan(&barModelDefault); err != nil {
+		t.Fatalf("read kestrel-vroom model-number default: %v", err)
 	}
-	if barModelDefault != "Room Bar" {
-		t.Errorf("cisco-room-bar model-number default = %q, want %q", barModelDefault, "Room Bar")
+	if barModelDefault != "VRoom" {
+		t.Errorf("kestrel-vroom model-number default = %q, want %q", barModelDefault, "VRoom")
 	}
 
 	// Re-running Run keeps the metadata fields, not just the initial insert.
-	var crestronWebsite string
-	if err := conn.QueryRow(ctx, `select website from vendor where name = 'crestron'`).Scan(&crestronWebsite); err != nil {
-		t.Fatalf("read crestron website: %v", err)
+	var borealWebsite string
+	if err := conn.QueryRow(ctx, `select website from vendor where name = 'boreal'`).Scan(&borealWebsite); err != nil {
+		t.Fatalf("read boreal website: %v", err)
 	}
-	if crestronWebsite != "https://www.crestron.com" {
-		t.Errorf("crestron website = %q, want https://www.crestron.com", crestronWebsite)
+	if borealWebsite != "https://boreal.example" {
+		t.Errorf("boreal website = %q, want https://boreal.example", borealWebsite)
 	}
 
 	// The official secret_types seed with their per-field shape.

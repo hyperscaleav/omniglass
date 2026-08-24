@@ -89,7 +89,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 	}
 
 	// A room bar is classified video-bar, so it fills the table-mic slot.
-	bar := "cisco-room-bar"
+	bar := "kestrel-vroom"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, all, all, all, all); err != nil {
 		t.Fatalf("create bar: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestEffectiveRolesAndAssignment(t *testing.T) {
 
 	// A display is not within the video-bar subtree: refused, and the refusal
 	// names both what the component is and what the role wants.
-	qm := "samsung-qm55"
+	qm := "boreal-edge-55"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1", ProductName: &qm}, all, all, all, all); err != nil {
 		t.Fatalf("create panel: %v", err)
 	}
@@ -230,8 +230,8 @@ func TestAssignRefusesWrongType(t *testing.T) {
 		t.Fatalf("declare role: %v", err)
 	}
 
-	crestron := "crestron-tss-1070" // component_type: touch-panel
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1", ProductName: &crestron}, all, all, all, all); err != nil {
+	newtron := "newtron-panel-7" // component_type: touch-panel
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "panel-1", ProductName: &newtron}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 
@@ -309,7 +309,7 @@ func TestAssignProductPin(t *testing.T) {
 
 	if _, err := gw.SetSystemRole(ctx, "", "system", "pin-sys", storage.SystemRoleSpec{
 		Name: "main-display", Label: "Main Display",
-		AcceptedTypes: []string{"display"}, PinnedProducts: []string{"samsung-qm55"},
+		AcceptedTypes: []string{"display"}, PinnedProducts: []string{"boreal-edge-55"},
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
@@ -330,11 +330,11 @@ func TestAssignProductPin(t *testing.T) {
 		t.Fatalf("assign right type, wrong product: err = %v, want ProductPinShortfall", err)
 	}
 	if pinShort.Component != "panel-3" || pinShort.ComponentProduct != "other-display" ||
-		pinShort.Role != "Main Display" || !hasAll(pinShort.WantProducts, "samsung-qm55") {
-		t.Fatalf("shortfall = %+v, want panel-3/other-display refused against role Main Display wanting samsung-qm55", pinShort)
+		pinShort.Role != "Main Display" || !hasAll(pinShort.WantProducts, "boreal-edge-55") {
+		t.Fatalf("shortfall = %+v, want panel-3/other-display refused against role Main Display wanting boreal-edge-55", pinShort)
 	}
 
-	qm := "samsung-qm55"
+	qm := "boreal-edge-55"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "qm-2", ProductName: &qm}, all, all, all, all); err != nil {
 		t.Fatalf("create pinned-product component: %v", err)
 	}
@@ -374,7 +374,7 @@ func TestSecondRoleSameComponentRefused(t *testing.T) {
 		t.Fatalf("declare confidence-monitor: %v", err)
 	}
 
-	bar := "cisco-room-bar"
+	bar := "kestrel-vroom"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -508,7 +508,7 @@ func TestLoweringCapacityBelowCountRefusedAcrossInheritingSystems(t *testing.T) 
 		t.Fatalf("create system b: %v", err)
 	}
 
-	bar := "cisco-room-bar"
+	bar := "kestrel-vroom"
 	newBar := func(name string) {
 		t.Helper()
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name, ProductName: &bar}, all, all, all, all); err != nil {

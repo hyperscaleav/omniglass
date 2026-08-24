@@ -69,7 +69,7 @@ func TestFleetViewAPI(t *testing.T) {
 		"accepted_types": []string{"video-bar"}, "impact": "outage",
 	}, http.StatusOK)
 	c.do(ownerTok, http.MethodPost, "/systems", map[string]any{"name": "hq-1", "standard_id": "hq-room", "location": "hq-r1"}, http.StatusCreated)
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "bar-1", "product": "cisco-room-bar"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "bar-1", "product": "kestrel-vroom"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/systems/hq-1/roles/table-mic/assignments/bar-1", nil, http.StatusNoContent)
 
 	view := func(tok string) fleetViewWire {

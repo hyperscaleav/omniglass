@@ -3,8 +3,14 @@
 # driver (what talks to it), a kind (device/app/service), and the component_type
 # it is classified under (the taxonomy above product; component_types.yaml,
 # seeded first). vendor_id, driver_id, and component_type must resolve against
-# their catalogs. The registry lists alphabetically by label. Starter
-# set, operator-extensible later; tune freely.
+# their catalogs. The registry lists alphabetically by label.
+#
+# The SKUs are FICTIONAL (the omniglass-lab brand universe; the demo fleet is
+# not sponsored), but each is shaped like the real device class it stands for:
+# a video bar is the ONE all-in-one appliance at the front of a room, displays
+# come as a size family the meeting-room standards pin per variant, and the
+# audio rack splits into DSP, amplifier, and loudspeakers the way an
+# integrator actually racks them.
 #
 # The three generics (generic-device/generic-app/generic-service) are the
 # fallback every unclassified component and product resolves to (the product
@@ -12,12 +18,13 @@
 # without an explicit component_type, lands on the generic matching its own
 # kind rather than being refused outright by a direct-gateway caller.
 products:
-  - id: cisco-room-bar
-    label: Cisco Room Bar
-    vendor_id: cisco
-    driver_id: cisco-xapi
+  # Boreal: commercial displays, projection, and signage playback.
+  - id: boreal-edge-55
+    label: Boreal Edge 55
+    vendor_id: boreal
+    driver_id: snmp-generic
     kind: device
-    component_type: video-bar
+    component_type: display
     # The declared-property contract: which properties this product declares and
     # their defaults. An operator overrides one on a component; an unset property
     # resolves to the default here.
@@ -25,29 +32,163 @@ products:
       - name: serial-number
       - name: firmware-version
       - name: model-number
-        default: '"Room Bar"'
-  - id: samsung-qm55
-    label: Samsung QM55
-    vendor_id: samsung
+        default: '"Edge 55"'
+  - id: boreal-edge-65
+    label: Boreal Edge 65
+    vendor_id: boreal
+    driver_id: snmp-generic
     kind: device
     component_type: display
     properties:
       - name: serial-number
       - name: firmware-version
       - name: model-number
-        default: '"QM55"'
-  - id: shure-mxa920
-    label: Shure MXA920
-    vendor_id: shure
+        default: '"Edge 65"'
+  - id: boreal-edge-75
+    label: Boreal Edge 75
+    vendor_id: boreal
+    driver_id: snmp-generic
+    kind: device
+    component_type: display
+    properties:
+      - name: serial-number
+      - name: firmware-version
+      - name: model-number
+        default: '"Edge 75"'
+  - id: boreal-edge-86
+    label: Boreal Edge 86
+    vendor_id: boreal
+    driver_id: snmp-generic
+    kind: device
+    component_type: display
+    properties:
+      - name: serial-number
+      - name: firmware-version
+      - name: model-number
+        default: '"Edge 86"'
+  - id: boreal-edge-98
+    label: Boreal Edge 98
+    vendor_id: boreal
+    driver_id: snmp-generic
+    kind: device
+    component_type: display
+    properties:
+      - name: serial-number
+      - name: firmware-version
+      - name: model-number
+        default: '"Edge 98"'
+  - id: boreal-beam-340
+    label: Boreal Beam 340
+    vendor_id: boreal
+    driver_id: snmp-generic
+    kind: device
+    component_type: projector
+  - id: boreal-cast-m1
+    label: Boreal Cast M1
+    vendor_id: boreal
+    driver_id: http-json
+    kind: device
+    component_type: media-player
+  # Kestrel: video conferencing and cameras.
+  - id: kestrel-vroom
+    label: Kestrel VRoom
+    vendor_id: kestrel
+    driver_id: kestrel-api
+    kind: device
+    component_type: video-bar
+    properties:
+      - name: serial-number
+      - name: firmware-version
+      - name: model-number
+        default: '"VRoom"'
+  - id: kestrel-relay-c1
+    label: Kestrel Relay C1
+    vendor_id: kestrel
+    driver_id: kestrel-api
+    kind: device
+    component_type: codec
+  - id: kestrel-gaze-p2
+    label: Kestrel Gaze P2
+    vendor_id: kestrel
+    driver_id: kestrel-api
+    kind: device
+    component_type: ptz-camera
+  # Lyra: microphones, by form factor.
+  - id: lyra-arc-a2
+    label: Lyra Arc A2
+    vendor_id: lyra
     driver_id: snmp-generic
     kind: device
     component_type: ceiling-mic
-  - id: crestron-tss-1070
-    label: Crestron TSS-1070
-    vendor_id: crestron
-    driver_id: crestron-cip
+  - id: lyra-hx-1
+    label: Lyra HX-1
+    vendor_id: lyra
+    driver_id: snmp-generic
+    kind: device
+    component_type: wireless-mic
+  - id: lyra-gn-12
+    label: Lyra GN-12
+    vendor_id: lyra
+    kind: device
+    component_type: gooseneck-mic
+  # Meridian: switching and extension.
+  - id: meridian-mx-84
+    label: Meridian MX 84
+    vendor_id: meridian
+    driver_id: snmp-generic
+    kind: device
+    component_type: presentation-switcher
+  - id: meridian-xl-1
+    label: Meridian XL-1
+    vendor_id: meridian
+    driver_id: snmp-generic
+    kind: device
+    component_type: av-extender
+  # Newtron: control.
+  - id: newtron-panel-7
+    label: Newtron Panel 7
+    vendor_id: newtron
+    driver_id: newtron-nvp
     kind: device
     component_type: touch-panel
+  - id: newtron-slate-5
+    label: Newtron Slate 5
+    vendor_id: newtron
+    driver_id: newtron-nvp
+    kind: device
+    component_type: scheduling-panel
+  - id: newtron-core-3
+    label: Newtron Core CP-3
+    vendor_id: newtron
+    driver_id: newtron-nvp
+    kind: device
+    component_type: control-processor
+  # Polaris: the audio rack.
+  - id: polaris-dsp-16
+    label: Polaris DSP 16
+    vendor_id: polaris
+    driver_id: snmp-generic
+    kind: device
+    component_type: dsp
+  - id: polaris-amp-4100
+    label: Polaris Amp 4-100
+    vendor_id: polaris
+    driver_id: snmp-generic
+    kind: device
+    component_type: amplifier
+  - id: polaris-sky-c6
+    label: Polaris Sky C6
+    vendor_id: polaris
+    kind: device
+    component_type: speaker
+  # Tessellate: sensing.
+  - id: tessellate-census-c1
+    label: Tessellate Census C1
+    vendor_id: tessellate
+    driver_id: http-json
+    kind: device
+    component_type: occupancy-sensor
+  # The generic floor.
   - id: generic-device
     label: Generic Device
     kind: device

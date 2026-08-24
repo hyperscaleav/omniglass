@@ -454,14 +454,14 @@ files:
     content: "CONFIDENTIAL competitive bid, integrator A"
     sensitive: true
 
-# Product contract lines: one property the dev fleet adds to the Samsung QM55's
+# Product contract lines: one property the dev fleet adds to the Boreal Edge 55's
 # declared-property contract, on top of the ones the boot seed ships
 # (serial-number, firmware-version, and model-number with a default). It shows an
 # operator-extended contract in the editor, and `mac-address` carries no default,
 # so the effective-properties panel shows a default-vs-plain contrast. The product
 # and the property both come from the boot seed catalogs.
 product_properties:
-  - product: samsung-qm55
+  - product: boreal-edge-55
     property: mac-address
 
 # Components: example devices placed in the fleet, so the Components directory
@@ -482,31 +482,66 @@ product_properties:
 # cover the whole fleet.
 components:
   - key: huddle-display
-    product: samsung-qm55
+    product: boreal-edge-55
     location: huddle
   # The lobby's signage endpoint, deliberately in no system: the display is on
   # the wall and nobody has commissioned it, so the canvas draws the room as a
   # hole with a device already waiting in it.
   - key: lobby-display
-    product: samsung-qm55
+    product: boreal-edge-75
     location: lobby
-  # The shared bar lives physically in room A and serves both halves of the
-  # divisible boardroom (assignments, below).
-  - key: shared-bar
-    product: cisco-room-bar
-    location: boardroom-a
   - key: bar-a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: boardroom-a
   - key: panel-a
-    product: samsung-qm55
+    product: boreal-edge-75
     location: boardroom-a
   - key: panel-b
-    product: samsung-qm55
+    product: boreal-edge-75
     location: boardroom-b
   - key: bar-b
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: boardroom-b
+  - key: panel-a2
+    product: boreal-edge-75
+    location: boardroom-a
+  - key: panel-b2
+    product: boreal-edge-75
+    location: boardroom-b
+  - key: mic-a1
+    product: lyra-arc-a2
+    location: boardroom-a
+  - key: mic-a2
+    product: lyra-arc-a2
+    location: boardroom-a
+  - key: mic-b1
+    product: lyra-arc-a2
+    location: boardroom-b
+  - key: mic-b2
+    product: lyra-arc-a2
+    location: boardroom-b
+  - key: touch-a
+    product: newtron-panel-7
+    location: boardroom-a
+  - key: touch-b
+    product: newtron-panel-7
+    location: boardroom-b
+  - key: sched-a
+    product: newtron-slate-5
+    location: boardroom-a
+  - key: sched-b
+    product: newtron-slate-5
+    location: boardroom-b
+  # The divisible pair's ONE audio rack, physically in room A, serving both
+  # sides through zones: the same two components satisfy both sides' dsp and
+  # amplifier slots (the shared-component quorum case, #802; the old "shared
+  # video bar" it replaces could never exist in a real room).
+  - key: div-dsp
+    product: polaris-dsp-16
+    location: boardroom-a
+  - key: div-amp
+    product: polaris-amp-4100
+    location: boardroom-a
   # No product on purpose: it classifies as generic-device, a type no role's
   # accepted_types names, so no role can want it. It is in the room and
   # accounted for, and nothing more, which is exactly the case membership
@@ -518,61 +553,97 @@ components:
     label: Power Conditioner
     location: boardroom-a
   - key: auditorium-display
-    product: samsung-qm55
+    product: boreal-edge-98
     location: auditorium
-  - key: auditorium-display-b
-    product: samsung-qm55
+  # The hall's chain (#802): projection, the audio rack, switching, control,
+  # and the back-of-room capture cameras. The critical alarm (below) takes the
+  # DSP down, so the hall drops on a real failure in the middle of the chain.
+  - key: auditorium-projector
+    product: boreal-beam-340
     location: auditorium
-  - key: auditorium-bar
-    product: cisco-room-bar
+  - key: aud-podium
+    product: lyra-gn-12
     location: auditorium
-  - key: auditorium-bar-b
-    product: cisco-room-bar
+  - key: aud-dsp
+    product: polaris-dsp-16
+    location: auditorium
+  - key: aud-amp-1
+    product: polaris-amp-4100
+    location: auditorium
+  - key: aud-amp-2
+    product: polaris-amp-4100
+    location: auditorium
+  - key: aud-spk-1
+    product: polaris-sky-c6
+    location: auditorium
+  - key: aud-spk-2
+    product: polaris-sky-c6
+    location: auditorium
+  - key: aud-spk-3
+    product: polaris-sky-c6
+    location: auditorium
+  - key: aud-spk-4
+    product: polaris-sky-c6
+    location: auditorium
+  - key: aud-sw
+    product: meridian-mx-84
+    location: auditorium
+  - key: aud-cp
+    product: newtron-core-3
+    location: auditorium
+  - key: aud-cam-1
+    product: kestrel-gaze-p2
+    location: auditorium
+  - key: aud-cam-2
+    product: kestrel-gaze-p2
     location: auditorium
   - key: auditorium-mic
-    product: shure-mxa920
+    product: lyra-arc-a2
     location: auditorium
   - key: aud-mic-1
-    product: shure-mxa920
+    product: lyra-hx-1
     location: auditorium
   - key: aud-mic-2
-    product: shure-mxa920
+    product: lyra-hx-1
     location: auditorium
   - key: auditorium-touch
-    product: crestron-tss-1070
+    product: newtron-panel-7
     location: auditorium
 
   # The huddle room's bar staffs the video-bar leg of the choice-bearing
   # huddle-room standard (systems, below); the touch panel is in the room and
   # accounted for, filling no role.
   - key: huddle-bar
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: huddle
   - key: huddle-touch
-    product: crestron-tss-1070
+    product: newtron-panel-7
     location: huddle
 
   - key: briefing-bar
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: briefing
-  - key: briefing-bar-b
-    product: cisco-room-bar
+  - key: briefing-touch
+    product: newtron-panel-7
     location: briefing
   - key: briefing-display
-    product: samsung-qm55
+    product: boreal-edge-65
     location: briefing
 
   - key: bay-1-bar
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: bay-1
   - key: bay-1-bar-b
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: bay-1
   - key: bay-1-display
-    product: samsung-qm55
+    product: boreal-edge-55
     location: bay-1
   - key: bay-1-mic
-    product: shure-mxa920
+    product: lyra-arc-a2
+    location: bay-1
+  - key: bay-1-player
+    product: boreal-cast-m1
     location: bay-1
 
   # A central recording service, a member of systems in TWO different tops. A
@@ -588,301 +659,481 @@ components:
 
   # Volume devices (mass for the canvas).
   - key: wl3-c1a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: wl3-r1
   - key: wl3-c1d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: wl3-r1
   - key: wl3-c1b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: wl3-r1
+  - key: wl3-c1s
+    product: newtron-slate-5
     location: wl3-r1
   - key: wl3-c2a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: wl3-r2
   - key: wl3-c2d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: wl3-r2
   - key: wl3-c2b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: wl3-r2
+  - key: wl3-c2s
+    product: newtron-slate-5
     location: wl3-r2
   - key: wl3-c3a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: wl3-r3
   - key: wl3-c3d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: wl3-r3
   - key: wl3-c3b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: wl3-r3
+  - key: wl3-c3s
+    product: newtron-slate-5
     location: wl3-r3
   - key: wl3-c4a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: wl3-r4
   - key: wl3-c4d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: wl3-r4
   - key: wl3-c4b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: wl3-r4
+  - key: wl3-c4s
+    product: newtron-slate-5
     location: wl3-r4
   - key: wl3-c5a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: wl3-r5
   - key: wl3-c5d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: wl3-r5
   - key: wl3-c5b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: wl3-r5
+  - key: wl3-c5s
+    product: newtron-slate-5
     location: wl3-r5
   - key: wl3-c6a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: wl3-r6
   - key: wl3-c6d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: wl3-r6
   - key: wl3-c6b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: wl3-r6
+  - key: wl3-c6s
+    product: newtron-slate-5
     location: wl3-r6
   - key: wl4-c1a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: wl4-r1
   - key: wl4-c1d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: wl4-r1
   - key: wl4-c1b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: wl4-r1
+  - key: wl4-c1s
+    product: newtron-slate-5
     location: wl4-r1
   - key: wl4-c2a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: wl4-r2
   - key: wl4-c2d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: wl4-r2
   - key: wl4-c2b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: wl4-r2
+  - key: wl4-c2s
+    product: newtron-slate-5
     location: wl4-r2
   - key: wl4-c3a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: wl4-r3
   - key: wl4-c3d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: wl4-r3
   - key: wl4-c3b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: wl4-r3
+  - key: wl4-c3s
+    product: newtron-slate-5
     location: wl4-r3
   - key: wl4-c4a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: wl4-r4
   - key: wl4-c4d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: wl4-r4
   - key: wl4-c4b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: wl4-r4
+  - key: wl4-c4s
+    product: newtron-slate-5
     location: wl4-r4
   - key: wl4-c5a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: wl4-r5
   - key: wl4-c5d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: wl4-r5
   - key: wl4-c5b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: wl4-r5
+  - key: wl4-c5s
+    product: newtron-slate-5
     location: wl4-r5
   - key: hl2-c1a
-    product: cisco-room-bar
+    product: lyra-arc-a2
     location: hl2-r1
   - key: hl2-c1d
-    product: samsung-qm55
+    product: boreal-edge-86
     location: hl2-r1
   - key: hl2-c1b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: hl2-r1
+  - key: t1-fd2
+    product: boreal-edge-86
+    location: hl2-r1
+  - key: t1-cm2
+    product: lyra-arc-a2
+    location: hl2-r1
+  - key: t1-wm
+    product: lyra-hx-1
+    location: hl2-r1
+  - key: t1-pm
+    product: lyra-gn-12
+    location: hl2-r1
+  - key: t1-dsp
+    product: polaris-dsp-16
+    location: hl2-r1
+  - key: t1-amp
+    product: polaris-amp-4100
+    location: hl2-r1
+  - key: t1-spk1
+    product: polaris-sky-c6
+    location: hl2-r1
+  - key: t1-spk2
+    product: polaris-sky-c6
+    location: hl2-r1
+  - key: t1-spk3
+    product: polaris-sky-c6
+    location: hl2-r1
+  - key: t1-spk4
+    product: polaris-sky-c6
+    location: hl2-r1
+  - key: t1-sw
+    product: meridian-mx-84
+    location: hl2-r1
+  - key: t1-ext1
+    product: meridian-xl-1
+    location: hl2-r1
+  - key: t1-ext2
+    product: meridian-xl-1
+    location: hl2-r1
+  - key: t1-cp
+    product: newtron-core-3
+    location: hl2-r1
+  - key: t1-sp
+    product: newtron-slate-5
+    location: hl2-r1
+  - key: t1-oc
+    product: tessellate-census-c1
+    location: hl2-r1
+  - key: t1-cam1
+    product: kestrel-gaze-p2
+    location: hl2-r1
+  - key: t1-cam2
+    product: kestrel-gaze-p2
     location: hl2-r1
   - key: hl2-c2a
-    product: cisco-room-bar
+    product: lyra-arc-a2
     location: hl2-r2
   - key: hl2-c2d
-    product: samsung-qm55
+    product: boreal-edge-86
     location: hl2-r2
   - key: hl2-c2b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: hl2-r2
+  - key: t2-fd2
+    product: boreal-edge-86
+    location: hl2-r2
+  - key: t2-cm2
+    product: lyra-arc-a2
+    location: hl2-r2
+  - key: t2-wm
+    product: lyra-hx-1
+    location: hl2-r2
+  - key: t2-pm
+    product: lyra-gn-12
+    location: hl2-r2
+  - key: t2-dsp
+    product: polaris-dsp-16
+    location: hl2-r2
+  - key: t2-amp
+    product: polaris-amp-4100
+    location: hl2-r2
+  - key: t2-spk1
+    product: polaris-sky-c6
+    location: hl2-r2
+  - key: t2-spk2
+    product: polaris-sky-c6
+    location: hl2-r2
+  - key: t2-spk3
+    product: polaris-sky-c6
+    location: hl2-r2
+  - key: t2-spk4
+    product: polaris-sky-c6
+    location: hl2-r2
+  - key: t2-sw
+    product: meridian-mx-84
+    location: hl2-r2
+  - key: t2-ext1
+    product: meridian-xl-1
+    location: hl2-r2
+  - key: t2-ext2
+    product: meridian-xl-1
+    location: hl2-r2
+  - key: t2-cp
+    product: newtron-core-3
+    location: hl2-r2
+  - key: t2-sp
+    product: newtron-slate-5
+    location: hl2-r2
+  - key: t2-oc
+    product: tessellate-census-c1
+    location: hl2-r2
+  - key: t2-cam1
+    product: kestrel-gaze-p2
+    location: hl2-r2
+  - key: t2-cam2
+    product: kestrel-gaze-p2
     location: hl2-r2
   - key: hl2-c3a
-    product: cisco-room-bar
+    product: lyra-hx-1
     location: hl2-r3
   - key: hl2-c3d
-    product: samsung-qm55
+    product: boreal-edge-65
     location: hl2-r3
   - key: hl2-c3b
-    product: cisco-room-bar
+    product: newtron-panel-7
     location: hl2-r3
   - key: hl2-c4a
-    product: cisco-room-bar
+    product: lyra-hx-1
     location: hl2-r4
   - key: hl2-c4d
-    product: samsung-qm55
+    product: boreal-edge-65
     location: hl2-r4
   - key: hl2-c4b
-    product: cisco-room-bar
+    product: newtron-panel-7
     location: hl2-r4
   - key: hl2-c5a
-    product: cisco-room-bar
+    product: lyra-hx-1
     location: hl2-r5
   - key: hl2-c5d
-    product: samsung-qm55
+    product: boreal-edge-65
     location: hl2-r5
   - key: hl2-c5b
-    product: cisco-room-bar
+    product: newtron-panel-7
     location: hl2-r5
   - key: hl2-c6a
-    product: cisco-room-bar
+    product: lyra-hx-1
     location: hl2-r6
   - key: hl2-c6d
-    product: samsung-qm55
+    product: boreal-edge-65
     location: hl2-r6
   - key: hl2-c6b
-    product: cisco-room-bar
+    product: newtron-panel-7
     location: hl2-r6
   - key: pava-c1a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: pava-r1
   - key: pava-c1d
-    product: samsung-qm55
+    product: boreal-edge-65
     location: pava-r1
   - key: pava-c1b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: pava-r1
+  - key: pava-c1s
+    product: newtron-slate-5
     location: pava-r1
   - key: pava-c2a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: pava-r2
   - key: pava-c2d
-    product: samsung-qm55
+    product: boreal-edge-65
     location: pava-r2
   - key: pava-c2b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: pava-r2
+  - key: pava-c2s
+    product: newtron-slate-5
     location: pava-r2
   - key: pava-c3a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: pava-r3
   - key: pava-c3d
-    product: samsung-qm55
+    product: boreal-edge-65
     location: pava-r3
   - key: pava-c3b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: pava-r3
+  - key: pava-c3s
+    product: newtron-slate-5
     location: pava-r3
   - key: pava-c4a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: pava-r4
   - key: pava-c4d
-    product: samsung-qm55
+    product: boreal-edge-65
     location: pava-r4
   - key: pava-c4b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: pava-r4
+  - key: pava-c4s
+    product: newtron-slate-5
     location: pava-r4
   - key: pava-c5a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: pava-r5
   - key: pava-c5d
-    product: samsung-qm55
+    product: boreal-edge-65
     location: pava-r5
   - key: pava-c5b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: pava-r5
+  - key: pava-c5s
+    product: newtron-slate-5
     location: pava-r5
   - key: pavb-c1a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: pavb-r1
   - key: pavb-c1d
-    product: samsung-qm55
+    product: boreal-edge-75
     location: pavb-r1
   - key: pavb-c1b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: pavb-r1
+  - key: pavb-c1s
+    product: newtron-slate-5
     location: pavb-r1
   - key: pavb-c2a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: pavb-r2
   - key: pavb-c2d
-    product: samsung-qm55
+    product: boreal-edge-75
     location: pavb-r2
   - key: pavb-c2b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: pavb-r2
+  - key: pavb-c2s
+    product: newtron-slate-5
     location: pavb-r2
   - key: pavb-c3a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: pavb-r3
   - key: pavb-c3d
-    product: samsung-qm55
+    product: boreal-edge-75
     location: pavb-r3
   - key: pavb-c3b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: pavb-r3
+  - key: pavb-c3s
+    product: newtron-slate-5
     location: pavb-r3
   - key: pavb-c4a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: pavb-r4
   - key: pavb-c4d
-    product: samsung-qm55
+    product: boreal-edge-75
     location: pavb-r4
   - key: pavb-c4b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: pavb-r4
+  - key: pavb-c4s
+    product: newtron-slate-5
     location: pavb-r4
   - key: pavb-c5a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: pavb-r5
   - key: pavb-c5d
-    product: samsung-qm55
+    product: boreal-edge-75
     location: pavb-r5
   - key: pavb-c5b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: pavb-r5
+  - key: pavb-c5s
+    product: newtron-slate-5
     location: pavb-r5
   - key: ann-c1a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: ann-r1
   - key: ann-c1d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: ann-r1
   - key: ann-c1b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: ann-r1
+  - key: ann-c1s
+    product: newtron-slate-5
     location: ann-r1
   - key: ann-c2a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: ann-r2
   - key: ann-c2d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: ann-r2
   - key: ann-c2b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: ann-r2
+  - key: ann-c2s
+    product: newtron-slate-5
     location: ann-r2
   - key: ann-c3a
-    product: cisco-room-bar
+    product: kestrel-vroom
     location: ann-r3
   - key: ann-c3d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: ann-r3
   - key: ann-c3b
-    product: cisco-room-bar
+    product: newtron-panel-7
+    location: ann-r3
+  - key: ann-c3s
+    product: newtron-slate-5
     location: ann-r3
   - key: dep-c1a
-    product: cisco-room-bar
+    product: boreal-edge-55
     location: dep-r1
   - key: dep-c1d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: dep-r1
   - key: dep-c1b
-    product: cisco-room-bar
+    product: boreal-cast-m1
     location: dep-r1
   - key: dep-c2a
-    product: cisco-room-bar
+    product: boreal-edge-55
     location: dep-r2
   - key: dep-c2d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: dep-r2
   - key: dep-c2b
-    product: cisco-room-bar
+    product: boreal-cast-m1
     location: dep-r2
   - key: dep-c3a
-    product: cisco-room-bar
+    product: boreal-edge-55
     location: dep-r3
   - key: dep-c3d
-    product: samsung-qm55
+    product: boreal-edge-55
     location: dep-r3
   - key: dep-c3b
-    product: cisco-room-bar
+    product: boreal-cast-m1
     location: dep-r3
 
 # Property values: two overrides the huddle display declares over its product's
@@ -912,11 +1163,11 @@ property_values:
 # boardrooms inside one.
 systems:
   - key: boardroom-a
-    standard: meeting-room
+    standard: divisible-conference
     system_type: board
     location: boardroom-a
   - key: boardroom-b
-    standard: meeting-room
+    standard: divisible-conference
     system_type: board
     location: boardroom-b
 
@@ -959,14 +1210,14 @@ systems:
   # One microphone short of its quorum of two, with the one it has healthy
   # (assignments, below): short-staffed, not broken, so it reads incomplete.
   - key: briefing-av
-    standard: meeting-room
+    standard: mr65
     system_type: meeting
     location: briefing
 
   # Fully staffed, and the room its warning-level alarm (below) does NOT
   # impair: the component degrades and keeps its slot.
   - key: bay-1-av
-    standard: signage
+    standard: ds55
     system_type: sign
     location: bay-1
 
@@ -975,56 +1226,56 @@ systems:
   # is mostly healthy rooms (#785), and the exceptions above carry the
   # teaching, not the volume.
   - key: wl3-s1
-    standard: meeting-room
+    standard: mr55
     system_type: meeting
     location: wl3-r1
   - key: wl3-s2
-    standard: meeting-room
+    standard: mr55
     system_type: meeting
     location: wl3-r2
   - key: wl3-s3
-    standard: meeting-room
+    standard: mr55
     system_type: meeting
     location: wl3-r3
   - key: wl3-s4
-    standard: meeting-room
+    standard: mr55
     system_type: meeting
     location: wl3-r4
   - key: wl3-s5
-    standard: meeting-room
+    standard: mr55
     system_type: meeting
     location: wl3-r5
   - key: wl3-s6
-    standard: meeting-room
+    standard: mr55
     system_type: meeting
     location: wl3-r6
   - key: wl4-s1
-    standard: meeting-room
+    standard: mr55
     system_type: meeting
     location: wl4-r1
   - key: wl4-s2
-    standard: meeting-room
+    standard: mr55
     system_type: meeting
     location: wl4-r2
   - key: wl4-s3
-    standard: meeting-room
+    standard: mr55
     system_type: meeting
     location: wl4-r3
   - key: wl4-s4
-    standard: meeting-room
+    standard: mr55
     system_type: meeting
     location: wl4-r4
   - key: wl4-s5
-    standard: meeting-room
+    standard: mr55
     system_type: meeting
     location: wl4-r5
   - key: hl2-s1
-    standard: classroom
-    system_type: class
+    standard: training-room
+    system_type: training
     location: hl2-r1
   - key: hl2-s2
-    standard: classroom
-    system_type: class
+    standard: training-room
+    system_type: training
     location: hl2-r2
   - key: hl2-s3
     standard: classroom
@@ -1043,67 +1294,67 @@ systems:
     system_type: class
     location: hl2-r6
   - key: pava-s1
-    standard: meeting-room
+    standard: mr65
     system_type: meeting
     location: pava-r1
   - key: pava-s2
-    standard: meeting-room
+    standard: mr65
     system_type: meeting
     location: pava-r2
   - key: pava-s3
-    standard: meeting-room
+    standard: mr65
     system_type: meeting
     location: pava-r3
   - key: pava-s4
-    standard: meeting-room
+    standard: mr65
     system_type: meeting
     location: pava-r4
   - key: pava-s5
-    standard: meeting-room
+    standard: mr65
     system_type: meeting
     location: pava-r5
   - key: pavb-s1
-    standard: meeting-room
+    standard: mr75
     system_type: conference
     location: pavb-r1
   - key: pavb-s2
-    standard: meeting-room
+    standard: mr75
     system_type: conference
     location: pavb-r2
   - key: pavb-s3
-    standard: meeting-room
+    standard: mr75
     system_type: conference
     location: pavb-r3
   - key: pavb-s4
-    standard: meeting-room
+    standard: mr75
     system_type: conference
     location: pavb-r4
   - key: pavb-s5
-    standard: meeting-room
+    standard: mr75
     system_type: conference
     location: pavb-r5
   - key: ann-s1
-    standard: meeting-room
+    standard: mr55
     system_type: meeting
     location: ann-r1
   - key: ann-s2
-    standard: meeting-room
+    standard: mr55
     system_type: meeting
     location: ann-r2
   - key: ann-s3
-    standard: meeting-room
+    standard: mr55
     system_type: meeting
     location: ann-r3
   - key: dep-s1
-    standard: signage
+    standard: ds55
     system_type: sign
     location: dep-r1
   - key: dep-s2
-    standard: signage
+    standard: ds55
     system_type: sign
     location: dep-r2
   - key: dep-s3
-    standard: signage
+    standard: ds55
     system_type: sign
     location: dep-r3
 
@@ -1144,52 +1395,91 @@ members:
     component: huddle-touch
   - system: auditorium-av
     component: auditorium-touch
-  # The second bar is racked but unassigned: when the critical alarm takes
-  # the conferencing bar down, the hall degrades on a real failure rather
-  # than failing over silently.
+  # The house spare: a ceiling mic racked in the hall, in the room and
+  # accounted for, filling no role.
   - system: auditorium-av
-    component: auditorium-bar-b
+    component: auditorium-mic
 
 # Staffing, which creates the membership as a side effect. Both boardroom halves
 # are fully staffed (#785: a deployed room fills every role; the one-mic-short
 # teaching case is briefing-av, below): the shared bar counts toward each half's
 # quorum and each half racks a bar of its own beside it.
 role_assignments:
+  # The divisible pair (#802): each side fully staffed on its own bar,
+  # displays, mics, and panels, while the ONE audio rack in room A satisfies
+  # BOTH sides' dsp and amplifier slots: the shared-component quorum case,
+  # standing where the physically impossible shared video bar used to.
   - system: boardroom-a
-    role: room-mic
-    component: shared-bar
-  - system: boardroom-a
-    role: room-mic
+    role: video-bar
     component: bar-a
   - system: boardroom-a
     role: main-display
     component: panel-a
-  - system: boardroom-b
+  - system: boardroom-a
+    role: main-display
+    component: panel-a2
+  - system: boardroom-a
     role: room-mic
-    component: shared-bar
-  - system: boardroom-b
+    component: mic-a1
+  - system: boardroom-a
     role: room-mic
+    component: mic-a2
+  - system: boardroom-a
+    role: touch-control
+    component: touch-a
+  - system: boardroom-a
+    role: scheduling-panel
+    component: sched-a
+  - system: boardroom-a
+    role: dsp
+    component: div-dsp
+  - system: boardroom-a
+    role: amplifier
+    component: div-amp
+  - system: boardroom-b
+    role: video-bar
     component: bar-b
   - system: boardroom-b
     role: main-display
     component: panel-b
-
+  - system: boardroom-b
+    role: main-display
+    component: panel-b2
+  - system: boardroom-b
+    role: room-mic
+    component: mic-b1
+  - system: boardroom-b
+    role: room-mic
+    component: mic-b2
+  - system: boardroom-b
+    role: touch-control
+    component: touch-b
+  - system: boardroom-b
+    role: scheduling-panel
+    component: sched-b
+  - system: boardroom-b
+    role: dsp
+    component: div-dsp
+  - system: boardroom-b
+    role: amplifier
+    component: div-amp
   # Huddle North, built all-in-one: the video-bar alternate is staffed and the
   # component build is left alone, so the room reads healthy on one leg.
   - system: huddle-north
     role: conf-bar
     component: huddle-bar
-
-  # The auditorium is fully staffed on ITS OWN standard (#796): projection,
-  # a stage-mic pair, and the conferencing bar. The critical alarm (below)
-  # takes the bar down, so the hall drops on a real failure; the second bar
-  # holds the slot as a spare.
+  - system: huddle-north
+    role: main-display
+    component: huddle-display
+  # The auditorium is fully staffed on its hall-scale chain (#802). The
+  # critical alarm (below) takes the DSP down, so the hall drops on a real
+  # failure in the middle of the signal path.
   - system: auditorium-av
     role: projection
+    component: auditorium-projector
+  - system: auditorium-av
+    role: confidence-display
     component: auditorium-display
-  - system: auditorium-av
-    role: projection
-    component: auditorium-display-b
   - system: auditorium-av
     role: stage-mic
     component: aud-mic-1
@@ -1197,303 +1487,537 @@ role_assignments:
     role: stage-mic
     component: aud-mic-2
   - system: auditorium-av
-    role: conference
-    component: auditorium-bar
-
-  # The briefing room is one microphone short of its quorum of two, with the
-  # one it has healthy: short-staffed, not broken.
+    role: podium-mic
+    component: aud-podium
+  - system: auditorium-av
+    role: dsp
+    component: aud-dsp
+  - system: auditorium-av
+    role: amplifier
+    component: aud-amp-1
+  - system: auditorium-av
+    role: amplifier
+    component: aud-amp-2
+  - system: auditorium-av
+    role: speakers
+    component: aud-spk-1
+  - system: auditorium-av
+    role: speakers
+    component: aud-spk-2
+  - system: auditorium-av
+    role: speakers
+    component: aud-spk-3
+  - system: auditorium-av
+    role: speakers
+    component: aud-spk-4
+  - system: auditorium-av
+    role: video-switcher
+    component: aud-sw
+  - system: auditorium-av
+    role: control-system
+    component: aud-cp
+  - system: auditorium-av
+    role: touch-control
+    component: auditorium-touch
+  - system: auditorium-av
+    role: camera
+    component: aud-cam-1
+  - system: auditorium-av
+    role: camera
+    component: aud-cam-2
+  # The briefing room is deployed except its scheduling panel, which was never
+  # installed: short one commissioning item, not broken.
   - system: briefing-av
-    role: room-mic
+    role: video-bar
     component: briefing-bar
   - system: briefing-av
     role: main-display
     component: briefing-display
-
-  # Bay 1 is fully staffed.
-  # The depot's bays hold signage boards (#796); the bars and mics racked in
-  # bay 1 are the service stock, members with no role.
+  - system: briefing-av
+    role: touch-control
+    component: briefing-touch
+  # The signage endpoints: panel plus player, deployed.
   - system: bay-1-av
     role: panel
     component: bay-1-display
-
+  - system: bay-1-av
+    role: player
+    component: bay-1-player
 
   # Volume staffing.
   - system: wl3-s1
-    role: room-mic
+    role: video-bar
     component: wl3-c1a
   - system: wl3-s1
     role: main-display
     component: wl3-c1d
   - system: wl3-s1
-    role: room-mic
+    role: touch-control
     component: wl3-c1b
+  - system: wl3-s1
+    role: scheduling-panel
+    component: wl3-c1s
   - system: wl3-s2
-    role: room-mic
+    role: video-bar
     component: wl3-c2a
   - system: wl3-s2
     role: main-display
     component: wl3-c2d
   - system: wl3-s2
-    role: room-mic
+    role: touch-control
     component: wl3-c2b
+  - system: wl3-s2
+    role: scheduling-panel
+    component: wl3-c2s
   - system: wl3-s3
-    role: room-mic
+    role: video-bar
     component: wl3-c3a
   - system: wl3-s3
     role: main-display
     component: wl3-c3d
   - system: wl3-s3
-    role: room-mic
+    role: touch-control
     component: wl3-c3b
+  - system: wl3-s3
+    role: scheduling-panel
+    component: wl3-c3s
   - system: wl3-s4
-    role: room-mic
+    role: video-bar
     component: wl3-c4a
   - system: wl3-s4
     role: main-display
     component: wl3-c4d
   - system: wl3-s4
-    role: room-mic
+    role: touch-control
     component: wl3-c4b
+  - system: wl3-s4
+    role: scheduling-panel
+    component: wl3-c4s
   - system: wl3-s5
-    role: room-mic
+    role: video-bar
     component: wl3-c5a
   - system: wl3-s5
     role: main-display
     component: wl3-c5d
   - system: wl3-s5
-    role: room-mic
+    role: touch-control
     component: wl3-c5b
+  - system: wl3-s5
+    role: scheduling-panel
+    component: wl3-c5s
   - system: wl3-s6
-    role: room-mic
+    role: video-bar
     component: wl3-c6a
   - system: wl3-s6
     role: main-display
     component: wl3-c6d
   - system: wl3-s6
-    role: room-mic
+    role: touch-control
     component: wl3-c6b
+  - system: wl3-s6
+    role: scheduling-panel
+    component: wl3-c6s
   - system: wl4-s1
-    role: room-mic
+    role: video-bar
     component: wl4-c1a
   - system: wl4-s1
     role: main-display
     component: wl4-c1d
   - system: wl4-s1
-    role: room-mic
+    role: touch-control
     component: wl4-c1b
+  - system: wl4-s1
+    role: scheduling-panel
+    component: wl4-c1s
   - system: wl4-s2
-    role: room-mic
+    role: video-bar
     component: wl4-c2a
   - system: wl4-s2
     role: main-display
     component: wl4-c2d
   - system: wl4-s2
-    role: room-mic
+    role: touch-control
     component: wl4-c2b
+  - system: wl4-s2
+    role: scheduling-panel
+    component: wl4-c2s
   - system: wl4-s3
-    role: room-mic
+    role: video-bar
     component: wl4-c3a
   - system: wl4-s3
     role: main-display
     component: wl4-c3d
   - system: wl4-s3
-    role: room-mic
+    role: touch-control
     component: wl4-c3b
+  - system: wl4-s3
+    role: scheduling-panel
+    component: wl4-c3s
   - system: wl4-s4
-    role: room-mic
+    role: video-bar
     component: wl4-c4a
   - system: wl4-s4
     role: main-display
     component: wl4-c4d
   - system: wl4-s4
-    role: room-mic
+    role: touch-control
     component: wl4-c4b
+  - system: wl4-s4
+    role: scheduling-panel
+    component: wl4-c4s
   - system: wl4-s5
-    role: room-mic
+    role: video-bar
     component: wl4-c5a
   - system: wl4-s5
     role: main-display
     component: wl4-c5d
   - system: wl4-s5
-    role: room-mic
+    role: touch-control
     component: wl4-c5b
+  - system: wl4-s5
+    role: scheduling-panel
+    component: wl4-c5s
+  - system: pava-s1
+    role: video-bar
+    component: pava-c1a
+  - system: pava-s1
+    role: main-display
+    component: pava-c1d
+  - system: pava-s1
+    role: touch-control
+    component: pava-c1b
+  - system: pava-s1
+    role: scheduling-panel
+    component: pava-c1s
+  - system: pava-s2
+    role: video-bar
+    component: pava-c2a
+  - system: pava-s2
+    role: main-display
+    component: pava-c2d
+  - system: pava-s2
+    role: touch-control
+    component: pava-c2b
+  - system: pava-s2
+    role: scheduling-panel
+    component: pava-c2s
+  - system: pava-s3
+    role: video-bar
+    component: pava-c3a
+  - system: pava-s3
+    role: main-display
+    component: pava-c3d
+  - system: pava-s3
+    role: touch-control
+    component: pava-c3b
+  - system: pava-s3
+    role: scheduling-panel
+    component: pava-c3s
+  - system: pava-s4
+    role: video-bar
+    component: pava-c4a
+  - system: pava-s4
+    role: main-display
+    component: pava-c4d
+  - system: pava-s4
+    role: touch-control
+    component: pava-c4b
+  - system: pava-s4
+    role: scheduling-panel
+    component: pava-c4s
+  - system: pava-s5
+    role: video-bar
+    component: pava-c5a
+  - system: pava-s5
+    role: main-display
+    component: pava-c5d
+  - system: pava-s5
+    role: touch-control
+    component: pava-c5b
+  - system: pava-s5
+    role: scheduling-panel
+    component: pava-c5s
+  - system: pavb-s1
+    role: video-bar
+    component: pavb-c1a
+  - system: pavb-s1
+    role: main-display
+    component: pavb-c1d
+  - system: pavb-s1
+    role: touch-control
+    component: pavb-c1b
+  - system: pavb-s1
+    role: scheduling-panel
+    component: pavb-c1s
+  - system: pavb-s2
+    role: video-bar
+    component: pavb-c2a
+  - system: pavb-s2
+    role: main-display
+    component: pavb-c2d
+  - system: pavb-s2
+    role: touch-control
+    component: pavb-c2b
+  - system: pavb-s2
+    role: scheduling-panel
+    component: pavb-c2s
+  - system: pavb-s3
+    role: video-bar
+    component: pavb-c3a
+  - system: pavb-s3
+    role: main-display
+    component: pavb-c3d
+  - system: pavb-s3
+    role: touch-control
+    component: pavb-c3b
+  - system: pavb-s3
+    role: scheduling-panel
+    component: pavb-c3s
+  - system: pavb-s4
+    role: video-bar
+    component: pavb-c4a
+  - system: pavb-s4
+    role: main-display
+    component: pavb-c4d
+  - system: pavb-s4
+    role: touch-control
+    component: pavb-c4b
+  - system: pavb-s4
+    role: scheduling-panel
+    component: pavb-c4s
+  - system: pavb-s5
+    role: video-bar
+    component: pavb-c5a
+  - system: pavb-s5
+    role: main-display
+    component: pavb-c5d
+  - system: pavb-s5
+    role: touch-control
+    component: pavb-c5b
+  - system: pavb-s5
+    role: scheduling-panel
+    component: pavb-c5s
+  - system: ann-s1
+    role: video-bar
+    component: ann-c1a
+  - system: ann-s1
+    role: main-display
+    component: ann-c1d
+  - system: ann-s1
+    role: touch-control
+    component: ann-c1b
+  - system: ann-s1
+    role: scheduling-panel
+    component: ann-c1s
+  - system: ann-s2
+    role: video-bar
+    component: ann-c2a
+  - system: ann-s2
+    role: main-display
+    component: ann-c2d
+  - system: ann-s2
+    role: touch-control
+    component: ann-c2b
+  - system: ann-s2
+    role: scheduling-panel
+    component: ann-c2s
+  - system: ann-s3
+    role: video-bar
+    component: ann-c3a
+  - system: ann-s3
+    role: main-display
+    component: ann-c3d
+  - system: ann-s3
+    role: touch-control
+    component: ann-c3b
+  - system: ann-s3
+    role: scheduling-panel
+    component: ann-c3s
   - system: hl2-s1
-    role: class-display
+    role: front-display
     component: hl2-c1d
   - system: hl2-s1
-    role: instructor-mic
+    role: front-display
+    component: t1-fd2
+  - system: hl2-s1
+    role: ceiling-mic
     component: hl2-c1a
+  - system: hl2-s1
+    role: ceiling-mic
+    component: t1-cm2
+  - system: hl2-s1
+    role: presenter-mic
+    component: t1-wm
+  - system: hl2-s1
+    role: podium-mic
+    component: t1-pm
+  - system: hl2-s1
+    role: dsp
+    component: t1-dsp
+  - system: hl2-s1
+    role: amplifier
+    component: t1-amp
+  - system: hl2-s1
+    role: speakers
+    component: t1-spk1
+  - system: hl2-s1
+    role: speakers
+    component: t1-spk2
+  - system: hl2-s1
+    role: speakers
+    component: t1-spk3
+  - system: hl2-s1
+    role: speakers
+    component: t1-spk4
+  - system: hl2-s1
+    role: video-switcher
+    component: t1-sw
+  - system: hl2-s1
+    role: display-endpoint
+    component: t1-ext1
+  - system: hl2-s1
+    role: display-endpoint
+    component: t1-ext2
+  - system: hl2-s1
+    role: control-system
+    component: t1-cp
+  - system: hl2-s1
+    role: touch-control
+    component: hl2-c1b
+  - system: hl2-s1
+    role: scheduling-panel
+    component: t1-sp
+  - system: hl2-s1
+    role: people-counter
+    component: t1-oc
+  - system: hl2-s1
+    role: camera
+    component: t1-cam1
+  - system: hl2-s1
+    role: camera
+    component: t1-cam2
   - system: hl2-s2
-    role: class-display
+    role: front-display
     component: hl2-c2d
   - system: hl2-s2
-    role: instructor-mic
+    role: front-display
+    component: t2-fd2
+  - system: hl2-s2
+    role: ceiling-mic
     component: hl2-c2a
+  - system: hl2-s2
+    role: ceiling-mic
+    component: t2-cm2
+  - system: hl2-s2
+    role: presenter-mic
+    component: t2-wm
+  - system: hl2-s2
+    role: podium-mic
+    component: t2-pm
+  - system: hl2-s2
+    role: dsp
+    component: t2-dsp
+  - system: hl2-s2
+    role: amplifier
+    component: t2-amp
+  - system: hl2-s2
+    role: speakers
+    component: t2-spk1
+  - system: hl2-s2
+    role: speakers
+    component: t2-spk2
+  - system: hl2-s2
+    role: speakers
+    component: t2-spk3
+  - system: hl2-s2
+    role: speakers
+    component: t2-spk4
+  - system: hl2-s2
+    role: video-switcher
+    component: t2-sw
+  - system: hl2-s2
+    role: display-endpoint
+    component: t2-ext1
+  - system: hl2-s2
+    role: display-endpoint
+    component: t2-ext2
+  - system: hl2-s2
+    role: control-system
+    component: t2-cp
+  - system: hl2-s2
+    role: touch-control
+    component: hl2-c2b
+  - system: hl2-s2
+    role: scheduling-panel
+    component: t2-sp
+  - system: hl2-s2
+    role: people-counter
+    component: t2-oc
+  - system: hl2-s2
+    role: camera
+    component: t2-cam1
+  - system: hl2-s2
+    role: camera
+    component: t2-cam2
   - system: hl2-s3
     role: class-display
     component: hl2-c3d
   - system: hl2-s3
     role: instructor-mic
     component: hl2-c3a
+  - system: hl2-s3
+    role: touch-control
+    component: hl2-c3b
   - system: hl2-s4
     role: class-display
     component: hl2-c4d
   - system: hl2-s4
     role: instructor-mic
     component: hl2-c4a
+  - system: hl2-s4
+    role: touch-control
+    component: hl2-c4b
   - system: hl2-s5
     role: class-display
     component: hl2-c5d
   - system: hl2-s5
     role: instructor-mic
     component: hl2-c5a
+  - system: hl2-s5
+    role: touch-control
+    component: hl2-c5b
   - system: hl2-s6
     role: class-display
     component: hl2-c6d
   - system: hl2-s6
     role: instructor-mic
     component: hl2-c6a
-  - system: pava-s1
-    role: room-mic
-    component: pava-c1a
-  - system: pava-s1
-    role: main-display
-    component: pava-c1d
-  - system: pava-s1
-    role: room-mic
-    component: pava-c1b
-  - system: pava-s2
-    role: room-mic
-    component: pava-c2a
-  - system: pava-s2
-    role: main-display
-    component: pava-c2d
-  - system: pava-s2
-    role: room-mic
-    component: pava-c2b
-  - system: pava-s3
-    role: room-mic
-    component: pava-c3a
-  - system: pava-s3
-    role: main-display
-    component: pava-c3d
-  - system: pava-s3
-    role: room-mic
-    component: pava-c3b
-  - system: pava-s4
-    role: room-mic
-    component: pava-c4a
-  - system: pava-s4
-    role: main-display
-    component: pava-c4d
-  - system: pava-s4
-    role: room-mic
-    component: pava-c4b
-  - system: pava-s5
-    role: room-mic
-    component: pava-c5a
-  - system: pava-s5
-    role: main-display
-    component: pava-c5d
-  - system: pava-s5
-    role: room-mic
-    component: pava-c5b
-  - system: pavb-s1
-    role: room-mic
-    component: pavb-c1a
-  - system: pavb-s1
-    role: main-display
-    component: pavb-c1d
-  - system: pavb-s1
-    role: room-mic
-    component: pavb-c1b
-  - system: pavb-s2
-    role: room-mic
-    component: pavb-c2a
-  - system: pavb-s2
-    role: main-display
-    component: pavb-c2d
-  - system: pavb-s2
-    role: room-mic
-    component: pavb-c2b
-  - system: pavb-s3
-    role: room-mic
-    component: pavb-c3a
-  - system: pavb-s3
-    role: main-display
-    component: pavb-c3d
-  - system: pavb-s3
-    role: room-mic
-    component: pavb-c3b
-  - system: pavb-s4
-    role: room-mic
-    component: pavb-c4a
-  - system: pavb-s4
-    role: main-display
-    component: pavb-c4d
-  - system: pavb-s4
-    role: room-mic
-    component: pavb-c4b
-  - system: pavb-s5
-    role: room-mic
-    component: pavb-c5a
-  - system: pavb-s5
-    role: main-display
-    component: pavb-c5d
-  - system: pavb-s5
-    role: room-mic
-    component: pavb-c5b
-  - system: ann-s1
-    role: room-mic
-    component: ann-c1a
-  - system: ann-s1
-    role: main-display
-    component: ann-c1d
-  - system: ann-s1
-    role: room-mic
-    component: ann-c1b
-  - system: ann-s2
-    role: room-mic
-    component: ann-c2a
-  - system: ann-s2
-    role: main-display
-    component: ann-c2d
-  - system: ann-s2
-    role: room-mic
-    component: ann-c2b
-  - system: ann-s3
-    role: room-mic
-    component: ann-c3a
-  - system: ann-s3
-    role: main-display
-    component: ann-c3d
-  - system: ann-s3
-    role: room-mic
-    component: ann-c3b
+  - system: hl2-s6
+    role: touch-control
+    component: hl2-c6b
   - system: dep-s1
     role: panel
-    component: dep-c1d
+    component: dep-c1a
+  - system: dep-s1
+    role: player
+    component: dep-c1b
   - system: dep-s2
     role: panel
-    component: dep-c2d
+    component: dep-c2a
+  - system: dep-s2
+    role: player
+    component: dep-c2b
   - system: dep-s3
     role: panel
-    component: dep-c3d
+    component: dep-c3a
+  - system: dep-s3
+    role: player
+    component: dep-c3b
 
-# Something actually wrong, so the fleet is not all healthy-and-incomplete. A
-# CRITICAL alarm takes its component's own verdict to outage, which stops it
-# occupying the roles it fills (#626); a lesser one degrades the component while
-# it keeps its slot. Both appear here because the difference is exactly what an
-# operator has to be able to read off a screen.
-#
-# auditorium-bar going down leaves the auditorium's room-mic role holding one of
-# the two it wants, so the room drops to degraded on a REAL failure, beside the
-# briefing room sitting at incomplete on a gap. Same arithmetic, different
-# cause, different colour: that contrast is the fleet canvas's whole argument.
 alarms:
-  - component: auditorium-bar
+  - component: aud-dsp
     severity: critical
-    message: No route to host on the primary interface
+    message: No route to host on the control interface
     dedup_key: unreachable
   # A warning that costs nothing structural: the component reads degraded and
   # keeps its slot, so the room above it stays healthy. Worth seeding because

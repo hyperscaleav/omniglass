@@ -3,6 +3,7 @@ package devseed_test
 import (
 	"context"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/devseed"
@@ -453,11 +454,11 @@ func TestRunIdempotent(t *testing.T) {
 	// are each idempotent.
 	var contractLines, huddleComps, propVals int
 	if err := conn.QueryRow(ctx, `
-		select count(*) from product_property where product_id = (select id from product where name = 'samsung-qm55')`).Scan(&contractLines); err != nil {
+		select count(*) from product_property where product_id = (select id from product where name = 'boreal-edge-55')`).Scan(&contractLines); err != nil {
 		t.Fatalf("count contract lines: %v", err)
 	}
 	if contractLines != 4 {
-		t.Errorf("qm55 contract lines = %d, want 4 (3 boot-seed + mac-address)", contractLines)
+		t.Errorf("edge-55 contract lines = %d, want 4 (3 boot-seed + mac-address)", contractLines)
 	}
 	if err := conn.QueryRow(ctx, `
 		select count(*) from component where location_id = (select id from location where name = 'huddle')`).Scan(&huddleComps); err != nil {
@@ -680,7 +681,7 @@ func TestRunIdempotent(t *testing.T) {
 const (
 	huddleDisplaySQL = `(select id from component where name = 'display-1'
 		and location_id = (select id from location where name = 'huddle'))`
-	barSQL = `(select id from component where name = 'videobar-2'
+	barSQL = `(select id from component where name = 'videobar-1'
 		and location_id = (select id from location where name = 'boardroom-a'))`
 )
 
@@ -689,8 +690,8 @@ const (
 // hand-writing them fails here on the pen (a typed name clears name_generated
 // and stores no ordinal) as well as on the value.
 //
-// The names are not incidental. `display-1` appears three times, once per room,
-// which is the placement-scoped unique index doing its job; and `boardroom`
+// The names are not incidental. `display-1` appears once per room holding a
+// display, which is the placement-scoped unique index doing its job; and `boardroom`
 // carries no ordinal while storing 1, which is the first-of-its-stem suppression
 // (ADR-0101).
 //
@@ -718,8 +719,8 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 		// Components: the stem comes from the product's component_type, the
 		// ordinal from the room.
 		{what: "the huddle display", table: "component", place: "huddle", name: "display-1", ordinal: 1, generated: true},
-		{what: "the shared video bar", table: "component", place: "boardroom-a", name: "videobar-1", ordinal: 1, generated: true},
-		{what: "the second video bar", table: "component", place: "boardroom-a", name: "videobar-2", ordinal: 2, generated: true},
+		{what: "the video bar (one per room, #802)", table: "component", place: "boardroom-a", name: "videobar-1", ordinal: 1, generated: true},
+		{what: "the second ceiling mic", table: "component", place: "boardroom-a", name: "mic-2", ordinal: 2, generated: true},
 		{what: "room A's panel", table: "component", place: "boardroom-a", name: "display-1", ordinal: 1, generated: true},
 		// Room B's panel is the first display in ITS room: the ordinal resets
 		// across the air wall because the bucket is the room.
@@ -787,7 +788,7 @@ func TestSeededNamesComeFromTheGenerator(t *testing.T) {
 	// failure.
 	roomsWithDisplay := map[string]bool{}
 	for _, c := range fixturesDoc(t).Components {
-		if c.Product == "samsung-qm55" && c.Location != "" {
+		if strings.HasPrefix(c.Product, "boreal-edge-") && c.Location != "" {
 			roomsWithDisplay[c.Location] = true
 		}
 	}
@@ -880,7 +881,7 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 	}{
 		{table: "component", place: "huddle", name: "display-1", label: "Display 1", platform: true},
 		{table: "component", place: "boardroom-a", name: "videobar-1", label: "Video Bar 1", platform: true},
-		{table: "component", place: "boardroom-a", name: "videobar-2", label: "Video Bar 2", platform: true},
+		{table: "component", place: "boardroom-a", name: "mic-2", label: "Ceiling Microphone 2", platform: true},
 		{table: "component", place: "boardroom-a", name: "display-1", label: "Display 1", platform: true},
 		// Room B's panel is the first display in ITS room, so it reads
 		// display-1 too: the placement-scoped name index doing its job across
@@ -968,10 +969,10 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 // fleet in the wrong order: every name and label would still be right, and the
 // wrong panel would be staffing the wrong half of the room.
 //
-// The staffing is also the fleet's health story: both halves hold two mics and
-// a display and read healthy (#785: a deployed room fills every role; the
-// quorum-short teaching case is the briefing room), with the shared bar
-// counting in both from its physical home in A.
+// The staffing is also the fleet's health story: both halves are fully
+// deployed and read healthy (#785), with the divisible pair's ONE audio rack
+// (dsp-1, amp-1, physically racked in A) counting in both halves (#802): the
+// shared-component case, standing where the impossible shared bar used to.
 func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 	ctx, conn, _ := seededFleet(t)
 
@@ -980,14 +981,19 @@ func TestSeededStaffingLandsOnTheRightDevices(t *testing.T) {
 		want map[string]string // role -> the component names filling it, joined
 	}{
 		// Both halves mint `boardroom` in their own rooms, so the room is the
-		// address here. The shared bar staffs room-mic in BOTH, from its
-		// physical home in A.
-		{room: "boardroom-a", want: map[string]string{"room-mic": "videobar-1,videobar-2", "main-display": "display-1"}},
-		// Two mics, two rooms, one name each: the shared bar keeps the name it
-		// minted in A, and B's own bar is the first bar OF ITS OWN ROOM, so
-		// both render videobar-1. The placement-scoped index at work, not a
-		// duplicate.
-		{room: "boardroom-b", want: map[string]string{"room-mic": "videobar-1,videobar-1", "main-display": "display-1"}},
+		// address here. The shared rack staffs dsp and amplifier in BOTH,
+		// from its physical home in A, so both halves name dsp-1 and amp-1.
+		{room: "boardroom-a", want: map[string]string{
+			"video-bar": "videobar-1", "main-display": "display-1,display-2", "room-mic": "mic-1,mic-2",
+			"touch-control": "panel-1", "scheduling-panel": "scheduler-1", "dsp": "dsp-1", "amplifier": "amp-1",
+		}},
+		// B's own devices are the first OF THEIR OWN ROOM (the
+		// placement-scoped index at work, not duplicates), while the rack's
+		// names stay the ones it minted in A.
+		{room: "boardroom-b", want: map[string]string{
+			"video-bar": "videobar-1", "main-display": "display-1,display-2", "room-mic": "mic-1,mic-2",
+			"touch-control": "panel-1", "scheduling-panel": "scheduler-1", "dsp": "dsp-1", "amplifier": "amp-1",
+		}},
 	} {
 		rows, err := conn.Query(ctx, `
 			select r.name, c.name
@@ -1458,11 +1464,11 @@ func TestSeededFleetShowsEveryVerdict(t *testing.T) {
 
 	for _, tc := range []struct{ room, want, why string }{
 		{"media-lab", "incomplete", "two pods conforming to a standard with nothing assigned to any role: commissioning gaps, and no alarm will ever fire for them"},
-		{"boardroom-a", "healthy", "fully staffed, the shared bar counted where it physically sits"},
-		{"boardroom-b", "healthy", "fully staffed since #785: the shared bar plus a bar of its own; the quorum-short teaching case lives in the briefing room now"},
-		{"briefing", "incomplete", "same shape as the second boardroom half: short a microphone nobody has installed"},
-		{"auditorium", "degraded", "fully staffed, but a critical alarm took one of its two microphones down: a real failure, not a gap"},
-		{"bay-1", "healthy", "fully staffed and quiet"},
+		{"boardroom-a", "healthy", "fully staffed, the shared audio rack counted where it physically sits"},
+		{"boardroom-b", "healthy", "fully staffed: its own bar, displays, mics, and panels, plus the divisible pair's shared DSP and amplifier (#802)"},
+		{"briefing", "incomplete", "deployed except the scheduling panel nobody has installed: short one commissioning item"},
+		{"auditorium", "degraded", "fully staffed, but a critical alarm took the DSP down: a real failure in the middle of the chain, not a gap"},
+		{"bay-1", "healthy", "panel and player staffed and quiet"},
 		{"huddle", "healthy", "built all-in-one, so the component-build alternate it never staffed does not impair it"},
 	} {
 		for _, id := range systemsIn(tc.room) {
@@ -1520,7 +1526,7 @@ func TestFixtureFleetReadsDeployed(t *testing.T) {
 	teaching := map[string]string{
 		"lab-pod-a":   "the commissioning pair: racked, cabled, nothing assigned",
 		"lab-pod-b":   "the commissioning pair: racked, cabled, nothing assigned",
-		"briefing-av": "the quorum-short case: one microphone short, the one it has healthy",
+		"briefing-av": "the commissioning-gap case: deployed except its scheduling panel",
 	}
 	staffed := map[string]map[string]int{}
 	for _, ra := range doc.RoleAssignments {
@@ -1530,11 +1536,23 @@ func TestFixtureFleetReadsDeployed(t *testing.T) {
 		staffed[ra.System][ra.Role]++
 	}
 	// The archetype quorums (#796): what "deployed" means per standard.
+	mr := map[string]int{"video-bar": 1, "main-display": 1, "touch-control": 1, "scheduling-panel": 1}
 	quorums := map[string]map[string]int{
-		"meeting-room": {"room-mic": 2, "main-display": 1},
-		"classroom":    {"class-display": 1, "instructor-mic": 1},
-		"auditorium":   {"projection": 1, "stage-mic": 2, "conference": 1},
-		"signage":      {"panel": 1},
+		"mr55": mr, "mr65": mr, "mr75": mr, "mr86": mr, "mr98": mr,
+		"divisible-conference": {"video-bar": 1, "main-display": 2, "room-mic": 2, "dsp": 1, "amplifier": 1, "touch-control": 1, "scheduling-panel": 1},
+		"classroom":            {"class-display": 1, "instructor-mic": 1, "touch-control": 1},
+		"training-room": {
+			"front-display": 2, "ceiling-mic": 2, "presenter-mic": 1, "podium-mic": 1,
+			"dsp": 1, "amplifier": 1, "speakers": 4, "video-switcher": 1, "display-endpoint": 2,
+			"control-system": 1, "touch-control": 1, "scheduling-panel": 1, "people-counter": 1, "camera": 2,
+		},
+		"auditorium": {
+			"projection": 1, "confidence-display": 1, "stage-mic": 2, "podium-mic": 1,
+			"dsp": 1, "amplifier": 2, "speakers": 4, "video-switcher": 1,
+			"control-system": 1, "touch-control": 1, "camera": 2,
+		},
+		"ds55": {"panel": 1, "player": 1},
+		"ds75": {"panel": 1, "player": 1},
 	}
 	for _, s := range doc.Systems {
 		want, known := quorums[s.Standard]
@@ -1554,10 +1572,12 @@ func TestFixtureFleetReadsDeployed(t *testing.T) {
 
 	// The archetype coherence guard (#796): a space's standard matches its
 	// type, so no auditorium ever renders as a meeting room again.
-	pair := map[string]string{"meeting": "meeting-room", "conference": "meeting-room", "board": "meeting-room", "training": "meeting-room", "huddle": "huddle-room", "class": "classroom", "auditorium": "auditorium", "sign": "signage"}
+	// A size-serialized family pairs by prefix: any mrNN is a meeting room,
+	// any dsNN a digital sign (#802).
+	pair := map[string]string{"meeting": "mr", "conference": "mr", "board": "divisible-conference", "training": "training-room", "huddle": "huddle-room", "class": "classroom", "auditorium": "auditorium", "sign": "ds"}
 	for _, s := range doc.Systems {
-		if want, ok := pair[s.SystemType]; ok && s.Standard != want {
-			t.Errorf("system %q is a %q on the %q standard; the archetype pairs %q", s.Key, s.SystemType, s.Standard, want)
+		if want, ok := pair[s.SystemType]; ok && !strings.HasPrefix(s.Standard, want) {
+			t.Errorf("system %q is a %q on the %q standard; the archetype pairs %q*", s.Key, s.SystemType, s.Standard, want)
 		}
 	}
 }

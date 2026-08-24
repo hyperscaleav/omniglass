@@ -64,7 +64,7 @@ func TestTheDraftLabelIsTheLabelTheCreateStores(t *testing.T) {
 	}
 
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
-		ProductName:  qm55,
+		ProductName:  edge55,
 		Name:         "front-panel",
 		LocationName: room.Name,
 		SystemName:   "board-1",
@@ -73,7 +73,7 @@ func TestTheDraftLabelIsTheLabelTheCreateStores(t *testing.T) {
 		t.Fatalf("render draft: %v", err)
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "front-panel", ProductName: strptr(qm55), LocationName: &room.Name, SystemName: strptr("board-1"),
+		Name: "front-panel", ProductName: strptr(edge55), LocationName: &room.Name, SystemName: strptr("board-1"),
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
@@ -97,13 +97,13 @@ func TestTheDraftIsTheIdentityTheCreateStampsForAGeneratedName(t *testing.T) {
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
-		ProductName: qm55, LocationName: room.Name,
+		ProductName: edge55, LocationName: room.Name,
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		ProductName: strptr(qm55), LocationName: &room.Name,
+		ProductName: strptr(edge55), LocationName: &room.Name,
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
@@ -157,7 +157,7 @@ func TestTheDraftedOrdinalIsTheLowestFreeOneInThatBucket(t *testing.T) {
 	draft := func(room string) storage.DraftLabel {
 		t.Helper()
 		d, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
-			ProductName: qm55, LocationName: room,
+			ProductName: edge55, LocationName: room,
 		}, all, all, all, all)
 		if err != nil {
 			t.Fatalf("render draft at %s: %v", room, err)
@@ -170,12 +170,12 @@ func TestTheDraftedOrdinalIsTheLowestFreeOneInThatBucket(t *testing.T) {
 	}
 	for i := range 2 {
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-			ProductName: strptr(qm55), LocationName: &here.Name,
+			ProductName: strptr(edge55), LocationName: &here.Name,
 		}, all, all, all, all); err != nil {
 			t.Fatalf("create %d: %v", i, err)
 		}
 	}
-	if got := draft(here.Name); got.Ordinal != 3 || got.Name != storage.ExportMintName(stemOf(t, gw, ctx, qm55), false, 3) {
+	if got := draft(here.Name); got.Ordinal != 3 || got.Name != storage.ExportMintName(stemOf(t, gw, ctx, edge55), false, 3) {
 		t.Errorf("draft after two creates = %+v, want ordinal 3 and the name the mint gives it", got)
 	}
 	// The other bucket is untouched by them, which is the whole reason the
@@ -194,17 +194,17 @@ func TestTheDraftedNameIsWhatTheAllocatorWouldMint(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		ProductName: strptr(qm55), LocationName: &room.Name,
+		ProductName: strptr(edge55), LocationName: &room.Name,
 	}, all, all, all, all); err != nil {
 		t.Fatalf("seed the bucket: %v", err)
 	}
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
-		ProductName: qm55, LocationName: room.Name,
+		ProductName: edge55, LocationName: room.Name,
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
-	name, ordinal, err := gw.ExportGenerateName(ctx, stemOf(t, gw, ctx, qm55), nil, &room.ID, nil)
+	name, ordinal, err := gw.ExportGenerateName(ctx, stemOf(t, gw, ctx, edge55), nil, &room.ID, nil)
 	if err != nil {
 		t.Fatalf("run the allocator: %v", err)
 	}
@@ -329,7 +329,7 @@ func TestTheDraftLabelIsEmptyWhereNoRuleResolves(t *testing.T) {
 func TestTheDraftLabelReportsTheRuleItRendered(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
-		ProductName: qm55, Name: "front-panel",
+		ProductName: edge55, Name: "front-panel",
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
@@ -404,7 +404,7 @@ func TestTheDraftLabelRendersWithinTheCallersReadScope(t *testing.T) {
 
 	narrow := scope.Set{IDs: []string{mine.ID}}
 	got, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
-		ProductName: qm55, Name: "panel", LocationName: mine.Name,
+		ProductName: edge55, Name: "panel", LocationName: mine.Name,
 	}, all, narrow, narrow, narrow)
 	if err != nil {
 		t.Fatalf("render inside scope: %v", err)
@@ -413,7 +413,7 @@ func TestTheDraftLabelRendersWithinTheCallersReadScope(t *testing.T) {
 		t.Errorf("in-scope draft %q does not carry the location's label", got.Label)
 	}
 	if _, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
-		ProductName: qm55, Name: "panel", LocationName: theirs.Name,
+		ProductName: edge55, Name: "panel", LocationName: theirs.Name,
 	}, all, narrow, narrow, narrow); !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Errorf("out-of-scope draft = %v, want the non-disclosing ErrLocationNotFound", err)
 	}
@@ -457,7 +457,7 @@ func TestTheDraftComponentLabelReadsTheSystemWithinScope(t *testing.T) {
 	narrow := scope.Set{IDs: []string{mine.ID}}
 
 	if _, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
-		ProductName: qm55, Name: "panel", SystemName: "board-x",
+		ProductName: edge55, Name: "panel", SystemName: "board-x",
 	}, all, narrow, narrow, narrow); !errors.Is(err, storage.ErrSystemNotFound) {
 		t.Errorf("out-of-scope system draft = %v, want the non-disclosing ErrSystemNotFound", err)
 	}
@@ -498,7 +498,7 @@ func TestTheDraftLabelAllocatesNothing(t *testing.T) {
 
 	for range 5 {
 		d, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
-			ProductName: qm55, LocationName: "room-1",
+			ProductName: edge55, LocationName: "room-1",
 		}, all, all, all, all)
 		if err != nil {
 			t.Fatalf("render draft: %v", err)
@@ -525,7 +525,7 @@ func TestTheDraftLabelAllocatesNothing(t *testing.T) {
 	// create in that bucket is still ordinal 1. A mint that rolled back would
 	// pass the statement scan above and fail this.
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		ProductName: strptr(qm55), LocationName: strptr("room-1"),
+		ProductName: strptr(edge55), LocationName: strptr("room-1"),
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
@@ -584,7 +584,7 @@ func TestTheDraftRefusesTheParentlessBucketItCannotCreateIn(t *testing.T) {
 	// Component and system: their parentless bucket is the unplaced (or
 	// location-only) one, and their creates gate it identically.
 	if _, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
-		ProductName: qm55,
+		ProductName: edge55,
 	}, subtree, all, all, all); !errors.Is(err, storage.ErrComponentForbidden) {
 		t.Errorf("parentless component draft = %v, want ErrComponentForbidden", err)
 	}

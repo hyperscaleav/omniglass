@@ -1,38 +1,43 @@
 # The official vendors (manufacturers), seeded idempotently at boot. A vendor
-# names an organization in the fleet model (e.g. "Cisco", "Crestron"); a later
-# product slice will point at one. Each vendor carries a kind (manufacturer,
-# integrator, or developer). The registry lists alphabetically by label.
-# Starter set, operator-extensible later; tune freely.
+# names an organization in the fleet model; products point at one. Each vendor
+# carries a kind (manufacturer, integrator, or developer). The registry lists
+# alphabetically by label.
+#
+# The catalog is FICTIONAL by design: the demo fleet is not sponsored, so the
+# brands come from the omniglass-lab universe (Boreal displays, Kestrel video,
+# Newtron control, Polaris audio processing, Tessellate sensing, Shinra Cloud
+# services) plus two in-universe specialists (Lyra microphones, Meridian
+# signal distribution). Websites are reserved example domains.
 vendors:
-  - id: crestron
-    label: Crestron
+  - id: boreal
+    label: Boreal
     kind: manufacturer
-    website: https://www.crestron.com
-  - id: biamp
-    label: Biamp
+    website: https://boreal.example
+  - id: kestrel
+    label: Kestrel
     kind: manufacturer
-    website: https://www.biamp.com
-  - id: qsc
-    label: QSC
+    website: https://kestrel.example
+  - id: lyra
+    label: Lyra
     kind: manufacturer
-    website: https://www.qsc.com
-  - id: shure
-    label: Shure
+    website: https://lyra.example
+  - id: meridian
+    label: Meridian
     kind: manufacturer
-    website: https://www.shure.com
-  - id: cisco
-    label: Cisco
+    website: https://meridian.example
+  - id: newtron
+    label: Newtron
     kind: manufacturer
-    website: https://www.cisco.com
-  - id: extron
-    label: Extron
+    website: https://newtron.example
+  - id: polaris
+    label: Polaris
     kind: manufacturer
-    website: https://www.extron.com
-  - id: sony
-    label: Sony
+    website: https://polaris.example
+  - id: shinra-cloud
+    label: Shinra Cloud
+    kind: developer
+    website: https://shinra-cloud.example
+  - id: tessellate
+    label: Tessellate
     kind: manufacturer
-    website: https://www.sony.com
-  - id: samsung
-    label: Samsung
-    kind: manufacturer
-    website: https://www.samsung.com
+    website: https://tessellate.example

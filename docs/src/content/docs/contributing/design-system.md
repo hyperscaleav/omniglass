@@ -368,7 +368,7 @@ right in prose about topic structure and wrong on a form, where the operator is 
 not choosing a position.
 
 **There is one name rule on one character set, and one validator.** A name is a kebab token
-(`crestron`, `rm215a`, `icmp-rtt-avg`), capped at 100 characters, and it never carries a dot.
+(`boreal`, `rm215a`, `icmp-rtt-avg`), capped at 100 characters, and it never carries a dot.
 Every name goes through `storage.ValidateName`, which reads the table's declared identity shape to
 settle whether the table bears an operator-typed name at all rather than trusting whoever wrote the
 call site. There used to be four separate validators and a caller chose between them by hand, which

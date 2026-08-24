@@ -90,8 +90,8 @@ func TestComponentTypesAPI(t *testing.T) {
 	// stable id and the label), and it is official (seeded reference
 	// data, unlike location_type's editable example content).
 	mic := find(rows, "mic")
-	if mic.ParentID != "" || mic.Parent != "" {
-		t.Fatalf("mic parent = %+v, want a root type with no parent", mic)
+	if mic.Parent != "audio-device" {
+		t.Fatalf("mic parent = %+v, want the audio-device category root (the OAVC tree, ADR-0131)", mic)
 	}
 	if !mic.Official || mic.Stem != "mic" || mic.Icon != "mic" {
 		t.Fatalf("mic = %+v, want official=true stem=mic icon=mic", mic)
