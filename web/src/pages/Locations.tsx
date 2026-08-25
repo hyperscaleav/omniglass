@@ -1,39 +1,38 @@
 import { entityLabel } from "../lib/entities";
 import { locationBlade, systemBlade, componentBlade } from "../components/EntityBlade";
-import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
+import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
-import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor, type Widget } from "../components/TreeList";
+import { useNavigate, useParams } from "@solidjs/router";
+import TreeList, { type ListConfig, type ListNode, type PageDescriptor, type Widget } from "../components/TreeList";
 import Donut from "../components/Donut";
 import TreeSelect from "../components/TreeSelect";
-import KVStacked from "../components/KVStacked";
+
 import FieldRow from "../components/FieldRow";
 import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
-import TagAdder from "../components/TagAdder";
+
 import {
   type Location,
-  type NameCheck,
-  LOCATIONS_KEY,
+    LOCATIONS_KEY,
   listLocations,
   createLocation,
-  updateLocation, renameLocation, moveLocation,
-  checkLocationName,
+  
+  
   deleteLocation,
 } from "../lib/locations";
-import { LOCATION_TYPES_KEY, ROOT_PLACEMENT, listLocationTypes } from "../lib/location_types";
+import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import CreateIdentity from "../components/CreateIdentity";
-import LabelPenField, { seedLabelPen } from "../components/LabelPenField";
+
 import { bucketPhrase, createPen, nameBucket, penIncomplete } from "../lib/namegen";
 import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
 import { pathTo, type TreeNode } from "../lib/treeselect";
-import { useMe, can } from "../lib/auth";
+
 import { describeError } from "../lib/format";
-import { useEditParam } from "../lib/editurl";
-import { ChevronRight, Pencil, Plus, Save, Search, X, resolveIcon } from "../components/icons";
+
+import { Plus, X, resolveIcon } from "../components/icons";
 import Button from "../components/Button";
-import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "../components/PropertiesPanel";
-import { LocationHealthPanel } from "../components/HealthPanel";
+import { propertyResolutionBlade } from "../components/PropertiesPanel";
+
 import LocationZoom from "./LocationZoom";
 
 // Locations: the place tree on the generic TreeList (campuses, buildings, floors,
@@ -72,15 +71,13 @@ export const locationsDescriptor: PageDescriptor = {
 
 export default function Locations() {
   const params = useParams();
-  const [search] = useSearchParams();
   // The zoom face IS the default (ADR-0129): the identity route renders the
   // location zoom; the classic detail face survives at ?view=detail (and
   // under a legacy ?edit=1) until edit-in-blade lands.
-  const wantsDetail = () => params.id === "create" || search.view === "detail";
+  const wantsDetail = () => params.id === "create";
   if (params.id && !wantsDetail()) return <LocationZoom />;
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const me = useMe();
 
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
@@ -240,320 +237,8 @@ export default function Locations() {
   // only in edit (canUpdate gates them), so view carries no mutation. The full page
   // renders its own Save/Cancel/Edit footer from ctx.edit; a blade gets those from
   // BladeStack.
-  function LocationDetail(props: { node: LocNode; ctx: ListCtx<LocNode> }): JSX.Element {
-    const ctx = props.ctx;
-    const edit = ctx.edit;
-    const editing = () => edit?.editing() ?? false;
-    // Live node, re-resolved from the index so a background refetch updates facts
-    // without remounting (which would drop in-progress edit state).
-    const n = () => ctx.byId(props.node.id) ?? props.node;
-    const parent = () => ctx.parentOf(n());
-    const path = () => ctx.pathOf(n());
-    const kids = () => n().children;
-    const canUpdate = () => can(me.data, "location", "update");
-    // Placement (the Parent picker) is gated on its own permission (#627): a
-    // reparent is :move, not the PATCH update gate, so an operator holding
-    // location:update but not location:move can still edit the label and type
-    // but sees the parent as read-only, same as the non-editing view.
-    const canMove = () => can(me.data, "location", "move");
-
-    // The reparent picker's candidate list, narrowed to the location's own
-    // (stored, not live-edited) type's allowed_parent_types; empty means
-    // unconstrained. Filtering on the stored type rather than the in-progress
-    // `type()` edit avoids a picker that silently invalidates itself if the
-    // operator changes Location type and Parent in the same edit; a mismatch
-    // between the two is still caught server-side (validatePlacement uses the
-    // final, possibly-also-patched type) and surfaces through saveErr below,
-    // exactly like every other placement violation this slice.
-    const allowedParentTypes = () => locationTypes.data?.find((t) => t.name === n().raw.location_type)?.allowed_parent_types ?? [];
-    // Keyed AND valued on uuid, not name (#627): two same-named locations
-    // would otherwise render as value-identical options (an operator could
-    // not tell, or choose between, them), and the self-exclusion guard below
-    // needs a key that is actually unique to work at all. The API
-    // dual-accepts uuid-or-name (ADR-0062), so posting the uuid is safe.
-    const parentCandidates = createMemo(() => {
-      const allowed = allowedParentTypes();
-      const pool = allowed.length === 0 ? (locations.data ?? []) : (locations.data ?? []).filter((l) => allowed.includes(l.location_type));
-      return pool.map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 }));
-    });
-    const parentTypeLabel = (nm: string) => {
-      if (nm === ROOT_PLACEMENT) return "Root";
-      const row = locationTypes.data?.find((t) => t.name === nm);
-      return row ? entityLabel(row) : nm;
-    };
-    const parentHint = () =>
-      allowedParentTypes().length
-        ? `Restricted to: ${allowedParentTypes().map(parentTypeLabel).join(", ")}. Moving back to root is not supported here.`
-        : "Any location may be the parent (unconstrained). Moving back to root is not supported here.";
-
-    // The label's pen rather than a plain signal (#693): see Systems.tsx's own
-    // copy of this line and components/LabelPenField.tsx for the rule.
-    const displayPen = createPen();
-    const [type, setType] = createSignal(n().raw.location_type ?? "");
-    const [name, setName] = createSignal(n().raw.name);
-    const [nameCheck, setNameCheck] = createSignal<NameCheck | null>(null);
-    const [checking, setChecking] = createSignal(false);
-    const [saveErr, setSaveErr] = createSignal<string | null>(null);
-    // The reparent picker: parentName is the field's live value, seeded from the
-    // current parent's name each time edit begins; initialParentName is the same
-    // seed, kept static for the whole edit session so save() can tell "the
-    // operator actually changed this" from "unchanged, omit from the patch."
-    const [parentName, setParentName] = createSignal("");
-    const [initialParentName, setInitialParentName] = createSignal("");
-    async function runCheck() {
-      setChecking(true);
-      try { setNameCheck(await checkLocationName(name().trim(), n().raw.parent_id)); }
-      catch { setNameCheck(null); }
-      finally { setChecking(false); }
-    }
-    // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
-    // since Cancel exits edit and the next begin re-seeds).
-    createEffect(on(editing, (isEditing) => {
-      if (isEditing) {
-        seedLabelPen(displayPen, n().raw);
-        setType(n().raw.location_type ?? "");
-        setName(n().raw.name);
-        setNameCheck(null);
-        const seed = parent()?.raw.id ?? "";
-        setParentName(seed);
-        setInitialParentName(seed);
-      }
-    }));
-    // The edit face is a URL fact (#759): ?edit=1 requests edit once the node has
-    // resolved (a deep link, a refresh, the create or row-pencil handoff), and
-    // leaving edit strips the param again (lib/editurl.ts).
-    const editUrl = useEditParam(edit, { ready: () => !!n().id, canUpdate });
-
-    edit?.bind({
-      editable: canUpdate,
-      save: async () => {
-        setSaveErr(null);
-        const renamed = name().trim() !== n().raw.name;
-        const moved = canMove() && parentName() !== initialParentName();
-        try {
-          // Addressed by uuid (#627 review finding 1): see del() above.
-          await updateLocation(n().raw.id, {
-            // The pen's own value, always keyed (#693): see Systems.tsx's save
-            // for why the empty string is the right thing to post from a locked
-            // field.
-            label: displayPen.value(),
-            location_type: type() || undefined,
-          });
-          // The move is a second call, not a PATCH field (#627): placement left the
-          // patch body entirely, since a reparent is its own authorization act
-          // (location:move, distinct from location:update) and its own audit verb.
-          // It goes after the base patch and before the rename, separately
-          // refusable (a cycle, a placement-type mismatch, or a name collision at
-          // the destination the advisory precheck cannot rule out), the same
-          // reasoning that already puts rename last below.
-          if (moved) await moveLocation(n().raw.id, parentName());
-          // The rename is a third call and it goes LAST, because it is the one that
-          // can be refused on its own: it needs <resource>:rename, and a duplicate
-          // name is a 409 the advisory :checkName precheck cannot rule out. Doing it
-          // last means a refusal leaves the other edits saved and the name unchanged.
-          //
-          // The invalidation is in a finally for the same reason. It used to sit
-          // after the rename, so a 409 skipped it and the list went on rendering the
-          // label the server had already accepted: the operator saw a total
-          // failure for a half-committed save, and Cancel re-seeded the inputs from
-          // that stale cache.
-          // No hand-off navigate after a rename (#627 Task 15c): see
-          // Components.tsx's own save() for why (the route carries the id,
-          // which a rename never changes).
-          if (renamed) await renameLocation(n().raw.id, name().trim());
-        } catch (e) {
-          setSaveErr(describeError(e));
-          throw e; // keep the slot in edit mode so the operator can retry
-        } finally {
-          await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
-        }
-      },
-      destructive: () =>
-        can(me.data, "location", "delete")
-          ? { label: "Delete", tone: "danger" as const, onClick: () => { ctx.closeBlades(); del(n()); } }
-          : undefined,
-    });
-
-    return (
-      <div class="flex flex-col gap-5">
-        <Show when={saveErr()}><div role="alert" class="alert alert-error alert-soft text-sm"><span>{saveErr()}</span></div></Show>
-        <Show when={!ctx.full && path().length}>
-          <div class="flex flex-wrap items-center gap-1 text-[11.5px]">
-            <For each={path()}>
-              {(c, i) => (
-                <>
-                  <Show when={i()}><span class="text-base-content/30">{"›"}</span></Show>
-                  <button class="text-base-content/60 hover:text-base-content" onClick={() => { const a = ctx.byId(c.id); if (a) ctx.go(a); }}>{c.display}</button>
-                </>
-              )}
-            </For>
-          </div>
-        </Show>
-
-        <div class="flex flex-col gap-1.5">
-          <span class="eyebrow">Identity</span>
-          <Show
-            when={editing()}
-            fallback={
-              <div class="grid grid-cols-2 gap-5">
-                <KVStacked label="Type" value={<span class={typeBadge(n().type)}>{n().type}</span>} />
-                <KVStacked bind="name" value={<span class="font-data text-sm">{n().raw.name}</span>} />
-              </div>
-            }
-          >
-            <div class="flex flex-col gap-3">
-              <LabelPenField pen={displayPen} entity={() => n().raw} placeholder="Conf Room 301" />
-              <FieldRow label="Location type" info="A location_type name.">
-                <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
-                  <option value="" disabled>Select a type…</option>
-                  <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.label}</option>}</For>
-                </select>
-              </FieldRow>
-              <FieldRow
-                bind="name"
-                info="Renaming changes the address; existing links to the old name stop resolving."
-              >
-                <>
-                  <div class="join w-full">
-                    <input
-                      class="input input-bordered join-item w-full font-data"
-                      value={name()}
-                      onInput={(e) => { setName(e.currentTarget.value); setNameCheck(null); }}
-                    />
-                    <Button
-                      square
-                      size="md"
-                      icon={Search}
-                      label="Check name"
-                      title="Check availability"
-                      class="join-item"
-                      disabled={checking() || !name().trim() || name().trim() === n().raw.name}
-                      onClick={() => void runCheck()}
-                    />
-                  </div>
-                  <Show when={nameCheck()}>
-                    {(c) => (
-                      <span
-                        class="text-[11px]"
-                        classList={{ "text-success": c().valid && c().available, "text-error": !c().valid || !c().available }}
-                      >
-                        {!c().valid ? (c().reason ?? "Use lowercase, digits, hyphens.") : c().available ? "Available" : (c().reason ?? "Taken")}
-                      </span>
-                    )}
-                  </Show>
-                </>
-              </FieldRow>
-            </div>
-          </Show>
-        </div>
-
-        <div class="flex flex-col gap-1.5">
-          <span class="eyebrow">Placement</span>
-          <div class="grid grid-cols-2 gap-5">
-            <Show
-              when={editing() && canMove()}
-              fallback={
-                <KVStacked
-                  label="Parent"
-                  value={parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>}
-                />
-              }
-            >
-              <FieldRow label="Parent" eyebrow info={parentHint()}>
-                <TreeSelect
-                  items={parentCandidates()}
-                  value={parentName()}
-                  onChange={setParentName}
-                  excludeSubtreeOf={n().raw.id}
-                  rootLabel={parent() ? undefined : "Root (current)"}
-                />
-              </FieldRow>
-            </Show>
-            <KVStacked label="Contains" value={<span class="tnum text-sm">{kids().length}</span>} />
-          </div>
-        </div>
-
-        <Show when={kids().length}>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Contains</span>
-            <div class="overflow-hidden rounded-box border border-base-300">
-              <For each={kids()}>
-                {(c, i) => (
-                  <button
-                    class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5"
-                    classList={{ "border-t border-base-300": i() > 0 }}
-                    onClick={() => ctx.go(c)}
-                  >
-                    <span class="flex-1 truncate text-sm">{c.display}</span>
-                    <span class={typeBadge(c.type) + " text-[10px]"}>{c.type}</span>
-                    <ChevronRight size={14} />
-                  </button>
-                )}
-              </For>
-            </div>
-          </div>
-        </Show>
-
-        {/* Every panel below (except onOpenSystem) is addressed by the
-            location's uuid (#627 review finding 1), not its name: two
-            locations can legally share a name under different parents (#627
-            Task 10), and each of these routes dual-accepts uuid-or-name
-            (ADR-0062) but refuses an ambiguous bare name with a 409.
-
-            The rollup: a location has no roles of its own, so its verdict is the
-            worst among the systems placed anywhere beneath it, each linked to the
-            detail that can say why.
-
-            onOpenSystem still navigates by name (#627 Task 15c): the health
-            rollup read body carries only system names, no id. See
-            Systems.tsx's own onOpenComponent comment for why this is left
-            as-is (TreeList's byAddr fallback resolves it). */}
-        <LocationHealthPanel
-          location={n().raw.id}
-          onOpenSystem={(name) => navigate(`/systems/${encodeURIComponent(name)}`)}
-        />
-
-        {/* The location type's contract, resolved against this location's own
-            values. The panel batches its writes into the accordion's Save, so a
-            property override commits with the location's core facts. */}
-        <PropertiesPanel
-          location={n().raw.id}
-          edit={edit}
-          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "location", name: n().raw.id }, property) })}
-        />
-
-        <TagAdder kind="location" name={n().raw.id} canUpdate={editing() && can(me.data, "location", "update")} canCreateKey={can(me.data, "tag", "create")} />
-
-        <Show when={ctx.full}>
-          <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
-            <Show
-              when={editing()}
-              fallback={
-                <>
-                  <Show when={can(me.data, "location", "delete")}>
-                    <Button intent="danger" onClick={() => del(n())}>Delete</Button>
-                  </Show>
-                  <span class="flex-1" />
-                  <Show when={edit?.editable()}>
-                    <Button intent="action" icon={Pencil} onClick={() => editUrl.request()}>Edit</Button>
-                  </Show>
-                </>
-              }
-            >
-              <span class="flex-1" />
-              <Button icon={X} onClick={() => edit!.cancel()}>Cancel</Button>
-              <Button type="button" intent="action" icon={Save} disabled={edit!.saving()} onClick={() => { void edit!.save().catch(() => {}); }}>Save changes</Button>
-            </Show>
-          </div>
-        </Show>
-      </div>
-    );
-  }
-
-  // LocationCreate: the draft-create surface at /locations/create. Identity and
-  // Placement are writable; the binding sections (Tags) are shown locked until the
-  // location exists. Create commits the row and hands off to /locations/<name> in
-  // edit mode.
+  // The classic detail body retired with the face (#800 slice 3): the blade
+  // is the override, the full page unreachable, so the config renders null.
   function LocationCreate(): JSX.Element {
     // Independent fields (#688). This form derived the name from the display
     // name until a location_type could name its own rows (#687): a blank name is
@@ -727,7 +412,7 @@ export default function Locations() {
     onNew: () => navigate("/locations/create"),
     onEdit: (n) => navigate(`/locations/${encodeURIComponent(n.id)}?edit=1`),
     renderCreate: () => <LocationCreate />,
-    renderDetail: (n, ctx) => <LocationDetail node={n} ctx={ctx} />,
+    renderDetail: () => null,
     // The condensed fleet blade replaces the inventory-era detail blade (#799);
     // the other fleet kinds register so its drills nest on this page's stack.
     bladeOverride: locationBlade,

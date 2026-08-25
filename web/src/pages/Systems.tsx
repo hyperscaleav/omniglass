@@ -1,24 +1,21 @@
 import { byLabel, entityLabel } from "../lib/entities";
 import { systemBlade, componentBlade, locationBlade } from "../components/EntityBlade";
-import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
+import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
-import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
+import { useNavigate, useParams } from "@solidjs/router";
+import TreeList, { type ListConfig, type ListNode, type PageDescriptor } from "../components/TreeList";
 import TreeSelect from "../components/TreeSelect";
-import KVStacked from "../components/KVStacked";
+
 import FieldRow from "../components/FieldRow";
-import { EMPTY_VALUE } from "../components/BladeField";
+
 import TagPills from "../components/TagPills";
-import TagAdder from "../components/TagAdder";
+
 import { tagFilterKeys } from "../lib/predicate";
 import {
   type System,
-  type NameCheck,
   SYSTEMS_KEY,
   listSystems,
   createSystem,
-  updateSystem, renameSystem,
-  checkSystemName,
   deleteSystem,
 } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
@@ -26,20 +23,19 @@ import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { SYSTEM_TYPES_KEY, listSystemTypes } from "../lib/system_types";
 import SystemTypeSelect from "../components/SystemTypeSelect";
 import CreateIdentity from "../components/CreateIdentity";
-import LabelPenField, { seedLabelPen } from "../components/LabelPenField";
+
 import { bucketPhrase, createPen, nameBucket, penIncomplete } from "../lib/namegen";
 import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
 import { pathTo } from "../lib/treeselect";
-import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { useEditParam } from "../lib/editurl";
-import { ArrowRight, ChevronRight, Pencil, Plus, Save, Search, X } from "../components/icons";
+
+import { Plus, X } from "../components/icons";
 import Button from "../components/Button";
-import PropertiesPanel, { propertyResolutionBlade, ownerPropertyBladeId } from "../components/PropertiesPanel";
-import RolesPanel from "../components/RolesPanel";
-import MembersPanel from "../components/MembersPanel";
+import { propertyResolutionBlade } from "../components/PropertiesPanel";
+
+
 import HealthBadge from "../components/HealthBadge";
-import SystemHealthPanel from "../components/HealthPanel";
+
 import { SYSTEM_VERDICTS_KEY, systemVerdicts, verdictOf, verdictRank } from "../lib/health";
 import { hueFor } from "../lib/system_color";
 import SystemZoom from "./SystemZoom";
@@ -73,14 +69,14 @@ export default function Systems() {
   // The zoom face IS the default (ADR-0129): the identity route renders the
   // system workspace; the classic detail face survives at ?view=detail (and
   // under a legacy ?edit=1) until edit-in-blade lands.
-  const [zoomSearch] = useSearchParams();
+
   const zoomParams = useParams();
-  const wantsDetail = () => zoomParams.id === "create" || zoomSearch.view === "detail";
+  const wantsDetail = () => zoomParams.id === "create";
   if (zoomParams.id && !wantsDetail()) return <SystemZoom />;
   const params = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const me = useMe();
+
 
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
@@ -105,13 +101,7 @@ export default function Systems() {
     return row ? entityLabel(row) : handle;
   };
   // The system_type picker reads through SystemTypeSelect (the tree, indented),
-  // not a flat <select>: the taxonomy nests and the nesting is the point. The
-  // label lookup is the same shape the standard's is.
-  const systemTypeLabel = (handle?: string) => {
-    if (!handle) return "";
-    const row = (systemTypes.data ?? []).find((t) => t.name === handle);
-    return row ? entityLabel(row) : handle;
-  };
+  // not a flat <select>: the taxonomy nests and the nesting is the point.
   // Keyed AND valued on uuid, not name (#627): two same-named locations or
   // systems would otherwise render as visually identical, value-identical
   // options, and posting either would name an ambiguous ref. The API
@@ -183,314 +173,9 @@ export default function Systems() {
     }
   }
 
-  // SystemDetail: the entity accordion, read-only in view, editable in edit. Own
-  // fields (label, type) are editable; placement is fixed at creation. The
-  // Tags section is the shared TagAdder, whose write controls appear only in edit
-  // (canUpdate gates them), so view carries no mutation. The full page renders its
-  // own Save/Cancel/Edit footer from ctx.edit; a blade gets those from BladeStack.
-  function SystemDetail(props: { node: SysNode; ctx: ListCtx<SysNode> }): JSX.Element {
-    const ctx = props.ctx;
-    const edit = ctx.edit;
-    const editing = () => edit?.editing() ?? false;
-    // Live node, re-resolved from the index so a background refetch updates facts
-    // without remounting (which would drop in-progress edit state).
-    const n = () => ctx.byId(props.node.id) ?? props.node;
-    const parent = () => ctx.parentOf(n());
-    const path = () => ctx.pathOf(n());
-    const canUpdate = () => can(me.data, "system", "update");
+  // The classic detail body retired with the face (#800 slice 3): the blade
+  // is the override, the full page unreachable, so the config renders null.
 
-    // The label's pen rather than a plain signal (#693). What it holds IS what
-    // the save posts, so a locked field cannot post the platform's own rendering
-    // back as an override: see components/LabelPenField.tsx for the whole rule.
-    const displayPen = createPen();
-    const [standard, setStandard] = createSignal(n().raw.standard ?? "");
-    const [systemType, setSystemType] = createSignal(n().raw.system_type ?? "");
-    const [name, setName] = createSignal(n().raw.name);
-    const [nameCheck, setNameCheck] = createSignal<NameCheck | null>(null);
-    const [checking, setChecking] = createSignal(false);
-    const [saveErr, setSaveErr] = createSignal<string | null>(null);
-    async function runCheck() {
-      setChecking(true);
-      try { setNameCheck(await checkSystemName(name().trim(), n().raw.parent, n().raw.location)); }
-      catch { setNameCheck(null); }
-      finally { setChecking(false); }
-    }
-    // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
-    // since Cancel exits edit and the next begin re-seeds).
-    createEffect(on(editing, (isEditing) => {
-      if (isEditing) { seedLabelPen(displayPen, n().raw); setStandard(n().raw.standard ?? ""); setSystemType(n().raw.system_type ?? ""); setName(n().raw.name); setNameCheck(null); }
-    }));
-    // The edit face is a URL fact (#759): ?edit=1 requests edit once the node has
-    // resolved (a deep link, a refresh, the create or row-pencil handoff), and
-    // leaving edit strips the param again (lib/editurl.ts).
-    const editUrl = useEditParam(edit, { ready: () => !!n().id, canUpdate });
-
-    edit?.bind({
-      editable: canUpdate,
-      save: async () => {
-        setSaveErr(null);
-        const renamed = name().trim() !== n().raw.name;
-        try {
-          // Addressed by uuid (#627 review finding 1): see del() above.
-          await updateSystem(n().raw.id, {
-            // Always keyed, and the pen's own value: a locked field holds
-            // nothing, so it posts "" and the API reads that as "still the
-            // platform's" (labelPen, #682). Omitting the key would leave the pen
-            // alone, which is the same outcome here and NOT the same on the
-            // hand-back, so one expression covers both (#693).
-            label: displayPen.value(),
-            // Send the empty string rather than dropping the key: the API reads ""
-            // as "clear", which is how the operator converts this system back to a
-            // one-off. Omitting it would silently leave the old standard in place.
-            standard_id: standard(),
-            // Same reason as standard_id above: "" is how the operator
-            // un-classifies the system, so the key is always sent.
-            system_type_id: systemType(),
-          });
-          // The rename is a second call and it goes LAST, because it is the one that
-          // can be refused on its own: it needs <resource>:rename, and a duplicate
-          // name is a 409 the advisory :checkName precheck cannot rule out. Doing it
-          // last means a refusal leaves the other edits saved and the name unchanged.
-          //
-          // The invalidation is in a finally for the same reason. It used to sit
-          // after the rename, so a 409 skipped it and the list went on rendering the
-          // label the server had already accepted: the operator saw a total
-          // failure for a half-committed save, and Cancel re-seeded the inputs from
-          // that stale cache.
-          // No hand-off navigate after a rename (#627 Task 15c): see
-          // Components.tsx's own save() for why (the route carries the id,
-          // which a rename never changes).
-          if (renamed) await renameSystem(n().raw.id, name().trim());
-        } catch (e) {
-          setSaveErr(describeError(e));
-          throw e; // keep the slot in edit mode so the operator can retry
-        } finally {
-          await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
-        }
-      },
-      destructive: () =>
-        can(me.data, "system", "delete")
-          ? { label: "Delete", tone: "danger" as const, onClick: () => { ctx.closeBlades(); del(n()); } }
-          : undefined,
-    });
-
-    return (
-      <div class="flex flex-col gap-5">
-        <Show when={saveErr()}>
-          <div role="alert" class="alert alert-error alert-soft text-sm"><span>{saveErr()}</span></div>
-        </Show>
-        <Show when={!ctx.full && path().length}>
-          <div class="flex flex-wrap items-center gap-1 text-[11.5px]">
-            <For each={path()}>
-              {(c, i) => (
-                <>
-                  <Show when={i()}><span class="text-base-content/30">{"›"}</span></Show>
-                  <button class="text-base-content/60 hover:text-base-content" onClick={() => { const a = ctx.byId(c.id); if (a) ctx.go(a); }}>{c.display}</button>
-                </>
-              )}
-            </For>
-          </div>
-        </Show>
-
-        <div class="flex flex-col gap-1.5">
-          <span class="eyebrow">Identity</span>
-          <Show
-            when={editing()}
-            fallback={
-              <div class="grid grid-cols-2 gap-5">
-                <KVStacked
-                  label="Type"
-                  value={
-                    n().raw.system_type
-                      ? <span class="badge badge-ghost badge-sm">{systemTypeLabel(n().raw.system_type)}</span>
-                      : <span class="text-sm text-base-content/50">Unclassified</span>
-                  }
-                />
-                <KVStacked
-                  label="Standard"
-                  value={
-                    n().standard
-                      ? <span class="badge badge-ghost badge-sm">{n().standard}</span>
-                      : <span class="text-sm text-base-content/50">None (a one-off system)</span>
-                  }
-                />
-                <KVStacked bind="name" value={<span class="font-data text-sm">{n().raw.name}</span>} />
-              </div>
-            }
-          >
-            <div class="flex flex-col gap-3">
-              <LabelPenField pen={displayPen} entity={() => n().raw} placeholder="Executive Boardroom" />
-              <FieldRow
-                label="Type"
-                info="What kind of space this is (a boardroom, a classroom, a video wall). Separate from the standard below: the type is what it IS, the standard is what it is built to."
-              >
-                <SystemTypeSelect types={systemTypes.data ?? []} value={systemType()} onChange={setSystemType} emptyLabel="Unclassified" />
-              </FieldRow>
-              <FieldRow
-                label="Standard"
-                info="The blueprint this system conforms to; its contract declares the properties below."
-              >
-                <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>
-                  <option value="">None (a one-off system)</option>
-                  <For each={standardOptions()}>{(s) => <option value={s.name}>{s.label}</option>}</For>
-                </select>
-              </FieldRow>
-              <FieldRow
-                bind="name"
-                info="Renaming changes the address; existing links to the old name stop resolving."
-              >
-                <>
-                  <div class="join w-full">
-                    <input
-                      class="input input-bordered join-item w-full font-data"
-                      value={name()}
-                      onInput={(e) => { setName(e.currentTarget.value); setNameCheck(null); }}
-                    />
-                    <Button
-                      square
-                      size="md"
-                      icon={Search}
-                      label="Check name"
-                      title="Check availability"
-                      class="join-item"
-                      disabled={checking() || !name().trim() || name().trim() === n().raw.name}
-                      onClick={() => void runCheck()}
-                    />
-                  </div>
-                  <Show when={nameCheck()}>
-                    {(c) => (
-                      <span
-                        class="text-[11px]"
-                        classList={{ "text-success": c().valid && c().available, "text-error": !c().valid || !c().available }}
-                      >
-                        {!c().valid ? (c().reason ?? "Use lowercase, digits, hyphens.") : c().available ? "Available" : (c().reason ?? "Taken")}
-                      </span>
-                    )}
-                  </Show>
-                </>
-              </FieldRow>
-            </div>
-          </Show>
-        </div>
-
-        <div class="flex flex-col gap-1.5">
-          <span class="eyebrow">Placement</span>
-          <div class="grid grid-cols-2 gap-5">
-            <KVStacked label="Location" value={<span>{n().locationName || EMPTY_VALUE}</span>} />
-            <KVStacked
-              label="Parent"
-              value={parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>}
-            />
-          </div>
-        </div>
-
-        <Show when={n().children.length}>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Subsystems</span>
-            <div class="overflow-hidden rounded-box border border-base-300">
-              <For each={n().children}>
-                {(c, i) => (
-                  <button class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5" classList={{ "border-t border-base-300": i() > 0 }} onClick={() => ctx.go(c)}>
-                    <span class="flex-1 truncate text-sm">{c.display}</span>
-                    <Show when={c.standard}><span class="badge badge-ghost badge-sm text-[10px]">{c.standard}</span></Show>
-                    <ChevronRight size={14} />
-                  </button>
-                )}
-              </For>
-            </div>
-          </div>
-        </Show>
-
-
-        {/* Every panel below (except the two onOpenComponent callbacks) is
-            addressed by the system's uuid (#627 review finding 1), not its
-            name: two systems can legally share a name in different
-            placements (#627 Task 10), and each of these routes dual-accepts
-            uuid-or-name (ADR-0062) but refuses an ambiguous bare name with a
-            409. */}
-
-        {/* The verdict and its reconciliation: which roles are impaired, which
-            assigned components went down, and which alarms took them down.
-            It sits directly above the roles surface it reasons about, so "why is
-            this degraded" and "what are these roles" read as one thought.
-
-            onOpenComponent still navigates by name (#627 Task 15c): the health
-            read body (HealthRoleBody.down) carries only component names, no
-            id, so there is no uuid here to route with. TreeList's own focus
-            effect resolves it through the byAddr fallback (a unique hit
-            redirects the URL to the id, an ambiguous or missing one gets an
-            honest state instead of the old silent list fallback). */}
-        <SystemHealthPanel
-          system={n().raw.id}
-          onOpenComponent={(name) => navigate(`/components/${encodeURIComponent(name)}`)}
-        />
-
-        {/* What is in this system, directly above what each one does. Membership
-            is the attachment and a role is what it does, so the two read in that
-            order: the room's contents, then the jobs. A member holding no role
-            appears only here, which is the case a staffing-only view would lose.
-            onOpenComponent: see SystemHealthPanel's own comment above; membership
-            (SystemMemberBody.component) is also name-only on the wire. */}
-        <MembersPanel
-          system={n().raw.id}
-          canUpdate={editing() && canUpdate()}
-          onOpenComponent={(name) => navigate(`/components/${encodeURIComponent(name)}`)}
-        />
-
-        {/* The slots this system needs filled, resolved the same way its
-            properties are: what the standard declares plus what the system
-            declares of its own. Assignment writes immediately (like tags), so its
-            controls appear only in edit mode, which keeps view read-only. */}
-        <RolesPanel system={n().raw.id} canUpdate={editing() && canUpdate()} />
-
-        {/* The standard's contract, resolved against this system's own values.
-            The panel batches its writes into the accordion's Save, so a property
-            override commits with the system's core facts, not on its own. */}
-        <PropertiesPanel
-          system={n().raw.id}
-          edit={edit}
-          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "system", name: n().raw.id }, property) })}
-        />
-
-        <TagAdder kind="system" name={n().raw.id} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
-
-        <Show when={ctx.full}>
-          <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
-            <Show
-              when={editing()}
-              fallback={
-                <>
-                  <Show when={can(me.data, "system", "delete")}>
-                    <Button intent="danger" onClick={() => del(n())}>Delete</Button>
-                  </Show>
-                  <span class="flex-1" />
-                  {/* The query-string carries the system's uuid, not its name
-                      (#627 Task 15c): Components.tsx's own system facet
-                      matches on system_id now, since a name is no longer a
-                      reliable cross-entity key once two systems can share
-                      one under different placements. */}
-                  <Button icon={ArrowRight} iconTrailing onClick={() => navigate(`/components?system=${encodeURIComponent(n().raw.id)}`)}>Components</Button>
-                  <Show when={edit?.editable()}>
-                    <Button intent="action" icon={Pencil} onClick={() => editUrl.request()}>Edit</Button>
-                  </Show>
-                </>
-              }
-            >
-              <span class="flex-1" />
-              <Button icon={X} onClick={() => edit!.cancel()}>Cancel</Button>
-              <Button type="button" intent="action" icon={Save} disabled={edit!.saving()} onClick={() => { void edit!.save().catch(() => {}); }}>Save changes</Button>
-            </Show>
-          </div>
-        </Show>
-      </div>
-    );
-  }
-
-  // SystemCreate: the draft-create surface at /systems/create. Classification and
-  // Placement are writable and come FIRST, because they are what the naming and
-  // labelling rules read; Identity follows and is optional throughout. The
-  // binding sections (Tags) are shown locked until the system exists. Create
-  // commits the row and hands off to /systems/<id> in edit mode.
   function SystemCreate(): JSX.Element {
     // Independent fields (#688). The derive-from-display coupling this form used
     // to carry was wrong the moment a system could name itself: a blank name is
@@ -696,7 +381,7 @@ export default function Systems() {
     onNew: () => navigate("/systems/create"),
     onEdit: (n) => navigate(`/systems/${encodeURIComponent(n.id)}?edit=1`),
     renderCreate: () => <SystemCreate />,
-    renderDetail: (n, ctx) => <SystemDetail node={n} ctx={ctx} />,
+    renderDetail: () => null,
     // The condensed fleet blade replaces the inventory-era detail blade (#799);
     // the other fleet kinds register so its drills nest on this page's stack.
     bladeOverride: systemBlade,

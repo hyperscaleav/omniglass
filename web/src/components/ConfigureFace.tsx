@@ -51,7 +51,7 @@ function Footer(props: { slot: BladeEdit; onEdit: () => void; err: () => string 
           }
         >
           <Button onClick={() => props.slot.cancel()}>Cancel</Button>
-          <Button intent="action" loading={props.slot.saving()} disabled={!props.slot.valid()} onClick={() => void props.slot.save()}>
+          <Button intent="action" loading={props.slot.saving()} disabled={!props.slot.valid()} onClick={() => props.slot.save().catch(() => { /* surfaced by the body's alert; the slot stays editing */ })}>
             Save changes
           </Button>
         </Show>
@@ -107,7 +107,15 @@ function NameField(props: {
   );
 }
 
-export default function ConfigureFace(props: { kind: ConfigureKind; id: string }) {
+export default function ConfigureFace(props: {
+  kind: ConfigureKind;
+  id: string;
+  // The kind-specific manage panels the classic face used to host (roles,
+  // properties, reachability, alarms), injected by the page so they wire to
+  // its own blade stack, sharing this face's edit slot so their writes batch
+  // into the one Save.
+  panels?: (slot: BladeEdit) => import("solid-js").JSX.Element;
+}) {
   const me = useMe();
   const qc = useQueryClient();
   const slot = createEditSlot();
@@ -158,9 +166,8 @@ export default function ConfigureFace(props: { kind: ConfigureKind; id: string }
       if (props.kind === "location") {
         setLocationType((rec.location_type as string) ?? "");
         const parentID = (rec.parent_id as string) ?? "";
-        const parent = (locations.data ?? []).find((l) => l.id === parentID);
-        setParentName(parent?.name ?? "");
-        setInitialParent(parent?.name ?? "");
+        setParentName(parentID);
+        setInitialParent(parentID);
       }
     },
     save: async () => {
@@ -176,6 +183,8 @@ export default function ConfigureFace(props: { kind: ConfigureKind; id: string }
           await updateSystem(r.id, { label: pen.value(), standard_id: standard(), system_type_id: systemType() });
         } else if (props.kind === "location") {
           await updateLocation(r.id, { label: pen.value(), location_type: locationType() || undefined });
+          // The move posts the parent's uuid (#627): the API dual-accepts, and
+          // a name would 409 on the legal duplicate.
           if (moved) await moveLocation(r.id, parentName());
         } else {
           await updateComponent(r.id, { label: pen.value() });
@@ -222,8 +231,24 @@ export default function ConfigureFace(props: { kind: ConfigureKind; id: string }
       }
       return false;
     };
-    return list.filter((l) => !inSubtree(l.id));
+    // Narrowed to the location's own (stored) type's allowed_parent_types,
+    // the classic picker's rule: empty means unconstrained. Filtering on the
+    // stored type rather than the in-progress draft avoids a picker that
+    // invalidates itself mid-edit; a final mismatch still surfaces from the
+    // server through the save error.
+    const allowed = (locationTypes.data ?? []).find((t) => t.name === (row()?.location_type as string))?.allowed_parent_types ?? [];
+    const pool = allowed.length === 0 ? list : list.filter((l) => allowed.includes((l as { location_type: string }).location_type));
+    return pool.filter((l) => !inSubtree(l.id));
   });
+  const parentHint = () => {
+    const allowed = (locationTypes.data ?? []).find((t) => t.name === (row()?.location_type as string))?.allowed_parent_types ?? [];
+    if (!allowed.length) return undefined;
+    const label = (nm: string) => {
+      const r = (locationTypes.data ?? []).find((t) => t.name === nm);
+      return r ? entityLabel(r) : nm;
+    };
+    return `Restricted to: ${allowed.map(label).join(", ")}.`;
+  };
 
   const check = (n: string) => {
     const rec = row();
@@ -323,15 +348,20 @@ export default function ConfigureFace(props: { kind: ConfigureKind; id: string }
                 return parent ? entityLabel(parent) : "Root";
               }}
               info="Moving re-parents the subtree and re-scopes who can see it: its own authorization act, gated by location:move."
+              hint={parentHint()}
               children={slot.editing() && canMove() && locations.data ? (
                 <select class="select select-bordered w-full" value={parentName()} onChange={(e) => setParentName(e.currentTarget.value)}>
-                  <option value="">Root</option>
-                  <For each={legalParents()}>{(l) => <option value={l.name}>{entityLabel(l)}</option>}</For>
+                  <Show when={initialParent() === ""}>
+                    <option value="">Root (current)</option>
+                  </Show>
+                  <For each={legalParents()}>{(l) => <option value={l.id}>{entityLabel(l)}</option>}</For>
                 </select>
               ) : undefined}
             />
           </Show>
         </div>
+
+        <Show when={props.panels}>{(pn) => <div id="panels" class={SECTION}>{pn()(slot)}</div>}</Show>
 
         <div id="tags" class={SECTION}>
           <TagAdder kind={props.kind} name={props.id} canUpdate={slot.editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />

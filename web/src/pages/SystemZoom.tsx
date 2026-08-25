@@ -22,6 +22,8 @@ import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
 import TabRail from "../components/TabRail";
 import ConfigureFace from "../components/ConfigureFace";
+import RolesPanel from "../components/RolesPanel";
+import PropertiesPanel, { ownerPropertyBladeId, propertyResolutionBlade } from "../components/PropertiesPanel";
 import { alarmRows, componentCards, sinceOf, systemZoomVM, type ComponentCard } from "../lib/system_zoom";
 import { vitalRows } from "../lib/component_leaf";
 import { slotStrip } from "../lib/slot_strip";
@@ -205,6 +207,14 @@ export default function SystemZoom() {
       title={system() ? entityLabel(system()!) : "System"}
       breadcrumb={<Breadcrumb crumbs={crumbs()} />}
     >
+      <Show
+        when={!(view.data && !system() && !(view.data.systems ?? []).some((x) => x.name === id()))}
+        fallback={
+          <div role="alert" class="alert alert-warning alert-soft text-sm">
+            <span>No system answers this address. It may have been deleted, or the link is stale.</span>
+          </div>
+        }
+      >
       <Show when={!pending()} fallback={<div class="skeleton h-32 w-full" />}>
         <Show
           when={!failed()}
@@ -257,7 +267,20 @@ export default function SystemZoom() {
                   {(decl) => <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} onOpen={openComponent} />}
                 </Show>
                 <Show when={tab() === "configure"}>
-                  <ConfigureFace kind="system" id={id()} />
+                  <ConfigureFace
+                    kind="system"
+                    id={id()}
+                    panels={(slot) => (
+                      <>
+                        <RolesPanel system={id()} canUpdate={slot.editing() && can(me.data, "system", "update")} />
+                        <PropertiesPanel
+                          system={id()}
+                          edit={slot}
+                          onOpen={(property) => blades.push({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "system", name: id() }, property) })}
+                        />
+                      </>
+                    )}
+                  />
                 </Show>
                 <Show when={tab() === "events"}>
                   <section data-testid="events-tab" class="flex flex-col gap-2 p-4">
@@ -556,8 +579,9 @@ export default function SystemZoom() {
           </FleetShell>
         </Show>
       </Show>
+      </Show>
     </Page>
-    <BladeStack controller={blades} registry={fleetRegistry} />
+    <BladeStack controller={blades} registry={{ ...fleetRegistry, "property-resolution": propertyResolutionBlade }} />
     </BladesContext.Provider>
   );
 

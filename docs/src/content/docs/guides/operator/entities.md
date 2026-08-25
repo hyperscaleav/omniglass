@@ -28,11 +28,12 @@ it the same way everywhere in the console.
 
 Click a row to open its **blade**, a panel that slides in from the right with the entity's
 details. From a blade you can drill into a child (it stacks another blade behind the first),
-step back with the breadcrumb, or **Maximize** to the full detail page. The full page has its
-own URL, so it is shareable and bookmarkable; a blade opened by a click is a quick look that
-does not change the URL, though a blade can be addressed by one (a user's `?u=<id>` deep link,
-which the create flow uses for its own handoff). Rows are keyboard-operable: Tab to a row and
-press Enter to open it.
+step back with the breadcrumb, or **Expand** to the entity's own page: a fleet entity opens
+its workspace, an identity entity its full detail. The page has its own URL, so it is
+shareable and bookmarkable; a blade opened by a click is a quick look that does not change
+the URL, though a blade can be addressed by one (a user's `?u=<id>` deep link, which the
+create flow uses for its own handoff). Rows are keyboard-operable: Tab to a row and press
+Enter to open it.
 
 ::screenshot{#entity-blade}
 

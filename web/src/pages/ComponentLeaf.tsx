@@ -5,6 +5,16 @@ import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
 import TabRail from "../components/TabRail";
 import ConfigureFace from "../components/ConfigureFace";
+import BladeStack from "../components/BladeStack";
+import PropertiesPanel, { propertyBladeId, propertyResolutionBlade } from "../components/PropertiesPanel";
+import ReachabilityPanel from "../components/ReachabilityPanel";
+import AlarmsPanel from "../components/AlarmsPanel";
+import EventsPanel from "../components/EventsPanel";
+import ReconciliationPanel from "../components/ReconciliationPanel";
+import ResolutionPanel from "../components/ResolutionPanel";
+import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
+import { BladesContext, createBladeController } from "../lib/blades";
+import { fleetRegistry } from "../lib/fleetBlades";
 import HealthBadge from "../components/HealthBadge";
 import FleetShell from "../components/FleetShell";
 import { componentTileSpec } from "../lib/fleet_tiles";
@@ -49,9 +59,11 @@ export default function ComponentLeaf() {
   const navigate = useNavigate();
   const id = () => params.id;
   const me = useMe();
+  const blades = createBladeController();
   const [leafSearch] = useSearchParams();
   const leafTabs = createMemo(() => [
     { key: "overview", label: "Overview" },
+    { key: "events", label: "Events" },
     ...(can(me.data, "component", "update") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const leafTab = () => {
@@ -139,10 +151,19 @@ export default function ComponentLeaf() {
   });
 
   return (
+    <BladesContext.Provider value={blades}>
     <Page
       title={component() ? entityLabel(component()!) : "Component"}
       breadcrumb={<Breadcrumb crumbs={crumbs()} />}
     >
+      <Show
+        when={!((view.data && components.data) && !component() && !(components.data ?? []).some((x) => x.name === id()))}
+        fallback={
+          <div role="alert" class="alert alert-warning alert-soft text-sm">
+            <span>No component answers this address. It may have been deleted, or the link is stale.</span>
+          </div>
+        }
+      >
       <Show when={!view.isPending && !components.isPending} fallback={<div class="skeleton h-32 w-full" />}>
         <Show
           when={!view.isError && !components.isError}
@@ -155,7 +176,30 @@ export default function ComponentLeaf() {
           <div class="flex flex-col gap-3">
           <TabRail tabs={leafTabs()} activeKey={leafTab} />
           <Show when={leafTab() === "configure"}>
-            <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace kind="component" id={id()} /></div>
+            <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace
+              kind="component"
+              id={id()}
+              panels={(slot) => (
+                <>
+                  <ReconciliationPanel name={id()} />
+                  <ResolutionPanel component={id()} />
+                  <PropertiesPanel
+                    component={id()}
+                    edit={slot}
+                    onOpen={(property) => blades.push({ kind: "property-resolution", id: propertyBladeId(id(), property) })}
+                  />
+                  <ReachabilityPanel
+                    name={id()}
+                    onAdd={can(me.data, "interface", "create") ? () => blades.push({ kind: "interface-create", id: id() }) : undefined}
+                    onOpenInterface={can(me.data, "interface", "read") ? (ifid) => blades.push({ kind: "interface", id: ifid }) : undefined}
+                  />
+                  <AlarmsPanel component={id()} canUpdate={slot.editing() && can(me.data, "component", "update")} canAcknowledge={can(me.data, "alarm", "acknowledge")} />
+                </>
+              )}
+            /></div>
+          </Show>
+          <Show when={leafTab() === "events"}>
+            <div class="card border border-base-300 bg-base-200 p-4"><EventsPanel name={id()} /></div>
           </Show>
           <Show when={leafTab() === "overview"}>
 <FleetShell
@@ -357,6 +401,9 @@ export default function ComponentLeaf() {
           </div>
         </Show>
       </Show>
+      </Show>
     </Page>
+    <BladeStack controller={blades} registry={{ ...fleetRegistry, "property-resolution": propertyResolutionBlade, interface: interfaceBlade, "interface-create": interfaceCreateBlade }} />
+    </BladesContext.Provider>
   );
 }

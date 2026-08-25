@@ -9,6 +9,10 @@ import FleetShell from "../components/FleetShell";
 import FleetRows from "../components/FleetRows";
 import TabRail from "../components/TabRail";
 import ConfigureFace from "../components/ConfigureFace";
+import BladeStack from "../components/BladeStack";
+import PropertiesPanel, { ownerPropertyBladeId, propertyResolutionBlade } from "../components/PropertiesPanel";
+import { BladesContext, createBladeController } from "../lib/blades";
+import { fleetRegistry } from "../lib/fleetBlades";
 import { locationTileSpec } from "../lib/fleet_tiles";
 import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
 import {
@@ -42,6 +46,7 @@ export default function LocationZoom() {
   const navigate = useNavigate();
   const id = () => params.id;
   const me = useMe();
+  const blades = createBladeController();
   // The zoom grows the Configure facet (#800): two tabs, Overview the default.
   const [zoomSearch] = useSearchParams();
   const zoomTabs = createMemo(() => [
@@ -126,10 +131,19 @@ export default function LocationZoom() {
   });
 
   return (
+    <BladesContext.Provider value={blades}>
     <Page
       title={anchor() ? entityLabel(anchor()!) : "Location"}
       breadcrumb={<Breadcrumb crumbs={crumbs()} />}
     >
+      <Show
+        when={!(view.data && !anchor() && !(view.data.locations ?? []).some((x) => x.name === id()))}
+        fallback={
+          <div role="alert" class="alert alert-warning alert-soft text-sm">
+            <span>No location answers this address. It may have been deleted, or the link is stale.</span>
+          </div>
+        }
+      >
       <Show when={!view.isPending} fallback={<div class="skeleton h-32 w-full" />}>
         <Show
           when={!view.isError}
@@ -142,7 +156,17 @@ export default function LocationZoom() {
           <div class="flex flex-col gap-3">
           <TabRail tabs={zoomTabs()} activeKey={zoomTab} />
           <Show when={zoomTab() === "configure"}>
-            <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace kind="location" id={id()} /></div>
+            <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace
+              kind="location"
+              id={id()}
+              panels={(slot) => (
+                <PropertiesPanel
+                  location={id()}
+                  edit={slot}
+                  onOpen={(property) => blades.push({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "location", name: id() }, property) })}
+                />
+              )}
+            /></div>
           </Show>
           <Show when={zoomTab() === "overview"}>
 <FleetShell
@@ -193,7 +217,10 @@ export default function LocationZoom() {
           </div>
         </Show>
       </Show>
+      </Show>
     </Page>
+    <BladeStack controller={blades} registry={{ ...fleetRegistry, "property-resolution": propertyResolutionBlade }} />
+    </BladesContext.Provider>
   );
 
   function ZoomBand(props: { band: Band; view: FleetView }) {

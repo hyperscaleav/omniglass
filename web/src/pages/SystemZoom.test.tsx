@@ -124,6 +124,10 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
   qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], healthOverride);
   qc.setQueryData([...systemRolesKey(uuidFor("szp-sys"))], declared);
   qc.setQueryData([...systemMetricsKey(uuidFor("szp-sys"))], metrics);
+  qc.setQueryData(["system-properties", uuidFor("szp-sys")], [
+    { property_type_name: "room-owner", label: "Room owner", value: "\"facilities\"", from_contract: true, source: "default" },
+    { property_type_name: "asset-tag", label: "Asset tag", value: "\"A-100\"", from_contract: false, source: "self" },
+  ]);
   qc.setQueryData([...STANDARDS_KEY], standards);
   window.history.pushState({}, "", path);
   const r = render(() => (
@@ -232,10 +236,6 @@ describe("the system zoom", () => {
     expect(screen.getByTestId("system-header")).toBeTruthy();
   });
 
-  it("the classic detail face survives at ?view=detail until edit-in-blade lands", () => {
-    mount(`/web/systems/${uuidFor("szp-sys")}?view=detail`);
-    expect(screen.queryByTestId("system-header")).toBeNull();
-  });
 });
 
 describe("the components-first body (#790)", () => {
@@ -552,5 +552,26 @@ describe("?edit=1 lands on configure (#800)", () => {
     const face = await screen.findByTestId("configure-face");
     expect(await within(face).findByDisplayValue("boardroom")).toBeTruthy();
     expect(within(face).getByRole("button", { name: /save/i })).toBeTruthy();
+  });
+});
+
+
+// The properties surface the classic face carried, re-homed on Configure
+// (#800 slice 3): the standard's contract resolves with off-contract values
+// apart, on the workspace.
+describe("properties live on configure (#800)", () => {
+  it("resolves the contract on the configure face", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure`);
+    const face = await screen.findByTestId("configure-face");
+    expect(await within(face).findByText("Room owner")).toBeTruthy();
+    expect(within(face).getByText("Asset tag")).toBeTruthy();
+  });
+});
+
+describe("the miss face (#800)", () => {
+  it("an address matching no system renders the explicit miss, not a silent fallback", async () => {
+    mount("/web/systems/no-such-room");
+    expect(await screen.findByText(/No system answers this address/)).toBeTruthy();
+    expect(screen.queryByText("Room Microphone")).toBeNull();
   });
 });

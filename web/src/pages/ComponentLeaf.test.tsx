@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, within, cleanup } from "@solidjs/testing-library";
+import { cleanup, fireEvent, render, screen, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Components from "./Components";
@@ -214,5 +214,28 @@ describe("the component configure tab (#800)", () => {
     expect(within(face).getByText("Classification")).toBeTruthy();
     expect(within(face).getAllByText("Tags").length).toBeGreaterThan(0);
     expect(within(face).getByText(/fixed at creation/i)).toBeTruthy();
+  });
+});
+
+
+// The interfaces surface the classic face carried, re-homed on the leaf's
+// Configure (#800 slice 3): the reachability panel with its add and open
+// affordances wiring the interface blades onto the leaf's own stack.
+describe("interfaces live on the leaf configure (#800)", () => {
+  it("offers Add interface and opens the create blade on this stack", async () => {
+    mount(`/web/components/${uuidFor("cf-c-bar")}?tab=configure`);
+    const face = await screen.findByTestId("configure-face");
+    const add = await within(face).findByRole("button", { name: /add interface/i });
+    fireEvent.click(add);
+    const blade = await screen.findByRole("dialog");
+    expect(blade.getAttribute("aria-labelledby")).toContain("interface-create");
+  });
+});
+
+describe("the miss face (#800)", () => {
+  it("an address matching no component renders the explicit miss, not a silent fallback", async () => {
+    mount("/web/components/no-such-widget");
+    expect(await screen.findByText(/No component answers this address/)).toBeTruthy();
+    expect(screen.queryByText("Reachability")).toBeNull();
   });
 });

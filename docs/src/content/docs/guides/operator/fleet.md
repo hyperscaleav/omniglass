@@ -147,8 +147,8 @@ so a pasted link lands on the same face, and the old `/locations`, `/systems`, a
 ## Zoom into a location
 
 Clicking a band opens the location at its own address: the zoom **is** the identity
-route's face. The classic detail face stays reachable at `?view=detail` while editing
-still lives there; it retires when edit moves into the blades.
+route's face, the only one it has: editing lives on the Configure tab (#800), and an
+old `?view=detail` link simply lands here.
 
 ::screenshot{#fleet-location}
 
