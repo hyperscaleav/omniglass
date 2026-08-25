@@ -22,8 +22,10 @@ test.describe("operator console", () => {
   test("signs in, lists locations, creates a location, opens it, deletes it", async ({ page }) => {
     await page.goto("/web/locations");
 
-    // The shell labels the section and the inventory surface renders.
-    await expect(page.getByRole("banner")).toContainText(/locations/i);
+    // The bare index address redirects into the fleet list face's Locations
+    // kind tab (#798): the shell says Fleet, the list face carries the kind.
+    await page.waitForURL(/fleet\?view=list&kind=locations/);
+    await expect(page.getByTestId("fleet-list-face")).toBeVisible();
 
     // Create a throwaway campus through the create-as-route draft. Campus
     // carries no name rule, so the operator types the name: the other half of
@@ -127,10 +129,16 @@ test.describe("operator console", () => {
     await expect(nameField).toHaveValue(drafted);
 
     await page.getByRole("button", { name: /create component/i }).click();
-    await page.waitForURL(/\/web\/components\/[0-9a-f-]{36}/);
+    await page.waitForURL(/\/web\/components\/[0-9a-f-]{36}\?edit=1/);
 
-    // Create hands off to the new component's detail in edit mode; Cancel drops
-    // it to the read-only face, where the identity is rendered rather than typed.
+    // Create hands off to the new leaf's Configure tab already editing (#800).
+    // The platform holds the label's pen: the pen field says so in words while
+    // the slot is editing (the old face's "Generated" chip retired in #693).
+    await expect(page.getByRole("button", { name: /save changes/i })).toBeVisible();
+    await expect(page.getByText(/Rendered from a label rule|No label rule applies/).first()).toBeVisible();
+
+    // Cancel drops to the read-only leaf, where the identity is rendered
+    // rather than typed.
     await page.getByRole("button", { name: /^cancel$/i }).first().click();
 
     // What the row actually got, compared with what the operator was shown, on
@@ -140,15 +148,15 @@ test.describe("operator console", () => {
     await expect(page.getByText(drafted, { exact: true }).first()).toBeVisible();
     await expect(page.locator("main")).toContainText(draftedLabel);
 
-    // And the platform holds the pen on both, which is what makes them the
-    // platform's to keep current through a later move or reclassify. Posting the
-    // precondition is what would break this if it were ever read as a name.
-    await expect(page.getByText("Generated", { exact: true }).first()).toBeVisible();
-
-    // Clean up after the run.
+    // Clean up after the run: the row's blade on the fleet list carries the
+    // confirm-delete (#799); the leaf itself has no destructive footer.
     page.on("dialog", (d) => d.accept());
-    await page.locator('button:text-is("Delete")').click();
-    await page.waitForURL(/\/web\/components\/?$/);
+    await page.goto("/web/components");
+    await page.waitForURL(/fleet\?view=list&kind=components/);
+    await page.getByText(draftedLabel, { exact: true }).first().click();
+    await expect(page.locator("aside[data-blade]")).toBeVisible();
+    await page.locator('aside[data-blade] button:text-is("Delete")').click();
+    await expect(page.locator("main")).not.toContainText(draftedLabel);
   });
 
   // #690, and the only tier that can witness it: the defect is a LAYOUT, so it

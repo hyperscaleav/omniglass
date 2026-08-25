@@ -66,13 +66,22 @@ export const systemsDescriptor: PageDescriptor = {
 };
 
 export default function Systems() {
-  // The zoom face IS the default (ADR-0129): the identity route renders the
-  // system workspace; the classic detail face survives at ?view=detail (and
-  // under a legacy ?edit=1) until edit-in-blade lands.
-
+  // The workspace IS the identity route's face (ADR-0129, ADR-0132);
+  // "create" is the one address that renders a form instead.
   const zoomParams = useParams();
-  const wantsDetail = () => zoomParams.id === "create";
-  if (zoomParams.id && !wantsDetail()) return <SystemZoom />;
+  // The branch is a reactive Show, not a one-time return: create's post-save
+  // navigate lands on the new row's uuid WITHOUT remounting this route
+  // component (same /:id pattern), so a decision taken once at setup would
+  // leave the create face mounted forever with an empty body (the e2e create
+  // handoff walk is the regression that caught it).
+  return (
+    <Show when={!!zoomParams.id && zoomParams.id !== "create"} fallback={<SystemsIndex />}>
+      <SystemZoom />
+    </Show>
+  );
+}
+
+function SystemsIndex() {
   const params = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();

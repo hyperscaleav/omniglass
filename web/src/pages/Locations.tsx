@@ -70,12 +70,22 @@ export const locationsDescriptor: PageDescriptor = {
 };
 
 export default function Locations() {
+  // The zoom face IS the identity route's face (ADR-0129, ADR-0132); "create"
+  // is the one address that renders a form instead. The branch is a reactive
+  // Show, not a one-time return: create's post-save navigate lands on the new
+  // row's uuid WITHOUT remounting this route component (same /:id pattern),
+  // so a decision taken once at setup would leave the create face mounted
+  // forever with an empty body (the e2e create handoff walk is the regression).
+  const zoomParams = useParams();
+  return (
+    <Show when={!!zoomParams.id && zoomParams.id !== "create"} fallback={<LocationsIndex />}>
+      <LocationZoom />
+    </Show>
+  );
+}
+
+function LocationsIndex() {
   const params = useParams();
-  // The zoom face IS the default (ADR-0129): the identity route renders the
-  // location zoom; the classic detail face survives at ?view=detail (and
-  // under a legacy ?edit=1) until edit-in-blade lands.
-  const wantsDetail = () => params.id === "create";
-  if (params.id && !wantsDetail()) return <LocationZoom />;
   const navigate = useNavigate();
   const qc = useQueryClient();
 

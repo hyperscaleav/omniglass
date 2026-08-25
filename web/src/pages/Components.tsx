@@ -82,13 +82,23 @@ export const componentsDescriptor: PageDescriptor = {
 };
 
 export default function Components() {
-  // The zoom face IS the default (ADR-0129, reversing ADR-0126's parking):
-  // the identity route renders the leaf; the classic detail face survives at
-  // ?view=detail (and under a legacy ?edit=1) until edit-in-blade lands. A
-  // legacy ?zoom=1 deep link still resolves here, one face either way.
+  // The leaf IS the identity route's face (ADR-0129, ADR-0132); "create" is
+  // the one address that renders a form instead, and a legacy ?zoom=1 deep
+  // link still resolves here.
   const zoomParams = useParams();
-  const wantsDetail = () => zoomParams.id === "create";
-  if (zoomParams.id && !wantsDetail()) return <ComponentLeaf />;
+  // The branch is a reactive Show, not a one-time return: create's post-save
+  // navigate lands on the new row's uuid WITHOUT remounting this route
+  // component (same /:id pattern), so a decision taken once at setup would
+  // leave the create face mounted forever with an empty body (the e2e create
+  // handoff walk is the regression that caught it).
+  return (
+    <Show when={!!zoomParams.id && zoomParams.id !== "create"} fallback={<ComponentsIndex />}>
+      <ComponentLeaf />
+    </Show>
+  );
+}
+
+function ComponentsIndex() {
   const params = useParams();
   const [search] = useSearchParams();
   const navigate = useNavigate();
