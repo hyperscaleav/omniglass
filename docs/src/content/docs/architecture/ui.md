@@ -164,12 +164,11 @@ Two layers, deliberately decoupled:
    rearrangeable and user-customizable without touching a route.
 
 **The mode rides the URL too**
-([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact), and
-[ADR-0126](/architecture/decisions/#adr-0126-the-zoom-face-is-a-url-fact-on-the-identity-routes)
-for the zoom face: `?zoom=1` beside a location address renders the fleet canvas one level down,
-the inventory detail staying the default): `?edit=1` beside a
-detail address (or beside a blade's id param, `?u=<id>&edit=1`) requests the edit face, behind the
-same `<resource>:update` permission the footer Edit is behind; without it the link lands read-only.
+([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact) established the rule;
+[ADR-0132](/architecture/decisions/#adr-0132-configure-is-the-one-deep-editor) retargets it):
+`?edit=1` beside a fleet address lands the workspace's Configure tab already editing, and beside
+an identity blade's id param (`?u=<id>&edit=1`) opens that blade editing, both behind the same
+`<resource>:update` permission the Edit button is behind; without it the link lands read-only.
 Leaving edit (Cancel or Save) strips the param via history replace, so a refresh mid-edit keeps the
 mode while Back never re-enters an edit the operator left. One hook (`web/src/lib/editurl.ts`) owns
 both directions, the create-as-route and row-pencil handoffs are those URLs rather than in-memory
