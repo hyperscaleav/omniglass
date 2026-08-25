@@ -145,7 +145,7 @@ func TestTheCreatesSystemBindResolvesInTheUpdateScope(t *testing.T) {
 
 	// Its own system is bindable.
 	f.c.do(floored, http.MethodPost, "/components", map[string]any{
-		"name": "panel-in", "product": "boreal-edge-55", "parent": f.rackID, "system": "av-a",
+		"name": "panel-in", "product": f.product.Name, "parent": f.rackID, "system": "av-a",
 	}, http.StatusCreated)
 
 	// The one it may only read is not. The refusal names the missing authority
@@ -153,7 +153,7 @@ func TestTheCreatesSystemBindResolvesInTheUpdateScope(t *testing.T) {
 	// #707 review: that answer denied the existence of the very row the GET above
 	// just returned, which an operator can only read as a broken platform.
 	status, body := f.c.send(floored, http.MethodPost, "/components", map[string]any{
-		"name": "panel-out", "product": "boreal-edge-55", "parent": f.rackID, "system": f.wingBSys,
+		"name": "panel-out", "product": f.product.Name, "parent": f.rackID, "system": f.wingBSys,
 	})
 	if status != http.StatusForbidden {
 		t.Fatalf("bind of a readable system outside the update scope = %d, want 403\nbody: %s", status, body)
@@ -165,7 +165,7 @@ func TestTheCreatesSystemBindResolvesInTheUpdateScope(t *testing.T) {
 	// The owner runs the refused body and is served, so the refusal is a scope
 	// boundary rather than a broken route.
 	f.c.do(f.owner, http.MethodPost, "/components", map[string]any{
-		"name": "panel-out", "product": "boreal-edge-55", "parent": f.rackID, "system": f.wingBSys,
+		"name": "panel-out", "product": f.product.Name, "parent": f.rackID, "system": f.wingBSys,
 	}, http.StatusCreated)
 }
 
@@ -202,13 +202,13 @@ func TestTheDraftRefusesTheSystemBindTheCreateRefuses(t *testing.T) {
 	// The same body drafts and creates, which is the property under test: a form
 	// posts what it drafted with, plus the precondition.
 	body := func(name, system string) map[string]any {
-		return map[string]any{"name": name, "product": "boreal-edge-55", "parent": f.rackID, "system": system}
+		return map[string]any{"name": name, "product": f.product.Name, "parent": f.rackID, "system": system}
 	}
 
 	// A draft naming no system is served to the operator, so what follows is
 	// about the bind rather than about its right to draft at all.
 	f.c.do(operator, http.MethodPost, "/components:renderLabel",
-		map[string]any{"name": "panel-free", "product": "boreal-edge-55", "parent": f.rackID}, http.StatusOK)
+		map[string]any{"name": "panel-free", "product": f.product.Name, "parent": f.rackID}, http.StatusOK)
 
 	// The permission half, on both routes, with the same status and the same
 	// missing authority named.

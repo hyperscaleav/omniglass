@@ -21,6 +21,7 @@ type healthFixture struct {
 	gw   *storage.PG
 	conn *pgx.Conn
 	all  scope.Set
+	bar  storage.Product // minted video-bar product staffing the table-mic slot
 }
 
 func newHealthFixture(t *testing.T) *healthFixture {
@@ -69,9 +70,10 @@ func newHealthFixture(t *testing.T) *healthFixture {
 		t.Fatalf("declare role: %v", err)
 	}
 
-	// kestrel-vroom classifies as video-bar.
-	bar := "kestrel-vroom"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, f.all, all, all, all); err != nil {
+	// A minted video-bar product satisfies the accepted type; tests that need
+	// another video-bar occupant reuse f.bar.
+	f.bar = storagetest.MintProduct(t, ctx, gw, "video-bar")
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &f.bar.Name}, f.all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	if err := gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-1", f.all, f.all); err != nil {
@@ -661,9 +663,9 @@ func TestHealthIgnoresProductChange(t *testing.T) {
 		t.Fatalf("baseline system = %q, want healthy", v)
 	}
 
-	// boreal-edge-55 classifies as display, not video-bar, but bar-1 is already
+	// A minted display product is not a video-bar, but bar-1 is already
 	// assigned and stays assigned: reclassifying it must record nothing.
-	panel := "boreal-edge-55"
+	panel := storagetest.MintProduct(t, ctx, f.gw, "display").Name
 	if _, err := f.gw.UpdateComponent(ctx, "", "bar-1", storage.ComponentPatch{ProductName: &panel}, f.all, f.all); err != nil {
 		t.Fatalf("change product: %v", err)
 	}
@@ -680,8 +682,7 @@ func TestHealthIgnoresProductChange(t *testing.T) {
 	mustAgree(t, rep)
 
 	// Reclassifying back is the same no-op in the other direction.
-	bar := "kestrel-vroom"
-	if _, err := f.gw.UpdateComponent(ctx, "", "bar-1", storage.ComponentPatch{ProductName: &bar}, f.all, f.all); err != nil {
+	if _, err := f.gw.UpdateComponent(ctx, "", "bar-1", storage.ComponentPatch{ProductName: &f.bar.Name}, f.all, f.all); err != nil {
 		t.Fatalf("restore product: %v", err)
 	}
 	if got, v := f.recorded(t, ctx, "system", "hq-huddle"); v != "healthy" || got != before {
@@ -987,8 +988,7 @@ func TestAlarmOnSpareDoesNotShort(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
-	panel := "kestrel-vroom"
-	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &panel}, f.all, all, all, all); err != nil {
+	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &f.bar.Name}, f.all, all, all, all); err != nil {
 		t.Fatalf("create second component: %v", err)
 	}
 	if err := f.gw.AssignRole(ctx, "", "hq-huddle", "table-mic", "bar-2", f.all, f.all); err != nil {

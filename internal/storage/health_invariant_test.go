@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
 )
 
 // healthSeries reads one owner's recorded health values oldest-first, the same
@@ -107,7 +108,10 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 		t.Fatalf("after create = %v, want the one opening incomplete (every role unstaffed, a commissioning gap)", got)
 	}
 
-	bar, panel, touch, sched := "kestrel-vroom", "boreal-edge-55", "newtron-panel-7", "newtron-slate-5"
+	bar := f.bar.Name
+	panel := storagetest.MintProduct(t, ctx, f.gw, "display").Name
+	touch := storagetest.MintProduct(t, ctx, f.gw, "touch-panel").Name
+	sched := storagetest.MintProduct(t, ctx, f.gw, "scheduling-panel").Name
 	for _, c := range []struct{ name, product string }{
 		{"bar-a", bar}, {"panel-a", panel}, {"touch-a", touch}, {"sched-a", sched},
 	} {
@@ -203,7 +207,7 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 	// whose unstaffed roles are a commissioning gap (#631), not their impact.
 	f.mustAgreeWithRecord(t, ctx, "choice-room", "incomplete")
 
-	bar := "kestrel-vroom"
+	bar := f.bar.Name
 	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "choice-bar-1", ProductName: &bar}, f.all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -318,7 +322,10 @@ func TestHealthRecordsEveryRealChange(t *testing.T) {
 	}, f.all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
-	bar, panel, touch, sched := "kestrel-vroom", "boreal-edge-55", "newtron-panel-7", "newtron-slate-5"
+	bar := f.bar.Name
+	panel := storagetest.MintProduct(t, ctx, f.gw, "display").Name
+	touch := storagetest.MintProduct(t, ctx, f.gw, "touch-panel").Name
+	sched := storagetest.MintProduct(t, ctx, f.gw, "scheduling-panel").Name
 	for _, c := range []struct{ name, product string }{
 		{"bar-a", bar}, {"panel-a", panel}, {"touch-a", touch}, {"sched-a", sched},
 	} {
@@ -381,7 +388,7 @@ func (f *healthFixture) staffPair(t *testing.T, ctx context.Context, standard, s
 	}, f.all, all); err != nil {
 		t.Fatalf("create system %s: %v", system, err)
 	}
-	bar := "kestrel-vroom"
+	bar := f.bar.Name
 	for _, c := range components {
 		product := bar
 		if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{

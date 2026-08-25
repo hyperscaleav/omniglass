@@ -25,12 +25,12 @@ func declareTableMic(t *testing.T, ctx context.Context, gw storage.Gateway, all 
 	}
 }
 
-// newBarInto creates a video-bar component and immediately asserts the
-// create succeeded, the shared shape every position test's fixtures need.
-func newBarInto(t *testing.T, ctx context.Context, gw storage.Gateway, all scope.Set, name string) {
+// newBarInto creates a component of the given product (a video-bar the test
+// minted) and immediately asserts the create succeeded, the shared shape
+// every position test's fixtures need.
+func newBarInto(t *testing.T, ctx context.Context, gw storage.Gateway, all scope.Set, product, name string) {
 	t.Helper()
-	bar := "kestrel-vroom"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name, ProductName: &bar}, all, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name, ProductName: &product}, all, all, all, all); err != nil {
 		t.Fatalf("create component %s: %v", name, err)
 	}
 }
@@ -78,8 +78,9 @@ func TestAssignedToIsPositionOrdered(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	declareTableMic(t, ctx, gw, all, "position-order-sys", 2)
-	newBarInto(t, ctx, gw, all, "zeta")
-	newBarInto(t, ctx, gw, all, "alpha")
+	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
+	newBarInto(t, ctx, gw, all, bar, "zeta")
+	newBarInto(t, ctx, gw, all, bar, "alpha")
 
 	if err := gw.AssignRole(ctx, "", "position-order-sys", "table-mic", "zeta", all, all); err != nil {
 		t.Fatalf("assign zeta: %v", err)
@@ -130,8 +131,9 @@ func TestSwapIsAtomic(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	declareTableMic(t, ctx, gw, all, "swap-sys", 2)
-	newBarInto(t, ctx, gw, all, "first")
-	newBarInto(t, ctx, gw, all, "second")
+	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
+	newBarInto(t, ctx, gw, all, bar, "first")
+	newBarInto(t, ctx, gw, all, bar, "second")
 
 	if err := gw.AssignRole(ctx, "", "swap-sys", "table-mic", "first", all, all); err != nil {
 		t.Fatalf("assign first: %v", err)
@@ -184,8 +186,9 @@ func TestConcurrentAssignsGetDistinctPositions(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	declareTableMic(t, ctx, gw, all, "concurrent-position-sys", 2)
-	newBarInto(t, ctx, gw, all, "race-a")
-	newBarInto(t, ctx, gw, all, "race-b")
+	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
+	newBarInto(t, ctx, gw, all, bar, "race-a")
+	newBarInto(t, ctx, gw, all, bar, "race-b")
 
 	runTogether(t,
 		func() error {
@@ -233,8 +236,9 @@ func TestUnassignLeavesGapThenRefills(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	declareTableMic(t, ctx, gw, all, "gap-sys", 1)
+	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 	for _, name := range []string{"one", "two", "three"} {
-		newBarInto(t, ctx, gw, all, name)
+		newBarInto(t, ctx, gw, all, bar, name)
 	}
 	for _, name := range []string{"one", "two", "three"} {
 		if err := gw.AssignRole(ctx, "", "gap-sys", "table-mic", name, all, all); err != nil {
@@ -264,7 +268,7 @@ func TestUnassignLeavesGapThenRefills(t *testing.T) {
 
 	// The next assignment refills the vacated position (2), landing between
 	// one and three rather than appending after three at position 4.
-	newBarInto(t, ctx, gw, all, "four")
+	newBarInto(t, ctx, gw, all, bar, "four")
 	if err := gw.AssignRole(ctx, "", "gap-sys", "table-mic", "four", all, all); err != nil {
 		t.Fatalf("assign four: %v", err)
 	}
@@ -300,8 +304,9 @@ func TestEffectiveRolesReportsRealPositionsAcrossAGap(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	declareTableMic(t, ctx, gw, all, "gap-positions-sys", 1)
+	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 	for _, name := range []string{"one", "two", "three"} {
-		newBarInto(t, ctx, gw, all, name)
+		newBarInto(t, ctx, gw, all, bar, name)
 	}
 	for _, name := range []string{"one", "two", "three"} {
 		if err := gw.AssignRole(ctx, "", "gap-positions-sys", "table-mic", name, all, all); err != nil {
@@ -374,9 +379,10 @@ func TestAssignRefusesAtCapacity(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
-	newBarInto(t, ctx, gw, all, "one")
-	newBarInto(t, ctx, gw, all, "two")
-	newBarInto(t, ctx, gw, all, "three")
+	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
+	newBarInto(t, ctx, gw, all, bar, "one")
+	newBarInto(t, ctx, gw, all, bar, "two")
+	newBarInto(t, ctx, gw, all, bar, "three")
 	if err := gw.AssignRole(ctx, "", "capacity-full-sys", "table-mic", "one", all, all); err != nil {
 		t.Fatalf("assign one: %v", err)
 	}
@@ -437,8 +443,9 @@ func TestLoweringCapacityThenAssigningIsRefused(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 	declareTableMic(t, ctx, gw, all, "capacity-bypass-sys", 1) // no capacity yet
+	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 	for _, name := range []string{"one", "two", "three", "four"} {
-		newBarInto(t, ctx, gw, all, name)
+		newBarInto(t, ctx, gw, all, bar, name)
 	}
 	for _, name := range []string{"one", "two", "three"} {
 		if err := gw.AssignRole(ctx, "", "capacity-bypass-sys", "table-mic", name, all, all); err != nil {

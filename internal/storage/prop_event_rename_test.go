@@ -41,7 +41,7 @@ func TestPropertiesAndEventsSurviveARename(t *testing.T) {
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "old-sys", StandardID: &std}, all, all); err != nil {
 		t.Fatalf("system: %v", err)
 	}
-	bar := "kestrel-vroom"
+	bar := storagetest.MintProduct(t, ctx, gw, "").Name
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "old-comp", ProductName: &bar}, all, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}

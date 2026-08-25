@@ -51,6 +51,7 @@ type placementFixture struct {
 	rackID   string
 	sysAID   string
 	wingBSys string
+	product  storage.Product
 }
 
 func newPlacementFixture(t *testing.T) *placementFixture {
@@ -69,6 +70,9 @@ func newPlacementFixture(t *testing.T) *placementFixture {
 	t.Cleanup(srv.Close)
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
+	// The product every component below is created from: minted for the
+	// fixture rather than borrowed from the seeded catalog (#804).
+	product := storagetest.MintProduct(t, ctx, gw, "")
 
 	// Rules that read the placement, so the leak these gates exist to close is
 	// actually present in the answer rather than assumed to be.
@@ -91,7 +95,7 @@ func newPlacementFixture(t *testing.T) *placementFixture {
 	// owner builds the two rows the narrow principal then writes under. The rack
 	// sits in wing-a, which is what puts it inside that principal's own scope.
 	rack := c.do(owner, http.MethodPost, "/components", map[string]any{
-		"name": "rack", "product": "boreal-edge-55", "location": "wing-a",
+		"name": "rack", "product": product.Name, "location": "wing-a",
 	}, http.StatusCreated)
 	var rackBody struct {
 		ID string `json:"id"`
@@ -117,7 +121,7 @@ func newPlacementFixture(t *testing.T) *placementFixture {
 	})
 	return &placementFixture{
 		c: c, dsn: dsn, owner: owner, narrow: narrow,
-		rackID: rackBody.ID, sysAID: sysAID, wingBSys: "av-b",
+		rackID: rackBody.ID, sysAID: sysAID, wingBSys: "av-b", product: product,
 	}
 }
 
@@ -141,7 +145,7 @@ func TestAComponentCreateRefusesAPlacementTheCallerCannotRead(t *testing.T) {
 	// Inside its own wing the narrow principal creates normally, and the answer
 	// carries the label of the location it may read.
 	got := f.c.do(f.narrow, http.MethodPost, "/components", map[string]any{
-		"name": "panel-a", "product": "boreal-edge-55", "parent": f.rackID, "location": "wing-a",
+		"name": "panel-a", "product": f.product.Name, "parent": f.rackID, "location": "wing-a",
 	}, http.StatusCreated)
 	if !strings.HasPrefix(label(t, got), "Wing A") {
 		t.Fatalf("in-scope create stored %q, want it to open with the location's label", label(t, got))
@@ -151,21 +155,21 @@ func TestAComponentCreateRefusesAPlacementTheCallerCannotRead(t *testing.T) {
 	// refuses, and with the same status: the preview and the create it previews
 	// have to agree or an operator is refused a draft and then creates anyway.
 	leakBody := map[string]any{
-		"name": "panel-b", "product": "boreal-edge-55", "parent": f.rackID, "location": "wing-b",
+		"name": "panel-b", "product": f.product.Name, "parent": f.rackID, "location": "wing-b",
 	}
 	// The draft carries the parent the create posts, which it did not before the
 	// #702 review: the parentless bucket is now gated on an all-scoped create
 	// grant, so a body without it would be refused for the bucket rather than for
 	// the location, and this assertion would stop being about wing-b at all.
 	f.c.do(f.narrow, http.MethodPost, "/components:renderLabel", map[string]any{
-		"name": "panel-b", "product": "boreal-edge-55", "parent": f.rackID, "location": "wing-b",
+		"name": "panel-b", "product": f.product.Name, "parent": f.rackID, "location": "wing-b",
 	}, http.StatusUnprocessableEntity)
 	f.c.do(f.narrow, http.MethodPost, "/components", leakBody, http.StatusUnprocessableEntity)
 
 	// The system reference is the component map's other placement fact, and it
 	// leaks the same way: av-b sits in the wing this principal cannot read.
 	f.c.do(f.narrow, http.MethodPost, "/components", map[string]any{
-		"name": "panel-c", "product": "boreal-edge-55", "parent": f.rackID, "system": f.wingBSys,
+		"name": "panel-c", "product": f.product.Name, "parent": f.rackID, "system": f.wingBSys,
 	}, http.StatusUnprocessableEntity)
 
 	// The owner runs the identical bodies and is served, so both refusals above
@@ -175,7 +179,7 @@ func TestAComponentCreateRefusesAPlacementTheCallerCannotRead(t *testing.T) {
 		t.Errorf("owner create stored %q, want the sibling wing's label: the refusals above are not scope refusals", label(t, owned))
 	}
 	owned = f.c.do(f.owner, http.MethodPost, "/components", map[string]any{
-		"name": "panel-c", "product": "boreal-edge-55", "parent": f.rackID, "system": f.wingBSys,
+		"name": "panel-c", "product": f.product.Name, "parent": f.rackID, "system": f.wingBSys,
 	}, http.StatusCreated)
 	if !strings.Contains(label(t, owned), "Boardroom") {
 		t.Errorf("owner create stored %q, want the out-of-scope system's type label in it", label(t, owned))
@@ -215,7 +219,7 @@ func TestAMoveRefusesALocationTheCallerCannotRead(t *testing.T) {
 	f := newPlacementFixture(t)
 
 	f.c.do(f.narrow, http.MethodPost, "/components", map[string]any{
-		"name": "panel-a", "product": "boreal-edge-55", "parent": f.rackID, "location": "wing-a",
+		"name": "panel-a", "product": f.product.Name, "parent": f.rackID, "location": "wing-a",
 	}, http.StatusCreated)
 	f.c.do(f.narrow, http.MethodPost, "/systems", map[string]any{
 		"name": "sub-a", "system_type_id": "board", "parent": "av-a", "location": "wing-a",
@@ -277,13 +281,13 @@ func TestAGrantOnOnlyTheWrittenTierBindsNoPlacement(t *testing.T) {
 	// Placing nowhere names no location, so nothing is resolved in the empty set
 	// and the create is served: the write grant on its own is sufficient.
 	f.c.do(componentOnly, http.MethodPost, "/components", map[string]any{
-		"name": "panel-unplaced", "product": "boreal-edge-55", "parent": f.rackID,
+		"name": "panel-unplaced", "product": f.product.Name, "parent": f.rackID,
 	}, http.StatusCreated)
 
 	// The same body naming wing-a, the rack's OWN location, is refused. The only
 	// difference between the two calls is the placement field.
 	f.c.do(componentOnly, http.MethodPost, "/components", map[string]any{
-		"name": "panel-placed", "product": "boreal-edge-55", "parent": f.rackID, "location": "wing-a",
+		"name": "panel-placed", "product": f.product.Name, "parent": f.rackID, "location": "wing-a",
 	}, http.StatusUnprocessableEntity)
 
 	// The other verb answers the same, and its control is a move that names only
@@ -313,7 +317,7 @@ func TestAGrantOnOnlyTheWrittenTierBindsNoPlacement(t *testing.T) {
 		{role: "viewer", scopeKind: "all"},
 	})
 	got := f.c.do(withFloor, http.MethodPost, "/components", map[string]any{
-		"name": "panel-floored", "product": "boreal-edge-55", "parent": f.rackID, "location": "wing-a",
+		"name": "panel-floored", "product": f.product.Name, "parent": f.rackID, "location": "wing-a",
 	}, http.StatusCreated)
 	if !strings.HasPrefix(label(t, got), "Wing A") {
 		t.Errorf("create under the read floor stored %q, want the location's label: the refusals above are about the empty read scope, and this proves it", label(t, got))
@@ -357,7 +361,7 @@ func TestAnAmbiguousPlacementNamesOnlyTheCandidatesTheCallerCanRead(t *testing.T
 		"name": "1", "location_type": "room", "parent": "wing-b",
 	}, http.StatusCreated))
 
-	create := map[string]any{"name": "panel-1", "product": "boreal-edge-55", "parent": f.rackID, "location": "1"}
+	create := map[string]any{"name": "panel-1", "product": f.product.Name, "parent": f.rackID, "location": "1"}
 	status, body := f.c.send(f.narrow, http.MethodPost, "/components", create)
 	if status != http.StatusConflict {
 		t.Fatalf("create against an in-scope-ambiguous location = %d, want 409\nbody: %s", status, body)
@@ -374,7 +378,7 @@ func TestAnAmbiguousPlacementNamesOnlyTheCandidatesTheCallerCanRead(t *testing.T
 	// A uuid from the list is a spelling that resolves, so the answer is
 	// actionable and not merely descriptive.
 	f.c.do(f.narrow, http.MethodPost, "/components", map[string]any{
-		"name": "panel-1", "product": "boreal-edge-55", "parent": f.rackID, "location": eastOne,
+		"name": "panel-1", "product": f.product.Name, "parent": f.rackID, "location": eastOne,
 	}, http.StatusCreated)
 
 	// So is the dotted address, which this reference has accepted since #627
@@ -383,7 +387,7 @@ func TestAnAmbiguousPlacementNamesOnlyTheCandidatesTheCallerCanRead(t *testing.T
 	// answered by the code. It is absolute, rooted at a root location, which is
 	// exactly the string the location's own read hands back as its path.
 	f.c.do(f.narrow, http.MethodPost, "/components", map[string]any{
-		"name": "panel-2", "product": "boreal-edge-55", "parent": f.rackID, "location": "hq.wing-a.west.1",
+		"name": "panel-2", "product": f.product.Name, "parent": f.rackID, "location": "hq.wing-a.west.1",
 	}, http.StatusCreated)
 
 	// The owner, whose scope holds all three, is refused with all three named:

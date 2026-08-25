@@ -18,7 +18,7 @@ import (
 // of the epic writes first.
 //
 // Before this, a product id was the primary key, so a typo or a rebrand could not
-// be corrected: `kestrel-vroom` was permanent, and every referencing row would
+// be corrected: a product's name was permanent, and every referencing row would
 // have had to be rewritten to change it.
 func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 	if testing.Short() {

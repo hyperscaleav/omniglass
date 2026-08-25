@@ -201,8 +201,8 @@ func TestDetachedRoleBecomesUnconditional(t *testing.T) {
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "detach-sys", StandardID: &std}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
-	bar := "kestrel-vroom"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "detach-comp", ProductName: &bar}, all, all, all, all); err != nil {
+	product := storagetest.MintProduct(t, ctx, gw, "").Name
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "detach-comp", ProductName: &product}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
 	if err := gw.AssignRole(ctx, "", "detach-sys", "role-b", "detach-comp", all, all); err != nil {
@@ -279,7 +279,7 @@ func TestEditingRoleLeavesAlternateAlone(t *testing.T) {
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "edit-sys", StandardID: &std}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
-	bar := "kestrel-vroom"
+	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "edit-comp", ProductName: &bar}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -383,7 +383,7 @@ func TestHealthRoleReportsChoiceAndActive(t *testing.T) {
 	if _, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "report-sys", StandardID: &std}, all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
-	bar := "kestrel-vroom"
+	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "report-bar", ProductName: &bar}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}

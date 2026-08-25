@@ -138,8 +138,8 @@ func TestSystemRolesAPI(t *testing.T) {
 		t.Fatalf("wall-display = %+v, want ad-hoc with the default quorum of one", disp)
 	}
 
-	// A room bar is classified video-bar, so it fills the mic role.
-	bar := "kestrel-vroom"
+	// A product classified video-bar, so it fills the mic role.
+	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "bar-1", "product": bar}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/systems/acme-1/roles/table-mic/assignments/bar-1", nil, http.StatusNoContent)
 	mic = read(ownerTok, "acme-1").find(t, "table-mic")
@@ -151,7 +151,8 @@ func TestSystemRolesAPI(t *testing.T) {
 	// parties. A bare 422 would leave the operator nothing to act on, so the
 	// message is the contract, asserted here verbatim (the task brief's own
 	// worked example, up to the specific names).
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "panel-1", "product": "boreal-edge-55"}, http.StatusCreated)
+	disp := storagetest.MintProduct(t, ctx, gw, "display")
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "panel-1", "product": disp.Name}, http.StatusCreated)
 	body := c.do(ownerTok, http.MethodPut, "/systems/acme-1/roles/table-mic/assignments/panel-1", nil, http.StatusUnprocessableEntity)
 	const wantDetail = `component "panel-1" is a display; role "Table Microphone" wants a video-bar`
 	var problem struct {
@@ -220,9 +221,9 @@ func TestSystemRolesAPI(t *testing.T) {
 // API on the typed-slot guard (#626, rework of the former
 // TestSeededStandardRolesAPI): the meeting-room standard arrives with roles
 // declaring accepted_types, not capabilities, so a system that conforms to it
-// shows staffing work to do the moment it is created, the shipped catalog can
-// actually satisfy what the shipped standard asks for, and a component of the
-// wrong type is refused.
+// shows staffing work to do the moment it is created, a display-classified
+// product can satisfy what the shipped standard asks for, and a component of
+// the wrong type is refused.
 func TestSeededStandardTypedRoles(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -260,13 +261,15 @@ func TestSeededStandardTypedRoles(t *testing.T) {
 		t.Fatalf("seeded main-display = %+v, want accepting display", disp)
 	}
 
-	// The shipped catalog can actually satisfy what the shipped standard asks
-	// for: a Boreal Edge 55 fills the display role without any hand-declaration.
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "qm-1", "product": "boreal-edge-55"}, http.StatusCreated)
+	// A product classified display fills the display role without any
+	// hand-declaration: the typed slot matches on the classification alone.
+	disp := storagetest.MintProduct(t, ctx, gw, "display")
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "qm-1", "product": disp.Name}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/systems/seeded-room/roles/main-display/assignments/qm-1", nil, http.StatusNoContent)
 
 	// A touch panel is not a display: refused.
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "panel-9", "product": "newtron-panel-7"}, http.StatusCreated)
+	panel := storagetest.MintProduct(t, ctx, gw, "touch-panel")
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "panel-9", "product": panel.Name}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/systems/seeded-room/roles/main-display/assignments/panel-9", nil, http.StatusUnprocessableEntity)
 }
 
@@ -306,7 +309,7 @@ func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
 		"label": "Main Display",
 	}, http.StatusOK)
 
-	bar := "kestrel-vroom"
+	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "zeta", "product": bar}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "alpha", "product": bar}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/roles/table-mic/assignments/zeta", nil, http.StatusNoContent)

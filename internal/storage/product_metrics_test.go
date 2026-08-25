@@ -117,26 +117,26 @@ func TestProductMetricCRUD(t *testing.T) {
 	}
 
 	// A seeded (official) product's contract is seed-owned and read-only.
-	if _, err := gw.SetProductMetric(ctx, "", "kestrel-vroom", storage.ProductMetricSpec{MetricTypeName: "tcp-open"}); !errors.Is(err, storage.ErrTypeOfficial) {
+	if _, err := gw.SetProductMetric(ctx, "", "generic-device", storage.ProductMetricSpec{MetricTypeName: "tcp-open"}); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("set official err = %v, want ErrTypeOfficial", err)
 	}
-	if err := gw.DeleteProductMetric(ctx, "", "kestrel-vroom", "tcp-open"); !errors.Is(err, storage.ErrTypeOfficial) {
+	if err := gw.DeleteProductMetric(ctx, "", "generic-device", "tcp-open"); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("delete official err = %v, want ErrTypeOfficial", err)
 	}
 
 	// The boot-seed path writes an official product's contract without the guard
 	// and without an audit, and is idempotent.
-	if err := gw.UpsertProductMetric(ctx, "kestrel-vroom", storage.ProductMetricSpec{
+	if err := gw.UpsertProductMetric(ctx, "generic-device", storage.ProductMetricSpec{
 		MetricTypeName: "tcp-open", DefaultValue: json.RawMessage(`1`), Required: true,
 	}); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	if err := gw.UpsertProductMetric(ctx, "kestrel-vroom", storage.ProductMetricSpec{
+	if err := gw.UpsertProductMetric(ctx, "generic-device", storage.ProductMetricSpec{
 		MetricTypeName: "tcp-open", DefaultValue: json.RawMessage(`0`), Required: false,
 	}); err != nil {
 		t.Fatalf("re-upsert: %v", err)
 	}
-	lines, err = gw.ListProductMetrics(ctx, "kestrel-vroom")
+	lines, err = gw.ListProductMetrics(ctx, "generic-device")
 	if err != nil {
 		t.Fatalf("list official: %v", err)
 	}

@@ -13,8 +13,9 @@ import (
 
 // TestCreateGeneratesFromTypeStem proves the base rule: a create with no name
 // mints "<stem>-<n>" from the product's component_type, ordinal always
-// present, incrementing per sibling in the same placement bucket.
-// boreal-edge-55 classifies under component_type "display" (stem "display").
+// present, incrementing per sibling in the same placement bucket. The minted
+// product classifies under component_type "display" (stem "display"): the stem
+// walk reads the TYPE tree, so the product is only the doorway in (#804).
 func TestCreateGeneratesFromTypeStem(t *testing.T) {
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
@@ -22,7 +23,7 @@ func TestCreateGeneratesFromTypeStem(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	edge55 := "boreal-edge-55"
+	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
 	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &edge55}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create first: %v", err)
@@ -112,7 +113,7 @@ func TestRenameFreezes(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	edge55 := "boreal-edge-55"
+	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &edge55}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -134,7 +135,7 @@ func TestRenameFreezes(t *testing.T) {
 
 	// A reclassify would normally recompute a still-generated name; it must
 	// leave this one alone now that the operator owns it.
-	mic := "lyra-arc-a2"
+	mic := storagetest.MintProduct(t, ctx, gw, "ceiling-mic").Name
 	after, err := gw.UpdateComponent(ctx, "", c.ID, storage.ComponentPatch{ProductName: &mic}, all, all)
 	if err != nil {
 		t.Fatalf("reclassify: %v", err)
@@ -155,7 +156,7 @@ func TestResetReturnsPen(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	edge55 := "boreal-edge-55"
+	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
 
 	// An operator-typed component from the start.
 	typed, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "operator-panel", ProductName: &edge55}, all, all, all, all)
@@ -205,8 +206,8 @@ func TestReclassifyRecomputes(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	edge55 := "boreal-edge-55"
-	mic := "lyra-arc-a2"
+	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
+	mic := storagetest.MintProduct(t, ctx, gw, "ceiling-mic").Name
 
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &edge55, Label: "My Display"}, all, all, all, all)
 	if err != nil {
@@ -221,7 +222,7 @@ func TestReclassifyRecomputes(t *testing.T) {
 		t.Fatalf("reclassify: %v", err)
 	}
 	if after.Name != "mic-1" {
-		t.Fatalf("name after reclassify = %q, want mic-1 (lyra-arc-a2 classifies under ceiling-mic)", after.Name)
+		t.Fatalf("name after reclassify = %q, want mic-1 (the minted product classifies under ceiling-mic)", after.Name)
 	}
 	if !after.NameGenerated {
 		t.Fatalf("NameGenerated after reclassify = false, want true")
@@ -309,7 +310,7 @@ func TestConcurrentCreateSerialisesOrdinals(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	edge55 := "boreal-edge-55"
+	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
 	start := make(chan struct{})
 	var wg sync.WaitGroup
 	results := make([]*storage.Component, 2)

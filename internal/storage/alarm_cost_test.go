@@ -95,7 +95,7 @@ func alarmProbe(t *testing.T, staffs, roomsN int) (storage.Gateway, *querycount.
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
-	bar := "kestrel-vroom"
+	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, sc, sc, sc, sc); err != nil {
 		t.Fatalf("create component: %v", err)
 	}

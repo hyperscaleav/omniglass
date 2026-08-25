@@ -63,6 +63,7 @@ func labelFleet(t *testing.T, roomCount int) (storage.Gateway, *querycount.Count
 func TestTheBulkRecomputeCostIsFlatInFleetSize(t *testing.T) {
 	gw, counter, rooms := labelFleet(t, 4)
 	ctx := context.Background()
+	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
 	if _, err := gw.CreateProduct(ctx, "", storage.Product{
 		Name: "my-mic", Label: "My Mic", ComponentType: "mic",
 	}); err != nil {
@@ -115,6 +116,7 @@ func TestTheBulkRecomputeCostIsFlatInFleetSize(t *testing.T) {
 func TestTheLocationCascadeCostIsFlatInWhatIsPlacedThere(t *testing.T) {
 	gw, counter, rooms := labelFleet(t, 2)
 	ctx := context.Background()
+	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.LocationLabel}} {{.TypeName}} {{.Ordinal}}"); err != nil {
 		t.Fatalf("component rule: %v", err)
 	}
@@ -182,6 +184,7 @@ func TestTheLocationCascadeCostIsFlatInWhatIsPlacedThere(t *testing.T) {
 func TestAPlacedCreateStillCostsAFixedNumberOfStatements(t *testing.T) {
 	gw, counter, rooms := labelFleet(t, 1)
 	ctx := context.Background()
+	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
 	if _, err := gw.SetLabelRule(ctx, "", "component", "{{.SystemTypeLabel}} {{.LocationLabel}} {{.TypeName}} {{.Ordinal}}"); err != nil {
 		t.Fatalf("component rule: %v", err)
 	}
