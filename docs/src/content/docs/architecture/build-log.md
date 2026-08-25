@@ -5750,3 +5750,10 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   names a catalog SKU outside the designated pin files, reading the SKU list from
   the seed's own render. A catalog change now touches the YAML and the pin files,
   nothing else.
+- **Every system carries its components**
+  (dev seed ruling, 2026-08-26). The demo fleet staffs every system to its standard's
+  quorum: the lab pods gain their displays, wireless mics, and touch panels (keeping
+  their same-bucket ordinal demo), and the depot's service stock stays racked in the
+  bays rather than memberized onto the signage. Exactly one provisioning system
+  remains, briefing-av, short its scheduling panel, so the incomplete verdict still
+  appears without reading as a half-built fleet.

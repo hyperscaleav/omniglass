@@ -1136,6 +1136,27 @@ components:
     product: boreal-cast-m1
     location: dep-r3
 
+  # The lab pods' kit, one set per pod, sharing the one room (so the displays,
+  # mics, and panels are same-bucket siblings too).
+  - key: lab-a-display
+    product: boreal-edge-75
+    location: lab
+  - key: lab-a-mic
+    product: lyra-hx-1
+    location: lab
+  - key: lab-a-touch
+    product: newtron-panel-7
+    location: lab
+  - key: lab-b-display
+    product: boreal-edge-75
+    location: lab
+  - key: lab-b-mic
+    product: lyra-hx-1
+    location: lab
+  - key: lab-b-touch
+    product: newtron-panel-7
+    location: lab
+
 # Property values: two overrides the huddle display declares over its product's
 # contract, so the effective-properties panel teaches direct-vs-inherited.
 # `model-number` stays unset and resolves to the product default ("QM55"), and
@@ -1187,17 +1208,12 @@ systems:
     system_type: auditorium
     location: auditorium
 
-  # Racked, cabled, and not yet commissioned: two training pods conforming to a
-  # standard with nothing assigned to any role either declares. Both read
-  # INCOMPLETE, the verdict #631 added, and nothing in this seed produced it
-  # before. Most of a real fleet looks like this for months, which is the
-  # whole reason that verdict is not outage.
-  #
-  # They are also the fleet's same-BUCKET same-type siblings, the pair that
-  # demonstrates the ordinal the system rule reads (#693): two `class` systems
-  # in one room mint `classroom` and `classroom-2`, rendering "Classroom" and
-  # "Classroom 2". The divisible boardroom used to carry this demo and cannot
-  # any more, its halves being two rooms now (one bucket each).
+  # The lab pods, fully staffed like everything else: the ruling is that every
+  # system carries all of its components (broken is fine, absent is not), with
+  # briefing-av below the ONE provisioning exception. The pods keep their other
+  # job: the fleet's same-BUCKET same-type siblings, the pair that demonstrates
+  # the ordinal the system rule reads (#693): two `class` systems in one room
+  # mint `classroom` and `classroom-2`, rendering "Classroom" and "Classroom 2".
   - key: lab-pod-a
     standard: classroom
     system_type: class
@@ -1207,8 +1223,10 @@ systems:
     system_type: class
     location: lab
 
-  # One microphone short of its quorum of two, with the one it has healthy
-  # (assignments, below): short-staffed, not broken, so it reads incomplete.
+  # The fleet's ONE provisioning system (ruled: every other system is fully
+  # staffed): deployed except the scheduling panel nobody has installed yet,
+  # short-staffed rather than broken, so it reads incomplete and #631's
+  # verdict still appears on screen somewhere.
   - key: briefing-av
     standard: mr65
     system_type: meeting
@@ -1997,6 +2015,25 @@ role_assignments:
   - system: dep-s3
     role: player
     component: dep-c3b
+
+  - system: lab-pod-a
+    role: class-display
+    component: lab-a-display
+  - system: lab-pod-a
+    role: instructor-mic
+    component: lab-a-mic
+  - system: lab-pod-a
+    role: touch-control
+    component: lab-a-touch
+  - system: lab-pod-b
+    role: class-display
+    component: lab-b-display
+  - system: lab-pod-b
+    role: instructor-mic
+    component: lab-b-mic
+  - system: lab-pod-b
+    role: touch-control
+    component: lab-b-touch
 
 alarms:
   - component: aud-dsp

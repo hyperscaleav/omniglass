@@ -1333,13 +1333,12 @@ func TestFixturesMakeAnFleetWorthLookingAt(t *testing.T) {
 		t.Error("no leaf is without a system, so the canvas has no hole to draw")
 	}
 
-	// Every verdict the domain has must appear somewhere, incomplete above all:
-	// it landed in #631 and nothing in the seed produced it, so the colour that
-	// un-saturates a commissioning fleet had never been seen on screen.
-	var anyUnstaffed bool
+	// The ruling: EVERY system carries its components (broken is fine, absent
+	// is not), so no system with a standard is left without a single
+	// assignment. The one provisioning system (briefing-av, short its
+	// scheduling panel) is short-staffed, never bare, and it alone keeps
+	// #631's incomplete verdict on screen.
 	for _, s := range doc.Systems {
-		// A system with a standard but no assignment at all cannot satisfy any
-		// role it declares, which is the commissioning gap in its purest form.
 		if s.Standard == "" {
 			continue
 		}
@@ -1351,11 +1350,8 @@ func TestFixturesMakeAnFleetWorthLookingAt(t *testing.T) {
 			}
 		}
 		if !any {
-			anyUnstaffed = true
+			t.Errorf("system %s is entirely unstaffed; the ruling is every system carries its components, with briefing-av the one short-staffed exception", s.Key)
 		}
-	}
-	if !anyUnstaffed {
-		t.Error("no system is left entirely unstaffed, so nothing in the seed reads incomplete")
 	}
 
 	// A component shared across two DIFFERENT roots. Sharing inside one room
@@ -1463,7 +1459,7 @@ func TestSeededFleetShowsEveryVerdict(t *testing.T) {
 	}
 
 	for _, tc := range []struct{ room, want, why string }{
-		{"media-lab", "incomplete", "two pods conforming to a standard with nothing assigned to any role: commissioning gaps, and no alarm will ever fire for them"},
+		{"media-lab", "healthy", "both pods fully staffed and quiet; the ordinal demo lives in their names, not in a gap"},
 		{"boardroom-a", "healthy", "fully staffed, the shared audio rack counted where it physically sits"},
 		{"boardroom-b", "healthy", "fully staffed: its own bar, displays, mics, and panels, plus the divisible pair's shared DSP and amplifier (#802)"},
 		{"briefing", "incomplete", "deployed except the scheduling panel nobody has installed: short one commissioning item"},
@@ -1518,15 +1514,12 @@ func fixtureComponentNames(doc devseed.Doc) []string {
 // every role is staffed to quorum; commissioning is the exception that
 // carries the teaching, not the norm. This pins the ruling so a future
 // volume block cannot quietly regress the fleet back to a wall of
-// incomplete: every meeting-room system in the fixture is staffed to the
-// standard's quorum (two mics, one display) unless it is one of the three
-// named teaching cases.
+// incomplete: every system in the fixture is staffed to its standard's
+// quorum, with exactly one named provisioning exception.
 func TestFixtureFleetReadsDeployed(t *testing.T) {
 	doc := fixturesDoc(t)
 	teaching := map[string]string{
-		"lab-pod-a":   "the commissioning pair: racked, cabled, nothing assigned",
-		"lab-pod-b":   "the commissioning pair: racked, cabled, nothing assigned",
-		"briefing-av": "the commissioning-gap case: deployed except its scheduling panel",
+		"briefing-av": "the ONE provisioning system: deployed except its scheduling panel",
 	}
 	staffed := map[string]map[string]int{}
 	for _, ra := range doc.RoleAssignments {
