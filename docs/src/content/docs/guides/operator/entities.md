@@ -53,9 +53,11 @@ read-only reference.
 
 ## Edit through the footer action bar
 
-A detail blade opens **read-only**, and every entity is edited the same way through the **footer action bar**.
-The blade header is chrome only (back, full-page, close); the actions live in the bar at the foot of the blade.
-**Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
+A blade opens **read-only**, and its actions live in the **footer action bar**; the header is
+chrome only (back, full-page, close). What Edit opens depends on the kind: a **fleet** blade edits
+its label and tags in place and jumps into the workspace's [Configure tab](/guides/operator/fleet/)
+for everything deeper, while an **identity** blade (a user, a group) edits whole-face, in place.
+On an identity blade, **Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
 cluster swaps to **Cancel** and **Save**. Changes stage locally so you can check your work first; **Save**
 commits them together, **Cancel** discards them. The **destructive** action sits on the **left** and is always
 available, with no need to enter edit mode: a red **Delete** for a group (a user instead has the escalating
