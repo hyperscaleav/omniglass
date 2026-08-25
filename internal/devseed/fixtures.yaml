@@ -1358,32 +1358,16 @@ systems:
     system_type: sign
     location: dep-r3
 
-# Membership without a job. The shared bar staffs the microphone role in both halves
-# (below, through assignment), but the power conditioner fills no declared role at
-# all: it is in the room, it is accounted for, and no role wants it. A model that
-# only knew about staffing would lose it.
+# Membership without a job. The audio rack staffs dsp and amplifier in both
+# halves (below, through assignment), but the power conditioner fills no declared
+# role at all: it is in the room, it is accounted for, and no role wants it. A
+# model that only knew about staffing would lose it. The depot's service stock
+# (the spare bars, mics, and displays racked in the bays) deliberately joins NO
+# system: stock relates to the bay it sits in, not to the bay's signage, so it
+# is roomed and unbound, like the lobby's uncommissioned endpoint above.
 members:
   - system: boardroom-a
     component: power
-  # The depot's service stock: racked in the bays, accounted for, no role.
-  - system: bay-1-av
-    component: bay-1-bar
-  - system: bay-1-av
-    component: bay-1-bar-b
-  - system: bay-1-av
-    component: bay-1-mic
-  - system: dep-s1
-    component: dep-c1a
-  - system: dep-s1
-    component: dep-c1b
-  - system: dep-s2
-    component: dep-c2a
-  - system: dep-s2
-    component: dep-c2b
-  - system: dep-s3
-    component: dep-c3a
-  - system: dep-s3
-    component: dep-c3b
   # One service, two tops. No role wants it, so it is membership and nothing
   # more, which is exactly what the many-valued binding is for.
   - system: auditorium-av
@@ -1402,8 +1386,8 @@ members:
 
 # Staffing, which creates the membership as a side effect. Both boardroom halves
 # are fully staffed (#785: a deployed room fills every role; the one-mic-short
-# teaching case is briefing-av, below): the shared bar counts toward each half's
-# quorum and each half racks a bar of its own beside it.
+# teaching case is briefing-av, below): the ONE audio rack in room A counts
+# toward both halves' dsp and amplifier quorums, and everything else is per-half.
 role_assignments:
   # The divisible pair (#802): each side fully staffed on its own bar,
   # displays, mics, and panels, while the ONE audio rack in room A satisfies
