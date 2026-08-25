@@ -12,8 +12,8 @@ import (
 // MintProduct creates a throwaway product classified under componentType and
 // returns it. A behavior test that needs "a product classified display" mints
 // one here instead of borrowing a seeded SKU, so the shipped catalog can
-// change without touching it (#804). The name is random, so two mints never
-// collide and nothing can come to depend on it; the classification is the
+// change without touching it (#804). The name is random, so a collision is
+// out of the ordinary and nothing can come to depend on it; the classification is the
 // only fact the caller chose, and an empty componentType takes the gateway's
 // own floor (the generic of the product's kind).
 func MintProduct(t testing.TB, ctx context.Context, gw storage.Gateway, componentType string) storage.Product {
