@@ -75,7 +75,7 @@ export default function Systems() {
   // under a legacy ?edit=1) until edit-in-blade lands.
   const [zoomSearch] = useSearchParams();
   const zoomParams = useParams();
-  const wantsDetail = () => zoomParams.id === "create" || zoomSearch.view === "detail" || zoomSearch.edit === "1";
+  const wantsDetail = () => zoomParams.id === "create" || zoomSearch.view === "detail";
   if (zoomParams.id && !wantsDetail()) return <SystemZoom />;
   const params = useParams();
   const navigate = useNavigate();

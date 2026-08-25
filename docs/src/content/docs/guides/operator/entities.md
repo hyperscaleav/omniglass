@@ -16,13 +16,9 @@ screenshots:
       - ".og-statestrip"
   - id: entity-edit-face
     path: /web/locations/east?edit=1
-    alt: "A location's full detail page lands directly in edit mode from an ?edit=1 deep link."
-    mask:
-      - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
-      - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
-      - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
-      - ".og-statestrip"
-      - ".og-system-dot"
+    alt: "An ?edit=1 deep link lands the workspace on its Configure tab, already editing."
+    # No mask: the Configure tab replaces the overview (and its since-line
+    # clock), and the form renders from the seed deterministically.
 ---
 
 Once you have [found an entity](/guides/operator/inventory/), you open it, read it, and change
@@ -76,16 +72,18 @@ file) or as its own blade (New interface) puts its **Create** button in the bar 
 panel, never floating after the last field, and greys it out until the form is complete. **Cancel**
 sits beside it on the forms that offer one; where it does not, the header **x** closes the panel.
 
-## Deep-link the edit face
+## Deep-link the edit
 
-The mode is part of the address: append `?edit=1` to an inventory detail's URL (or to a user's
-`?u=<id>` deep link) and the page lands **already editing**, so a "fix the label on this room"
-handoff is one link, not a link plus instructions. It is the same edit you reach through the
-footer bar, behind the same permission: without `<resource>:update` the link lands on the
-read-only face, quietly. Leaving edit (Cancel or Save) strips the param again, so refreshing
-mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already left.
-The console itself uses these links for its handoffs: creating an entity lands on
-`/…/<id>?edit=1`, and the row pencil is that same address.
+The mode is part of the address: append `?edit=1` to a fleet entity's URL and it lands on
+the workspace's **Configure** tab, already editing (#800), so a "fix the label on this
+room" handoff is one link, not a link plus instructions. The blade's own jump affordances
+(rename, change, move beside its read-only facts) produce exactly these addresses, anchored
+to the section they name. The same permission gates apply: without `<resource>:update` the
+link lands reading, quietly. Leaving edit (Cancel or Save) strips the param, so refreshing
+mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already
+left. The console itself uses these links for its handoffs: creating an entity lands on
+`/…/<id>?edit=1`, and a user's `?u=<id>&edit=1` deep link keeps the same contract on the
+identity pages.
 
 ::screenshot{#entity-edit-face}
 

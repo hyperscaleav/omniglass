@@ -107,7 +107,12 @@ export default function SystemZoom() {
   ]);
   const tab = () => {
     const t = Array.isArray(search.tab) ? search.tab[0] : search.tab;
-    return t && tabs().some((x) => x.key === t) ? t : "overview";
+    if (t && tabs().some((x) => x.key === t)) return t;
+    // ?edit=1 means the one editor (#800): a bare edit intent lands on
+    // Configure, whose own hook then begins the edit.
+    const editing = (Array.isArray(search.edit) ? search.edit[0] : search.edit) === "1";
+    if (editing && tabs().some((x) => x.key === "configure")) return "configure";
+    return "overview";
   };
   // Every member's alarm history, cleared ones included: the causes beside
   // the verdict spans. Fan-out per component (rooms are small); each query
@@ -247,7 +252,7 @@ export default function SystemZoom() {
           <Show when={vm()}>
             {(z) => (
               <div class="flex min-w-0 flex-1 flex-col">
-                <TabRail tabs={tabs()} />
+                <TabRail tabs={tabs()} activeKey={tab} />
                 <Show when={tab() === "map" && mapDecl()}>
                   {(decl) => <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} onOpen={openComponent} />}
                 </Show>

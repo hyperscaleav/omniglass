@@ -974,3 +974,26 @@ describe("edit as a URL fact", () => {
     expect(window.location.pathname.endsWith(hq.id)).toBe(true);
   });
 });
+
+
+// Slice 2 of #800: the identity route with ?edit=1 renders the ZOOM (whose
+// configure face receives the intent), not the classic face; only
+// ?view=detail still reaches the classic editor until slice 3 retires it.
+describe("?edit=1 stops routing to the classic face (#800)", () => {
+  it("lands on the location zoom with the configure face editing", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...ME_KEY], me);
+    window.history.pushState({}, "", `/locations/${hq.id}?edit=1`);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/locations/:id" component={Locations} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    // The zoom mounts (its skeleton is fine: the routing is the assertion);
+    // the classic face's identity accordion must NOT appear.
+    await waitFor(() => expect(document.querySelector('[data-testid="configure-face"], .skeleton')).toBeTruthy());
+    expect(screen.queryByText("PLACEMENT")).toBeNull();
+  });
+});

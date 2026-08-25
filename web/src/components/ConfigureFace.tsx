@@ -197,6 +197,17 @@ export default function ConfigureFace(props: { kind: ConfigureKind; id: string }
 
   const editUrl = useEditParam(slot, { ready: () => !!raw(), canUpdate });
 
+  // The jump anchors are a promise the SPA router does not keep by itself
+  // (#800-2 review): once the row is loaded, scroll the named section into
+  // view. One shot per mount; jsdom has no scrollIntoView, hence the guard.
+  createEffect(on(raw, (r) => {
+    if (!r) return;
+    const anchor = window.location.hash.replace(/^#/, "");
+    if (!anchor) return;
+    const el = document.getElementById(anchor);
+    if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "start" });
+  }, { defer: false }));
+
   // The parent options exclude the location's own subtree: the server refuses
   // the cycle anyway, so the select never offers it (advisory, like the name
   // precheck). Walks parent_id upward per candidate; the tree is small.
@@ -236,7 +247,7 @@ export default function ConfigureFace(props: { kind: ConfigureKind; id: string }
   return (
     <section data-testid="configure-face" class="flex flex-col gap-5 p-4">
       <Show when={raw()} fallback={<div class="skeleton h-24 w-full" />}>
-        <div class={SECTION}>
+        <div id="identity" class={SECTION}>
           <span class={EYEBROW}>Identity</span>
           <Show
             when={slot.editing()}
@@ -257,7 +268,7 @@ export default function ConfigureFace(props: { kind: ConfigureKind; id: string }
           />
         </div>
 
-        <div class={SECTION}>
+        <div id="classification" class={SECTION}>
           <span class={EYEBROW}>Classification</span>
           <Show when={props.kind === "system"}>
             <BladeField label="System type" edit={slot} value={() => (row()?.system_type as string) || "Unclassified"}
@@ -300,7 +311,7 @@ export default function ConfigureFace(props: { kind: ConfigureKind; id: string }
           </Show>
         </div>
 
-        <div class={SECTION}>
+        <div id="placement" class={SECTION}>
           <span class={EYEBROW}>Placement</span>
           <Show when={props.kind === "location"} fallback={
             <BladeField label="Where it sits" edit={slot} value={() => placementLine(props.kind, row(), locations.data)} />
@@ -322,8 +333,7 @@ export default function ConfigureFace(props: { kind: ConfigureKind; id: string }
           </Show>
         </div>
 
-        <div class={SECTION}>
-          <span class={EYEBROW}>Tags</span>
+        <div id="tags" class={SECTION}>
           <TagAdder kind={props.kind} name={props.id} canUpdate={slot.editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
         </div>
 
@@ -335,7 +345,10 @@ export default function ConfigureFace(props: { kind: ConfigureKind; id: string }
 
 function placementLine(kind: ConfigureKind, rec: Record<string, unknown> | undefined, locations?: { id: string; name: string; label?: string }[]): string {
   if (!rec) return "";
-  const locID = (kind === "system" ? rec.location : rec.location_id) as string | undefined;
-  const loc = locID ? (locations ?? []).find((l) => l.id === locID) : undefined;
+  // The rows spell placement differently per kind (a system's list row
+  // carries location_id, a component's location_id too, older shapes a bare
+  // location); read whichever is present and resolve by id or name.
+  const ref = (rec.location_id ?? rec.location) as string | undefined;
+  const loc = ref ? (locations ?? []).find((l) => l.id === ref || l.name === ref) : undefined;
   return loc ? entityLabel(loc) : "Unplaced";
 }

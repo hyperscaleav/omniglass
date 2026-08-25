@@ -56,7 +56,10 @@ export default function ComponentLeaf() {
   ]);
   const leafTab = () => {
     const t = Array.isArray(leafSearch.tab) ? leafSearch.tab[0] : leafSearch.tab;
-    return t && leafTabs().some((x) => x.key === t) ? t : "overview";
+    if (t && leafTabs().some((x) => x.key === t)) return t;
+    const editing = (Array.isArray(leafSearch.edit) ? leafSearch.edit[0] : leafSearch.edit) === "1";
+    if (editing && leafTabs().some((x) => x.key === "configure")) return "configure";
+    return "overview";
   };
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
@@ -150,7 +153,7 @@ export default function ComponentLeaf() {
           }
         >
           <div class="flex flex-col gap-3">
-          <TabRail tabs={leafTabs()} />
+          <TabRail tabs={leafTabs()} activeKey={leafTab} />
           <Show when={leafTab() === "configure"}>
             <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace kind="component" id={id()} /></div>
           </Show>

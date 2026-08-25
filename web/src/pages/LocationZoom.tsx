@@ -50,7 +50,10 @@ export default function LocationZoom() {
   ]);
   const zoomTab = () => {
     const t = Array.isArray(zoomSearch.tab) ? zoomSearch.tab[0] : zoomSearch.tab;
-    return t && zoomTabs().some((x) => x.key === t) ? t : "overview";
+    if (t && zoomTabs().some((x) => x.key === t)) return t;
+    const editing = (Array.isArray(zoomSearch.edit) ? zoomSearch.edit[0] : zoomSearch.edit) === "1";
+    if (editing && zoomTabs().some((x) => x.key === "configure")) return "configure";
+    return "overview";
   };
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const locHealth = useQuery(() => ({ queryKey: locationHealthKey(id()), queryFn: () => locationHealth(id()) }));
@@ -137,7 +140,7 @@ export default function LocationZoom() {
           }
         >
           <div class="flex flex-col gap-3">
-          <TabRail tabs={zoomTabs()} />
+          <TabRail tabs={zoomTabs()} activeKey={zoomTab} />
           <Show when={zoomTab() === "configure"}>
             <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace kind="location" id={id()} /></div>
           </Show>

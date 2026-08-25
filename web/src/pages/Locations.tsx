@@ -76,7 +76,7 @@ export default function Locations() {
   // The zoom face IS the default (ADR-0129): the identity route renders the
   // location zoom; the classic detail face survives at ?view=detail (and
   // under a legacy ?edit=1) until edit-in-blade lands.
-  const wantsDetail = () => params.id === "create" || search.view === "detail" || search.edit === "1";
+  const wantsDetail = () => params.id === "create" || search.view === "detail";
   if (params.id && !wantsDetail()) return <LocationZoom />;
   const navigate = useNavigate();
   const qc = useQueryClient();

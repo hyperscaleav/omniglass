@@ -89,7 +89,7 @@ export default function Components() {
   // legacy ?zoom=1 deep link still resolves here, one face either way.
   const [zoomSearch] = useSearchParams();
   const zoomParams = useParams();
-  const wantsDetail = () => zoomParams.id === "create" || zoomSearch.view === "detail" || zoomSearch.edit === "1";
+  const wantsDetail = () => zoomParams.id === "create" || zoomSearch.view === "detail";
   if (zoomParams.id && !wantsDetail()) return <ComponentLeaf />;
   const params = useParams();
   const [search] = useSearchParams();

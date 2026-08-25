@@ -542,3 +542,15 @@ describe("the configure tab (#800)", () => {
     expect(screen.queryByRole("tab", { name: "Configure" })).toBeNull();
   });
 });
+
+
+// Slice 2 of #800: ?edit=1 means the one editor, wherever it is typed. The
+// bare param lands the workspace on Configure, already editing.
+describe("?edit=1 lands on configure (#800)", () => {
+  it("opens the configure tab editing from a bare ?edit=1 address", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?edit=1`);
+    const face = await screen.findByTestId("configure-face");
+    expect(await within(face).findByDisplayValue("boardroom")).toBeTruthy();
+    expect(within(face).getByRole("button", { name: /save/i })).toBeTruthy();
+  });
+});

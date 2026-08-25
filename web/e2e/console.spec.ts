@@ -40,35 +40,36 @@ test.describe("operator console", () => {
     await page.getByLabel("Name", { exact: true }).fill(name);
     await page.getByRole("button", { name: /create location/i }).click();
 
-    // Create hands off to the new location's own detail in edit mode, and the
-    // handoff is the URL itself (#759): the route lands carrying ?edit=1. Cancel
-    // drops it to the read-only face (where the identity is rendered) and strips
-    // the param, so the URL stops requesting an edit the operator left.
+    // Create hands off to the new location's own workspace already editing
+    // (#800): the route lands carrying ?edit=1, which the zoom answers with
+    // its Configure tab in edit mode. Cancel leaves edit and strips the
+    // param, so the URL stops requesting an edit the operator left.
     await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}\?edit=1/);
+    await expect(page.getByRole("button", { name: /save changes/i })).toBeVisible();
     await page.getByRole("button", { name: /^cancel$/i }).first().click();
-    await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: label })).toBeVisible();
     await expect(page).not.toHaveURL(/edit=1/);
 
-    // The edit face is deep-linkable: revisiting the same detail with ?edit=1
-    // lands editing directly, no clicks involved.
+    // The edit is deep-linkable: revisiting with ?edit=1 lands the Configure
+    // tab editing directly, no clicks involved.
     await page.goto(page.url().split("?")[0] + "?edit=1");
     await expect(page.getByRole("button", { name: /save changes/i })).toBeVisible();
     await page.getByRole("button", { name: /^cancel$/i }).first().click();
     await expect(page).not.toHaveURL(/edit=1/);
 
-    // It appears as a new root row back on the list, under the label the rule
+    // It appears as a new root row on the fleet list (the old index address
+    // lands on the Locations kind tab, #798), under the label the rule
     // rendered from the name typed above.
     await page.goto("/web/locations");
     await expect(page.locator("main")).toContainText(label);
 
-    // Confirm-delete it from its own detail. The detail's Delete carries its
-    // word; the row's inline action is an icon-only button of the same
-    // accessible name.
+    // Confirm-delete it from its blade: a row opens the condensed blade
+    // (#799), whose footer carries Delete behind a confirm.
     page.on("dialog", (d) => d.accept());
     await page.getByText(label, { exact: true }).first().click();
-    await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
-    await expect(page.locator('button:text-is("Delete")')).toBeVisible();
-    await page.locator('button:text-is("Delete")').click();
+    await expect(page.locator("aside[data-blade]")).toBeVisible();
+    await expect(page.locator('aside[data-blade] button:text-is("Delete")')).toBeVisible();
+    await page.locator('aside[data-blade] button:text-is("Delete")').click();
 
     // It is gone from the list.
     await expect(page.locator("main")).not.toContainText(label);
