@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
-import { useNavigate, useParams } from "@solidjs/router";
+import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
@@ -7,6 +7,8 @@ import HealthBadge from "../components/HealthBadge";
 import SystemCard from "../components/SystemCard";
 import FleetShell from "../components/FleetShell";
 import FleetRows from "../components/FleetRows";
+import TabRail from "../components/TabRail";
+import ConfigureFace from "../components/ConfigureFace";
 import { locationTileSpec } from "../lib/fleet_tiles";
 import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
 import {
@@ -23,6 +25,7 @@ import {
 } from "../lib/fleet";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { entityLabel } from "../lib/entities";
+import { can, useMe } from "../lib/auth";
 import { durationText } from "../lib/timeline";
 import { sinceOf } from "../lib/system_zoom";
 import { describeError, fmtTime } from "../lib/format";
@@ -38,6 +41,17 @@ export default function LocationZoom() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   const id = () => params.id;
+  const me = useMe();
+  // The zoom grows the Configure facet (#800): two tabs, Overview the default.
+  const [zoomSearch] = useSearchParams();
+  const zoomTabs = createMemo(() => [
+    { key: "overview", label: "Overview" },
+    ...(can(me.data, "location", "update") ? [{ key: "configure", label: "Configure" }] : []),
+  ]);
+  const zoomTab = () => {
+    const t = Array.isArray(zoomSearch.tab) ? zoomSearch.tab[0] : zoomSearch.tab;
+    return t && zoomTabs().some((x) => x.key === t) ? t : "overview";
+  };
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const locHealth = useQuery(() => ({ queryKey: locationHealthKey(id()), queryFn: () => locationHealth(id()) }));
   // Pinned at setup, like the system zoom's: a moving now re-ages the line.
@@ -122,7 +136,13 @@ export default function LocationZoom() {
             </div>
           }
         >
-          <FleetShell
+          <div class="flex flex-col gap-3">
+          <TabRail tabs={zoomTabs()} />
+          <Show when={zoomTab() === "configure"}>
+            <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace kind="location" id={id()} /></div>
+          </Show>
+          <Show when={zoomTab() === "overview"}>
+<FleetShell
             storageKey="fleet"
             tiles={tiles()}
             list={<div class="card overflow-hidden border border-base-300 bg-base-200 p-0"><FleetRows rows={bands().flatMap((b) => b.clusters)} view={view.data!} onOpen={(sid) => navigate(`/systems/${sid}`)} /></div>}
@@ -166,6 +186,8 @@ export default function LocationZoom() {
               </div>
             </div>
           </FleetShell>
+          </Show>
+          </div>
         </Show>
       </Show>
     </Page>

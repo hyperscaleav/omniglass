@@ -1,8 +1,10 @@
 import { For, Show, createEffect, createMemo } from "solid-js";
-import { useNavigate, useParams } from "@solidjs/router";
+import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
+import TabRail from "../components/TabRail";
+import ConfigureFace from "../components/ConfigureFace";
 import HealthBadge from "../components/HealthBadge";
 import FleetShell from "../components/FleetShell";
 import { componentTileSpec } from "../lib/fleet_tiles";
@@ -20,6 +22,7 @@ import { NODES_KEY, listNodes } from "../lib/nodes";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
+import { can, useMe } from "../lib/auth";
 import {describeError, fmtTime } from "../lib/format";
 
 // The component leaf (#637): the end of the walk. What it is (product,
@@ -45,6 +48,16 @@ export default function ComponentLeaf() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   const id = () => params.id;
+  const me = useMe();
+  const [leafSearch] = useSearchParams();
+  const leafTabs = createMemo(() => [
+    { key: "overview", label: "Overview" },
+    ...(can(me.data, "component", "update") ? [{ key: "configure", label: "Configure" }] : []),
+  ]);
+  const leafTab = () => {
+    const t = Array.isArray(leafSearch.tab) ? leafSearch.tab[0] : leafSearch.tab;
+    return t && leafTabs().some((x) => x.key === t) ? t : "overview";
+  };
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
@@ -136,7 +149,13 @@ export default function ComponentLeaf() {
             </div>
           }
         >
-          <FleetShell
+          <div class="flex flex-col gap-3">
+          <TabRail tabs={leafTabs()} />
+          <Show when={leafTab() === "configure"}>
+            <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace kind="component" id={id()} /></div>
+          </Show>
+          <Show when={leafTab() === "overview"}>
+<FleetShell
             storageKey="fleet"
             tiles={tiles()}
             rows={[]}
@@ -331,6 +350,8 @@ export default function ComponentLeaf() {
             </section>
           </div>
           </FleetShell>
+          </Show>
+          </div>
         </Show>
       </Show>
     </Page>

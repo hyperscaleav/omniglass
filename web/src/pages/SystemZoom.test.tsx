@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, within, cleanup, fireEvent } from "@solidjs/testing-library";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route, useLocation } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Systems from "./Systems";
@@ -113,10 +113,10 @@ const declared = [
   },
 ] as unknown as EffectiveRole[];
 
-function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: FleetHealth = health, metrics: unknown[] = [], standards: unknown[] = []) {
+function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: FleetHealth = health, metrics: unknown[] = [], standards: unknown[] = [], meOverride: Me = me) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...FLEET_VIEW_KEY], view);
-  qc.setQueryData([...ME_KEY], me);
+  qc.setQueryData([...ME_KEY], meOverride);
   qc.setQueryData([...SYSTEMS_KEY], [{ id: uuidFor("szp-sys"), name: "boardroom", label: "Boardroom", standard: "huddle-room" }]);
   qc.setQueryData([...LOCATIONS_KEY], []);
   qc.setQueryData([...LOCATION_TYPES_KEY], []);
@@ -485,5 +485,60 @@ describe("the scoped summary (#795 review)", () => {
     expect(within(rail).queryByText("roots")).toBeNull();
     expect(within(rail).getByText("slots filled")).toBeTruthy();
     expect(within(rail).getByText(/active alarms?/)).toBeTruthy();
+  });
+});
+
+
+// The Configure facet (#800 slice 1): editing is one more tab of the
+// workspace. Identity, Classification, Placement, Tags, the classic face's
+// own save contract (update first, rename last, invalidate in finally), and
+// the tab renders only for a caller who could change anything.
+describe("the configure tab (#800)", () => {
+  it("offers Configure to an owner and renders the sections from the row", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure`);
+    const face = await screen.findByTestId("configure-face");
+    expect(within(face).getByText("Identity")).toBeTruthy();
+    expect(within(face).getByText("Classification")).toBeTruthy();
+    expect(within(face).getByText("Placement")).toBeTruthy();
+    expect(within(face).getAllByText("Tags").length).toBeGreaterThan(0);
+    // The row's facts read back before any edit: the name in the data font,
+    // the standard it conforms to.
+    expect(within(face).getByText("boardroom")).toBeTruthy();
+    expect(within(face).getAllByText(/huddle-room/).length).toBeGreaterThan(0);
+  });
+
+  it("saves the classic contract: label PATCHes by uuid, rename goes last", async () => {
+    const calls: { method: string; url: string; body: string }[] = [];
+    const stub = vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+      const req = input as Request;
+      const body = req.method === "PATCH" || req.method === "POST" ? await req.clone().text() : "";
+      calls.push({ method: req.method, url: req.url, body });
+      return new Response(JSON.stringify({}), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    try {
+      mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure`);
+      const face = await screen.findByTestId("configure-face");
+      fireEvent.click(within(face).getByRole("button", { name: "Edit" }));
+      const name = await within(face).findByDisplayValue("boardroom");
+      fireEvent.input(name, { target: { value: "exec-boardroom" } });
+      fireEvent.click(within(face).getByRole("button", { name: /save/i }));
+      await waitFor(() => {
+        expect(within(face).queryByRole("alert")?.textContent ?? "", "save error surfaced").toBe("");
+        const patch = calls.find((c) => c.method === "PATCH" && c.url.includes(`/systems/${uuidFor("szp-sys")}`));
+        expect(patch, "the update PATCH by uuid").toBeTruthy();
+        const rename = calls.find((c) => c.method === "POST" && c.url.includes(":rename"));
+        expect(rename, "the rename custom method; saw " + JSON.stringify(calls.map((c) => c.method + " " + c.url))).toBeTruthy();
+        expect(JSON.parse(rename!.body).name).toBe("exec-boardroom");
+      });
+    } finally {
+      stub.mockRestore();
+    }
+  });
+
+  it("hides Configure from a caller with no edit verb", async () => {
+    const viewer: Me = { principal: { id: "u-v", kind: "human" }, human: { username: "v" }, permissions: ["system:read", "location:read", "component:read", "standard:read", "system_type:read", "metric_type:read"], grants: [] };
+    mount(`/web/systems/${uuidFor("szp-sys")}`, health, [], [], viewer);
+    await screen.findByTestId("tab-rail");
+    expect(screen.queryByRole("tab", { name: "Configure" })).toBeNull();
   });
 });

@@ -21,6 +21,7 @@ import BladeStack from "../components/BladeStack";
 import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
 import TabRail from "../components/TabRail";
+import ConfigureFace from "../components/ConfigureFace";
 import { alarmRows, componentCards, sinceOf, systemZoomVM, type ComponentCard } from "../lib/system_zoom";
 import { vitalRows } from "../lib/component_leaf";
 import { slotStrip } from "../lib/slot_strip";
@@ -28,6 +29,7 @@ import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { entityLabel } from "../lib/entities";
+import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
 import { componentAlarms, componentAlarmsKey, severityRank } from "../lib/alarms";
@@ -46,6 +48,7 @@ import TimeseriesChart from "../components/TimeseriesChart";
 export default function SystemZoom() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const me = useMe();
   const id = () => params.id;
   // Pinned at setup, like HealthHistory's: a "now" that moved under the
   // since-line would re-age it on every unrelated re-render.
@@ -98,6 +101,9 @@ export default function SystemZoom() {
     { key: "events", label: "Events" },
     { key: "logs", label: "Logs" },
     ...(kpiMetrics().length > 0 ? [{ key: "data", label: "Data" }] : []),
+    // Editing is a facet of the workspace (#800): the tab renders only for a
+    // caller holding an edit verb; the sections inside gate per verb again.
+    ...(can(me.data, "system", "update") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
   const tab = () => {
     const t = Array.isArray(search.tab) ? search.tab[0] : search.tab;
@@ -244,6 +250,9 @@ export default function SystemZoom() {
                 <TabRail tabs={tabs()} />
                 <Show when={tab() === "map" && mapDecl()}>
                   {(decl) => <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} onOpen={openComponent} />}
+                </Show>
+                <Show when={tab() === "configure"}>
+                  <ConfigureFace kind="system" id={id()} />
                 </Show>
                 <Show when={tab() === "events"}>
                   <section data-testid="events-tab" class="flex flex-col gap-2 p-4">

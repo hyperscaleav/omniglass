@@ -107,7 +107,11 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`) {
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...LOCATION_TYPES_KEY], types);
-  qc.setQueryData([...LOCATIONS_KEY], []);
+  // The configure face self-fetches its row and parent options from this
+  // list; a test that strips it renders the face as a skeleton (#800-1).
+  qc.setQueryData([...LOCATIONS_KEY], [
+    { id: uuidFor("lz-hq"), name: "hq", label: "Headquarters", location_type: "campus", parent_id: null, actions: ["update", "delete"] },
+  ]);
   qc.setQueryData([...SYSTEMS_KEY], []);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...systemHealthKey(uuidFor("lz-s-lobby"))], lobbyHealth);
@@ -293,5 +297,28 @@ describe("the location list density", () => {
     const toggle = screen.getByTestId("view-toggle");
     fireEvent.click(within(toggle).getByRole("button", { name: /list/i }));
     await waitFor(() => expect(window.location.search).toContain("view=list"));
+  });
+});
+
+
+// The location zoom grows the same Configure facet (#800 slice 1): a
+// two-tab rail (Overview, Configure), the parent mover with its consequence
+// copy living where the room to explain it exists.
+describe("the location configure tab (#800)", () => {
+  it("offers Configure and renders identity, the parent mover, and tags", async () => {
+    mount(`/web/locations/${uuidFor("lz-hq")}?tab=configure`);
+    const face = await screen.findByTestId("configure-face");
+    expect(within(face).getByText("Identity")).toBeTruthy();
+    expect(within(face).getByText("Placement")).toBeTruthy();
+    expect(within(face).getAllByText("Tags").length).toBeGreaterThan(0);
+    expect(within(face).getByText("hq")).toBeTruthy();
+  });
+
+  it("keeps the Overview the default facet", async () => {
+    mount();
+    const rail = await screen.findByTestId("tab-rail");
+    expect(within(rail).getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe("true");
+    expect(within(rail).getByRole("tab", { name: "Configure" })).toBeTruthy();
+    expect(screen.getByTestId("location-header")).toBeTruthy();
   });
 });

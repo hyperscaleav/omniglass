@@ -200,3 +200,19 @@ describe("the leaf's dispatch facts (#786)", () => {
     expect(within(card).getByText("port open")).toBeTruthy();
   });
 });
+
+
+// The leaf grows the Configure facet too (#800 slice 1): identity with the
+// reset-to-generated affordance, the product read-only (fixed at creation),
+// tags. Placement reads where it sits; movers are not part of the classic
+// contract this slice reproduces.
+describe("the component configure tab (#800)", () => {
+  it("offers Configure with identity, the fixed product, and tags", async () => {
+    mount(`/web/components/${uuidFor("cf-c-bar")}?tab=configure`);
+    const face = await screen.findByTestId("configure-face");
+    expect(within(face).getByText("Identity")).toBeTruthy();
+    expect(within(face).getByText("Classification")).toBeTruthy();
+    expect(within(face).getAllByText("Tags").length).toBeGreaterThan(0);
+    expect(within(face).getByText(/fixed at creation/i)).toBeTruthy();
+  });
+});
