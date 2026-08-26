@@ -5600,3 +5600,34 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   header gains the verdict badge, the since-line from the location health read's
   transitions, and a needs-attention count for this subtree whose click applies the
   existing worst-first verdict filter. No new API.
+
+- **A missing asset 404s, so a broken deploy stops looking healthy**
+  ([#778](https://github.com/hyperscaleav/omniglass/issues/778)). The SPA catch-all
+  answered every miss under the console's own paths with `index.html` and 200, which made a
+  partial deploy indistinguishable from a working one: a missing JS chunk arrived as HTML
+  and the browser reported a syntax error at line 1, a missing face rendered wrong with no
+  request having failed, and any monitor keyed on 4xx saw a healthy origin. The handler now
+  reads the directories the build owns off the build output itself (`assets/`, and `fonts/`
+  from `public/`) and 404s a miss inside one of them; a console route at any depth still
+  renders the SPA. Derived rather than enumerated, so an asset kind the build starts
+  emitting is covered with no code to remember it, which the `media/` case in the test rail
+  pins. Keying off `Accept` was weighed and dropped: a deep link from curl sends `*/*` and
+  must still render the console, but `*/*` is also what a script or stylesheet request
+  carries, so the escape hatch the deep link needs re-admits the case the fix exists to catch.
+- **A product with no label stops wedging its components**
+  ([#805](https://github.com/hyperscaleav/omniglass/issues/805)). `componentLabelChain`
+  scanned `p.label` into a plain string while every other label read coalesced, so a product
+  whose label is NULL failed every component create, rename, move and reclassify that
+  resolved it. The API cannot mint that row (create requires `minLength: 1`), but the
+  direct-gateway lane can, and that lane is the one seed, devseed and the tests use. The
+  query coalesces like its siblings; the label falls through to the component_type, which is
+  what an absent product label should render as. Found by the #804 sweep, whose harness had
+  worked around it by setting labels.
+- **The two dated audit documents leave the repository root**
+  ([#497](https://github.com/hyperscaleav/omniglass/issues/497)). `AUDIT-2026-07-30.md` and
+  `DRIFT-PLAN-2026-07-30.md` sat beside the README, outside every lint scan root, asserting
+  whatever was true on 2026-07-30 with nothing to flag them, in a repository that is public
+  from the first commit. Both are deleted: the audit's findings and the plan's 42 sub-issues
+  are tracked in GitHub, which holds them authoritatively, and a dated write-up that has been
+  fully converted into issues has no second life. The `docs-audit` skill keeps the six-section
+  output shape it encoded and stops pointing at a file that is gone.

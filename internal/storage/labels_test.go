@@ -1113,6 +1113,50 @@ func TestEveryStoredSystemAndLocationLabelEqualsWhatItsRuleProduces(t *testing.T
 	}
 }
 
+// A product whose label is NULL still resolves a component's label (#805).
+//
+// The API cannot mint the row (create requires minLength 1 on label), but the
+// direct-gateway lane can, and that lane is exactly the one seed, devseed and
+// the tests use: CreateProduct takes an empty label and stores NULL through
+// labelOrNull. componentLabelChain then scanned p.label into a plain string, so
+// every component create, rename, move and reclassify resolving that product
+// died on "cannot scan NULL into *string". Found by the #804 sweep, whose
+// harness minted label-less products; the harness now sets labels, which walks
+// around the defect rather than fixing it, so the coverage has to live here.
+func TestAComponentResolvesALabelFromALabellessProduct(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	room := makeRoom(t, gw, ctx, "room-labelless")
+
+	// The gateway lane, with no label: the row the API refuses and the seed makes.
+	unlabelled, err := gw.CreateProduct(ctx, "", storage.Product{Name: "no-label-panel", ComponentType: "display"})
+	if err != nil {
+		t.Fatalf("create label-less product: %v", err)
+	}
+	if unlabelled.Label != "" {
+		t.Fatalf("product label = %q, want empty (the row must actually be NULL)", unlabelled.Label)
+	}
+
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &unlabelled.Name, LocationName: &room}, all, all, all, all)
+	if err != nil {
+		t.Fatalf("create component from a label-less product: %v", err)
+	}
+	// The seeded global rule renders from the component_type, which is what an
+	// absent product label should fall through to rather than failing the write.
+	if c.Label != "Display 1" {
+		t.Errorf("label = %q, want %q", c.Label, "Display 1")
+	}
+
+	// And the other write paths that re-resolve the same chain (#805 named them
+	// all: create, rename, move, reclassify).
+	moved := makeRoom(t, gw, ctx, "room-labelless-2")
+	if _, err := gw.MoveComponent(ctx, "", c.Name, storage.ComponentMove{LocationName: &moved}, all, all, all); err != nil {
+		t.Errorf("move a component on a label-less product: %v", err)
+	}
+	if _, err := gw.UpdateComponent(ctx, "", c.ID, storage.ComponentPatch{Label: strptr("Operator's Own")}, all, all); err != nil {
+		t.Errorf("rename a component on a label-less product: %v", err)
+	}
+}
+
 // --- helpers ------------------------------------------------------------
 
 // seededGateway opens a Gateway over a fresh database with the boot seed
