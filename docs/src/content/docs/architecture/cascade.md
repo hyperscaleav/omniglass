@@ -214,7 +214,7 @@ not the comparison itself.
 ```text
 RM204 - cascade precedence            most-specific (highest) wins
 ==============================================================================
- spec  source                            poll-interval  credential   retry_limit
+ spec  source                            poll-interval  credential   retry-limit
  ----  --------------------------------  -------------  ----------   -----------
  500   component RM204  (explicit)        -              -            -      <- ceiling
  450   group: Old-firmware Room Kits      5min  *        -            -
@@ -230,7 +230,7 @@ RM204 - cascade precedence            most-specific (highest) wins
 ==============================================================================
  effective:  poll-interval = 5min    (group 450; shadowed template 30s, platform 60s)
              credential    = vault-B (location Floor 3 @330; shadowed PCI-scope @250, HQ Campus @310)
-             retry_limit   = 3       (no binding at any rung: the declaration stands)
+             retry-limit   = 3       (no binding at any rung: the declaration stands)
 ```
 
 The three columns are the point:
@@ -240,7 +240,7 @@ The three columns are the point:
   fix needs.
 - **`credential`**: the **PCI-scope group (250)** sits *below* deployment, so the specific
   **Floor 3 (330)** setting beats it, the case a fixed band would get wrong.
-- **`retry_limit`**: **nothing bound it anywhere**, so the fold ends empty and the value falls
+- **`retry-limit`**: **nothing bound it anywhere**, so the fold ends empty and the value falls
   through to the declaration: `3` is not a `platform` binding and shadowed nothing, it is what the
   type says a retry limit is.
 

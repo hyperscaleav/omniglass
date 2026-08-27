@@ -52,6 +52,24 @@ func ValidateName(table, name string) error {
 	}
 }
 
+// ValidateEntityName applies the rule WITHOUT a table, for the callers that hold a
+// name but no row to attach it to. There is exactly one rule (#586), so this and
+// [ValidateName] agree for every name-bearing table by construction rather than by
+// coincidence: ValidateName's whole remaining job is deciding whether the table
+// bears a name at all, and it defers to this for the answer.
+//
+// Exported for the docs lint (#571), which validates the example names in the
+// published corpus and has a name literal from a fenced block with no table in
+// sight. Prefer [ValidateName] anywhere a table IS known: it also catches the
+// table that bears no operator-typed name, which this cannot see.
+//
+// If the rule ever splits by table again, this becomes the wrong entry point and
+// its callers have to learn the table. That is the intended failure mode: one
+// exported rule for as long as there is one rule.
+func ValidateEntityName(name string) error {
+	return validateEntityName(name)
+}
+
 // validateEntityName is the rule: one kebab token, no dots, so a name is exactly one
 // position wherever it is carried and can never split into two.
 func validateEntityName(name string) error {
