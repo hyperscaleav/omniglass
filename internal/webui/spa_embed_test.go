@@ -107,3 +107,48 @@ func TestEmbeddedConsoleServesHashedAsset(t *testing.T) {
 		t.Fatalf("asset Cache-Control = %q, want immutable", cc)
 	}
 }
+
+func TestEmbeddedConsole404sAMissingAsset(t *testing.T) {
+	// #778 against the REAL build output, which is the assertion that matters:
+	// the prefixes are derived from whatever Vite and public/ actually emitted,
+	// so this fails if the build stops emitting a directory the fake-FS tests
+	// assume, or starts emitting one the derivation cannot see.
+	sub, err := fs.Sub(distFS, "dist")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := fs.ReadDir(sub, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dirs []string
+	for _, e := range entries {
+		if e.IsDir() {
+			dirs = append(dirs, e.Name())
+		}
+	}
+	if len(dirs) == 0 {
+		t.Fatal("the embedded console has no asset directories; the build did not run")
+	}
+
+	h := SPA()
+	for _, dir := range dirs {
+		// A name no content hash can collide with, under a directory the build
+		// really owns: a broken deploy, and a broken deploy must not read as 200.
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/"+dir+"/omniglass-no-such-file-000000.bin", nil))
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("GET /%s/<missing> = %d, want 404", dir, rec.Code)
+		}
+		if strings.Contains(rec.Body.String(), `id="root"`) {
+			t.Errorf("GET /%s/<missing> answered with the console shell", dir)
+		}
+	}
+
+	// And the catch-all still does its job for a real console route.
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/locations/hq", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `id="root"`) {
+		t.Errorf("GET /locations/hq = %d, want 200 with the console shell", rec.Code)
+	}
+}

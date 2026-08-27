@@ -11,9 +11,11 @@ disagrees with its fences. It cannot catch **semantic** drift: a claim the code 
 (the audit's canonical case: "alarms never write samples" after a health slice made them),
 an argument that stopped being true, a read surface a page forgot to mention, a
 capability that outgrew its page. That class needs a periodic human-shaped read, and the
-2026-07-30 audit (`AUDIT-2026-07-30.md`, the artifact this skill encodes) proved the
-fan-out shape works: it produced the drift-correction wave (#428), the lint suite (#429),
-the telemetry-integrity epic (#430), and the corpus restructure (#434).
+2026-07-30 audit, the run this skill encodes, proved the fan-out shape works: it produced
+the drift-correction wave (#428), the lint suite (#429), the telemetry-integrity epic
+(#430), and the corpus restructure (#434). Those issues are the surviving record of it;
+the dated write-up it was read from is gone (#497), because a finding is tracked in an
+issue or it is not tracked.
 
 ## When
 
@@ -61,7 +63,7 @@ finding with **file:line and the code evidence**, and an explicit "checked, clea
 (so silence is a claim, not a gap). Sketch pages (the Design sidebar group) get a
 lighter pass: only the built-today notes and any claim of existence are checked.
 
-## The output shape (six sections, matching AUDIT-2026-07-30.md)
+## The output shape (six sections, as the 2026-07-30 audit ran them)
 
 1. **Where the implementation actually is**: the snapshot (page/badge census, table and
    route and command counts, the mature-vs-thin map).

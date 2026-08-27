@@ -23,6 +23,7 @@ func SPAHandler(fsys fs.FS) http.Handler {
 		return http.HandlerFunc(placeholder)
 	}
 	fileServer := http.FileServer(http.FS(fsys))
+	prefixes := assetPrefixes(fsys)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
 		if p != "" {
@@ -38,9 +39,67 @@ func SPAHandler(fsys fs.FS) http.Handler {
 				fileServer.ServeHTTP(w, r)
 				return
 			}
+			if underAssetPrefix(prefixes, p) {
+				http.NotFound(w, r)
+				return
+			}
 		}
 		serveIndex(w, r, fsys)
 	})
+}
+
+// assetPrefixes returns the directories the console build owns, read off the
+// build output itself rather than kept by hand (#778).
+//
+// A miss inside one of them is a genuine 404: nothing but the build writes
+// there, so a request for a file that is not there is a broken deploy, not a
+// console route. Answering it with index.html and 200, which is what the
+// catch-all used to do, makes a partial deploy indistinguishable from a healthy
+// one: a missing JS chunk arrives as HTML and the browser reports a syntax error
+// at line 1, a missing face renders wrong with no request having failed, and any
+// monitor keyed on 4xx sees an origin that is fine.
+//
+// Deriving the set beats enumerating it. Today Vite emits `assets/` and copies
+// `public/` verbatim (`fonts/`, per web/vite.config.ts); the day the build emits
+// another kind, it is covered with no code here to remember. The rule the
+// derivation rests on is that the console's own routes never share a first
+// segment with a build directory, which holds because the build's names come
+// from Vite and public/, and the router's come from the fleet vocabulary.
+//
+// The alternative, keying off Accept, was weighed and dropped: a deep link from
+// curl sends `*/*` and must still render the console, but `*/*` is also exactly
+// what a script or stylesheet request carries, so the escape hatch the deep link
+// needs re-admits the case this exists to catch.
+func assetPrefixes(fsys fs.FS) []string {
+	entries, err := fs.ReadDir(fsys, ".")
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			out = append(out, e.Name())
+		}
+	}
+	return out
+}
+
+// underAssetPrefix reports whether p addresses a file inside one of the build's
+// directories. Pure and separate from the handler so the rule is testable
+// without a filesystem: it matches a whole first segment, so `assets/app.js` is
+// an asset request while the bare directory `assets` and the look-alike
+// `assetsomething/x` are not.
+func underAssetPrefix(prefixes []string, p string) bool {
+	first, rest, ok := strings.Cut(p, "/")
+	if !ok || rest == "" {
+		return false
+	}
+	for _, prefix := range prefixes {
+		if first == prefix {
+			return true
+		}
+	}
+	return false
 }
 
 // contentTypeFor returns the media type this binary states for a console file,

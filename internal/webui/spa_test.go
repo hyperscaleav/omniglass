@@ -86,6 +86,85 @@ func TestFallsBackToIndexForClientRoute(t *testing.T) {
 	}
 }
 
+func TestMissingAssetIs404NotTheSPA(t *testing.T) {
+	// #778: the fallback answered every miss with index.html and 200, so a
+	// partial deploy looked healthy. A miss under a directory the build owns is
+	// a genuine 404: nothing routes there but the build's own output.
+	h := SPAHandler(fakeConsole())
+	for _, p := range []string{
+		"/assets/app-deadbeef.js",              // a chunk a partial deploy did not upload
+		"/fonts/ibm-plex-sans-latin-700.woff2", // a face referenced but not built
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404", p, rec.Code)
+		}
+		if contains(rec.Body.String(), `id="root"`) {
+			t.Errorf("GET %s answered with index.html", p)
+		}
+	}
+}
+
+func TestAssetPrefixesComeFromTheBuild(t *testing.T) {
+	// The prefixes are read off the build output, not a list kept by hand, so an
+	// asset kind nobody enumerated is covered the day the build starts emitting
+	// it. `media/` did not exist when #778 was fixed; no handler code names it.
+	fsys := fakeConsole()
+	fsys["media/intro-abc123.mp4"] = &fstest.MapFile{Data: []byte("fakemp4")}
+
+	h := SPAHandler(fsys)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/media/missing-000000.mp4", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("GET /media/missing-000000.mp4 = %d, want 404", rec.Code)
+	}
+
+	// And the directory it lives in is served as before.
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/media/intro-abc123.mp4", nil))
+	if rec.Code != http.StatusOK {
+		t.Errorf("GET /media/intro-abc123.mp4 = %d, want 200", rec.Code)
+	}
+}
+
+func TestUnderAssetPrefix(t *testing.T) {
+	// The rule itself, with no filesystem in the way. Only a path *inside* one of
+	// the build's directories is an asset request; the directory name on its own,
+	// a look-alike sharing its prefix, and every console route are not.
+	prefixes := []string{"assets", "fonts"}
+	cases := map[string]bool{
+		"assets/app-abc123.js": true,
+		"fonts/any.woff2":      true,
+		"assets":               false, // the bare directory, not a file in it
+		"assetsomething/x":     false, // shares a prefix, is not the directory
+		"locations/hq":         false, // a console route
+		"":                     false,
+		"index.html":           false,
+	}
+	for p, want := range cases {
+		if got := underAssetPrefix(prefixes, p); got != want {
+			t.Errorf("underAssetPrefix(%q) = %v, want %v", p, got, want)
+		}
+	}
+}
+
+func TestDeepLinkStillRendersTheConsole(t *testing.T) {
+	// The reason the catch-all exists. A console route at any depth must still
+	// render the SPA, including one whose last segment carries a dot.
+	h := SPAHandler(fakeConsole())
+	for _, p := range []string{"/locations/hq", "/nodes/edge-1/interfaces", "/products/samsung-qm55"} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
+		if rec.Code != http.StatusOK {
+			t.Errorf("GET %s = %d, want 200", p, rec.Code)
+		}
+		if !contains(rec.Body.String(), `id="root"`) {
+			t.Errorf("GET %s did not render the console", p)
+		}
+	}
+}
+
 func TestNoPathTraversal(t *testing.T) {
 	// An absolute request path is cleaned at the root, and io/fs rejects any
 	// remaining "..", so a traversal attempt cannot escape the embedded FS: it

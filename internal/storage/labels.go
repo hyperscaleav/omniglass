@@ -417,7 +417,11 @@ func componentLabelChain(ctx context.Context, q querier, productID string) (comp
 	// and the fleet this epic exists for has 15,000 components in it.
 	var global string
 	err := q.QueryRow(ctx, `
-		select p.label, coalesce(v.label, ''), p.label_rule, p.component_type_id,
+		-- p.label coalesces for the same reason v.label does (#805): a label is
+		-- nullable on every registry, an absent one is renderable as absent, and
+		-- the direct-gateway lane seed, devseed and the tests use accepts a
+		-- product with no label even though the API's minLength refuses one.
+		select coalesce(p.label, ''), coalesce(v.label, ''), p.label_rule, p.component_type_id,
 		       coalesce(s.image->>'label', ct.label),
 		       coalesce(lr.template, lr.default_template, '')
 		from product p
