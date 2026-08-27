@@ -32,17 +32,23 @@ const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { userna
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
-function mount(me: Me = admin) {
+// lateCatalogs starts BOTH classifier catalogs empty, so a test can deliver them
+// one at a time and reproduce the order the target picker actually hits: the
+// command type is in hand before either catalog answers.
+function mount(me: Me = admin, lateCatalogs = false) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...COMMAND_TYPES_KEY], seed);
-  qc.setQueryData([...PROPERTIES_KEY], properties);
-  qc.setQueryData([...METRICS_KEY], metrics);
+  qc.setQueryData([...PROPERTIES_KEY], lateCatalogs ? [] : properties);
+  qc.setQueryData([...METRICS_KEY], lateCatalogs ? [] : metrics);
   qc.setQueryData([...ME_KEY], me);
-  return render(() => (
-    <QueryClientProvider client={qc}>
-      <CommandTypes />
-    </QueryClientProvider>
-  ));
+  return Object.assign(
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <CommandTypes />
+      </QueryClientProvider>
+    )),
+    { qc },
+  );
 }
 
 describe("Command Types page", () => {
@@ -126,6 +132,32 @@ describe("Command Types page", () => {
     expect(within(picker).getByRole("group", { name: "Metrics" })).toBeTruthy();
     // One selection sets one arm; the current target is the selected option.
     expect((picker as HTMLSelectElement).value).toBe("property:audio-level");
+  });
+
+  it("shows a metric-targeted type's own target when the metric catalog answers last", async () => {
+    // The picker draws one menu from TWO catalogs, so it has to re-take its value
+    // whichever one answers last: a <select> keeps no value it has no option for
+    // (#772). set-gain targets a METRIC, so delivering the properties first must
+    // not be enough, which is what makes this prove both sources are tracked
+    // rather than just the first.
+    const { qc } = mount(admin, true);
+    fireEvent.click(screen.getByText("Set gain"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    const picker = () => within(blade).getByRole("combobox") as HTMLSelectElement;
+    expect(picker().value).toBe("");
+
+    qc.setQueryData([...PROPERTIES_KEY], properties);
+    await waitFor(() => expect(within(picker()).queryByRole("option", { name: "Video input" })).toBeTruthy());
+    expect(picker().value).toBe(""); // still nothing to hold: its arm is the other catalog
+
+    qc.setQueryData([...METRICS_KEY], metrics);
+
+    await waitFor(() => expect(picker().value).toBe("metric:mic-gain"));
   });
 
   it("offers the target picker over both catalogs on the create form", async () => {

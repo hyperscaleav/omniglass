@@ -8,6 +8,7 @@ import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
 import { useFormActions } from "../lib/formactions";
+import { bindSelectValue } from "../lib/selectvalue";
 import { Plus } from "../components/icons";
 import {
   type CommandTypeRow,
@@ -131,8 +132,11 @@ function TargetSelect(p: { value: string; onChange: (v: string) => void }): JSX.
     entityLabel(a).localeCompare(entityLabel(b));
   const propertyOptions = createMemo(() => [...(properties.data ?? [])].sort(byRenderedLabel) as PropertyRow[]);
   const metricOptions = createMemo(() => [...(metrics.data ?? [])].sort(byRenderedLabel) as MetricRow[]);
+  // BOTH catalogs are tracked by the binder: the value can name a row from
+  // either, so the control has to re-take it whichever one answers last
+  // (lib/selectvalue.ts, #772).
   return (
-    <select class="select select-bordered w-full" value={p.value} onChange={(e) => p.onChange(e.currentTarget.value)}>
+    <select ref={bindSelectValue(() => p.value, propertyOptions, metricOptions)} class="select select-bordered w-full" onChange={(e) => p.onChange(e.currentTarget.value)}>
       <option value="">None (fire-and-forget)</option>
       <optgroup label="Properties">
         <For each={propertyOptions()}>

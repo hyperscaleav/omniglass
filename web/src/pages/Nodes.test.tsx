@@ -35,18 +35,24 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function mount(me: Me) {
+// lateLocations starts the location directory EMPTY, so a test can deliver it
+// after the blade is open and reproduce the order the placement picker actually
+// hits: the node is in hand well before the directory answers.
+function mount(me: Me, lateLocations = false) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...NODES_KEY], seed);
-  qc.setQueryData([...LOCATIONS_KEY], locSeed);
+  qc.setQueryData([...LOCATIONS_KEY], lateLocations ? [] : locSeed);
   qc.setQueryData([...TASKS_KEY], taskSeed);
   qc.setQueryData([...INTERFACES_KEY], ifaceSeed);
   qc.setQueryData([...ME_KEY], me);
-  return render(() => (
-    <QueryClientProvider client={qc}>
-      <Nodes />
-    </QueryClientProvider>
-  ));
+  return Object.assign(
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Nodes />
+      </QueryClientProvider>
+    )),
+    { qc },
+  );
 }
 
 describe("Nodes page", () => {
@@ -102,6 +108,26 @@ describe("Nodes page", () => {
       const patched = vi.mocked(fetch).mock.calls.find(([input]) => (input as Request)?.method === "PATCH");
       expect(patched).toBeTruthy();
     });
+  });
+
+  it("shows the node's own placement when the location directory answers after edit opened", async () => {
+    // The blade opens on the node, which is already in the list query; the
+    // location directory is a separate query that can answer later. A <select>
+    // keeps no value it has no option for, so the placement picker used to read
+    // "(unplaced)" on a placed node until something else made the value change
+    // (#772). Delivered by hand, so the gap is deterministic, never a sleep.
+    const { qc } = mount(owner, true);
+    fireEvent.click(screen.getByText("HQ Edge Node"));
+    const blade = await screen.findByRole("dialog");
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    const picker = () => within(blade).getByLabelText("Location") as HTMLSelectElement;
+    await waitFor(() => expect(picker()).toBeTruthy());
+    expect(picker().options.length).toBe(1); // "(unplaced)" alone
+
+    qc.setQueryData([...LOCATIONS_KEY], locSeed);
+
+    await waitFor(() => expect(picker().options.length).toBeGreaterThan(1));
+    expect(picker().value).toBe("hq");
   });
 
   it("hides Edit and Re-enroll for a reader (no node:update / node:enroll)", async () => {

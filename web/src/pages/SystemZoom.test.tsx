@@ -12,6 +12,7 @@ import { componentAlarmsKey } from "../lib/alarms";
 import { systemEventsKey, systemLogsKey } from "../lib/system_activity";
 import { metricSeriesKey } from "../lib/series";
 import { STANDARDS_KEY } from "../lib/standards";
+import { SYSTEM_TYPES_KEY } from "../lib/system_types";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { ME_KEY, type Me } from "../lib/auth";
@@ -129,6 +130,7 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
     { property_type_name: "asset-tag", label: "Asset tag", value: "\"A-100\"", from_contract: false, source: "self" },
   ]);
   qc.setQueryData([...STANDARDS_KEY], standards);
+  qc.setQueryData([...SYSTEM_TYPES_KEY], []);
   window.history.pushState({}, "", path);
   const r = render(() => (
 
@@ -573,5 +575,29 @@ describe("the miss face (#800)", () => {
     mount("/web/systems/no-such-room");
     expect(await screen.findByText(/No system answers this address/)).toBeTruthy();
     expect(screen.queryByText("Room Microphone")).toBeNull();
+  });
+});
+
+// #782 on the workspace: the Configure catalogs (standards, system types) are
+// separate queries that can answer after ?edit=1 opened the editor. A <select>
+// keeps no value it has no option for, so until the catalog landed the standard
+// read "" (None), and a save in that window silently cleared it. The catalog is
+// delivered by hand between two assertions, so the losing order is
+// deterministic rather than a race.
+describe("a configure select takes its value when its catalog lands (#782)", () => {
+  it("keeps the stored standard when the standards catalog answers after edit opened", async () => {
+    const { qc } = mount(`/web/systems/${uuidFor("szp-sys")}?edit=1`);
+    const face = await screen.findByTestId("configure-face");
+    await within(face).findByDisplayValue("boardroom");
+    const picker = () => within(face).getByLabelText("Standard") as HTMLSelectElement;
+    expect(picker().options.length).toBe(1); // "None (a one-off system)" alone
+
+    qc.setQueryData([...STANDARDS_KEY], [
+      { id: uuidFor("szp-std-mr"), name: "mr55", label: "MR55" },
+      { id: uuidFor("szp-std-huddle"), name: "huddle-room", label: "Huddle Room" },
+    ]);
+
+    await waitFor(() => expect(picker().options.length).toBe(3));
+    expect(picker().value).toBe("huddle-room");
   });
 });

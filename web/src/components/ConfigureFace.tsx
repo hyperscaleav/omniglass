@@ -6,6 +6,7 @@ import LabelPenField, { seedLabelPen } from "./LabelPenField";
 import TagAdder from "./TagAdder";
 import { createEditSlot, type BladeEdit } from "../lib/blades";
 import { useEditParam } from "../lib/editurl";
+import { bindSelectValue } from "../lib/selectvalue";
 import { createPen } from "../lib/namegen";
 import { can, useMe } from "../lib/auth";
 import { describeError } from "../lib/format";
@@ -298,7 +299,11 @@ export default function ConfigureFace(props: {
           <Show when={props.kind === "system"}>
             <BladeField label="System type" edit={slot} value={() => (row()?.system_type as string) || "Unclassified"}
               children={slot.editing() ? (
-                <select class="select select-bordered w-full" value={systemType()} onChange={(e) => setSystemType(e.currentTarget.value)}>
+                // The catalogs answer after ?edit=1 opened the editor on a deep
+                // link, and a <select> keeps no value it has no option for, so
+                // the four selects below take their value through the shared
+                // binder (lib/selectvalue.ts, #772/#782).
+                <select ref={bindSelectValue(systemType, () => systemTypes.data)} class="select select-bordered w-full" onChange={(e) => setSystemType(e.currentTarget.value)}>
                   <option value="">Unclassified</option>
                   <For each={systemTypes.data ?? []}>{(t) => <option value={t.name}>{entityLabel(t)}</option>}</For>
                 </select>
@@ -307,7 +312,7 @@ export default function ConfigureFace(props: {
             <BladeField label="Standard" edit={slot} value={() => (row()?.standard as string) || "None (a one-off system)"}
               info="The blueprint this system is built to. Clearing it makes the system a one-off."
               children={slot.editing() ? (
-                <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>
+                <select ref={bindSelectValue(standard, () => standards.data)} class="select select-bordered w-full" onChange={(e) => setStandard(e.currentTarget.value)}>
                   <option value="">None (a one-off system)</option>
                   <For each={standards.data ?? []}>{(st) => <option value={st.name}>{entityLabel(st)}</option>}</For>
                 </select>
@@ -317,7 +322,7 @@ export default function ConfigureFace(props: {
           <Show when={props.kind === "location"}>
             <BladeField label="Location type" edit={slot} value={() => (row()?.location_type as string) ?? ""}
               children={slot.editing() ? (
-                <select class="select select-bordered w-full" value={locationType()} onChange={(e) => setLocationType(e.currentTarget.value)}>
+                <select ref={bindSelectValue(locationType, () => locationTypes.data)} class="select select-bordered w-full" onChange={(e) => setLocationType(e.currentTarget.value)}>
                   <For each={locationTypes.data ?? []}>{(t) => <option value={t.name}>{entityLabel(t)}</option>}</For>
                 </select>
               ) : undefined}
@@ -350,7 +355,10 @@ export default function ConfigureFace(props: {
               info="Moving re-parents the subtree and re-scopes who can see it: its own authorization act, gated by location:move."
               hint={parentHint()}
               children={slot.editing() && canMove() && locations.data ? (
-                <select class="select select-bordered w-full" value={parentName()} onChange={(e) => setParentName(e.currentTarget.value)}>
+                // The parent pool churns when the type catalog lands (the
+                // allowed_parent_types filter arrives with it), so the binder
+                // tracks legalParents, which reads both queries.
+                <select ref={bindSelectValue(parentName, legalParents)} class="select select-bordered w-full" onChange={(e) => setParentName(e.currentTarget.value)}>
                   <Show when={initialParent() === ""}>
                     <option value="">Root (current)</option>
                   </Show>

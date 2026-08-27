@@ -1,4 +1,5 @@
 import { For, Show, type JSX } from "solid-js";
+import { bindSelectValue } from "../lib/selectvalue";
 import { type SystemType, systemTypeTree, flattenSystemTypeTree } from "../lib/system_types";
 
 // SystemTypeSelect: a single <select> over the system_type tree, indented by
@@ -20,11 +21,14 @@ export default function SystemTypeSelect(p: {
   // so the depth indent uses an explicit non-breaking space (\u00A0), three per
   // level, which is what actually survives to the rendered glyph.
   const indent = (depth: number) => "\u00A0\u00A0\u00A0".repeat(depth);
+  // Its rows are a query answer at every caller, so the control is routinely
+  // rendered before its options exist and must take the value again once they
+  // land (lib/selectvalue.ts, #772).
   return (
     <select
       id={p.id}
+      ref={bindSelectValue(() => p.value, rows)}
       class="select select-bordered w-full font-data"
-      value={p.value}
       onChange={(e) => p.onChange(e.currentTarget.value)}
     >
       <Show when={p.emptyLabel}>

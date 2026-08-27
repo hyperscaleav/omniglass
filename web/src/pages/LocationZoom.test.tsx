@@ -101,12 +101,15 @@ const types: LocationType[] = [
   { id: uuidFor("lzt-room"), name: "room", label: "Room", icon: "door-open", official: true, forked: false, allowed_parent_types: ["building", "floor"] },
 ] as unknown as LocationType[];
 
-function mount(path = `/web/locations/${uuidFor("lz-hq")}`) {
+// lateTypes starts the location-type catalog EMPTY, so a test can deliver it
+// after the editor is open and reproduce the order a deep link actually hits:
+// the row is in hand well before the catalog answers (#782).
+function mount(path = `/web/locations/${uuidFor("lz-hq")}`, lateTypes = false) {
   localStorage.removeItem("fleet-sumopen");
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], me);
-  qc.setQueryData([...LOCATION_TYPES_KEY], types);
+  qc.setQueryData([...LOCATION_TYPES_KEY], lateTypes ? [] : types);
   // The configure face self-fetches its row and parent options from this
   // list; a test that strips it renders the face as a skeleton (#800-1).
   qc.setQueryData([...LOCATIONS_KEY], [
@@ -127,7 +130,7 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`) {
     ],
   } as unknown as FleetHealth);
   window.history.pushState({}, "", path);
-  return render(() => (
+  const r = render(() => (
     <QueryClientProvider client={qc}>
       <Router base="/web">
         <Route path="/locations/:id" component={Locations} />
@@ -136,6 +139,7 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`) {
       </Router>
     </QueryClientProvider>
   ));
+  return Object.assign(r, { qc });
 }
 
 afterEach(cleanup);
@@ -392,5 +396,32 @@ describe("the miss face (#800)", () => {
     mount("/web/locations/no-such-place");
     expect(await screen.findByText(/No location answers this address/)).toBeTruthy();
     expect(screen.queryByText("Contained systems")).toBeNull();
+  });
+});
+
+// #782 on the workspace: the location-type catalog is a separate query that
+// can answer after ?edit=1 opened the editor, and this select carries no
+// placeholder option, so the fallback is not even empty: the browser picks the
+// FIRST type, and a save in that window silently retypes the building as a
+// campus. The parent picker's option pool also churns when the catalog lands
+// (the allowed_parent_types filter arrives with it), so the chosen parent must
+// survive that too. Delivered by hand between two assertions, never a race.
+describe("a configure select takes its value when its catalog lands (#782)", () => {
+  it("keeps the stored type and parent when the type catalog answers after edit opened", async () => {
+    const { qc } = mount(`/web/locations/${uuidFor("lz-b1")}?tab=configure&edit=1`, true);
+    const face = await screen.findByTestId("configure-face");
+    const typePicker = (await within(face).findByLabelText("Location type")) as HTMLSelectElement;
+    expect(typePicker.options.length).toBe(0);
+    const parentPicker = () => within(face).getByLabelText("Parent") as HTMLSelectElement;
+    expect(parentPicker().value).toBe(uuidFor("lz-hq"));
+
+    qc.setQueryData([...LOCATION_TYPES_KEY], types);
+
+    await waitFor(() => expect(typePicker.options.length).toBe(types.length));
+    expect(typePicker.value).toBe("building");
+    // The filter that arrived with the catalog narrowed the parent pool to
+    // campuses; the stored parent is one, and stays chosen through the churn.
+    await waitFor(() => expect(parentPicker().options.length).toBe(2));
+    expect(parentPicker().value).toBe(uuidFor("lz-hq"));
   });
 });
