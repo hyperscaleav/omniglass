@@ -66,6 +66,8 @@ type ICMPTask struct {
 type Runner struct {
 	TCP  TCPDialer
 	Ping Pinger
+	HTTP HTTPProber
+	SSH  SSHProber
 }
 
 // CollectTCP runs one tcp task and returns its samples. A tcp probe always
@@ -170,6 +172,131 @@ func (r *Runner) CollectICMP(ctx context.Context, t ICMPTask) ([]Sample, error) 
 			Value: float64(res.AvgRTT) / float64(time.Millisecond),
 			TS:    now,
 		})
+	}
+	return out, nil
+}
+
+// The layer-7 ladder signals (#812): the response metrics born five-lane in
+// the seed catalogs, and the responds/auth verdict properties beside
+// endpoint-reachable. EventCollectionFailed is the occurrence a task lands
+// when its payload or config cannot be used, never a silent drop.
+const (
+	SignalHTTPResponseTime      = "http-response-time"
+	SignalSSHHandshakeTime      = "ssh-handshake-time"
+	SignalEndpointResponsive    = "endpoint-responsive"
+	SignalEndpointAuthenticated = "endpoint-authenticated"
+	EventCollectionFailed       = "collection-failed"
+)
+
+// HTTPTask is the parsed http reachability-plus-responsiveness unit a node
+// runs: the request target (host:port) and the per-attempt timeout.
+type HTTPTask struct {
+	Target  string
+	Timeout time.Duration
+}
+
+// SSHTask is the parsed ssh unit: the dial target, the optional credential the
+// auth rung tries (params today; secret references with #813), and the
+// per-attempt timeout.
+type SSHTask struct {
+	Target   string
+	Username string
+	Password string
+	Timeout  time.Duration
+}
+
+// ladderVerdict renders one responds/auth verdict as a property-lane text
+// sample: the value is up/down (or yes/no for the auth rung), the reason label
+// says why when down. The ingest consumer stores transitions only, so a probe
+// may emit its verdict every run.
+func ladderVerdict(name, value string, reason Reachability, ts time.Time) Sample {
+	return Sample{
+		Name:   name,
+		Text:   value,
+		IsText: true,
+		TS:     ts,
+		Labels: map[string]string{ReasonLabel: string(reason)},
+	}
+}
+
+// CollectHTTP runs one http task: the L4 dial facts (tcp-open, and
+// tcp-connect-time when open) fall out of the same request, the L7 rung is
+// whether a real HTTP response was drawn (http-response-time when it was, any
+// status: a 500 is an API answering), and the endpoint-responsive verdict
+// rides the property lane. A port that accepts but never answers is
+// reached-but-not-responsive, distinct from port-closed. err is returned only
+// when the target could not be attempted at all (inconclusive).
+func (r *Runner) CollectHTTP(ctx context.Context, t HTTPTask) ([]Sample, error) {
+	if t.Target == "" {
+		return nil, fmt.Errorf("collection: http task: empty target")
+	}
+	res, err := r.HTTP.Probe(ctx, t.Target, t.Timeout)
+	if err != nil {
+		return nil, fmt.Errorf("collection: http probe %s: %w", t.Target, err)
+	}
+	now := time.Now().UTC()
+	openVal := 0.0
+	if res.Dialed {
+		openVal = 1.0
+	}
+	out := []Sample{{
+		Name:   SignalTCPOpen,
+		Value:  openVal,
+		TS:     now,
+		Labels: map[string]string{ReasonLabel: string(res.Reason)},
+	}}
+	if res.Dialed {
+		out = append(out, Sample{Name: SignalTCPConnectTime, Value: res.DialMS, TS: now})
+	}
+	responsive := "down"
+	if res.Responded {
+		responsive = "up"
+		out = append(out, Sample{Name: SignalHTTPResponseTime, Value: res.ResponseMS, TS: now})
+	}
+	out = append(out, ladderVerdict(SignalEndpointResponsive, responsive, res.Reason, now))
+	return out, nil
+}
+
+// CollectSSH runs one ssh task: the L4 dial facts, the L7 rung (the key
+// exchange reached authentication: ssh-handshake-time when it did), the
+// endpoint-responsive verdict, and, ONLY when a credential was supplied, the
+// endpoint-authenticated verdict (yes/no). A daemon that accepts the port but
+// never completes the exchange is reached-but-not-responsive; one that
+// completes it and refuses the credential is responded-but-not-authenticated.
+func (r *Runner) CollectSSH(ctx context.Context, t SSHTask) ([]Sample, error) {
+	if t.Target == "" {
+		return nil, fmt.Errorf("collection: ssh task: empty target")
+	}
+	res, err := r.SSH.Probe(ctx, t.Target, SSHCredential{Username: t.Username, Password: t.Password}, t.Timeout)
+	if err != nil {
+		return nil, fmt.Errorf("collection: ssh probe %s: %w", t.Target, err)
+	}
+	now := time.Now().UTC()
+	openVal := 0.0
+	if res.Dialed {
+		openVal = 1.0
+	}
+	out := []Sample{{
+		Name:   SignalTCPOpen,
+		Value:  openVal,
+		TS:     now,
+		Labels: map[string]string{ReasonLabel: string(res.Reason)},
+	}}
+	if res.Dialed {
+		out = append(out, Sample{Name: SignalTCPConnectTime, Value: res.DialMS, TS: now})
+	}
+	responsive := "down"
+	if res.Responded {
+		responsive = "up"
+		out = append(out, Sample{Name: SignalSSHHandshakeTime, Value: res.HandshakeMS, TS: now})
+	}
+	out = append(out, ladderVerdict(SignalEndpointResponsive, responsive, res.Reason, now))
+	if res.AuthAttempted {
+		authed := "no"
+		if res.Authenticated {
+			authed = "yes"
+		}
+		out = append(out, ladderVerdict(SignalEndpointAuthenticated, authed, res.Reason, now))
 	}
 	return out, nil
 }
