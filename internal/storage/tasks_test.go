@@ -47,17 +47,17 @@ func TestResolveTaskOwner(t *testing.T) {
 		t.Fatalf("connect: %v", err)
 	}
 	defer conn.Close(ctx)
-	// A component-bound tcp interface placed on node-a, and a shared (no component)
-	// interface on node-a. The node placement lives on the INTERFACE; a task carries
-	// no node column (its placement projects from its interface).
-	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values
-		('disp-1-tcp', (select id from interface_type where name = 'tcp'), (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.1:22"}'::jsonb),
-		('shared-tcp', (select id from interface_type where name = 'tcp'), null, (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.2:22"}'::jsonb)`); err != nil {
-		t.Fatalf("insert interfaces: %v", err)
+	// A component-bound tcp endpoint placed on node-a, and a shared (no component)
+	// endpoint on node-a. The node placement lives on the ENDPOINT; a task carries
+	// no node column (its placement projects from its endpoint).
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
+		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.1:22"}'::jsonb),
+		('shared-tcp', 'tcp', null, (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.2:22"}'::jsonb)`); err != nil {
+		t.Fatalf("insert endpoints: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
-		('t-bound', 'poll', (select id from interface where name = 'disp-1-tcp'), true),
-		('t-shared', 'poll', (select id from interface where name = 'shared-tcp'), true)`); err != nil {
+		('t-bound', 'poll', (select id from endpoint where name = 'disp-1-tcp'), true),
+		('t-shared', 'poll', (select id from endpoint where name = 'shared-tcp'), true)`); err != nil {
 		t.Fatalf("insert tasks: %v", err)
 	}
 

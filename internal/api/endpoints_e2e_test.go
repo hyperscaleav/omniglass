@@ -71,7 +71,7 @@ func TestInterfaceAPI(t *testing.T) {
 		t.Fatalf("owner interface list = %d, want 2", len(got))
 	}
 	c.do(ownerTok, http.MethodGet, "/endpoints/"+ifA.ID, nil, http.StatusOK)
-	// An unknown interface_type is a 422.
+	// An unknown transport is a 422.
 	c.do(ownerTok, http.MethodPost, "/endpoints", map[string]any{"transport": "galaxy"}, http.StatusUnprocessableEntity)
 
 	// PERMISSION GATE: an all-scope viewer can read (the *:read floor) but cannot

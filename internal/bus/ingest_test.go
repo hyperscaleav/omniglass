@@ -88,21 +88,21 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values
-		('disp-1-tcp', (select id from interface_type where name = 'tcp'), (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), $1::jsonb),
-		('disp-2-tcp', (select id from interface_type where name = 'tcp'), (select id from component where name = 'disp-2'), (select principal_id from node where name = 'node-b'), '{"target":"127.0.0.1:1"}'::jsonb)`,
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
+		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), $1::jsonb),
+		('disp-2-tcp', 'tcp', (select id from component where name = 'disp-2'), (select principal_id from node where name = 'node-b'), '{"target":"127.0.0.1:1"}'::jsonb)`,
 		`{"target":"`+target+`"}`); err != nil {
-		t.Fatalf("insert interfaces: %v", err)
+		t.Fatalf("insert endpoints: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
-		('t-a', 'poll', (select id from interface where name = 'disp-1-tcp'), true),
-		('t-b', 'poll', (select id from interface where name = 'disp-2-tcp'), true)`); err != nil {
+		('t-a', 'poll', (select id from endpoint where name = 'disp-1-tcp'), true),
+		('t-b', 'poll', (select id from endpoint where name = 'disp-2-tcp'), true)`); err != nil {
 		t.Fatalf("insert tasks: %v", err)
 	}
 	conn.Close(ctx)
 
-	// Register the interface_type so the interface FK is satisfiable was already
-	// handled at seed; start the bus + an API server that advertises it.
+	// The transport is a code-registry fact now (no seeded type row to
+	// arrange); start the bus + an API server that advertises it.
 	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, gw)
 	if err != nil {
 		t.Fatalf("start bus: %v", err)
