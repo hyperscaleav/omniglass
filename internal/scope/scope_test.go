@@ -292,10 +292,10 @@ func TestResolveInterfaceTaskCascade(t *testing.T) {
 	// interface/task, while a wrong-tier (location/system) grant does not.
 	idx := rbac.NewRoleIndex([]rbac.Role{
 		{ID: "viewer", Permissions: []string{"*:read"}},
-		{ID: "operator", Permissions: []string{"interface:create,update", "task:create,update"}},
+		{ID: "operator", Permissions: []string{"endpoint:create,update", "task:create,update"}},
 		{ID: "owner", Permissions: []string{"*:*"}},
 	})
-	for _, resource := range []string{"interface", "task"} {
+	for _, resource := range []string{"endpoint", "task"} {
 		// A component-scoped operator grant cascades onto the interface/task.
 		s := scope.Resolve([]scope.Grant{{Role: "operator", ScopeKind: "component", ScopeID: "comp-a"}}, idx, resource, "update")
 		if s.All || len(s.IDs) != 1 || s.IDs[0] != "comp-a" {

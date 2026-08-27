@@ -119,24 +119,24 @@ func TestInterfaceScopeCRUD(t *testing.T) {
 		t.Errorf("unknown component = %v, want ErrEndpointComponentNotFound", err)
 	}
 
-	// Audit rows: the interface resource is audited across create/update/delete.
+	// Audit rows: the endpoint resource is audited across create/update/delete.
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatalf("audit connect: %v", err)
 	}
 	defer conn.Close(ctx)
 	var n int
-	if err := conn.QueryRow(ctx, `select count(*) from audit_log where resource = 'interface'`).Scan(&n); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from audit_log where resource = 'endpoint'`).Scan(&n); err != nil {
 		t.Fatalf("count audit: %v", err)
 	}
 	if n == 0 {
-		t.Errorf("interface audit rows = 0, want the create/update/delete trail")
+		t.Errorf("endpoint audit rows = 0, want the create/update/delete trail")
 	}
 }
 
-// TestInterfaceProtocolNamed proves the identity model: an interface is named by
-// its transport (its type), unique WITHIN its component. Two different components
-// can each own a tcp interface, but a second interface of the same transport on ONE
+// TestInterfaceProtocolNamed proves the identity model: an endpoint is named by
+// its transport, unique WITHIN its component. Two different components can each
+// own a tcp endpoint, but a second endpoint of the same transport on ONE
 // component is refused (a 409 via ErrEndpointExists).
 func TestInterfaceProtocolNamed(t *testing.T) {
 	dsn := storagetest.NewDSN(t)
