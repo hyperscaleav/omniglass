@@ -1,7 +1,7 @@
 import { Show, type ParentComponent, createEffect, createMemo } from "solid-js";
 import { useLocation, useNavigate } from "@solidjs/router";
 import { useMe, can } from "../lib/auth";
-import { routeTokens } from "../lib/nav";
+import { routeAllowed } from "../lib/nav";
 
 // RouteGuard blocks a direct hit on a route the caller cannot read. Route access
 // is derived from the same nav permission map that hides the sidebar button
@@ -23,8 +23,7 @@ export const RouteGuard: ParentComponent = (props) => {
   const allowed = createMemo(() => {
     const m = me.data;
     if (!m) return true; // still resolving; AuthGuard holds the loader
-    const tokens = routeTokens(location.pathname);
-    return !tokens || can(m, ...tokens);
+    return routeAllowed(location.pathname, (tokens) => can(m, ...tokens));
   });
 
   createEffect(() => {

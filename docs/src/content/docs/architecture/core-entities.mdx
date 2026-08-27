@@ -169,10 +169,10 @@ The **component-classification catalogs** are flat, seed-and-custom registries o
 official/custom pattern as the `*_type` registries ([Location Types guide](/guides/admin/location-types/)); the
 **`product`** catalog (below) sits above them as the concrete SKU a `component` points at:
 
-- A **`vendor`** (Crestron, Biamp, ...) names an organization, with a **`kind`** of `manufacturer`,
+- A **`vendor`** (Boreal, Polaris, ...) names an organization, with a **`kind`** of `manufacturer`,
   `integrator`, or `developer` (default `manufacturer`); the generalization of the former
   manufacturer-only `component_make`.
-- A **`driver`** (Generic SNMP, Cisco xAPI, ...) names the implementation that gets, emits, or sets a
+- A **`driver`** (Generic SNMP, Kestrel Device API, ...) names the implementation that gets, emits, or sets a
   product's signals, with an optional **`version`**.
 - The capability registry retired (#626): a product's device-class genus is now `component_type`
   (below), and what a [system role](#system-roles-the-slots-a-system-needs-filled) requires is a
@@ -183,7 +183,9 @@ See the [Vendors guide](/guides/admin/vendors/) for the operator surface.
 ### Catalog reference data: `component_type`
 
 A **`component_type`** (`display`, `projector`, `video-bar`, `dsp`, `mic`, ...) is the **device-class
-genus**: a seeded-plus-custom taxonomy that **nests by `parent_id`** (`mic` over `wireless-mic`,
+genus**: a seeded-plus-custom taxonomy that **nests by `parent_id`** and mirrors the
+OpenAVCloud AV Device Taxonomy v1.1 ([ADR-0131](/architecture/decisions/#adr-0131-the-device-taxonomy-is-oavc-and-the-demo-catalog-is-fictional)): category roots, subcategory types,
+and concrete leaves, microphones subtyped by form factor (`mic` over `wireless-mic`,
 `ceiling-mic`, `boundary-mic`), on the same official/custom pattern as the other classification
 catalogs, operator-graftable at any node
 ([ADR-0085](/architecture/decisions/#adr-0085-the-component_type-registry-returns-as-the-device-class-genus)).
@@ -233,7 +235,7 @@ deliberately different, **above the product** rather than beside the component.
 
 ### Catalog reference data: `product`
 
-A **`product`** (Cisco Room Bar, Samsung QM55, ...) is the concrete **SKU**: a stable `id` and
+A **`product`** (Kestrel VRoom, Boreal Edge 55, ...) is the concrete **SKU**: a stable `id` and
 `label`, a **`kind`** (`device` / `app` / `service`, no default, required at create so a
 mislabeled cloud service can never read as correct through a silent fallback;
 [ADR-0086](/architecture/decisions/#adr-0086-the-product-classification-floor-and-the-kind-split)
@@ -671,10 +673,10 @@ Three things, and no fourth:
 - **id**, a uuid. Immutable, the primary key, and what every foreign key stores, so a rename has
   nothing to rewrite.
 - **name**, the renameable machine identifier an operator types and a URL, a CLI argument, and an
-  address carry (the `rm215a` in `boi.17c.rm215a`). Renameable is the point: `cisco-room-bar` is a
+  address carry (the `rm215a` in `boi.17c.rm215a`). Renameable is the point: `kestrel-vroom` is a
   typo or a rebrand away from being wrong forever if it cannot change.
 - **label**, an optional friendly string a human reads ("HQ Boardroom DSP"). Absent is normal:
-  `crestron` needs no label. Absent has exactly one spelling, **SQL NULL**:
+  `boreal` needs no label. Absent has exactly one spelling, **SQL NULL**:
   the column is nullable, and the rule that keeps the empty string out of it lives in Go at the
   gateway write path, where every other rule of its kind lives
   ([ADR-0118](/architecture/decisions/#adr-0118-the-friendly-string-an-operator-reads-is-a-label-and-unset-is-sql-null)).
@@ -1031,9 +1033,9 @@ and the compiled engine is cached against the list itself, so an edit reaches th
 The dictionary matters **less** than it looks, and the honest limit is worth stating rather than
 discovering. A type's `label` already holds correctly-cased English out of the catalog ("DSP",
 "Video Bar"), and the shipped rules render that, so the list only bites where a rule title-cases a
-name the operator typed: mostly systems and locations. Product model numbers (`qm55` wanting `QM55`)
+name the operator typed: mostly systems and locations. Product model numbers (`vroom` wanting `VRoom`)
 are unbounded and vendor-supplied, so a dictionary can never be complete, and a missing one degrades
-quietly to `Qm55` rather than failing. That is acceptable because the result is one click from being
+quietly to `Vroom` rather than failing. That is acceptable because the result is one click from being
 overridden on the row, and because the alternative, a rule that guesses at casing, is wrong more
 often than it is right.
 

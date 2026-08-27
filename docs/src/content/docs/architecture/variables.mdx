@@ -218,8 +218,8 @@ interpolated as `$var:<name>` into functions, interface definitions, and rule sc
 
 - **A name is org-specific, not a canonical signal**, the one place the "operator-defined, not
   curated" namespace applies: no registry, no pre-registration. The ordinary entity name rule still
-  holds, though (one segment of lowercase letters, digits, and hyphens, no dot), so `crestron-ssh`
-  names a variable and `crestron.ssh` is refused. Sprawl is controlled by a creation **role-gate**
+  holds, though (one segment of lowercase letters, digits, and hyphens, no dot), so `newtron-ssh`
+  names a variable and `newtron.ssh` is refused. Sprawl is controlled by a creation **role-gate**
   ([IAM](/architecture/identity-access/)) and by every variable being **surfaced in the tree**.
 - **A label rides beside the name**, the friendly string an operator reads ("Poll Interval") where
   the name is what the cascade resolves by
@@ -260,7 +260,7 @@ blades, a **Properties** panel on the component, system, and location details). 
 A **property** is one typed name used three ways: the **catalog** says the name exists and what it
 means, a **classifier contract** says which names its instances carry (and their defaults), and a
 **value** row says what one owner holds. Where a variable or secret is a single cascaded cell, a
-property is a named slot a whole class carries, set per instance ("every Samsung QM55 carries an
+property is a named slot a whole class carries, set per instance ("every Boreal Edge 55 carries an
 `asset_tag`" is one declaration, the fix for Zabbix's fixed `inventory_1..40`).
 
 The **provenance** column is why this is one primitive: the same name and store hold a value a device

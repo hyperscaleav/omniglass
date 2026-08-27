@@ -1,16 +1,17 @@
 # The official drivers, seeded idempotently at boot. A driver is the
-# implementation that gets/emits/sets a product's signals (e.g. "Generic SNMP",
-# "Cisco xAPI"); a later product slice will point at one. The registry lists
-# alphabetically by label. Starter set, operator-extensible later; tune
-# freely.
+# implementation that gets/emits/sets a product's signals; a product points at
+# one. The registry lists alphabetically by label. Starter set,
+# operator-extensible later; tune freely. Fictional-brand drivers match the
+# omniglass-lab device surfaces: Kestrel speaks an HTTP JSON device API,
+# Newtron a vendor control protocol, Boreal and the audio rack SNMP.
 drivers:
   - id: snmp-generic
     label: Generic SNMP
     version: "1.0.0"
-  - id: cisco-xapi
-    label: Cisco xAPI
-  - id: crestron-cip
-    label: Crestron CIP
+  - id: kestrel-api
+    label: Kestrel Device API
+  - id: newtron-nvp
+    label: Newtron NVP
   - id: http-json
     label: HTTP JSON
     version: "1.0.0"

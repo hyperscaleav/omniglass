@@ -5600,7 +5600,140 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   header gains the verdict badge, the since-line from the location health read's
   transitions, and a needs-attention count for this subtree whose click applies the
   existing worst-first verdict filter. No new API.
-
+- **The system zoom goes components-first, and the prose moves to tooltips**
+  ([#790](https://github.com/hyperscaleav/omniglass/issues/790), the first workspace slice).
+  The room renders as one card per component with its role as a badge; role chrome appears
+  only where it earns it (quorum beyond one, a shortfall, an unstaffed role), the build not
+  in use never renders, and the no-role strip becomes ordinary cards. KPI tiles read the
+  standard's contract metrics (the seed declares room-temperature and occupancy-count on
+  both example standards, sampled on the huddle). The tooltips-not-prose rule lands with
+  its primitives: `Eyebrow` (a section label with its explainer on the (i)) beside the
+  existing `InfoTip`, and the history strip's pedagogy rides the hover. The `TabRail`
+  primitive ships tested, param-driven and deep-linked, mounting once a second facet lands.
+- **The standard declares a map, the system renders it**
+  ([#791](https://github.com/hyperscaleav/omniglass/issues/791), ADR-0128). One jsonb
+  value on `standard` (aspect plus normalized 1-based role positions, validated in Go,
+  cleared by JSON null), carried on the standard wire and patched through the standard
+  API; both example standards declare one in the dev seed. The system zoom grows its
+  first second facet: the Map tab (the `TabRail` mounts), a top-down room with one marker
+  per declared position of the build in use, solid in the occupant's state and linking to
+  its leaf, hollow where nobody is staffed.
+- **The history tab: spans, markers, and what went wrong**
+  ([#792](https://github.com/hyperscaleav/omniglass/issues/792)). Every system's zoom
+  gains the History facet: the verdict spans the health read already carried, one marker
+  per alarm raise on the same axis, and the what-went-wrong list, every member alarm in
+  the window, cleared ones included, ongoing first (fanned out over the members'
+  alarm-history reads; a server rollup waits for a fleet that makes fan-out hurt). No new
+  API.
+- **System-scoped events and logs**
+  ([#793](https://github.com/hyperscaleav/omniglass/issues/793)). Two new reads:
+  `GET /systems/{name}/events` (the system's own events and its members', newest first,
+  each row labeled by owner) and `GET /systems/{name}/logs` (the members' raw lines
+  merged, each naming its writer), both windowed and capped like the component reads,
+  gated by `system:read` with the non-disclosing resolve. The workspace grows its Events
+  and Logs tabs over them. A wire lesson worth keeping: Huma does not flatten an embedded
+  struct into the schema, so the system bodies spell their fields out rather than
+  embedding the component bodies.
+- **The timeseries reads and the Data tab**
+  ([#794](https://github.com/hyperscaleav/omniglass/issues/794)). The platform's first
+  series-history reads: `GET /{components,systems}/{name}/metrics/{metric}/samples` and
+  the property mirror at `.../properties/{property}/samples`, raw rows newest first,
+  windowed (hours) and capped (limit, newest kept), extending the effective reads' route
+  grammar; downsampling waits for a measured need. Over them, the `TimeseriesChart`
+  primitive (a pure `chartLayout` core, one series, area fill, recessive grid, the newest
+  point emphasized) and the workspace's Data tab, one picker chip per declared metric;
+  the dev seed grows a day of temperature and occupancy on the huddle so the chart is
+  judgeable. The chart primitive is dashboards' seed (primitive first).
+- **The summary reflects the page it is on** (#795 review). The rail stops repeating the
+  fleet's numbers on every zoom: each scope builds its own tile spec (the fleet over
+  systems; a location over its subtree with a children count; a system over its own
+  components with slots, active alarms, and shared members; the leaf over itself), and
+  `FleetShell` renders the spec without knowing the scope. A summary identical on every
+  page was chrome, not information.
+- **The history tab reads like a status page** (#795 refinement). Uptime over the window
+  leads (the health KPI over time), the timeline beside it; the transitions group into
+  INCIDENTS, one entry per contiguous stretch away from healthy, ongoing first, each
+  expanding to its verdict changes and the alarms whose lifetimes overlap the stretch;
+  a stretch no alarm explains names itself a commissioning gap; alarms the room absorbed
+  list separately.
+- **The zoom face becomes the default** (ADR-0129, stage 1 of the reconciliation ruled on
+  the #795 review). The identity routes render the fleet faces without any param;
+  `?zoom=1` is tolerated for old links and never written; every in-app address is bare;
+  the classic detail face survives at `?view=detail` (and under legacy `?edit=1`) until
+  edit-in-blade lands. `create` stays a reserved segment. The remaining stages (one
+  entity blade per kind, edit-in-blade, operate absorption, classic retirement) are the
+  follow-up epic.
+- **The seed reads like a real enterprise**
+  ([#796](https://github.com/hyperscaleav/omniglass/issues/796)). The dev fleet stops
+  contradicting itself: the auditorium gets its own standard and system type (projection,
+  stage mics, conferencing) instead of wearing a meeting room's, classrooms teach on the
+  classroom standard (class display, instructor mic), digital signage stands on a
+  one-panel standard, and the depot holds unassigned service stock rather than phantom
+  rooms; a spare projection display leaves the critical alarm still degrading the hall.
+  Boot canon grows the three standards, the auditorium type, and the call-ended and
+  input-changed event families. The seed also gains judgeable telemetry breadth: call
+  and input events across sites, log lines on three components, reachability series on
+  the bars, room climate series on every standard that declares it, and one
+  raised-then-cleared warning so cleared history renders. The fixture guard now asserts
+  per-archetype quorums and type-standard coherence, so a future fixture cannot
+  reintroduce a mismatched room.
+- **The write sequence outlives the wall clock**
+  ([#780](https://github.com/hyperscaleav/omniglass/issues/780), ADR-0130). The
+  screenshot gate's last two flaps (the audit page interleave, the users directory row
+  swap) shared one root cause: on a loaded WSL2 host the wall clock steps several
+  seconds mid-run correcting NTP drift, and both `created_at` and uuidv7 ids read that
+  clock, so rows written in order could sort out of it. `audit_log` and `principal`
+  gain a `bigint identity` the database assigns at insert; the audit trail orders by
+  it, the principal directory groups humans before nodes and orders by it within a
+  kind. Regression tests simulate the step by rewriting committed rows' clock keys and
+  asserting the lists hold. The remaining clock-ordered reads are #801.
+- **One door and the density toggle**
+  ([#798](https://github.com/hyperscaleav/omniglass/issues/798), stage 2 of the
+  ADR-0129 reconciliation). The Inventory nav group dissolves: Fleet is the only
+  way into the monitored fleet, and Nodes (infrastructure, not inventory) gets its
+  own top-level entry. `FleetShell` gains the canvas/list toggle, a URL fact
+  (`?view=list`): on the fleet it swaps the canvas for the classic index tables
+  re-homed as kind tabs (Locations, Systems, Components: the old page components
+  mounted whole, filters, blades, and creation intact, tabs permission-filtered
+  like the rail entries they replace); inside a location it lists the subtree one
+  row per system through the new `FleetRows`, verdict first, a row opening the
+  system full screen per the altitude rule. The bare index addresses redirect to
+  their kind tabs, their gates and top-bar identities surviving off-rail, and the
+  command palette keeps the three as Fleet destinations.
+- **One blade per fleet kind**
+  ([#799](https://github.com/hyperscaleav/omniglass/issues/799), stage 3 of the
+  ADR-0129 reconciliation). `EntityBlade` renders each fleet kind as a condensed cut
+  of its workspace cores: verdict and since lead, the alarms say why, the 30-day
+  strip rides under them, a system lists its members and room vitals, a location its
+  subtree rollup and what needs attention. Every body self-fetches by id, so the one
+  `fleetRegistry` serves the fleet canvas, the system zoom (whose member cards,
+  alarm links, and map markers now open the component blade instead of leaving the
+  page, per the altitude rule), and the index tables (TreeList grows a
+  `bladeOverride` seam that retires the inventory-era detail blade for these kinds).
+  Expand promotes to the identity route; the label edits in place through the
+  footer pencil and Delete confirms, both gated by the row's scope-aware actions.
+- **The seed speaks real AV**
+  ([#802](https://github.com/hyperscaleav/omniglass/issues/802), ADR-0131). The
+  component_type registry becomes the OpenAVCloud AV Device Taxonomy v1.1 (category
+  roots, subcategory types, form-factor mic subtypes, dante-card under dsp), the
+  catalog goes fictional (eight omniglass-lab-universe vendors, twenty-two SKUs shaped
+  by the AV-iQ database), and the standards become integrator-style room chains:
+  size-serialized meeting rooms (mr55..mr98 pinning the display per variant), the
+  divisible conference pair whose ONE audio rack satisfies both sides' dsp and
+  amplifier slots (retiring the physically impossible shared bar), the full
+  training-room chain (dual front displays, form-factor mics, rack, switching,
+  endpoints, control, people counter, back-of-room cameras), the hall-scale
+  auditorium with no conferencing role, digital signs with players, and the light
+  classroom. The fixture fleet restaffs to match, one bar per room at the front; the
+  duplicate standard stubs and the control-room stub die; the guards pin per-variant
+  quorums and prefix-paired archetypes.
+- **Every system carries its components**
+  (dev seed ruling, 2026-08-26). The demo fleet staffs every system to its standard's
+  quorum: the lab pods gain their displays, wireless mics, and touch panels (keeping
+  their same-bucket ordinal demo), and the depot's service stock stays racked in the
+  bays rather than memberized onto the signage. Exactly one provisioning system
+  remains, briefing-av, short its scheduling panel, so the incomplete verdict still
+  appears without reading as a half-built fleet.
 - **A missing asset 404s, so a broken deploy stops looking healthy**
   ([#778](https://github.com/hyperscaleav/omniglass/issues/778)). The SPA catch-all
   answered every miss under the console's own paths with `index.html` and 200, which made a

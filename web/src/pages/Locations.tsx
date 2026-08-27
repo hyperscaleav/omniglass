@@ -1,4 +1,5 @@
 import { entityLabel } from "../lib/entities";
+import { locationBlade, systemBlade, componentBlade } from "../components/EntityBlade";
 import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
@@ -71,10 +72,12 @@ export const locationsDescriptor: PageDescriptor = {
 
 export default function Locations() {
   const params = useParams();
-  // The zoom face is a URL fact (ADR-0126): ?zoom=1 on the identity route
-  // renders the location zoom, and the inventory detail stays the default.
   const [search] = useSearchParams();
-  if (params.id && search.zoom === "1") return <LocationZoom />;
+  // The zoom face IS the default (ADR-0129): the identity route renders the
+  // location zoom; the classic detail face survives at ?view=detail (and
+  // under a legacy ?edit=1) until edit-in-blade lands.
+  const wantsDetail = () => params.id === "create" || search.view === "detail" || search.edit === "1";
+  if (params.id && !wantsDetail()) return <LocationZoom />;
   const navigate = useNavigate();
   const qc = useQueryClient();
   const me = useMe();
@@ -725,7 +728,10 @@ export default function Locations() {
     onEdit: (n) => navigate(`/locations/${encodeURIComponent(n.id)}?edit=1`),
     renderCreate: () => <LocationCreate />,
     renderDetail: (n, ctx) => <LocationDetail node={n} ctx={ctx} />,
-    extraBlades: { "property-resolution": propertyResolutionBlade },
+    // The condensed fleet blade replaces the inventory-era detail blade (#799);
+    // the other fleet kinds register so its drills nest on this page's stack.
+    bladeOverride: locationBlade,
+    extraBlades: { "property-resolution": propertyResolutionBlade, system: systemBlade, component: componentBlade },
   };
 
   return (

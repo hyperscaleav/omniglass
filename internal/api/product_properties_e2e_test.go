@@ -104,9 +104,9 @@ func TestProductPropertiesAPI(t *testing.T) {
 
 	// The seeded official product ships its contract with the release, so both
 	// writes are refused (the official read-only rule, not a permission fault).
-	c.do(ownerTok, http.MethodPut, "/products/cisco-room-bar/properties/serial-number",
+	c.do(ownerTok, http.MethodPut, "/products/kestrel-vroom/properties/serial-number",
 		map[string]any{"required": true}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/products/cisco-room-bar/properties/serial-number", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/products/kestrel-vroom/properties/serial-number", nil, http.StatusUnprocessableEntity)
 
 	// A property the catalog does not know is a request fault, not a 500.
 	c.do(ownerTok, http.MethodPut, "/products/acme-panel/properties/not_a_property",

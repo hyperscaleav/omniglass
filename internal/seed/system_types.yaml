@@ -58,6 +58,12 @@ system_types:
     parent_id: room
     stem: huddle
     abbrev: hud
+  - id: auditorium
+    label: Auditorium
+    parent_id: av
+    stem: auditorium
+    abbrev: aud
+    icon: theater
   - id: sign
     label: Signage
     parent_id: av

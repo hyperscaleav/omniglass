@@ -251,8 +251,8 @@ func TestMoveRecomputesGeneratedName(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	qm55 := "samsung-qm55"
-	mic := "shure-mxa920"
+	edge55 := "boreal-edge-55"
+	mic := "lyra-arc-a2"
 
 	// A generated display under root-1 becomes display-1. A second generated
 	// display already sits under root-2, so root-2's display bucket has
@@ -260,14 +260,14 @@ func TestMoveRecomputesGeneratedName(t *testing.T) {
 	// new ordinal.
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "mv-root-1"}, all)
 	root2 := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "mv-root-2"}, all)
-	mover, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-1"), ProductName: &qm55}, all, all, all, all)
+	mover, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-1"), ProductName: &edge55}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create generated mover: %v", err)
 	}
 	if mover.Name != "display-1" || !mover.NameGenerated {
 		t.Fatalf("mover before move = %q (generated=%v), want display-1/true", mover.Name, mover.NameGenerated)
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-2"), ProductName: &qm55}, all, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ParentName: strptr("mv-root-2"), ProductName: &edge55}, all, all, all, all); err != nil {
 		t.Fatalf("occupy destination's display-1: %v", err)
 	}
 
@@ -294,7 +294,7 @@ func TestMoveRecomputesGeneratedName(t *testing.T) {
 		t.Fatalf("create generated mic: %v", err)
 	}
 	if genMic.Name != "mic-1" {
-		t.Fatalf("generated mic name = %q, want mic-1 (shure-mxa920 classifies under ceiling-mic)", genMic.Name)
+		t.Fatalf("generated mic name = %q, want mic-1 (lyra-arc-a2 classifies under ceiling-mic)", genMic.Name)
 	}
 	afterReparent, err := gw.MoveComponent(ctx, "", genMic.ID, storage.ComponentMove{ParentName: strptr("mv-mic-root")}, all, all, all)
 	if err != nil {
@@ -307,7 +307,7 @@ func TestMoveRecomputesGeneratedName(t *testing.T) {
 	// An operator-typed name at the SAME kind of move is left untouched: the
 	// recompute is conditional on name_generated, not unconditional for
 	// every mover.
-	typed := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "keep-my-name", ParentName: strptr("mv-root-1"), ProductName: &qm55}, all)
+	typed := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "keep-my-name", ParentName: strptr("mv-root-1"), ProductName: &edge55}, all)
 	afterTyped, err := gw.MoveComponent(ctx, "", typed.ID, storage.ComponentMove{ParentName: strptr("mv-root-2")}, all, all, all)
 	if err != nil {
 		t.Fatalf("move operator-named component: %v", err)
@@ -335,7 +335,7 @@ func TestComponentUpdateEmptyProductReclassifiesToGeneric(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	bar := "cisco-room-bar"
+	bar := "kestrel-vroom"
 	mustCreateComponent(t, gw, storage.ComponentSpec{Name: "reclass", ProductName: &bar}, all)
 
 	after, err := gw.UpdateComponent(ctx, "", "reclass", storage.ComponentPatch{ProductName: strptr("")}, all, all)

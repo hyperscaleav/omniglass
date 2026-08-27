@@ -56,7 +56,7 @@ func roleMaskFixture(t *testing.T) (*apiClient, string, string) {
 	c.do(ownerTok, http.MethodPatch, "/standards/mask-room/roles/main-display", map[string]any{
 		"label": "Main Display", "quorum": 2, "capacity": 3, "impact": "outage",
 		"position_labels": []string{"left", "right"},
-		"accepted_types":  []string{"display"}, "pinned_products": []string{"samsung-qm55"},
+		"accepted_types":  []string{"display"}, "pinned_products": []string{"boreal-edge-55"},
 	}, http.StatusOK)
 	return c, ownerTok, "/standards/mask-room/roles/main-display"
 }

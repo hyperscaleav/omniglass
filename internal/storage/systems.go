@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -71,6 +72,59 @@ type Standard struct {
 	// tier a system's label resolves through: null defers to the system_type
 	// chain, and then to the global tier.
 	LabelRule *string
+	// Map is the standard's room-layout declaration (#791, ADR-0128), the raw
+	// jsonb value ({aspect, positions:[{role, position, x, y}]}); nil when the
+	// standard declares none. Display data: nothing queries into it.
+	Map json.RawMessage
+}
+
+// StandardMap is the parsed shape of Standard.Map, used for validation on
+// write and by any Go reader; the wire carries the raw value.
+type StandardMap struct {
+	// Aspect is width over height of the room's drawing space.
+	Aspect float64 `json:"aspect"`
+	// Positions place each role position in normalized space: x and y in
+	// [0, 1], position 1-based (matching position_labels).
+	Positions []StandardMapPosition `json:"positions"`
+}
+
+type StandardMapPosition struct {
+	Role     string  `json:"role"`
+	Position int     `json:"position"`
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
+}
+
+// ErrStandardMapInvalid is a map declaration that fails validation: a
+// non-positive aspect, a coordinate outside [0, 1], a position below 1, or a
+// duplicate (role, position) pair.
+var ErrStandardMapInvalid = errors.New("storage: standard map invalid")
+
+// validateStandardMap parses and checks a map declaration. A JSON null is
+// valid and means "clear the declaration".
+func validateStandardMap(raw json.RawMessage) error {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var m StandardMap
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return fmt.Errorf("%w: %v", ErrStandardMapInvalid, err)
+	}
+	if m.Aspect <= 0 {
+		return fmt.Errorf("%w: aspect must be positive", ErrStandardMapInvalid)
+	}
+	seen := map[string]bool{}
+	for _, pos := range m.Positions {
+		if pos.Role == "" || pos.Position < 1 || pos.X < 0 || pos.X > 1 || pos.Y < 0 || pos.Y > 1 {
+			return fmt.Errorf("%w: position %s/%d out of bounds", ErrStandardMapInvalid, pos.Role, pos.Position)
+		}
+		key := fmt.Sprintf("%s/%d", pos.Role, pos.Position)
+		if seen[key] {
+			return fmt.Errorf("%w: duplicate position %s", ErrStandardMapInvalid, key)
+		}
+		seen[key] = true
+	}
+	return nil
 }
 
 // System is a composition of components (the service tree): name-addressable,
@@ -194,12 +248,16 @@ type SystemMove struct {
 // parent_standard_id stores a uuid; the parent's handle is projected beside it,
 // as the fleet arcs do.
 const standardCols = `id, name, official, coalesce(label, ''), parent_standard_id,
-	(select p.name from standard p where p.id = standard.parent_standard_id) as parent_handle, label_rule`
+	(select p.name from standard p where p.id = standard.parent_standard_id) as parent_handle, label_rule, map`
 
 func scanStandard(row pgx.Row) (*Standard, error) {
 	var st Standard
-	if err := row.Scan(&st.ID, &st.Name, &st.Official, &st.Label, &st.ParentStandardID, &st.ParentStandardName, &st.LabelRule); err != nil {
+	var mapRaw []byte
+	if err := row.Scan(&st.ID, &st.Name, &st.Official, &st.Label, &st.ParentStandardID, &st.ParentStandardName, &st.LabelRule, &mapRaw); err != nil {
 		return nil, err
+	}
+	if len(mapRaw) > 0 && string(mapRaw) != "null" {
+		st.Map = json.RawMessage(mapRaw)
 	}
 	return &st, nil
 }
@@ -295,6 +353,9 @@ type StandardPatch struct {
 	Label            *string
 	ParentStandardID *string
 	LabelRule        *string
+	// Map: nil leaves the declaration untouched; a JSON null clears it; any
+	// other value replaces it (validated, ErrStandardMapInvalid).
+	Map *json.RawMessage
 }
 
 // CreateStandard inserts a custom (official=false) standard and audits it. A
@@ -343,6 +404,11 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 	if err := validateLabelRule(patch.LabelRule); err != nil {
 		return nil, err
 	}
+	if patch.Map != nil {
+		if err := validateStandardMap(*patch.Map); err != nil {
+			return nil, err
+		}
+	}
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin update standard: %w", err)
@@ -371,10 +437,16 @@ func (p *PG) UpdateStandard(ctx context.Context, actorID, id string, patch Stand
 				when $4 = '' then null
 				else $4::text
 			end,
+			-- The map patch mirrors label_rule's three-way CASE: absent leaves
+			-- it, JSON null clears it, a value replaces it.
+			map                = case
+				when $6::boolean then nullif($7::jsonb, 'null'::jsonb)
+				else map
+			end,
 			updated_at         = now()
 		where `+registryRefCol(id)+` = $1
 		returning `+standardCols,
-		id, labelVal, patch.ParentStandardID, patch.LabelRule, setLabel))
+		id, labelVal, patch.ParentStandardID, patch.LabelRule, setLabel, patch.Map != nil, mapPatchValue(patch.Map)))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -1237,4 +1309,13 @@ func mapSystemWriteErr(err error) error {
 		}
 	}
 	return fmt.Errorf("storage: system write: %w", err)
+}
+
+// mapPatchValue renders the map patch for the SQL CASE: nil becomes SQL null
+// (the CASE ignores it anyway), a value passes through as its raw JSON.
+func mapPatchValue(m *json.RawMessage) any {
+	if m == nil {
+		return nil
+	}
+	return string(*m)
 }

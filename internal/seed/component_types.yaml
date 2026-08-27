@@ -4,16 +4,29 @@
 # product, not beside component). Official (ON CONFLICT DO UPDATE,
 # authoritative), unlike location_types.yaml's seed-if-absent example content.
 #
-# Litmus test for a subtype: it exists only where a standard's slot would name
-# it (a huddle-room standard's mic slot wants "wireless-mic" or "ceiling-mic",
-# not just "mic"). Every root carries its own stem (the auto-generated
-# component name's prefix), abbrev (a compact form), and icon; a child leaves
-# a field blank to inherit the parent's, and sets one only to override it.
-# Order matters: a child's parent_id must name an id that appears earlier in
-# this list.
+# The tree mirrors the OpenAVCloud AV Device Taxonomy v1.1 (ADR: the category
+# roots are OAVC's high-level categories, the mid level its subcategories, and
+# the leaves the concrete classes a standard's slot names). Microphone
+# subtypes are arranged by FORM FACTOR (ceiling, wireless, gooseneck,
+# boundary), never by inner technology: beamforming is a capability a ceiling
+# mic may have, not a kind of device. A slot may accept at any level (the
+# typed-slot guard matches self or a descendant, #626): "mic" admits every
+# form factor, "gooseneck-mic" exactly one.
+#
+# Every root carries its own stem (the auto-generated component name's
+# prefix), abbrev (a compact form), and icon; a child leaves a field blank to
+# inherit the parent's, and sets one only to override it. Order matters: a
+# child's parent_id must name an id that appears earlier in this list.
 component_types:
+  # ── Display devices (OAVC 2.1) ──────────────────────────────────────────
+  - id: display-device
+    label: Display Device
+    stem: display
+    abbrev: disp
+    icon: monitor
   - id: display
     label: Display
+    parent_id: display-device
     stem: display
     abbrev: fp
     icon: monitor
@@ -22,36 +35,37 @@ component_types:
     parent_id: display
   - id: projector
     label: Projector
+    parent_id: display-device
     stem: projector
     abbrev: proj
     icon: projector
   - id: screen
     label: Screen
+    parent_id: display-device
     stem: screen
     abbrev: scr
     icon: tv
-  - id: presentation-switcher
-    label: Presentation Switcher
-    stem: switcher
-    abbrev: sw
-    icon: shuffle
-  - id: video-bar
-    label: Video Bar
-    stem: videobar
-    abbrev: vb
-    icon: video
-  - id: dsp
-    label: DSP
-    stem: dsp
-    abbrev: dsp
-    icon: cpu
-  - id: amplifier
-    label: Amplifier
-    stem: amp
-    abbrev: amp
+  - id: video-wall
+    label: Video Wall
+    parent_id: display-device
+    stem: videowall
+    abbrev: vw
+    icon: grid
+  - id: interactive-whiteboard
+    label: Interactive Whiteboard
+    parent_id: display-device
+    stem: whiteboard
+    abbrev: iwb
+    icon: pencil
+  # ── Audio devices (OAVC 2.2) ────────────────────────────────────────────
+  - id: audio-device
+    label: Audio Device
+    stem: audio
+    abbrev: aud
     icon: speaker
   - id: mic
     label: Microphone
+    parent_id: audio-device
     stem: mic
     abbrev: mic
     icon: mic
@@ -64,31 +78,187 @@ component_types:
   - id: boundary-mic
     label: Boundary Microphone
     parent_id: mic
-  - id: camera
-    label: Camera
-    stem: camera
-    abbrev: cam
-    icon: camera
-  - id: codec
-    label: Codec
-    stem: codec
-    abbrev: cdc
-    icon: video
-  - id: control-processor
-    label: Control Processor
-    stem: processor
-    abbrev: cp
+  - id: gooseneck-mic
+    label: Gooseneck Microphone
+    parent_id: mic
+  - id: speaker
+    label: Speaker
+    parent_id: audio-device
+    stem: speaker
+    abbrev: spk
+    icon: speaker
+  - id: audio-mixer
+    label: Audio Mixer
+    parent_id: audio-device
+    stem: mixer
+    abbrev: mix
+    icon: sliders
+  - id: dsp
+    label: DSP
+    parent_id: audio-device
+    stem: dsp
+    abbrev: dsp
     icon: cpu
-  - id: touch-panel
-    label: Touch Panel
-    stem: panel
-    abbrev: tp
-    icon: touchpad
   - id: dante-card
     label: Dante Card
+    parent_id: dsp
     stem: dante
     abbrev: dc
     icon: network
+  - id: amplifier
+    label: Amplifier
+    parent_id: audio-device
+    stem: amp
+    abbrev: amp
+    icon: speaker
+  # ── Video devices (OAVC 2.3) ────────────────────────────────────────────
+  - id: video-device
+    label: Video Device
+    stem: video
+    abbrev: vid
+    icon: video
+  - id: camera
+    label: Camera
+    parent_id: video-device
+    stem: camera
+    abbrev: cam
+    icon: camera
+  - id: ptz-camera
+    label: PTZ Camera
+    parent_id: camera
+  - id: capture-encoder
+    label: Capture Encoder
+    parent_id: video-device
+    stem: encoder
+    abbrev: enc
+    icon: video
+  - id: codec
+    label: Codec
+    parent_id: video-device
+    stem: codec
+    abbrev: cdc
+    icon: video
+  # ── Control systems (OAVC 2.4) ──────────────────────────────────────────
+  - id: control-device
+    label: Control Device
+    stem: control
+    abbrev: ctl
+    icon: touchpad
+  - id: touch-panel
+    label: Touch Panel
+    parent_id: control-device
+    stem: panel
+    abbrev: tp
+    icon: touchpad
+  - id: button-panel
+    label: Button Panel
+    parent_id: control-device
+    stem: keypad
+    abbrev: bp
+    icon: grip-vertical
+  - id: control-processor
+    label: Control Processor
+    parent_id: control-device
+    stem: processor
+    abbrev: cp
+    icon: cpu
+  - id: scheduling-panel
+    label: Scheduling Panel
+    parent_id: control-device
+    stem: scheduler
+    abbrev: sp
+    icon: clock
+  - id: occupancy-sensor
+    label: Occupancy Sensor
+    parent_id: control-device
+    stem: sensor
+    abbrev: occ
+    icon: eye
+  # ── Signal management and distribution (OAVC 2.5) ───────────────────────
+  - id: signal-device
+    label: Signal Device
+    stem: signal
+    abbrev: sig
+    icon: shuffle
+  - id: presentation-switcher
+    label: Presentation Switcher
+    parent_id: signal-device
+    stem: switcher
+    abbrev: sw
+    icon: shuffle
+  - id: matrix-switcher
+    label: Matrix Switcher
+    parent_id: signal-device
+    stem: matrix
+    abbrev: mx
+    icon: shuffle
+  - id: av-extender
+    label: AV Extender
+    parent_id: signal-device
+    stem: extender
+    abbrev: ext
+    icon: network
+  - id: distribution-amplifier
+    label: Distribution Amplifier
+    parent_id: signal-device
+    stem: da
+    abbrev: da
+    icon: shuffle
+  # ── Collaboration and video conferencing (OAVC 2.6) ─────────────────────
+  - id: collaboration-device
+    label: Collaboration Device
+    stem: collab
+    abbrev: col
+    icon: video
+  - id: video-bar
+    label: Video Bar
+    parent_id: collaboration-device
+    stem: videobar
+    abbrev: vb
+    icon: video
+  - id: wireless-presenter
+    label: Wireless Presenter
+    parent_id: collaboration-device
+    stem: presenter
+    abbrev: wp
+    icon: video
+  # ── Recording and playback (OAVC 2.7) ───────────────────────────────────
+  - id: playback-device
+    label: Playback Device
+    stem: media
+    abbrev: med
+    icon: tv
+  - id: media-player
+    label: Media Player
+    parent_id: playback-device
+    stem: player
+    abbrev: mp
+    icon: tv
+  - id: recorder
+    label: Recorder
+    parent_id: playback-device
+    stem: recorder
+    abbrev: rec
+    icon: server
+  # ── Infrastructure and accessories (OAVC 2.8) ───────────────────────────
+  - id: infrastructure-device
+    label: Infrastructure Device
+    stem: infra
+    abbrev: inf
+    icon: server
+  - id: power-device
+    label: Power Device
+    parent_id: infrastructure-device
+    stem: power
+    abbrev: pwr
+    icon: box
+  - id: network-device
+    label: Network Device
+    parent_id: infrastructure-device
+    stem: network
+    abbrev: net
+    icon: network
+  # ── The generic floor (outside the OAVC tree by design) ─────────────────
   - id: generic-device
     label: Generic Device
     stem: device

@@ -53,12 +53,12 @@ func TestAnOperatorAddedAcronymTakesEffectWithoutARestart(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	setLocationRule(t, gw, ctx, titleTheName)
 
-	before := makeRoomIn(t, gw, ctx, "qm55-wall")
-	if before.Label != "Qm55 Wall" {
-		t.Fatalf("label before the edit = %q, want %q", before.Label, "Qm55 Wall")
+	before := makeRoomIn(t, gw, ctx, "mx84-wall")
+	if before.Label != "Mx84 Wall" {
+		t.Fatalf("label before the edit = %q, want %q", before.Label, "Mx84 Wall")
 	}
 
-	addAcronyms(t, gw, ctx, "QM55")
+	addAcronyms(t, gw, ctx, "MX84")
 
 	// The row that already existed: its next write re-renders it, on this same
 	// process, with no restart in between.
@@ -66,14 +66,14 @@ func TestAnOperatorAddedAcronymTakesEffectWithoutARestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("update location: %v", err)
 	}
-	if updated.Label != "QM55 Wall" {
-		t.Fatalf("label after the edit = %q, want %q (the engine kept the dictionary it booted with)", updated.Label, "QM55 Wall")
+	if updated.Label != "MX84 Wall" {
+		t.Fatalf("label after the edit = %q, want %q (the engine kept the dictionary it booted with)", updated.Label, "MX84 Wall")
 	}
 
 	// And a row created after the edit.
-	fresh := makeRoomIn(t, gw, ctx, "qm55-lobby")
-	if fresh.Label != "QM55 Lobby" {
-		t.Fatalf("new row label = %q, want %q", fresh.Label, "QM55 Lobby")
+	fresh := makeRoomIn(t, gw, ctx, "mx84-lobby")
+	if fresh.Label != "MX84 Lobby" {
+		t.Fatalf("new row label = %q, want %q", fresh.Label, "MX84 Lobby")
 	}
 }
 
@@ -86,7 +86,7 @@ func TestAnOperatorListReplacesTheShippedOne(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	setLocationRule(t, gw, ctx, titleTheName)
 
-	addAcronyms(t, gw, ctx, "QM55")
+	addAcronyms(t, gw, ctx, "MX84")
 
 	l := makeRoomIn(t, gw, ctx, "dsp-closet")
 	if l.Label != "Dsp Closet" {
@@ -117,7 +117,7 @@ func TestTheSettingsFileLayerReachesTheEngine(t *testing.T) {
 	ctx := context.Background()
 	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t),
 		storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))),
-		storage.WithSettingsFile(settings.Doc{"label": {"acronyms": []any{"QM55"}}}))
+		storage.WithSettingsFile(settings.Doc{"label": {"acronyms": []any{"MX84"}}}))
 	if err != nil {
 		t.Fatalf("open gateway: %v", err)
 	}
@@ -127,9 +127,9 @@ func TestTheSettingsFileLayerReachesTheEngine(t *testing.T) {
 	}
 	setLocationRule(t, gw, ctx, titleTheName)
 
-	l := makeRoomIn(t, gw, ctx, "qm55-wall")
-	if l.Label != "QM55 Wall" {
-		t.Fatalf("label = %q, want %q (the file layer did not reach the engine)", l.Label, "QM55 Wall")
+	l := makeRoomIn(t, gw, ctx, "mx84-wall")
+	if l.Label != "MX84 Wall" {
+		t.Fatalf("label = %q, want %q (the file layer did not reach the engine)", l.Label, "MX84 Wall")
 	}
 }
 

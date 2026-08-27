@@ -94,7 +94,7 @@ func TestTheRenderedLabelIsTheLabelTheCreateStoresAPI(t *testing.T) {
 	// A component with an operator-typed name, which is the case with no
 	// unknown left in it at all: an operator-named row carries no ordinal, so
 	// the drafted string and the stored one match character for character.
-	compDraft := map[string]any{"product": "samsung-qm55", "location": "room-204b", "name": "front-panel"}
+	compDraft := map[string]any{"product": "boreal-edge-55", "location": "room-204b", "name": "front-panel"}
 	drafted = renderLabelAt(t, c, owner, "/components:renderLabel", compDraft, http.StatusOK)
 	created = c.do(owner, http.MethodPost, "/components", compDraft, http.StatusCreated)
 	var comp struct {
@@ -144,7 +144,7 @@ func TestTheDraftedNameIsTheNameTheCreateStampsAPI(t *testing.T) {
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "hq", "location_type": "building"}, http.StatusCreated)
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "room-204b", "location_type": "room", "parent": "hq"}, http.StatusCreated)
 
-	body := map[string]any{"product": "samsung-qm55", "location": "room-204b"}
+	body := map[string]any{"product": "boreal-edge-55", "location": "room-204b"}
 	drafted := renderLabelAt(t, c, owner, "/components:renderLabel", body, http.StatusOK)
 	if drafted.Ordinal != 1 {
 		t.Fatalf("first draft in an empty room = %+v, want ordinal 1", drafted)
@@ -213,7 +213,7 @@ func TestTheDraftedNameIsTheNameTheCreateStampsAPI(t *testing.T) {
 	// An expectation beside a name the operator typed is refused, since that
 	// path allocates nothing for it to be about, even when the two agree.
 	c.do(owner, http.MethodPost, "/components",
-		map[string]any{"product": "samsung-qm55", "location": "room-204b", "name": "front-panel", "expected_name": "front-panel"},
+		map[string]any{"product": "boreal-edge-55", "location": "room-204b", "name": "front-panel", "expected_name": "front-panel"},
 		http.StatusUnprocessableEntity)
 	// And the empty string is not a spelling of "no expectation": the schema
 	// refuses it, so a client cannot post an unevaluable precondition by
@@ -268,12 +268,12 @@ func TestTheDraftedOrdinalFollowsThePlacementBucketAPI(t *testing.T) {
 	}
 	// One child already under the rack, and none at the room level.
 	c.do(owner, http.MethodPost, "/components",
-		map[string]any{"product": "samsung-qm55", "parent": parent.Name}, http.StatusCreated)
+		map[string]any{"product": "boreal-edge-55", "parent": parent.Name}, http.StatusCreated)
 
 	underParent := renderLabelAt(t, c, owner, "/components:renderLabel",
-		map[string]any{"product": "samsung-qm55", "parent": parent.Name}, http.StatusOK)
+		map[string]any{"product": "boreal-edge-55", "parent": parent.Name}, http.StatusOK)
 	atRoom := renderLabelAt(t, c, owner, "/components:renderLabel",
-		map[string]any{"product": "samsung-qm55", "location": "room-204b"}, http.StatusOK)
+		map[string]any{"product": "boreal-edge-55", "location": "room-204b"}, http.StatusOK)
 	if underParent.Ordinal != 2 {
 		t.Errorf("draft under the parent = %+v, want ordinal 2: the parent's bucket already holds one", underParent)
 	}
@@ -283,7 +283,7 @@ func TestTheDraftedOrdinalFollowsThePlacementBucketAPI(t *testing.T) {
 	// And the create under the parent takes the number the draft showed, which
 	// is what would fail if the draft had read the wrong bucket.
 	created := c.do(owner, http.MethodPost, "/components",
-		map[string]any{"product": "samsung-qm55", "parent": parent.Name, "expected_name": underParent.Name}, http.StatusCreated)
+		map[string]any{"product": "boreal-edge-55", "parent": parent.Name, "expected_name": underParent.Name}, http.StatusCreated)
 	var child struct {
 		Name string `json:"name"`
 	}
@@ -345,7 +345,7 @@ func TestTheRenderedLabelStopsAtTheCallersReadScope(t *testing.T) {
 	// Inside its own wing the narrow principal gets a real answer, carrying the
 	// label of the location it may read.
 	got := renderLabelAt(t, c, narrow, "/components:renderLabel",
-		map[string]any{"product": "samsung-qm55", "name": "panel", "parent": rack, "location": "wing-a"}, http.StatusOK)
+		map[string]any{"product": "boreal-edge-55", "name": "panel", "parent": rack, "location": "wing-a"}, http.StatusOK)
 	if got.Label == "" {
 		t.Fatal("the in-scope draft rendered nothing, so the refusal below proves nothing")
 	}
@@ -356,9 +356,9 @@ func TestTheRenderedLabelStopsAtTheCallersReadScope(t *testing.T) {
 	// The sibling wing is refused. The owner is shown the same request
 	// succeeding, so this is a scope refusal and not a broken route.
 	c.do(narrow, http.MethodPost, "/components:renderLabel",
-		map[string]any{"product": "samsung-qm55", "name": "panel", "parent": rack, "location": "wing-b"}, http.StatusUnprocessableEntity)
+		map[string]any{"product": "boreal-edge-55", "name": "panel", "parent": rack, "location": "wing-b"}, http.StatusUnprocessableEntity)
 	leak := renderLabelAt(t, c, owner, "/components:renderLabel",
-		map[string]any{"product": "samsung-qm55", "name": "panel", "parent": rack, "location": "wing-b"}, http.StatusOK)
+		map[string]any{"product": "boreal-edge-55", "name": "panel", "parent": rack, "location": "wing-b"}, http.StatusOK)
 	if leak.Label == "" || leak.Label[:len("Secret Wing")] != "Secret Wing" {
 		t.Errorf("owner draft %q does not carry the sibling wing's label, so the refusal above is not a scope refusal", leak.Label)
 	}
@@ -386,7 +386,7 @@ func TestTheRenderedLabelNeedsTheCreatePermission(t *testing.T) {
 
 	viewer := principalWithGrants(t, ctx, dsn, "viewer-all", []grant{{role: "viewer", scopeKind: "all"}})
 	c.do(viewer, http.MethodPost, "/components:renderLabel",
-		map[string]any{"product": "samsung-qm55", "name": "panel"}, http.StatusForbidden)
+		map[string]any{"product": "boreal-edge-55", "name": "panel"}, http.StatusForbidden)
 	c.do(viewer, http.MethodPost, "/systems:renderLabel",
 		map[string]any{"system_type_id": "board", "name": "board-x"}, http.StatusForbidden)
 	c.do(viewer, http.MethodPost, "/locations:renderLabel",
@@ -550,7 +550,7 @@ func TestThePreconditionBindsTheNameTheFormShowed(t *testing.T) {
 	owner := principalWithGrants(t, ctx, dsn, "owner-all", []grant{{role: "owner", scopeKind: "all"}})
 
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "hq", "location_type": "building"}, http.StatusCreated)
-	body := map[string]any{"product": "samsung-qm55", "location": "hq"}
+	body := map[string]any{"product": "boreal-edge-55", "location": "hq"}
 	drafted := renderLabelAt(t, c, owner, "/components:renderLabel", body, http.StatusOK)
 	if drafted.Name != "display-1" || drafted.Ordinal != 1 {
 		t.Fatalf("draft = %+v, want display-1 at ordinal 1", drafted)

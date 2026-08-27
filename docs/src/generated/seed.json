@@ -304,6 +304,19 @@
    "unit": "ms",
    "label": "TCP Connect Time",
    "description": "Time to establish the TCP connection; absent when the port is closed."
+  },
+  {
+   "name": "room-temperature",
+   "data_type": "float",
+   "unit": "C",
+   "label": "Room Temperature",
+   "description": "Ambient temperature reported for the space, in degrees Celsius."
+  },
+  {
+   "name": "occupancy-count",
+   "data_type": "int",
+   "label": "Occupancy Count",
+   "description": "People detected in the space by the room's occupancy source."
   }
  ],
  "event_types": [
@@ -316,6 +329,16 @@
    "name": "command-issued",
    "label": "Command Issued",
    "description": "A command was issued to a component (the caused event a command records). It opens the intended value the command sets and is the lineage cause of that intended value."
+  },
+  {
+   "name": "call-ended",
+   "label": "Call Ended",
+   "description": "A conferencing endpoint left an active call: call-started's closing half, caught natively or derived. The pair brackets a session for usage reads."
+  },
+  {
+   "name": "input-changed",
+   "label": "Input Changed",
+   "description": "A display or switcher moved to a different source input. Caught natively where the device reports it; a frequent, benign occurrence that teaches the event lane's volume without implying a fault."
   }
  ],
  "command_types": [
@@ -445,8 +468,16 @@
  ],
  "component_types": [
   {
+   "id": "display-device",
+   "label": "Display Device",
+   "stem": "display",
+   "abbrev": "disp",
+   "icon": "monitor"
+  },
+  {
    "id": "display",
    "label": "Display",
+   "parent_id": "display-device",
    "stem": "display",
    "abbrev": "fp",
    "icon": "monitor"
@@ -459,6 +490,7 @@
   {
    "id": "projector",
    "label": "Projector",
+   "parent_id": "display-device",
    "stem": "projector",
    "abbrev": "proj",
    "icon": "projector"
@@ -466,41 +498,38 @@
   {
    "id": "screen",
    "label": "Screen",
+   "parent_id": "display-device",
    "stem": "screen",
    "abbrev": "scr",
    "icon": "tv"
   },
   {
-   "id": "presentation-switcher",
-   "label": "Presentation Switcher",
-   "stem": "switcher",
-   "abbrev": "sw",
-   "icon": "shuffle"
+   "id": "video-wall",
+   "label": "Video Wall",
+   "parent_id": "display-device",
+   "stem": "videowall",
+   "abbrev": "vw",
+   "icon": "grid"
   },
   {
-   "id": "video-bar",
-   "label": "Video Bar",
-   "stem": "videobar",
-   "abbrev": "vb",
-   "icon": "video"
+   "id": "interactive-whiteboard",
+   "label": "Interactive Whiteboard",
+   "parent_id": "display-device",
+   "stem": "whiteboard",
+   "abbrev": "iwb",
+   "icon": "pencil"
   },
   {
-   "id": "dsp",
-   "label": "DSP",
-   "stem": "dsp",
-   "abbrev": "dsp",
-   "icon": "cpu"
-  },
-  {
-   "id": "amplifier",
-   "label": "Amplifier",
-   "stem": "amp",
-   "abbrev": "amp",
+   "id": "audio-device",
+   "label": "Audio Device",
+   "stem": "audio",
+   "abbrev": "aud",
    "icon": "speaker"
   },
   {
    "id": "mic",
    "label": "Microphone",
+   "parent_id": "audio-device",
    "stem": "mic",
    "abbrev": "mic",
    "icon": "mic"
@@ -521,38 +550,239 @@
    "parent_id": "mic"
   },
   {
+   "id": "gooseneck-mic",
+   "label": "Gooseneck Microphone",
+   "parent_id": "mic"
+  },
+  {
+   "id": "speaker",
+   "label": "Speaker",
+   "parent_id": "audio-device",
+   "stem": "speaker",
+   "abbrev": "spk",
+   "icon": "speaker"
+  },
+  {
+   "id": "audio-mixer",
+   "label": "Audio Mixer",
+   "parent_id": "audio-device",
+   "stem": "mixer",
+   "abbrev": "mix",
+   "icon": "sliders"
+  },
+  {
+   "id": "dsp",
+   "label": "DSP",
+   "parent_id": "audio-device",
+   "stem": "dsp",
+   "abbrev": "dsp",
+   "icon": "cpu"
+  },
+  {
+   "id": "dante-card",
+   "label": "Dante Card",
+   "parent_id": "dsp",
+   "stem": "dante",
+   "abbrev": "dc",
+   "icon": "network"
+  },
+  {
+   "id": "amplifier",
+   "label": "Amplifier",
+   "parent_id": "audio-device",
+   "stem": "amp",
+   "abbrev": "amp",
+   "icon": "speaker"
+  },
+  {
+   "id": "video-device",
+   "label": "Video Device",
+   "stem": "video",
+   "abbrev": "vid",
+   "icon": "video"
+  },
+  {
    "id": "camera",
    "label": "Camera",
+   "parent_id": "video-device",
    "stem": "camera",
    "abbrev": "cam",
    "icon": "camera"
   },
   {
+   "id": "ptz-camera",
+   "label": "PTZ Camera",
+   "parent_id": "camera"
+  },
+  {
+   "id": "capture-encoder",
+   "label": "Capture Encoder",
+   "parent_id": "video-device",
+   "stem": "encoder",
+   "abbrev": "enc",
+   "icon": "video"
+  },
+  {
    "id": "codec",
    "label": "Codec",
+   "parent_id": "video-device",
    "stem": "codec",
    "abbrev": "cdc",
    "icon": "video"
   },
   {
-   "id": "control-processor",
-   "label": "Control Processor",
-   "stem": "processor",
-   "abbrev": "cp",
-   "icon": "cpu"
+   "id": "control-device",
+   "label": "Control Device",
+   "stem": "control",
+   "abbrev": "ctl",
+   "icon": "touchpad"
   },
   {
    "id": "touch-panel",
    "label": "Touch Panel",
+   "parent_id": "control-device",
    "stem": "panel",
    "abbrev": "tp",
    "icon": "touchpad"
   },
   {
-   "id": "dante-card",
-   "label": "Dante Card",
-   "stem": "dante",
-   "abbrev": "dc",
+   "id": "button-panel",
+   "label": "Button Panel",
+   "parent_id": "control-device",
+   "stem": "keypad",
+   "abbrev": "bp",
+   "icon": "grip-vertical"
+  },
+  {
+   "id": "control-processor",
+   "label": "Control Processor",
+   "parent_id": "control-device",
+   "stem": "processor",
+   "abbrev": "cp",
+   "icon": "cpu"
+  },
+  {
+   "id": "scheduling-panel",
+   "label": "Scheduling Panel",
+   "parent_id": "control-device",
+   "stem": "scheduler",
+   "abbrev": "sp",
+   "icon": "clock"
+  },
+  {
+   "id": "occupancy-sensor",
+   "label": "Occupancy Sensor",
+   "parent_id": "control-device",
+   "stem": "sensor",
+   "abbrev": "occ",
+   "icon": "eye"
+  },
+  {
+   "id": "signal-device",
+   "label": "Signal Device",
+   "stem": "signal",
+   "abbrev": "sig",
+   "icon": "shuffle"
+  },
+  {
+   "id": "presentation-switcher",
+   "label": "Presentation Switcher",
+   "parent_id": "signal-device",
+   "stem": "switcher",
+   "abbrev": "sw",
+   "icon": "shuffle"
+  },
+  {
+   "id": "matrix-switcher",
+   "label": "Matrix Switcher",
+   "parent_id": "signal-device",
+   "stem": "matrix",
+   "abbrev": "mx",
+   "icon": "shuffle"
+  },
+  {
+   "id": "av-extender",
+   "label": "AV Extender",
+   "parent_id": "signal-device",
+   "stem": "extender",
+   "abbrev": "ext",
+   "icon": "network"
+  },
+  {
+   "id": "distribution-amplifier",
+   "label": "Distribution Amplifier",
+   "parent_id": "signal-device",
+   "stem": "da",
+   "abbrev": "da",
+   "icon": "shuffle"
+  },
+  {
+   "id": "collaboration-device",
+   "label": "Collaboration Device",
+   "stem": "collab",
+   "abbrev": "col",
+   "icon": "video"
+  },
+  {
+   "id": "video-bar",
+   "label": "Video Bar",
+   "parent_id": "collaboration-device",
+   "stem": "videobar",
+   "abbrev": "vb",
+   "icon": "video"
+  },
+  {
+   "id": "wireless-presenter",
+   "label": "Wireless Presenter",
+   "parent_id": "collaboration-device",
+   "stem": "presenter",
+   "abbrev": "wp",
+   "icon": "video"
+  },
+  {
+   "id": "playback-device",
+   "label": "Playback Device",
+   "stem": "media",
+   "abbrev": "med",
+   "icon": "tv"
+  },
+  {
+   "id": "media-player",
+   "label": "Media Player",
+   "parent_id": "playback-device",
+   "stem": "player",
+   "abbrev": "mp",
+   "icon": "tv"
+  },
+  {
+   "id": "recorder",
+   "label": "Recorder",
+   "parent_id": "playback-device",
+   "stem": "recorder",
+   "abbrev": "rec",
+   "icon": "server"
+  },
+  {
+   "id": "infrastructure-device",
+   "label": "Infrastructure Device",
+   "stem": "infra",
+   "abbrev": "inf",
+   "icon": "server"
+  },
+  {
+   "id": "power-device",
+   "label": "Power Device",
+   "parent_id": "infrastructure-device",
+   "stem": "power",
+   "abbrev": "pwr",
+   "icon": "box"
+  },
+  {
+   "id": "network-device",
+   "label": "Network Device",
+   "parent_id": "infrastructure-device",
+   "stem": "network",
+   "abbrev": "net",
    "icon": "network"
   },
   {
@@ -636,6 +866,14 @@
    "abbrev": "hud"
   },
   {
+   "id": "auditorium",
+   "label": "Auditorium",
+   "parent_id": "av",
+   "stem": "auditorium",
+   "abbrev": "aud",
+   "icon": "theater"
+  },
+  {
    "id": "sign",
    "label": "Signage",
    "parent_id": "av",
@@ -665,9 +903,9 @@
    "label": "Meeting Room",
    "roles": [
     {
-     "name": "room-mic",
-     "label": "Room Microphone",
-     "quorum": 2,
+     "name": "video-bar",
+     "label": "Video Bar",
+     "quorum": 0,
      "accepted_types": [
       "video-bar"
      ]
@@ -679,6 +917,294 @@
      "accepted_types": [
       "display"
      ]
+    },
+    {
+     "name": "touch-control",
+     "label": "Touch Control",
+     "quorum": 0,
+     "accepted_types": [
+      "touch-panel"
+     ]
+    },
+    {
+     "name": "scheduling-panel",
+     "label": "Scheduling Panel",
+     "quorum": 0,
+     "accepted_types": [
+      "scheduling-panel"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mr55",
+   "label": "Meeting Room 55",
+   "parent_standard_id": "meeting-room",
+   "roles": [
+    {
+     "name": "video-bar",
+     "label": "Video Bar",
+     "quorum": 0,
+     "accepted_types": [
+      "video-bar"
+     ]
+    },
+    {
+     "name": "main-display",
+     "label": "Main Display",
+     "quorum": 0,
+     "accepted_types": [
+      "display"
+     ],
+     "pinned_products": [
+      "boreal-edge-55"
+     ]
+    },
+    {
+     "name": "touch-control",
+     "label": "Touch Control",
+     "quorum": 0,
+     "accepted_types": [
+      "touch-panel"
+     ]
+    },
+    {
+     "name": "scheduling-panel",
+     "label": "Scheduling Panel",
+     "quorum": 0,
+     "accepted_types": [
+      "scheduling-panel"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mr65",
+   "label": "Meeting Room 65",
+   "parent_standard_id": "meeting-room",
+   "roles": [
+    {
+     "name": "video-bar",
+     "label": "Video Bar",
+     "quorum": 0,
+     "accepted_types": [
+      "video-bar"
+     ]
+    },
+    {
+     "name": "main-display",
+     "label": "Main Display",
+     "quorum": 0,
+     "accepted_types": [
+      "display"
+     ],
+     "pinned_products": [
+      "boreal-edge-65"
+     ]
+    },
+    {
+     "name": "touch-control",
+     "label": "Touch Control",
+     "quorum": 0,
+     "accepted_types": [
+      "touch-panel"
+     ]
+    },
+    {
+     "name": "scheduling-panel",
+     "label": "Scheduling Panel",
+     "quorum": 0,
+     "accepted_types": [
+      "scheduling-panel"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mr75",
+   "label": "Meeting Room 75",
+   "parent_standard_id": "meeting-room",
+   "roles": [
+    {
+     "name": "video-bar",
+     "label": "Video Bar",
+     "quorum": 0,
+     "accepted_types": [
+      "video-bar"
+     ]
+    },
+    {
+     "name": "main-display",
+     "label": "Main Display",
+     "quorum": 0,
+     "accepted_types": [
+      "display"
+     ],
+     "pinned_products": [
+      "boreal-edge-75"
+     ]
+    },
+    {
+     "name": "touch-control",
+     "label": "Touch Control",
+     "quorum": 0,
+     "accepted_types": [
+      "touch-panel"
+     ]
+    },
+    {
+     "name": "scheduling-panel",
+     "label": "Scheduling Panel",
+     "quorum": 0,
+     "accepted_types": [
+      "scheduling-panel"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mr86",
+   "label": "Meeting Room 86",
+   "parent_standard_id": "meeting-room",
+   "roles": [
+    {
+     "name": "video-bar",
+     "label": "Video Bar",
+     "quorum": 0,
+     "accepted_types": [
+      "video-bar"
+     ]
+    },
+    {
+     "name": "main-display",
+     "label": "Main Display",
+     "quorum": 0,
+     "accepted_types": [
+      "display"
+     ],
+     "pinned_products": [
+      "boreal-edge-86"
+     ]
+    },
+    {
+     "name": "touch-control",
+     "label": "Touch Control",
+     "quorum": 0,
+     "accepted_types": [
+      "touch-panel"
+     ]
+    },
+    {
+     "name": "scheduling-panel",
+     "label": "Scheduling Panel",
+     "quorum": 0,
+     "accepted_types": [
+      "scheduling-panel"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "mr98",
+   "label": "Meeting Room 98",
+   "parent_standard_id": "meeting-room",
+   "roles": [
+    {
+     "name": "video-bar",
+     "label": "Video Bar",
+     "quorum": 0,
+     "accepted_types": [
+      "video-bar"
+     ]
+    },
+    {
+     "name": "main-display",
+     "label": "Main Display",
+     "quorum": 0,
+     "accepted_types": [
+      "display"
+     ],
+     "pinned_products": [
+      "boreal-edge-98"
+     ]
+    },
+    {
+     "name": "touch-control",
+     "label": "Touch Control",
+     "quorum": 0,
+     "accepted_types": [
+      "touch-panel"
+     ]
+    },
+    {
+     "name": "scheduling-panel",
+     "label": "Scheduling Panel",
+     "quorum": 0,
+     "accepted_types": [
+      "scheduling-panel"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "divisible-conference",
+   "label": "Divisible Conference",
+   "roles": [
+    {
+     "name": "video-bar",
+     "label": "Video Bar",
+     "quorum": 0,
+     "accepted_types": [
+      "video-bar"
+     ]
+    },
+    {
+     "name": "main-display",
+     "label": "Main Display",
+     "quorum": 2,
+     "accepted_types": [
+      "display"
+     ]
+    },
+    {
+     "name": "room-mic",
+     "label": "Room Microphone",
+     "quorum": 2,
+     "accepted_types": [
+      "ceiling-mic"
+     ]
+    },
+    {
+     "name": "dsp",
+     "label": "DSP",
+     "quorum": 0,
+     "accepted_types": [
+      "dsp"
+     ]
+    },
+    {
+     "name": "amplifier",
+     "label": "Amplifier",
+     "quorum": 0,
+     "accepted_types": [
+      "amplifier"
+     ]
+    },
+    {
+     "name": "touch-control",
+     "label": "Touch Control",
+     "quorum": 0,
+     "accepted_types": [
+      "touch-panel"
+     ]
+    },
+    {
+     "name": "scheduling-panel",
+     "label": "Scheduling Panel",
+     "quorum": 0,
+     "accepted_types": [
+      "scheduling-panel"
+     ]
     }
    ]
   },
@@ -686,6 +1212,14 @@
    "id": "huddle-room",
    "label": "Huddle Room",
    "roles": [
+    {
+     "name": "main-display",
+     "label": "Main Display",
+     "quorum": 0,
+     "accepted_types": [
+      "display"
+     ]
+    },
     {
      "name": "conf-bar",
      "label": "Conferencing Bar",
@@ -738,69 +1272,372 @@
   },
   {
    "id": "classroom",
-   "label": "Classroom"
+   "label": "Classroom",
+   "roles": [
+    {
+     "name": "class-display",
+     "label": "Main Display",
+     "quorum": 0,
+     "accepted_types": [
+      "display"
+     ]
+    },
+    {
+     "name": "instructor-mic",
+     "label": "Instructor Microphone",
+     "quorum": 0,
+     "accepted_types": [
+      "wireless-mic"
+     ]
+    },
+    {
+     "name": "touch-control",
+     "label": "Touch Control",
+     "quorum": 0,
+     "accepted_types": [
+      "touch-panel"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "training-room",
+   "label": "Training Room",
+   "roles": [
+    {
+     "name": "front-display",
+     "label": "Front Display",
+     "quorum": 2,
+     "accepted_types": [
+      "display"
+     ],
+     "pinned_products": [
+      "boreal-edge-86"
+     ]
+    },
+    {
+     "name": "ceiling-mic",
+     "label": "Ceiling Microphone",
+     "quorum": 2,
+     "accepted_types": [
+      "ceiling-mic"
+     ]
+    },
+    {
+     "name": "presenter-mic",
+     "label": "Presenter Wireless Microphone",
+     "quorum": 0,
+     "accepted_types": [
+      "wireless-mic"
+     ]
+    },
+    {
+     "name": "podium-mic",
+     "label": "Podium Microphone",
+     "quorum": 0,
+     "accepted_types": [
+      "gooseneck-mic"
+     ]
+    },
+    {
+     "name": "dsp",
+     "label": "DSP",
+     "quorum": 0,
+     "accepted_types": [
+      "dsp"
+     ]
+    },
+    {
+     "name": "amplifier",
+     "label": "Amplifier",
+     "quorum": 0,
+     "accepted_types": [
+      "amplifier"
+     ]
+    },
+    {
+     "name": "speakers",
+     "label": "Speakers",
+     "quorum": 4,
+     "accepted_types": [
+      "speaker"
+     ]
+    },
+    {
+     "name": "video-switcher",
+     "label": "Video Switcher",
+     "quorum": 0,
+     "accepted_types": [
+      "presentation-switcher"
+     ]
+    },
+    {
+     "name": "display-endpoint",
+     "label": "Display Endpoint",
+     "quorum": 2,
+     "accepted_types": [
+      "av-extender"
+     ]
+    },
+    {
+     "name": "control-system",
+     "label": "Control System",
+     "quorum": 0,
+     "accepted_types": [
+      "control-processor"
+     ]
+    },
+    {
+     "name": "touch-control",
+     "label": "Touch Control",
+     "quorum": 0,
+     "accepted_types": [
+      "touch-panel"
+     ]
+    },
+    {
+     "name": "scheduling-panel",
+     "label": "Scheduling Panel",
+     "quorum": 0,
+     "accepted_types": [
+      "scheduling-panel"
+     ]
+    },
+    {
+     "name": "people-counter",
+     "label": "People Counter",
+     "quorum": 0,
+     "accepted_types": [
+      "occupancy-sensor"
+     ]
+    },
+    {
+     "name": "camera",
+     "label": "Camera",
+     "quorum": 2,
+     "accepted_types": [
+      "camera"
+     ]
+    }
+   ]
   },
   {
    "id": "auditorium",
-   "label": "Auditorium"
+   "label": "Auditorium",
+   "roles": [
+    {
+     "name": "projection",
+     "label": "Projection",
+     "quorum": 0,
+     "accepted_types": [
+      "projector"
+     ]
+    },
+    {
+     "name": "confidence-display",
+     "label": "Confidence Display",
+     "quorum": 0,
+     "accepted_types": [
+      "display"
+     ]
+    },
+    {
+     "name": "stage-mic",
+     "label": "Stage Microphone",
+     "quorum": 2,
+     "accepted_types": [
+      "wireless-mic"
+     ]
+    },
+    {
+     "name": "podium-mic",
+     "label": "Podium Microphone",
+     "quorum": 0,
+     "accepted_types": [
+      "gooseneck-mic"
+     ]
+    },
+    {
+     "name": "dsp",
+     "label": "DSP",
+     "quorum": 0,
+     "accepted_types": [
+      "dsp"
+     ]
+    },
+    {
+     "name": "amplifier",
+     "label": "Amplifier",
+     "quorum": 2,
+     "accepted_types": [
+      "amplifier"
+     ]
+    },
+    {
+     "name": "speakers",
+     "label": "Speakers",
+     "quorum": 4,
+     "accepted_types": [
+      "speaker"
+     ]
+    },
+    {
+     "name": "video-switcher",
+     "label": "Video Switcher",
+     "quorum": 0,
+     "accepted_types": [
+      "presentation-switcher"
+     ]
+    },
+    {
+     "name": "control-system",
+     "label": "Control System",
+     "quorum": 0,
+     "accepted_types": [
+      "control-processor"
+     ]
+    },
+    {
+     "name": "touch-control",
+     "label": "Touch Control",
+     "quorum": 0,
+     "accepted_types": [
+      "touch-panel"
+     ]
+    },
+    {
+     "name": "camera",
+     "label": "Camera",
+     "quorum": 2,
+     "accepted_types": [
+      "camera"
+     ]
+    }
+   ]
   },
   {
-   "id": "signage",
-   "label": "Digital Signage"
+   "id": "digital-sign",
+   "label": "Digital Sign",
+   "roles": [
+    {
+     "name": "panel",
+     "label": "Panel",
+     "quorum": 0,
+     "accepted_types": [
+      "display"
+     ]
+    },
+    {
+     "name": "player",
+     "label": "Player",
+     "quorum": 0,
+     "accepted_types": [
+      "media-player"
+     ]
+    }
+   ]
   },
   {
-   "id": "control-room",
-   "label": "Control Room"
+   "id": "ds55",
+   "label": "Digital Sign 55",
+   "parent_standard_id": "digital-sign",
+   "roles": [
+    {
+     "name": "panel",
+     "label": "Panel",
+     "quorum": 0,
+     "accepted_types": [
+      "display"
+     ],
+     "pinned_products": [
+      "boreal-edge-55"
+     ]
+    },
+    {
+     "name": "player",
+     "label": "Player",
+     "quorum": 0,
+     "accepted_types": [
+      "media-player"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ds75",
+   "label": "Digital Sign 75",
+   "parent_standard_id": "digital-sign",
+   "roles": [
+    {
+     "name": "panel",
+     "label": "Panel",
+     "quorum": 0,
+     "accepted_types": [
+      "display"
+     ],
+     "pinned_products": [
+      "boreal-edge-75"
+     ]
+    },
+    {
+     "name": "player",
+     "label": "Player",
+     "quorum": 0,
+     "accepted_types": [
+      "media-player"
+     ]
+    }
+   ]
   }
  ],
  "vendors": [
   {
-   "id": "crestron",
-   "label": "Crestron",
+   "id": "boreal",
+   "label": "Boreal",
    "kind": "manufacturer",
-   "website": "https://www.crestron.com"
+   "website": "https://boreal.example"
   },
   {
-   "id": "biamp",
-   "label": "Biamp",
+   "id": "kestrel",
+   "label": "Kestrel",
    "kind": "manufacturer",
-   "website": "https://www.biamp.com"
+   "website": "https://kestrel.example"
   },
   {
-   "id": "qsc",
-   "label": "QSC",
+   "id": "lyra",
+   "label": "Lyra",
    "kind": "manufacturer",
-   "website": "https://www.qsc.com"
+   "website": "https://lyra.example"
   },
   {
-   "id": "shure",
-   "label": "Shure",
+   "id": "meridian",
+   "label": "Meridian",
    "kind": "manufacturer",
-   "website": "https://www.shure.com"
+   "website": "https://meridian.example"
   },
   {
-   "id": "cisco",
-   "label": "Cisco",
+   "id": "newtron",
+   "label": "Newtron",
    "kind": "manufacturer",
-   "website": "https://www.cisco.com"
+   "website": "https://newtron.example"
   },
   {
-   "id": "extron",
-   "label": "Extron",
+   "id": "polaris",
+   "label": "Polaris",
    "kind": "manufacturer",
-   "website": "https://www.extron.com"
+   "website": "https://polaris.example"
   },
   {
-   "id": "sony",
-   "label": "Sony",
-   "kind": "manufacturer",
-   "website": "https://www.sony.com"
+   "id": "shinra-cloud",
+   "label": "Shinra Cloud",
+   "kind": "developer",
+   "website": "https://shinra-cloud.example"
   },
   {
-   "id": "samsung",
-   "label": "Samsung",
+   "id": "tessellate",
+   "label": "Tessellate",
    "kind": "manufacturer",
-   "website": "https://www.samsung.com"
+   "website": "https://tessellate.example"
   }
  ],
  "drivers": [
@@ -810,12 +1647,12 @@
    "version": "1.0.0"
   },
   {
-   "id": "cisco-xapi",
-   "label": "Cisco xAPI"
+   "id": "kestrel-api",
+   "label": "Kestrel Device API"
   },
   {
-   "id": "crestron-cip",
-   "label": "Crestron CIP"
+   "id": "newtron-nvp",
+   "label": "Newtron NVP"
   },
   {
    "id": "http-json",
@@ -825,10 +1662,10 @@
  ],
  "products": [
   {
-   "id": "cisco-room-bar",
-   "label": "Cisco Room Bar",
-   "vendor_id": "cisco",
-   "driver_id": "cisco-xapi",
+   "id": "boreal-edge-55",
+   "label": "Boreal Edge 55",
+   "vendor_id": "boreal",
+   "driver_id": "snmp-generic",
    "kind": "device",
    "properties": [
     {
@@ -839,14 +1676,15 @@
     },
     {
      "name": "model-number",
-     "default": "\"Room Bar\""
+     "default": "\"Edge 55\""
     }
    ]
   },
   {
-   "id": "samsung-qm55",
-   "label": "Samsung QM55",
-   "vendor_id": "samsung",
+   "id": "boreal-edge-65",
+   "label": "Boreal Edge 65",
+   "vendor_id": "boreal",
+   "driver_id": "snmp-generic",
    "kind": "device",
    "properties": [
     {
@@ -857,22 +1695,194 @@
     },
     {
      "name": "model-number",
-     "default": "\"QM55\""
+     "default": "\"Edge 65\""
     }
    ]
   },
   {
-   "id": "shure-mxa920",
-   "label": "Shure MXA920",
-   "vendor_id": "shure",
+   "id": "boreal-edge-75",
+   "label": "Boreal Edge 75",
+   "vendor_id": "boreal",
+   "driver_id": "snmp-generic",
+   "kind": "device",
+   "properties": [
+    {
+     "name": "serial-number"
+    },
+    {
+     "name": "firmware-version"
+    },
+    {
+     "name": "model-number",
+     "default": "\"Edge 75\""
+    }
+   ]
+  },
+  {
+   "id": "boreal-edge-86",
+   "label": "Boreal Edge 86",
+   "vendor_id": "boreal",
+   "driver_id": "snmp-generic",
+   "kind": "device",
+   "properties": [
+    {
+     "name": "serial-number"
+    },
+    {
+     "name": "firmware-version"
+    },
+    {
+     "name": "model-number",
+     "default": "\"Edge 86\""
+    }
+   ]
+  },
+  {
+   "id": "boreal-edge-98",
+   "label": "Boreal Edge 98",
+   "vendor_id": "boreal",
+   "driver_id": "snmp-generic",
+   "kind": "device",
+   "properties": [
+    {
+     "name": "serial-number"
+    },
+    {
+     "name": "firmware-version"
+    },
+    {
+     "name": "model-number",
+     "default": "\"Edge 98\""
+    }
+   ]
+  },
+  {
+   "id": "boreal-beam-340",
+   "label": "Boreal Beam 340",
+   "vendor_id": "boreal",
    "driver_id": "snmp-generic",
    "kind": "device"
   },
   {
-   "id": "crestron-tss-1070",
-   "label": "Crestron TSS-1070",
-   "vendor_id": "crestron",
-   "driver_id": "crestron-cip",
+   "id": "boreal-cast-m1",
+   "label": "Boreal Cast M1",
+   "vendor_id": "boreal",
+   "driver_id": "http-json",
+   "kind": "device"
+  },
+  {
+   "id": "kestrel-vroom",
+   "label": "Kestrel VRoom",
+   "vendor_id": "kestrel",
+   "driver_id": "kestrel-api",
+   "kind": "device",
+   "properties": [
+    {
+     "name": "serial-number"
+    },
+    {
+     "name": "firmware-version"
+    },
+    {
+     "name": "model-number",
+     "default": "\"VRoom\""
+    }
+   ]
+  },
+  {
+   "id": "kestrel-relay-c1",
+   "label": "Kestrel Relay C1",
+   "vendor_id": "kestrel",
+   "driver_id": "kestrel-api",
+   "kind": "device"
+  },
+  {
+   "id": "kestrel-gaze-p2",
+   "label": "Kestrel Gaze P2",
+   "vendor_id": "kestrel",
+   "driver_id": "kestrel-api",
+   "kind": "device"
+  },
+  {
+   "id": "lyra-arc-a2",
+   "label": "Lyra Arc A2",
+   "vendor_id": "lyra",
+   "driver_id": "snmp-generic",
+   "kind": "device"
+  },
+  {
+   "id": "lyra-hx-1",
+   "label": "Lyra HX-1",
+   "vendor_id": "lyra",
+   "driver_id": "snmp-generic",
+   "kind": "device"
+  },
+  {
+   "id": "lyra-gn-12",
+   "label": "Lyra GN-12",
+   "vendor_id": "lyra",
+   "kind": "device"
+  },
+  {
+   "id": "meridian-mx-84",
+   "label": "Meridian MX 84",
+   "vendor_id": "meridian",
+   "driver_id": "snmp-generic",
+   "kind": "device"
+  },
+  {
+   "id": "meridian-xl-1",
+   "label": "Meridian XL-1",
+   "vendor_id": "meridian",
+   "driver_id": "snmp-generic",
+   "kind": "device"
+  },
+  {
+   "id": "newtron-panel-7",
+   "label": "Newtron Panel 7",
+   "vendor_id": "newtron",
+   "driver_id": "newtron-nvp",
+   "kind": "device"
+  },
+  {
+   "id": "newtron-slate-5",
+   "label": "Newtron Slate 5",
+   "vendor_id": "newtron",
+   "driver_id": "newtron-nvp",
+   "kind": "device"
+  },
+  {
+   "id": "newtron-core-3",
+   "label": "Newtron Core CP-3",
+   "vendor_id": "newtron",
+   "driver_id": "newtron-nvp",
+   "kind": "device"
+  },
+  {
+   "id": "polaris-dsp-16",
+   "label": "Polaris DSP 16",
+   "vendor_id": "polaris",
+   "driver_id": "snmp-generic",
+   "kind": "device"
+  },
+  {
+   "id": "polaris-amp-4100",
+   "label": "Polaris Amp 4-100",
+   "vendor_id": "polaris",
+   "driver_id": "snmp-generic",
+   "kind": "device"
+  },
+  {
+   "id": "polaris-sky-c6",
+   "label": "Polaris Sky C6",
+   "vendor_id": "polaris",
+   "kind": "device"
+  },
+  {
+   "id": "tessellate-census-c1",
+   "label": "Tessellate Census C1",
+   "vendor_id": "tessellate",
+   "driver_id": "http-json",
    "kind": "device"
   },
   {

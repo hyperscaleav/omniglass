@@ -46,7 +46,7 @@ func newMemberFixture(t *testing.T, ctx context.Context) *memberFixture {
 			t.Fatalf("system %s: %v", s, err)
 		}
 	}
-	bar := "cisco-room-bar"
+	bar := "kestrel-vroom"
 	for _, c := range []string{"dsp", "mic-a", "mic-b"} {
 		product := bar
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{

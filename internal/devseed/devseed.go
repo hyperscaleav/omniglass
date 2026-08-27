@@ -609,6 +609,155 @@ func Run(ctx context.Context, gw storage.Gateway, actorID string) error {
 	if err := seedNodeLogs(ctx, gw); err != nil {
 		return err
 	}
+	// The meeting-room standard's first metric contract, with samples on the
+	// huddle system (#790): the system zoom's KPI tiles render only what the
+	// standard declares, so without this no room would show a tile.
+	if err := seedStandardMetrics(ctx, gw, sysIDs); err != nil {
+		return err
+	}
+	// The telemetry breadth (#796): events, logs, series, and alarm history
+	// across the fleet, so the workspace views have something real to say on
+	// more rooms than the two worked examples.
+	if err := seedTelemetryBreadth(ctx, gw, actorID, compIDs, sysIDs); err != nil {
+		return err
+	}
+	// The room maps (#791, ADR-0128): every conforming system's Map tab
+	// renders from its standard's declaration, so both example standards
+	// carry one. Present is the sentinel: the write audits, so a re-run
+	// must not repeat it.
+	if err := seedStandardMaps(ctx, gw, actorID); err != nil {
+		return err
+	}
+	return nil
+}
+
+// standardMaps are the example rooms' layouts, drawn the way an integrator
+// sketches one: front wall at the top, the table in the middle distance.
+var standardMaps = map[string]string{
+	"mr55": `{"aspect":1.5,"positions":[
+		{"role":"main-display","position":1,"x":0.5,"y":0.06},
+		{"role":"video-bar","position":1,"x":0.5,"y":0.14},
+		{"role":"touch-control","position":1,"x":0.5,"y":0.55},
+		{"role":"scheduling-panel","position":1,"x":0.06,"y":0.9}]}`,
+	"classroom": `{"aspect":1.4,"positions":[
+		{"role":"class-display","position":1,"x":0.5,"y":0.07},
+		{"role":"instructor-mic","position":1,"x":0.5,"y":0.3},
+		{"role":"touch-control","position":1,"x":0.14,"y":0.6}]}`,
+	"training-room": `{"aspect":1.6,"positions":[
+		{"role":"front-display","position":1,"x":0.32,"y":0.06},
+		{"role":"front-display","position":2,"x":0.68,"y":0.06},
+		{"role":"podium-mic","position":1,"x":0.12,"y":0.2},
+		{"role":"ceiling-mic","position":1,"x":0.35,"y":0.45},
+		{"role":"ceiling-mic","position":2,"x":0.65,"y":0.45},
+		{"role":"speakers","position":1,"x":0.25,"y":0.3},
+		{"role":"speakers","position":2,"x":0.75,"y":0.3},
+		{"role":"speakers","position":3,"x":0.25,"y":0.7},
+		{"role":"speakers","position":4,"x":0.75,"y":0.7},
+		{"role":"camera","position":1,"x":0.35,"y":0.93},
+		{"role":"camera","position":2,"x":0.65,"y":0.93},
+		{"role":"touch-control","position":1,"x":0.12,"y":0.3},
+		{"role":"scheduling-panel","position":1,"x":0.05,"y":0.9}]}`,
+	"auditorium": `{"aspect":1.8,"positions":[
+		{"role":"projection","position":1,"x":0.5,"y":0.06},
+		{"role":"confidence-display","position":1,"x":0.85,"y":0.12},
+		{"role":"podium-mic","position":1,"x":0.2,"y":0.22},
+		{"role":"stage-mic","position":1,"x":0.4,"y":0.2},
+		{"role":"stage-mic","position":2,"x":0.6,"y":0.2},
+		{"role":"speakers","position":1,"x":0.15,"y":0.4},
+		{"role":"speakers","position":2,"x":0.85,"y":0.4},
+		{"role":"speakers","position":3,"x":0.15,"y":0.75},
+		{"role":"speakers","position":4,"x":0.85,"y":0.75},
+		{"role":"camera","position":1,"x":0.35,"y":0.94},
+		{"role":"camera","position":2,"x":0.65,"y":0.94},
+		{"role":"touch-control","position":1,"x":0.08,"y":0.3}]}`,
+	"ds55": `{"aspect":1.2,"positions":[
+		{"role":"panel","position":1,"x":0.5,"y":0.12},
+		{"role":"player","position":1,"x":0.5,"y":0.3}]}`,
+	"huddle-room": `{"aspect":1.3,"positions":[
+		{"role":"main-display","position":1,"x":0.5,"y":0.06},
+		{"role":"conf-bar","position":1,"x":0.5,"y":0.14},
+		{"role":"conf-codec","position":1,"x":0.12,"y":0.9},
+		{"role":"conf-camera","position":1,"x":0.5,"y":0.2},
+		{"role":"conf-dsp","position":1,"x":0.24,"y":0.9},
+		{"role":"conf-amp","position":1,"x":0.36,"y":0.9},
+		{"role":"conf-mic","position":1,"x":0.5,"y":0.55}]}`,
+}
+
+func seedStandardMaps(ctx context.Context, gw storage.Gateway, actorID string) error {
+	// Fixed order: the writes audit, and a Go map's random iteration order
+	// swapped the two audit rows between seeds, which the shot gate reads
+	// as drift (the #780 class).
+	for _, std := range []string{"mr55", "huddle-room", "classroom", "training-room", "auditorium", "ds55"} {
+		decl := standardMaps[std]
+		st, err := gw.GetStandard(ctx, std)
+		if err != nil {
+			return fmt.Errorf("devseed: read standard %q: %w", std, err)
+		}
+		if st.Map != nil {
+			continue
+		}
+		raw := json.RawMessage(decl)
+		if _, err := gw.UpdateStandard(ctx, actorID, std, storage.StandardPatch{Map: &raw}); err != nil {
+			return fmt.Errorf("devseed: declare the %s map: %w", std, err)
+		}
+	}
+	return nil
+}
+
+// kpiSystem carries the sampled KPI values: the huddle room, the fleet's
+// worked healthy example (and the docs shot's subject). Every other seeded
+// room still carries the tiles' CONTRACT from its standard, unsampled, which
+// is itself the teaching: contract first, sample when the room's build wires
+// a source in.
+const kpiSystem = "huddle-north"
+
+// seedStandardMetrics declares room-temperature and occupancy-count on the
+// meeting-room standard and lands one sample of each on the huddle system.
+// The contract upsert is idempotent by nature; the samples are append-only,
+// so the sampled series is the sentinel: present means this ran, and a
+// re-run writes nothing.
+func seedStandardMetrics(ctx context.Context, gw storage.Gateway, sysIDs map[string]string) error {
+	// Every occupied-room archetype declares the pair, so its zoom carries
+	// the tiles (the huddle is the sampled subject below); signage boards
+	// measure neither.
+	for _, std := range []string{"meeting-room", "mr55", "mr65", "mr75", "mr86", "mr98", "divisible-conference", "huddle-room", "classroom", "training-room", "auditorium"} {
+		for _, m := range []string{"room-temperature", "occupancy-count"} {
+			if err := gw.UpsertStandardMetric(ctx, std, storage.StandardMetricSpec{MetricTypeName: m}); err != nil {
+				return fmt.Errorf("devseed: declare %s on %s: %w", m, std, err)
+			}
+		}
+	}
+	sysID, ok := sysIDs[kpiSystem]
+	if !ok {
+		return fmt.Errorf("devseed: the KPI fixture system %q is not in the fleet", kpiSystem)
+	}
+	all := scope.Set{All: true}
+	eff, err := gw.EffectiveMetrics(ctx, "system", sysID, all)
+	if err != nil {
+		return fmt.Errorf("devseed: check KPI samples: %w", err)
+	}
+	for _, m := range eff {
+		if m.MetricTypeName == "room-temperature" && m.IsSampled {
+			return nil
+		}
+	}
+	// A day of temperature (a morning ramp, an afternoon peak) and a working
+	// day of occupancy, newest last: enough shape for the Data tab's chart
+	// to be judged, ending on the values the KPI tiles show.
+	now := time.Now()
+	writes := []storage.MetricSampleWrite{}
+	temps := []float64{21.8, 21.6, 21.9, 22.4, 23.1, 23.8, 24.2, 23.9, 23.5}
+	occ := []float64{0, 0, 4, 6, 6, 2, 5, 1, 0}
+	for i := range temps {
+		ts := now.Add(-time.Duration(len(temps)-1-i) * 3 * time.Hour).Add(-4 * time.Minute)
+		writes = append(writes,
+			storage.MetricSampleWrite{OwnerKind: "system", OwnerID: sysID, Key: "room-temperature", Value: temps[i], Source: "devseed", TS: ts},
+			storage.MetricSampleWrite{OwnerKind: "system", OwnerID: sysID, Key: "occupancy-count", Value: occ[i], Source: "devseed", TS: ts},
+		)
+	}
+	if err := gw.InsertMetricSamples(ctx, writes); err != nil {
+		return fmt.Errorf("devseed: write KPI samples: %w", err)
+	}
 	return nil
 }
 
@@ -900,8 +1049,8 @@ func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, fla
 
 // The example events the dev seed installs on a boardroom video bar: a conferencing
 // endpoint publishes call-started natively (an xAPI event) so the console's event
-// panel comes up populated instead of empty. eventComponent is the fixture KEY of a
-// video bar seeded above (the platform names it videobar-2), resolved to an id so
+// panel comes up populated instead of empty. eventComponent is the fixture KEY of
+// the boardroom's video bar (the platform names it videobar-1), resolved to an id so
 // the event's component_id foreign key resolves. Every row uses the registered
 // event_type key call-started (reject-not-project) and is stamped origin=caught: the
 // device reported it, the platform did not derive it. Raw device logs are a separate
@@ -957,4 +1106,143 @@ func seedEvents(ctx context.Context, gw storage.Gateway, componentID string) err
 		return fmt.Errorf("devseed: insert events: %w", err)
 	}
 	return nil
+}
+
+// breadthEventComponents are the bars that carry a day of call activity
+// beside the boardroom's worked example: enough rooms that the Events tab
+// reads populated wherever an operator lands. Fixture keys.
+
+// seedTelemetryBreadth writes the fleet-wide example telemetry (#796):
+// call events on several bars, log lines on several devices, RTT series on a
+// few components, room series on every system whose standard declares them,
+// and a raised-then-cleared alarm pair so the history surfaces show a healed
+// incident beside the standing ones. Sentinel: the breadth marker event on
+// the first breadth bar; present means the whole block ran.
+func seedTelemetryBreadth(ctx context.Context, gw storage.Gateway, actorID string, compIDs, sysIDs map[string]string) error {
+	first, ok := compIDs["huddle-bar"]
+	if !ok {
+		return fmt.Errorf("devseed: the breadth fixture component %q is not in the fleet", "huddle-bar")
+	}
+	existing, err := gw.ListComponentEvents(ctx, first, 0, 200)
+	if err != nil {
+		return fmt.Errorf("devseed: check breadth events: %w", err)
+	}
+	for _, e := range existing {
+		if e.Source == "devseed-breadth" {
+			return nil
+		}
+	}
+	now := time.Now().UTC()
+
+	// Calls on the bars: a working day per room, offsets varied by index so
+	// no two rooms tell the identical story.
+	var events []storage.EventWrite
+	for i, key := range []string{"huddle-bar", "briefing-bar", "ann-c1a", "wl3-c1a", "pava-c1a"} {
+		id, ok := compIDs[key]
+		if !ok {
+			continue
+		}
+		base := now.Add(-time.Duration(2+i) * time.Hour)
+		events = append(events,
+			storage.EventWrite{OwnerKind: "component", OwnerID: id, Key: "call-started", Message: "call started", Source: "devseed-breadth", TS: base},
+			storage.EventWrite{OwnerKind: "component", OwnerID: id, Key: "call-ended", Message: fmt.Sprintf("call ended after %d minutes", 24+7*i), Source: "devseed-breadth", TS: base.Add(time.Duration(24+7*i) * time.Minute)},
+		)
+	}
+	// Input changes and a firmware update on displays.
+	for i, key := range []string{"hl2-c3d", "wl3-c1d", "panel-a"} {
+		id, ok := compIDs[key]
+		if !ok {
+			continue
+		}
+		events = append(events, storage.EventWrite{OwnerKind: "component", OwnerID: id, Key: "input-changed", Message: "HDMI 2 to HDMI 1", Source: "devseed-breadth", TS: now.Add(-time.Duration(5+i) * time.Hour)})
+	}
+	if err := gw.InsertEvents(ctx, events); err != nil {
+		return fmt.Errorf("devseed: breadth events: %w", err)
+	}
+
+	// Log lines on a few devices beside the huddle display's worked set.
+	var lines []storage.LogLineWrite
+	for i, key := range []string{"huddle-bar", "wl3-c1a", "aud-dsp"} {
+		id, ok := compIDs[key]
+		if !ok {
+			continue
+		}
+		base := now.Add(-time.Duration(30+10*i) * time.Minute)
+		lines = append(lines,
+			storage.LogLineWrite{OwnerKind: "component", OwnerID: id, Severity: "info", Message: "link established, 1Gb full duplex", Source: "device", TS: base},
+			storage.LogLineWrite{OwnerKind: "component", OwnerID: id, Severity: "warning", Message: "ntp drift 210ms, resyncing", Source: "device", TS: base.Add(9 * time.Minute)},
+			storage.LogLineWrite{OwnerKind: "component", OwnerID: id, Severity: "info", Message: "telemetry session established", Source: "device", TS: base.Add(11 * time.Minute)},
+		)
+	}
+	if err := gw.InsertLogLines(ctx, lines); err != nil {
+		return fmt.Errorf("devseed: breadth logs: %w", err)
+	}
+
+	// RTT series on a few components, so leaves beyond the DSP chart.
+	var samples []storage.MetricSampleWrite
+	for i, key := range []string{"huddle-bar", "wl3-c1a", "briefing-bar"} {
+		id, ok := compIDs[key]
+		if !ok {
+			continue
+		}
+		for j := 0; j < 8; j++ {
+			ts := now.Add(-time.Duration(7-j) * 3 * time.Hour)
+			samples = append(samples, storage.MetricSampleWrite{OwnerKind: "component", OwnerID: id, Key: "icmp-rtt-avg", Value: 4.5 + float64(i) + 0.3*float64(j%3), Source: "devseed-breadth", TS: ts})
+		}
+	}
+	// Room series on every system whose standard declares the pair, varied by
+	// index; the huddle keeps its own worked pattern from seedStandardMetrics.
+	roomStds := map[string]bool{"mr55": true, "mr65": true, "mr75": true, "mr86": true, "mr98": true, "divisible-conference": true, "huddle-room": true, "classroom": true, "training-room": true, "auditorium": true}
+	keys := make([]string, 0, len(sysIDs))
+	for k := range sysIDs {
+		keys = append(keys, k)
+	}
+	sortStrings(keys)
+	fx, err := Fixtures()
+	if err != nil {
+		return err
+	}
+	stdOf := map[string]string{}
+	for _, sy := range fx.Systems {
+		stdOf[sy.Key] = sy.Standard
+	}
+	for i, k := range keys {
+		if k == kpiSystem || !roomStds[stdOf[k]] {
+			continue
+		}
+		id := sysIDs[k]
+		for j := 0; j < 5; j++ {
+			ts := now.Add(-time.Duration(4-j) * 5 * time.Hour)
+			samples = append(samples,
+				storage.MetricSampleWrite{OwnerKind: "system", OwnerID: id, Key: "room-temperature", Value: 21.0 + float64(i%5)*0.4 + 0.5*float64(j%2), Source: "devseed-breadth", TS: ts},
+				storage.MetricSampleWrite{OwnerKind: "system", OwnerID: id, Key: "occupancy-count", Value: float64((i + j) % 7), Source: "devseed-breadth", TS: ts},
+			)
+		}
+	}
+	if err := gw.InsertMetricSamples(ctx, samples); err != nil {
+		return fmt.Errorf("devseed: breadth samples: %w", err)
+	}
+
+	// A healed incident: raised and cleared in the same seed, so the history
+	// surfaces show a cleared row beside the standing alarms. Honest about
+	// its age (the record cannot be backdated through the write path).
+	if hl, ok := compIDs["wl3-c1a"]; ok {
+		a, err := gw.RaiseAlarm(ctx, actorID, hl, storage.AlarmSpec{Severity: "warning", Message: "Packet loss above threshold on the media port", DedupKey: "media-loss"})
+		if err != nil {
+			return fmt.Errorf("devseed: breadth raise: %w", err)
+		}
+		if err := gw.ClearAlarm(ctx, actorID, hl, a.ID); err != nil {
+			return fmt.Errorf("devseed: breadth clear: %w", err)
+		}
+	}
+	return nil
+}
+
+// sortStrings is sort.Strings without dragging the import to one call site.
+func sortStrings(s []string) {
+	for i := 1; i < len(s); i++ {
+		for j := i; j > 0 && s[j] < s[j-1]; j-- {
+			s[j], s[j-1] = s[j-1], s[j]
+		}
+	}
 }

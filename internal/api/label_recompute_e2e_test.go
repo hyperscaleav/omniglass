@@ -82,11 +82,11 @@ func TestRuleChangePreviewsThenAppliesOverHTTP(t *testing.T) {
 		map[string]any{"name": "room-a", "location_type": "room", "parent": "hq"}, http.StatusCreated)
 	for range 3 {
 		c.do(tok, http.MethodPost, "/components",
-			map[string]any{"product": "samsung-qm55", "location": "room-a"}, http.StatusCreated)
+			map[string]any{"product": "boreal-edge-55", "location": "room-a"}, http.StatusCreated)
 	}
 	// One label the operator typed, which no recompute may touch.
 	c.do(tok, http.MethodPost, "/components",
-		map[string]any{"name": "hand-named", "product": "samsung-qm55", "location": "room-a", "label": "The Operator's Own"}, http.StatusCreated)
+		map[string]any{"name": "hand-named", "product": "boreal-edge-55", "location": "room-a", "label": "The Operator's Own"}, http.StatusCreated)
 
 	// The rule edit itself is a component_type edit, the tier an operator
 	// actually reaches: it forks the shipped row rather than writing it.
@@ -157,7 +157,7 @@ func TestALocationRecomputeReportsWhatItStales(t *testing.T) {
 	c.do(tok, http.MethodPost, "/locations",
 		map[string]any{"name": "room-a", "location_type": "room", "parent": "hq"}, http.StatusCreated)
 	c.do(tok, http.MethodPost, "/components",
-		map[string]any{"product": "samsung-qm55", "location": "room-a"}, http.StatusCreated)
+		map[string]any{"product": "boreal-edge-55", "location": "room-a"}, http.StatusCreated)
 	c.do(tok, http.MethodPatch, "/component-types/display",
 		map[string]any{"label_rule": "{{.LocationLabel}} {{.TypeName}}"}, http.StatusOK)
 	c.do(tok, http.MethodPost, "/components:recomputeLabels", nil, http.StatusOK)
@@ -228,9 +228,9 @@ func TestAPreviewIsBoundedByTheUpdateScopeJustAsTheApplyIs(t *testing.T) {
 	c.do(tok, http.MethodPost, "/locations",
 		map[string]any{"name": "room-b", "location_type": "room", "parent": "hq"}, http.StatusCreated)
 	mine := decodePen(t, "mine", c.do(tok, http.MethodPost, "/components",
-		map[string]any{"name": "mine", "product": "samsung-qm55", "location": "room-a"}, http.StatusCreated))
+		map[string]any{"name": "mine", "product": "boreal-edge-55", "location": "room-a"}, http.StatusCreated))
 	theirs := decodePen(t, "theirs", c.do(tok, http.MethodPost, "/components",
-		map[string]any{"name": "theirs", "product": "samsung-qm55", "location": "room-b"}, http.StatusCreated))
+		map[string]any{"name": "theirs", "product": "boreal-edge-55", "location": "room-b"}, http.StatusCreated))
 	_ = theirs
 
 	// A rule everything drifts against.

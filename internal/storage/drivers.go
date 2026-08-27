@@ -10,7 +10,7 @@ import (
 )
 
 // Driver is a registry row naming the implementation that gets/emits/sets a
-// product's signals (e.g. "Generic SNMP", "Cisco xAPI"): a stable id, the
+// product's signals (e.g. "Generic SNMP", "Kestrel Device API"): a stable id, the
 // official flag, a label, and a version string. It is a flat registry
 // like vendor: no tree, and no in-use delete guard in this slice (nothing
 // references a driver yet; product will). The registry lists alphabetically by

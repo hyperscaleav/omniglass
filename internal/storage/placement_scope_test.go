@@ -44,7 +44,7 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 	// The room it may read binds, and the label carries that room's label: the
 	// fixture is live.
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "panel-mine", ProductName: strptr(qm55), LocationName: &mine.Name,
+		Name: "panel-mine", ProductName: strptr(edge55), LocationName: &mine.Name,
 	}, all, narrow, narrow, narrow)
 	if err != nil {
 		t.Fatalf("create into the readable room: %v", err)
@@ -57,14 +57,14 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 	// not-found an absent room gives, never as a forbidden that would separate
 	// "no such room" from "a room you cannot see".
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "panel-theirs", ProductName: strptr(qm55), LocationName: &theirs.Name,
+		Name: "panel-theirs", ProductName: strptr(edge55), LocationName: &theirs.Name,
 	}, all, narrow, narrow, narrow); !errors.Is(err, storage.ErrLocationNotFound) {
 		t.Errorf("create into the unreadable room = %v, want the non-disclosing ErrLocationNotFound", err)
 	}
 	// The system reference is the map's other placement fact, guarded by the
 	// caller's system:read scope rather than its location one.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "panel-sys", ProductName: strptr(qm55), SystemName: strptr("board-theirs"),
+		Name: "panel-sys", ProductName: strptr(edge55), SystemName: strptr("board-theirs"),
 	}, all, narrow, narrow, narrow); !errors.Is(err, storage.ErrSystemNotFound) {
 		t.Errorf("create into the unreadable system = %v, want the non-disclosing ErrSystemNotFound", err)
 	}
@@ -72,7 +72,7 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 	// The wide caller runs both bodies and is served, with the labels the narrow
 	// caller was refused: these are scope refusals, not a broken create.
 	leaked, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "panel-theirs", ProductName: strptr(qm55), LocationName: &theirs.Name,
+		Name: "panel-theirs", ProductName: strptr(edge55), LocationName: &theirs.Name,
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("wide create into the same room: %v", err)
@@ -81,7 +81,7 @@ func TestAComponentCreateBindsOnlyAPlacementItCanRead(t *testing.T) {
 		t.Errorf("wide create stored %q, want the room's label: the refusal above proves nothing otherwise", leaked.Label)
 	}
 	leaked, err = gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "panel-sys", ProductName: strptr(qm55), SystemName: strptr("board-theirs"),
+		Name: "panel-sys", ProductName: strptr(edge55), SystemName: strptr("board-theirs"),
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("wide create into the same system: %v", err)
@@ -112,7 +112,7 @@ func TestTheSystemBindSaysWhichAuthorityIsMissing(t *testing.T) {
 	}
 	none := scope.Set{}
 	spec := func(name string) storage.ComponentSpec {
-		return storage.ComponentSpec{Name: name, ProductName: strptr(qm55), SystemName: strptr("board-bind")}
+		return storage.ComponentSpec{Name: name, ProductName: strptr(edge55), SystemName: strptr("board-bind")}
 	}
 
 	// Readable and not updatable: the refusal is about authority, and it must not
@@ -194,7 +194,7 @@ func TestAMoveBindsOnlyADestinationItCanRead(t *testing.T) {
 	theirs := makeRoomWithLabel(t, gw, ctx, "room-theirs", "Theirs")
 	narrow := scope.Set{IDs: []string{mine.ID}}
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "panel", ProductName: strptr(qm55), LocationName: &mine.Name,
+		Name: "panel", ProductName: strptr(edge55), LocationName: &mine.Name,
 	}, all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -263,9 +263,9 @@ func TestTheDraftAndTheCreateRefuseTheSamePlacement(t *testing.T) {
 		{what: "an unreadable system", system: "board-theirs", want: storage.ErrSystemNotFound},
 	} {
 		_, draftErr := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
-			ProductName: qm55, Name: "panel", LocationName: tc.location, SystemName: tc.system,
+			ProductName: edge55, Name: "panel", LocationName: tc.location, SystemName: tc.system,
 		}, all, narrow, narrow, narrow)
-		spec := storage.ComponentSpec{Name: "panel", ProductName: strptr(qm55)}
+		spec := storage.ComponentSpec{Name: "panel", ProductName: strptr(edge55)}
 		if tc.location != "" {
 			spec.LocationName = &tc.location
 		}
@@ -303,9 +303,9 @@ func TestTheDraftResolvesTheSystemInTheScopeTheBindRequires(t *testing.T) {
 		t.Fatalf("create system: %v", err)
 	}
 	none := scope.Set{}
-	draft := storage.ComponentLabelDraft{ProductName: qm55, Name: "panel", SystemName: "board-draft-bind"}
+	draft := storage.ComponentLabelDraft{ProductName: edge55, Name: "panel", SystemName: "board-draft-bind"}
 	spec := func(name string) storage.ComponentSpec {
-		return storage.ComponentSpec{Name: name, ProductName: strptr(qm55), SystemName: strptr("board-draft-bind")}
+		return storage.ComponentSpec{Name: name, ProductName: strptr(edge55), SystemName: strptr("board-draft-bind")}
 	}
 
 	// Readable and not updatable: the draft refuses by AUTHORITY, the same

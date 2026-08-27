@@ -3809,6 +3809,57 @@ components:
         - principal_id
         - kind
       type: object
+    MetricSampleBody:
+      additionalProperties: false
+      properties:
+        instance:
+          description: The series discriminator, when set
+          type: string
+        provenance:
+          description: observed, or calculated for a derived row
+          type: string
+        source:
+          type: string
+        ts:
+          description: When the sample was observed
+          format: date-time
+          type: string
+        value:
+          format: double
+          type: number
+      required:
+        - ts
+        - value
+        - provenance
+      type: object
+    MetricSeriesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/MetricSeriesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        metric:
+          description: The series' metric_type name
+          type: string
+        owner:
+          description: The owner's name
+          type: string
+        samples:
+          description: Newest first
+          items:
+            $ref: "#/components/schemas/MetricSampleBody"
+          type:
+            - array
+            - "null"
+      required:
+        - owner
+        - metric
+        - samples
+      type: object
     MetricTypeBody:
       additionalProperties: false
       properties:
@@ -4233,6 +4284,56 @@ components:
         - name
         - data_type
         - official
+      type: object
+    PropertySampleBody:
+      additionalProperties: false
+      properties:
+        instance:
+          description: The series discriminator, when set
+          type: string
+        provenance:
+          description: observed, declared, or calculated
+          type: string
+        source:
+          type: string
+        ts:
+          description: When the value was observed
+          format: date-time
+          type: string
+        value:
+          type: string
+      required:
+        - ts
+        - value
+        - provenance
+      type: object
+    PropertySeriesOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/PropertySeriesOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        owner:
+          description: The owner's name
+          type: string
+        property:
+          description: The series' property_type name
+          type: string
+        samples:
+          description: "Newest first: the change history behind the effective value"
+          items:
+            $ref: "#/components/schemas/PropertySampleBody"
+          type:
+            - array
+            - "null"
+      required:
+        - owner
+        - property
+        - samples
       type: object
     PushEvent:
       additionalProperties: false
@@ -5524,6 +5625,8 @@ components:
           type: string
         label:
           type: string
+        map:
+          description: "The standard's room layout: aspect (width over height) and one normalized position per role position; absent when undeclared"
         name:
           description: The name an operator reads and types; renameable
           type: string
@@ -5707,6 +5810,133 @@ components:
         - name_generated
         - label_generated
         - member_count
+      type: object
+    SystemEventBody:
+      additionalProperties: false
+      properties:
+        attributes:
+          description: Structured attributes, when the occurrence carried a JSON payload
+        event_type_id:
+          description: The event_type's uuid, the stable form of key
+          type: string
+        instance:
+          description: The series discriminator (e.g. the interface), when set
+          type: string
+        key:
+          description: The event_type name of the occurrence (e.g. call-started)
+          type: string
+        message:
+          description: The occurrence message
+          type: string
+        origin:
+          description: How the occurrence arrived (caught/caused/derived/scheduled)
+          type: string
+        owner:
+          description: The owning row's name (the system's, or the member component's)
+          type: string
+        owner_kind:
+          description: "Which arc raised the occurrence: system or component"
+          type: string
+        provenance:
+          description: The lineage of the occurrence (observed for direct collection)
+          type: string
+        source:
+          description: The interface type that produced the occurrence
+          type: string
+        ts:
+          description: When the occurrence happened
+          format: date-time
+          type: string
+      required:
+        - ts
+        - key
+        - event_type_id
+        - origin
+        - message
+        - provenance
+        - owner_kind
+        - owner
+      type: object
+    SystemEventsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SystemEventsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        events:
+          items:
+            $ref: "#/components/schemas/SystemEventBody"
+          type:
+            - array
+            - "null"
+        system:
+          type: string
+      required:
+        - system
+        - events
+      type: object
+    SystemLogBody:
+      additionalProperties: false
+      properties:
+        attributes:
+          description: Structured fields parsed from the line, when present
+        component:
+          description: The member component that wrote the line
+          type: string
+        correlation_id:
+          description: Threads related lines and their derived events
+          type: string
+        facility:
+          description: The line's facility, when classified
+          type: string
+        instance:
+          description: The series discriminator, when set
+          type: string
+        labels:
+          description: Freeform classification labels, when present
+        message:
+          description: The raw log text
+          type: string
+        severity:
+          description: The line's severity, when classified
+          type: string
+        source:
+          description: The channel the line arrived on (e.g. syslog)
+          type: string
+        ts:
+          description: When the line arrived
+          format: date-time
+          type: string
+      required:
+        - ts
+        - message
+        - component
+      type: object
+    SystemLogsOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SystemLogsOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        logs:
+          items:
+            $ref: "#/components/schemas/SystemLogBody"
+          type:
+            - array
+            - "null"
+        system:
+          type: string
+      required:
+        - system
+        - logs
       type: object
     SystemMemberBody:
       additionalProperties: false
@@ -6491,6 +6721,8 @@ components:
         label:
           description: A new operator-facing label
           type: string
+        map:
+          description: "The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair"
         parent_standard_id:
           description: A new variant parent, by handle or uuid
           type: string
@@ -7804,6 +8036,60 @@ paths:
           description: Error
       summary: List a component's effective metrics
       x-omniglass-permission: component:read
+  /components/{name}/metrics/{metric}/samples:
+    get:
+      description: The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+      operationId: list-component-metric-series
+      parameters:
+        - description: The owner's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The owner's name or uuid
+            type: string
+        - description: The metric_type name of the series
+          in: path
+          name: metric
+          required: true
+          schema:
+            description: The metric_type name of the series
+            type: string
+        - description: The window in hours, counted back from now; 24 when unset
+          explode: false
+          in: query
+          name: hours
+          schema:
+            description: The window in hours, counted back from now; 24 when unset
+            format: int64
+            maximum: 720
+            minimum: 1
+            type: integer
+        - description: The row cap, newest kept; 500 when unset
+          explode: false
+          in: query
+          name: limit
+          schema:
+            description: The row cap, newest kept; 500 when unset
+            format: int64
+            maximum: 2000
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricSeriesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read one metric series' raw samples
+      x-omniglass-permission: component:read
   /components/{name}/properties:
     get:
       description: Every property the component's product declares, resolved to the component's own value or the contract default (is_set marks the override), plus any property set directly on the component (from_contract false). Gated by component:read; an out-of-scope component is a non-disclosing 404.
@@ -7900,6 +8186,60 @@ paths:
           description: Error
       summary: Set a property on a component
       x-omniglass-permission: component:update
+  /components/{name}/properties/{property}/samples:
+    get:
+      description: The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). Gated by component:read; an out-of-scope owner is a non-disclosing 404.
+      operationId: list-component-property-series
+      parameters:
+        - description: The owner's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The owner's name or uuid
+            type: string
+        - description: The property_type name of the series
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property_type name of the series
+            type: string
+        - description: The window in hours, counted back from now; 24 when unset
+          explode: false
+          in: query
+          name: hours
+          schema:
+            description: The window in hours, counted back from now; 24 when unset
+            format: int64
+            maximum: 720
+            minimum: 1
+            type: integer
+        - description: The row cap, newest kept; 500 when unset
+          explode: false
+          in: query
+          name: limit
+          schema:
+            description: The row cap, newest kept; 500 when unset
+            format: int64
+            maximum: 2000
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertySeriesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read one property series' change history
+      x-omniglass-permission: component:read
   /components/{name}/reachability:
     get:
       description: Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
@@ -12319,6 +12659,33 @@ paths:
           description: Error
       summary: Update a system
       x-omniglass-permission: system:update
+  /systems/{name}/events:
+    get:
+      description: Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+      operationId: list-system-events
+      parameters:
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemEventsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a system's recent events, members included
+      x-omniglass-permission: system:read
   /systems/{name}/health:
     get:
       description: "The system's current verdict and why: every role it needs filled, whether it is impaired, what an impaired role means for the system (impact), and for an impaired role which assigned components are down plus the alarms that took them down. A role that belongs to a choice (#626, an exclusive-or group such as an all-in-one alternate versus a component-built one) carries choice and alternate, and active is false when a different alternate answered the choice, meaning this role's own impaired figure did not move the verdict. Transitions are the recorded edges over the last 30 days, one entry per change. Gated by system:read; an out-of-scope system is a non-disclosing 404."
@@ -12345,6 +12712,33 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: Read a system's health
+      x-omniglass-permission: system:read
+  /systems/{name}/logs:
+    get:
+      description: Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it. Gated by system:read; an out-of-scope system is a non-disclosing 404.
+      operationId: list-system-logs
+      parameters:
+        - description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The system's name, or a dotted address (e.g. boi.17c.$sys.av)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemLogsOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: List a system's members' recent log lines
       x-omniglass-permission: system:read
   /systems/{name}/members:
     get:
@@ -12489,6 +12883,60 @@ paths:
           description: Error
       summary: List a system's effective metrics
       x-omniglass-permission: system:read
+  /systems/{name}/metrics/{metric}/samples:
+    get:
+      description: The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+      operationId: list-system-metric-series
+      parameters:
+        - description: The owner's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The owner's name or uuid
+            type: string
+        - description: The metric_type name of the series
+          in: path
+          name: metric
+          required: true
+          schema:
+            description: The metric_type name of the series
+            type: string
+        - description: The window in hours, counted back from now; 24 when unset
+          explode: false
+          in: query
+          name: hours
+          schema:
+            description: The window in hours, counted back from now; 24 when unset
+            format: int64
+            maximum: 720
+            minimum: 1
+            type: integer
+        - description: The row cap, newest kept; 500 when unset
+          explode: false
+          in: query
+          name: limit
+          schema:
+            description: The row cap, newest kept; 500 when unset
+            format: int64
+            maximum: 2000
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricSeriesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read one metric series' raw samples
+      x-omniglass-permission: system:read
   /systems/{name}/properties:
     get:
       description: Every property the system's standard declares, resolved to the system's own value or the contract default (is_set marks the override), plus any property set directly on the system (from_contract false). Gated by system:read; an out-of-scope system is a non-disclosing 404.
@@ -12585,6 +13033,60 @@ paths:
           description: Error
       summary: Set a property on a system
       x-omniglass-permission: system:update
+  /systems/{name}/properties/{property}/samples:
+    get:
+      description: The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). Gated by system:read; an out-of-scope owner is a non-disclosing 404.
+      operationId: list-system-property-series
+      parameters:
+        - description: The owner's name or uuid
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The owner's name or uuid
+            type: string
+        - description: The property_type name of the series
+          in: path
+          name: property
+          required: true
+          schema:
+            description: The property_type name of the series
+            type: string
+        - description: The window in hours, counted back from now; 24 when unset
+          explode: false
+          in: query
+          name: hours
+          schema:
+            description: The window in hours, counted back from now; 24 when unset
+            format: int64
+            maximum: 720
+            minimum: 1
+            type: integer
+        - description: The row cap, newest kept; 500 when unset
+          explode: false
+          in: query
+          name: limit
+          schema:
+            description: The row cap, newest kept; 500 when unset
+            format: int64
+            maximum: 2000
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertySeriesOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Read one property series' change history
+      x-omniglass-permission: system:read
   /systems/{name}/roles:
     get:
       description: "Every role this system needs filled: those its standard declares (from_standard true) plus those declared directly on it, each with the types it accepts (and products it pins, if any), the components filling it, and how many more it wants before quorum (understaffed). A one-off system shows only its own. Gated by system:read; an out-of-scope system is a non-disclosing 404."

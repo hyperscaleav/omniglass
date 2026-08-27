@@ -39,12 +39,24 @@ export function buildCommands(allow: (tokens: string[]) => boolean): Command[] {
           section: c.section,
         })),
   );
+  // The re-homed index pages (#798): off the rail, still destinations. Each
+  // jumps to its old address, whose redirect lands on the fleet list face's
+  // matching kind tab, gated exactly as its sidebar entry was.
+  const fleetKinds: Command[] = (
+    [
+      { label: "Locations", path: "/locations", resource: "location" },
+      { label: "Systems", path: "/systems", resource: "system" },
+      { label: "Components", path: "/components", resource: "component" },
+    ] as const
+  )
+    .filter((k) => allow([k.resource, "read"]))
+    .map((k) => ({ label: k.label, path: k.path, group: "Fleet", section: "Fleet" }));
   const catalog: Command[] = visibleGroups(allow).flatMap((g) =>
     g.entries
       .filter((e) => e.path)
       .map((e) => ({ label: e.label, path: e.path!, group: `Catalog · ${g.header}`, section: g.header })),
   );
-  return [...rail, ...catalog];
+  return [...rail, ...fleetKinds, ...catalog];
 }
 
 // matches is the palette filter: label, group, or section.

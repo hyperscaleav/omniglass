@@ -4,35 +4,157 @@
 # a product. These stand in until standards are created by forking an in-code
 # template (#317); they are illustrative, not authoritative. The catalog lists
 # alphabetically by label; variants hang off parent_standard_id.
+#
+# The catalog is written the way an integrator writes room standards (#802):
+# a standard is a room type's full signal chain, and a size-serialized family
+# (mr55..mr98, ds55/ds75) pins the display SKU per variant while the chain
+# stays the parent's. Domain rules that shaped it: a video bar is the ONE
+# all-in-one conferencing appliance at the front of a room, never a
+# microphone and never shared between rooms; microphones are typed by form
+# factor; a divisible room shares its DSP and amplifier rack, which is what
+# the shared-component quorum case teaches.
 standards:
+  # ── The meeting-room family ─────────────────────────────────────────────
+  # The parent carries the chain unpinned; each variant pins its display.
   - id: meeting-room
     label: Meeting Room
-    # The roles a conforming system needs filled. A component may fill one only
-    # when its product's component_type falls within one of the accepted types
-    # (self or a descendant): the #626 typed-slot guard, and these double as its
-    # worked example (the shipped Cisco Room Bar, video-bar, satisfies room-mic;
-    # the Samsung QM55, display, satisfies main-display; a room with one bar
-    # reads as understaffed until the second lands). An occupant satisfies its
-    # slot unless its own verdict is outage: an alarm impairs a component
-    # wholesale now, not by named capability, but only a critical one costs
-    # the component its slots (#626). Seeded if absent, so an operator who
-    # retunes them keeps the edit.
     roles:
-      - name: room-mic
-        label: Room Microphone
-        quorum: 2
+      - name: video-bar
+        label: Video Bar
         accepted_types: [video-bar]
       - name: main-display
         label: Main Display
         accepted_types: [display]
+      - name: touch-control
+        label: Touch Control
+        accepted_types: [touch-panel]
+      - name: scheduling-panel
+        label: Scheduling Panel
+        accepted_types: [scheduling-panel]
+  - id: mr55
+    label: Meeting Room 55
+    parent_standard_id: meeting-room
+    roles:
+      - name: video-bar
+        label: Video Bar
+        accepted_types: [video-bar]
+      - name: main-display
+        label: Main Display
+        accepted_types: [display]
+        pinned_products: [boreal-edge-55]
+      - name: touch-control
+        label: Touch Control
+        accepted_types: [touch-panel]
+      - name: scheduling-panel
+        label: Scheduling Panel
+        accepted_types: [scheduling-panel]
+  - id: mr65
+    label: Meeting Room 65
+    parent_standard_id: meeting-room
+    roles:
+      - name: video-bar
+        label: Video Bar
+        accepted_types: [video-bar]
+      - name: main-display
+        label: Main Display
+        accepted_types: [display]
+        pinned_products: [boreal-edge-65]
+      - name: touch-control
+        label: Touch Control
+        accepted_types: [touch-panel]
+      - name: scheduling-panel
+        label: Scheduling Panel
+        accepted_types: [scheduling-panel]
+  - id: mr75
+    label: Meeting Room 75
+    parent_standard_id: meeting-room
+    roles:
+      - name: video-bar
+        label: Video Bar
+        accepted_types: [video-bar]
+      - name: main-display
+        label: Main Display
+        accepted_types: [display]
+        pinned_products: [boreal-edge-75]
+      - name: touch-control
+        label: Touch Control
+        accepted_types: [touch-panel]
+      - name: scheduling-panel
+        label: Scheduling Panel
+        accepted_types: [scheduling-panel]
+  - id: mr86
+    label: Meeting Room 86
+    parent_standard_id: meeting-room
+    roles:
+      - name: video-bar
+        label: Video Bar
+        accepted_types: [video-bar]
+      - name: main-display
+        label: Main Display
+        accepted_types: [display]
+        pinned_products: [boreal-edge-86]
+      - name: touch-control
+        label: Touch Control
+        accepted_types: [touch-panel]
+      - name: scheduling-panel
+        label: Scheduling Panel
+        accepted_types: [scheduling-panel]
+  - id: mr98
+    label: Meeting Room 98
+    parent_standard_id: meeting-room
+    roles:
+      - name: video-bar
+        label: Video Bar
+        accepted_types: [video-bar]
+      - name: main-display
+        label: Main Display
+        accepted_types: [display]
+        pinned_products: [boreal-edge-98]
+      - name: touch-control
+        label: Touch Control
+        accepted_types: [touch-panel]
+      - name: scheduling-panel
+        label: Scheduling Panel
+        accepted_types: [scheduling-panel]
+  # ── The divisible conference pair ───────────────────────────────────────
+  # Each side of a combinable room conforms to this; the DSP and amplifier
+  # rack is ONE physical install serving both sides, so the same two
+  # components satisfy both sides' audio slots (the shared-component case).
+  - id: divisible-conference
+    label: Divisible Conference
+    roles:
+      - name: video-bar
+        label: Video Bar
+        accepted_types: [video-bar]
+      - name: main-display
+        label: Main Display
+        quorum: 2
+        accepted_types: [display]
+      - name: room-mic
+        label: Room Microphone
+        quorum: 2
+        accepted_types: [ceiling-mic]
+      - name: dsp
+        label: DSP
+        accepted_types: [dsp]
+      - name: amplifier
+        label: Amplifier
+        accepted_types: [amplifier]
+      - name: touch-control
+        label: Touch Control
+        accepted_types: [touch-panel]
+      - name: scheduling-panel
+        label: Scheduling Panel
+        accepted_types: [scheduling-panel]
+  # ── The huddle room ─────────────────────────────────────────────────────
+  # A huddle room can be built either of two ways, and only one has to be
+  # true (#626): an all-in-one video bar, or a component build of a codec
+  # driving a separate camera, dsp, amplifier and mic. Staffing either
+  # alternate in full answers the choice; the other alternate's roles stay
+  # unbuilt without impairing the room, which is the worked example
+  # internal/health.Choice.Active and the storage-layer split exist for.
   - id: huddle-room
     label: Huddle Room
-    # A huddle room can be built either of two ways, and only one has to be
-    # true (#626): an all-in-one video bar, or a component build of a codec
-    # driving a separate camera, dsp, amplifier and mic. Staffing either
-    # alternate in full answers the choice; the other alternate's roles stay
-    # unbuilt without impairing the room, which is the worked example
-    # internal/health.Choice.Active and the storage-layer split exist for.
     choices:
       - name: conferencing
         label: Conferencing
@@ -42,6 +164,9 @@ standards:
           - name: component-system
             label: Component System
     roles:
+      - name: main-display
+        label: Main Display
+        accepted_types: [display]
       - name: conf-bar
         label: Conferencing Bar
         quorum: 1
@@ -73,11 +198,145 @@ standards:
         accepted_types: [mic]
         choice: conferencing
         alternate: component-system
+  # ── The classroom (the light teaching space) ────────────────────────────
   - id: classroom
     label: Classroom
+    roles:
+      - name: class-display
+        label: Main Display
+        accepted_types: [display]
+      - name: instructor-mic
+        label: Instructor Microphone
+        accepted_types: [wireless-mic]
+      - name: touch-control
+        label: Touch Control
+        accepted_types: [touch-panel]
+  # ── The training room (the full chain) ──────────────────────────────────
+  # Two front displays carrying the same content, voice lift and program
+  # audio through the rack, capture cameras at the BACK of the room for the
+  # remote training participants, and the people counter feeding the
+  # occupancy KPI the room standards declare.
+  - id: training-room
+    label: Training Room
+    roles:
+      - name: front-display
+        label: Front Display
+        quorum: 2
+        accepted_types: [display]
+        pinned_products: [boreal-edge-86]
+      - name: ceiling-mic
+        label: Ceiling Microphone
+        quorum: 2
+        accepted_types: [ceiling-mic]
+      - name: presenter-mic
+        label: Presenter Wireless Microphone
+        accepted_types: [wireless-mic]
+      - name: podium-mic
+        label: Podium Microphone
+        accepted_types: [gooseneck-mic]
+      - name: dsp
+        label: DSP
+        accepted_types: [dsp]
+      - name: amplifier
+        label: Amplifier
+        accepted_types: [amplifier]
+      - name: speakers
+        label: Speakers
+        quorum: 4
+        accepted_types: [speaker]
+      - name: video-switcher
+        label: Video Switcher
+        accepted_types: [presentation-switcher]
+      - name: display-endpoint
+        label: Display Endpoint
+        quorum: 2
+        accepted_types: [av-extender]
+      - name: control-system
+        label: Control System
+        accepted_types: [control-processor]
+      - name: touch-control
+        label: Touch Control
+        accepted_types: [touch-panel]
+      - name: scheduling-panel
+        label: Scheduling Panel
+        accepted_types: [scheduling-panel]
+      - name: people-counter
+        label: People Counter
+        accepted_types: [occupancy-sensor]
+      - name: camera
+        label: Camera
+        quorum: 2
+        accepted_types: [camera]
+  # ── The auditorium (the hall-scale chain, no conferencing) ──────────────
   - id: auditorium
     label: Auditorium
-  - id: signage
-    label: Digital Signage
-  - id: control-room
-    label: Control Room
+    roles:
+      - name: projection
+        label: Projection
+        accepted_types: [projector]
+      - name: confidence-display
+        label: Confidence Display
+        accepted_types: [display]
+      - name: stage-mic
+        label: Stage Microphone
+        quorum: 2
+        accepted_types: [wireless-mic]
+      - name: podium-mic
+        label: Podium Microphone
+        accepted_types: [gooseneck-mic]
+      - name: dsp
+        label: DSP
+        accepted_types: [dsp]
+      - name: amplifier
+        label: Amplifier
+        quorum: 2
+        accepted_types: [amplifier]
+      - name: speakers
+        label: Speakers
+        quorum: 4
+        accepted_types: [speaker]
+      - name: video-switcher
+        label: Video Switcher
+        accepted_types: [presentation-switcher]
+      - name: control-system
+        label: Control System
+        accepted_types: [control-processor]
+      - name: touch-control
+        label: Touch Control
+        accepted_types: [touch-panel]
+      - name: camera
+        label: Camera
+        quorum: 2
+        accepted_types: [camera]
+  # ── The digital sign family ─────────────────────────────────────────────
+  - id: digital-sign
+    label: Digital Sign
+    roles:
+      - name: panel
+        label: Panel
+        accepted_types: [display]
+      - name: player
+        label: Player
+        accepted_types: [media-player]
+  - id: ds55
+    label: Digital Sign 55
+    parent_standard_id: digital-sign
+    roles:
+      - name: panel
+        label: Panel
+        accepted_types: [display]
+        pinned_products: [boreal-edge-55]
+      - name: player
+        label: Player
+        accepted_types: [media-player]
+  - id: ds75
+    label: Digital Sign 75
+    parent_standard_id: digital-sign
+    roles:
+      - name: panel
+        label: Panel
+        accepted_types: [display]
+        pinned_products: [boreal-edge-75]
+      - name: player
+        label: Player
+        accepted_types: [media-player]

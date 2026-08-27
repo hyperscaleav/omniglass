@@ -14,7 +14,7 @@ import (
 // TestCreateGeneratesFromTypeStem proves the base rule: a create with no name
 // mints "<stem>-<n>" from the product's component_type, ordinal always
 // present, incrementing per sibling in the same placement bucket.
-// samsung-qm55 classifies under component_type "display" (stem "display").
+// boreal-edge-55 classifies under component_type "display" (stem "display").
 func TestCreateGeneratesFromTypeStem(t *testing.T) {
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
@@ -22,8 +22,8 @@ func TestCreateGeneratesFromTypeStem(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	qm55 := "samsung-qm55"
-	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all, all)
+	edge55 := "boreal-edge-55"
+	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &edge55}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create first: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestCreateGeneratesFromTypeStem(t *testing.T) {
 		t.Fatalf("first.NameGenerated = false, want true")
 	}
 
-	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all, all)
+	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &edge55}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create second: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestCreateGeneratesFromTypeStem(t *testing.T) {
 	// A DIFFERENT placement bucket restarts the ordinal at 1: the scope is
 	// per-placement, not fleet-wide.
 	root := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "namegen-root"}, all)
-	third, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, ParentName: &root.Name}, all, all, all, all)
+	third, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &edge55, ParentName: &root.Name}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create third (under a parent): %v", err)
 	}
@@ -59,14 +59,14 @@ func TestCreateGeneratesFromTypeStem(t *testing.T) {
 		t.Fatalf("create location: %v", err)
 	}
 	locName := "namegen-loc"
-	fourth, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, LocationName: &locName}, all, all, all, all)
+	fourth, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &edge55, LocationName: &locName}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create fourth (at a location): %v", err)
 	}
 	if fourth.Name != "display-1" {
 		t.Fatalf("fourth generated name (location bucket) = %q, want display-1", fourth.Name)
 	}
-	fifth, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, LocationName: &locName}, all, all, all, all)
+	fifth, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &edge55, LocationName: &locName}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create fifth (same location): %v", err)
 	}
@@ -112,8 +112,8 @@ func TestRenameFreezes(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	qm55 := "samsung-qm55"
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all, all)
+	edge55 := "boreal-edge-55"
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &edge55}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestRenameFreezes(t *testing.T) {
 
 	// A reclassify would normally recompute a still-generated name; it must
 	// leave this one alone now that the operator owns it.
-	mic := "shure-mxa920"
+	mic := "lyra-arc-a2"
 	after, err := gw.UpdateComponent(ctx, "", c.ID, storage.ComponentPatch{ProductName: &mic}, all, all)
 	if err != nil {
 		t.Fatalf("reclassify: %v", err)
@@ -155,10 +155,10 @@ func TestResetReturnsPen(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	qm55 := "samsung-qm55"
+	edge55 := "boreal-edge-55"
 
 	// An operator-typed component from the start.
-	typed, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "operator-panel", ProductName: &qm55}, all, all, all, all)
+	typed, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "operator-panel", ProductName: &edge55}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create typed: %v", err)
 	}
@@ -205,10 +205,10 @@ func TestReclassifyRecomputes(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	qm55 := "samsung-qm55"
-	mic := "shure-mxa920"
+	edge55 := "boreal-edge-55"
+	mic := "lyra-arc-a2"
 
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55, Label: "My Display"}, all, all, all, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &edge55, Label: "My Display"}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestReclassifyRecomputes(t *testing.T) {
 		t.Fatalf("reclassify: %v", err)
 	}
 	if after.Name != "mic-1" {
-		t.Fatalf("name after reclassify = %q, want mic-1 (shure-mxa920 classifies under ceiling-mic)", after.Name)
+		t.Fatalf("name after reclassify = %q, want mic-1 (lyra-arc-a2 classifies under ceiling-mic)", after.Name)
 	}
 	if !after.NameGenerated {
 		t.Fatalf("NameGenerated after reclassify = false, want true")
@@ -309,7 +309,7 @@ func TestConcurrentCreateSerialisesOrdinals(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	qm55 := "samsung-qm55"
+	edge55 := "boreal-edge-55"
 	start := make(chan struct{})
 	var wg sync.WaitGroup
 	results := make([]*storage.Component, 2)
@@ -319,7 +319,7 @@ func TestConcurrentCreateSerialisesOrdinals(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start
-			results[i], errs[i] = gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &qm55}, all, all, all, all)
+			results[i], errs[i] = gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &edge55}, all, all, all, all)
 		}(i)
 	}
 	close(start)
