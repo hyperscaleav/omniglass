@@ -136,10 +136,10 @@ func TestNodeGateway(t *testing.T) {
 	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values ('disp-1-icmp', (select id from interface_type where name = 'icmp'), (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, spec, enabled) values ('t-icmp', 'poll', (select id from interface where name = 'disp-1-icmp'), '{"probe":"icmp"}'::jsonb, true)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, spec, enabled) values ('t-icmp', 'poll', (select id from interface where name = 'disp-1-icmp'), '{"probe":"icmp"}'::jsonb, true)`); err != nil {
 		t.Fatalf("insert task: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, spec, enabled) values ('t-off', 'poll', (select id from interface where name = 'disp-1-icmp'), '{}'::jsonb, false)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, spec, enabled) values ('t-off', 'poll', (select id from interface where name = 'disp-1-icmp'), '{}'::jsonb, false)`); err != nil {
 		t.Fatalf("insert disabled task: %v", err)
 	}
 
@@ -150,7 +150,7 @@ func TestNodeGateway(t *testing.T) {
 	if len(wl.Tasks) != 1 {
 		t.Fatalf("worklist tasks = %d, want 1 (enabled only)", len(wl.Tasks))
 	}
-	if wl.Tasks[0].ID != "t-icmp" || wl.Tasks[0].InterfaceType != "icmp" || wl.Tasks[0].Mode != "poll" {
+	if wl.Tasks[0].ID != "t-icmp" || wl.Tasks[0].Transport != "icmp" || wl.Tasks[0].Mode != "poll" {
 		t.Fatalf("worklist task: got %+v", wl.Tasks[0])
 	}
 	if wl.ConfigGeneration == 0 {
@@ -392,8 +392,8 @@ func TestDeleteNode(t *testing.T) {
 		t.Fatalf("create node: %v", err)
 	}
 	comp, nodeName := "dsp-1", "edge-del"
-	if _, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{
-		Type: "tcp", Component: &comp, Node: &nodeName, Params: []byte(`{"target":"10.0.0.1:80"}`),
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+		Transport: "tcp", Component: &comp, Node: &nodeName, Params: []byte(`{"target":"10.0.0.1:80"}`),
 	}, all); err != nil {
 		t.Fatalf("create interface: %v", err)
 	}

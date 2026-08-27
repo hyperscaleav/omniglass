@@ -91,8 +91,8 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 				t.Fatalf("create component: %v", err)
 			}
 			ref := "lbl-comp"
-			if _, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{
-				Type: "ssh", Component: &ref, Label: blank,
+			if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+				Transport: "ssh", Component: &ref, Label: blank,
 			}, all); err != nil {
 				t.Fatalf("create interface: %v", err)
 			}
@@ -295,14 +295,14 @@ func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
 				t.Fatalf("create component: %v", err)
 			}
 			ref := "clr-comp"
-			it, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "ssh", Component: &ref, Label: "Labelled"}, all)
+			it, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "ssh", Component: &ref, Label: "Labelled"}, all)
 			if err != nil {
 				t.Fatalf("create: %v", err)
 			}
 			clearInterfaceID = it.ID
 			return it.Name
 		}, func(t *testing.T, key string) {
-			if _, err := gw.UpdateInterface(ctx, "", clearInterfaceID, storage.InterfacePatch{Label: &empty}, all, all); err != nil {
+			if _, err := gw.UpdateEndpoint(ctx, "", clearInterfaceID, storage.EndpointPatch{Label: &empty}, all, all); err != nil {
 				t.Fatalf("clear: %v", err)
 			}
 		}},

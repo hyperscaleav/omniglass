@@ -130,17 +130,6 @@ fleet: {
     parent_id: uuid {constraint: foreign_key}
     product_id: uuid {constraint: foreign_key}
   }
-  interface: {
-    shape: sql_table
-    id: uuid {constraint: primary_key}
-    component: uuid {constraint: foreign_key}
-    node_name: uuid {constraint: foreign_key}
-    type: uuid {constraint: foreign_key}
-  }
-  interface_type: {
-    shape: sql_table
-    id: uuid {constraint: primary_key}
-  }
   location: {
     shape: sql_table
     id: uuid {constraint: primary_key}
@@ -331,7 +320,7 @@ collection: {
   task: {
     shape: sql_table
     id: text {constraint: primary_key}
-    interface_id: uuid {constraint: foreign_key}
+    endpoint_id: uuid {constraint: foreign_key}
   }
 }
 
@@ -404,6 +393,15 @@ audit: {
   }
 }
 
+unclustered: {
+  endpoint: {
+    shape: sql_table
+    id: uuid {constraint: primary_key}
+    component: uuid {constraint: foreign_key}
+    node_name: uuid {constraint: foreign_key}
+  }
+}
+
 audit.audit_log.actor_principal_id -> identity.principal.id
 audit.audit_log.real_actor_principal_id -> identity.principal.id
 catalog.component_type.parent_id -> catalog.component_type.id
@@ -424,7 +422,7 @@ catalog.system_type.parent_id -> catalog.system_type.id
 collection.node.location_id -> fleet.location.id
 collection.node.principal_id -> identity.principal.id
 collection.node_log.node_id -> collection.node.principal_id
-collection.task.interface_id -> fleet.interface.id
+collection.task.endpoint_id -> unclustered.endpoint.id
 config.credential.principal_id -> identity.principal.id
 config.secret.component_id -> fleet.component.id
 config.secret.location_id -> fleet.location.id
@@ -442,9 +440,6 @@ content.tag_binding.tag_id -> content.tag.id
 fleet.component.location_id -> fleet.location.id
 fleet.component.parent_id -> fleet.component.id
 fleet.component.product_id -> catalog.product.id
-fleet.interface.component -> fleet.component.id
-fleet.interface.node_name -> collection.node.principal_id
-fleet.interface.type -> fleet.interface_type.id
 fleet.location.location_type -> fleet.location_type.id
 fleet.location.parent_id -> fleet.location.id
 fleet.location_type_metric.location_type_id -> fleet.location_type.id
@@ -516,6 +511,8 @@ telemetry.property.location_id -> fleet.location.id
 telemetry.property.node_id -> collection.node.principal_id
 telemetry.property.property_type_id -> telemetry.property_type.id
 telemetry.property.system_id -> fleet.system.id
+unclustered.endpoint.component -> fleet.component.id
+unclustered.endpoint.node_name -> collection.node.principal_id
 ```
 
 <!-- erd:end -->

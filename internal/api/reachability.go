@@ -11,8 +11,8 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/storage"
 )
 
-// The reachability read BFF: a per-component, per-interface composition of the
-// verdict property (interface-reachable), the layer signals (the raw icmp/tcp probe
+// The reachability read BFF: a per-component, per-endpoint composition of the
+// verdict property (endpoint-reachable), the layer signals (the raw icmp/tcp probe
 // metrics), and the recent transition history the availability strip reads. It is
 // a plain typed Huma GET (no ViewResult framework exists), gated by component:read
 // and scope-injected through GetComponent: an out-of-scope component is a
@@ -22,8 +22,8 @@ import (
 // reachHistoryWindow bounds the transition history returned for the strip.
 const reachHistoryWindow = 24 * time.Hour
 
-// verdictKey is the property sample that carries the per-interface verdict.
-const verdictKey = "interface-reachable"
+// verdictKey is the property sample that carries the per-endpoint verdict.
+const verdictKey = "endpoint-reachable"
 
 // reachLayer describes one probe layer the panel gates on: its primary signal
 // (0/1) and the optional companion metric that carries a timing detail.
@@ -57,12 +57,12 @@ type reachHistoryBody struct {
 	Value string    `json:"value"`
 }
 
-type reachInterfaceBody struct {
-	Interface string             `json:"interface" doc:"The interface's derived name (its protocol)"`
+type reachEndpointBody struct {
+	Endpoint  string             `json:"endpoint" doc:"The endpoint's derived name (its transport)"`
 	Label     string             `json:"label,omitempty" doc:"The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim"`
-	Type      string             `json:"interface_type" doc:"The interface type (icmp, tcp, ...)"`
-	Endpoint  string             `json:"endpoint,omitempty" doc:"The probed endpoint (target[:port]) from the interface params"`
-	Node      string             `json:"node,omitempty" doc:"The node that probes this interface"`
+	Transport string             `json:"transport" doc:"The transport (icmp, tcp, ...)"`
+	Address   string             `json:"address,omitempty" doc:"The probed address (target[:port]) from the endpoint params"`
+	Node      string             `json:"node,omitempty" doc:"The node that probes this endpoint"`
 	Verdict   *reachVerdictBody  `json:"verdict" doc:"The latest reachability verdict, or null if none yet"`
 	Layers    []reachLayerBody   `json:"layers" doc:"The per-layer probe signals that compose the verdict"`
 	History   []reachHistoryBody `json:"history" doc:"The recent verdict transitions, oldest first, for the availability strip"`
@@ -70,8 +70,8 @@ type reachInterfaceBody struct {
 
 type reachabilityOutput struct {
 	Body struct {
-		Component  string               `json:"component"`
-		Interfaces []reachInterfaceBody `json:"interfaces"`
+		Component string              `json:"component"`
+		Endpoints []reachEndpointBody `json:"endpoints"`
 	}
 }
 
@@ -82,14 +82,14 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		OperationID: "get-component-reachability",
 		Method:      http.MethodGet,
 		Path:        "/components/{name}/reachability",
-		Summary:     "Read a component's per-interface reachability",
-		Description: "Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+		Summary:     "Read a component's per-endpoint reachability",
+		Description: "Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 	}, "component", "read"), func(ctx context.Context, in *componentPathInput) (*reachabilityOutput, error) {
 		comp, err := gw.GetComponent(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, mapComponentErr(err)
 		}
-		ifaces, err := gw.ListComponentInterfaces(ctx, comp.ID)
+		ifaces, err := gw.ListComponentEndpoints(ctx, comp.ID)
 		if err != nil {
 			if refErr, ok := mapRefErr(err); ok {
 				return nil, refErr
@@ -98,14 +98,14 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 		}
 		out := &reachabilityOutput{}
 		out.Body.Component = comp.Name
-		out.Body.Interfaces = make([]reachInterfaceBody, 0, len(ifaces))
+		out.Body.Endpoints = make([]reachEndpointBody, 0, len(ifaces))
 		for i := range ifaces {
-			row, err := composeInterface(ctx, gw, comp.ID, ifaces[i], reachHistoryWindow)
+			row, err := composeEndpoint(ctx, gw, comp.ID, ifaces[i], reachHistoryWindow)
 			if err != nil {
 				// mapRefErr first: comp.ID is always a uuid (GetComponent
 				// above already resolved it), so LatestProperty/
 				// LatestMetricInstance/PropertyTransitions inside
-				// composeInterface can never actually be ambiguous today,
+				// composeEndpoint can never actually be ambiguous today,
 				// but each runs through the same bare-name resolver every
 				// other component route does, and a future caller must not
 				// silently regress to a 500 (ruling 1, #627).
@@ -114,21 +114,21 @@ func registerReachabilityRoutes(api huma.API, a *authenticator, gw storage.Gatew
 				}
 				return nil, huma.Error500InternalServerError("read reachability")
 			}
-			out.Body.Interfaces = append(out.Body.Interfaces, row)
+			out.Body.Endpoints = append(out.Body.Endpoints, row)
 		}
 		return out, nil
 	})
 }
 
-// composeInterface assembles one interface's reachability row from the property and
+// composeEndpoint assembles one endpoint's reachability row from the property and
 // metric sinks. All reads are keyed by the verified component name and the
-// interface name (the sample instance).
-func composeInterface(ctx context.Context, gw storage.Gateway, comp string, it storage.ComponentInterface, window time.Duration) (reachInterfaceBody, error) {
-	row := reachInterfaceBody{
-		Interface: it.Name,
+// endpoint name (the sample instance).
+func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it storage.ComponentEndpoint, window time.Duration) (reachEndpointBody, error) {
+	row := reachEndpointBody{
+		Endpoint:  it.Name,
 		Label:     it.Label,
-		Type:      it.Type,
-		Endpoint:  endpointFromParams(it.Params),
+		Transport: it.Transport,
+		Address:   addressFromParams(it.Params),
 		Node:      it.NodeName,
 		Layers:    []reachLayerBody{},
 		History:   []reachHistoryBody{},
@@ -171,10 +171,10 @@ func composeInterface(ctx context.Context, gw storage.Gateway, comp string, it s
 	return row, nil
 }
 
-// endpointFromParams renders the probed endpoint from an interface's params
+// addressFromParams renders the probed address from an endpoint's params
 // jsonb: target, with :port appended when the params carry one. An empty or
-// unparseable params yields an empty endpoint (real field only, never invented).
-func endpointFromParams(params []byte) string {
+// unparseable params yields an empty address (real field only, never invented).
+func addressFromParams(params []byte) string {
 	if len(params) == 0 {
 		return ""
 	}

@@ -62,35 +62,35 @@ func TestInterfaceAPI(t *testing.T) {
 	// named (name = type), so the create body carries no name; capture the surrogate
 	// id the create returns.
 	ifA := createInterface(c, ownerTok, map[string]any{
-		"interface_type": "tcp", "component": "comp-a", "params": map[string]any{"target": "10.0.0.1"},
+		"transport": "tcp", "component": "comp-a", "params": map[string]any{"target": "10.0.0.1"},
 	})
 	ifB := createInterface(c, ownerTok, map[string]any{
-		"interface_type": "tcp", "component": "comp-b",
+		"transport": "tcp", "component": "comp-b",
 	})
 	if got := listInterfaces(c, ownerTok); len(got) != 2 {
 		t.Fatalf("owner interface list = %d, want 2", len(got))
 	}
-	c.do(ownerTok, http.MethodGet, "/interfaces/"+ifA.ID, nil, http.StatusOK)
+	c.do(ownerTok, http.MethodGet, "/endpoints/"+ifA.ID, nil, http.StatusOK)
 	// An unknown interface_type is a 422.
-	c.do(ownerTok, http.MethodPost, "/interfaces", map[string]any{"interface_type": "galaxy"}, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodPost, "/endpoints", map[string]any{"transport": "galaxy"}, http.StatusUnprocessableEntity)
 
 	// PERMISSION GATE: an all-scope viewer can read (the *:read floor) but cannot
 	// create (no interface:create) -> a capability 403.
 	viewerAllTok := setupAllViewer(t, ctx, dsn, "viewer-all")
-	c.do(viewerAllTok, http.MethodGet, "/interfaces/"+ifA.ID, nil, http.StatusOK)
-	c.do(viewerAllTok, http.MethodPost, "/interfaces", map[string]any{"interface_type": "http", "component": "comp-a"}, http.StatusForbidden)
-	c.do(viewerAllTok, http.MethodPatch, "/interfaces/"+ifA.ID, map[string]any{"params": map[string]any{"target": "9.9.9.9"}}, http.StatusForbidden)
+	c.do(viewerAllTok, http.MethodGet, "/endpoints/"+ifA.ID, nil, http.StatusOK)
+	c.do(viewerAllTok, http.MethodPost, "/endpoints", map[string]any{"transport": "http", "component": "comp-a"}, http.StatusForbidden)
+	c.do(viewerAllTok, http.MethodPatch, "/endpoints/"+ifA.ID, map[string]any{"params": map[string]any{"target": "9.9.9.9"}}, http.StatusForbidden)
 
 	// SCOPE GATE: an operator scoped to component B holds interface:create/update
 	// but its scope cascades only through B. A's interface is a non-disclosing 404
 	// on read AND on update; a create under A is a 403 (out of the create scope);
 	// its own B interface is fully reachable (a different transport, so no collision).
 	opBTok := setupScopedViewer(t, ctx, dsn, "op-b", "operator", "component", compB.ID)
-	c.do(opBTok, http.MethodGet, "/interfaces/"+ifA.ID, nil, http.StatusNotFound)
-	c.do(opBTok, http.MethodPatch, "/interfaces/"+ifA.ID, map[string]any{"params": map[string]any{"target": "9.9.9.9"}}, http.StatusNotFound)
-	c.do(opBTok, http.MethodPost, "/interfaces", map[string]any{"interface_type": "http", "component": "comp-a"}, http.StatusForbidden)
-	c.do(opBTok, http.MethodGet, "/interfaces/"+ifB.ID, nil, http.StatusOK)
-	c.do(opBTok, http.MethodPost, "/interfaces", map[string]any{"interface_type": "icmp", "component": "comp-b"}, http.StatusCreated)
+	c.do(opBTok, http.MethodGet, "/endpoints/"+ifA.ID, nil, http.StatusNotFound)
+	c.do(opBTok, http.MethodPatch, "/endpoints/"+ifA.ID, map[string]any{"params": map[string]any{"target": "9.9.9.9"}}, http.StatusNotFound)
+	c.do(opBTok, http.MethodPost, "/endpoints", map[string]any{"transport": "http", "component": "comp-a"}, http.StatusForbidden)
+	c.do(opBTok, http.MethodGet, "/endpoints/"+ifB.ID, nil, http.StatusOK)
+	c.do(opBTok, http.MethodPost, "/endpoints", map[string]any{"transport": "icmp", "component": "comp-b"}, http.StatusCreated)
 	// The scoped operator's list shows only B's interfaces (if-b, if-b2), never A's.
 	for _, it := range listInterfaces(c, opBTok) {
 		if it.Component != nil && *it.Component == "comp-a" {
@@ -147,7 +147,7 @@ func TestInterfaceCreateWithAmbiguousComponentIs409(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	status, body := c.send(ownerTok, http.MethodPost, "/interfaces", map[string]any{"interface_type": "tcp", "component": "dup-cmp"})
+	status, body := c.send(ownerTok, http.MethodPost, "/endpoints", map[string]any{"transport": "tcp", "component": "dup-cmp"})
 	if status != http.StatusConflict {
 		t.Fatalf("create interface with ambiguous component status = %d, want 409\nbody: %s", status, body)
 	}
@@ -159,14 +159,14 @@ func TestInterfaceCreateWithAmbiguousComponentIs409(t *testing.T) {
 type interfaceResp struct {
 	ID        string  `json:"id"`
 	Name      string  `json:"name"`
-	Type      string  `json:"interface_type"`
+	Type      string  `json:"transport"`
 	Component *string `json:"component"`
 	Node      *string `json:"node"`
 }
 
 func createInterface(c *apiClient, tok string, body map[string]any) interfaceResp {
 	c.t.Helper()
-	out := c.do(tok, http.MethodPost, "/interfaces", body, http.StatusCreated)
+	out := c.do(tok, http.MethodPost, "/endpoints", body, http.StatusCreated)
 	var it interfaceResp
 	if err := json.Unmarshal(out, &it); err != nil {
 		c.t.Fatalf("decode interface: %v", err)
@@ -176,7 +176,7 @@ func createInterface(c *apiClient, tok string, body map[string]any) interfaceRes
 
 func listInterfaces(c *apiClient, tok string) []interfaceResp {
 	c.t.Helper()
-	out := c.do(tok, http.MethodGet, "/interfaces", nil, http.StatusOK)
+	out := c.do(tok, http.MethodGet, "/endpoints", nil, http.StatusOK)
 	var body struct {
 		Interfaces []interfaceResp `json:"interfaces"`
 	}

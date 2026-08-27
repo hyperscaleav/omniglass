@@ -55,7 +55,7 @@ func TestResolveTaskOwner(t *testing.T) {
 		('shared-tcp', (select id from interface_type where name = 'tcp'), null, (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.2:22"}'::jsonb)`); err != nil {
 		t.Fatalf("insert interfaces: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, enabled) values
+	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
 		('t-bound', 'poll', (select id from interface where name = 'disp-1-tcp'), true),
 		('t-shared', 'poll', (select id from interface where name = 'shared-tcp'), true)`); err != nil {
 		t.Fatalf("insert tasks: %v", err)
@@ -66,7 +66,7 @@ func TestResolveTaskOwner(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("resolve t-bound for node-a: ok=%v err=%v", ok, err)
 	}
-	if owner.ComponentID != disp1.ID || owner.InterfaceName != "disp-1-tcp" || owner.InterfaceType != "tcp" {
+	if owner.ComponentID != disp1.ID || owner.EndpointName != "disp-1-tcp" || owner.Transport != "tcp" {
 		t.Fatalf("owner = %+v, want %s / disp-1-tcp / tcp", owner, disp1.ID)
 	}
 

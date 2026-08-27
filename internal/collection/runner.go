@@ -28,7 +28,7 @@ const (
 
 // Sample is one observation produced by a probe or computed by the node: a
 // canonical name, a value, a timestamp, and labels. A metric rides Value (float);
-// a state verdict (interface-reachable) rides Text with IsText set, so the same
+// a state verdict (endpoint-reachable) rides Text with IsText set, so the same
 // list carries both to buildBatch, which maps a text sample to the proto
 // string_value and a metric to double_value. Labels (the reason) are not
 // persisted yet, but the probe still produces them.

@@ -14,7 +14,7 @@ import (
 // interface table becomes endpoint, its type FK becomes a transport name the
 // Go registry validates, the interface_type table retires, and the rename
 // carries everything that spells the old noun: the task arc's column, the
-// role permission strings, and the canonical interface-reachable datapoint.
+// role permission strings, and the canonical endpoint-reachable datapoint.
 //
 // Following product_type_backfill_test.go: the test stands the database just
 // below this migration, plants pre-rename rows, then drives the migration's

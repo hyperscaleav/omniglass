@@ -11,7 +11,7 @@ import (
 // TestParseTCPTask: the dial target and timeout come off the interface params;
 // an empty target is a usage error the caller skips on.
 func TestParseTCPTask(t *testing.T) {
-	spec := collection.TaskSpec{ID: "t1", InterfaceType: "tcp", InterfaceParams: json.RawMessage(`{"target":"10.0.0.5:22","timeout":"2s"}`)}
+	spec := collection.TaskSpec{ID: "t1", Transport: "tcp", EndpointParams: json.RawMessage(`{"target":"10.0.0.5:22","timeout":"2s"}`)}
 	got, err := parseTCPTask(spec)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -20,7 +20,7 @@ func TestParseTCPTask(t *testing.T) {
 		t.Fatalf("parse = %+v, want target 10.0.0.5:22 timeout 2s", got)
 	}
 
-	if _, err := parseTCPTask(collection.TaskSpec{ID: "t2", InterfaceType: "tcp", InterfaceParams: json.RawMessage(`{}`)}); err == nil {
+	if _, err := parseTCPTask(collection.TaskSpec{ID: "t2", Transport: "tcp", EndpointParams: json.RawMessage(`{}`)}); err == nil {
 		t.Fatal("empty target: want error")
 	}
 }
@@ -28,7 +28,7 @@ func TestParseTCPTask(t *testing.T) {
 // TestParseICMPTask: the ping target, count, and timeout come off the interface
 // params; an empty target is a usage error the caller skips on.
 func TestParseICMPTask(t *testing.T) {
-	spec := collection.TaskSpec{ID: "t1", InterfaceType: "icmp", InterfaceParams: json.RawMessage(`{"target":"10.0.0.5","count":3,"timeout":"2s"}`)}
+	spec := collection.TaskSpec{ID: "t1", Transport: "icmp", EndpointParams: json.RawMessage(`{"target":"10.0.0.5","count":3,"timeout":"2s"}`)}
 	got, err := parseICMPTask(spec)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -37,7 +37,7 @@ func TestParseICMPTask(t *testing.T) {
 		t.Fatalf("parse = %+v, want target 10.0.0.5 count 3 timeout 2s", got)
 	}
 
-	if _, err := parseICMPTask(collection.TaskSpec{ID: "t2", InterfaceType: "icmp", InterfaceParams: json.RawMessage(`{}`)}); err == nil {
+	if _, err := parseICMPTask(collection.TaskSpec{ID: "t2", Transport: "icmp", EndpointParams: json.RawMessage(`{}`)}); err == nil {
 		t.Fatal("empty target: want error")
 	}
 }
@@ -50,7 +50,7 @@ func TestBuildBatchLanes(t *testing.T) {
 	dps := []collection.Sample{
 		{Name: collection.SignalTCPOpen, Value: 1, Labels: map[string]string{collection.ReasonLabel: "responded"}},
 		{Name: collection.SignalTCPConnectTime, Value: 3.5},
-		{Name: collection.SignalInterfaceReachable, Text: collection.VerdictUp, IsText: true},
+		{Name: collection.SignalEndpointReachable, Text: collection.VerdictUp, IsText: true},
 	}
 	ev := buildBatch("t1", "node-a", dps)
 	if ev.GetTaskId() != "t1" || ev.GetNodeId() != "node-a" {
@@ -64,8 +64,8 @@ func TestBuildBatchLanes(t *testing.T) {
 		t.Fatalf("first metric = %+v, want tcp-open=1", first)
 	}
 	verdict := ev.GetProperties()[0]
-	if verdict.GetName() != collection.SignalInterfaceReachable || verdict.GetValueJson() != `"up"` {
-		t.Fatalf("verdict property = %+v, want interface-reachable with value_json %q", verdict, `"up"`)
+	if verdict.GetName() != collection.SignalEndpointReachable || verdict.GetValueJson() != `"up"` {
+		t.Fatalf("verdict property = %+v, want endpoint-reachable with value_json %q", verdict, `"up"`)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/hyperscaleav/omniglass/internal/rbac"
+	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
 // The generated seed-facts artifact: FactsJSON renders every embedded seed YAML
@@ -49,9 +50,14 @@ type factsNamed struct {
 	Description string `json:"description,omitempty"`
 }
 
-type factsInterfaceType struct {
+// factsTransport renders the code registry (internal/transport, ADR-0073) into
+// the same facts artifact the seeded YAMLs feed: the transports are build-time
+// facts of the binary, so the docs table derives from the registry rather than
+// restating it.
+type factsTransport struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
+	Held        bool   `json:"held"`
 	Built       bool   `json:"built"`
 }
 
@@ -155,22 +161,22 @@ type factsSecretType struct {
 }
 
 type seedFactsDoc struct {
-	Comment        string               `json:"//"`
-	Roles          []factsRole          `json:"roles"`
-	PropertyTypes  []factsProperty      `json:"property_types"`
-	MetricTypes    []factsMetricType    `json:"metric_types"`
-	EventTypes     []factsNamed         `json:"event_types"`
-	CommandTypes   []factsNamed         `json:"command_types"`
-	SecretTypes    []factsSecretType    `json:"secret_types"`
-	InterfaceTypes []factsInterfaceType `json:"interface_types"`
-	LocationTypes  []factsLocationType  `json:"location_types"`
-	ComponentTypes []factsTypeNode      `json:"component_types"`
-	SystemTypes    []factsTypeNode      `json:"system_types"`
-	Standards      []factsStandard      `json:"standards"`
-	Vendors        []factsVendor        `json:"vendors"`
-	Drivers        []factsDriver        `json:"drivers"`
-	Products       []factsProduct       `json:"products"`
-	LabelRules     []factsLabelRule     `json:"label_rules"`
+	Comment        string              `json:"//"`
+	Roles          []factsRole         `json:"roles"`
+	PropertyTypes  []factsProperty     `json:"property_types"`
+	MetricTypes    []factsMetricType   `json:"metric_types"`
+	EventTypes     []factsNamed        `json:"event_types"`
+	CommandTypes   []factsNamed        `json:"command_types"`
+	SecretTypes    []factsSecretType   `json:"secret_types"`
+	Transports     []factsTransport    `json:"transports"`
+	LocationTypes  []factsLocationType `json:"location_types"`
+	ComponentTypes []factsTypeNode     `json:"component_types"`
+	SystemTypes    []factsTypeNode     `json:"system_types"`
+	Standards      []factsStandard     `json:"standards"`
+	Vendors        []factsVendor       `json:"vendors"`
+	Drivers        []factsDriver       `json:"drivers"`
+	Products       []factsProduct      `json:"products"`
+	LabelRules     []factsLabelRule    `json:"label_rules"`
 }
 
 // eventCommandDoc covers the shared name/display/description shape of the
@@ -270,12 +276,8 @@ func FactsJSON() ([]byte, error) {
 		doc.SecretTypes = append(doc.SecretTypes, st)
 	}
 
-	var ifts interfaceTypesDoc
-	if err := yaml.Unmarshal(interfaceTypesYAML, &ifts); err != nil {
-		return nil, fmt.Errorf("seed facts: interface types: %w", err)
-	}
-	for _, it := range ifts.InterfaceTypes {
-		doc.InterfaceTypes = append(doc.InterfaceTypes, factsInterfaceType{Name: it.Name, Description: it.Description, Built: it.Built})
+	for _, tr := range transport.All() {
+		doc.Transports = append(doc.Transports, factsTransport{Name: tr.Name, Description: tr.Description, Held: tr.Held, Built: tr.Built})
 	}
 
 	var lts locationTypesDoc

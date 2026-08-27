@@ -60,7 +60,7 @@ func TestNodeRunOnce(t *testing.T) {
 	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values ('disp-1-icmp', (select id from interface_type where name = 'icmp'), (select id from component where name = 'disp-1'), (select principal_id from node where name = 'site-a'), '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, spec, enabled) values ('t-icmp', 'poll', (select id from interface where name = 'disp-1-icmp'), '{}'::jsonb, true)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, spec, enabled) values ('t-icmp', 'poll', (select id from interface where name = 'disp-1-icmp'), '{}'::jsonb, true)`); err != nil {
 		t.Fatalf("insert task: %v", err)
 	}
 	conn.Close(ctx)
@@ -189,7 +189,7 @@ func TestNodeVerdictPerInterface(t *testing.T) {
 			t.Fatalf("insert interface for %s: %v", c.comp, err)
 		}
 		if _, err := conn.Exec(ctx,
-			`insert into task (id, mode, interface_id, spec, enabled) values ($1, 'poll', (select id from interface where component = (select id from component where name = $2) and name = 'api'), '{}'::jsonb, true)`,
+			`insert into task (id, mode, endpoint_id, spec, enabled) values ($1, 'poll', (select id from interface where component = (select id from component where name = $2) and name = 'api'), '{}'::jsonb, true)`,
 			"t-"+c.comp, c.comp); err != nil {
 			t.Fatalf("insert task for %s: %v", c.comp, err)
 		}
@@ -221,7 +221,7 @@ func TestNodeVerdictPerInterface(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for _, comp := range []string{"disp-1", "disp-2"} {
 		for {
-			v, err := gw.LatestProperty(ctx, comp, "interface-reachable", "api")
+			v, err := gw.LatestProperty(ctx, comp, "endpoint-reachable", "api")
 			if err != nil {
 				t.Fatalf("latest property %s: %v", comp, err)
 			}

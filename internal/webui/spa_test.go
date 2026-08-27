@@ -153,7 +153,7 @@ func TestDeepLinkStillRendersTheConsole(t *testing.T) {
 	// The reason the catch-all exists. A console route at any depth must still
 	// render the SPA, including one whose last segment carries a dot.
 	h := SPAHandler(fakeConsole())
-	for _, p := range []string{"/locations/hq", "/nodes/edge-1/interfaces", "/products/samsung-qm55"} {
+	for _, p := range []string{"/locations/hq", "/nodes/edge-1/endpoints", "/products/samsung-qm55"} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, p, nil))
 		if rec.Code != http.StatusOK {

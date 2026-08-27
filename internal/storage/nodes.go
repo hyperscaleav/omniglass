@@ -63,17 +63,17 @@ type NodePatch struct {
 // task plus the placement-bound interface it runs over. InterfaceParams and Spec
 // are raw jsonb passed through to the node.
 type WorklistTask struct {
-	ID              string
-	Mode            string
-	InterfaceName   string
-	InterfaceType   string
-	InterfaceParams []byte
-	Spec            []byte
+	ID             string
+	Mode           string
+	EndpointName   string
+	Transport      string
+	EndpointParams []byte
+	Spec           []byte
 }
 
 // Worklist is a node's resolved work plus the config generation (the max
-// interface updated_at across the node's interfaces, epoch seconds; 0 when the
-// node has no interfaces). A steady generation lets the node serve from cache; a
+// endpoint updated_at across the node's endpoints, epoch seconds; 0 when the
+// node has no endpoints). A steady generation lets the node serve from cache; a
 // bump forces a refresh.
 type Worklist struct {
 	Tasks            []WorklistTask
@@ -366,14 +366,14 @@ func (p *PG) RecordHeartbeat(ctx context.Context, name string) error {
 	return nil
 }
 
-// NodeWorklist resolves a node's enabled tasks (joined to their interface) plus
+// NodeWorklist resolves a node's enabled tasks (joined to their endpoint) plus
 // the config generation. Keyed by the node name the server extracts from the
 // worklist subject. An unknown node returns an empty worklist, not an error.
 func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	rows, err := p.pool.Query(ctx, `
-		select t.id, t.mode, i.name, (select it.name from interface_type it where it.id = i.type), i.params, t.spec
+		select t.id, t.mode, i.name, i.transport, i.params, t.spec
 		from task t
-		join interface i on i.id = t.interface_id
+		join endpoint i on i.id = t.endpoint_id
 		where i.node_name = (select principal_id from node where name = $1) and t.enabled = true
 		order by t.id`, name)
 	if err != nil {
@@ -383,7 +383,7 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	var wl Worklist
 	for rows.Next() {
 		var wt WorklistTask
-		if err := rows.Scan(&wt.ID, &wt.Mode, &wt.InterfaceName, &wt.InterfaceType, &wt.InterfaceParams, &wt.Spec); err != nil {
+		if err := rows.Scan(&wt.ID, &wt.Mode, &wt.EndpointName, &wt.Transport, &wt.EndpointParams, &wt.Spec); err != nil {
 			return Worklist{}, fmt.Errorf("storage: scan worklist task: %w", err)
 		}
 		wl.Tasks = append(wl.Tasks, wt)
@@ -391,11 +391,11 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	if err := rows.Err(); err != nil {
 		return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
 	}
-	// config_generation moves at operator-config pace: the max interface
-	// updated_at (epoch seconds) across the node's interfaces, 0 when none.
+	// config_generation moves at operator-config pace: the max endpoint
+	// updated_at (epoch seconds) across the node's endpoints, 0 when none.
 	if err := p.pool.QueryRow(ctx, `
 		select coalesce(extract(epoch from max(updated_at))::bigint, 0)
-		from interface where node_name = (select principal_id from node where name = $1)`, name).Scan(&wl.ConfigGeneration); err != nil {
+		from endpoint where node_name = (select principal_id from node where name = $1)`, name).Scan(&wl.ConfigGeneration); err != nil {
 		return Worklist{}, fmt.Errorf("storage: node config generation %q: %w", name, err)
 	}
 	return wl, nil

@@ -38,9 +38,6 @@ var eventTypesYAML []byte
 //go:embed command_types.yaml
 var commandTypesYAML []byte
 
-//go:embed interface_types.yaml
-var interfaceTypesYAML []byte
-
 //go:embed vendors.yaml
 var vendorsYAML []byte
 
@@ -156,14 +153,6 @@ type metricTypesDoc struct {
 	} `yaml:"metric_types"`
 }
 
-type interfaceTypesDoc struct {
-	InterfaceTypes []struct {
-		Name        string `yaml:"name"`
-		Description string `yaml:"description"`
-		Built       bool   `yaml:"built"`
-	} `yaml:"interface_types"`
-}
-
 type vendorsDoc struct {
 	Vendors []struct {
 		ID      string `yaml:"id"`
@@ -258,9 +247,6 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedStandards(ctx, gw); err != nil {
 		return err
 	}
-	if err := seedInterfaceTypes(ctx, gw); err != nil {
-		return err
-	}
 	if err := seedPropertyTypes(ctx, gw); err != nil {
 		return err
 	}
@@ -319,21 +305,6 @@ func seedLabelRules(ctx context.Context, gw storage.Gateway) error {
 	for _, r := range doc.LabelRules {
 		if err := gw.UpsertLabelRuleDefault(ctx, r.EntityKind, r.Template); err != nil {
 			return fmt.Errorf("seed: label_rule %s: %w", r.EntityKind, err)
-		}
-	}
-	return nil
-}
-
-func seedInterfaceTypes(ctx context.Context, gw storage.Gateway) error {
-	var doc interfaceTypesDoc
-	if err := yaml.Unmarshal(interfaceTypesYAML, &doc); err != nil {
-		return fmt.Errorf("seed: parse interface_types: %w", err)
-	}
-	for _, it := range doc.InterfaceTypes {
-		if err := gw.UpsertInterfaceType(ctx, storage.InterfaceType{
-			Name: it.Name, Official: true, Description: it.Description, Built: it.Built,
-		}); err != nil {
-			return err
 		}
 	}
 	return nil

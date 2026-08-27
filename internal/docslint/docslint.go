@@ -378,7 +378,6 @@ var operatorStrings = []string{
 	filepath.Join("..", "..", "internal", "seed", "property_types.yaml"),
 	filepath.Join("..", "..", "internal", "seed", "metric_types.yaml"),
 	filepath.Join("..", "..", "internal", "seed", "command_types.yaml"),
-	filepath.Join("..", "..", "internal", "seed", "interface_types.yaml"),
 	filepath.Join("..", "..", "internal", "seed", "roles.yaml"),
 	filepath.Join("..", "..", "web", "src", "lib", "nav.ts"),
 	filepath.Join("..", "..", "README.md"),

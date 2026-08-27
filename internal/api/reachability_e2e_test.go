@@ -23,7 +23,7 @@ type reachResp struct {
 	Component  string `json:"component"`
 	Interfaces []struct {
 		Interface string `json:"interface"`
-		Type      string `json:"interface_type"`
+		Type      string `json:"transport"`
 		Endpoint  string `json:"endpoint"`
 		Node      string `json:"node"`
 		Verdict   *struct {
@@ -92,7 +92,7 @@ func TestReachabilityAPI(t *testing.T) {
 	t2 := t1.Add(time.Minute)
 	// disp-1-tcp: up verdict + tcp-open=1 + connect_time.
 	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface-reachable", Instance: "disp-1-tcp", Value: "up", Source: "tcp", TS: t2},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "disp-1-tcp", Value: "up", Source: "tcp", TS: t2},
 	}); err != nil {
 		t.Fatalf("insert tcp state: %v", err)
 	}
@@ -104,12 +104,12 @@ func TestReachabilityAPI(t *testing.T) {
 	}
 	// disp-1-icmp: down verdict with two transitions (up then down) + icmp-reachable=0.
 	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface-reachable", Instance: "disp-1-icmp", Value: "up", Source: "icmp", TS: t0},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "disp-1-icmp", Value: "up", Source: "icmp", TS: t0},
 	}); err != nil {
 		t.Fatalf("insert icmp up: %v", err)
 	}
 	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface-reachable", Instance: "disp-1-icmp", Value: "down", Source: "icmp", TS: t1},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "disp-1-icmp", Value: "down", Source: "icmp", TS: t1},
 	}); err != nil {
 		t.Fatalf("insert icmp down: %v", err)
 	}

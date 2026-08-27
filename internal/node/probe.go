@@ -14,11 +14,11 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// interfaceParams is the endpoint config a probe reads off a task's interface.
+// endpointParams is the address config a probe reads off a task's endpoint.
 // A tcp probe needs the dial target (host:port) and an optional connect timeout;
 // an icmp probe needs the echo target (host or IP), an optional echo count, and
 // an optional per-run timeout.
-type interfaceParams struct {
+type endpointParams struct {
 	Target  string `json:"target"`
 	Count   int    `json:"count,omitempty"`
 	Timeout string `json:"timeout,omitempty"`
@@ -45,17 +45,17 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 			continue // unusable config or inconclusive probe: skip, no false down
 		}
 		if dps == nil {
-			continue // an unwired interface type: nothing to publish
+			continue // an unwired transport: nothing to publish
 		}
-		// Compute and, on a transition only, append the interface reachability
+		// Compute and, on a transition only, append the endpoint reachability
 		// verdict as a state sample. The node remembers the last verdict per
-		// task and emits interface-reachable only on a flip or first observation,
+		// task and emits endpoint-reachable only on a flip or first observation,
 		// so the state series is transition-only, not one row per tick. The key is
-		// the task id, not the interface name: interface names are unique only per
-		// component, so a node routinely probes two components' interfaces that
+		// the task id, not the endpoint name: endpoint names are unique only per
+		// component, so a node routinely probes two components' endpoints that
 		// share a friendly name (the default is the protocol), and a name-keyed map
 		// would suppress the second one's verdict. The task id is node-unique (a
-		// content hash over the interface). The ingest-side latest-value guard is
+		// content hash over the endpoint). The ingest-side latest-value guard is
 		// the net for a node restart.
 		dps = appendVerdict(dps, task.ID, verdicts)
 		ev := buildBatch(task.ID, node, dps)
@@ -70,16 +70,16 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 	return nil
 }
 
-// appendVerdict computes the interface reachability verdict from a probe's
+// appendVerdict computes the endpoint reachability verdict from a probe's
 // samples and appends it (a state sample carrying up/down) only when it
 // differs from the last verdict remembered for that task, or is the first
 // observation. It records the emitted verdict in verdicts (keyed by the
-// node-unique task id, since interface names collide across components) so the
+// node-unique task id, since endpoint names collide across components) so the
 // next tick can tell a flip from a repeat. When the probe produced no
 // reachability metric (nothing to judge) or the verdict is unchanged, dps is
 // returned untouched.
 func appendVerdict(dps []collection.Sample, taskID string, verdicts map[string]string) []collection.Sample {
-	up, ok := collection.InterfaceVerdict(dps)
+	up, ok := collection.EndpointVerdict(dps)
 	if !ok {
 		return dps
 	}
@@ -92,22 +92,22 @@ func appendVerdict(dps []collection.Sample, taskID string, verdicts map[string]s
 	}
 	verdicts[taskID] = verdict
 	return append(dps, collection.Sample{
-		Name:   collection.SignalInterfaceReachable,
+		Name:   collection.SignalEndpointReachable,
 		Text:   verdict,
 		IsText: true,
 		TS:     time.Now().UTC(),
 	})
 }
 
-// collectTask dispatches a task to its probe by interface type and returns the
-// produced samples. A nil, nil return is an interface type this node does not
+// collectTask dispatches a task to its probe by transport and returns the
+// produced samples. A nil, nil return is a transport this node does not
 // run (skip, nothing to publish); an error is an unusable config or an
 // inconclusive probe (skip, no false down). The transport is the reachability
 // axis: tcp, ssh, and http all reach by opening the tcp port (the driver that
 // speaks the protocol over the transport is a later collection layer), so they
 // share the tcp-connect probe; icmp pings.
 func collectTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec) ([]collection.Sample, error) {
-	switch task.InterfaceType {
+	switch task.Transport {
 	case "tcp", "ssh", "http":
 		t, err := parseTCPTask(task)
 		if err != nil {
@@ -121,16 +121,16 @@ func collectTask(ctx context.Context, runner *collection.Runner, task collection
 		}
 		return runner.CollectICMP(ctx, t)
 	default:
-		return nil, nil // unwired interface type: nothing to run
+		return nil, nil // unwired transport: nothing to run
 	}
 }
 
-// parseTCPTask reads the dial target and timeout from a task's interface params.
+// parseTCPTask reads the dial target and timeout from a task's endpoint params.
 func parseTCPTask(task collection.TaskSpec) (collection.TCPTask, error) {
-	var p interfaceParams
-	if len(task.InterfaceParams) > 0 {
-		if err := json.Unmarshal(task.InterfaceParams, &p); err != nil {
-			return collection.TCPTask{}, fmt.Errorf("node: bad interface params for task %s: %w", task.ID, err)
+	var p endpointParams
+	if len(task.EndpointParams) > 0 {
+		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
+			return collection.TCPTask{}, fmt.Errorf("node: bad endpoint params for task %s: %w", task.ID, err)
 		}
 	}
 	if p.Target == "" {
@@ -147,13 +147,13 @@ func parseTCPTask(task collection.TaskSpec) (collection.TCPTask, error) {
 	return collection.TCPTask{Target: p.Target, Timeout: timeout}, nil
 }
 
-// parseICMPTask reads the echo target, count, and timeout from a task's interface
+// parseICMPTask reads the echo target, count, and timeout from a task's endpoint
 // params. An empty target is a usage error the caller skips on.
 func parseICMPTask(task collection.TaskSpec) (collection.ICMPTask, error) {
-	var p interfaceParams
-	if len(task.InterfaceParams) > 0 {
-		if err := json.Unmarshal(task.InterfaceParams, &p); err != nil {
-			return collection.ICMPTask{}, fmt.Errorf("node: bad interface params for task %s: %w", task.ID, err)
+	var p endpointParams
+	if len(task.EndpointParams) > 0 {
+		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
+			return collection.ICMPTask{}, fmt.Errorf("node: bad endpoint params for task %s: %w", task.ID, err)
 		}
 	}
 	if p.Target == "" {

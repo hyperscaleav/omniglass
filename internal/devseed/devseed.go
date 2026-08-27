@@ -876,9 +876,9 @@ func seedNodeLogs(ctx context.Context, gw storage.Gateway) error {
 
 // The worked reachability check the dev seed installs: an enrolled node and a lab
 // DSP (a polaris-class 16-channel audio DSP) under the HQ boardroom, exposing two
-// APIs. Each API is a protocol-named interface over its transport: `web` (the HTTP
+// APIs. Each API is a transport-named endpoint: `web` (the HTTP
 // management API) and `qrc` (the Q-SYS-style control protocol over raw tcp). Two
-// interfaces on one device is the "APIs on this box" story: an interface is an API
+// endpoints on one device is the "APIs on this box" story: an endpoint is an API
 // we intend to call, named by its protocol, not a network interface. Each has a poll
 // task and enough samples for the panel to render a live verdict + availability
 // strip.
@@ -898,11 +898,11 @@ const (
 	reachHost         = "10.20.4.12"
 )
 
-// reachChecks are the DSP's interfaces: each named by the protocol it speaks and
+// reachChecks are the DSP's endpoints: each named by the transport it speaks and
 // typed by its transport (the reachability axis; the driver that speaks the protocol
 // over the transport is a later collection layer). flapped seeds the availability
 // history with a brief-outage-then-recovered story (mostly up with a thin blip); an
-// unflapped interface reads cleanly up. rttMs is the shared host ping; connMs is the
+// unflapped endpoint reads cleanly up. rttMs is the shared host ping; connMs is the
 // per-port connect time.
 var reachChecks = []struct {
 	name    string
@@ -917,11 +917,11 @@ var reachChecks = []struct {
 }
 
 // seedReachability installs the worked reachability checks idempotently through the
-// Storage Gateway. Its sentinel is the first interface: samples are append-only,
+// Storage Gateway. Its sentinel is the first endpoint: samples are append-only,
 // so once it exists the whole block has run and a re-run is a no-op (a second
 // `make dev` must not double the samples). It authors each check the way a node
-// runs one (interface + poll task) and writes a handful of samples keyed by the
-// component (owner) and interface (instance), using ONLY registered canonical
+// runs one (endpoint + poll task) and writes a handful of samples keyed by the
+// component (owner) and endpoint (instance), using ONLY registered canonical
 // property_type names, so a wrong name would reject-not-project.
 func seedReachability(ctx context.Context, gw storage.Gateway, actorID string, locIDs map[string]string) error {
 	all := scope.Set{All: true}
@@ -934,10 +934,10 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string, l
 		return fmt.Errorf("devseed: the reachability node location key %q is not in the fleet", reachNodeLocation)
 	}
 
-	// Sentinel: the first interface. Present means this block ran on an earlier start.
-	existing, err := gw.ListComponentInterfaces(ctx, reachComponent)
+	// Sentinel: the first endpoint. Present means this block ran on an earlier start.
+	existing, err := gw.ListComponentEndpoints(ctx, reachComponent)
 	if err != nil {
-		return fmt.Errorf("devseed: check reachability interfaces: %w", err)
+		return fmt.Errorf("devseed: check reachability endpoints: %w", err)
 	}
 	for _, it := range existing {
 		if it.Name == reachChecks[0].itype {
@@ -994,22 +994,22 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string, l
 		return fmt.Errorf("devseed: check reachability node: %w", err)
 	}
 
-	// Each interface: named by its protocol, typed by its transport, target = the DSP
-	// host at the protocol's port. A poll task rides each; samples tell its story.
+	// Each endpoint: named by its transport, target = the DSP
+	// host at the transport's port. A poll task rides each; samples tell its story.
 	comp := reachComponent
 	node := reachNode
 	now := time.Now().UTC()
 	for _, c := range reachChecks {
-		// The interface is protocol-named: its name is DERIVED from its transport
+		// The endpoint is transport-named: its name is DERIVED from its transport
 		// (c.itype). Its poll task derives automatically from creating it, so the
-		// samples are instanced by the interface name (the transport).
-		if _, err := gw.CreateInterface(ctx, actorID, storage.InterfaceSpec{
-			Type:      c.itype,
+		// samples are instanced by the endpoint name (the transport).
+		if _, err := gw.CreateEndpoint(ctx, actorID, storage.EndpointSpec{
+			Transport: c.itype,
 			Component: &comp,
 			Node:      &node,
 			Params:    []byte(fmt.Sprintf(`{"target":"%s:%d"}`, reachHost, c.port)),
 		}, all); err != nil {
-			return fmt.Errorf("devseed: create %s interface: %w", c.itype, err)
+			return fmt.Errorf("devseed: create %s endpoint: %w", c.itype, err)
 		}
 		if err := seedReachSamples(ctx, gw, c.itype, c.flapped, c.rttMs, c.connMs, now); err != nil {
 			return err
@@ -1018,21 +1018,21 @@ func seedReachability(ctx context.Context, gw storage.Gateway, actorID string, l
 	return nil
 }
 
-// seedReachSamples writes one interface's reachability samples: the
-// interface-reachable state (a fresh "up"; when flapped, an up baseline then a brief
+// seedReachSamples writes one endpoint's reachability samples: the
+// endpoint-reachable state (a fresh "up"; when flapped, an up baseline then a brief
 // outage then the recovery, so the strip reads mostly up with a thin blip) and the
-// probe-layer metrics (ping + port). Owner = the component, instance = the interface
+// probe-layer metrics (ping + port). Owner = the component, instance = the endpoint
 // name. Only canonical property_type names are used (reject-not-project).
 func seedReachSamples(ctx context.Context, gw storage.Gateway, iface string, flapped bool, rttMs, connMs float64, now time.Time) error {
 	recovered := now.Add(-30 * time.Second)
 	states := []storage.PropertySampleWrite{}
 	if flapped {
 		states = append(states,
-			storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface-reachable", Instance: iface, Value: "up", Source: "reachability", TS: now.Add(-2 * time.Hour)},
-			storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface-reachable", Instance: iface, Value: "down", Source: "reachability", TS: now.Add(-6 * time.Minute)},
+			storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "endpoint-reachable", Instance: iface, Value: "up", Source: "reachability", TS: now.Add(-2 * time.Hour)},
+			storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "endpoint-reachable", Instance: iface, Value: "down", Source: "reachability", TS: now.Add(-6 * time.Minute)},
 		)
 	}
-	states = append(states, storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "interface-reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered})
+	states = append(states, storage.PropertySampleWrite{OwnerKind: "component", OwnerID: reachComponent, Key: "endpoint-reachable", Instance: iface, Value: "up", Source: "reachability", TS: recovered})
 	if err := gw.InsertPropertySamples(ctx, states); err != nil {
 		return fmt.Errorf("devseed: insert %s property samples: %w", iface, err)
 	}

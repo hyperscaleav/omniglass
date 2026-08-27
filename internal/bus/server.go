@@ -147,12 +147,12 @@ func (s *Server) buildWorklistReply(node string) (collection.WorklistReply, erro
 	reply := collection.WorklistReply{ConfigGeneration: wl.ConfigGeneration}
 	for _, t := range wl.Tasks {
 		reply.Tasks = append(reply.Tasks, collection.TaskSpec{
-			ID:              t.ID,
-			Mode:            t.Mode,
-			InterfaceName:   t.InterfaceName,
-			InterfaceType:   t.InterfaceType,
-			InterfaceParams: t.InterfaceParams,
-			Spec:            t.Spec,
+			ID:             t.ID,
+			Mode:           t.Mode,
+			EndpointName:   t.EndpointName,
+			Transport:      t.Transport,
+			EndpointParams: t.EndpointParams,
+			Spec:           t.Spec,
 		})
 	}
 	return reply, nil

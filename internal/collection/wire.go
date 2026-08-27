@@ -62,15 +62,15 @@ func NodeFromSubject(subject string) string {
 }
 
 // TaskSpec is one enabled task in a worklist reply: the content-addressed task
-// plus the placement-bound interface it runs over. InterfaceParams and Spec are
+// plus the placement-bound endpoint it runs over. EndpointParams and Spec are
 // raw jsonb passed through from storage.
 type TaskSpec struct {
-	ID              string          `json:"id"`
-	Mode            string          `json:"mode"`
-	InterfaceName   string          `json:"interface_name"`
-	InterfaceType   string          `json:"interface_type"`
-	InterfaceParams json.RawMessage `json:"interface_params,omitempty"`
-	Spec            json.RawMessage `json:"spec,omitempty"`
+	ID             string          `json:"id"`
+	Mode           string          `json:"mode"`
+	EndpointName   string          `json:"endpoint_name"`
+	Transport      string          `json:"transport"`
+	EndpointParams json.RawMessage `json:"endpoint_params,omitempty"`
+	Spec           json.RawMessage `json:"spec,omitempty"`
 }
 
 // WorklistReply is the server's response to a worklist request: the node's

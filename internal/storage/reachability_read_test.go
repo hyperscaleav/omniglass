@@ -13,7 +13,7 @@ import (
 )
 
 // TestReachabilityReads proves the two read helpers the reachability BFF composes
-// over: ListComponentInterfaces returns a component's interfaces ordered by name,
+// over: ListComponentEndpoints returns a component's interfaces ordered by name,
 // and LatestMetricInstance resolves one interface's latest probe value rather than
 // the newest across every interface (as the instance-blind LatestMetric does).
 func TestReachabilityReads(t *testing.T) {
@@ -49,14 +49,14 @@ func TestReachabilityReads(t *testing.T) {
 		t.Fatalf("insert interfaces: %v", err)
 	}
 
-	ifaces, err := gw.ListComponentInterfaces(ctx, "disp-1")
+	ifaces, err := gw.ListComponentEndpoints(ctx, "disp-1")
 	if err != nil {
 		t.Fatalf("list interfaces: %v", err)
 	}
 	if len(ifaces) != 2 || ifaces[0].Name != "disp-1-icmp" || ifaces[1].Name != "disp-1-tcp" {
 		t.Fatalf("interfaces: want [disp-1-icmp disp-1-tcp] ordered, got %+v", ifaces)
 	}
-	if ifaces[1].Type != "tcp" || len(ifaces[1].Params) == 0 {
+	if ifaces[1].Transport != "tcp" || len(ifaces[1].Params) == 0 {
 		t.Fatalf("tcp interface: want type tcp with params, got %+v", ifaces[1])
 	}
 

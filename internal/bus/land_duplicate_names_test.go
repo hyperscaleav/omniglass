@@ -87,7 +87,7 @@ func TestLandSurvivesDuplicateComponentNames(t *testing.T) {
 		compA.ID); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, enabled) values
+	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
 		('t-a', 'poll', (select id from interface where name = 'display-1-tcp'), true)`); err != nil {
 		t.Fatalf("insert task: %v", err)
 	}
