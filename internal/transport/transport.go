@@ -28,8 +28,8 @@ var registry = []Transport{
 	{Name: "icmp", Description: "ICMP echo / ping reachability and RTT.", Held: false, Built: true},
 	{Name: "tcp", Description: "Raw TCP connect / port-open check.", Held: false, Built: true},
 	{Name: "udp", Description: "UDP datagram transport; probing arrives with its driver.", Held: false, Built: false},
-	{Name: "ssh", Description: "SSH transport; reachability opens the tcp port (a driver speaks the CLI over a held session later).", Held: true, Built: true},
-	{Name: "http", Description: "HTTP/HTTPS transport; reachability opens the tcp port (a driver calls the API over it later).", Held: true, Built: true},
+	{Name: "ssh", Description: "SSH transport; the probe runs a real key exchange (responds), and tries the endpoint credential when one is set (auth).", Held: true, Built: true},
+	{Name: "http", Description: "HTTP transport; the probe draws a real response off the API (responds), any status counting as an answer.", Held: true, Built: true},
 	{Name: "snmp", Description: "SNMP transport; the v2c scalar driver arrives with its slice.", Held: true, Built: false},
 }
 

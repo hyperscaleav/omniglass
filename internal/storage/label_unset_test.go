@@ -86,7 +86,7 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 
 	stem := "probe"
 	provers := map[string]func(t *testing.T) (keyCol, key string){
-		"interface": func(t *testing.T) (string, string) {
+		"endpoint": func(t *testing.T) (string, string) {
 			if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "lbl-comp"}, all, all, all, all); err != nil {
 				t.Fatalf("create component: %v", err)
 			}
@@ -94,7 +94,7 @@ func TestEveryWritePathStoresNullForAnUnsetLabel(t *testing.T) {
 			if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 				Transport: "ssh", Component: &ref, Label: blank,
 			}, all); err != nil {
-				t.Fatalf("create interface: %v", err)
+				t.Fatalf("create endpoint: %v", err)
 			}
 			return "name", "ssh"
 		},
@@ -282,7 +282,7 @@ func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
 	stem := "probe"
 	// The two uuid-addressed rows carry their id from the prepare to the clear,
 	// since their write path takes a uuid while every row here is keyed by name.
-	var clearInterfaceID, clearSecretID string
+	var clearEndpointID, clearSecretID string
 
 	cases := []struct {
 		table   string
@@ -290,7 +290,7 @@ func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
 		prepare func(t *testing.T) string // creates a LABELLED row, returns its key
 		clear   func(t *testing.T, key string)
 	}{
-		{"interface", "name", func(t *testing.T) string {
+		{"endpoint", "name", func(t *testing.T) string {
 			if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "clr-comp"}, all, all, all, all); err != nil {
 				t.Fatalf("create component: %v", err)
 			}
@@ -299,10 +299,10 @@ func TestClearingALabelStoresNullRatherThanEmpty(t *testing.T) {
 			if err != nil {
 				t.Fatalf("create: %v", err)
 			}
-			clearInterfaceID = it.ID
+			clearEndpointID = it.ID
 			return it.Name
 		}, func(t *testing.T, key string) {
-			if _, err := gw.UpdateEndpoint(ctx, "", clearInterfaceID, storage.EndpointPatch{Label: &empty}, all, all); err != nil {
+			if _, err := gw.UpdateEndpoint(ctx, "", clearEndpointID, storage.EndpointPatch{Label: &empty}, all, all); err != nil {
 				t.Fatalf("clear: %v", err)
 			}
 		}},

@@ -31,6 +31,12 @@ type Config struct {
 	// Pinger is the icmp probe primitive the node runs its icmp tasks with. Nil
 	// defaults to the real collection.NewICMPPinger(); tests inject a fake.
 	Pinger collection.Pinger
+	// HTTP is the layer-7 http probe primitive (#812). Nil defaults to the
+	// real collection.NewHTTPProber(); tests inject a fake.
+	HTTP collection.HTTPProber
+	// SSH is the layer-7 ssh probe primitive (#812). Nil defaults to the
+	// real collection.NewSSHProber(); tests inject a fake.
+	SSH collection.SSHProber
 }
 
 // Run claims the node's NATS credential, connects outbound-only to the bus,
@@ -78,6 +84,15 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if pinger == nil {
 		pinger = collection.NewICMPPinger()
 	}
+	httpProber := cfg.HTTP
+	if httpProber == nil {
+		httpProber = collection.NewHTTPProber()
+	}
+	sshProber := cfg.SSH
+	if sshProber == nil {
+		sshProber = collection.NewSSHProber()
+	}
+	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber}
 
 	// verdicts remembers the last reachability verdict per task (keyed by the
 	// node-unique task id, since interface names collide across components) across
@@ -90,7 +105,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		return collection.WorklistReply{}, err
 	}
 	logger.Info("worklist pulled", "facility", "collection", "tasks", len(wl.Tasks))
-	if err := runTasks(ctx, nc, cfg.Name, wl, dialer, pinger, verdicts); err != nil {
+	if err := runTasks(ctx, nc, cfg.Name, wl, runner, verdicts); err != nil {
 		return wl, err
 	}
 	if err := publishHeartbeat(nc, cfg.Name); err != nil {
@@ -123,7 +138,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			}
 			// Run the worklist's tcp tasks and publish their telemetry. A publish
 			// failure is non-fatal (retry next tick).
-			_ = runTasks(ctx, nc, cfg.Name, wl, dialer, pinger, verdicts)
+			_ = runTasks(ctx, nc, cfg.Name, wl, runner, verdicts)
 			// Ship whatever the node logged this tick as self-logs.
 			publishSelfLogs(nc, cfg.Name, sink)
 		}

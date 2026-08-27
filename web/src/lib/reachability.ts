@@ -29,6 +29,10 @@ export type ReachEndpoint = {
   address?: string;
   node?: string;
   verdict: ReachVerdict | null;
+  // The layer-7 rungs (#812): responds (the protocol itself answered) and,
+  // only when a credential was tried, auth. Absent until a probe climbs them.
+  responsive?: ReachVerdict | null;
+  authenticated?: ReachVerdict | null;
   layers: ReachLayer[];
   history: ReachHistory[];
 };

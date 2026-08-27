@@ -4556,6 +4556,9 @@ components:
         address:
           description: The probed address (target[:port]) from the endpoint params
           type: string
+        authenticated:
+          $ref: "#/components/schemas/ReachVerdictBody"
+          description: The auth rung (the probe's credential was accepted), present only when a credential was tried
         endpoint:
           description: The endpoint's derived name (its transport)
           type: string
@@ -4579,6 +4582,9 @@ components:
         node:
           description: The node that probes this endpoint
           type: string
+        responsive:
+          $ref: "#/components/schemas/ReachVerdictBody"
+          description: The layer-7 responds rung (the protocol itself answered), when a probe has climbed it
         transport:
           description: The transport (icmp, tcp, ...)
           type: string

@@ -26,10 +26,14 @@ type reachResp struct {
 		Type     string `json:"transport"`
 		Address  string `json:"address"`
 		Node     string `json:"node"`
-		Verdict   *struct {
+		Verdict  *struct {
 			Value string    `json:"value"`
 			TS    time.Time `json:"ts"`
 		} `json:"verdict"`
+		Responsive *struct {
+			Value string    `json:"value"`
+			TS    time.Time `json:"ts"`
+		} `json:"responsive"`
 		Layers []struct {
 			Layer  string  `json:"layer"`
 			Check  string  `json:"check"`
@@ -93,6 +97,7 @@ func TestReachabilityAPI(t *testing.T) {
 	// disp-1-tcp: up verdict + tcp-open=1 + connect_time.
 	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
 		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "disp-1-tcp", Value: "up", Source: "tcp", TS: t2},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-responsive", Instance: "disp-1-tcp", Value: "up", Source: "http", TS: t2},
 	}); err != nil {
 		t.Fatalf("insert tcp state: %v", err)
 	}
@@ -139,6 +144,12 @@ func TestReachabilityAPI(t *testing.T) {
 	}
 	if tcp.Verdict == nil || tcp.Verdict.Value != "up" {
 		t.Fatalf("tcp verdict: want up, got %+v", tcp.Verdict)
+	}
+	if tcp.Responsive == nil || tcp.Responsive.Value != "up" {
+		t.Fatalf("tcp responds rung: want up, got %+v", tcp.Responsive)
+	}
+	if icmp.Responsive != nil {
+		t.Fatalf("icmp responds rung: no L7 probe ran, want absent, got %+v", icmp.Responsive)
 	}
 	if tcp.Address != "10.20.4.11:5000" {
 		t.Fatalf("tcp address: want 10.20.4.11:5000, got %q", tcp.Address)

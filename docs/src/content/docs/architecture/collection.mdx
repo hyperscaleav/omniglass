@@ -150,12 +150,20 @@ The poll types and listeners in the `transport` registry and the operator config
 
 ### Poll protocols and their config
 
-Built today: the `icmp` and `tcp` probes (with `ssh` and `http` probing as tcp-connect). A probe's config rides the endpoint's `params` JSON, unmarshalled on the node:
+Built today: the `icmp` and `tcp` probes, and the layer-7 `http` and `ssh` probes (#812): http
+draws a real response off the API (any status is an answer), ssh runs a real key exchange and,
+when the params carry a credential, tries it. The ladder facts each observes: an accepting port
+whose API never answers is **reached but not responsive**, and a completed SSH exchange that
+refuses the credential is **responded but not authenticated**. A task whose config cannot be used
+lands a `collection-failed` event naming the task, never a silent skip. A probe's config rides
+the endpoint's `params` JSON, unmarshalled on the node:
 
-| endpoint type | shape | config (`endpoint.params`) | samples |
+| transport | shape | config (`endpoint.params`) | samples |
 |---|---|---|---|
 | `icmp` | inline probe | `target` (host or IP), `count`, `timeout` | `icmp-reachable`, `icmp-rtt-avg` (fixed) |
 | `tcp` | inline probe | `target` (`host:port`), `timeout` | `tcp-open`, `tcp-connect-time` (fixed) |
+| `http` | inline probe | `target` (`host:port`), `timeout` | the tcp pair, `http-response-time`, `endpoint-responsive` |
+| `ssh` | inline probe | `target` (`host:port`), `timeout`, optional `username`/`password` (secret references arrive with the driver spec) | the tcp pair, `ssh-handshake-time`, `endpoint-responsive`, `endpoint-authenticated` (only when a credential was tried) |
 
 :::design[The remaining transports and their per-task spec, tracked in #489]
 

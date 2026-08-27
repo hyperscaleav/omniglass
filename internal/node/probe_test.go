@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -126,4 +127,84 @@ func TestAppendVerdict(t *testing.T) {
 	if got := appendVerdict([]collection.Sample{{Name: collection.SignalTCPConnectTime, Value: 3}}, "if-3", verdicts); len(got) != 1 {
 		t.Fatalf("no reachability metric: want no verdict, got %+v", got)
 	}
+}
+
+// TestParseHTTPTask / TestParseSSHTask: the L7 tasks come off the endpoint
+// params (#812); the ssh credential is optional and rides plain params until
+// the driver spec's secret references (#813).
+func TestParseHTTPTask(t *testing.T) {
+	spec := collection.TaskSpec{ID: "t1", Transport: "http", EndpointParams: json.RawMessage(`{"target":"10.0.0.5:80","timeout":"3s"}`)}
+	got, err := parseHTTPTask(spec)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if got.Target != "10.0.0.5:80" || got.Timeout.String() != "3s" {
+		t.Fatalf("parse = %+v", got)
+	}
+	if _, err := parseHTTPTask(collection.TaskSpec{ID: "t2", Transport: "http", EndpointParams: json.RawMessage(`{}`)}); err == nil {
+		t.Fatal("empty target: want error")
+	}
+}
+
+func TestParseSSHTask(t *testing.T) {
+	spec := collection.TaskSpec{ID: "t1", Transport: "ssh", EndpointParams: json.RawMessage(`{"target":"10.0.0.5:22","username":"svc","password":"pw"}`)}
+	got, err := parseSSHTask(spec)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if got.Target != "10.0.0.5:22" || got.Username != "svc" || got.Password != "pw" {
+		t.Fatalf("parse = %+v", got)
+	}
+}
+
+// TestCollectTaskDispatchesTheLadder: the http and ssh transports reach their
+// own L7 probes since #812, no longer the plain tcp connect.
+func TestCollectTaskDispatchesTheLadder(t *testing.T) {
+	runner := &collection.Runner{
+		HTTP: dispatchHTTPFake{},
+		SSH:  dispatchSSHFake{},
+	}
+	dps, err := collectTask(t.Context(), runner, collection.TaskSpec{ID: "h", Transport: "http", EndpointParams: json.RawMessage(`{"target":"a:80"}`)})
+	if err != nil {
+		t.Fatalf("http dispatch: %v", err)
+	}
+	if !hasSample(dps, "http-response-time") {
+		t.Fatalf("http dispatch missed the L7 probe: %v", names(dps))
+	}
+	dps, err = collectTask(t.Context(), runner, collection.TaskSpec{ID: "s", Transport: "ssh", EndpointParams: json.RawMessage(`{"target":"a:22","username":"u","password":"p"}`)})
+	if err != nil {
+		t.Fatalf("ssh dispatch: %v", err)
+	}
+	if !hasSample(dps, "ssh-handshake-time") || !hasSample(dps, "endpoint-authenticated") {
+		t.Fatalf("ssh dispatch missed the L7 probe: %v", names(dps))
+	}
+}
+
+type dispatchHTTPFake struct{}
+
+func (dispatchHTTPFake) Probe(_ context.Context, _ string, _ time.Duration) (collection.HTTPResult, error) {
+	return collection.HTTPResult{Dialed: true, Responded: true, DialMS: 1, ResponseMS: 2, Reason: collection.Responded}, nil
+}
+
+type dispatchSSHFake struct{}
+
+func (dispatchSSHFake) Probe(_ context.Context, _ string, _ collection.SSHCredential, _ time.Duration) (collection.SSHResult, error) {
+	return collection.SSHResult{Dialed: true, Responded: true, AuthAttempted: true, Authenticated: true, DialMS: 1, HandshakeMS: 2, Reason: collection.Responded}, nil
+}
+
+func hasSample(dps []collection.Sample, name string) bool {
+	for _, d := range dps {
+		if d.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func names(dps []collection.Sample) []string {
+	var out []string
+	for _, d := range dps {
+		out = append(out, d.Name)
+	}
+	return out
 }

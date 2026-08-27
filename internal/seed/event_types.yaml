@@ -26,3 +26,9 @@ event_types:
       A display or switcher moved to a different source input. Caught natively
       where the device reports it; a frequent, benign occurrence that teaches
       the event lane's volume without implying a fault.
+  - name: collection-failed
+    label: Collection Failed
+    description: >-
+      A collection task could not use what it had: an unusable config or a
+      payload that did not parse. Carries the task identity in its payload, so
+      the failure names its work; the alternative is a silent skip nobody sees.

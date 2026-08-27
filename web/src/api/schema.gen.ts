@@ -6505,6 +6505,8 @@ export interface components {
         ReachEndpointBody: {
             /** @description The probed address (target[:port]) from the endpoint params */
             address?: string;
+            /** @description The auth rung (the probe's credential was accepted), present only when a credential was tried */
+            authenticated?: components["schemas"]["ReachVerdictBody"];
             /** @description The endpoint's derived name (its transport) */
             endpoint: string;
             /** @description The recent verdict transitions, oldest first, for the availability strip */
@@ -6515,6 +6517,8 @@ export interface components {
             layers: components["schemas"]["ReachLayerBody"][] | null;
             /** @description The node that probes this endpoint */
             node?: string;
+            /** @description The layer-7 responds rung (the protocol itself answered), when a probe has climbed it */
+            responsive?: components["schemas"]["ReachVerdictBody"];
             /** @description The transport (icmp, tcp, ...) */
             transport: string;
             /** @description The latest reachability verdict, or null if none yet */

@@ -124,6 +124,15 @@ function EndpointRow(p: { iface: ReachEndpoint; manageId?: string; onManage?: (i
           <div class="min-w-0 flex-1">
             <AvailabilityStrip iface={p.iface} />
           </div>
+          {/* The layer-7 rungs (#812): responds and, when a credential was
+              tried, auth. Rendered only once a probe has climbed them, so a
+              tcp/icmp endpoint's row stays exactly as it was. */}
+          <Show when={p.iface.responsive}>
+            {(r) => <span class={`badge badge-soft badge-sm shrink-0 ${r().value === "up" ? "badge-success" : "badge-error"}`}>{r().value === "up" ? "responds" : "no response"}</span>}
+          </Show>
+          <Show when={p.iface.authenticated}>
+            {(a) => <span class={`badge badge-soft badge-sm shrink-0 ${a().value === "yes" ? "badge-success" : "badge-error"}`}>{a().value === "yes" ? "auth ok" : "auth failed"}</span>}
+          </Show>
           <span class={`badge badge-soft badge-sm shrink-0 ${pill().cls}`}>{pill().label}</span>
         </button>
         <Show when={canManage()}>

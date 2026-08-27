@@ -34,3 +34,13 @@ metric_types:
     data_type: int
     label: Occupancy Count
     description: People detected in the space by the room's occupancy source.
+  - name: http-response-time
+    data_type: float
+    unit: ms
+    label: HTTP Response Time
+    description: Time for the probe's HTTP request to draw a response (any status); absent when the API never answered.
+  - name: ssh-handshake-time
+    data_type: float
+    unit: ms
+    label: SSH Handshake Time
+    description: Time for the SSH key exchange to reach authentication; absent when the daemon never completed it.

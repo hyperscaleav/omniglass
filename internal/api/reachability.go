@@ -22,8 +22,13 @@ import (
 // reachHistoryWindow bounds the transition history returned for the strip.
 const reachHistoryWindow = 24 * time.Hour
 
-// verdictKey is the property sample that carries the per-endpoint verdict.
-const verdictKey = "endpoint-reachable"
+// verdictKey is the property sample that carries the per-endpoint reach
+// verdict; responsiveKey and authKey are the layer-7 rungs beside it (#812).
+const (
+	verdictKey    = "endpoint-reachable"
+	responsiveKey = "endpoint-responsive"
+	authKey       = "endpoint-authenticated"
+)
 
 // reachLayer describes one probe layer the panel gates on: its primary signal
 // (0/1) and the optional companion metric that carries a timing detail.
@@ -58,14 +63,16 @@ type reachHistoryBody struct {
 }
 
 type reachEndpointBody struct {
-	Endpoint  string             `json:"endpoint" doc:"The endpoint's derived name (its transport)"`
-	Label     string             `json:"label,omitempty" doc:"The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim"`
-	Transport string             `json:"transport" doc:"The transport (icmp, tcp, ...)"`
-	Address   string             `json:"address,omitempty" doc:"The probed address (target[:port]) from the endpoint params"`
-	Node      string             `json:"node,omitempty" doc:"The node that probes this endpoint"`
-	Verdict   *reachVerdictBody  `json:"verdict" doc:"The latest reachability verdict, or null if none yet"`
-	Layers    []reachLayerBody   `json:"layers" doc:"The per-layer probe signals that compose the verdict"`
-	History   []reachHistoryBody `json:"history" doc:"The recent verdict transitions, oldest first, for the availability strip"`
+	Endpoint      string             `json:"endpoint" doc:"The endpoint's derived name (its transport)"`
+	Label         string             `json:"label,omitempty" doc:"The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim"`
+	Transport     string             `json:"transport" doc:"The transport (icmp, tcp, ...)"`
+	Address       string             `json:"address,omitempty" doc:"The probed address (target[:port]) from the endpoint params"`
+	Node          string             `json:"node,omitempty" doc:"The node that probes this endpoint"`
+	Verdict       *reachVerdictBody  `json:"verdict" doc:"The latest reachability verdict, or null if none yet"`
+	Responsive    *reachVerdictBody  `json:"responsive,omitempty" doc:"The layer-7 responds rung (the protocol itself answered), when a probe has climbed it"`
+	Authenticated *reachVerdictBody  `json:"authenticated,omitempty" doc:"The auth rung (the probe's credential was accepted), present only when a credential was tried"`
+	Layers        []reachLayerBody   `json:"layers" doc:"The per-layer probe signals that compose the verdict"`
+	History       []reachHistoryBody `json:"history" doc:"The recent verdict transitions, oldest first, for the availability strip"`
 }
 
 type reachabilityOutput struct {
@@ -140,6 +147,20 @@ func composeEndpoint(ctx context.Context, gw storage.Gateway, comp string, it st
 	}
 	if verdict != nil {
 		row.Verdict = &reachVerdictBody{Value: verdict.Value, TS: verdict.TS}
+	}
+	responsive, err := gw.LatestProperty(ctx, comp, responsiveKey, it.Name)
+	if err != nil {
+		return row, err
+	}
+	if responsive != nil {
+		row.Responsive = &reachVerdictBody{Value: responsive.Value, TS: responsive.TS}
+	}
+	authed, err := gw.LatestProperty(ctx, comp, authKey, it.Name)
+	if err != nil {
+		return row, err
+	}
+	if authed != nil {
+		row.Authenticated = &reachVerdictBody{Value: authed.Value, TS: authed.TS}
 	}
 
 	for _, l := range reachLayers {

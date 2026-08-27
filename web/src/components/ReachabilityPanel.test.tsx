@@ -172,3 +172,27 @@ describe("ReachabilityPanel identity", () => {
     expect(screen.queryByText("Ssh")).toBeNull();
   });
 });
+
+// The layer-7 rungs (#812): the responds and auth chips render only once a
+// probe has climbed them, so a plain tcp endpoint's row is untouched.
+describe("the layer-7 rungs", () => {
+  it("renders responds and auth chips from the read, and omits them when absent", () => {
+    mount({
+      component: compId,
+      endpoints: [
+        {
+          endpoint: "ssh", transport: "ssh", address: "10.0.0.9:22",
+          verdict: { value: "up", ts: new Date().toISOString() },
+          responsive: { value: "up", ts: new Date().toISOString() },
+          authenticated: { value: "no", ts: new Date().toISOString() },
+          layers: [], history: [],
+        },
+        { endpoint: "disp-1-tcp", transport: "tcp", verdict: null, layers: [], history: [] },
+      ],
+    });
+    expect(screen.getByText("responds")).toBeTruthy();
+    expect(screen.getByText("auth failed")).toBeTruthy();
+    expect(screen.queryByText("no response")).toBeNull();
+    expect(screen.queryByText("auth ok")).toBeNull();
+  });
+});

@@ -242,6 +242,18 @@
    "description": "Per-endpoint reachability verdict, the AND of the endpoint's probe results (up = every applicable probe reached the target). A built-in state: availability is time_in_state over it. Unknown/stale are read-time derivations, not stored values."
   },
   {
+   "name": "endpoint-responsive",
+   "data_type": "string",
+   "label": "Endpoint Responsive",
+   "description": "The layer-7 rung beside endpoint-reachable: the protocol itself answered (an HTTP request drew a response, an SSH exchange completed). A port that accepts but never answers is reachable and not responsive, which is the distinction this verdict exists to draw."
+  },
+  {
+   "name": "endpoint-authenticated",
+   "data_type": "string",
+   "label": "Endpoint Authenticated",
+   "description": "The auth rung: the credential the probe carried was accepted. Written only when a credential was actually tried, so an unauthenticated probe never reads as a failed login."
+  },
+  {
    "name": "health",
    "data_type": "string",
    "label": "Health",
@@ -317,6 +329,20 @@
    "data_type": "int",
    "label": "Occupancy Count",
    "description": "People detected in the space by the room's occupancy source."
+  },
+  {
+   "name": "http-response-time",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "HTTP Response Time",
+   "description": "Time for the probe's HTTP request to draw a response (any status); absent when the API never answered."
+  },
+  {
+   "name": "ssh-handshake-time",
+   "data_type": "float",
+   "unit": "ms",
+   "label": "SSH Handshake Time",
+   "description": "Time for the SSH key exchange to reach authentication; absent when the daemon never completed it."
   }
  ],
  "event_types": [
@@ -339,6 +365,11 @@
    "name": "input-changed",
    "label": "Input Changed",
    "description": "A display or switcher moved to a different source input. Caught natively where the device reports it; a frequent, benign occurrence that teaches the event lane's volume without implying a fault."
+  },
+  {
+   "name": "collection-failed",
+   "label": "Collection Failed",
+   "description": "A collection task could not use what it had: an unusable config or a payload that did not parse. Carries the task identity in its payload, so the failure names its work; the alternative is a silent skip nobody sees."
   }
  ],
  "command_types": [
@@ -427,13 +458,13 @@
   },
   {
    "name": "ssh",
-   "description": "SSH transport; reachability opens the tcp port (a driver speaks the CLI over a held session later).",
+   "description": "SSH transport; the probe runs a real key exchange (responds), and tries the endpoint credential when one is set (auth).",
    "held": true,
    "built": true
   },
   {
    "name": "http",
-   "description": "HTTP/HTTPS transport; reachability opens the tcp port (a driver calls the API over it later).",
+   "description": "HTTP transport; the probe draws a real response off the API (responds), any status counting as an answer.",
    "held": true,
    "built": true
   },
