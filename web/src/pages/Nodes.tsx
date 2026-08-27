@@ -8,6 +8,7 @@ import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import Button from "../components/Button";
 import { useFormActions } from "../lib/formactions";
+import { bindSelectValue } from "../lib/selectvalue";
 import { Check, Copy, Plus, Server } from "../components/icons";
 import KVStacked from "../components/KVStacked";
 import LogsPanel from "../components/LogsPanel";
@@ -289,7 +290,10 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
               </Show>
             }
           >
-            <select class="select select-bordered w-full" value={location()} onChange={(e) => setLocation(e.currentTarget.value)}>
+            {/* The directory can answer after the blade is on screen, and a
+                <select> keeps no value it has no option for, so the control takes
+                its value through the shared binder (lib/selectvalue.ts, #772). */}
+            <select ref={bindSelectValue(location, () => locations.data)} class="select select-bordered w-full" onChange={(e) => setLocation(e.currentTarget.value)}>
               <option value="">(unplaced)</option>
               <For each={locations.data ?? []}>{(l) => <option value={l.name}>{entityLabel(l)}</option>}</For>
             </select>

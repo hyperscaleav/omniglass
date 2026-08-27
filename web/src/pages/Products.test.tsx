@@ -58,12 +58,15 @@ const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { userna
 
 const asides = () => document.querySelectorAll("aside[data-blade]");
 
-function mount(me: Me = admin) {
+// lateRegistries starts the vendor, driver, and component_type registries EMPTY,
+// so a test can deliver them after the blade is open and reproduce the order the
+// pickers actually hit: the product is in hand before its three registries are.
+function mount(me: Me = admin, lateRegistries = false) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...PRODUCTS_KEY], seed);
-  qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
-  qc.setQueryData([...VENDORS_KEY], vendors);
-  qc.setQueryData([...DRIVERS_KEY], drivers);
+  qc.setQueryData([...COMPONENT_TYPES_KEY], lateRegistries ? [] : componentTypes);
+  qc.setQueryData([...VENDORS_KEY], lateRegistries ? [] : vendors);
+  qc.setQueryData([...DRIVERS_KEY], lateRegistries ? [] : drivers);
   qc.setQueryData([...PROPERTIES_KEY], propertyCatalog);
   qc.setQueryData([...METRICS_KEY], []);
   qc.setQueryData([...classifierPropertiesKey("product", "acme-panel")], contract);
@@ -71,11 +74,14 @@ function mount(me: Me = admin) {
   qc.setQueryData([...classifierMetricsKey("product", "acme-panel")], []);
   qc.setQueryData([...classifierMetricsKey("product", "crestron-tsw-1070")], []);
   qc.setQueryData([...ME_KEY], me);
-  return render(() => (
-    <QueryClientProvider client={qc}>
-      <Products />
-    </QueryClientProvider>
-  ));
+  return Object.assign(
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Products />
+      </QueryClientProvider>
+    )),
+    { qc },
+  );
 }
 
 describe("Products page", () => {
@@ -129,6 +135,31 @@ describe("Products page", () => {
     // vendor + driver selects both offer the seeded registry rows
     expect(within(blade).getByRole("option", { name: "Crestron" })).toBeInTheDocument();
     expect(within(blade).getByRole("option", { name: "Crestron CT" })).toBeInTheDocument();
+  });
+
+  it("shows the product's own vendor when the registries answer after edit opened", async () => {
+    // Three pickers on this blade read three separate registries, none of which
+    // is guaranteed to answer before the operator is looking at the field. A
+    // <select> holds no value it has no option for, so the vendor read "None" on
+    // a product that has one, and saving in that window would have posted the
+    // fallback (#772). The registries land by hand below, never on a timer.
+    const { qc } = mount(admin, true);
+    fireEvent.click(screen.getByText("Acme Panel"));
+    const blade = await waitFor(() => {
+      const el = asides()[0];
+      if (!el) throw new Error("no blade yet");
+      return el as HTMLElement;
+    });
+    fireEvent.click(within(blade).getByLabelText("Edit"));
+    const vendor = () => within(blade).getByLabelText("Vendor") as HTMLSelectElement;
+    expect(vendor().options.length).toBe(1); // "None" alone
+
+    qc.setQueryData([...VENDORS_KEY], vendors);
+    qc.setQueryData([...DRIVERS_KEY], drivers);
+    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
+
+    await waitFor(() => expect(vendor().options.length).toBeGreaterThan(1));
+    expect(vendor().value).toBe("acme-av");
   });
 
   // The blade model (#621): a blade opens read-only, and EVERY mutating control,

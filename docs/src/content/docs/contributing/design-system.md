@@ -231,6 +231,37 @@ announces the field to a screen reader without claiming the browser will refuse 
 `validation-guard.test.ts` scans every `.tsx` for a native constraint on an `input`, `select` or
 `textarea`, so the next form cannot reintroduce one by habit.
 
+### A select over a loaded collection binds through `bindSelectValue`, not `value=`
+
+**A `<select>` whose options come from a collection the server answers for does not carry a
+`value=` prop.** It takes its value from `bindSelectValue(value, ...options)` (`lib/selectvalue.ts`),
+used as the element's `ref`:
+
+```tsx
+<select ref={bindSelectValue(type, () => locationTypes.data)} onChange={...}>
+  <option value="" disabled>Select a type...</option>
+  <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.label}</option>}</For>
+</select>
+```
+
+A native `<select>` holds no memory of a value it has no `<option>` for: assign one and the control
+keeps nothing, and when the options arrive the browser selects the **first** one instead. Every edit
+face has the ingredients, because the stored value is known as soon as the entity resolves while the
+options come from a separate query that answers when it answers. A `value=` binding cannot cover it,
+since Solid re-runs that when the *value* changes and in the losing order the value never changes,
+the options do. The primitive owns the value through an effect that tracks both, so it re-applies on
+whichever lands second; the effect is created in the ref callback, so it belongs to the owner that
+rendered the control and dies with the edit face, and it runs after the `<For>` that fills the
+control because user effects flush after the render effects that insert the options. At least one
+option source is required by the signature, since a binding that tracks none is the defect itself
+([ADR-0133](/architecture/decisions/)).
+
+Two shapes are **exempt**, and the exemption is the reason this is not a blanket conversion. A
+select over a **hard-coded or generated list** (`PRODUCT_KINDS`, a settings field's enum) has no
+async gap to lose a value in. A select whose value **starts empty and only ever moves because the
+operator moved it** (a create form, an "Add a component..." picker) has nothing stored to lose, and
+its first option is the placeholder the fallback would land on anyway.
+
 ### How an entity's identity reads
 
 Every entity carries the same identity triad: an **id** (a uuid, immutable), a **name** (the
