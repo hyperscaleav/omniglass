@@ -331,6 +331,13 @@
    "description": "People detected in the space by the room's occupancy source."
   },
   {
+   "name": "uptime",
+   "data_type": "float",
+   "unit": "s",
+   "label": "Uptime",
+   "description": "How long the device reports it has been running, in seconds (an SNMP sysUpTime scaled from timeticks, or the driver's equivalent)."
+  },
+  {
    "name": "http-response-time",
    "data_type": "float",
    "unit": "ms",
@@ -1699,7 +1706,8 @@
   },
   {
    "id": "newtron-nvp",
-   "label": "Newtron NVP"
+   "label": "Newtron NVP",
+   "version": "1.0.0"
   },
   {
    "id": "http-json",

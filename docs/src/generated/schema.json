@@ -195,6 +195,11 @@
       "nullable": false,
       "default": "uuidv7()",
       "pk": true
+     },
+     {
+      "name": "spec",
+      "type": "jsonb",
+      "nullable": true
      }
     ],
     "uniques": [
@@ -1778,6 +1783,19 @@
       "name": "transport",
       "type": "text",
       "nullable": false
+     },
+     {
+      "name": "driver_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "driver.id"
+     },
+     {
+      "name": "inputs",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'{}'::jsonb"
      }
     ],
     "uniques": [

@@ -168,6 +168,9 @@ type driversDoc struct {
 		ID      string `yaml:"id"`
 		Label   string `yaml:"label"`
 		Version string `yaml:"version"`
+		// Spec is the declarative body (#813), authored as YAML here and
+		// stored as jsonb; absent on a stub that has not been authored yet.
+		Spec map[string]any `yaml:"spec"`
 	} `yaml:"drivers"`
 }
 
@@ -262,6 +265,12 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	if err := seedVendors(ctx, gw); err != nil {
 		return err
 	}
+	// Secret types before drivers: a driver spec's secret input names a
+	// secret_type, and the spec validates at write (#813), so on a first boot
+	// the type must already exist.
+	if err := seedSecretTypes(ctx, gw); err != nil {
+		return err
+	}
 	if err := seedDrivers(ctx, gw); err != nil {
 		return err
 	}
@@ -287,10 +296,7 @@ func Run(ctx context.Context, gw storage.Gateway) error {
 	// After the component_type taxonomy, products, and choices: a declared
 	// role's typed-slot requirement points into the first two, and its
 	// optional alternate_id into the third.
-	if err := seedStandardRoles(ctx, gw, choiceAlts); err != nil {
-		return err
-	}
-	return seedSecretTypes(ctx, gw)
+	return seedStandardRoles(ctx, gw, choiceAlts)
 }
 
 // seedLabelRules writes the rule this release ships for each labelled entity
@@ -462,8 +468,15 @@ func seedDrivers(ctx context.Context, gw storage.Gateway) error {
 		return fmt.Errorf("seed: parse drivers: %w", err)
 	}
 	for _, d := range doc.Drivers {
+		var spec []byte
+		if len(d.Spec) > 0 {
+			var err error
+			if spec, err = json.Marshal(d.Spec); err != nil {
+				return fmt.Errorf("seed: marshal driver %q spec: %w", d.ID, err)
+			}
+		}
 		if err := gw.UpsertDriver(ctx, storage.Driver{
-			Name: d.ID, Official: true, Label: d.Label, Version: d.Version,
+			Name: d.ID, Official: true, Label: d.Label, Version: d.Version, Spec: spec,
 		}); err != nil {
 			return err
 		}

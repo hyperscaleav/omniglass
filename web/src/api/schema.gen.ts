@@ -4430,6 +4430,8 @@ export interface components {
             label: string;
             /** @description The globally unique name; renameable */
             name: string;
+            /** @description The declarative spec body; validated against the catalogs, and a spec that fails validation refuses the write (422) */
+            spec?: unknown;
             /** @description A free-form version string, e.g. 1.0.0 */
             version?: string;
         };
@@ -4442,14 +4444,20 @@ export interface components {
             readonly $schema?: string;
             /** @description Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant) */
             component?: string;
+            /** @description Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions */
+            driver?: string;
+            /** @description The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest */
+            inputs?: {
+                [key: string]: string;
+            };
             /** @description What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for */
             label?: string;
             /** @description Node placement, by name or id */
             node?: string;
-            /** @description Address/target settings (jsonb) */
+            /** @description Address/target settings (jsonb); an attach derives them from the inputs instead */
             params?: unknown;
-            /** @description A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component */
-            transport: string;
+            /** @description A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
+            transport?: string;
         };
         CreateEventTypeInputBody: {
             /**
@@ -4918,6 +4926,8 @@ export interface components {
             /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
+            /** @description The declarative spec body (#813): transports, inputs, poll functions, listeners, command bindings. Absent on a stub that cannot be attached yet */
+            spec?: unknown;
             version?: string;
         };
         EffectiveMetricBody: {
@@ -5041,8 +5051,14 @@ export interface components {
             component?: string;
             /** @description The owning component's id; the stable form of component */
             component_id?: string;
+            /** @description The driver this endpoint was attached through (#813); absent for a bare probe endpoint */
+            driver?: string;
+            /** @description The attached driver's id; the stable form of driver */
+            driver_id?: string;
             /** @description The endpoint's surrogate id (the address) */
             id: string;
+            /** @description The effective inputs supplied at attach, defaults baked; secret inputs are reference names, never values */
+            inputs?: unknown;
             /** @description The friendly string an operator reads, and the only identity string an operator types here: the name is derived from the transport. Absent when unset, and a surface with none renders the name verbatim */
             label?: string;
             /** @description The derived name (its transport), unique within the owning component */
@@ -7589,6 +7605,8 @@ export interface components {
             readonly $schema?: string;
             /** @description A new operator-facing label */
             label?: string;
+            /** @description A replacement spec body; validated like the create's, refused with a 422 when it cannot be interpreted */
+            spec?: unknown;
             /** @description A new version string, e.g. 1.0.1 */
             version?: string;
         };

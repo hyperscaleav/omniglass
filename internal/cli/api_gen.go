@@ -1558,6 +1558,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fLabel string
 				var fName string
+				var fSpec string
 				var fVersion string
 				cmd := &cobra.Command{
 					Use:     "create",
@@ -1574,6 +1575,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("spec") {
+							body["spec"] = jsonOrString(fSpec)
+						}
 						if cmd.Flags().Changed("version") {
 							body["version"] = fVersion
 						}
@@ -1584,6 +1588,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("label")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fSpec, "spec", "", "The declarative spec body; validated against the catalogs, and a spec that fails validation refuses the write (422)")
 				cmd.Flags().StringVar(&fVersion, "version", "", "A free-form version string, e.g. 1.0.0")
 				return cmd
 			}()
@@ -1643,6 +1648,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fLabel string
+				var fSpec string
 				var fVersion string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
@@ -1656,6 +1662,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
+						if cmd.Flags().Changed("spec") {
+							body["spec"] = jsonOrString(fSpec)
+						}
 						if cmd.Flags().Changed("version") {
 							body["version"] = fVersion
 						}
@@ -1663,6 +1672,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
+				cmd.Flags().StringVar(&fSpec, "spec", "", "A replacement spec body; validated like the create's, refused with a 422 when it cannot be interpreted")
 				cmd.Flags().StringVar(&fVersion, "version", "", "A new version string, e.g. 1.0.1")
 				return cmd
 			}()
@@ -1678,6 +1688,8 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fComponent string
+				var fDriver string
+				var fInputs string
 				var fLabel string
 				var fNode string
 				var fParams string
@@ -1686,13 +1698,19 @@ func generatedCommands() []*cobra.Command {
 					Use:     "create",
 					Short:   "Create an endpoint",
 					Long:    "Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by endpoint:create.",
-					Example: "  omniglass endpoint create --transport transport",
+					Example: "  omniglass endpoint create",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
 						path := fmt.Sprintf("/api/v1/endpoints")
 						body := map[string]any{}
 						if cmd.Flags().Changed("component") {
 							body["component"] = fComponent
+						}
+						if cmd.Flags().Changed("driver") {
+							body["driver"] = fDriver
+						}
+						if cmd.Flags().Changed("inputs") {
+							body["inputs"] = jsonOrString(fInputs)
 						}
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
@@ -1710,11 +1728,12 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fComponent, "component", "", "Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant)")
+				cmd.Flags().StringVar(&fDriver, "driver", "", "Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions")
+				cmd.Flags().StringVar(&fInputs, "inputs", "", "The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest")
 				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for")
 				cmd.Flags().StringVar(&fNode, "node", "", "Node placement, by name or id")
-				cmd.Flags().StringVar(&fParams, "params", "", "Address/target settings (jsonb)")
-				cmd.Flags().StringVar(&fTransport, "transport", "", "A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component")
-				_ = cmd.MarkFlagRequired("transport")
+				cmd.Flags().StringVar(&fParams, "params", "", "Address/target settings (jsonb); an attach derives them from the inputs instead")
+				cmd.Flags().StringVar(&fTransport, "transport", "", "A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set")
 				return cmd
 			}()
 			return cmd

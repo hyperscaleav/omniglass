@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -31,6 +32,9 @@ type endpointBody struct {
 	Node        *string         `json:"node,omitempty" doc:"The node placement name, if assigned"`
 	NodeID      *string         `json:"node_id,omitempty" doc:"The placed node's id; the stable form of node"`
 	Params      json.RawMessage `json:"params,omitempty" doc:"The address/target settings (jsonb)"`
+	Driver      *string         `json:"driver,omitempty" doc:"The driver this endpoint was attached through (#813); absent for a bare probe endpoint"`
+	DriverID    *string         `json:"driver_id,omitempty" doc:"The attached driver's id; the stable form of driver"`
+	Inputs      json.RawMessage `json:"inputs,omitempty" doc:"The effective inputs supplied at attach, defaults baked; secret inputs are reference names, never values"`
 }
 
 func toEndpointBody(it *storage.Endpoint) endpointBody {
@@ -41,6 +45,10 @@ func toEndpointBody(it *storage.Endpoint) endpointBody {
 	}
 	if len(it.Params) > 0 {
 		b.Params = json.RawMessage(it.Params)
+	}
+	b.Driver, b.DriverID = it.Driver, it.DriverID
+	if len(it.Inputs) > 2 { // "{}" is the bare-create floor, not an attachment
+		b.Inputs = json.RawMessage(it.Inputs)
 	}
 	return b
 }
@@ -61,11 +69,13 @@ type endpointPathInput struct {
 
 type createEndpointInput struct {
 	Body struct {
-		Transport string          `json:"transport" minLength:"1" doc:"A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component"`
+		Transport string          `json:"transport,omitempty" doc:"A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set"`
 		Label     string          `json:"label,omitempty" maxLength:"200" doc:"What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for"`
 		Component *string         `json:"component,omitempty" doc:"Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant)"`
 		Node      *string         `json:"node,omitempty" doc:"Node placement, by name or id"`
-		Params    json.RawMessage `json:"params,omitempty" doc:"Address/target settings (jsonb)"`
+		Params    json.RawMessage `json:"params,omitempty" doc:"Address/target settings (jsonb); an attach derives them from the inputs instead"`
+		Driver    *string         `json:"driver,omitempty" doc:"Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions"`
+		Inputs    map[string]string `json:"inputs,omitempty" doc:"The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest"`
 	}
 }
 
@@ -141,12 +151,17 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 		Summary:       "Create an endpoint",
 		Description:   "Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by endpoint:create.",
 	}, "endpoint", "create"), func(ctx context.Context, in *createEndpointInput) (*endpointOutput, error) {
+		if in.Body.Transport == "" && in.Body.Driver == nil {
+			return nil, huma.Error422UnprocessableEntity("set a transport (a bare probe endpoint) or a driver (an attach)")
+		}
 		it, err := gw.CreateEndpoint(ctx, actorID(ctx), storage.EndpointSpec{
 			Transport: in.Body.Transport,
 			Label:     in.Body.Label,
 			Component: in.Body.Component,
 			Node:      in.Body.Node,
 			Params:    []byte(in.Body.Params),
+			Driver:    in.Body.Driver,
+			Inputs:    in.Body.Inputs,
 		}, a.scopeFor(ctx, "endpoint", "create"))
 		if err != nil {
 			return nil, mapEndpointErr(err)
@@ -193,6 +208,12 @@ func mapEndpointErr(err error) error {
 		return refErr
 	}
 	switch {
+	case errors.Is(err, storage.ErrAttachInvalid), errors.Is(err, storage.ErrSpecInvalid):
+		// The attach gate names the fault (a missing input, a secret reference
+		// that resolves to nothing); surface it so the author can fix the call.
+		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: "))
+	case errors.Is(err, storage.ErrTypeNotFound):
+		return huma.Error422UnprocessableEntity("driver not found")
 	case errors.Is(err, storage.ErrEndpointNotFound):
 		return huma.Error404NotFound("endpoint not found")
 	case errors.Is(err, storage.ErrEndpointForbidden):

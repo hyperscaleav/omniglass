@@ -1180,6 +1180,7 @@ Creates a custom (non-official) driver. Gated by driver:create.
 |---|---|---|---|
 | `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--name` | string | (none) | The globally unique name; renameable |
+| `--spec` | string | (none) | The declarative spec body; validated against the catalogs, and a spec that fails validation refuses the write (422) |
 | `--version` | string | (none) | A free-form version string, e.g. 1.0.0 |
 
 Example:
@@ -1249,6 +1250,7 @@ Patches a custom driver's label or version. Official drivers are read-only (422)
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--label` | string | (none) | A new operator-facing label |
+| `--spec` | string | (none) | A replacement spec body; validated like the create's, refused with a 422 when it cannot be interpreted |
 | `--version` | string | (none) | A new version string, e.g. 1.0.1 |
 
 Example:
@@ -1274,15 +1276,17 @@ Creates an endpoint owned by a component (or a server-hosted one, which needs an
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--component` | string | (none) | Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant) |
+| `--driver` | string | (none) | Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions |
+| `--inputs` | string | (none) | The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest |
 | `--label` | string | (none) | What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for |
 | `--node` | string | (none) | Node placement, by name or id |
-| `--params` | string | (none) | Address/target settings (jsonb) |
-| `--transport` | string | (none) | A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component |
+| `--params` | string | (none) | Address/target settings (jsonb); an attach derives them from the inputs instead |
+| `--transport` | string | (none) | A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set |
 
 Example:
 
 ```sh
-omniglass endpoint create --transport transport
+omniglass endpoint create
 ```
 
 ### `omniglass endpoint delete`

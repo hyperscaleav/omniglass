@@ -41,8 +41,14 @@ type Endpoint struct {
 	Node        *string
 	NodeID      *string
 	Params      []byte
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// Driver and DriverID record the attachment that authored this endpoint
+	// (#813): nil for a bare probe endpoint. Inputs is the effective input set
+	// supplied at attach, defaults baked, secret inputs by reference name.
+	Driver    *string
+	DriverID  *string
+	Inputs    []byte
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // EndpointSpec is the create input. The endpoint is transport-named: its name
@@ -61,6 +67,12 @@ type EndpointSpec struct {
 	Component *string
 	Node      *string
 	Params    []byte
+	// Driver switches the create into an attach (#813): the transport comes
+	// from the driver's spec (setting both refuses), Inputs must satisfy the
+	// spec's declared inputs, and the spec's functions derive the endpoint's
+	// tasks in the same transaction.
+	Driver *string
+	Inputs map[string]string
 }
 
 // EndpointPatch is the update input: nil fields unchanged. Type and component
@@ -90,16 +102,20 @@ const (
 	endpointCols = `id, name, coalesce(label, ''), transport,
 		(select c.name from component c where c.id = endpoint.component) as component_name, component,
 		(select n.name from node n where n.principal_id = endpoint.node_name) as node_name_ref, node_name,
-		params, created_at, updated_at`
+		params,
+		(select d.name from driver d where d.id = endpoint.driver_id) as driver_name, driver_id, inputs,
+		created_at, updated_at`
 	endpointColsJoin = `i.id, i.name, coalesce(i.label, ''), i.transport,
 		(select c2.name from component c2 where c2.id = i.component) as component_name, i.component,
 		(select n.name from node n where n.principal_id = i.node_name) as node_name_ref, i.node_name,
-		i.params, i.created_at, i.updated_at`
+		i.params,
+		(select d2.name from driver d2 where d2.id = i.driver_id) as driver_name, i.driver_id, i.inputs,
+		i.created_at, i.updated_at`
 )
 
 func scanEndpoint(row pgx.Row) (*Endpoint, error) {
 	var it Endpoint
-	if err := row.Scan(&it.ID, &it.Name, &it.Label, &it.Transport, &it.Component, &it.ComponentID, &it.Node, &it.NodeID, &it.Params, &it.CreatedAt, &it.UpdatedAt); err != nil {
+	if err := row.Scan(&it.ID, &it.Name, &it.Label, &it.Transport, &it.Component, &it.ComponentID, &it.Node, &it.NodeID, &it.Params, &it.Driver, &it.DriverID, &it.Inputs, &it.CreatedAt, &it.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &it, nil
@@ -283,9 +299,27 @@ func (p *PG) CreateEndpoint(ctx context.Context, actorID string, spec EndpointSp
 		return nil, ErrEndpointForbidden
 	}
 
+	// A driver reference switches the create into an attach (#813): the spec
+	// derives the transport, the params, and (after the insert) the tasks.
+	var plan *attachPlan
+	if spec.Driver != nil {
+		plan, err = resolveAttach(ctx, tx, spec)
+		if err != nil {
+			return nil, err
+		}
+		spec.Transport = plan.transport
+		spec.Params = plan.params
+	}
+
 	params := spec.Params
 	if len(params) == 0 {
 		params = []byte("{}")
+	}
+	inputs := []byte("{}")
+	var driverID *string
+	if plan != nil {
+		inputs = plan.inputs
+		driverID = &plan.driverID
 	}
 	nodeID, err := endpointNodeID(ctx, tx, spec.Node)
 	if err != nil {
@@ -298,10 +332,10 @@ func (p *PG) CreateEndpoint(ctx context.Context, actorID string, spec EndpointSp
 		return nil, ErrUnknownTransport
 	}
 	it, err := scanEndpoint(tx.QueryRow(ctx, `
-		insert into endpoint (name, transport, component, node_name, params, label)
-		values ($1, $1, $2, $3, $4, $5)
+		insert into endpoint (name, transport, component, node_name, params, label, driver_id, inputs)
+		values ($1, $1, $2, $3, $4, $5, $6, $7)
 		returning `+endpointCols,
-		spec.Transport, componentID, nodeID, params, labelOrNull(spec.Label)))
+		spec.Transport, componentID, nodeID, params, labelOrNull(spec.Label), driverID, inputs))
 	if err != nil {
 		return nil, mapEndpointWriteErr(err)
 	}
@@ -310,6 +344,13 @@ func (p *PG) CreateEndpoint(ctx context.Context, actorID string, spec EndpointSp
 	// over this connection, makes task a derived artifact, never operator-authored.
 	if err := deriveReachabilityTask(ctx, tx, it.ID); err != nil {
 		return nil, err
+	}
+	// An attach also derives the spec's functions: a poll task per poll
+	// function, a standing listen task per listener, lanes baked.
+	if plan != nil {
+		if err := deriveDriverTasks(ctx, tx, it.ID, plan); err != nil {
+			return nil, err
+		}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "endpoint", it.ID, nil, it); err != nil {
 		return nil, err
