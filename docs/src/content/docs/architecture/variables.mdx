@@ -190,7 +190,7 @@ platform credential stays admin/owner-only beside an operational device secret. 
   **alarm** before the secret lapses.
 
 **Secret health is its validity, not its value**: **intrinsic expiry** (an `oauth2` token, a
-`tls_cert` `notAfter`) warns proactively, and **observed-use failure** flips it unhealthy after N
+`tls-cert` `notAfter`) warns proactively, and **observed-use failure** flips it unhealthy after N
 consecutive auth failures consumers report, both through the ordinary sample-to-alarm pipeline.
 :::
 
