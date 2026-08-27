@@ -4,16 +4,17 @@ import { Sliders } from "./icons";
 import KVStacked from "./KVStacked";
 import BladeTitle from "./BladeTitle";
 import {
-  type Interface,
-  type UpdateInterface,
-  INTERFACES_KEY,
-  INTERFACE_TYPES,
-  listInterfaces,
-  createInterface,
-  updateInterface,
-  deleteInterface,
-  interfaceTarget,
-} from "../lib/interfaces";
+  type Endpoint,
+  type UpdateEndpoint,
+  ENDPOINTS_KEY,
+  TRANSPORTS_KEY,
+  listTransports,
+  listEndpoints,
+  createEndpoint,
+  updateEndpoint,
+  deleteEndpoint,
+  endpointTarget,
+} from "../lib/endpoints";
 import { REACHABILITY_KEY } from "../lib/reachability";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { NODES_KEY, listNodes } from "../lib/nodes";
@@ -23,11 +24,11 @@ import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 
-// The interface blades, salvaged from the retired standalone Interfaces page and
-// folded onto the component detail's shared blade stack (an interface belongs to
-// its component, so it surfaces as a panel there, not a top-level tab). Two kinds:
-//   interface        the read -> edit -> save detail blade (edit node placement and
-//                    target, Delete), addressed by the interface's surrogate id.
+// The endpoint blades, salvaged from the retired standalone page and folded
+// onto the component detail's shared blade stack (an endpoint belongs to its
+// component, so it surfaces as a panel there, not a top-level tab). Two kinds:
+//   endpoint         the read -> edit -> save detail blade (edit node placement and
+//                    target, Delete), addressed by the endpoint's surrogate id.
 //   interface-create the new-interface Drawer body, addressed by the OWNING
 //                    component's name (an interface added from a component always
 //                    belongs to it), so the create form pre-sets and hides the
@@ -37,8 +38,8 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // deliberately never touch the components query, so the TreeList blade index stays
 // stable and the blade survives on the stack (like the secret cascade blade).
 
-function useInterfaceById(id: string): () => Interface | null {
-  const interfaces = useQuery(() => ({ queryKey: INTERFACES_KEY, queryFn: () => listInterfaces() }));
+function useEndpointById(id: string): () => Endpoint | null {
+  const interfaces = useQuery(() => ({ queryKey: ENDPOINTS_KEY, queryFn: () => listEndpoints() }));
   return () => interfaces.data?.find((x) => x.id === id) ?? null;
 }
 
@@ -57,13 +58,13 @@ function NodeSelect(props: { value: string; onChange: (v: string) => void; disab
   );
 }
 
-// interfaceBlade renders an interface on the shared blade stack (same chrome and
+// endpointBlade renders an interface on the shared blade stack (same chrome and
 // footer action rail as the identity blades): read-only facts, a pencil into an
 // inline edit of the mutable fields (node placement, target), and Delete as the one
 // destructive action.
-export const interfaceBlade: BladeDef = {
-  Title: (p) => <InterfaceBladeTitle id={p.id} />,
-  Body: (p) => <InterfaceBladeBody id={p.id} />,
+export const endpointBlade: BladeDef = {
+  Title: (p) => <EndpointBladeTitle id={p.id} />,
+  Body: (p) => <EndpointBladeBody id={p.id} />,
 };
 
 // The heading is the label, falling back to the derived name in the data face,
@@ -71,22 +72,22 @@ export const interfaceBlade: BladeDef = {
 // gained a label (#613), which is the moment #581 said to switch, and it matters
 // more here than anywhere: every SSH interface in the fleet is named `ssh`, so
 // without a label two blades on two components are titled identically.
-function InterfaceBladeTitle(props: { id: string }): JSX.Element {
-  const iface = useInterfaceById(props.id);
-  return <BladeTitle row={() => iface() ?? undefined} fallback="interface" />;
+function EndpointBladeTitle(props: { id: string }): JSX.Element {
+  const iface = useEndpointById(props.id);
+  return <BladeTitle row={() => iface() ?? undefined} fallback="endpoint" />;
 }
 
-// InterfaceBladeBody re-derives the interface from the live query by id (not a row
+// EndpointBladeBody re-derives the interface from the live query by id (not a row
 // snapshot), so an edit reflects after the invalidate. Only the node placement and
 // the probed target are mutable (name, type, and owning component are fixed at
 // creation); the edit slot seeds its inputs each time edit begins, and a Cancel
 // reverts by leaving edit (the next begin re-seeds).
-function InterfaceBladeBody(props: { id: string }): JSX.Element {
+function EndpointBladeBody(props: { id: string }): JSX.Element {
   const qc = useQueryClient();
   const me = useMe();
   const blades = useBlades();
   const edit = useBladeEdit();
-  const i = useInterfaceById(props.id);
+  const i = useEndpointById(props.id);
   const [node, setNode] = createSignal("");
   const [target, setTarget] = createSignal("");
   const [label, setLabel] = createSignal("");
@@ -98,8 +99,8 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
   // internal/api/interfaces.go): ReachabilityPanel reads REACHABILITY_KEY by the
   // component's uuid (#627 review finding 1), and a name-keyed invalidate here
   // missed that cache entry entirely (review round 3, regression 2).
-  async function refresh(iface: Interface) {
-    await qc.invalidateQueries({ queryKey: INTERFACES_KEY });
+  async function refresh(iface: Endpoint) {
+    await qc.invalidateQueries({ queryKey: ENDPOINTS_KEY });
     if (iface.component_id) await qc.invalidateQueries({ queryKey: REACHABILITY_KEY(iface.component_id) });
   }
 
@@ -108,20 +109,20 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
   const seedDrafts = () => {
     const iface = i();
     setNode(iface?.node ?? "");
-    setTarget(iface ? interfaceTarget(iface) : "");
+    setTarget(iface ? endpointTarget(iface) : "");
     // The RAW column, never entityLabel: seeding the editor with the fallback
     // would turn "no label" into a label the operator never typed.
     setLabel(iface?.label ?? "");
     setErr(null);
   };
 
-  async function removeInterface() {
+  async function removeEndpoint() {
     const iface = i();
     if (!iface) return;
     if (!confirm(`Delete interface "${iface.name}"?`)) return;
     setErr(null);
     try {
-      await deleteInterface(iface.id);
+      await deleteEndpoint(iface.id);
       // Pop just this blade (not the whole stack): a component opened as a blade
       // behind it must stay.
       blades.pop();
@@ -136,15 +137,15 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
     if (!iface) return;
     // Patch only the changed mutable fields. A blank node or target selection is left
     // unchanged: the API has no clear-placement, so an empty node would FK-fault (422).
-    const patch: UpdateInterface = {};
+    const patch: UpdateEndpoint = {};
     if (node() && node() !== (iface.node ?? "")) patch.node = node();
-    if (target() && target() !== interfaceTarget(iface)) patch.params = { target: target().trim() };
+    if (target() && target() !== endpointTarget(iface)) patch.params = { target: target().trim() };
     // The label is sent whenever it differs, including when it is now empty:
     // clearing one is an instruction, not an omission.
     if (label() !== (iface.label ?? "")) patch.label = label();
     setErr(null);
     try {
-      await updateInterface(iface.id, patch);
+      await updateEndpoint(iface.id, patch);
       await refresh(iface);
     } catch (e) {
       setErr(describeError(e));
@@ -153,10 +154,10 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
   }
 
   edit.bind({
-    editable: () => !!i() && can(me.data, "interface", "update"),
+    editable: () => !!i() && can(me.data, "endpoint", "update"),
     seed: seedDrafts,
     save,
-    destructive: () => (i() && can(me.data, "interface", "delete") ? { label: "Delete", tone: "danger", onClick: removeInterface } : undefined),
+    destructive: () => (i() && can(me.data, "endpoint", "delete") ? { label: "Delete", tone: "danger", onClick: removeEndpoint } : undefined),
   });
 
   return (
@@ -165,7 +166,7 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
         <div class="flex flex-col gap-4">
           <div class="flex items-center gap-3">
             <span class="text-base-content/40"><Sliders size={22} /></span>
-            <span class="badge badge-ghost badge-sm">{iface().interface_type}</span>
+            <span class="badge badge-ghost badge-sm">{iface().transport}</span>
           </div>
 
           <Show when={err()}>
@@ -178,10 +179,10 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
               <div class="grid grid-cols-2 gap-4">
                 <KVStacked bind="label" value={iface().label ? <span>{iface().label}</span> : <span class="text-base-content/40">unset</span>} />
                 <KVStacked bind="name" value={<span class="font-data">{iface().name}</span>} />
-                <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{iface().interface_type}</span>} />
+                <KVStacked label="Type" value={<span class="badge badge-ghost badge-sm">{iface().transport}</span>} />
                 <KVStacked label="Component" value={iface().component ? <span class="font-data">{iface().component}</span> : <span class="text-base-content/40">server-hosted</span>} />
                 <KVStacked label="Node" value={iface().node ? <span class="font-data">{iface().node}</span> : <span class="text-base-content/40">unassigned</span>} />
-                <KVStacked label="Target" value={interfaceTarget(iface()) ? <span class="font-data">{interfaceTarget(iface())}</span> : <span class="text-base-content/40">not set</span>} />
+                <KVStacked label="Target" value={endpointTarget(iface()) ? <span class="font-data">{endpointTarget(iface())}</span> : <span class="text-base-content/40">not set</span>} />
               </div>
             }
           >
@@ -207,36 +208,36 @@ function InterfaceBladeBody(props: { id: string }): JSX.Element {
   );
 }
 
-// interfaceCreateBlade hosts the new-interface form on the shared blade stack,
+// endpointCreateBlade hosts the new-interface form on the shared blade stack,
 // addressed by the OWNING component's name. On success it invalidates the
 // component's reachability read (the form already invalidates the interfaces list)
 // and swaps itself for the created interface's detail blade.
-export const interfaceCreateBlade: BladeDef = {
+export const endpointCreateBlade: BladeDef = {
   Title: () => <span>New interface</span>,
-  Body: (p) => <InterfaceCreateBody component={p.id} />,
+  Body: (p) => <EndpointCreateBody component={p.id} />,
 };
 
-function InterfaceCreateBody(props: { component: string }): JSX.Element {
+function EndpointCreateBody(props: { component: string }): JSX.Element {
   const qc = useQueryClient();
   const blades = useBlades();
   return (
-    <CreateInterfaceForm
+    <CreateEndpointForm
       component={props.component}
       onCreated={(created) => {
         void qc.invalidateQueries({ queryKey: REACHABILITY_KEY(props.component) });
         blades.pop();
-        blades.push({ kind: "interface", id: created.id });
+        blades.push({ kind: "endpoint", id: created.id });
       }}
     />
   );
 }
 
-// CreateInterfaceForm is the new-interface form: type (the built types), owning
+// CreateEndpointForm is the new-interface form: type (the built types), owning
 // component (or server-hosted), node placement, and the probed target. When
 // `component` is set the interface always belongs to it, so the form pre-sets that
 // component and hides the picker. On success it invalidates the list and hands the
 // created interface to onCreated, which opens its detail blade.
-function CreateInterfaceForm(props: { onCreated: (i: Interface) => void; component?: string }) {
+function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; component?: string }) {
   const qc = useQueryClient();
   // Always fetched (not gated on `!props.component`): a preset component still
   // needs this list to resolve its uuid to a readable label below. The
@@ -248,7 +249,13 @@ function CreateInterfaceForm(props: { onCreated: (i: Interface) => void; compone
     const match = components.data?.find((c) => c.id === props.component);
     return match ? entityLabel(match) : props.component;
   };
-  const [type, setType] = createSignal<string>(INTERFACE_TYPES[0]);
+  // The transports come from the code registry the server ships (GET
+  // /transports), so the picker can never drift from what a create refuses;
+  // only the built ones are offered, since an unbuilt transport would author
+  // a check no node can run yet.
+  const transports = useQuery(() => ({ queryKey: TRANSPORTS_KEY, queryFn: listTransports }));
+  const builtTransports = () => (transports.data ?? []).filter((t) => t.built);
+  const [type, setType] = createSignal<string>("icmp");
   const [label, setLabel] = createSignal("");
   const [component, setComponent] = createSignal(props.component ?? "");
   const [node, setNode] = createSignal("");
@@ -262,21 +269,21 @@ function CreateInterfaceForm(props: { onCreated: (i: Interface) => void; compone
   // Cancel, because a blade already has two ways out (the header close and Back)
   // and every other blade in the stack reads the same.
   useBladeEdit().bind({
-    primary: () => ({ label: "Create interface", onClick: () => void submit(), busy }),
+    primary: () => ({ label: "Create endpoint", onClick: () => void submit(), busy }),
   });
 
   async function submit() {
     setBusy(true);
     setErr(null);
     try {
-      const created = await createInterface({
-        interface_type: type(),
+      const created = await createEndpoint({
+        transport: type(),
         label: label().trim() || undefined,
         component: component() || undefined,
         node: node() || undefined,
         params: target().trim() ? { target: target().trim() } : undefined,
       });
-      await qc.invalidateQueries({ queryKey: INTERFACES_KEY });
+      await qc.invalidateQueries({ queryKey: ENDPOINTS_KEY });
       props.onCreated(created);
     } catch (er) {
       setErr(describeError(er));
@@ -287,7 +294,7 @@ function CreateInterfaceForm(props: { onCreated: (i: Interface) => void; compone
 
   return (
     <form class="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-      <p class="text-xs text-base-content/50">An API on a component, named by its protocol (its type). The label is yours: say what the connection is for, since the name only says how it is reached. Its reachability task derives automatically.</p>
+      <p class="text-xs text-base-content/50">An API on a component, named by the transport it speaks. The label is yours: say what the connection is for, since the name only says how it is reached. Its reachability task derives automatically.</p>
       <Show when={err()}>
         <div role="alert" class="alert alert-error alert-soft text-sm"><span>{err()}</span></div>
       </Show>
@@ -296,9 +303,12 @@ function CreateInterfaceForm(props: { onCreated: (i: Interface) => void; compone
         <input id="new-iface-label" autocomplete="off" class="input input-bordered w-full" value={label()} placeholder="Control processor" onInput={(e) => setLabel(e.currentTarget.value)} disabled={busy()} />
       </div>
       <div>
-        <label class="eyebrow mb-1.5 block" for="new-iface-type">Protocol (type)</label>
-        <select id="new-iface-type" class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)} disabled={busy()}>
-          <For each={INTERFACE_TYPES}>{(t) => <option value={t}>{t}</option>}</For>
+        <label class="eyebrow mb-1.5 block" for="new-iface-type">Transport</label>
+        {/* The registry answers after the blade opens, and a <select> keeps no
+            value it has no option for, so the control takes its value through
+            the shared binder (lib/selectvalue.ts, ADR-0133). */}
+        <select id="new-iface-type" ref={bindSelectValue(type, builtTransports)} class="select select-bordered w-full" onChange={(e) => setType(e.currentTarget.value)} disabled={busy()}>
+          <For each={builtTransports()}>{(t) => <option value={t.name}>{t.name}</option>}</For>
         </select>
       </div>
       <Show

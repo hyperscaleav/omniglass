@@ -12,7 +12,7 @@ import AlarmsPanel from "../components/AlarmsPanel";
 import EventsPanel from "../components/EventsPanel";
 import ReconciliationPanel from "../components/ReconciliationPanel";
 import ResolutionPanel from "../components/ResolutionPanel";
-import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
+import { endpointBlade, endpointCreateBlade } from "../components/endpointBlades";
 import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
 import HealthBadge from "../components/HealthBadge";
@@ -130,7 +130,7 @@ export default function ComponentLeaf() {
 
   const tiles = createMemo(() =>
     view.data && component()
-      ? componentTileSpec(view.data, component()!.id, activeAlarms().length, (reach.data?.interfaces ?? []).length)
+      ? componentTileSpec(view.data, component()!.id, activeAlarms().length, (reach.data?.endpoints ?? []).length)
       : undefined,
   );
   const [filterChips, setFilterChips] = createSignal<Chip[]>([]);
@@ -190,8 +190,8 @@ export default function ComponentLeaf() {
                   />
                   <ReachabilityPanel
                     name={id()}
-                    onAdd={can(me.data, "interface", "create") ? () => blades.push({ kind: "interface-create", id: id() }) : undefined}
-                    onOpenInterface={can(me.data, "interface", "read") ? (ifid) => blades.push({ kind: "interface", id: ifid }) : undefined}
+                    onAdd={can(me.data, "endpoint", "create") ? () => blades.push({ kind: "endpoint-create", id: id() }) : undefined}
+                    onOpenEndpoint={can(me.data, "endpoint", "read") ? (ifid) => blades.push({ kind: "endpoint", id: ifid }) : undefined}
                   />
                   <AlarmsPanel component={id()} canUpdate={slot.editing() && can(me.data, "component", "update")} canAcknowledge={can(me.data, "alarm", "acknowledge")} />
                 </>
@@ -353,14 +353,14 @@ export default function ComponentLeaf() {
             </Show>
             <section data-testid="leaf-collection" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
               <h2 class="eyebrow">Collection</h2>
-              <Show when={reach.data && (reach.data.interfaces ?? []).length > 0} fallback={<p class="text-base-content/60">No interface declared yet, so nothing collects from this component.</p>}>
+              <Show when={reach.data && (reach.data.endpoints ?? []).length > 0} fallback={<p class="text-base-content/60">No interface declared yet, so nothing collects from this component.</p>}>
                 <ul class="flex flex-col gap-1">
-                  <For each={reach.data!.interfaces}>
+                  <For each={reach.data!.endpoints}>
                     {(iface) => {
                       const state = () => collectionState(iface, iface.node ? nodeByName().get(iface.node) : undefined);
                       return (
                         <li class="flex flex-wrap items-center gap-2 text-xs">
-                          <span class="font-medium">{iface.interface}</span>
+                          <span class="font-medium">{iface.endpoint}</span>
                           {/* The layer rungs, so device-versus-path reads at
                               a glance: ping answers the path, the port
                               answers the service. */}
@@ -377,7 +377,7 @@ export default function ComponentLeaf() {
                           <Show when={iface.verdict}>
                             <span class="text-base-content/50">last sample {ageWords(iface.verdict!.ts)}</span>
                           </Show>
-                          <span data-testid={`collection-${iface.interface}`} class="rounded border border-base-content/20 px-1.5 py-0.5">
+                          <span data-testid={`collection-${iface.endpoint}`} class="rounded border border-base-content/20 px-1.5 py-0.5">
                             {
                               {
                                 collecting: "collecting",
@@ -403,7 +403,7 @@ export default function ComponentLeaf() {
       </Show>
       </Show>
     </Page>
-    <BladeStack controller={blades} registry={{ ...fleetRegistry, "property-resolution": propertyResolutionBlade, interface: interfaceBlade, "interface-create": interfaceCreateBlade }} />
+    <BladeStack controller={blades} registry={{ ...fleetRegistry, "property-resolution": propertyResolutionBlade, endpoint: endpointBlade, "endpoint-create": endpointCreateBlade }} />
     </BladesContext.Provider>
   );
 }

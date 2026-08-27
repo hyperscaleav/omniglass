@@ -50,9 +50,9 @@ const iso = (secondsAgo: number) => new Date(now - secondsAgo * 1000).toISOStrin
 
 const reach: Reachability = {
   component: "videobar-1",
-  interfaces: [
+  endpoints: [
     // A stale sample: last verdict long ago, but the node below is alive.
-    { interface: "ssh", interface_type: "ssh", node: "edge-1", verdict: { value: "up", ts: iso(600) }, layers: [
+    { endpoint: "ssh", transport: "ssh", node: "edge-1", verdict: { value: "up", ts: iso(600) }, layers: [
       { layer: "ping", check: "icmp-reachable", value: 1, ts: iso(600) },
       { layer: "port", check: "tcp-open", value: 1, ts: iso(600) },
     ], history: [] },
@@ -228,7 +228,7 @@ describe("interfaces live on the leaf configure (#800)", () => {
     const add = await within(face).findByRole("button", { name: /add interface/i });
     fireEvent.click(add);
     const blade = await screen.findByRole("dialog");
-    expect(blade.getAttribute("aria-labelledby")).toContain("interface-create");
+    expect(blade.getAttribute("aria-labelledby")).toContain("endpoint-create");
   });
 });
 

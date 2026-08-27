@@ -3,7 +3,7 @@ import { render, fireEvent, screen } from "@solidjs/testing-library";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import ReachabilityPanel from "./ReachabilityPanel";
 import { REACHABILITY_KEY, type Reachability } from "../lib/reachability";
-import { INTERFACES_KEY, type Interface } from "../lib/interfaces";
+import { ENDPOINTS_KEY, type Endpoint } from "../lib/endpoints";
 import { uuidFor } from "../lib/testids";
 
 // The panel is read-only and derives verdict/strip/reason client-side from the
@@ -13,11 +13,11 @@ const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
 const seed: Reachability = {
   component: "disp-1",
-  interfaces: [
+  endpoints: [
     {
-      interface: "disp-1-tcp",
-      interface_type: "tcp",
-      endpoint: "10.20.4.11:5000",
+      endpoint: "disp-1-tcp",
+      transport: "tcp",
+      address: "10.20.4.11:5000",
       node: "node-a",
       verdict: { value: "up", ts: nowIso },
       layers: [
@@ -27,9 +27,9 @@ const seed: Reachability = {
       history: [{ ts: ago(120_000), value: "up" }],
     },
     {
-      interface: "disp-1-icmp",
-      interface_type: "icmp",
-      endpoint: "10.20.4.11",
+      endpoint: "disp-1-icmp",
+      transport: "icmp",
+      address: "10.20.4.11",
       node: "node-a",
       verdict: { value: "down", ts: nowIso },
       layers: [
@@ -86,9 +86,9 @@ describe("ReachabilityPanel", () => {
   it("derives stale and unknown verdicts client-side", () => {
     const stale: Reachability = {
       component: "c2",
-      interfaces: [
-        { interface: "i-stale", interface_type: "tcp", verdict: { value: "up", ts: ago(600_000) }, layers: [], history: [] },
-        { interface: "i-unknown", interface_type: "tcp", verdict: null, layers: [], history: [] },
+      endpoints: [
+        { endpoint: "i-stale", transport: "tcp", verdict: { value: "up", ts: ago(600_000) }, layers: [], history: [] },
+        { endpoint: "i-unknown", transport: "tcp", verdict: null, layers: [], history: [] },
       ],
     };
     const { getByText } = mount(stale);
@@ -97,7 +97,7 @@ describe("ReachabilityPanel", () => {
   });
 
   it("shows the empty state when a component has no interfaces", () => {
-    const { getByText } = mount({ component: "c3", interfaces: [] });
+    const { getByText } = mount({ component: "c3", endpoints: [] });
     expect(getByText(/no interfaces on this component/i)).toBeTruthy();
   });
 });
@@ -110,18 +110,18 @@ describe("ReachabilityPanel", () => {
 // component's uuid now (two components can share a name, ADR-0062), so the
 // interfaces list is matched on component_id, not the component name.
 const compId = uuidFor("comp-disp-1");
-const ifaceSeed: Interface[] = [
-  { id: uuidFor("if-1"), name: "disp-1-tcp", interface_type: "tcp", component: "disp-1", component_id: compId },
-  { id: uuidFor("if-2"), name: "disp-1-icmp", interface_type: "icmp", component: "disp-1", component_id: compId },
+const ifaceSeed: Endpoint[] = [
+  { id: uuidFor("if-1"), name: "disp-1-tcp", transport: "tcp", component: "disp-1", component_id: compId },
+  { id: uuidFor("if-2"), name: "disp-1-icmp", transport: "icmp", component: "disp-1", component_id: compId },
 ];
 
-function mountManaged(opts: { onAdd?: () => void; onOpenInterface?: (id: string) => void }) {
+function mountManaged(opts: { onAdd?: () => void; onOpenEndpoint?: (id: string) => void }) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...REACHABILITY_KEY(compId)], seed);
-  qc.setQueryData([...INTERFACES_KEY], ifaceSeed);
+  qc.setQueryData([...ENDPOINTS_KEY], ifaceSeed);
   return render(() => (
     <QueryClientProvider client={qc}>
-      <ReachabilityPanel name={compId} onAdd={opts.onAdd} onOpenInterface={opts.onOpenInterface} />
+      <ReachabilityPanel name={compId} onAdd={opts.onAdd} onOpenEndpoint={opts.onOpenEndpoint} />
     </QueryClientProvider>
   ));
 }
@@ -139,13 +139,13 @@ describe("ReachabilityPanel management affordances", () => {
 
   it("surfaces a per-row Manage affordance that opens the interface by id", () => {
     const opened: string[] = [];
-    mountManaged({ onOpenInterface: (id) => opened.push(id) });
+    mountManaged({ onOpenEndpoint: (id) => opened.push(id) });
     // No Manage affordance without the callback.
     fireEvent.click(screen.getByLabelText("Manage disp-1-tcp"));
     expect(opened).toEqual([uuidFor("if-1")]);
   });
 
-  it("omits the Manage affordance when onOpenInterface is absent", () => {
+  it("omits the Manage affordance when onOpenEndpoint is absent", () => {
     mountManaged({});
     expect(screen.queryByLabelText("Manage disp-1-tcp")).toBeNull();
   });
@@ -158,9 +158,9 @@ describe("ReachabilityPanel management affordances", () => {
 describe("ReachabilityPanel identity", () => {
   const twoOfAKind: Reachability = {
     component: "codec-1",
-    interfaces: [
-      { interface: "ssh", label: "Control processor", interface_type: "ssh", endpoint: "10.0.0.9:22", node: "node-a", verdict: null, layers: [], history: [] },
-      { interface: "ssh", interface_type: "ssh", endpoint: "10.0.0.10:22", node: "node-a", verdict: null, layers: [], history: [] },
+    endpoints: [
+      { endpoint: "ssh", label: "Control processor", transport: "ssh", address: "10.0.0.9:22", node: "node-a", verdict: null, layers: [], history: [] },
+      { endpoint: "ssh", transport: "ssh", address: "10.0.0.10:22", node: "node-a", verdict: null, layers: [], history: [] },
     ],
   };
 

@@ -5,7 +5,7 @@ import Button from "./Button";
 import StateStrip from "./StateStrip";
 import { rel } from "../lib/format";
 import { entityLabel } from "../lib/entities";
-import { INTERFACES_KEY, listInterfaces } from "../lib/interfaces";
+import { ENDPOINTS_KEY, listEndpoints } from "../lib/endpoints";
 import {
   REACHABILITY_KEY,
   getReachability,
@@ -14,7 +14,7 @@ import {
   uptime,
   reason,
   layerWord,
-  type ReachInterface,
+  type ReachEndpoint,
   type VerdictWord,
 } from "../lib/reachability";
 
@@ -46,7 +46,7 @@ function segClass(value: string): string {
 // AvailabilityStrip renders the up/down segments as flex weights, with an uptime
 // hint. A single-value strip (or none) still reads correctly. The bar itself is the
 // shared StateStrip primitive, the same one the health history draws.
-function AvailabilityStrip(p: { iface: ReachInterface }) {
+function AvailabilityStrip(p: { iface: ReachEndpoint }) {
   const now = Date.now();
   const segs = createMemo(() => segments(p.iface.history, p.iface.verdict, now));
   const up = createMemo(() => uptime(p.iface.history, p.iface.verdict, now));
@@ -62,7 +62,7 @@ function AvailabilityStrip(p: { iface: ReachInterface }) {
 // GateBreakdown lists one line per probe layer (dot + word + timing detail) and
 // the "why" reason line for a down interface. It is the pedagogical payoff: the
 // verdict is the AND of the layers, shown as the layers.
-function GateBreakdown(p: { iface: ReachInterface }) {
+function GateBreakdown(p: { iface: ReachEndpoint }) {
   const now = Date.now();
   const why = createMemo(() => reason(p.iface, now));
   const verdictOk = createMemo(() => p.iface.verdict?.value === "up");
@@ -96,7 +96,7 @@ function GateBreakdown(p: { iface: ReachInterface }) {
   );
 }
 
-function InterfaceRow(p: { iface: ReachInterface; manageId?: string; onManage?: (id: string) => void }) {
+function EndpointRow(p: { iface: ReachEndpoint; manageId?: string; onManage?: (id: string) => void }) {
   const [open, setOpen] = createSignal(false);
   const word = createMemo(() => verdictWord(p.iface.verdict));
   const pill = createMemo(() => PILL[word()]);
@@ -113,12 +113,12 @@ function InterfaceRow(p: { iface: ReachInterface; manageId?: string; onManage?: 
           <span class={`shrink-0 text-base-content/40 transition-transform ${open() ? "rotate-90" : ""}`}><ChevronRight size={14} /></span>
           <div class="flex w-52 shrink-0 flex-col gap-0.5">
             {/* The label over the derived name, through the one renderer. This
-                panel is where two interfaces of one protocol sit beside each
+                panel is where two endpoints of one transport sit beside each
                 other, so it is where the label earns its place (#613). */}
-            <span class="truncate text-sm">{entityLabel({ name: p.iface.interface, label: p.iface.label })}</span>
+            <span class="truncate text-sm">{entityLabel({ name: p.iface.endpoint, label: p.iface.label })}</span>
             <span class="truncate font-data text-[11px] text-base-content/50">
-              {p.iface.interface_type}
-              <Show when={p.iface.endpoint}> · {p.iface.endpoint}</Show>
+              {p.iface.transport}
+              <Show when={p.iface.address}> · {p.iface.address}</Show>
             </span>
           </div>
           <div class="min-w-0 flex-1">
@@ -131,7 +131,7 @@ function InterfaceRow(p: { iface: ReachInterface; manageId?: string; onManage?: 
             type="button"
             class="flex shrink-0 items-center px-2.5 text-base-content/40 hover:bg-base-content/5 hover:text-base-content"
             title="Manage interface"
-            aria-label={`Manage ${entityLabel({ name: p.iface.interface, label: p.iface.label })}`}
+            aria-label={`Manage ${entityLabel({ name: p.iface.endpoint, label: p.iface.label })}`}
             onClick={() => p.onManage!(p.manageId!)}
           >
             <Sliders size={15} />
@@ -163,16 +163,16 @@ export default function ReachabilityPanel(p: {
   onAdd?: () => void;
   // Present -> each row that maps to a known interface shows "Manage", opening that
   // interface's detail blade by id (the caller gates on interface:read).
-  onOpenInterface?: (id: string) => void;
+  onOpenEndpoint?: (id: string) => void;
 }) {
   const q = useQuery(() => ({ queryKey: REACHABILITY_KEY(p.name), queryFn: () => getReachability(p.name) }));
-  const ifaces = createMemo(() => q.data?.interfaces ?? []);
+  const ifaces = createMemo(() => q.data?.endpoints ?? []);
   // Only load the interface list when the caller can open interface details; map an
   // interface's name (the reachability row key) to its surrogate id so a row can
   // open its detail blade. Matched by component_id, not the component name
   // (#627): p.name is now the component's own uuid, and two components can
   // legally share a name, so a name match could pull in a sibling's rows.
-  const interfaces = useQuery(() => ({ queryKey: INTERFACES_KEY, queryFn: () => listInterfaces(), enabled: !!p.onOpenInterface }));
+  const interfaces = useQuery(() => ({ queryKey: ENDPOINTS_KEY, queryFn: () => listEndpoints(), enabled: !!p.onOpenEndpoint }));
   const idByName = createMemo(() => {
     const m = new Map<string, string>();
     for (const it of interfaces.data ?? []) if (it.component_id === p.name) m.set(it.name, it.id);
@@ -181,7 +181,7 @@ export default function ReachabilityPanel(p: {
   return (
     <div class="flex flex-col gap-1.5">
       <div class="flex items-center gap-2">
-        <span class="eyebrow">Interfaces</span>
+        <span class="eyebrow">Endpoints</span>
         <Show when={ifaces().length}>
           <span class="text-[11px] text-base-content/40">
             {ifaces().length} interface{ifaces().length === 1 ? "" : "s"}
@@ -203,7 +203,7 @@ export default function ReachabilityPanel(p: {
         }
       >
         <div class="divide-y divide-base-300 overflow-hidden rounded-box border border-base-300">
-          <For each={ifaces()}>{(iface) => <InterfaceRow iface={iface} manageId={idByName().get(iface.interface)} onManage={p.onOpenInterface} />}</For>
+          <For each={ifaces()}>{(iface) => <EndpointRow iface={iface} manageId={idByName().get(iface.endpoint)} onManage={p.onOpenEndpoint} />}</For>
         </div>
       </Show>
     </div>
