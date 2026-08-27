@@ -241,31 +241,11 @@ func loadDriverRef(ctx context.Context, q querier, ref string) (*Driver, error) 
 	return d, nil
 }
 
-// bakedEmit is a spec emit with its lane resolved: attach bakes the lane so
-// the node never does a runtime catalog lookup (the compile step of the
-// authoring model).
-type bakedEmit struct {
-	Name      string            `json:"name"`
-	Lane      string            `json:"lane"`
-	Extract   driver.Extract    `json:"extract"`
-	Transform *driver.Transform `json:"transform,omitempty"`
-}
-
-// bakedFunction is one derived task's spec: the driver function carried whole,
-// emit lanes resolved.
-type bakedFunction struct {
-	Driver   string           `json:"driver"`
-	Version  string           `json:"version,omitempty"`
-	Function string           `json:"function"`
-	Schedule *driver.Schedule `json:"schedule,omitempty"`
-	Request  *driver.Request  `json:"request,omitempty"`
-	Arm      []string         `json:"arm,omitempty"`
-	Match    *driver.Match    `json:"match,omitempty"`
-	Emits    []bakedEmit      `json:"emits"`
-}
-
-func bakeEmits(emits []driver.Emit, cat catalogMaps) ([]bakedEmit, error) {
-	out := make([]bakedEmit, 0, len(emits))
+// bakeEmits resolves each emit's lane (the compile step of the authoring
+// model, ADR-0135) into the shared runtime unit the node parses back
+// (driver.BakedEmit), so the two sides can never drift on the shape.
+func bakeEmits(emits []driver.Emit, cat catalogMaps) ([]driver.BakedEmit, error) {
+	out := make([]driver.BakedEmit, 0, len(emits))
 	for _, em := range emits {
 		lane, ok := cat.LaneOf(em.Name)
 		if !ok {
@@ -273,7 +253,7 @@ func bakeEmits(emits []driver.Emit, cat catalogMaps) ([]bakedEmit, error) {
 			// path here, and refusing names it.
 			return nil, fmt.Errorf("%w: emitted name %q is no longer in any catalog", ErrAttachInvalid, em.Name)
 		}
-		out = append(out, bakedEmit{Name: em.Name, Lane: lane, Extract: em.Extract, Transform: em.Transform})
+		out = append(out, driver.BakedEmit{Name: em.Name, Lane: lane, Extract: em.Extract, Transform: em.Transform})
 	}
 	return out, nil
 }
@@ -303,7 +283,7 @@ func deriveDriverTasks(ctx context.Context, tx pgx.Tx, endpointID string, plan *
 			return err
 		}
 		sched, req := p.Schedule, p.Request
-		if err := insert("poll", bakedFunction{
+		if err := insert("poll", driver.BakedFunction{
 			Driver: plan.driver.Name, Version: plan.driver.Version, Function: p.Name,
 			Schedule: &sched, Request: &req, Emits: emits,
 		}); err != nil {
@@ -316,7 +296,7 @@ func deriveDriverTasks(ctx context.Context, tx pgx.Tx, endpointID string, plan *
 			return err
 		}
 		match := l.Match
-		if err := insert("listen", bakedFunction{
+		if err := insert("listen", driver.BakedFunction{
 			Driver: plan.driver.Name, Version: plan.driver.Version, Function: l.Name,
 			Arm: l.Arm, Match: &match, Emits: emits,
 		}); err != nil {
