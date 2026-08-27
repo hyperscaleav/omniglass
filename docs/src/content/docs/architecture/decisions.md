@@ -173,6 +173,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0132](#adr-0132-configure-is-the-one-deep-editor) | 2026-08-25 | Accepted | Every fleet workspace carries a Configure tab as the ONE deep editor; the blade stays a quick face whose rows jump into it; `?edit=1` retargets to Configure and the classic detail face retires with an explicit miss face (#800, diverging deliberately from ADR-0129's edit-in-blade target) |
 | [ADR-0133](#adr-0133-a-select-over-a-loaded-collection-binds-through-a-ref-not-a-value-prop) | 2026-08-27 | Accepted | A `<select>` whose options come from a collection the server answers for takes its value from `bindSelectValue(value, ...options)` (`web/src/lib/selectvalue.ts`) used as the element's `ref`, never from a `value=` prop: the control keeps no value it has no option for, and a value binding does not re-run when the OPTIONS are what arrived. Thirteen controls convert, the workspace Configure face's four among them. Two shapes stay on `value=` and the exemption is deliberate: a hard-coded or generated option list has no async gap, and a control whose value starts empty and only moves because the operator moved it has nothing stored to lose |
 | [ADR-0134](#adr-0134-the-entity-an-api-is-reached-through-is-an-endpoint) | 2026-08-28 | Accepted | The entity formerly named `interface` renames to `endpoint` end to end (table, routes, `endpoint:*` permission nouns, console, docs, the `endpoint-reachable` datapoint renamed in place), executing #603's naming ruling as ADR-0073's transports-become-code lands: `service` was disqualified by the existing service-principal table, `api` by the platform's own API vocabulary, and `endpoint` is the word the design already used for this thing's address, which becomes `address` so the schema never reads `endpoint.endpoint` |
+| [ADR-0135](#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it) | 2026-08-28 | Accepted | A driver's body is a versioned declarative spec (jsonb on the driver row, validated against the catalogs at every write): one transport, typed inputs with secret references, and three function families (polls, listeners, command bindings). Attach derives the endpoint and its tasks from the spec, emit lanes baked at attach; a listener's arm conversation is session plumbing, never recorded command rows |
 
 ## Entries
 
@@ -6193,3 +6194,33 @@ interface create form, since that name is the platform's to mint.
   for when describing this entity's address, is observability-native (a scrape endpoint, a
   monitoring endpoint) and network-native (the SSH endpoint on a host), and composes cleanly
   (`endpoint:*`, `/endpoints`, `endpoint-reachable`).
+
+### ADR-0135: A driver's spec is data, one engine interprets it
+
+- **Date:** 2026-08-28 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/),
+  [glossary](/architecture/glossary/)
+- **Decision:** A driver's body is a **versioned declarative spec** (`jsonb` on the driver row,
+  `version: 1`, parsed strictly so an unknown field refuses rather than projects) interpreted by
+  one generic engine, never per-driver code: the one transport it rides, typed inputs (`string`,
+  `number`, `secret` with a `secret_type`, supplied as a reference name and resolved at attach),
+  and three function families: poll functions (schedule, transport-shaped request, per-emit
+  extraction with declared transforms: cast, scale, enum map), listeners (an `arm` conversation,
+  a match rule, the same extraction), and command bindings (how a `command_type` actuates). Each
+  emit names its sample in a lane catalog (the ADR-0065 vocabulary: the name is the signal, what
+  lands is a sample). The
+  spec validates against the live catalogs at **every write** (create, update, boot seed; the seed
+  now installs secret types before drivers so a first boot validates cleanly), so an
+  uninterpretable spec refuses at authoring time with the fault named. **Attach derives, never
+  authors**: an endpoint created with a driver reference takes its transport and params from the
+  spec, and its tasks derive in the same transaction (a poll task per poll function, a standing
+  listen task per listener), each task carrying its function whole with **emit lanes baked at
+  attach**, so the node never consults a catalog at runtime. A listener's `arm` lines are session
+  **plumbing** re-sent on every recover (ruling 3 on #603), never recorded command rows: the
+  command lane records operator intent with settlement semantics, and machine chatter would flood
+  it.
+- **Context:** #813 (epic #603): the driver registry rows existed with no body, and the epic's
+  produce path needs the menu before the interpreter. Data-not-code keeps every driver inspectable
+  and diffable, keeps validation one function rather than a plugin ABI, and matches the template
+  authoring model (#489) this layer will slot under. The lane bake executes the authoring model's
+  compile step at the earliest point it exists; transforms stay declared data operations so the
+  expression engine (#524) is not a dependency of the collection path.

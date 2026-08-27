@@ -1,4 +1,4 @@
-import { For, Show, createSignal, type JSX } from "solid-js";
+import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { Sliders } from "./icons";
 import KVStacked from "./KVStacked";
@@ -16,6 +16,7 @@ import {
   endpointTarget,
 } from "../lib/endpoints";
 import { REACHABILITY_KEY } from "../lib/reachability";
+import { DRIVERS_KEY, listDrivers, type Driver } from "../lib/drivers";
 import { COMPONENTS_KEY, listComponents } from "../lib/components";
 import { NODES_KEY, listNodes } from "../lib/nodes";
 import { bindSelectValue } from "../lib/selectvalue";
@@ -183,6 +184,9 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
                 <KVStacked label="Component" value={iface().component ? <span class="font-data">{iface().component}</span> : <span class="text-base-content/40">server-hosted</span>} />
                 <KVStacked label="Node" value={iface().node ? <span class="font-data">{iface().node}</span> : <span class="text-base-content/40">unassigned</span>} />
                 <KVStacked label="Target" value={endpointTarget(iface()) ? <span class="font-data">{endpointTarget(iface())}</span> : <span class="text-base-content/40">not set</span>} />
+                <Show when={iface().driver}>
+                  <KVStacked label="Driver" value={<span class="font-data">{iface().driver}</span>} />
+                </Show>
               </div>
             }
           >
@@ -255,6 +259,14 @@ function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; component
   // a check no node can run yet.
   const transports = useQuery(() => ({ queryKey: TRANSPORTS_KEY, queryFn: listTransports }));
   const builtTransports = () => (transports.data ?? []).filter((t) => t.built);
+  // The attachable drivers: the registry rows that carry a spec (#813). A
+  // stub cannot be attached, so the picker never offers one.
+  const drivers = useQuery(() => ({ queryKey: DRIVERS_KEY, queryFn: listDrivers }));
+  const attachable = () => (drivers.data ?? []).filter((d) => !!d.spec);
+  const [mode, setMode] = createSignal<"attach" | "probe">("probe");
+  const [driverName, setDriverName] = createSignal("");
+  const [inputs, setInputs] = createSignal<Record<string, string>>({});
+  const chosenDriver = createMemo<Driver | undefined>(() => attachable().find((d) => d.name === driverName()));
   const [type, setType] = createSignal<string>("icmp");
   const [label, setLabel] = createSignal("");
   const [component, setComponent] = createSignal(props.component ?? "");
@@ -269,20 +281,38 @@ function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; component
   // Cancel, because a blade already has two ways out (the header close and Back)
   // and every other blade in the stack reads the same.
   useBladeEdit().bind({
-    primary: () => ({ label: "Create endpoint", onClick: () => void submit(), busy }),
+    primary: () => ({
+      label: mode() === "attach" ? "Attach driver" : "Create endpoint",
+      onClick: () => void submit(),
+      busy,
+      disabled: () => mode() === "attach" && !driverName(),
+    }),
   });
 
   async function submit() {
     setBusy(true);
     setErr(null);
     try {
-      const created = await createEndpoint({
-        transport: type(),
-        label: label().trim() || undefined,
-        component: component() || undefined,
-        node: node() || undefined,
-        params: target().trim() ? { target: target().trim() } : undefined,
-      });
+      const supplied = Object.fromEntries(
+        Object.entries(inputs()).map(([k, v]) => [k, v.trim()]).filter(([, v]) => v !== ""),
+      );
+      const created = await createEndpoint(
+        mode() === "attach"
+          ? {
+              driver: driverName(),
+              inputs: supplied,
+              label: label().trim() || undefined,
+              component: component() || undefined,
+              node: node() || undefined,
+            }
+          : {
+              transport: type(),
+              label: label().trim() || undefined,
+              component: component() || undefined,
+              node: node() || undefined,
+              params: target().trim() ? { target: target().trim() } : undefined,
+            },
+      );
       await qc.invalidateQueries({ queryKey: ENDPOINTS_KEY });
       props.onCreated(created);
     } catch (er) {
@@ -302,15 +332,61 @@ function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; component
         <label class="eyebrow mb-1.5 block" for="new-iface-label">Label</label>
         <input id="new-iface-label" autocomplete="off" class="input input-bordered w-full" value={label()} placeholder="Control processor" onInput={(e) => setLabel(e.currentTarget.value)} disabled={busy()} />
       </div>
-      <div>
-        <label class="eyebrow mb-1.5 block" for="new-iface-type">Transport</label>
-        {/* The registry answers after the blade opens, and a <select> keeps no
-            value it has no option for, so the control takes its value through
-            the shared binder (lib/selectvalue.ts, ADR-0133). */}
-        <select id="new-iface-type" ref={bindSelectValue(type, builtTransports)} class="select select-bordered w-full" onChange={(e) => setType(e.currentTarget.value)} disabled={busy()}>
-          <For each={builtTransports()}>{(t) => <option value={t.name}>{t.name}</option>}</For>
-        </select>
+      <div role="tablist" class="tabs tabs-border tabs-sm">
+        {/* Probe first: it is what exists end to end today. Attach derives the
+            endpoint from a driver's spec (#813); its collection engine lands
+            with the following slices. */}
+        <button type="button" role="tab" class="tab" classList={{ "tab-active": mode() === "probe" }} onClick={() => setMode("probe")}>Probe</button>
+        <button type="button" role="tab" class="tab" classList={{ "tab-active": mode() === "attach" }} onClick={() => setMode("attach")}>Attach a driver</button>
       </div>
+      <Show when={mode() === "probe"}>
+        <div>
+          <label class="eyebrow mb-1.5 block" for="new-iface-type">Transport</label>
+          {/* The registry answers after the blade opens, and a <select> keeps no
+              value it has no option for, so the control takes its value through
+              the shared binder (lib/selectvalue.ts, ADR-0133). */}
+          <select id="new-iface-type" ref={bindSelectValue(type, builtTransports)} class="select select-bordered w-full" onChange={(e) => setType(e.currentTarget.value)} disabled={busy()}>
+            <For each={builtTransports()}>{(t) => <option value={t.name}>{t.name}</option>}</For>
+          </select>
+        </div>
+      </Show>
+      <Show when={mode() === "attach"}>
+        <div>
+          <label class="eyebrow mb-1.5 block" for="new-iface-driver">Driver</label>
+          {/* Same async-select rule as the transport picker (ADR-0133). */}
+          <select id="new-iface-driver" ref={bindSelectValue(driverName, attachable)} class="select select-bordered w-full" onChange={(e) => { setDriverName(e.currentTarget.value); setInputs({}); }} disabled={busy()}>
+            <option value="">Pick a driver…</option>
+            <For each={attachable()}>{(d) => <option value={d.name}>{entityLabel(d)}</option>}</For>
+          </select>
+          <p class="mt-1 text-[11px] text-base-content/40">The spec derives the transport and the endpoint's tasks; you supply only its inputs.</p>
+        </div>
+        <Show when={chosenDriver()}>
+          {(d) => (
+            <For each={d().spec?.inputs ?? []}>
+              {(input) => (
+                <div>
+                  <label class="eyebrow mb-1.5 block" for={`new-iface-input-${input.name}`}>
+                    {input.name}
+                    <Show when={!input.required}><span class="ml-1 normal-case text-base-content/40">optional</span></Show>
+                  </label>
+                  <input
+                    id={`new-iface-input-${input.name}`}
+                    autocomplete="off"
+                    class="input input-bordered w-full font-data"
+                    value={inputs()[input.name] ?? ""}
+                    placeholder={input.default || (input.kind === "secret" ? `a ${input.secret_type} secret's name` : input.name)}
+                    onInput={(e) => setInputs({ ...inputs(), [input.name]: e.currentTarget.value })}
+                    disabled={busy()}
+                  />
+                  <Show when={input.kind === "secret"}>
+                    <p class="mt-1 text-[11px] text-base-content/40">A secret reference: the name of a {input.secret_type} secret, never the value itself.</p>
+                  </Show>
+                </div>
+              )}
+            </For>
+          )}
+        </Show>
+      </Show>
       <Show
         when={props.component}
         fallback={
@@ -332,11 +408,13 @@ function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; component
         <label class="eyebrow mb-1.5 block" for="new-iface-node">Node</label>
         <NodeSelect id="new-iface-node" value={node()} onChange={setNode} disabled={busy()} />
       </div>
-      <div>
-        <label class="eyebrow mb-1.5 block" for="new-iface-target">Target</label>
-        <input id="new-iface-target" autocomplete="off" class="input input-bordered w-full font-data" value={target()} placeholder="10.0.0.1:22" onInput={(e) => setTarget(e.currentTarget.value)} disabled={busy()} />
-        <p class="mt-1 text-[11px] text-base-content/40">host:port for tcp, host for icmp.</p>
-      </div>
+      <Show when={mode() === "probe"}>
+        <div>
+          <label class="eyebrow mb-1.5 block" for="new-iface-target">Target</label>
+          <input id="new-iface-target" autocomplete="off" class="input input-bordered w-full font-data" value={target()} placeholder="10.0.0.1:22" onInput={(e) => setTarget(e.currentTarget.value)} disabled={busy()} />
+          <p class="mt-1 text-[11px] text-base-content/40">host:port for tcp, host for icmp.</p>
+        </div>
+      </Show>
     </form>
   );
 }

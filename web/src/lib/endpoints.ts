@@ -24,6 +24,12 @@ export type Endpoint = {
   component_id?: string;
   node?: string;
   params?: EndpointParams;
+  // Set when the endpoint was authored by a driver attach (#813): the driver's
+  // name and uuid, and the effective inputs supplied at attach (secret inputs
+  // are reference names, never values).
+  driver?: string;
+  driver_id?: string;
+  inputs?: Record<string, string>;
 };
 
 export const ENDPOINTS_KEY = ["endpoints"] as const;
@@ -68,11 +74,16 @@ export async function getEndpoint(id: string): Promise<Endpoint> {
 // that is the point: the label is the only identity string an operator types
 // here, so it has to be settable at create rather than on a following patch (#613).
 export type CreateEndpoint = {
-  transport: string;
+  // Exactly one of transport (a bare probe endpoint) or driver (an attach).
+  transport?: string;
   label?: string;
   component?: string;
   node?: string;
   params?: EndpointParams;
+  // Attach: the driver (by name) whose spec derives the transport, params, and
+  // tasks, and the inputs its spec declares.
+  driver?: string;
+  inputs?: Record<string, string>;
 };
 
 export async function createEndpoint(body: CreateEndpoint): Promise<Endpoint> {

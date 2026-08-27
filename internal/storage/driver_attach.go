@@ -30,7 +30,7 @@ type catalogMaps struct {
 	secrets  map[string]bool
 }
 
-func (c catalogMaps) DatapointLane(name string) (string, bool) {
+func (c catalogMaps) LaneOf(name string) (string, bool) {
 	lane, ok := c.lanes[name]
 	return lane, ok
 }
@@ -38,7 +38,7 @@ func (c catalogMaps) CommandTypeExists(name string) bool { return c.commands[nam
 func (c catalogMaps) SecretTypeExists(name string) bool  { return c.secrets[name] }
 
 // loadDriverCatalog snapshots the names a spec may reference: the metric and
-// property catalogs as datapoint lanes, the command types, the secret types.
+// property catalogs as emit lanes, the command types, the secret types.
 func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
 	cat := catalogMaps{
 		lanes:    map[string]string{},
@@ -50,13 +50,13 @@ func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
 		union all
 		select name, 'property' from property_type`)
 	if err != nil {
-		return cat, fmt.Errorf("storage: load datapoint catalogs: %w", err)
+		return cat, fmt.Errorf("storage: load emit catalogs: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var name, lane string
 		if err := rows.Scan(&name, &lane); err != nil {
-			return cat, fmt.Errorf("storage: scan datapoint catalog: %w", err)
+			return cat, fmt.Errorf("storage: scan emit catalog: %w", err)
 		}
 		// The canon test keeps the lanes disjoint; first write wins if a
 		// stranger ever collides, and validation still resolves.
@@ -65,7 +65,7 @@ func loadDriverCatalog(ctx context.Context, q querier) (catalogMaps, error) {
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return cat, fmt.Errorf("storage: read datapoint catalogs: %w", err)
+		return cat, fmt.Errorf("storage: read emit catalogs: %w", err)
 	}
 	for col, into := range map[string]map[string]bool{"command_type": cat.commands, "secret_type": cat.secrets} {
 		rows, err := q.Query(ctx, `select name from `+col)
@@ -241,10 +241,10 @@ func loadDriverRef(ctx context.Context, q querier, ref string) (*Driver, error) 
 	return d, nil
 }
 
-// bakedDatapoint is a spec datapoint with its lane resolved: attach bakes the
-// lane so the node never does a runtime catalog lookup (the compile step of
-// the authoring model).
-type bakedDatapoint struct {
+// bakedEmit is a spec emit with its lane resolved: attach bakes the lane so
+// the node never does a runtime catalog lookup (the compile step of the
+// authoring model).
+type bakedEmit struct {
 	Name      string            `json:"name"`
 	Lane      string            `json:"lane"`
 	Extract   driver.Extract    `json:"extract"`
@@ -252,28 +252,28 @@ type bakedDatapoint struct {
 }
 
 // bakedFunction is one derived task's spec: the driver function carried whole,
-// datapoint lanes resolved.
+// emit lanes resolved.
 type bakedFunction struct {
-	Driver     string           `json:"driver"`
-	Version    string           `json:"version,omitempty"`
-	Function   string           `json:"function"`
-	Schedule   *driver.Schedule `json:"schedule,omitempty"`
-	Request    *driver.Request  `json:"request,omitempty"`
-	Arm        []string         `json:"arm,omitempty"`
-	Match      *driver.Match    `json:"match,omitempty"`
-	Datapoints []bakedDatapoint `json:"datapoints"`
+	Driver   string           `json:"driver"`
+	Version  string           `json:"version,omitempty"`
+	Function string           `json:"function"`
+	Schedule *driver.Schedule `json:"schedule,omitempty"`
+	Request  *driver.Request  `json:"request,omitempty"`
+	Arm      []string         `json:"arm,omitempty"`
+	Match    *driver.Match    `json:"match,omitempty"`
+	Emits    []bakedEmit      `json:"emits"`
 }
 
-func bakeDatapoints(dps []driver.Datapoint, cat catalogMaps) ([]bakedDatapoint, error) {
-	out := make([]bakedDatapoint, 0, len(dps))
-	for _, dp := range dps {
-		lane, ok := cat.DatapointLane(dp.Name)
+func bakeEmits(emits []driver.Emit, cat catalogMaps) ([]bakedEmit, error) {
+	out := make([]bakedEmit, 0, len(emits))
+	for _, em := range emits {
+		lane, ok := cat.LaneOf(em.Name)
 		if !ok {
 			// Validated at spec write; a catalog row deleted since is the one
 			// path here, and refusing names it.
-			return nil, fmt.Errorf("%w: datapoint %q is no longer in any catalog", ErrAttachInvalid, dp.Name)
+			return nil, fmt.Errorf("%w: emitted name %q is no longer in any catalog", ErrAttachInvalid, em.Name)
 		}
-		out = append(out, bakedDatapoint{Name: dp.Name, Lane: lane, Extract: dp.Extract, Transform: dp.Transform})
+		out = append(out, bakedEmit{Name: em.Name, Lane: lane, Extract: em.Extract, Transform: em.Transform})
 	}
 	return out, nil
 }
@@ -298,27 +298,27 @@ func deriveDriverTasks(ctx context.Context, tx pgx.Tx, endpointID string, plan *
 		return nil
 	}
 	for _, p := range plan.spec.Polls {
-		dps, err := bakeDatapoints(p.Datapoints, plan.catalog)
+		emits, err := bakeEmits(p.Emits, plan.catalog)
 		if err != nil {
 			return err
 		}
 		sched, req := p.Schedule, p.Request
 		if err := insert("poll", bakedFunction{
 			Driver: plan.driver.Name, Version: plan.driver.Version, Function: p.Name,
-			Schedule: &sched, Request: &req, Datapoints: dps,
+			Schedule: &sched, Request: &req, Emits: emits,
 		}); err != nil {
 			return err
 		}
 	}
 	for _, l := range plan.spec.Listeners {
-		dps, err := bakeDatapoints(l.Datapoints, plan.catalog)
+		emits, err := bakeEmits(l.Emits, plan.catalog)
 		if err != nil {
 			return err
 		}
 		match := l.Match
 		if err := insert("listen", bakedFunction{
 			Driver: plan.driver.Name, Version: plan.driver.Version, Function: l.Name,
-			Arm: l.Arm, Match: &match, Datapoints: dps,
+			Arm: l.Arm, Match: &match, Emits: emits,
 		}); err != nil {
 			return err
 		}

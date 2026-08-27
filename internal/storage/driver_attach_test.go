@@ -32,7 +32,7 @@ const lineProtoSpec = `{
 		"name": "status",
 		"schedule": {"every": "30s"},
 		"request": {"line": "GET STATUS"},
-		"datapoints": [
+		"emits": [
 			{"name": "video-input", "extract": {"regex": "^INPUT (\\S+)$"}}
 		]
 	}],
@@ -40,7 +40,7 @@ const lineProtoSpec = `{
 		"name": "events",
 		"arm": ["SUBSCRIBE EVENTS"],
 		"match": {"prefix": "EVT "},
-		"datapoints": [
+		"emits": [
 			{"name": "video-input", "extract": {"regex": "^EVT INPUT (\\S+)$"}}
 		]
 	}],
@@ -63,7 +63,7 @@ const snmpSpec = `{
 		"name": "scalars",
 		"schedule": {"every": "60s"},
 		"request": {"get": ["1.3.6.1.2.1.1.1.0", "1.3.6.1.2.1.1.3.0"]},
-		"datapoints": [
+		"emits": [
 			{"name": "model-number", "extract": {"oid": "1.3.6.1.2.1.1.1.0"}},
 			{"name": "uptime", "extract": {"oid": "1.3.6.1.2.1.1.3.0"}, "transform": {"scale": 0.01}}
 		]
@@ -84,11 +84,11 @@ func TestDriverSpecRefusesAtWrite(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	// An unregistered datapoint name refuses at write, naming the stranger.
+	// An unregistered emitted name refuses at write, naming the stranger.
 	bad := strings.Replace(lineProtoSpec, `"video-input"`, `"warp-factor"`, 1)
 	_, err = gw.CreateDriver(ctx, "", storage.Driver{Name: "bad-driver", Label: "Bad", Version: "1.0.0", Spec: []byte(bad)})
 	if err == nil || !strings.Contains(err.Error(), "warp-factor") {
-		t.Fatalf("unregistered datapoint at create: err = %v, want a refusal naming warp-factor", err)
+		t.Fatalf("unregistered emitted name at create: err = %v, want a refusal naming warp-factor", err)
 	}
 	if !errors.Is(err, storage.ErrSpecInvalid) {
 		t.Fatalf("refusal is not ErrSpecInvalid: %v", err)
@@ -183,8 +183,8 @@ func TestAttachDriverAuthorsTheEndpointAndDerivesTasks(t *testing.T) {
 	}
 
 	// Task derivation: the reachability probe plus one poll task per poll
-	// function, its spec baked (function, schedule, request, datapoints with
-	// their lanes resolved at attach, not at collection).
+	// function, its spec baked (function, schedule, request, emits with their
+	// lanes resolved at attach, not at collection).
 	tasks, err := gw.ListTasks(ctx, all)
 	if err != nil {
 		t.Fatalf("list tasks: %v", err)
@@ -204,10 +204,10 @@ func TestAttachDriverAuthorsTheEndpointAndDerivesTasks(t *testing.T) {
 		Schedule struct {
 			Every string `json:"every"`
 		} `json:"schedule"`
-		Datapoints []struct {
+		Emits []struct {
 			Name string `json:"name"`
 			Lane string `json:"lane"`
-		} `json:"datapoints"`
+		} `json:"emits"`
 	}
 	if err := json.Unmarshal(polls[0].Spec, &baked); err != nil {
 		t.Fatalf("baked spec: %v", err)
@@ -216,8 +216,8 @@ func TestAttachDriverAuthorsTheEndpointAndDerivesTasks(t *testing.T) {
 		t.Fatalf("baked = %+v, want the scalars function carried whole", baked)
 	}
 	lanes := map[string]string{}
-	for _, dp := range baked.Datapoints {
-		lanes[dp.Name] = dp.Lane
+	for _, em := range baked.Emits {
+		lanes[em.Name] = em.Lane
 	}
 	if lanes["uptime"] != "metric" || lanes["model-number"] != "property" {
 		t.Fatalf("baked lanes = %v, want uptime:metric model-number:property", lanes)

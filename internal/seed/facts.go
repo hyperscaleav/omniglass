@@ -128,6 +128,12 @@ type factsDriver struct {
 	ID      string `json:"id"`
 	Label   string `json:"label"`
 	Version string `json:"version,omitempty"`
+	// The spec summary (#813): the transport the spec rides and how many
+	// functions each family declares. All zero on a stub with no spec.
+	Transport string `json:"transport,omitempty"`
+	Polls     int    `json:"polls,omitempty"`
+	Listeners int    `json:"listeners,omitempty"`
+	Commands  int    `json:"commands,omitempty"`
 }
 
 type factsProductProperty struct {
@@ -345,7 +351,16 @@ func FactsJSON() ([]byte, error) {
 		return nil, fmt.Errorf("seed facts: drivers: %w", err)
 	}
 	for _, d := range ds.Drivers {
-		doc.Drivers = append(doc.Drivers, factsDriver{ID: d.ID, Label: d.Label, Version: d.Version})
+		fd := factsDriver{ID: d.ID, Label: d.Label, Version: d.Version}
+		if len(d.Spec) > 0 {
+			fd.Transport, _ = d.Spec["transport"].(string)
+			count := func(key string) int {
+				list, _ := d.Spec[key].([]any)
+				return len(list)
+			}
+			fd.Polls, fd.Listeners, fd.Commands = count("polls"), count("listeners"), count("commands")
+		}
+		doc.Drivers = append(doc.Drivers, fd)
 	}
 
 	var ps productsDoc

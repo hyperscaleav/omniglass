@@ -72,7 +72,7 @@ func TestDriverAttachAPI(t *testing.T) {
 		"spec": map[string]any{"version": 1, "transport": "tcp", "polls": []map[string]any{{
 			"name": "p", "schedule": map[string]any{"every": "10s"},
 			"request":    map[string]any{"line": "X"},
-			"datapoints": []map[string]any{{"name": "warp-factor", "extract": map[string]any{"key": "w"}}},
+			"emits": []map[string]any{{"name": "warp-factor", "extract": map[string]any{"key": "w"}}},
 		}}},
 	})
 	if status != http.StatusUnprocessableEntity || !strings.Contains(string(body), "warp-factor") {

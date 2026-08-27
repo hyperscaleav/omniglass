@@ -2,7 +2,7 @@
 // body a driver row carries (#813). A spec names the transport it rides, the
 // inputs an attachment must supply (host, port, credentials as secret
 // references), and the three function families one generic engine interprets:
-// poll functions (schedule, request, per-datapoint extraction), listeners
+// poll functions (schedule, request, per-sample extraction), listeners
 // (instantiation commands, a match rule, the same extraction), and command
 // bindings (how a command type actuates over this protocol). The package is a
 // leaf like internal/transport: parsing and validation are pure, with catalog
@@ -24,9 +24,9 @@ import (
 // A nil Catalog validates structure only: that is the parse-time floor, and
 // name resolution is explicitly the write gate's job.
 type Catalog interface {
-	// DatapointLane resolves a datapoint name to its lane ("metric" or
+	// LaneOf resolves an emitted sample's name to its lane ("metric" or
 	// "property"); ok is false for a name no catalog holds.
-	DatapointLane(name string) (lane string, ok bool)
+	LaneOf(name string) (lane string, ok bool)
 	// CommandTypeExists reports whether the command-type catalog holds name.
 	CommandTypeExists(name string) bool
 	// SecretTypeExists reports whether the secret-type catalog holds name.
@@ -85,8 +85,9 @@ func (r Request) Empty() bool {
 	return len(r.Get) == 0 && r.Line == "" && r.Path == ""
 }
 
-// Extract locates one datapoint in a response: exactly one of the extractor
-// kinds (an OID, a regex capture, a JSONPath, a key of a key-value body).
+// Extract locates one emitted value in a response: exactly one of the
+// extractor kinds (an OID, a regex capture, a JSONPath, a key of a key-value
+// body).
 type Extract struct {
 	OID      string `json:"oid,omitempty"`
 	Regex    string `json:"regex,omitempty"`
@@ -103,22 +104,23 @@ type Transform struct {
 	Map   map[string]string `json:"map,omitempty"`
 }
 
-// Datapoint is one emitted value: a catalog name (the lane is resolved from
-// the catalogs at write and baked at attach), where to find it, and an
-// optional transform.
-type Datapoint struct {
+// Emit is one sample a function emits: a lane-catalog name (the lane itself
+// is resolved from the catalogs at write and baked at attach, per ADR-0065's
+// split: the name is the signal, the emission is a sample), where to find it
+// in the response, and an optional transform.
+type Emit struct {
 	Name      string     `json:"name"`
 	Extract   Extract    `json:"extract"`
 	Transform *Transform `json:"transform,omitempty"`
 }
 
-// Poll is a scheduled ask: send Request every Schedule, extract Datapoints
-// from the response.
+// Poll is a scheduled ask: send Request every Schedule, extract Emits from
+// the response.
 type Poll struct {
-	Name       string      `json:"name"`
-	Schedule   Schedule    `json:"schedule"`
-	Request    Request     `json:"request"`
-	Datapoints []Datapoint `json:"datapoints"`
+	Name     string   `json:"name"`
+	Schedule Schedule `json:"schedule"`
+	Request  Request  `json:"request"`
+	Emits    []Emit   `json:"emits"`
 }
 
 // Match classifies an unsolicited inbound payload to its listener: exactly
@@ -131,12 +133,12 @@ type Match struct {
 // Listener is a declared wait: Arm holds the instantiation commands sent on
 // session establish and re-sent on every recover (plumbing, not recorded
 // command rows, per the #603 ruling), Match claims inbound payloads, and
-// Datapoints extract from a claimed one.
+// Emits extract from a claimed one.
 type Listener struct {
-	Name       string      `json:"name"`
-	Arm        []string    `json:"arm,omitempty"`
-	Match      Match       `json:"match"`
-	Datapoints []Datapoint `json:"datapoints"`
+	Name  string   `json:"name"`
+	Arm   []string `json:"arm,omitempty"`
+	Match Match    `json:"match"`
+	Emits []Emit   `json:"emits"`
 }
 
 // CommandBinding declares how one command type actuates over this protocol.
@@ -158,7 +160,7 @@ func Parse(raw []byte) (*Spec, error) {
 }
 
 // Validate refuses a spec that cannot be interpreted, naming the fault. With
-// a Catalog it also resolves every referenced name (datapoints, command
+// a Catalog it also resolves every referenced name (emitted samples, command
 // types, secret types); with nil it checks structure only.
 func (s *Spec) Validate(cat Catalog) error {
 	if s.Version != 1 {
@@ -215,7 +217,7 @@ func (s *Spec) Validate(cat Catalog) error {
 		if p.Request.Empty() {
 			return fmt.Errorf("driver: poll %q has an empty request", p.Name)
 		}
-		if err := validateDatapoints("poll", p.Name, p.Datapoints, cat); err != nil {
+		if err := validateEmits("poll", p.Name, p.Emits, cat); err != nil {
 			return err
 		}
 	}
@@ -230,7 +232,7 @@ func (s *Spec) Validate(cat Catalog) error {
 		if err := validateMatch(l.Name, l.Match); err != nil {
 			return err
 		}
-		if err := validateDatapoints("listener", l.Name, l.Datapoints, cat); err != nil {
+		if err := validateEmits("listener", l.Name, l.Emits, cat); err != nil {
 			return err
 		}
 	}
@@ -254,24 +256,24 @@ func (s *Spec) Validate(cat Catalog) error {
 	return nil
 }
 
-func validateDatapoints(family, fn string, dps []Datapoint, cat Catalog) error {
-	if len(dps) == 0 {
-		return fmt.Errorf("driver: %s %q emits no datapoints", family, fn)
+func validateEmits(family, fn string, emits []Emit, cat Catalog) error {
+	if len(emits) == 0 {
+		return fmt.Errorf("driver: %s %q emits nothing", family, fn)
 	}
-	for _, dp := range dps {
-		if dp.Name == "" {
-			return fmt.Errorf("driver: %s %q has a datapoint with no name", family, fn)
+	for _, em := range emits {
+		if em.Name == "" {
+			return fmt.Errorf("driver: %s %q emits a sample with no name", family, fn)
 		}
 		if cat != nil {
-			if _, ok := cat.DatapointLane(dp.Name); !ok {
-				return fmt.Errorf("driver: %s %q emits %q, which no catalog holds", family, fn, dp.Name)
+			if _, ok := cat.LaneOf(em.Name); !ok {
+				return fmt.Errorf("driver: %s %q emits %q, which no catalog holds", family, fn, em.Name)
 			}
 		}
-		if err := validateExtract(fn, dp); err != nil {
+		if err := validateExtract(fn, em); err != nil {
 			return err
 		}
-		if dp.Transform != nil {
-			if err := validateTransform(fn, dp.Name, *dp.Transform); err != nil {
+		if em.Transform != nil {
+			if err := validateTransform(fn, em.Name, *em.Transform); err != nil {
 				return err
 			}
 		}
@@ -279,32 +281,32 @@ func validateDatapoints(family, fn string, dps []Datapoint, cat Catalog) error {
 	return nil
 }
 
-func validateExtract(fn string, dp Datapoint) error {
+func validateExtract(fn string, em Emit) error {
 	set := 0
-	for _, v := range []string{dp.Extract.OID, dp.Extract.Regex, dp.Extract.JSONPath, dp.Extract.Key} {
+	for _, v := range []string{em.Extract.OID, em.Extract.Regex, em.Extract.JSONPath, em.Extract.Key} {
 		if v != "" {
 			set++
 		}
 	}
 	if set != 1 {
-		return fmt.Errorf("driver: %s datapoint %q needs exactly one extract kind, has %d", fn, dp.Name, set)
+		return fmt.Errorf("driver: %s emit %q needs exactly one extract kind, has %d", fn, em.Name, set)
 	}
-	if dp.Extract.Regex != "" {
-		if _, err := regexp.Compile(dp.Extract.Regex); err != nil {
-			return fmt.Errorf("driver: %s datapoint %q has an uncompilable regex: %v", fn, dp.Name, err)
+	if em.Extract.Regex != "" {
+		if _, err := regexp.Compile(em.Extract.Regex); err != nil {
+			return fmt.Errorf("driver: %s emit %q has an uncompilable regex: %v", fn, em.Name, err)
 		}
 	}
 	return nil
 }
 
-func validateTransform(fn, dp string, tr Transform) error {
+func validateTransform(fn, name string, tr Transform) error {
 	if tr.Cast == "" && tr.Scale == 0 && len(tr.Map) == 0 {
-		return fmt.Errorf("driver: %s datapoint %q declares an empty transform", fn, dp)
+		return fmt.Errorf("driver: %s emit %q declares an empty transform", fn, name)
 	}
 	switch tr.Cast {
 	case "", "int", "float", "text":
 	default:
-		return fmt.Errorf("driver: %s datapoint %q has unknown cast %q", fn, dp, tr.Cast)
+		return fmt.Errorf("driver: %s emit %q has unknown cast %q", fn, name, tr.Cast)
 	}
 	return nil
 }

@@ -372,6 +372,48 @@ A `discovery_rule` turns the orphan stream, every emitted identity the index doe
 - **Idempotent on re-discovery**: keyed on the `(property_type, value)` already bound, so a steady stream of the same orphan resolves to one candidate.
 - **Scope and standing**: a cascade **scope** and an `official` / private standing like the other rule families (`event_rule`, calc).
 
+## Drivers: the declarative menu
+
+A **driver** turns a class of device API into a normalized menu of signals and actions. Its body
+is the **spec**: a versioned declarative document (data, not code) interpreted by one generic
+engine, stored as `jsonb` on the driver row and validated against the catalogs at **every write**
+(create, update, and the boot seed), so a spec that cannot be interpreted refuses at authoring
+time, never at collection time
+([ADR-0135](/architecture/decisions/#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it)). A
+spec declares:
+
+- **The transport it rides** (one, from the code registry): `snmp-generic` rides `snmp`,
+  `newtron-nvp` rides `tcp`.
+- **Inputs** an attachment must supply: typed (`string`, `number`, `secret`), required or
+  defaulted. A `secret` input carries a `secret_type` and is supplied as a **reference** (the name
+  of a secret row of that shape), never a value; the reference is checked at attach.
+- **Three function families**, every emitted sample referencing its lane catalog **by name**:
+  - **Poll functions**: a `schedule`, a transport-shaped `request` (scalar OIDs for an SNMP get, a
+    line for a line protocol), and per-emit **extraction** (`oid`, `regex` capture,
+    `jsonpath`, `key`) with an optional declared **transform** (`cast`, `scale`, enum `map`; the
+    expression engine is deliberately not a dependency).
+  - **Listeners**: the `arm` conversation sent on session establish and re-sent on every recover
+    (session **plumbing**, not recorded command rows), a `match` rule that claims an unsolicited
+    inbound payload, and the same extraction shape.
+  - **Command bindings**: how a `command_type` actuates over this protocol.
+
+**Attach is the authoring move**: creating an endpoint with a `driver` reference (instead of a
+`transport`) derives everything from the spec. The transport and params come from the spec (the
+`host` and `port` inputs join into the probed `target`), required inputs must be supplied and
+defaults bake, and the spec's functions derive the endpoint's tasks in the same transaction: a
+poll task per poll function, a standing listen task per listener, each task's spec carrying the
+function **whole with its emit lanes resolved at attach** (the compile step: the node never
+looks up a catalog at runtime). Refusals name the fault as a 422: a missing required input, an
+input the spec does not declare, a secret reference that resolves to nothing or to the wrong
+shape. A driver row without a spec is a **stub** that cannot be attached. The console's endpoint
+create offers both moves (a bare probe endpoint, or attach a driver and fill its inputs), and the
+Drivers page renders each spec as the menu it is.
+
+The interpreter that runs the poll functions lands with the next slice; sessions and listeners
+with the stateful arc. The ship-with set:
+
+<SeededSet kind="drivers" />
+
 ## Storage
 
 The connection registry, the declared connections, and the node's units of work; the physical layout lives on [storage](/architecture/storage/).
@@ -389,6 +431,8 @@ The **transports** are a **code registry** the binary ships (`internal/transport
     component_id: 'Set: pre-bound to the component; NULL: shared, resolved by match key',
     node_name: 'Placement: holds the node primary key (principal_id), not a name, despite the column name; ON DELETE CASCADE so a purged node takes its endpoints',
     params: 'The transport parameters the authoring schema validated',
+    driver_id: 'Set when a driver attach authored this endpoint (#813); NULL for a bare probe endpoint',
+    inputs: 'The effective inputs supplied at attach, defaults baked; secret inputs are reference names, never values',
   }}
 />
 

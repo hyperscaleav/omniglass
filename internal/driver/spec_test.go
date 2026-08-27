@@ -7,16 +7,16 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/driver"
 )
 
-// fakeCatalog resolves datapoint and command names for validation the way the
-// storage gateway does against the live catalogs: lanes for datapoint names,
-// existence for command types and secret types.
+// fakeCatalog resolves emitted-sample and command names for validation the
+// way the storage gateway does against the live catalogs: lanes for emitted
+// names, existence for command types and secret types.
 type fakeCatalog struct {
-	lanes    map[string]string // datapoint name -> lane ("metric" | "property")
+	lanes    map[string]string // emitted name -> lane ("metric" | "property")
 	commands map[string]bool
 	secrets  map[string]bool
 }
 
-func (f fakeCatalog) DatapointLane(name string) (string, bool) {
+func (f fakeCatalog) LaneOf(name string) (string, bool) {
 	lane, ok := f.lanes[name]
 	return lane, ok
 }
@@ -50,7 +50,7 @@ func validSpec() *driver.Spec {
 			Name:     "status",
 			Schedule: driver.Schedule{Every: "30s"},
 			Request:  driver.Request{Line: "GET STATUS"},
-			Datapoints: []driver.Datapoint{{
+			Emits: []driver.Emit{{
 				Name:    "video-input",
 				Extract: driver.Extract{Regex: `^INPUT (\S+)`},
 			}},
@@ -59,7 +59,7 @@ func validSpec() *driver.Spec {
 			Name:  "events",
 			Arm:   []string{"SUBSCRIBE EVENTS"},
 			Match: driver.Match{Prefix: "EVT "},
-			Datapoints: []driver.Datapoint{{
+			Emits: []driver.Emit{{
 				Name:    "video-input",
 				Extract: driver.Extract{Regex: `^EVT INPUT (\S+)`},
 			}},
@@ -99,21 +99,21 @@ func TestValidateRefusals(t *testing.T) {
 		{"poll with an unparseable schedule", func(s *driver.Spec) { s.Polls[0].Schedule.Every = "whenever" }, "schedule"},
 		{"poll with a zero schedule", func(s *driver.Spec) { s.Polls[0].Schedule.Every = "0s" }, "schedule"},
 		{"poll with an empty request", func(s *driver.Spec) { s.Polls[0].Request = driver.Request{} }, "request"},
-		{"poll with no datapoints", func(s *driver.Spec) { s.Polls[0].Datapoints = nil }, "datapoint"},
-		{"datapoint not in any catalog", func(s *driver.Spec) { s.Polls[0].Datapoints[0].Name = "warp-factor" }, "warp-factor"},
-		{"datapoint with no extractor", func(s *driver.Spec) { s.Polls[0].Datapoints[0].Extract = driver.Extract{} }, "extract"},
-		{"datapoint with two extractors", func(s *driver.Spec) {
-			s.Polls[0].Datapoints[0].Extract = driver.Extract{Regex: "x", OID: "1.3"}
+		{"poll that emits nothing", func(s *driver.Spec) { s.Polls[0].Emits = nil }, "emits"},
+		{"emitted name not in any catalog", func(s *driver.Spec) { s.Polls[0].Emits[0].Name = "warp-factor" }, "warp-factor"},
+		{"emit with no extractor", func(s *driver.Spec) { s.Polls[0].Emits[0].Extract = driver.Extract{} }, "extract"},
+		{"emit with two extractors", func(s *driver.Spec) {
+			s.Polls[0].Emits[0].Extract = driver.Extract{Regex: "x", OID: "1.3"}
 		}, "extract"},
-		{"datapoint with a bad regex", func(s *driver.Spec) { s.Polls[0].Datapoints[0].Extract = driver.Extract{Regex: "("} }, "regex"},
+		{"emit with a bad regex", func(s *driver.Spec) { s.Polls[0].Emits[0].Extract = driver.Extract{Regex: "("} }, "regex"},
 		{"transform scale on nothing", func(s *driver.Spec) {
-			s.Polls[0].Datapoints[0].Transform = &driver.Transform{}
+			s.Polls[0].Emits[0].Transform = &driver.Transform{}
 		}, "transform"},
 		{"transform with an unknown cast", func(s *driver.Spec) {
-			s.Polls[0].Datapoints[0].Transform = &driver.Transform{Cast: "quaternion"}
+			s.Polls[0].Emits[0].Transform = &driver.Transform{Cast: "quaternion"}
 		}, "cast"},
 		{"listener without a match rule", func(s *driver.Spec) { s.Listeners[0].Match = driver.Match{} }, "match"},
-		{"listener with no datapoints", func(s *driver.Spec) { s.Listeners[0].Datapoints = nil }, "datapoint"},
+		{"listener that emits nothing", func(s *driver.Spec) { s.Listeners[0].Emits = nil }, "emits"},
 		{"duplicate function names", func(s *driver.Spec) { s.Listeners[0].Name = "status" }, "status"},
 		{"command binding on an unknown command type", func(s *driver.Spec) { s.Commands[0].CommandType = "self-destruct" }, "self-destruct"},
 		{"command binding with an empty request", func(s *driver.Spec) { s.Commands[0].Request = driver.Request{} }, "request"},
@@ -157,7 +157,7 @@ func TestParseRoundTrips(t *testing.T) {
 			"name": "scalars",
 			"schedule": {"every": "60s"},
 			"request": {"get": ["1.3.6.1.2.1.1.3.0"]},
-			"datapoints": [
+			"emits": [
 				{"name": "uptime", "extract": {"oid": "1.3.6.1.2.1.1.3.0"}, "transform": {"scale": 0.01}}
 			]
 		}]
@@ -169,8 +169,8 @@ func TestParseRoundTrips(t *testing.T) {
 	if err := s.Validate(catalog()); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
-	if s.Polls[0].Datapoints[0].Transform.Scale != 0.01 {
-		t.Fatalf("scale = %v, want 0.01", s.Polls[0].Datapoints[0].Transform.Scale)
+	if s.Polls[0].Emits[0].Transform.Scale != 0.01 {
+		t.Fatalf("scale = %v, want 0.01", s.Polls[0].Emits[0].Transform.Scale)
 	}
 	if got := s.Polls[0].Schedule.Interval(); got.Seconds() != 60 {
 		t.Fatalf("interval = %v, want 60s", got)
@@ -182,11 +182,11 @@ func TestParseRoundTrips(t *testing.T) {
 // explicitly the write gate's job, not a side effect of parsing.
 func TestValidateStructureOnly(t *testing.T) {
 	s := validSpec()
-	s.Polls[0].Datapoints[0].Name = "not-in-any-catalog"
+	s.Polls[0].Emits[0].Name = "not-in-any-catalog"
 	if err := s.Validate(nil); err != nil {
 		t.Fatalf("structure-only validation resolved names: %v", err)
 	}
-	s.Polls[0].Datapoints[0].Extract = driver.Extract{}
+	s.Polls[0].Emits[0].Extract = driver.Extract{}
 	if err := s.Validate(nil); err == nil {
 		t.Fatal("structure-only validation must still refuse a missing extractor")
 	}

@@ -1698,7 +1698,9 @@
   {
    "id": "snmp-generic",
    "label": "Generic SNMP",
-   "version": "1.0.0"
+   "version": "1.0.0",
+   "transport": "snmp",
+   "polls": 1
   },
   {
    "id": "kestrel-api",
@@ -1707,7 +1709,11 @@
   {
    "id": "newtron-nvp",
    "label": "Newtron NVP",
-   "version": "1.0.0"
+   "version": "1.0.0",
+   "transport": "tcp",
+   "polls": 1,
+   "listeners": 1,
+   "commands": 1
   },
   {
    "id": "http-json",
