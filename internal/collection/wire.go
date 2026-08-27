@@ -63,14 +63,18 @@ func NodeFromSubject(subject string) string {
 
 // TaskSpec is one enabled task in a worklist reply: the content-addressed task
 // plus the placement-bound endpoint it runs over. EndpointParams and Spec are
-// raw jsonb passed through from storage.
+// raw jsonb passed through from storage. Secrets carries a driver task's
+// unsealed secret inputs (#814), resolved server-side at reply time; the
+// per-node subject grant is the isolation boundary, so a node only ever
+// receives the credentials of endpoints placed on it.
 type TaskSpec struct {
-	ID             string          `json:"id"`
-	Mode           string          `json:"mode"`
-	EndpointName   string          `json:"endpoint_name"`
-	Transport      string          `json:"transport"`
-	EndpointParams json.RawMessage `json:"endpoint_params,omitempty"`
-	Spec           json.RawMessage `json:"spec,omitempty"`
+	ID             string                       `json:"id"`
+	Mode           string                       `json:"mode"`
+	EndpointName   string                       `json:"endpoint_name"`
+	Transport      string                       `json:"transport"`
+	EndpointParams json.RawMessage              `json:"endpoint_params,omitempty"`
+	Spec           json.RawMessage              `json:"spec,omitempty"`
+	Secrets        map[string]map[string]string `json:"secrets,omitempty"`
 }
 
 // WorklistReply is the server's response to a worklist request: the node's

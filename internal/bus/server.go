@@ -153,6 +153,7 @@ func (s *Server) buildWorklistReply(node string) (collection.WorklistReply, erro
 			Transport:      t.Transport,
 			EndpointParams: t.EndpointParams,
 			Spec:           t.Spec,
+			Secrets:        t.Secrets,
 		})
 	}
 	return reply, nil

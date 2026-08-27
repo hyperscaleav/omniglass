@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -207,4 +208,63 @@ func names(dps []collection.Sample) []string {
 		out = append(out, d.Name)
 	}
 	return out
+}
+
+// fakeGetter serves a canned SNMP response for the driver-poll dispatch test.
+type fakeGetter struct {
+	res map[string]string
+	err error
+}
+
+func (f fakeGetter) Get(context.Context, string, string, []string, time.Duration) (map[string]string, error) {
+	return f.res, f.err
+}
+
+// TestCollectDriverTask proves the node-side driver dispatch (#814): a baked
+// poll task fetches with the worklist-delivered credential and lands its emits
+// typed by lane, and each fault is a story, never a silent drop.
+func TestCollectDriverTask(t *testing.T) {
+	spec := json.RawMessage(`{"driver": "snmp-generic", "function": "scalars",
+		"request": {"get": ["1.3.6.1.2.1.1.1.0", "1.3.6.1.2.1.1.3.0"]},
+		"emits": [
+			{"name": "model-number", "lane": "property", "extract": {"oid": "1.3.6.1.2.1.1.1.0"}},
+			{"name": "uptime", "lane": "metric", "extract": {"oid": "1.3.6.1.2.1.1.3.0"}, "transform": {"scale": 0.01}}
+		]}`)
+	task := collection.TaskSpec{
+		ID: "d1", Mode: "poll", Transport: "snmp",
+		EndpointParams: json.RawMessage(`{"target":"10.20.4.40:161"}`),
+		Spec:           spec,
+		Secrets:        map[string]map[string]string{"community": {"community": "lab-public"}},
+	}
+
+	runner := &collection.Runner{SNMP: fakeGetter{res: map[string]string{
+		"1.3.6.1.2.1.1.1.0": "Boreal AirWall 3",
+		"1.3.6.1.2.1.1.3.0": "8123456",
+	}}}
+	dps, faults := collectDriverTask(t.Context(), runner, task)
+	if len(faults) != 0 {
+		t.Fatalf("faults: %v", faults)
+	}
+	ev := buildBatch(task.ID, "edge-1", dps)
+	if len(ev.Metrics) != 1 || ev.Metrics[0].Name != "uptime" || ev.Metrics[0].Value != 81234.56 {
+		t.Fatalf("metric lane = %+v, want the scaled uptime", ev.Metrics)
+	}
+	if len(ev.Properties) != 1 || ev.Properties[0].Name != "model-number" || ev.Properties[0].ValueJson != `"Boreal AirWall 3"` {
+		t.Fatalf("property lane = %+v, want the sysDescr text", ev.Properties)
+	}
+
+	// A silent agent is one fault covering the fetch, and no samples at all.
+	runner = &collection.Runner{SNMP: fakeGetter{err: context.DeadlineExceeded}}
+	dps, faults = collectDriverTask(t.Context(), runner, task)
+	if len(dps) != 0 || len(faults) != 1 {
+		t.Fatalf("failed fetch: dps %v faults %v", dps, faults)
+	}
+
+	// A missing credential faults by name before any wire work.
+	bare := task
+	bare.Secrets = nil
+	_, faults = collectDriverTask(t.Context(), &collection.Runner{SNMP: fakeGetter{}}, bare)
+	if len(faults) != 1 || !strings.Contains(faults[0].Error(), "community") {
+		t.Fatalf("missing credential: faults %v", faults)
+	}
 }

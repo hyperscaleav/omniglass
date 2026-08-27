@@ -370,3 +370,70 @@ func TestAttachDriverRefusals(t *testing.T) {
 		t.Fatalf("driver+transport: err = %v, want ErrAttachInvalid", err)
 	}
 }
+
+// TestNodeWorklistDeliversSecretInputs pins the credential delivery contract
+// (#814): a driver task whose spec declares a secret input reaches its placed
+// node with that input's fields unsealed (the node must present the community
+// to the device), while the reachability task and non-driver tasks carry none.
+// Delivery rides the per-node worklist subject, whose NATS grant is the
+// isolation boundary; the attach audit row is the record of the binding.
+func TestNodeWorklistDeliversSecretInputs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t), storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "amp-3"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-3"}, all, all); err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+		Name: "lab-community", SecretType: "snmp-community", OwnerKind: "platform",
+		Fields: map[string]string{"community": "very-secret"},
+	}, all, true); err != nil {
+		t.Fatalf("create secret: %v", err)
+	}
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "snmp-scalar", Label: "SNMP Scalar", Version: "1.0.0", Spec: []byte(snmpSpec)}); err != nil {
+		t.Fatalf("create driver: %v", err)
+	}
+	comp, drv, node := "amp-3", "snmp-scalar", "edge-3"
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+		Driver: &drv, Component: &comp, Node: &node,
+		Inputs: map[string]string{"host": "10.20.4.40", "community": "lab-community"},
+	}, all); err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+
+	wl, err := gw.NodeWorklist(ctx, "edge-3")
+	if err != nil {
+		t.Fatalf("worklist: %v", err)
+	}
+	var driverTask, reachTask *storage.WorklistTask
+	for i := range wl.Tasks {
+		if len(wl.Tasks[i].Spec) > 2 {
+			driverTask = &wl.Tasks[i]
+		} else {
+			reachTask = &wl.Tasks[i]
+		}
+	}
+	if driverTask == nil || reachTask == nil {
+		t.Fatalf("worklist tasks = %+v, want the driver poll and the reachability probe", wl.Tasks)
+	}
+	if got := driverTask.Secrets["community"]["community"]; got != "very-secret" {
+		t.Fatalf("driver task secrets = %v, want the community field unsealed", driverTask.Secrets)
+	}
+	if len(reachTask.Secrets) != 0 {
+		t.Fatalf("the reachability task carries secrets it has no use for: %v", reachTask.Secrets)
+	}
+}

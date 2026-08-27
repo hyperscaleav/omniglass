@@ -908,3 +908,88 @@ func mapSecretWriteErr(err error) error {
 	}
 	return fmt.Errorf("storage: secret write: %w", err)
 }
+
+// nodeSecretFields unseals a secret's fields by name for worklist delivery
+// (#814): a driver task's secret inputs must reach the placed node as usable
+// credentials, so the server unseals them into the per-node worklist reply
+// (the node's NATS grant is the isolation boundary). This is machine delivery,
+// not an operator read: there is no scope check (the attach that bound the
+// reference was the scoped, audited operator action) and no per-pull audit
+// row, since the node re-pulls at heartbeat pace and a row per pull would
+// bury the audit log. An ambiguous name refuses rather than guessing, since
+// delivering the wrong tenant's credential is worse than delivering none.
+func (p *PG) nodeSecretFields(ctx context.Context, name string) (map[string]string, error) {
+	if p.secret == nil {
+		return nil, ErrNoSecretProvider
+	}
+	rows, err := p.pool.Query(ctx, `
+		select s.id, s.name, s.owner_kind,
+			coalesce(s.component_id::text, s.system_id::text, s.location_id::text),
+			s.value, st.name
+		from secret s join secret_type st on st.id = s.secret_type
+		where s.name = $1`, name)
+	if err != nil {
+		return nil, fmt.Errorf("storage: node secret %q: %w", name, err)
+	}
+	defer rows.Close()
+	var found []struct {
+		row      secretRow
+		typeName string
+	}
+	for rows.Next() {
+		var r secretRow
+		var ownerID *string
+		var typeName string
+		if err := rows.Scan(&r.id, &r.name, &r.ownerKind, &ownerID, &r.value, &typeName); err != nil {
+			return nil, fmt.Errorf("storage: scan node secret %q: %w", name, err)
+		}
+		r.ownerID = ownerID
+		found = append(found, struct {
+			row      secretRow
+			typeName string
+		}{r, typeName})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: node secret %q: %w", name, err)
+	}
+	if len(found) == 0 {
+		return nil, ErrSecretNotFound
+	}
+	if len(found) > 1 {
+		return nil, &ErrAmbiguousName{Kind: "secret", Ref: name}
+	}
+	shapes, err := p.shapeIndex(ctx)
+	if err != nil {
+		return nil, err
+	}
+	shape, ok := shapes[found[0].typeName]
+	if !ok {
+		return nil, fmt.Errorf("storage: node secret %q: unknown secret type %q", name, found[0].typeName)
+	}
+	row := found[0].row
+	out := make(map[string]string, len(row.value))
+	for _, f := range shape.Fields {
+		raw, ok := row.value[f.Name]
+		if !ok {
+			continue
+		}
+		if !f.Secret {
+			var v string
+			if err := json.Unmarshal(raw, &v); err != nil {
+				return nil, fmt.Errorf("storage: decode node secret field %q: %w", f.Name, err)
+			}
+			out[f.Name] = v
+			continue
+		}
+		var env secret.Envelope
+		if err := json.Unmarshal(raw, &env); err != nil {
+			return nil, fmt.Errorf("storage: decode node secret envelope %q: %w", f.Name, err)
+		}
+		pt, err := secret.Open(ctx, p.secret, env, secretAAD(row.ownerKind, row.ownerID, row.name, f.Name))
+		if err != nil {
+			return nil, fmt.Errorf("storage: unseal node secret field %q: %w", f.Name, err)
+		}
+		out[f.Name] = string(pt)
+	}
+	return out, nil
+}

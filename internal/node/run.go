@@ -37,6 +37,12 @@ type Config struct {
 	// SSH is the layer-7 ssh probe primitive (#812). Nil defaults to the
 	// real collection.NewSSHProber(); tests inject a fake.
 	SSH collection.SSHProber
+	// SNMP is the driver-poll v2c GET client (#814). Nil defaults to the
+	// real collection.NewSNMPGetter(); tests inject a fake.
+	SNMP collection.SNMPGetter
+	// Line is the driver-poll stateless line-protocol client (#814). Nil
+	// defaults to the real collection.NewLineExchanger(); tests inject a fake.
+	Line collection.LineExchanger
 }
 
 // Run claims the node's NATS credential, connects outbound-only to the bus,
@@ -92,7 +98,15 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if sshProber == nil {
 		sshProber = collection.NewSSHProber()
 	}
-	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber}
+	snmpGetter := cfg.SNMP
+	if snmpGetter == nil {
+		snmpGetter = collection.NewSNMPGetter()
+	}
+	lineExchanger := cfg.Line
+	if lineExchanger == nil {
+		lineExchanger = collection.NewLineExchanger()
+	}
+	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber, SNMP: snmpGetter, Line: lineExchanger}
 
 	// verdicts remembers the last reachability verdict per task (keyed by the
 	// node-unique task id, since interface names collide across components) across

@@ -68,6 +68,8 @@ type Runner struct {
 	Ping Pinger
 	HTTP HTTPProber
 	SSH  SSHProber
+	SNMP SNMPGetter
+	Line LineExchanger
 }
 
 // CollectTCP runs one tcp task and returns its samples. A tcp probe always

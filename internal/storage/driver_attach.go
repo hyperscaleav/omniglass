@@ -314,3 +314,29 @@ func specOrNull(b []byte) any {
 	}
 	return b
 }
+
+// secretRefsOf maps a driver task's secret inputs to the secret rows the
+// attach recorded: the spec says which inputs are secret, the endpoint's
+// stored inputs say which secret each references (by name).
+func secretRefsOf(driverSpec, endpointInputs []byte) (map[string]string, error) {
+	sp, err := driver.Parse(driverSpec)
+	if err != nil {
+		return nil, fmt.Errorf("stored driver spec does not parse: %w", err)
+	}
+	var inputs map[string]string
+	if len(endpointInputs) > 0 {
+		if err := json.Unmarshal(endpointInputs, &inputs); err != nil {
+			return nil, fmt.Errorf("stored endpoint inputs do not parse: %w", err)
+		}
+	}
+	refs := map[string]string{}
+	for _, in := range sp.Inputs {
+		if in.Kind != "secret" {
+			continue
+		}
+		if ref, ok := inputs[in.Name]; ok && ref != "" {
+			refs[in.Name] = ref
+		}
+	}
+	return refs, nil
+}

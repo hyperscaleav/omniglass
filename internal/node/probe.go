@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
@@ -36,6 +37,33 @@ type endpointParams struct {
 // on probe type).
 func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, runner *collection.Runner, verdicts map[string]string) error {
 	for _, task := range wl.Tasks {
+		// A standing listen task is inert until the stateful arc arms
+		// listeners over held sessions (#603 slices 6 and 7): skip without a
+		// collection-failed, since an armed-later task is not a fault.
+		if task.Mode == "listen" {
+			continue
+		}
+		// A driver poll (a baked function, #814) interprets rather than
+		// probes: fetch over the transport, locate and type each emit. Its
+		// faults are per-emit collection-failed stories beside whatever
+		// samples still landed, so a payload missing one value never
+		// silently drops the rest.
+		if driver.IsBaked(task.Spec) {
+			dps, faults := collectDriverTask(ctx, runner, task)
+			for _, f := range faults {
+				slog.Warn("driver poll fault", "facility", "collection", "task", task.ID, "error", f.Error())
+				if pubErr := publishCollectionFailed(nc, node, task.ID, f); pubErr != nil {
+					return pubErr
+				}
+			}
+			if len(dps) == 0 {
+				continue
+			}
+			if err := publishBatch(nc, node, task.ID, dps); err != nil {
+				return err
+			}
+			continue
+		}
 		dps, err := collectTask(ctx, runner, task)
 		if err != nil {
 			// A skipped task is the node's own operational story AND a
@@ -63,16 +91,57 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 		// content hash over the endpoint). The ingest-side latest-value guard is
 		// the net for a node restart.
 		dps = appendVerdict(dps, task.ID, verdicts)
-		ev := buildBatch(task.ID, node, dps)
-		b, err := proto.Marshal(ev)
-		if err != nil {
-			return fmt.Errorf("node: marshal telemetry event: %w", err)
-		}
-		if err := nc.Publish(collection.TelemetrySubject(node), b); err != nil {
-			return fmt.Errorf("node: publish telemetry: %w", err)
+		if err := publishBatch(nc, node, task.ID, dps); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// publishBatch maps samples to a per-lane TelemetryBatch and publishes it on
+// the node's own telemetry subject.
+func publishBatch(nc *nats.Conn, node, taskID string, dps []collection.Sample) error {
+	ev := buildBatch(taskID, node, dps)
+	b, err := proto.Marshal(ev)
+	if err != nil {
+		return fmt.Errorf("node: marshal telemetry event: %w", err)
+	}
+	if err := nc.Publish(collection.TelemetrySubject(node), b); err != nil {
+		return fmt.Errorf("node: publish telemetry: %w", err)
+	}
+	return nil
+}
+
+// collectDriverTask parses one derived driver poll and runs it: the baked
+// function from the task spec, the target from the endpoint params, the
+// unsealed secret inputs from the worklist. Faults are the collection-failed
+// stories; a parse fault covers the whole task.
+func collectDriverTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec) ([]collection.Sample, []error) {
+	fn, err := driver.ParseBaked(task.Spec)
+	if err != nil {
+		return nil, []error{fmt.Errorf("node: task %s: %w", task.ID, err)}
+	}
+	var p endpointParams
+	if len(task.EndpointParams) > 0 {
+		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
+			return nil, []error{fmt.Errorf("node: bad endpoint params for task %s: %w", task.ID, err)}
+		}
+	}
+	var timeout time.Duration
+	if p.Timeout != "" {
+		d, err := time.ParseDuration(p.Timeout)
+		if err != nil {
+			return nil, []error{fmt.Errorf("node: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)}
+		}
+		timeout = d
+	}
+	return runner.CollectDriverPoll(ctx, collection.DriverPollTask{
+		Fn:        fn,
+		Transport: task.Transport,
+		Target:    p.Target,
+		Secrets:   task.Secrets,
+		Timeout:   timeout,
+	})
 }
 
 // appendVerdict computes the endpoint reachability verdict from a probe's
