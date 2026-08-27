@@ -7,6 +7,11 @@ import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
 import { systemHealthKey, type FleetHealth } from "../lib/health";
 import { systemRolesKey } from "../lib/system_roles";
 import { SYSTEMS_KEY } from "../lib/systems";
+import { systemMetricsKey } from "../lib/system_metrics";
+import { componentAlarmsKey } from "../lib/alarms";
+import { systemEventsKey, systemLogsKey } from "../lib/system_activity";
+import { metricSeriesKey } from "../lib/series";
+import { STANDARDS_KEY } from "../lib/standards";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { ME_KEY, type Me } from "../lib/auth";
@@ -17,7 +22,7 @@ import type { EffectiveRole } from "../lib/system_zoom";
 // The system zoom's chrome (#636): one card per role with the server's own
 // arithmetic, choices grouped with the active alternate marked and the losing
 // build quiet, shared occupants chipped, and the no-role strip a state rather
-// than an error. Rendered at the identity route behind ?zoom=1 (ADR-0126).
+// than an error. The identity route's default face (ADR-0129).
 
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 
@@ -93,6 +98,10 @@ const declared = [
     accepted_types: ["display"], pinned_products: [], assigned_to: [], positions: [], position_labels: [],
   },
   {
+    name: "room-mic", label: "Room Microphone", quorum: 2, assigned: 2, impact: "degraded", from_standard: true,
+    accepted_types: ["video-bar"], pinned_products: [], assigned_to: ["videobar-1", "mic-1"], positions: [1, 2], position_labels: [],
+  },
+  {
     name: "conf-bar", label: "Conferencing Bar", quorum: 1, assigned: 1, impact: "outage", from_standard: true,
     accepted_types: ["video-bar"], pinned_products: [], assigned_to: ["videobar-1"], alternate: "conferencing/all-in-one",
     positions: [1], position_labels: [],
@@ -104,18 +113,21 @@ const declared = [
   },
 ] as unknown as EffectiveRole[];
 
-function mount(path = `/web/systems/${uuidFor("szp-sys")}?zoom=1`, healthOverride: FleetHealth = health) {
+function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: FleetHealth = health, metrics: unknown[] = [], standards: unknown[] = []) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], me);
-  qc.setQueryData([...SYSTEMS_KEY], []);
+  qc.setQueryData([...SYSTEMS_KEY], [{ id: uuidFor("szp-sys"), name: "boardroom", label: "Boardroom", standard: "huddle-room" }]);
   qc.setQueryData([...LOCATIONS_KEY], []);
   qc.setQueryData([...LOCATION_TYPES_KEY], []);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], healthOverride);
   qc.setQueryData([...systemRolesKey(uuidFor("szp-sys"))], declared);
+  qc.setQueryData([...systemMetricsKey(uuidFor("szp-sys"))], metrics);
+  qc.setQueryData([...STANDARDS_KEY], standards);
   window.history.pushState({}, "", path);
-  return render(() => (
+  const r = render(() => (
+
     <QueryClientProvider client={qc}>
       <Router base="/web">
         <Route path="/systems/:id" component={Systems} />
@@ -131,72 +143,56 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}?zoom=1`, healthOverrid
       </Router>
     </QueryClientProvider>
   ));
+  return Object.assign(r, { qc });
 }
 
 afterEach(cleanup);
 
 describe("the system zoom", () => {
-  it("renders one card per role with the server's own arithmetic", () => {
+  // #790 reshaped the body to components-first; the behaviors the retired
+  // one-card-per-role tests pinned live on in the group and card forms below.
+  it("arithmetic renders only where a role earned a group; the 1:1 case carries none", () => {
     mount();
-    const display = screen.getByTestId("slot-main-display");
-    expect(within(display).getByText("0 of 1 satisfying")).toBeTruthy();
+    expect(within(screen.getByTestId("rolegroup-room-mic")).getByText(/1 of 2/)).toBeTruthy();
+    expect(within(screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`)).queryByText(/of \d/)).toBeNull();
   });
 
-  it("a role nobody staffed reads incomplete, visually distinct from a role whose occupant is down", () => {
+  it("an unstaffed role and a down occupant stay visually distinct: commissioning wears incomplete, failure wears the impact", () => {
     mount();
-    const display = screen.getByTestId("slot-main-display");
-    expect(within(display).getByText("incomplete")).toBeTruthy();
-    expect(within(display).queryByText("outage")).toBeNull();
+    expect(screen.getByTestId("rolegroup-main-display").className).toContain("border-incomplete");
+    expect(screen.getByTestId("rolegroup-room-mic").className).toContain("border-warning");
+    expect(within(screen.getByTestId(`compcard-${uuidFor("szp-c-mic")}`)).getByText("mic-1")).toBeTruthy();
   });
 
-  it("shows only the build in use for a choice, named, and never the alternate the room did not choose", () => {
+  it("the build not in use never renders", () => {
     mount();
-    const conf = screen.getByTestId("choice-conferencing");
-    expect(within(conf).getByText(/built as all-in-one/)).toBeTruthy();
-    expect(within(conf).getByTestId("slot-conf-bar")).toBeTruthy();
-    // The losing build's role is not on the page at all: it is a
-    // configuration fact for the standard editor, not an operational one.
-    expect(screen.queryByTestId("slot-conf-codec")).toBeNull();
-    expect(screen.queryByText(/not the build in use/)).toBeNull();
+    expect(screen.queryByText(/conf-codec/)).toBeNull();
   });
 
-  it("an occupant serving another system carries a chip naming it", () => {
+  it("an occupant serving another system carries a badge naming it", () => {
     mount();
-    const bar = screen.getByTestId("slot-conf-bar");
-    expect(within(bar).getByText(/also Overflow Room/)).toBeTruthy();
+    const card = screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`);
+    expect(within(card).getByText(/also Overflow Room/)).toBeTruthy();
   });
 
-  it("a member filling no role appears in the no-role strip, and is not an error", () => {
+  it("a no-role member's card opens its component blade too (#799)", async () => {
     mount();
-    const strip = screen.getByTestId("no-role-strip");
-    expect(within(strip).getByText("device-1")).toBeTruthy();
+    fireEvent.click(screen.getByTestId(`compcard-${uuidFor("szp-c-power")}`));
+    const blade = await screen.findByRole("dialog");
+    expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-component-${uuidFor("szp-c-power")}`);
   });
 
-  // The drilldown's last step: an occupant is the component, so clicking it
-  // opens the leaf by uuid (names repeat across rooms) and keeps the zoom.
-  it("clicking an occupant opens the component leaf, by id, keeping the zoom", async () => {
+  it("a spare beyond quorum reads on the group header", () => {
     mount();
-    const bar = screen.getByTestId("slot-conf-bar");
-    fireEvent.click(within(bar).getByRole("button", { name: /videobar-1/ }));
-    const page = await screen.findByTestId("component-page");
-    expect(page.textContent).toBe(`/web/components/${uuidFor("szp-c-bar")}?zoom=1`);
+    expect(within(screen.getByTestId("rolegroup-room-mic")).getByText(/\+ 1 spare/)).toBeTruthy();
   });
 
-  it("clicking a no-role member opens its leaf too", async () => {
-    mount();
-    const strip = screen.getByTestId("no-role-strip");
-    fireEvent.click(within(strip).getByRole("button", { name: /device-1/ }));
-    const page = await screen.findByTestId("component-page");
-    expect(page.textContent).toBe(`/web/components/${uuidFor("szp-c-power")}?zoom=1`);
-  });
 
-  // #785: the header answers since-when, the alarms lead, the history strip
-  // renders, and slot arithmetic stops leading a fully staffed room.
+  // #785: the header answers since-when, the alarms lead, the history strip renders.
   it("the header names the last edge and its age; slot arithmetic leads only while something is missing", () => {
     mount();
     const header = screen.getByTestId("system-header");
     expect(within(header).getByText(/since/)).toBeTruthy();
-    // This fixture IS short, so the line earns its place.
     expect(within(header).getByText(/slots filled/)).toBeTruthy();
   });
 
@@ -215,8 +211,7 @@ describe("the system zoom", () => {
       })),
     } as FleetHealth;
     mount(undefined, full);
-    const header = screen.getByTestId("system-header");
-    expect(within(header).queryByText(/slots filled/)).toBeNull();
+    expect(within(screen.getByTestId("system-header")).queryByText(/slots filled/)).toBeNull();
   });
 
   it("renders the active alarms worst first, above the roles, each naming its component and role", () => {
@@ -232,14 +227,263 @@ describe("the system zoom", () => {
     expect(screen.getByTestId("health-history")).toBeTruthy();
   });
 
-  it("a role holding more occupants than its quorum says so", () => {
-    mount();
-    const card = screen.getByTestId("slot-room-mic");
-    expect(within(card).getByText(/\+ 1 spare/)).toBeTruthy();
+  it("a legacy ?zoom=1 deep link still lands on the workspace: old links never break", () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?zoom=1`);
+    expect(screen.getByTestId("system-header")).toBeTruthy();
   });
 
-  it("without the zoom param the route renders the inventory detail, untouched", () => {
-    mount(`/web/systems/${uuidFor("szp-sys")}`);
-    expect(screen.queryByTestId("zoom-ladder")).toBeNull();
+  it("the classic detail face survives at ?view=detail until edit-in-blade lands", () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?view=detail`);
+    expect(screen.queryByTestId("system-header")).toBeNull();
+  });
+});
+
+describe("the components-first body (#790)", () => {
+  it("a 1:1 occupant is one card with a role badge, no box and no arithmetic", () => {
+    mount();
+    const card = screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`);
+    expect(within(card).getByText("videobar-1")).toBeTruthy();
+    expect(within(card).getByText("Conferencing Bar")).toBeTruthy();
+    expect(within(card).queryByText(/satisfying/)).toBeNull();
+  });
+
+  it("the choice jargon never renders: no 'built as', no choice eyebrow", () => {
+    mount();
+    expect(screen.queryByText(/built as/)).toBeNull();
+    expect(screen.queryByText(/conferencing$/i)).toBeNull();
+  });
+
+  it("an unstaffed role renders as an empty group wearing its badge and arithmetic", () => {
+    mount();
+    const g = screen.getByTestId("rolegroup-main-display");
+    expect(within(g).getByText("Main Display")).toBeTruthy();
+    expect(within(g).getByText(/0 of 1/)).toBeTruthy();
+  });
+
+  it("a short role renders as a group with its occupants inside and the gap named", () => {
+    mount();
+    const g = screen.getByTestId("rolegroup-room-mic");
+    expect(within(g).getByText(/1 of 2/)).toBeTruthy();
+    expect(within(g).getByTestId(`compcard-${uuidFor("szp-c-mic")}`)).toBeTruthy();
+  });
+
+  it("a no-role member is a card with the no-role badge, not a strip of chips", () => {
+    mount();
+    const card = screen.getByTestId(`compcard-${uuidFor("szp-c-power")}`);
+    expect(within(card).getByText("no role")).toBeTruthy();
+    expect(screen.queryByTestId("no-role-strip")).toBeNull();
+  });
+
+  it("clicking a card opens the component blade; Expand promotes to the leaf (#799)", async () => {
+    mount();
+    fireEvent.click(screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`));
+    const blade = await screen.findByRole("dialog");
+    fireEvent.click(within(blade).getByRole("button", { name: "Expand" }));
+    const page = await screen.findByTestId("component-page");
+    expect(page.textContent).toBe(`/web/components/${uuidFor("szp-c-bar")}`);
+  });
+});
+
+describe("the KPI tiles (#790)", () => {
+  it("renders one tile per contract metric with the effective value, sampled or default", () => {
+    mount(undefined, health, [
+      { metric_type_name: "room-temperature", label: "Room Temperature", data_type: "float", value: 23.5, is_sampled: true, from_contract: true, required: false },
+      { metric_type_name: "occupancy-count", label: "Occupancy Count", data_type: "int", value: 0, is_sampled: false, from_contract: true, required: false },
+    ]);
+    const tiles = screen.getByTestId("kpi-tiles");
+    expect(within(tiles).getByText("Room Temperature")).toBeTruthy();
+    expect(within(tiles).getByText("23.5")).toBeTruthy();
+    expect(within(tiles).getByText(/default/)).toBeTruthy();
+  });
+
+  it("renders no tile row at all when the standard declares nothing", () => {
+    mount();
+    expect(screen.queryByTestId("kpi-tiles")).toBeNull();
+  });
+});
+
+describe("the map tab (#791)", () => {
+  const MAPPED = [{
+    id: uuidFor("szp-std"), name: "huddle-room", label: "Huddle Room", official: false,
+    map: { aspect: 1.5, positions: [
+      { role: "room-mic", position: 1, x: 0.32, y: 0.52 },
+      { role: "room-mic", position: 2, x: 0.68, y: 0.52 },
+      { role: "main-display", position: 1, x: 0.5, y: 0.06 },
+    ] },
+  }];
+
+  it("a standard with a map yields the Map tab; without one the tab is absent (History keeps the rail)", () => {
+    mount(undefined, health, [], MAPPED);
+    expect(screen.getByRole("tab", { name: "Map" })).toBeTruthy();
+    cleanup();
+    mount();
+    expect(screen.getByTestId("tab-rail")).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Map" })).toBeNull();
+  });
+
+  it("the map tab renders one marker per declared position of the build in use, occupants solid and gaps hollow", () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
+    const map = screen.getByTestId("system-map");
+    const markers = within(map).getAllByTestId(/^mapmarker-/);
+    expect(markers).toHaveLength(3);
+    expect(within(map).getByText(/Room Microphone 2 · mic-1/)).toBeTruthy();
+    expect(within(map).getByText(/Main Display · empty/)).toBeTruthy();
+  });
+
+  it("clicking an occupied marker opens its component blade (#799)", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=map`, health, [], MAPPED);
+    fireEvent.click(screen.getByTestId(`mapmarker-room-mic-2`));
+    const blade = await screen.findByRole("dialog");
+    expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-component-${uuidFor("szp-c-mic")}`);
+  });
+});
+
+describe("the name-shaped address (#759's rule)", () => {
+  it("keeps every search param through the uuid resolve, the tab included", async () => {
+    mount(`/web/systems/boardroom?tab=map`, health, [], [
+      { id: uuidFor("szp-std"), name: "huddle-room", label: "Huddle Room", official: false,
+        map: { aspect: 1.5, positions: [{ role: "room-mic", position: 1, x: 0.3, y: 0.5 }] } },
+    ]);
+    await screen.findByTestId("system-map");
+    expect(window.location.search).toContain("tab=map");
+    expect(window.location.pathname).toContain(uuidFor("szp-sys"));
+  });
+});
+
+describe("the history tab (#792)", () => {
+  function seedAlarms(qc: QueryClient) {
+    qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-mic"))], [
+      { id: "hal-1", component: uuidFor("szp-c-mic"), severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true, acknowledged: false },
+    ]);
+    qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-bar"))], [
+      { id: "hal-0", component: uuidFor("szp-c-bar"), severity: "warning", message: "Fan speed high", raised_at: "2026-08-09T09:12:00Z", cleared_at: "2026-08-09T09:53:00Z", active: false, acknowledged: true },
+    ]);
+    qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-power"))], []);
+  }
+
+  // #795 refinement: the tab reads like a status page: uptime up top, the
+  // timeline, then each unhealthy stretch as an incident whose reasoning
+  // expands. The old flat what-went-wrong assertions live on inside the
+  // incident form below.
+  it("leads with the window's uptime beside the timeline", () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
+    const tab = screen.getByTestId("history-tab");
+    const uptime = within(tab).getByTestId("uptime-kpi");
+    expect(uptime.textContent).toMatch(/\d+(\.\d)?%/);
+    expect(within(tab).getByTestId("health-history-full")).toBeTruthy();
+  });
+
+  it("renders the ongoing unhealthy stretch as the first incident, expandable to the alarms that explain it", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
+    seedAlarms(r.qc);
+    const list = screen.getByTestId("incident-list");
+    const first = within(list).getAllByTestId(/^incident-/)[0];
+    expect(within(first).getByText(/ongoing/)).toBeTruthy();
+    fireEvent.click(within(first).getByRole("button", { name: /expand/ }));
+    expect(await within(first).findByText("No route to host")).toBeTruthy();
+    expect(within(first).getAllByText(/degraded/).length).toBeGreaterThan(0);
+  });
+
+  it("an alarm outside every incident still shows, under other alarms", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
+    seedAlarms(r.qc);
+    const tab = screen.getByTestId("history-tab");
+    expect(await within(tab).findByText("Fan speed high")).toBeTruthy();
+  });
+
+  it("is always on the rail, with the timeline and raise markers", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
+    seedAlarms(r.qc);
+    expect(screen.getByRole("tab", { name: "History" })).toBeTruthy();
+    expect(screen.getByTestId("health-history-full")).toBeTruthy();
+    await screen.findByText("Fan speed high");
+  });
+
+  it("marks each raise on the strip's axis", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
+    seedAlarms(r.qc);
+    await screen.findByText("No route to host");
+    expect(screen.getAllByTestId(/^incident-marker-/)).toHaveLength(2);
+  });
+});
+
+describe("the events and logs tabs (#793)", () => {
+  it("the events tab lists the room's story newest first, each row labeled by its owner", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=events`);
+    r.qc.setQueryData([...systemEventsKey(uuidFor("szp-sys"))], [
+      { ts: "2026-08-18T15:53:00Z", key: "call-started", event_type_id: "et-1", origin: "caught", message: "call started", provenance: "observed", owner_kind: "component", owner: "videobar-1" },
+      { ts: "2026-08-18T15:50:00Z", key: "occupancy-changed", event_type_id: "et-2", origin: "derived", message: "0 to 6", provenance: "derived", owner_kind: "system", owner: "boardroom" },
+    ]);
+    const tab = screen.getByTestId("events-tab");
+    expect(await within(tab).findByText("call started")).toBeTruthy();
+    expect(within(tab).getByText("videobar-1")).toBeTruthy();
+    expect(within(tab).getByText("occupancy-changed")).toBeTruthy();
+    expect(within(tab).getByText("boardroom")).toBeTruthy();
+  });
+
+  it("the logs tab renders the members' lines with severity colouring the row, and an empty room says so", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=logs`);
+    r.qc.setQueryData([...systemLogsKey(uuidFor("szp-sys"))], [
+      { ts: "2026-08-18T16:45:02Z", severity: "error", message: "connect timeout", component: "videobar-1" },
+      { ts: "2026-08-18T16:42:11Z", severity: "info", message: "qrc poll ok", component: "dsp" },
+    ]);
+    const tab = screen.getByTestId("logs-tab");
+    expect(await within(tab).findByText(/connect timeout/)).toBeTruthy();
+    expect(within(tab).getByText(/qrc poll ok/)).toBeTruthy();
+    cleanup();
+    const r2 = mount(`/web/systems/${uuidFor("szp-sys")}?tab=logs`);
+    r2.qc.setQueryData([...systemLogsKey(uuidFor("szp-sys"))], []);
+    expect(await screen.findByText(/No lines in the window/)).toBeTruthy();
+  });
+});
+
+describe("the data tab (#794, stacked per the #795 review)", () => {
+  const METRICS = [
+    { metric_type_name: "room-temperature", label: "Room Temperature", data_type: "float", value: 23.5, is_sampled: true, from_contract: true, required: false },
+    { metric_type_name: "occupancy-count", label: "Occupancy Count", data_type: "int", value: 0, is_sampled: false, from_contract: true, required: false },
+  ];
+  const seedSeries = (qc: QueryClient) => {
+    qc.setQueryData([...metricSeriesKey("systems", uuidFor("szp-sys"), "room-temperature", 24)], [
+      { ts: "2026-08-20T10:00:00Z", value: 22.9, provenance: "observed" },
+      { ts: "2026-08-20T14:00:00Z", value: 23.5, provenance: "observed" },
+    ]);
+    qc.setQueryData([...metricSeriesKey("systems", uuidFor("szp-sys"), "occupancy-count", 24)], []);
+  };
+
+  it("stacks every declared metric as a table row: label, sparkline, the latest value; no picker to hunt through", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=data`, health, METRICS);
+    seedSeries(r.qc);
+    const tab = screen.getByTestId("data-tab");
+    const temp = within(tab).getByTestId("metric-row-room-temperature");
+    expect(await within(temp).findByTestId("sparkline")).toBeTruthy();
+    expect(within(temp).getByText("23.5")).toBeTruthy();
+    const occ = within(tab).getByTestId("metric-row-occupancy-count");
+    expect(within(occ).getByText(/contract default/)).toBeTruthy();
+    expect(within(tab).queryByTestId("timeseries-chart")).toBeNull();
+  });
+
+  it("a row expands to the full chart and collapses back", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=data`, health, METRICS);
+    seedSeries(r.qc);
+    fireEvent.click(screen.getByTestId("metric-row-room-temperature"));
+    expect(await screen.findByTestId("timeseries-chart")).toBeTruthy();
+    fireEvent.click(screen.getByTestId("metric-row-room-temperature"));
+    expect(screen.queryByTestId("timeseries-chart")).toBeNull();
+  });
+
+  it("hides the tab with nothing declared", () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=data`, health, []);
+    expect(screen.queryByRole("tab", { name: "Data" })).toBeNull();
+  });
+});
+
+describe("the scoped summary (#795 review)", () => {
+  it("talks about THIS system's components: mix subject, slots, alarms", () => {
+    mount();
+    const rail = screen.getByTestId("fleet-summary");
+    expect(within(rail).getByText("components")).toBeTruthy();
+    expect(within(rail).queryByText("roots")).toBeNull();
+    expect(within(rail).getByText("slots filled")).toBeTruthy();
+    expect(within(rail).getByText(/active alarms?/)).toBeTruthy();
   });
 });

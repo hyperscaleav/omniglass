@@ -68,12 +68,12 @@ func TestAcronymListIsReadableByAnyAuthenticatedCaller(t *testing.T) {
 // platform:update on top of settings:update because an override is install-wide.
 func TestAcronymListIsWritableOnlyByAnAdmin(t *testing.T) {
 	f := newSettingsFixture(t)
-	patch := map[string]any{"acronyms": []any{"AV", "QM55"}}
+	patch := map[string]any{"acronyms": []any{"AV", "Edge 55"}}
 	f.c.do(f.viewer, http.MethodPatch, "/settings/label", patch, http.StatusForbidden)
 	f.c.do(f.admin, http.MethodPatch, "/settings/label", patch, http.StatusOK)
 
 	got := acronymsOf(t, decodeMe(t, f.c.do(f.viewer, http.MethodGet, "/settings/me", nil, http.StatusOK)))
-	if len(got) != 2 || got[1] != "QM55" {
+	if len(got) != 2 || got[1] != "Edge 55" {
 		t.Fatalf("after the admin write, acronyms = %v, want the operator's list", got)
 	}
 }
@@ -88,7 +88,7 @@ func TestAcronymProvenanceDistinguishesTheShippedListFromAnOperators(t *testing.
 		t.Fatalf("untouched acronyms source = %q, want default", body.Sources["label.acronyms"])
 	}
 
-	f.c.do(f.admin, http.MethodPatch, "/settings/label", map[string]any{"acronyms": []any{"QM55"}}, http.StatusOK)
+	f.c.do(f.admin, http.MethodPatch, "/settings/label", map[string]any{"acronyms": []any{"Edge 55"}}, http.StatusOK)
 
 	body = decodeSettings(t, f.c.do(f.admin, http.MethodGet, "/settings", nil, http.StatusOK))
 	if body.Sources["label.acronyms"] != "platform" {

@@ -139,7 +139,7 @@ func TestSystemRolesAPI(t *testing.T) {
 	}
 
 	// A room bar is classified video-bar, so it fills the mic role.
-	bar := "cisco-room-bar"
+	bar := "kestrel-vroom"
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "bar-1", "product": bar}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/systems/acme-1/roles/table-mic/assignments/bar-1", nil, http.StatusNoContent)
 	mic = read(ownerTok, "acme-1").find(t, "table-mic")
@@ -151,7 +151,7 @@ func TestSystemRolesAPI(t *testing.T) {
 	// parties. A bare 422 would leave the operator nothing to act on, so the
 	// message is the contract, asserted here verbatim (the task brief's own
 	// worked example, up to the specific names).
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "panel-1", "product": "samsung-qm55"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "panel-1", "product": "boreal-edge-55"}, http.StatusCreated)
 	body := c.do(ownerTok, http.MethodPut, "/systems/acme-1/roles/table-mic/assignments/panel-1", nil, http.StatusUnprocessableEntity)
 	const wantDetail = `component "panel-1" is a display; role "Table Microphone" wants a video-bar`
 	var problem struct {
@@ -249,24 +249,24 @@ func TestSeededStandardTypedRoles(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/systems/seeded-room/roles", nil, http.StatusOK), &w); err != nil {
 		t.Fatalf("decode system roles: %v", err)
 	}
-	if len(w.Roles) != 2 {
-		t.Fatalf("seeded meeting-room roles = %+v, want the two the standard ships", w.Roles)
+	if len(w.Roles) != 4 {
+		t.Fatalf("seeded meeting-room roles = %+v, want the four the standard ships (#802)", w.Roles)
 	}
-	mic := w.find(t, "room-mic")
-	if !mic.FromStandard || mic.Quorum != 2 || mic.Understaffed != 2 || !hasAllString(mic.AcceptedTypes, "video-bar") {
-		t.Fatalf("seeded room-mic = %+v, want inherited, quorum 2, two short, accepting video-bar", mic)
+	bar := w.find(t, "video-bar")
+	if !bar.FromStandard || bar.Quorum != 1 || bar.Understaffed != 1 || !hasAllString(bar.AcceptedTypes, "video-bar") {
+		t.Fatalf("seeded video-bar = %+v, want inherited, quorum 1, one short, accepting video-bar", bar)
 	}
 	if disp := w.find(t, "main-display"); !hasAllString(disp.AcceptedTypes, "display") {
 		t.Fatalf("seeded main-display = %+v, want accepting display", disp)
 	}
 
 	// The shipped catalog can actually satisfy what the shipped standard asks
-	// for: a Samsung QM55 fills the display role without any hand-declaration.
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "qm-1", "product": "samsung-qm55"}, http.StatusCreated)
+	// for: a Boreal Edge 55 fills the display role without any hand-declaration.
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "qm-1", "product": "boreal-edge-55"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/systems/seeded-room/roles/main-display/assignments/qm-1", nil, http.StatusNoContent)
 
 	// A touch panel is not a display: refused.
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "panel-9", "product": "crestron-tss-1070"}, http.StatusCreated)
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "panel-9", "product": "newtron-panel-7"}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/systems/seeded-room/roles/main-display/assignments/panel-9", nil, http.StatusUnprocessableEntity)
 }
 
@@ -306,7 +306,7 @@ func TestSwapPositionsAndCapacityRefusalsAPI(t *testing.T) {
 		"label": "Main Display",
 	}, http.StatusOK)
 
-	bar := "cisco-room-bar"
+	bar := "kestrel-vroom"
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "zeta", "product": bar}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "alpha", "product": bar}, http.StatusCreated)
 	c.do(ownerTok, http.MethodPut, "/systems/swap-api-sys/roles/table-mic/assignments/zeta", nil, http.StatusNoContent)

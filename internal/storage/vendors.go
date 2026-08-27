@@ -31,7 +31,7 @@ func validVendorKind(s string) bool {
 }
 
 // Vendor is a registry row naming an organization in the fleet model (e.g.
-// "Cisco", "Crestron"): a stable id, the official flag, a label, a kind
+// "Boreal", "Kestrel"): a stable id, the official flag, a label, a kind
 // (manufacturer/integrator/developer), and optional contact metadata (icon,
 // support phone, website). It is a flat registry like component_type: no tree,
 // and no in-use delete guard in this slice (product will reference it). The

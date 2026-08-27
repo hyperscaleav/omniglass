@@ -327,6 +327,13 @@ change, since rows reference blobs by `sha256`.
 
 :::design[Typed, generated query construction, tracked in #529]
 
+## The standard's map
+
+A standard may carry a room-layout declaration (ADR-0128): the `map` jsonb column, one
+value holding an aspect ratio and normalized 1-based role positions, validated in Go on
+write and cleared by a JSON null. Display data: nothing queries into it, every conforming
+system renders from it.
+
 ## Query construction: typed, parameterized, generated
 
 **Logic lives in Go, and the schema carries exactly one deliberate exception.** That exception is

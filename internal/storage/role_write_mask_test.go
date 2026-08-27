@@ -51,7 +51,7 @@ func TestUnrelatedEditLeavesTheRestOfTheDeclarationAlone(t *testing.T) {
 	if _, err := gw.SetSystemRole(ctx, "", "system", "mask-preserve-sys", storage.SystemRoleSpec{
 		Name: "main-display", Label: "Main Display", Quorum: 2, Impact: "outage",
 		Capacity: &cap3, PositionLabels: []string{"left", "right"},
-		AcceptedTypes: []string{"display"}, PinnedProducts: []string{"samsung-qm55"},
+		AcceptedTypes: []string{"display"}, PinnedProducts: []string{"boreal-edge-55"},
 	}); err != nil {
 		t.Fatalf("declare: %v", err)
 	}
@@ -79,8 +79,8 @@ func TestUnrelatedEditLeavesTheRestOfTheDeclarationAlone(t *testing.T) {
 		t.Fatalf("accepted_types after an unrelated edit = %v, want [display]: an empty set is not "+
 			"a populated field, so it means unchanged, not cleared", r.AcceptedTypes)
 	}
-	if len(r.PinnedProducts) != 1 || r.PinnedProducts[0] != "samsung-qm55" {
-		t.Fatalf("pinned_products after an unrelated edit = %v, want [samsung-qm55]", r.PinnedProducts)
+	if len(r.PinnedProducts) != 1 || r.PinnedProducts[0] != "boreal-edge-55" {
+		t.Fatalf("pinned_products after an unrelated edit = %v, want [boreal-edge-55]", r.PinnedProducts)
 	}
 	if quorum := r.Quorum; quorum != 2 {
 		t.Fatalf("quorum after an unrelated edit = %d, want 2", quorum)
@@ -130,7 +130,7 @@ func TestExplicitMaskClearsTheTypedSlotAndLabels(t *testing.T) {
 	if _, err := gw.SetSystemRole(ctx, "", "system", "mask-clear-list-sys", storage.SystemRoleSpec{
 		Name: "main-display", Label: "Main Display",
 		PositionLabels: []string{"left"}, AcceptedTypes: []string{"display"},
-		PinnedProducts: []string{"samsung-qm55"},
+		PinnedProducts: []string{"boreal-edge-55"},
 	}); err != nil {
 		t.Fatalf("declare: %v", err)
 	}

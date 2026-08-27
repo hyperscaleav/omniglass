@@ -1,10 +1,11 @@
 import { For, Show, createEffect, createSignal, type Accessor, type JSX } from "solid-js";
+import { useSearchParams } from "@solidjs/router";
 import Button from "./Button";
 import Donut from "./Donut";
 import ListShell from "./ListShell";
-import { ChevronDown, ChevronLeft } from "./icons";
+import { ChevronDown, ChevronLeft, Grid, Rows } from "./icons";
 import type { Chip, FilterKey } from "../lib/predicate";
-import type { FleetTiles } from "../lib/fleet_tiles";
+import type { TileSpec } from "../lib/fleet_tiles";
 import type { SystemCluster } from "../lib/fleet";
 
 // The fleet pages' shared frame (#630, ruled 2026-08-18): the same layout at
@@ -26,7 +27,7 @@ const tileBox = "flex h-full w-full min-w-0 flex-col gap-2 rounded-box border bo
 
 export default function FleetShell(props: {
   storageKey: string;
-  tiles: FleetTiles | undefined;
+  tiles: TileSpec | undefined;
   rows: SystemCluster[];
   filterKeys: FilterKey<SystemCluster>[];
   chips: Accessor<Chip[]>;
@@ -37,8 +38,22 @@ export default function FleetShell(props: {
   // verdict and slot count, say). Renders where the filter bar would when a
   // zoom has nothing to filter; above the body when it has both.
   header?: JSX.Element;
+  // The density toggle's list face (#798, ADR-0129: tables survive as a
+  // list-density toggle). When set, the shell offers canvas/list buttons and
+  // `?view=list` swaps the whole body (summary, filter bar, canvas) for this
+  // face; the view is a URL fact, so the address deep-links. Leaving the list
+  // clears `kind` with it (the fleet root's tab param has no meaning off it).
+  list?: JSX.Element;
   children: JSX.Element;
 }) {
+  const [search, setSearch] = useSearchParams();
+  const listMode = () => props.list != null && search.view === "list";
+  const viewToggle = () => (
+    <div data-testid="view-toggle" class="join flex-none">
+      <Button square icon={Grid} title="Canvas view" label="Canvas view" class="join-item" intent={listMode() ? "quiet" : "action"} onClick={() => setSearch({ view: undefined, kind: undefined })} />
+      <Button square icon={Rows} title="List view" label="List view" class="join-item" intent={listMode() ? "action" : "quiet"} onClick={() => setSearch({ view: "list" })} />
+    </div>
+  );
   const [summaryOpen, setSummaryOpen] = createSignal(localStorage.getItem(`${props.storageKey}-sumopen`) === "1");
   createEffect(() => localStorage.setItem(`${props.storageKey}-sumopen`, summaryOpen() ? "1" : "0"));
 
@@ -55,6 +70,7 @@ export default function FleetShell(props: {
 
   const segs = () => VERDICTS.map((v) => ({ key: v, label: v, value: props.tiles?.ratio[v] ?? 0, color: COLOR[v] }));
   const total = () => props.tiles?.ratio.total ?? 0;
+  const subject = () => props.tiles?.subject ?? "";
   const attention = () => props.tiles?.attention.total ?? 0;
   const ATTENTION = ["outage", "degraded", "incomplete"];
   const attentionOn = () => ATTENTION.some(facetActive) && !facetActive("healthy");
@@ -65,8 +81,21 @@ export default function FleetShell(props: {
 
   const badgeCls = (on: boolean) => "inline-flex items-center gap-2 rounded-field border px-2.5 py-1 " + (on ? "border-primary bg-primary/10" : "border-base-300 bg-base-200");
 
-  return (
-    <section class="fade-in flex flex-col gap-3.5">
+  if (props.list != null) {
+    return (
+      <section class="fade-in flex flex-col gap-3.5">
+        <Show when={listMode()} fallback={canvasFace(viewToggle)}>
+          <div class="flex items-center justify-end">{viewToggle()}</div>
+          {props.list}
+        </Show>
+      </section>
+    );
+  }
+  return canvasFace();
+
+  function canvasFace(toggle?: () => JSX.Element) {
+    return (
+    <div class="flex flex-col gap-3.5">
       <Show when={props.tiles}>
         {(t) => (
           <div data-testid="fleet-summary" class="flex flex-col gap-3">
@@ -80,28 +109,25 @@ export default function FleetShell(props: {
                       <span class="inline-flex h-2 w-13 flex-none overflow-hidden rounded-full">
                         <For each={segs().filter((s) => s.value)}>{(s) => <span style={{ width: `${(s.value / Math.max(1, total())) * 52}px`, background: s.color }} />}</For>
                       </span>
-                      <span class="tnum text-sm font-semibold">{t().systems}</span>
-                      <span class="text-[11.5px] text-base-content/60">systems</span>
+                      <span class="tnum text-sm font-semibold">{total()}</span>
+                      <span class="text-[11.5px] text-base-content/60">{subject()}</span>
                     </button>
                     {/* Need attention: one click, three verdicts. */}
-                    <button data-testid="badge-attention" class={badgeCls(attentionOn())} onClick={toggleAttention} title="Filter to systems needing attention">
+                    <button data-testid="badge-attention" class={badgeCls(attentionOn())} onClick={toggleAttention} title="Filter to what needs attention">
                       <span class="h-1.5 w-1.5 flex-none rounded-full" style={{ background: attention() ? (t().attention.outage ? COLOR.outage : t().attention.degraded ? COLOR.degraded : COLOR.incomplete) : COLOR.healthy }} />
                       <span class="tnum text-sm font-semibold">{attention()}</span>
                       <span class="text-[11.5px] text-base-content/60">need attention</span>
                     </button>
-                    <span class={badgeCls(false)} title="Locations with no system">
-                      <span class="tnum text-sm font-semibold">{t().gaps}</span>
-                      <span class="text-[11.5px] text-base-content/60">{t().gaps === 1 ? "gap" : "gaps"}</span>
-                    </span>
-                    <span class={badgeCls(false)}>
-                      <span class="tnum text-sm font-semibold">{t().components}</span>
-                      <span class="text-[11.5px] text-base-content/60">components</span>
-                    </span>
-                    <span class={badgeCls(false)}>
-                      <span class="tnum text-sm font-semibold">{t().roots}</span>
-                      <span class="text-[11.5px] text-base-content/60">{t().roots === 1 ? "root" : "roots"}</span>
-                    </span>
+                    <For each={t().counts}>
+                      {(c) => (
+                        <span class={badgeCls(false)} title={c.sub}>
+                          <span class="tnum text-sm font-semibold">{String(c.value)}</span>
+                          <span class="text-[11.5px] text-base-content/60">{c.label}</span>
+                        </span>
+                      )}
+                    </For>
                   </div>
+                  {toggle?.()}
                   <Button square icon={ChevronLeft} title="Expand summary" label="Expand summary" class="flex-none" onClick={() => setSummaryOpen(true)} />
                 </div>
               }
@@ -109,6 +135,7 @@ export default function FleetShell(props: {
               <div class="flex items-center gap-2">
                 <span class="eyebrow">Summary</span>
                 <span class="flex-1" />
+                {toggle?.()}
                 <Button icon={ChevronDown} iconTrailing onClick={() => setSummaryOpen(false)}>Collapse</Button>
               </div>
               <div data-testid="fleet-tiles" class="flex flex-wrap items-stretch gap-3">
@@ -120,7 +147,7 @@ export default function FleetShell(props: {
                       thickness={11}
                       onSelect={(k) => toggleFacet(k)}
                       active={(k) => facetActive(k)}
-                      center={<><span class="tnum text-base font-semibold">{total()}</span><span class="text-[9px] text-base-content/50">systems</span></>}
+                      center={<><span class="tnum text-base font-semibold">{total()}</span><span class="text-[9px] text-base-content/50">{subject()}</span></>}
                     />
                     <ul class="flex flex-col gap-1 text-xs">
                       <For each={segs()}>
@@ -137,27 +164,17 @@ export default function FleetShell(props: {
                     </ul>
                   </div>
                 </div>
-                <div class="min-w-50 max-w-sm flex-[1_1_220px]">
-                  <div class={tileBox}>
-                    <span class="eyebrow">Gaps</span>
-                    <span class="tnum text-2xl font-semibold">{t().gaps}</span>
-                    <span class="text-xs text-base-content/60">{t().gaps === 1 ? "location with no system" : "locations with no system"}</span>
-                  </div>
-                </div>
-                <div class="min-w-50 max-w-sm flex-[1_1_220px]">
-                  <div class={tileBox}>
-                    <span class="eyebrow">Components</span>
-                    <span class="tnum text-2xl font-semibold">{t().components}</span>
-                    <span class="text-xs text-base-content/60">across {t().systems} systems</span>
-                  </div>
-                </div>
-                <div class="min-w-50 max-w-sm flex-[1_1_220px]">
-                  <div class={tileBox}>
-                    <span class="eyebrow">Roots</span>
-                    <span class="tnum text-2xl font-semibold">{t().roots}</span>
-                    <span class="text-xs text-base-content/60">{t().depth.min === t().depth.max ? `${t().depth.max} levels deep` : `${t().depth.min} to ${t().depth.max} levels deep`}</span>
-                  </div>
-                </div>
+                <For each={t().counts}>
+                  {(c) => (
+                    <div class="min-w-50 max-w-sm flex-[1_1_220px]">
+                      <div class={tileBox}>
+                        <span class="eyebrow">{c.label}</span>
+                        <span class="tnum text-2xl font-semibold">{String(c.value)}</span>
+                        <Show when={c.sub}><span class="text-xs text-base-content/60">{c.sub}</span></Show>
+                      </div>
+                    </div>
+                  )}
+                </For>
               </div>
             </Show>
           </div>
@@ -187,6 +204,7 @@ export default function FleetShell(props: {
           )}
         </ListShell>
       </Show>
-    </section>
-  );
+    </div>
+    );
+  }
 }

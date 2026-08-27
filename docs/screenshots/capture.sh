@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # Capture the docs screenshots against the real console (never mocked), fully in
 # Docker so it runs the same on a laptop and in CI with no host-networking
 # assumptions: Postgres, the server (the built binary), and the Playwright capture
@@ -58,8 +59,11 @@ sleep 2
 app() { docker run --rm --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" -e OMNIGLASS_DSN="$DSN" "$APPIMG" /omniglass "$@"; }
 
 app migrate
+# Idempotent by intent, but a swallowed TRANSIENT failure here drops audited
+# rows (credential creates) and shifts the audit page (#780): tolerate only
+# the already-exists case by checking the outcome, never by ignoring failure.
 app bootstrap dev --password dev >/dev/null 2>&1 || true
-app set-password dev dev >/dev/null 2>&1 || true
+app set-password dev dev >/dev/null
 app seed-dev
 
 docker run -d --name ogshots-srv --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" \
@@ -67,9 +71,13 @@ docker run -d --name ogshots-srv --network "$NET" -v "$ROOT/bin/omniglass:/omnig
 until docker run --rm --network "$NET" "$PWIMG" bash -c 'curl -fsS http://ogshots-srv:8080/api/v1/healthz' >/dev/null 2>&1; do sleep 1; done
 
 TOK=$(app token dev --description "docs capture" 2>/dev/null | grep -o 'ogp_[A-Za-z0-9_-]*')
-# A couple of secrets so the Secrets surface renders real rows (idempotent).
+# A couple of secrets so the Secrets surface renders real rows. LOUD on
+# failure: every CLI write here lands an audit row, so a write that silently
+# failed shifts the audit page by one row and the zero-tolerance gate reads
+# the shift as UI drift (#780's audit flap was exactly this class). A capture
+# whose fixture writes did not all land is not a capture of the console.
 sec() { docker run --rm --network "$NET" -v "$ROOT/bin/omniglass:/omniglass:ro" \
-  -e OMNIGLASS_SERVER=http://ogshots-srv:8080 -e OMNIGLASS_TOKEN="$TOK" "$APPIMG" /omniglass "$@" >/dev/null 2>&1 || true; }
+  -e OMNIGLASS_SERVER=http://ogshots-srv:8080 -e OMNIGLASS_TOKEN="$TOK" "$APPIMG" /omniglass "$@" >/dev/null; }
 sec secret create --name device-basic --secret-type basic-auth --owner-kind platform --fields '{"username":"admin","password":"s3cret-pw"}'
 sec secret create --name core-snmp --secret-type snmp-community --owner-kind platform --fields '{"community":"public"}'
 

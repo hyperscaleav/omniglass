@@ -69,8 +69,8 @@ func newHealthFixture(t *testing.T) *healthFixture {
 		t.Fatalf("declare role: %v", err)
 	}
 
-	// cisco-room-bar classifies as video-bar.
-	bar := "cisco-room-bar"
+	// kestrel-vroom classifies as video-bar.
+	bar := "kestrel-vroom"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, f.all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -661,9 +661,9 @@ func TestHealthIgnoresProductChange(t *testing.T) {
 		t.Fatalf("baseline system = %q, want healthy", v)
 	}
 
-	// samsung-qm55 classifies as display, not video-bar, but bar-1 is already
+	// boreal-edge-55 classifies as display, not video-bar, but bar-1 is already
 	// assigned and stays assigned: reclassifying it must record nothing.
-	panel := "samsung-qm55"
+	panel := "boreal-edge-55"
 	if _, err := f.gw.UpdateComponent(ctx, "", "bar-1", storage.ComponentPatch{ProductName: &panel}, f.all, f.all); err != nil {
 		t.Fatalf("change product: %v", err)
 	}
@@ -680,7 +680,7 @@ func TestHealthIgnoresProductChange(t *testing.T) {
 	mustAgree(t, rep)
 
 	// Reclassifying back is the same no-op in the other direction.
-	bar := "cisco-room-bar"
+	bar := "kestrel-vroom"
 	if _, err := f.gw.UpdateComponent(ctx, "", "bar-1", storage.ComponentPatch{ProductName: &bar}, f.all, f.all); err != nil {
 		t.Fatalf("restore product: %v", err)
 	}
@@ -987,7 +987,7 @@ func TestAlarmOnSpareDoesNotShort(t *testing.T) {
 	f := newHealthFixture(t)
 	ctx := context.Background()
 
-	panel := "cisco-room-bar"
+	panel := "kestrel-vroom"
 	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-2", ProductName: &panel}, f.all, all, all, all); err != nil {
 		t.Fatalf("create second component: %v", err)
 	}

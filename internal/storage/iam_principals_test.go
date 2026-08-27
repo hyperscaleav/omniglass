@@ -102,3 +102,57 @@ func TestPrincipalDirectory(t *testing.T) {
 		t.Fatalf("get malformed id: want ErrPrincipalNotFound, got %v", err)
 	}
 }
+
+// TestPrincipalListGroupsKinds pins the directory ordering rule: humans list
+// before nodes no matter which was created first. Creation stamps are not a
+// stable cross-kind order (bootstrap, seeding, and enrollment write in separate
+// transactions), and a stamp-led sort flapped the screenshot gate when a run's
+// node landed an earlier stamp than its humans. Skipped under -short.
+func TestPrincipalListGroupsKinds(t *testing.T) {
+	dsn := storagetest.NewDSN(t)
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+
+	if err := gw.UpsertRole(ctx, storage.Role{Name: "owner", Official: true, Permissions: []string{"*:*"}}); err != nil {
+		t.Fatalf("seed owner role: %v", err)
+	}
+	zeros := make([]byte, 32)
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: zeros, Prefix: "root0000"}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	owner, err := gw.AuthenticateBearer(ctx, zeros)
+	if err != nil {
+		t.Fatalf("resolve owner: %v", err)
+	}
+	all := scope.Set{All: true}
+
+	// The node lands first, so its created_at precedes the second human's: the
+	// exact shape that put a node above the humans under a stamp-led sort.
+	if _, err := gw.CreateNode(ctx, owner.ID, storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+	if _, err := gw.CreateHumanPrincipal(ctx, owner.ID, storage.HumanSpec{Username: "later-human"}, all); err != nil {
+		t.Fatalf("create human: %v", err)
+	}
+
+	list, err := gw.ListPrincipals(ctx, all, false)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	var kinds []string
+	for _, pr := range list {
+		kinds = append(kinds, pr.Kind)
+	}
+	want := []string{"human", "human", "node"}
+	if len(kinds) != 3 || kinds[0] != want[0] || kinds[1] != want[1] || kinds[2] != want[2] {
+		t.Fatalf("kind order: want %v, got %v", want, kinds)
+	}
+	// Within the humans, creation order holds: the bootstrap owner first.
+	if list[0].Human == nil || list[0].Human.Username != "root" || list[1].Human == nil || list[1].Human.Username != "later-human" {
+		t.Fatalf("human order: want root then later-human, got %+v", list)
+	}
+}

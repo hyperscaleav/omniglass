@@ -23,7 +23,7 @@ import (
 // reclassify still re-mint, and the label follows the name wherever it
 // legitimately moves.
 
-const ceilingMic = "shure-mxa920"
+const ceilingMic = "lyra-arc-a2"
 
 // TestAMoveThatRestatesItsPlacementKeepsTheName is #696's reproduction: a
 // pre-filled move form sends the current placement back, the move API requires
@@ -32,11 +32,11 @@ func TestAMoveThatRestatesItsPlacementKeepsTheName(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "restated-room")
 
-	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all, all, all, all)
+	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(edge55), LocationName: &room}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create first: %v", err)
 	}
-	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all, all, all, all)
+	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(edge55), LocationName: &room}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create second: %v", err)
 	}
@@ -76,11 +76,11 @@ func TestARelocateInsideOneParentBucketKeepsTheName(t *testing.T) {
 	roomB := makeRoom(t, gw, ctx, "parented-room-b")
 	rack := mustCreateComponent(t, gw, storage.ComponentSpec{Name: "parented-rack"}, all)
 
-	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), ParentName: &rack.Name, LocationName: &roomA}, all, all, all, all)
+	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(edge55), ParentName: &rack.Name, LocationName: &roomA}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create first: %v", err)
 	}
-	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), ParentName: &rack.Name, LocationName: &roomA}, all, all, all, all)
+	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(edge55), ParentName: &rack.Name, LocationName: &roomA}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create second: %v", err)
 	}
@@ -117,10 +117,10 @@ func TestAMoveBetweenBucketsStillReMints(t *testing.T) {
 
 	// display-1 is already taken in the destination, so a re-mint is visible
 	// rather than landing back on the name it started with.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &roomB}, all, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(edge55), LocationName: &roomB}, all, all, all, all); err != nil {
 		t.Fatalf("occupy the destination bucket: %v", err)
 	}
-	mover, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &roomA}, all, all, all, all)
+	mover, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(edge55), LocationName: &roomA}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create the mover: %v", err)
 	}
@@ -163,11 +163,11 @@ func TestAReclassifyToTheSameProductKeepsTheName(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	room := makeRoom(t, gw, ctx, "reclassify-room")
 
-	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all, all, all, all)
+	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(edge55), LocationName: &room}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create first: %v", err)
 	}
-	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all, all, all, all)
+	second, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(edge55), LocationName: &room}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create second: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestAReclassifyToTheSameProductKeepsTheName(t *testing.T) {
 		t.Fatalf("rename the first: %v", err)
 	}
 
-	after, err := gw.UpdateComponent(ctx, "", second.ID, storage.ComponentPatch{ProductName: strptr(qm55)}, all, all)
+	after, err := gw.UpdateComponent(ctx, "", second.ID, storage.ComponentPatch{ProductName: strptr(edge55)}, all, all)
 	if err != nil {
 		t.Fatalf("save restating the current product: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestARealReclassifyStillReMintsAndTheLabelFollows(t *testing.T) {
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(ceilingMic), LocationName: &room}, all, all, all, all); err != nil {
 		t.Fatalf("create the sitting mic: %v", err)
 	}
-	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(qm55), LocationName: &room}, all, all, all, all)
+	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(edge55), LocationName: &room}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create the display: %v", err)
 	}

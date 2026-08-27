@@ -28,9 +28,13 @@ type EventWrite struct {
 
 // Event is a stored occurrence row (read side).
 type Event struct {
-	ID          int64
-	TS          time.Time
-	OwnerKind   string
+	ID        int64
+	TS        time.Time
+	OwnerKind string
+	// Owner is the owning row's NAME, populated by the system-scoped read
+	// (#793), where one list mixes owners; the single-owner reads leave it
+	// empty because the caller already knows.
+	Owner       string
 	Key         string
 	EventTypeID string
 	Instance    string
@@ -131,4 +135,46 @@ func (p *PG) ListComponentEvents(ctx context.Context, componentRef string, windo
 		return nil, fmt.Errorf("storage: iterate events %s: %w", componentRef, err)
 	}
 	return out, nil
+}
+
+// ListSystemEvents returns the system's own events AND its members', one list
+// newest first (#793): the workspace's Events tab. The caller resolves the
+// system in scope first (the non-disclosing-404 pattern every lane read
+// shares); membership is the system_member join, so a component shared with
+// another system appears in both systems' lists, which is what sharing means.
+func (p *PG) ListSystemEvents(ctx context.Context, systemID string, window time.Duration, limit int) ([]Event, error) {
+	bound, args := tsSince("ts", window, systemID, limit)
+	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
+		select event.id, ts, owner_kind,
+			coalesce(
+				(select s.name from system s where s.id = event.system_id),
+				(select c.name from component c where c.id = event.component_id), ''),
+			(select et.name from event_type et where et.id = event.event_type_id), event.event_type_id,
+			instance, origin, message, attributes, provenance, source
+		from event
+		where (event.system_id = $1::uuid
+		   or event.component_id in (select m.component_id from system_member m where m.system_id = $1::uuid))
+		  and %s
+		order by ts desc
+		limit $2`, bound), args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list system events %s: %w", systemID, err)
+	}
+	defer rows.Close()
+	var out []Event
+	for rows.Next() {
+		var e Event
+		var key, typeID *string
+		if err := rows.Scan(&e.ID, &e.TS, &e.OwnerKind, &e.Owner, &key, &typeID, &e.Instance, &e.Origin, &e.Message, &e.Attributes, &e.Provenance, &e.Source); err != nil {
+			return nil, fmt.Errorf("storage: scan system event: %w", err)
+		}
+		if key != nil {
+			e.Key = *key
+		}
+		if typeID != nil {
+			e.EventTypeID = *typeID
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }

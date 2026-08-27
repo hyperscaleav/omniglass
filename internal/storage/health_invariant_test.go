@@ -104,12 +104,12 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 		t.Fatalf("create system: %v", err)
 	}
 	if got := f.healthSeries(t, ctx, "system", "hq-boardroom"); !sameSeq(got, []string{"incomplete"}) {
-		t.Fatalf("after create = %v, want the one opening incomplete (both roles unstaffed, a commissioning gap)", got)
+		t.Fatalf("after create = %v, want the one opening incomplete (every role unstaffed, a commissioning gap)", got)
 	}
 
-	bar, panel := "cisco-room-bar", "samsung-qm55"
+	bar, panel, touch, sched := "kestrel-vroom", "boreal-edge-55", "newtron-panel-7", "newtron-slate-5"
 	for _, c := range []struct{ name, product string }{
-		{"bar-a", bar}, {"bar-b", bar}, {"panel-a", panel},
+		{"bar-a", bar}, {"panel-a", panel}, {"touch-a", touch}, {"sched-a", sched},
 	} {
 		product := c.product
 		if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{
@@ -119,13 +119,15 @@ func TestHealthRecordsOneRowPerChange(t *testing.T) {
 		}
 	}
 
-	// The verdict after each assignment, from the roles themselves: one bar leaves
-	// room-mic below its quorum of 2, two bars satisfy it but main-display is still
-	// empty, and only the panel makes the system whole.
+	// The verdict after each assignment, from the roles themselves (#802: the
+	// seeded meeting-room ships the four-role chain): each staffing step short
+	// of the last leaves some role empty, and only the scheduling panel makes
+	// the system whole.
 	steps := []struct{ role, component, want string }{
-		{"room-mic", "bar-a", "incomplete"},
-		{"room-mic", "bar-b", "incomplete"},
-		{"main-display", "panel-a", "healthy"},
+		{"video-bar", "bar-a", "incomplete"},
+		{"main-display", "panel-a", "incomplete"},
+		{"touch-control", "touch-a", "incomplete"},
+		{"scheduling-panel", "sched-a", "healthy"},
 	}
 	for _, s := range steps {
 		if err := f.gw.AssignRole(ctx, "", "hq-boardroom", s.role, s.component, f.all, f.all); err != nil {
@@ -201,7 +203,7 @@ func TestUnbuiltAlternateDoesNotImpair(t *testing.T) {
 	// whose unstaffed roles are a commissioning gap (#631), not their impact.
 	f.mustAgreeWithRecord(t, ctx, "choice-room", "incomplete")
 
-	bar := "cisco-room-bar"
+	bar := "kestrel-vroom"
 	if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "choice-bar-1", ProductName: &bar}, f.all, all, all, all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -316,9 +318,9 @@ func TestHealthRecordsEveryRealChange(t *testing.T) {
 	}, f.all, all); err != nil {
 		t.Fatalf("create system: %v", err)
 	}
-	bar, panel := "cisco-room-bar", "samsung-qm55"
+	bar, panel, touch, sched := "kestrel-vroom", "boreal-edge-55", "newtron-panel-7", "newtron-slate-5"
 	for _, c := range []struct{ name, product string }{
-		{"bar-a", bar}, {"bar-b", bar}, {"panel-a", panel},
+		{"bar-a", bar}, {"panel-a", panel}, {"touch-a", touch}, {"sched-a", sched},
 	} {
 		product := c.product
 		if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{
@@ -328,7 +330,7 @@ func TestHealthRecordsEveryRealChange(t *testing.T) {
 		}
 	}
 	for _, s := range []struct{ role, component string }{
-		{"room-mic", "bar-a"}, {"room-mic", "bar-b"}, {"main-display", "panel-a"},
+		{"video-bar", "bar-a"}, {"main-display", "panel-a"}, {"touch-control", "touch-a"}, {"scheduling-panel", "sched-a"},
 	} {
 		if err := f.gw.AssignRole(ctx, "", "hq-boardroom", s.role, s.component, f.all, f.all); err != nil {
 			t.Fatalf("assign %s to %s: %v", s.component, s.role, err)
@@ -336,10 +338,10 @@ func TestHealthRecordsEveryRealChange(t *testing.T) {
 	}
 	f.mustAgreeWithRecord(t, ctx, "hq-boardroom", "healthy")
 
-	// A critical alarm takes bar-a down, dropping room-mic to one occupant,
-	// below its quorum: a real change, so a real row.
+	// A critical alarm takes the bar down, emptying the video-bar slot: a
+	// real change, so a real row.
 	alarm, err := f.gw.RaiseAlarm(ctx, "", "bar-a", storage.AlarmSpec{
-		Severity: "critical", Message: "mic array not responding",
+		Severity: "critical", Message: "bar not responding",
 	})
 	if err != nil {
 		t.Fatalf("raise alarm: %v", err)
@@ -379,7 +381,7 @@ func (f *healthFixture) staffPair(t *testing.T, ctx context.Context, standard, s
 	}, f.all, all); err != nil {
 		t.Fatalf("create system %s: %v", system, err)
 	}
-	bar := "cisco-room-bar"
+	bar := "kestrel-vroom"
 	for _, c := range components {
 		product := bar
 		if _, err := f.gw.CreateComponent(ctx, "", storage.ComponentSpec{
@@ -466,7 +468,7 @@ func TestHealthConcurrentWritesRecordOneEdge(t *testing.T) {
 			component := c
 			writes = append(writes, func() error {
 				_, err := f.gw.RaiseAlarm(ctx, "", component, storage.AlarmSpec{
-					Severity: "critical", Message: "mic array not responding",
+					Severity: "critical", Message: "bar not responding",
 				})
 				return err
 			})
@@ -517,7 +519,7 @@ func TestHealthConcurrentOppositeWritesLeaveNoStaleRecord(t *testing.T) {
 		// the write that says degraded: run together, they disagree about what
 		// the fleet is.
 		standing, err := f.gw.RaiseAlarm(ctx, "", a, storage.AlarmSpec{
-			Severity: "critical", Message: "mic array not responding",
+			Severity: "critical", Message: "bar not responding",
 		})
 		if err != nil {
 			t.Fatalf("raise standing alarm: %v", err)

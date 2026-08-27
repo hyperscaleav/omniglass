@@ -1,4 +1,5 @@
 import { For, Show, createMemo } from "solid-js";
+import Eyebrow from "./Eyebrow";
 import StateStrip from "./StateStrip";
 import { fmtTime, rel } from "../lib/format";
 import { durationText, share, spans, type Span } from "../lib/timeline";
@@ -45,6 +46,10 @@ export default function HealthHistory(props: {
   verdict?: string;
   // What the window covers, in the API's terms.
   window?: string;
+  // Strip only, no per-span rows: for a surface that narrates the spans
+  // itself (the history tab's incident list) and would otherwise say
+  // everything twice.
+  compact?: boolean;
 }) {
   // Pinned at setup, like the availability strip: a strip whose "now" moved under
   // it would re-weight every segment on an unrelated re-render.
@@ -56,25 +61,29 @@ export default function HealthHistory(props: {
   // Newest first for the reading order: what it is now, then what it was before.
   const rows = createMemo(() => [...list()].reverse());
   const healthy = createMemo(() => share(list(), (v) => v === "healthy"));
-  const changes = () => Math.max(edges().length - 1, 0);
 
   return (
     <div class="flex flex-col gap-2">
-      <div class="flex items-baseline justify-between gap-2">
-        <span class="eyebrow">History</span>
-        <span class="shrink-0 text-[10.5px] text-base-content/40">{props.window ?? "the recorded edges, last 30 days"}</span>
-      </div>
-      <p class="text-[11px] text-base-content/50">
-        One entry per change, never a sample. This is what answers "when exactly did it go unhealthy", read back weeks
-        later.
-      </p>
+      {/* The pedagogy rides the (i), never the flow (#790, tooltips-not-prose):
+          an operator scans this section, and the model it teaches is one hover
+          away on the label. */}
+      <Eyebrow
+        label="History"
+        hint={`One entry per change, never a sample: ${props.window ?? "the recorded edges over the last 30 days"}. This is what answers "when exactly did it go unhealthy", read back weeks later.`}
+        right={<Show when={!props.compact}><span class="shrink-0 text-[10.5px] text-base-content/40">30 days</span></Show>}
+      />
 
+      {/* In compact form the surface beside this strip owns the number (the
+          history tab's uptime card), so the trailing hint would say it twice. */}
       <StateStrip segments={list()} tone={tone} height="h-2.5" title="Verdict over the recorded window">
-        <Show when={healthy() !== null} fallback={<span class="text-[11px] text-base-content/40">no data</span>}>
-          <span class="w-20 shrink-0 text-right text-[11px] tabular-nums text-base-content/60">{healthy()}% healthy</span>
+        <Show when={!props.compact}>
+          <Show when={healthy() !== null} fallback={<span class="text-[11px] text-base-content/40">no data</span>}>
+            <span class="w-20 shrink-0 text-right text-[11px] tabular-nums text-base-content/60">{healthy()}% healthy</span>
+          </Show>
         </Show>
       </StateStrip>
 
+      <Show when={!props.compact}>
       <Show
         when={edges().length}
         fallback={
@@ -108,13 +117,7 @@ export default function HealthHistory(props: {
             }}
           </For>
         </div>
-        {/* The list holds one more entry than there are changes: the oldest is the
-            first record for this entity, which is a starting point rather than a
-            change from something. Saying so beats a count that looks off by one
-            against the rows right above it. */}
-        <span class="text-[11px] text-base-content/40">
-          {changes()} change{changes() === 1 ? "" : "s"} since the first record.
-        </span>
+      </Show>
       </Show>
     </div>
   );

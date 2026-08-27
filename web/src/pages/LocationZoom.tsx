@@ -6,7 +6,8 @@ import Breadcrumb from "../components/Breadcrumb";
 import HealthBadge from "../components/HealthBadge";
 import SystemCard from "../components/SystemCard";
 import FleetShell from "../components/FleetShell";
-import { fleetTiles } from "../lib/fleet_tiles";
+import FleetRows from "../components/FleetRows";
+import { locationTileSpec } from "../lib/fleet_tiles";
 import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
 import {
   FLEET_VIEW_KEY,
@@ -28,7 +29,7 @@ import { describeError, fmtTime } from "../lib/format";
 import { locationHealth, locationHealthKey } from "../lib/health";
 
 // The location zoom (#635): the same canvas one level down, at the identity
-// route behind ?zoom=1 (ADR-0126). One band per direct child whatever its
+// route, the DEFAULT face since ADR-0129. One band per direct child whatever its
 // type, the placed-here band first with this location's own systems as cards,
 // the subtree's holes dashed under the child that contains them, and the
 // allowed child types named beneath: a child can be any type this one allows,
@@ -44,7 +45,7 @@ export default function LocationZoom() {
   const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
 
   const anchor = createMemo(() => (view.data ? locationIndex(view.data).get(id()) : undefined));
-  const tiles = createMemo(() => (view.data ? fleetTiles(view.data) : undefined));
+  const tiles = createMemo(() => (view.data && anchor() ? locationTileSpec(view.data, anchor()!.id) : undefined));
   const [chips, setChips] = createSignal<Chip[]>([]);
   const filterKeys: FilterKey<SystemCluster>[] = [
     { key: "verdict", type: "string", hint: "exact", get: (c) => c.verdict ?? "unknown", values: () => ["outage", "degraded", "incomplete", "healthy"] },
@@ -60,7 +61,7 @@ export default function LocationZoom() {
   createEffect(() => {
     if (!view.data || anchor()) return;
     const matches = (view.data.locations ?? []).filter((l) => l.name === id());
-    if (matches.length === 1) navigate(`/locations/${matches[0].id}?zoom=1`, { replace: true });
+    if (matches.length === 1) navigate(`/locations/${matches[0].id}${window.location.search}`, { replace: true });
   });
   const bands = createMemo<Band[]>(() => {
     if (!view.data) return [];
@@ -94,7 +95,7 @@ export default function LocationZoom() {
       ...chain.slice(0, -1).map((l) => ({
         key: l.id,
         label: entityLabel(l),
-        onClick: () => navigate(`/locations/${l.id}?zoom=1`),
+        onClick: () => navigate(`/locations/${l.id}`),
       })),
     ];
   });
@@ -124,6 +125,7 @@ export default function LocationZoom() {
           <FleetShell
             storageKey="fleet"
             tiles={tiles()}
+            list={<div class="card overflow-hidden border border-base-300 bg-base-200 p-0"><FleetRows rows={bands().flatMap((b) => b.clusters)} view={view.data!} onOpen={(sid) => navigate(`/systems/${sid}`)} /></div>}
             rows={bands().flatMap((b) => b.clusters)}
             filterKeys={filterKeys}
             chips={chips}
@@ -191,7 +193,7 @@ export default function LocationZoom() {
             <button
               type="button"
               class="block w-full cursor-pointer rounded-lg p-1 text-left hover:bg-base-content/5"
-              onClick={() => navigate(`/locations/${props.band.key}?zoom=1`)}
+              onClick={() => navigate(`/locations/${props.band.key}`)}
             >
               <div class="flex items-center gap-2">
                 <HealthBadge verdict={props.band.recordedVerdict ?? undefined} size="xs" />
@@ -208,7 +210,7 @@ export default function LocationZoom() {
         </div>
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap gap-2">
-            <For each={props.band.clusters}>{(cluster) => <SystemCard cluster={cluster} view={props.view} onOpen={(sid) => navigate(`/systems/${sid}?zoom=1`)} />}</For>
+            <For each={props.band.clusters}>{(cluster) => <SystemCard cluster={cluster} view={props.view} onOpen={(sid) => navigate(`/systems/${sid}`)} />}</For>
             <For each={bandHoles()}>
               {(hole) => (
                 <div class="flex w-40 flex-none flex-col justify-center gap-0.5 rounded-md border border-dashed border-primary/40 px-2 py-2 text-xs text-base-content/50">

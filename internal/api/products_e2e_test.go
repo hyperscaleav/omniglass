@@ -77,7 +77,7 @@ func TestProductsAPI(t *testing.T) {
 	var created productBodyWire
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/products", map[string]any{
 		"name": "acme-bar", "label": "Acme Bar",
-		"vendor_id": "cisco", "driver_id": "cisco-xapi", "kind": "device", "component_type": "video-bar",
+		"vendor_id": "kestrel", "driver_id": "kestrel-api", "kind": "device", "component_type": "video-bar",
 	}, http.StatusCreated), &created); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
@@ -86,11 +86,11 @@ func TestProductsAPI(t *testing.T) {
 		t.Fatalf("created = %+v, want name=acme-bar official=false", created)
 	}
 	// A reference carries both too, and the vendor was named by its handle.
-	if created.Vendor != "cisco" {
-		t.Fatalf("created vendor = %q, want the handle cisco", created.Vendor)
+	if created.Vendor != "kestrel" {
+		t.Fatalf("created vendor = %q, want the handle kestrel", created.Vendor)
 	}
-	if created.Vendor != "cisco" || created.Driver != "cisco-xapi" || created.Kind != "device" {
-		t.Fatalf("created refs = %+v, want cisco/cisco-xapi/device", created)
+	if created.Vendor != "kestrel" || created.Driver != "kestrel-api" || created.Kind != "device" {
+		t.Fatalf("created refs = %+v, want cisco/kestrel-api/device", created)
 	}
 	if created.ComponentType != "video-bar" || created.ComponentTypeID == "" {
 		t.Fatalf("created component_type = %+v, want video-bar with a resolved id", created)
@@ -129,14 +129,14 @@ func TestProductsAPI(t *testing.T) {
 	}
 	// Asserted on the handle: vendor_id is the uuid now, and the point of the
 	// assertion is that the vendor was KEPT, which the handle says legibly.
-	if reread.Vendor != "cisco" {
+	if reread.Vendor != "kestrel" {
 		t.Fatalf("vendor after empty-string patch = %q, want cisco (kept)", reread.Vendor)
 	}
 
-	// The seeded official row (cisco-room-bar) is read-only: 422 on patch and delete.
-	c.do(ownerTok, http.MethodPatch, "/products/cisco-room-bar",
+	// The seeded official row (kestrel-vroom) is read-only: 422 on patch and delete.
+	c.do(ownerTok, http.MethodPatch, "/products/kestrel-vroom",
 		map[string]any{"label": "X"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/products/cisco-room-bar", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/products/kestrel-vroom", nil, http.StatusUnprocessableEntity)
 
 	// Admin deletes the custom row.
 	c.do(ownerTok, http.MethodDelete, "/products/acme-bar", nil, http.StatusNoContent)

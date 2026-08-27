@@ -45,7 +45,7 @@ func verdictFleet(t *testing.T, gw storage.Gateway, systems int) {
 	}); err != nil {
 		t.Fatalf("declare role: %v", err)
 	}
-	std, bar := "verdict-std", "cisco-room-bar"
+	std, bar := "verdict-std", "kestrel-vroom"
 	for i := range systems {
 		sys, comp := fmt.Sprintf("sys-%d", i), fmt.Sprintf("bar-%d", i)
 		if _, err := gw.CreateSystem(ctx, "",

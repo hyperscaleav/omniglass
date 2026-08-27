@@ -79,3 +79,43 @@ func TestSelfProfileAuditsRealActor(t *testing.T) {
 		t.Fatalf("second audit = %+v, want actor=alice real=root", got[1])
 	}
 }
+
+// The audit page orders by seq, the DB-assigned write sequence (#780): two
+// rows whose ts stamps inverted across transactions must still list in write
+// order, or the same trail renders differently on two honest reads. (The
+// uuidv7 id was the first fix here and turned out to be a clock in disguise;
+// TestAuditOrderSurvivesClockStep covers that half.)
+func TestAuditListOrdersByWriteSequenceNotTS(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+
+	// Written second (later id), stamped EARLIER: the inversion a slow
+	// neighbor transaction produces.
+	if _, err := conn.Exec(ctx, `
+		insert into audit_log (verb, resource, resource_id, ts) values
+			('create', 'flap-probe', 'first-written', now() + interval '2 seconds'),
+			('create', 'flap-probe', 'second-written', now())`); err != nil {
+		t.Fatalf("insert probes: %v", err)
+	}
+
+	rows, err := gw.ListAuditLog(ctx, storage.AuditFilter{Resource: "flap-probe", Limit: 10})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(rows) != 2 || rows[0].ResourceID != "second-written" || rows[1].ResourceID != "first-written" {
+		t.Fatalf("order = %+v, want write order (second-written first), never ts order", rows)
+	}
+}

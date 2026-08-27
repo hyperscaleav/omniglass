@@ -65,6 +65,11 @@
       "name": "real_actor_username",
       "type": "text",
       "nullable": true
+     },
+     {
+      "name": "seq",
+      "type": "bigint",
+      "nullable": false
      }
     ]
    }
@@ -481,6 +486,11 @@
      {
       "name": "label_rule",
       "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "map",
+      "type": "jsonb",
       "nullable": true
      }
     ],
@@ -2457,6 +2467,11 @@
       "name": "archived_at",
       "type": "timestamp with time zone",
       "nullable": true
+     },
+     {
+      "name": "seq",
+      "type": "bigint",
+      "nullable": false
      }
     ],
     "checks": [

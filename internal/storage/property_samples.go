@@ -168,3 +168,40 @@ func (p *PG) PropertyTransitions(ctx context.Context, componentRef, key, instanc
 	}
 	return out, nil
 }
+
+// ListPropertySeries returns one property series' change history newest
+// first: the samples behind the effective value (#794). Mirrors
+// ListMetricSeries over the property lane.
+func (p *PG) ListPropertySeries(ctx context.Context, ownerKind, ownerRef, key string, window time.Duration, limit int) ([]PropertySample, error) {
+	col, err := ownerColumn(ownerKind)
+	if err != nil {
+		return nil, err
+	}
+	arc, err := p.ownerArcValue(ctx, p.pool, ownerKind, ownerRef)
+	if err != nil {
+		return nil, err
+	}
+	bound, args := tsSince("ts", window, arc, key, limit)
+	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
+		select ts, owner_kind,
+			(select pt.name from property_type pt where pt.id = property.property_type_id), instance, value #>> '{}', provenance, source
+		from property
+		where %s = $1::uuid
+		  and property_type_id = (select id from property_type where name = $2)
+		  and %s
+		order by ts desc
+		limit $3`, col, bound), args...)
+	if err != nil {
+		return nil, fmt.Errorf("storage: list property series %s/%s: %w", ownerRef, key, err)
+	}
+	defer rows.Close()
+	var out []PropertySample
+	for rows.Next() {
+		var dp PropertySample
+		if err := rows.Scan(&dp.TS, &dp.OwnerKind, &dp.Key, &dp.Instance, &dp.Value, &dp.Provenance, &dp.Source); err != nil {
+			return nil, fmt.Errorf("storage: scan property series: %w", err)
+		}
+		out = append(out, dp)
+	}
+	return out, rows.Err()
+}

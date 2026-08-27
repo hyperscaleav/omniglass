@@ -43,7 +43,7 @@ func TestACreateHonoursTheNameTheFormWasShown(t *testing.T) {
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
-		ProductName: qm55, LocationName: room.Name,
+		ProductName: edge55, LocationName: room.Name,
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
@@ -52,7 +52,7 @@ func TestACreateHonoursTheNameTheFormWasShown(t *testing.T) {
 		t.Fatalf("drafted %+v, want the first ordinal in an empty bucket", drafted)
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		ProductName: strptr(qm55), LocationName: &room.Name, ExpectedName: &drafted.Name,
+		ProductName: strptr(edge55), LocationName: &room.Name, ExpectedName: &drafted.Name,
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create with the expected name: %v", err)
@@ -78,14 +78,14 @@ func TestACreateRefusesANameAnotherCreateTook(t *testing.T) {
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
-		ProductName: qm55, LocationName: room.Name,
+		ProductName: edge55, LocationName: room.Name,
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
 	}
 	// The other create, which takes the name the form is holding.
 	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		ProductName: strptr(qm55), LocationName: &room.Name,
+		ProductName: strptr(edge55), LocationName: &room.Name,
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("the racing create: %v", err)
@@ -95,7 +95,7 @@ func TestACreateRefusesANameAnotherCreateTook(t *testing.T) {
 	}
 
 	_, err = gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		ProductName: strptr(qm55), LocationName: &room.Name, ExpectedName: &drafted.Name,
+		ProductName: strptr(edge55), LocationName: &room.Name, ExpectedName: &drafted.Name,
 	}, all, all, all, all)
 	var moved *storage.DraftedNameMovedError
 	if !errors.As(err, &moved) {
@@ -139,7 +139,7 @@ func TestACreateRefusesANameTheTypeMovedUnderneath(t *testing.T) {
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
 	drafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
-		ProductName: qm55, LocationName: room.Name,
+		ProductName: edge55, LocationName: room.Name,
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("render draft: %v", err)
@@ -157,7 +157,7 @@ func TestACreateRefusesANameTheTypeMovedUnderneath(t *testing.T) {
 	}
 
 	_, err = gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		ProductName: strptr(qm55), LocationName: &room.Name, ExpectedName: &drafted.Name,
+		ProductName: strptr(edge55), LocationName: &room.Name, ExpectedName: &drafted.Name,
 	}, all, all, all, all)
 	var moved *storage.DraftedNameMovedError
 	if !errors.As(err, &moved) {
@@ -182,7 +182,7 @@ func TestACreateRefusesANameTheTypeMovedUnderneath(t *testing.T) {
 	// Re-drafted, the form is shown the new name and the create takes it, still
 	// with the platform holding the pen.
 	redrafted, err := gw.RenderComponentDraftLabel(ctx, storage.ComponentLabelDraft{
-		ProductName: qm55, LocationName: room.Name,
+		ProductName: edge55, LocationName: room.Name,
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("re-render draft: %v", err)
@@ -191,7 +191,7 @@ func TestACreateRefusesANameTheTypeMovedUnderneath(t *testing.T) {
 		t.Fatalf("re-draft %+v, want monitor-1", redrafted)
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		ProductName: strptr(qm55), LocationName: &room.Name, ExpectedName: &redrafted.Name,
+		ProductName: strptr(edge55), LocationName: &room.Name, ExpectedName: &redrafted.Name,
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create with the re-drafted name: %v", err)
@@ -210,7 +210,7 @@ func TestTheNamePreconditionIsRefusedOnAnOperatorTypedName(t *testing.T) {
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
 	_, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "front-panel", ProductName: strptr(qm55), LocationName: &room.Name, ExpectedName: strptr("front-panel"),
+		Name: "front-panel", ProductName: strptr(edge55), LocationName: &room.Name, ExpectedName: strptr("front-panel"),
 	}, all, all, all, all)
 	if !errors.Is(err, storage.ErrNameExpectedOnTypedName) {
 		t.Errorf("typed name with an expectation = %v, want ErrNameExpectedOnTypedName", err)
@@ -221,7 +221,7 @@ func TestTheNamePreconditionIsRefusedOnAnOperatorTypedName(t *testing.T) {
 	// The same create with no expectation is fine, so the refusal is about the
 	// pairing and not about the name.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		Name: "front-panel", ProductName: strptr(qm55), LocationName: &room.Name,
+		Name: "front-panel", ProductName: strptr(edge55), LocationName: &room.Name,
 	}, all, all, all, all); err != nil {
 		t.Errorf("typed name with no expectation = %v, want no error", err)
 	}

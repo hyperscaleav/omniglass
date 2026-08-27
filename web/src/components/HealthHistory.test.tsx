@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render } from "@solidjs/testing-library";
+import { render, screen } from "@solidjs/testing-library";
 import HealthHistory from "./HealthHistory";
 import type { HealthTransition } from "../lib/health";
 
@@ -32,7 +32,7 @@ describe("HealthHistory", () => {
     // the SEGMENT: every drawn stretch must carry a tone of its own, and none may
     // fall through to the track colour.
     const segments = [...container.querySelectorAll<HTMLElement>("[style*='flex']")].filter((el) =>
-      el.className.startsWith("bg-"),
+      typeof el.className === "string" && el.className.startsWith("bg-"),
     );
     expect(segments.length).toBeGreaterThan(0);
     for (const seg of segments) {
@@ -54,5 +54,23 @@ describe("HealthHistory", () => {
       unmount();
     }
     expect(seen.size).toBe(4);
+  });
+
+  // The tooltips-not-prose rule (#790): the model this section teaches rides
+  // the label's (i), never the flow. A future edit that re-inlines the
+  // pedagogy fails here.
+  it("carries no inline pedagogy: the explainer is the label's tooltip", () => {
+    const { container } = render(() => <HealthHistory transitions={[at(ago(3600_000), "healthy")]} verdict="healthy" />);
+    expect(container.textContent).not.toContain("One entry per change");
+    expect(screen.getByRole("button", { name: /More about History/ })).toBeTruthy();
+  });
+
+  it("compact draws the strip only: no span rows and never the no-change fallback", () => {
+    const { container, queryByText } = render(() => (
+      <HealthHistory compact transitions={[at(ago(3600_000), "healthy"), at(ago(60_000), "degraded")]} verdict="degraded" />
+    ));
+    expect(container.querySelector(".og-statestrip")).toBeTruthy();
+    expect(queryByText(/No change recorded/)).toBeNull();
+    expect(queryByText(/held/)).toBeNull();
   });
 });

@@ -99,10 +99,10 @@ func TestVendorsAPI(t *testing.T) {
 		map[string]any{"website": "https://acme.example"}, http.StatusOK)
 	c.do(ownerTok, http.MethodDelete, "/vendors/acme2", nil, http.StatusNoContent)
 
-	// The seeded official row (crestron) is read-only: 422 on patch and delete.
-	c.do(ownerTok, http.MethodPatch, "/vendors/crestron",
+	// The seeded official row (boreal) is read-only: 422 on patch and delete.
+	c.do(ownerTok, http.MethodPatch, "/vendors/boreal",
 		map[string]any{"label": "X"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/vendors/crestron", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/vendors/boreal", nil, http.StatusUnprocessableEntity)
 
 	// Admin deletes the custom row.
 	c.do(ownerTok, http.MethodDelete, "/vendors/acme", nil, http.StatusNoContent)

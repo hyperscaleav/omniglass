@@ -961,6 +961,44 @@ func generatedCommands() []*cobra.Command {
 				}()
 				return cmd
 			}())
+			parent.AddCommand(func() *cobra.Command {
+				parent := &cobra.Command{
+					Use:   "sample",
+					Short: "Commands for the sample resource",
+				}
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						var qHours int
+						var qLimit int
+						cmd := &cobra.Command{
+							Use:     "list <name> <metric>",
+							Short:   "Read one metric series' raw samples",
+							Long:    "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
+							Example: "  omniglass component metric sample list <name> <metric>",
+							Args:    cobra.ExactArgs(2),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/components/%s/metrics/%s/samples", url.PathEscape(args[0]), url.PathEscape(args[1]))
+								q := url.Values{}
+								if cmd.Flags().Changed("hours") {
+									q.Set("hours", fmt.Sprintf("%v", qHours))
+								}
+								if cmd.Flags().Changed("limit") {
+									q.Set("limit", fmt.Sprintf("%v", qLimit))
+								}
+								if enc := q.Encode(); enc != "" {
+									path += "?" + enc
+								}
+								return runAPICommand(cmd, "GET", path, nil)
+							},
+						}
+						cmd.Flags().IntVar(&qHours, "hours", 0, "The window in hours, counted back from now; 24 when unset")
+						cmd.Flags().IntVar(&qLimit, "limit", 0, "The row cap, newest kept; 500 when unset")
+						return cmd
+					}()
+					return cmd
+				}())
+				return parent
+			}())
 			return parent
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -1046,6 +1084,44 @@ func generatedCommands() []*cobra.Command {
 					return cmd
 				}()
 				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				parent := &cobra.Command{
+					Use:   "sample",
+					Short: "Commands for the sample resource",
+				}
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						var qHours int
+						var qLimit int
+						cmd := &cobra.Command{
+							Use:     "list <name> <property>",
+							Short:   "Read one property series' change history",
+							Long:    "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). Gated by component:read; an out-of-scope owner is a non-disclosing 404.",
+							Example: "  omniglass component property sample list <name> <property>",
+							Args:    cobra.ExactArgs(2),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/components/%s/properties/%s/samples", url.PathEscape(args[0]), url.PathEscape(args[1]))
+								q := url.Values{}
+								if cmd.Flags().Changed("hours") {
+									q.Set("hours", fmt.Sprintf("%v", qHours))
+								}
+								if cmd.Flags().Changed("limit") {
+									q.Set("limit", fmt.Sprintf("%v", qLimit))
+								}
+								if enc := q.Encode(); enc != "" {
+									path += "?" + enc
+								}
+								return runAPICommand(cmd, "GET", path, nil)
+							},
+						}
+						cmd.Flags().IntVar(&qHours, "hours", 0, "The window in hours, counted back from now; 24 when unset")
+						cmd.Flags().IntVar(&qLimit, "limit", 0, "The row cap, newest kept; 500 when unset")
+						return cmd
+					}()
+					return cmd
+				}())
+				return parent
 			}())
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {
@@ -5098,6 +5174,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fLabel string
+				var fMap string
 				var fParentStandardId string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
@@ -5111,6 +5188,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
+						if cmd.Flags().Changed("map") {
+							body["map"] = jsonOrString(fMap)
+						}
 						if cmd.Flags().Changed("parent-standard-id") {
 							body["parent_standard_id"] = fParentStandardId
 						}
@@ -5118,6 +5198,7 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
+				cmd.Flags().StringVar(&fMap, "map", "", "The room-layout declaration to store; JSON null clears it; absent leaves it. Validated: positive aspect, coordinates in [0, 1], 1-based positions, no duplicate (role, position) pair")
 				cmd.Flags().StringVar(&fParentStandardId, "parent-standard-id", "", "A new variant parent, by handle or uuid")
 				return cmd
 			}()
@@ -5235,6 +5316,30 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}())
 		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "event",
+				Short: "Commands for the event resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "List a system's recent events, members included",
+						Long:    "Returns the system's own events and its members', newest first, bounded to the last 24 hours, each row labeled by the owner that raised it. A component shared with another system appears in both systems' lists. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+						Example: "  omniglass system event list <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/systems/%s/events", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
+		}())
+		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "get <name>",
@@ -5318,6 +5423,30 @@ func generatedCommands() []*cobra.Command {
 				return cmd
 			}()
 			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			parent := &cobra.Command{
+				Use:   "log",
+				Short: "Commands for the log resource",
+			}
+			parent.AddCommand(func() *cobra.Command {
+				cmd := func() *cobra.Command {
+					cmd := &cobra.Command{
+						Use:     "list <name>",
+						Short:   "List a system's members' recent log lines",
+						Long:    "Returns the members' raw log lines merged newest first, bounded to the last 24 hours and capped, each naming the component that wrote it. Gated by system:read; an out-of-scope system is a non-disclosing 404.",
+						Example: "  omniglass system log list <name>",
+						Args:    cobra.ExactArgs(1),
+						RunE: func(cmd *cobra.Command, args []string) error {
+							path := fmt.Sprintf("/api/v1/systems/%s/logs", url.PathEscape(args[0]))
+							return runAPICommand(cmd, "GET", path, nil)
+						},
+					}
+					return cmd
+				}()
+				return cmd
+			}())
+			return parent
 		}())
 		parent.AddCommand(func() *cobra.Command {
 			parent := &cobra.Command{
@@ -5416,6 +5545,44 @@ func generatedCommands() []*cobra.Command {
 				}()
 				return cmd
 			}())
+			parent.AddCommand(func() *cobra.Command {
+				parent := &cobra.Command{
+					Use:   "sample",
+					Short: "Commands for the sample resource",
+				}
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						var qHours int
+						var qLimit int
+						cmd := &cobra.Command{
+							Use:     "list <name> <metric>",
+							Short:   "Read one metric series' raw samples",
+							Long:    "The samples behind the effective read's latest value for one series, newest first, windowed (hours) and capped (limit, newest kept). Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
+							Example: "  omniglass system metric sample list <name> <metric>",
+							Args:    cobra.ExactArgs(2),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/systems/%s/metrics/%s/samples", url.PathEscape(args[0]), url.PathEscape(args[1]))
+								q := url.Values{}
+								if cmd.Flags().Changed("hours") {
+									q.Set("hours", fmt.Sprintf("%v", qHours))
+								}
+								if cmd.Flags().Changed("limit") {
+									q.Set("limit", fmt.Sprintf("%v", qLimit))
+								}
+								if enc := q.Encode(); enc != "" {
+									path += "?" + enc
+								}
+								return runAPICommand(cmd, "GET", path, nil)
+							},
+						}
+						cmd.Flags().IntVar(&qHours, "hours", 0, "The window in hours, counted back from now; 24 when unset")
+						cmd.Flags().IntVar(&qLimit, "limit", 0, "The row cap, newest kept; 500 when unset")
+						return cmd
+					}()
+					return cmd
+				}())
+				return parent
+			}())
 			return parent
 		}())
 		parent.AddCommand(func() *cobra.Command {
@@ -5501,6 +5668,44 @@ func generatedCommands() []*cobra.Command {
 					return cmd
 				}()
 				return cmd
+			}())
+			parent.AddCommand(func() *cobra.Command {
+				parent := &cobra.Command{
+					Use:   "sample",
+					Short: "Commands for the sample resource",
+				}
+				parent.AddCommand(func() *cobra.Command {
+					cmd := func() *cobra.Command {
+						var qHours int
+						var qLimit int
+						cmd := &cobra.Command{
+							Use:     "list <name> <property>",
+							Short:   "Read one property series' change history",
+							Long:    "The change history behind the effective value for one property series, newest first, windowed (hours) and capped (limit, newest kept). Gated by system:read; an out-of-scope owner is a non-disclosing 404.",
+							Example: "  omniglass system property sample list <name> <property>",
+							Args:    cobra.ExactArgs(2),
+							RunE: func(cmd *cobra.Command, args []string) error {
+								path := fmt.Sprintf("/api/v1/systems/%s/properties/%s/samples", url.PathEscape(args[0]), url.PathEscape(args[1]))
+								q := url.Values{}
+								if cmd.Flags().Changed("hours") {
+									q.Set("hours", fmt.Sprintf("%v", qHours))
+								}
+								if cmd.Flags().Changed("limit") {
+									q.Set("limit", fmt.Sprintf("%v", qLimit))
+								}
+								if enc := q.Encode(); enc != "" {
+									path += "?" + enc
+								}
+								return runAPICommand(cmd, "GET", path, nil)
+							},
+						}
+						cmd.Flags().IntVar(&qHours, "hours", 0, "The window in hours, counted back from now; 24 when unset")
+						cmd.Flags().IntVar(&qLimit, "limit", 0, "The row cap, newest kept; 500 when unset")
+						return cmd
+					}()
+					return cmd
+				}())
+				return parent
 			}())
 			parent.AddCommand(func() *cobra.Command {
 				cmd := func() *cobra.Command {

@@ -266,7 +266,7 @@ describe("SystemHealthPanel history", () => {
     expect(getByText("History")).toBeTruthy();
     // Three entries, two of them changes: the oldest is the first record, not a
     // change from anything, and the count says so rather than reading off by one.
-    expect(getByText("2 changes since the first record.")).toBeTruthy();
+    // The change-count caption retired with the tooltips-not-prose rule (ADR-0127).
     // The current state is open-ended; the ones before it are closed durations.
     expect(getAllByText(/and counting/).length).toBe(1);
     expect(getByText("held 2h")).toBeTruthy(); // degraded ran 5h ago -> 3h ago

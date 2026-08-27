@@ -29,7 +29,7 @@ func declareTableMic(t *testing.T, ctx context.Context, gw storage.Gateway, all 
 // create succeeded, the shared shape every position test's fixtures need.
 func newBarInto(t *testing.T, ctx context.Context, gw storage.Gateway, all scope.Set, name string) {
 	t.Helper()
-	bar := "cisco-room-bar"
+	bar := "kestrel-vroom"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: name, ProductName: &bar}, all, all, all, all); err != nil {
 		t.Fatalf("create component %s: %v", name, err)
 	}

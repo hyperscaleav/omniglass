@@ -50,7 +50,7 @@ func TestFirstMembershipRaceIsSerialized(t *testing.T) {
 			t.Fatalf("system %s: %v", s, err)
 		}
 	}
-	bar := "cisco-room-bar"
+	bar := "kestrel-vroom"
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "race-dsp", ProductName: &bar}, all, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}

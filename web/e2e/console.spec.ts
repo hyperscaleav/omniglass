@@ -22,8 +22,10 @@ test.describe("operator console", () => {
   test("signs in, lists locations, creates a location, opens it, deletes it", async ({ page }) => {
     await page.goto("/web/locations");
 
-    // The shell labels the section and the inventory surface renders.
-    await expect(page.getByRole("banner")).toContainText(/locations/i);
+    // The bare index address redirects into the fleet list face's Locations
+    // kind tab (#798): the shell says Fleet, the list face carries the kind.
+    await page.waitForURL(/fleet\?view=list&kind=locations/);
+    await expect(page.getByTestId("fleet-list-face")).toBeVisible();
 
     // Create a throwaway campus through the create-as-route draft. Campus
     // carries no name rule, so the operator types the name: the other half of
@@ -40,35 +42,36 @@ test.describe("operator console", () => {
     await page.getByLabel("Name", { exact: true }).fill(name);
     await page.getByRole("button", { name: /create location/i }).click();
 
-    // Create hands off to the new location's own detail in edit mode, and the
-    // handoff is the URL itself (#759): the route lands carrying ?edit=1. Cancel
-    // drops it to the read-only face (where the identity is rendered) and strips
-    // the param, so the URL stops requesting an edit the operator left.
+    // Create hands off to the new location's own workspace already editing
+    // (#800): the route lands carrying ?edit=1, which the zoom answers with
+    // its Configure tab in edit mode. Cancel leaves edit and strips the
+    // param, so the URL stops requesting an edit the operator left.
     await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}\?edit=1/);
+    await expect(page.getByRole("button", { name: /save changes/i })).toBeVisible();
     await page.getByRole("button", { name: /^cancel$/i }).first().click();
-    await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: label })).toBeVisible();
     await expect(page).not.toHaveURL(/edit=1/);
 
-    // The edit face is deep-linkable: revisiting the same detail with ?edit=1
-    // lands editing directly, no clicks involved.
+    // The edit is deep-linkable: revisiting with ?edit=1 lands the Configure
+    // tab editing directly, no clicks involved.
     await page.goto(page.url().split("?")[0] + "?edit=1");
     await expect(page.getByRole("button", { name: /save changes/i })).toBeVisible();
     await page.getByRole("button", { name: /^cancel$/i }).first().click();
     await expect(page).not.toHaveURL(/edit=1/);
 
-    // It appears as a new root row back on the list, under the label the rule
+    // It appears as a new root row on the fleet list (the old index address
+    // lands on the Locations kind tab, #798), under the label the rule
     // rendered from the name typed above.
     await page.goto("/web/locations");
     await expect(page.locator("main")).toContainText(label);
 
-    // Confirm-delete it from its own detail. The detail's Delete carries its
-    // word; the row's inline action is an icon-only button of the same
-    // accessible name.
+    // Confirm-delete it from its blade: a row opens the condensed blade
+    // (#799), whose footer carries Delete behind a confirm.
     page.on("dialog", (d) => d.accept());
     await page.getByText(label, { exact: true }).first().click();
-    await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
-    await expect(page.locator('button:text-is("Delete")')).toBeVisible();
-    await page.locator('button:text-is("Delete")').click();
+    await expect(page.locator("aside[data-blade]")).toBeVisible();
+    await expect(page.locator('aside[data-blade] button:text-is("Delete")')).toBeVisible();
+    await page.locator('aside[data-blade] button:text-is("Delete")').click();
 
     // It is gone from the list.
     await expect(page.locator("main")).not.toContainText(label);
@@ -126,10 +129,16 @@ test.describe("operator console", () => {
     await expect(nameField).toHaveValue(drafted);
 
     await page.getByRole("button", { name: /create component/i }).click();
-    await page.waitForURL(/\/web\/components\/[0-9a-f-]{36}/);
+    await page.waitForURL(/\/web\/components\/[0-9a-f-]{36}\?edit=1/);
 
-    // Create hands off to the new component's detail in edit mode; Cancel drops
-    // it to the read-only face, where the identity is rendered rather than typed.
+    // Create hands off to the new leaf's Configure tab already editing (#800).
+    // The platform holds the label's pen: the pen field says so in words while
+    // the slot is editing (the old face's "Generated" chip retired in #693).
+    await expect(page.getByRole("button", { name: /save changes/i })).toBeVisible();
+    await expect(page.getByText(/Rendered from a label rule|No label rule applies/).first()).toBeVisible();
+
+    // Cancel drops to the read-only leaf, where the identity is rendered
+    // rather than typed.
     await page.getByRole("button", { name: /^cancel$/i }).first().click();
 
     // What the row actually got, compared with what the operator was shown, on
@@ -139,15 +148,15 @@ test.describe("operator console", () => {
     await expect(page.getByText(drafted, { exact: true }).first()).toBeVisible();
     await expect(page.locator("main")).toContainText(draftedLabel);
 
-    // And the platform holds the pen on both, which is what makes them the
-    // platform's to keep current through a later move or reclassify. Posting the
-    // precondition is what would break this if it were ever read as a name.
-    await expect(page.getByText("Generated", { exact: true }).first()).toBeVisible();
-
-    // Clean up after the run.
+    // Clean up after the run: the row's blade on the fleet list carries the
+    // confirm-delete (#799); the leaf itself has no destructive footer.
     page.on("dialog", (d) => d.accept());
-    await page.locator('button:text-is("Delete")').click();
-    await page.waitForURL(/\/web\/components\/?$/);
+    await page.goto("/web/components");
+    await page.waitForURL(/fleet\?view=list&kind=components/);
+    await page.getByText(draftedLabel, { exact: true }).first().click();
+    await expect(page.locator("aside[data-blade]")).toBeVisible();
+    await page.locator('aside[data-blade] button:text-is("Delete")').click();
+    await expect(page.locator("main")).not.toContainText(draftedLabel);
   });
 
   // #690, and the only tier that can witness it: the defect is a LAYOUT, so it
@@ -239,7 +248,7 @@ test.describe("operator console", () => {
     // A band click navigates to the root location BY UUID, and the browser
     // back button returns to the fleet zoom (#633 acceptance).
     await band.getByRole("button").first().click();
-    await page.waitForURL(new RegExp(`/web/locations/${root.id}\\?zoom=1`));
+    await page.waitForURL(new RegExp(`/web/locations/${root.id}$`));
     // The zoom face renders at the identity route (ADR-0126): the breadcrumb
     // walks back to the fleet, and the summary rail is the same one.
     await expect(page.getByTestId("breadcrumb")).toBeVisible();

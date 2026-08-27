@@ -92,8 +92,8 @@ func TestLabelPenOnTheWire(t *testing.T) {
 		{
 			kind:   "component",
 			path:   "/components",
-			blank:  map[string]any{"name": "pen-blank", "product": "samsung-qm55"},
-			typed:  map[string]any{"name": "pen-typed", "label": "Operator Typed", "product": "samsung-qm55"},
+			blank:  map[string]any{"name": "pen-blank", "product": "boreal-edge-55"},
+			typed:  map[string]any{"name": "pen-typed", "label": "Operator Typed", "product": "boreal-edge-55"},
 			addr:   "/components/pen-typed",
 			blankA: "/components/pen-blank",
 		},
@@ -157,7 +157,7 @@ func TestLabelPenIsNotWritable(t *testing.T) {
 	c, tok, stop := penHarness(t)
 	defer stop()
 
-	c.do(tok, http.MethodPost, "/components", map[string]any{"name": "pen-ro", "product": "samsung-qm55"}, http.StatusCreated)
+	c.do(tok, http.MethodPost, "/components", map[string]any{"name": "pen-ro", "product": "boreal-edge-55"}, http.StatusCreated)
 	c.do(tok, http.MethodPatch, "/components/pen-ro",
 		map[string]any{"label_generated": false}, http.StatusUnprocessableEntity)
 }
