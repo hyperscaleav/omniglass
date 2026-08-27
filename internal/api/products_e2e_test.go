@@ -90,7 +90,7 @@ func TestProductsAPI(t *testing.T) {
 		t.Fatalf("created vendor = %q, want the handle kestrel", created.Vendor)
 	}
 	if created.Vendor != "kestrel" || created.Driver != "kestrel-api" || created.Kind != "device" {
-		t.Fatalf("created refs = %+v, want cisco/kestrel-api/device", created)
+		t.Fatalf("created refs = %+v, want kestrel/kestrel-api/device", created)
 	}
 	if created.ComponentType != "video-bar" || created.ComponentTypeID == "" {
 		t.Fatalf("created component_type = %+v, want video-bar with a resolved id", created)
@@ -133,10 +133,10 @@ func TestProductsAPI(t *testing.T) {
 		t.Fatalf("vendor after empty-string patch = %q, want cisco (kept)", reread.Vendor)
 	}
 
-	// The seeded official row (kestrel-vroom) is read-only: 422 on patch and delete.
-	c.do(ownerTok, http.MethodPatch, "/products/kestrel-vroom",
+	// The seeded official row (generic-device) is read-only: 422 on patch and delete.
+	c.do(ownerTok, http.MethodPatch, "/products/generic-device",
 		map[string]any{"label": "X"}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/products/kestrel-vroom", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/products/generic-device", nil, http.StatusUnprocessableEntity)
 
 	// Admin deletes the custom row.
 	c.do(ownerTok, http.MethodDelete, "/products/acme-bar", nil, http.StatusNoContent)

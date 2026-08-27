@@ -123,26 +123,26 @@ func TestProductPropertyCRUD(t *testing.T) {
 	}
 
 	// A seeded (official) product's contract is seed-owned and read-only.
-	if _, err := gw.SetProductProperty(ctx, "", "kestrel-vroom", storage.ProductPropertySpec{PropertyTypeName: "serial-number"}); !errors.Is(err, storage.ErrTypeOfficial) {
+	if _, err := gw.SetProductProperty(ctx, "", "generic-device", storage.ProductPropertySpec{PropertyTypeName: "serial-number"}); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("set official err = %v, want ErrTypeOfficial", err)
 	}
-	if err := gw.DeleteProductProperty(ctx, "", "kestrel-vroom", "serial-number"); !errors.Is(err, storage.ErrTypeOfficial) {
+	if err := gw.DeleteProductProperty(ctx, "", "generic-device", "serial-number"); !errors.Is(err, storage.ErrTypeOfficial) {
 		t.Fatalf("delete official err = %v, want ErrTypeOfficial", err)
 	}
 
 	// The boot-seed path writes the official product's contract without the guard
 	// and without an audit, and is idempotent.
-	if err := gw.UpsertProductProperty(ctx, "kestrel-vroom", storage.ProductPropertySpec{
+	if err := gw.UpsertProductProperty(ctx, "generic-device", storage.ProductPropertySpec{
 		PropertyTypeName: "serial-number", DefaultValue: json.RawMessage(`"unset"`), Required: true,
 	}); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	if err := gw.UpsertProductProperty(ctx, "kestrel-vroom", storage.ProductPropertySpec{
+	if err := gw.UpsertProductProperty(ctx, "generic-device", storage.ProductPropertySpec{
 		PropertyTypeName: "serial-number", DefaultValue: json.RawMessage(`"factory"`), Required: false,
 	}); err != nil {
 		t.Fatalf("re-upsert: %v", err)
 	}
-	props, err = gw.ListProductProperties(ctx, "kestrel-vroom")
+	props, err = gw.ListProductProperties(ctx, "generic-device")
 	if err != nil {
 		t.Fatalf("list official: %v", err)
 	}

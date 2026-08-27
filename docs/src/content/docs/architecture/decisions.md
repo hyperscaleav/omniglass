@@ -170,6 +170,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0129](#adr-0129-the-zoom-face-becomes-the-identity-routes-default-one-way-to-look) | 2026-08-21 | Accepted | The zoom/workspace/leaf render at the identity routes by default (`?zoom=1` tolerated, never written); the classic detail face survives at `?view=detail` only until edit-in-blade lands; the ruled target: one altitude rule, edit in blades, tables as a list-density toggle |
 | [ADR-0130](#adr-0130-lists-that-promise-write-order-order-by-a-db-assigned-sequence) | 2026-08-21 | Accepted | A read that promises write order orders by a bigint identity the database assigns at insert, never by `created_at` or a uuidv7 id: wall-clock steps (reproduced on WSL2 under load) invert clock-derived keys across transactions; audit and principals converted, the rest tracked by #801 |
 | [ADR-0131](#adr-0131-the-device-taxonomy-is-oavc-and-the-demo-catalog-is-fictional) | 2026-08-24 | Accepted | The component_type tree mirrors the OpenAVCloud AV Device Taxonomy v1.1 (category roots, subcategory types, form-factor mic subtypes); the seed catalog goes fictional (the omniglass-lab brand universe, AV-iQ as the realism source); standards become integrator-style room chains with size-serialized variants, and the impossible shared bar yields to the divisible pair's shared DSP and amplifier rack |
+| [ADR-0132](#adr-0132-configure-is-the-one-deep-editor) | 2026-08-25 | Accepted | Every fleet workspace carries a Configure tab as the ONE deep editor; the blade stays a quick face whose rows jump into it; `?edit=1` retargets to Configure and the classic detail face retires with an explicit miss face (#800, diverging deliberately from ADR-0129's edit-in-blade target) |
 
 ## Entries
 
@@ -6100,3 +6101,20 @@ interface create form, since that name is the platform's to mint.
   domain-impossible; the ruling (in chat, 2026-08-24) adopted the OAVC taxonomy for
   types, fictional lab brands for SKUs, and the integrator-style standards catalog,
   recorded here and built as #802.
+
+### ADR-0132: Configure is the one deep editor
+
+- **Date:** 2026-08-25 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/)
+- **Decision:** Every fleet workspace (system zoom, location zoom, component leaf) carries a
+  Configure tab, and it is the ONE deep editor: identity, classification, placement, the
+  kind's manage panels, and tags in one savable face. The blade stays a quick face: its label
+  pen and tag adder edit in place, and its other rows are jump anchors into Configure
+  (`?tab=configure&edit=1#section`). `?edit=1` retargets from the retired edit face to
+  Configure (the ADR-0120 URL-fact rule, new destination); the classic detail face and
+  `?view=detail` retire entirely, with an explicit miss face replacing the old not-found and
+  disambiguation pages.
+- **Context:** ADR-0129 kept the classic face alive "until edit-in-blade lands" and named
+  edit-in-blade as the target. Building it showed two editors (a growing blade and a
+  workspace) would duplicate every manage panel; the #800 ruling (the One Way to Edit float)
+  chose one deep editor in the workspace plus a thin quick face, deliberately diverging from
+  0129's recorded target. 0129's zoom-by-default half stands untouched.

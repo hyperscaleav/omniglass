@@ -237,16 +237,17 @@ func TestComponentRequiresProduct(t *testing.T) {
 	// A named product succeeds.
 	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "has-product", "product": "generic-device"}, http.StatusCreated)
 
-	// PATCH still reclassifies to a real product.
-	c.do(ownerTok, http.MethodPatch, "/components/has-product", map[string]any{"product": "kestrel-vroom"}, http.StatusOK)
+	// PATCH still reclassifies to a real product (minted, not a seeded SKU).
+	p := storagetest.MintProduct(t, ctx, gw, "")
+	c.do(ownerTok, http.MethodPatch, "/components/has-product", map[string]any{"product": p.Name}, http.StatusOK)
 	reread := struct {
 		Product string `json:"product"`
 	}{}
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/has-product", nil, http.StatusOK), &reread); err != nil {
 		t.Fatalf("decode get: %v", err)
 	}
-	if reread.Product != "kestrel-vroom" {
-		t.Fatalf("product after reclassify = %q, want kestrel-vroom", reread.Product)
+	if reread.Product != p.Name {
+		t.Fatalf("product after reclassify = %q, want %q", reread.Product, p.Name)
 	}
 
 	// PATCH no longer clears with an explicit empty string: 422, and the
@@ -255,8 +256,8 @@ func TestComponentRequiresProduct(t *testing.T) {
 	if err := json.Unmarshal(c.do(ownerTok, http.MethodGet, "/components/has-product", nil, http.StatusOK), &reread); err != nil {
 		t.Fatalf("decode get after refused clear: %v", err)
 	}
-	if reread.Product != "kestrel-vroom" {
-		t.Fatalf("product after refused clear = %q, want unchanged kestrel-vroom", reread.Product)
+	if reread.Product != p.Name {
+		t.Fatalf("product after refused clear = %q, want it unchanged (%q)", reread.Product, p.Name)
 	}
 }
 
@@ -439,6 +440,9 @@ func TestComponentCreateWithoutNameGenerates(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
+	// A product classified display, so the platform mints "display-<n>".
+	disp := storagetest.MintProduct(t, ctx, gw, "display")
+
 	type comp struct {
 		ID            string `json:"id"`
 		Name          string `json:"name"`
@@ -448,7 +452,7 @@ func TestComponentCreateWithoutNameGenerates(t *testing.T) {
 	// No "name" key in the body at all: the omission itself, not an empty
 	// string, is what the Huma pattern/minLength guards must tolerate.
 	var first comp
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components", map[string]any{"product": "boreal-edge-55"}, http.StatusCreated), &first); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components", map[string]any{"product": disp.Name}, http.StatusCreated), &first); err != nil {
 		t.Fatalf("decode create without name: %v", err)
 	}
 	if first.Name != "display-1" || !first.NameGenerated {
@@ -467,7 +471,7 @@ func TestComponentCreateWithoutNameGenerates(t *testing.T) {
 
 	// Supplying a name still behaves exactly as before.
 	var typed comp
-	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "operator-typed", "product": "boreal-edge-55"}, http.StatusCreated), &typed); err != nil {
+	if err := json.Unmarshal(c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "operator-typed", "product": disp.Name}, http.StatusCreated), &typed); err != nil {
 		t.Fatalf("decode create with name: %v", err)
 	}
 	if typed.Name != "operator-typed" || typed.NameGenerated {
@@ -503,7 +507,9 @@ func TestComponentResetName(t *testing.T) {
 	defer srv.Close()
 	c := &apiClient{t: t, ctx: ctx, base: srv.URL}
 
-	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "reset-me", "product": "boreal-edge-55"}, http.StatusCreated)
+	// A product classified display, so :resetName mints "display-1".
+	disp := storagetest.MintProduct(t, ctx, gw, "display")
+	c.do(ownerTok, http.MethodPost, "/components", map[string]any{"name": "reset-me", "product": disp.Name}, http.StatusCreated)
 
 	var reset struct {
 		Name          string `json:"name"`

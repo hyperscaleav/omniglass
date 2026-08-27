@@ -47,10 +47,11 @@ only where it says something a badge cannot (a quorum beyond one, a shortfall, a
 role). The platform-wide sweep of the older pages is tracked in #784. The system zoom is growing
 into the workspace #788 defines: facets as `?tab=` URL facts (`TabRail`), the Map tab
 rendering the standard's declared room (ADR-0128) with live occupant state on each marker.
-Since ADR-0129 these faces ARE the identity routes' default: one way to look, one altitude
-rule (locations drill, systems open full screen, components open in blades), with the
-classic detail face at `?view=detail` only until edit-in-blade lands and flat tables
-surviving as a list-density toggle for bulk work.
+Since ADR-0129 these faces ARE the identity routes' default, and since #800 they are the
+ONLY faces: one way to look, one altitude rule (locations drill, systems open full screen,
+components open in blades), editing on each workspace's Configure tab, and flat tables
+surviving as a list-density toggle for bulk work. The classic detail face is retired;
+`?view=detail` is ignored and `?edit=1` lands Configure already editing.
 
 ## One renderer library, two composition modes
 
@@ -163,12 +164,11 @@ Two layers, deliberately decoupled:
    rearrangeable and user-customizable without touching a route.
 
 **The mode rides the URL too**
-([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact), and
-[ADR-0126](/architecture/decisions/#adr-0126-the-zoom-face-is-a-url-fact-on-the-identity-routes)
-for the zoom face: `?zoom=1` beside a location address renders the fleet canvas one level down,
-the inventory detail staying the default): `?edit=1` beside a
-detail address (or beside a blade's id param, `?u=<id>&edit=1`) requests the edit face, behind the
-same `<resource>:update` permission the footer Edit is behind; without it the link lands read-only.
+([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact) established the rule;
+[ADR-0132](/architecture/decisions/#adr-0132-configure-is-the-one-deep-editor) retargets it):
+`?edit=1` beside a fleet address lands the workspace's Configure tab already editing, and beside
+an identity blade's id param (`?u=<id>&edit=1`) opens that blade editing, both behind the same
+`<resource>:update` permission the Edit button is behind; without it the link lands read-only.
 Leaving edit (Cancel or Save) strips the param via history replace, so a refresh mid-edit keeps the
 mode while Back never re-enters an edit the operator left. One hook (`web/src/lib/editurl.ts`) owns
 both directions, the create-as-route and row-pencil handoffs are those URLs rather than in-memory

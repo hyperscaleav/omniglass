@@ -8,10 +8,14 @@ import { useSearchParams } from "@solidjs/router";
 // once there are two.
 // The rail's URL fact defaults to `?tab=`; a caller whose facet is a different
 // noun names it (the fleet list's kind tabs ride `?kind=`, #798).
-export default function TabRail(props: { tabs: { key: string; label: string }[]; param?: string }) {
+export default function TabRail(props: { tabs: { key: string; label: string }[]; param?: string; activeKey?: () => string }) {
   const [params, setParams] = useSearchParams();
   const name = () => props.param ?? "tab";
   const active = () => {
+    // A page whose default facet is DERIVED (the ?edit=1 landing on
+    // Configure, #800) passes its own resolver, so the rail and the body
+    // cannot disagree about which facet is showing.
+    if (props.activeKey) return props.activeKey();
     const raw = params[name()];
     const t = Array.isArray(raw) ? raw[0] : raw;
     return t && props.tabs.some((x) => x.key === t) ? t : props.tabs[0]?.key;

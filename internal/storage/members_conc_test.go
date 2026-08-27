@@ -50,8 +50,8 @@ func TestFirstMembershipRaceIsSerialized(t *testing.T) {
 			t.Fatalf("system %s: %v", s, err)
 		}
 	}
-	bar := "kestrel-vroom"
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "race-dsp", ProductName: &bar}, all, all, all, all); err != nil {
+	product := storagetest.MintProduct(t, ctx, gw, "").Name
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "race-dsp", ProductName: &product}, all, all, all, all); err != nil {
 		t.Fatalf("component: %v", err)
 	}
 

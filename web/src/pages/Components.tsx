@@ -1,21 +1,20 @@
 import { byLabel, entityLabel } from "../lib/entities";
 import { componentBlade, systemBlade, locationBlade } from "../components/EntityBlade";
-import { For, Show, createEffect, createMemo, createSignal, on, type JSX } from "solid-js";
+import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
-import TreeList, { type ListConfig, type ListCtx, type ListNode, type PageDescriptor } from "../components/TreeList";
-import KVStacked from "../components/KVStacked";
+import TreeList, { type ListConfig, type ListNode, type PageDescriptor } from "../components/TreeList";
+
 import FieldRow from "../components/FieldRow";
-import { EMPTY_VALUE } from "../components/BladeField";
+
 import TreeSelect from "../components/TreeSelect";
 import {
   type Component as Comp,
-  type NameCheck,
-  COMPONENTS_KEY,
+    COMPONENTS_KEY,
   listComponents,
   createComponent,
-  updateComponent, renameComponent, resetComponentName,
-  checkComponentName,
+  
+  
   deleteComponent,
 } from "../lib/components";
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
@@ -25,23 +24,23 @@ import { bucketPhrase, createPen, nameBucket, penIncomplete } from "../lib/nameg
 import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
 import { pathTo, type TreeNode } from "../lib/treeselect";
 import CreateIdentity from "../components/CreateIdentity";
-import LabelPenField, { seedLabelPen } from "../components/LabelPenField";
+
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { useEditParam } from "../lib/editurl";
-import { ChevronRight, Pencil, Plus, RotateCcw, Save, Search, X } from "../components/icons";
+
+import { Plus, X } from "../components/icons";
 import Button from "../components/Button";
 import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
-import TagAdder from "../components/TagAdder";
-import ReachabilityPanel from "../components/ReachabilityPanel";
-import ReconciliationPanel from "../components/ReconciliationPanel";
-import EventsPanel from "../components/EventsPanel";
-import LogsPanel from "../components/LogsPanel";
+
+
+
+
+
 import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
-import PropertiesPanel, { propertyResolutionBlade, propertyBladeId } from "../components/PropertiesPanel";
-import ResolutionPanel from "../components/ResolutionPanel";
-import AlarmsPanel from "../components/AlarmsPanel";
+import { propertyResolutionBlade } from "../components/PropertiesPanel";
+
+
 import { hueFor } from "../lib/system_color";
 import ComponentLeaf from "./ComponentLeaf";
 
@@ -83,14 +82,23 @@ export const componentsDescriptor: PageDescriptor = {
 };
 
 export default function Components() {
-  // The zoom face IS the default (ADR-0129, reversing ADR-0126's parking):
-  // the identity route renders the leaf; the classic detail face survives at
-  // ?view=detail (and under a legacy ?edit=1) until edit-in-blade lands. A
-  // legacy ?zoom=1 deep link still resolves here, one face either way.
-  const [zoomSearch] = useSearchParams();
+  // The leaf IS the identity route's face (ADR-0129, ADR-0132); "create" is
+  // the one address that renders a form instead, and a legacy ?zoom=1 deep
+  // link still resolves here.
   const zoomParams = useParams();
-  const wantsDetail = () => zoomParams.id === "create" || zoomSearch.view === "detail" || zoomSearch.edit === "1";
-  if (zoomParams.id && !wantsDetail()) return <ComponentLeaf />;
+  // The branch is a reactive Show, not a one-time return: create's post-save
+  // navigate lands on the new row's uuid WITHOUT remounting this route
+  // component (same /:id pattern), so a decision taken once at setup would
+  // leave the create face mounted forever with an empty body (the e2e create
+  // handoff walk is the regression that caught it).
+  return (
+    <Show when={!!zoomParams.id && zoomParams.id !== "create"} fallback={<ComponentsIndex />}>
+      <ComponentLeaf />
+    </Show>
+  );
+}
+
+function ComponentsIndex() {
   const params = useParams();
   const [search] = useSearchParams();
   const navigate = useNavigate();
@@ -227,340 +235,8 @@ export default function Components() {
   // Properties section is the component's value surface, resolved against its
   // product's contract. The full page renders its own Save/Cancel/Edit footer from
   // ctx.edit; a blade gets those from BladeStack.
-  function ComponentDetail(props: { node: CompNode; ctx: ListCtx<CompNode> }): JSX.Element {
-    const ctx = props.ctx;
-    const edit = ctx.edit;
-    const editing = () => edit?.editing() ?? false;
-    // Live node, re-resolved from the index so a background refetch updates facts
-    // without remounting (which would drop in-progress edit state).
-    const n = () => ctx.byId(props.node.id) ?? props.node;
-    const parent = () => ctx.parentOf(n());
-    const path = () => ctx.pathOf(n());
-    const sysName = () => n().raw.system;
-    const canUpdate = () => can(me.data, "component", "update");
-    // :resetName is gated by component:rename at the API (the same token
-    // :rename uses, since both change the name), a strictly narrower grant
-    // than the component:update that opens edit mode (review minor,
-    // task-15-review.md). Without this the button rendered for anyone who
-    // could open edit mode at all, not just an operator who could actually
-    // use it.
-    const canRename = () => can(me.data, "component", "rename");
-
-    // The label's pen rather than a plain signal (#693): see Systems.tsx's own
-    // copy of this line and components/LabelPenField.tsx for the rule.
-    const displayPen = createPen();
-    const [name, setName] = createSignal(n().raw.name);
-    const [nameCheck, setNameCheck] = createSignal<NameCheck | null>(null);
-    const [checking, setChecking] = createSignal(false);
-    const [saveErr, setSaveErr] = createSignal<string | null>(null);
-    const [resetting, setResetting] = createSignal(false);
-    async function runCheck() {
-      setChecking(true);
-      try { setNameCheck(await checkComponentName(name().trim(), n().raw.parent_id, n().raw.location_id)); }
-      catch { setNameCheck(null); }
-      finally { setChecking(false); }
-    }
-    // Hands the pen back to the platform (#627 Task 15d): its own immediate
-    // act, like Delete, not folded into the accordion's Save, because it is
-    // unrelated to whatever the operator is mid-editing in the name field.
-    // Re-seeds the local draft from the server's own regenerated name so the
-    // input reflects it without waiting for a background refetch to land.
-    async function resetName() {
-      setResetting(true);
-      setSaveErr(null);
-      try {
-        const updated = await resetComponentName(n().raw.id);
-        setName(updated.name);
-        setNameCheck(null);
-        await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
-      } catch (e) {
-        setSaveErr(describeError(e));
-      } finally {
-        setResetting(false);
-      }
-    }
-    // Seed the inputs from the node each time edit begins (this also reverts a Cancel,
-    // since Cancel exits edit and the next begin re-seeds).
-    createEffect(on(editing, (isEditing) => {
-      if (isEditing) { seedLabelPen(displayPen, n().raw); setName(n().raw.name); setNameCheck(null); }
-    }));
-    // The edit face is a URL fact (#759): ?edit=1 requests edit once the node has
-    // resolved (a deep link, a refresh, the create or row-pencil handoff), and
-    // leaving edit strips the param again (lib/editurl.ts). Keyed on id (#627
-    // Task 15c), stable across a rename.
-    const editUrl = useEditParam(edit, { ready: () => !!n().id, canUpdate });
-
-    edit?.bind({
-      editable: canUpdate,
-      save: async () => {
-        setSaveErr(null);
-        const renamed = name().trim() !== n().raw.name;
-        try {
-          // Addressed by uuid (#627 review finding 1), not by name: two
-          // components can legally share a name in different placements
-          // (#627 Task 10), and the server's dual-accept (ADR-0062) refuses
-          // an ambiguous bare name with a 409, which is exactly what would
-          // happen here for the ordinary case of a room's first component
-          // (every room's first display is named "display-1").
-          await updateComponent(n().raw.id, {
-            // The pen's own value, always keyed (#693): see Systems.tsx's save
-            // for why the empty string is the right thing to post from a locked
-            // field.
-            label: displayPen.value(),
-          });
-          // The rename is a second call and it goes LAST, because it is the one that
-          // can be refused on its own: it needs <resource>:rename, and a duplicate
-          // name is a 409 the advisory :checkName precheck cannot rule out. Doing it
-          // last means a refusal leaves the other edits saved and the name unchanged.
-          //
-          // The invalidation is in a finally for the same reason. It used to sit
-          // after the rename, so a 409 skipped it and the list went on rendering the
-          // label the server had already accepted: the operator saw a total
-          // failure for a half-committed save, and Cancel re-seeded the inputs from
-          // that stale cache.
-          // No hand-off navigate after a rename (#627 Task 15c): the route
-          // carries the id, which a rename never changes, so there is
-          // nothing here to correct. The old navigate to
-          // /components/<newName> only existed because the URL used to
-          // carry the name; under uuid addressing it would have sent a
-          // just-saved operator from a valid URL to an unresolvable one.
-          if (renamed) await renameComponent(n().raw.id, name().trim());
-        } catch (e) {
-          setSaveErr(describeError(e));
-          throw e; // keep the slot in edit mode so the operator can retry
-        } finally {
-          await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
-        }
-      },
-      destructive: () =>
-        can(me.data, "component", "delete")
-          ? { label: "Delete", tone: "danger" as const, onClick: () => { ctx.closeBlades(); del(n()); } }
-          : undefined,
-    });
-
-    return (
-      <div class="flex flex-col gap-5">
-        <Show when={saveErr()}>
-          <div role="alert" class="alert alert-error alert-soft text-sm"><span>{saveErr()}</span></div>
-        </Show>
-        <Show when={!ctx.full && path().length}>
-          <div class="flex flex-wrap items-center gap-1 text-[11.5px]">
-            <For each={path()}>
-              {(c, i) => (
-                <>
-                  <Show when={i()}><span class="text-base-content/30">{"›"}</span></Show>
-                  <button class="text-base-content/60 hover:text-base-content" onClick={() => { const a = ctx.byId(c.id); if (a) ctx.go(a); }}>{c.display}</button>
-                </>
-              )}
-            </For>
-          </div>
-        </Show>
-
-        <div class="flex flex-col gap-1.5">
-          <span class="eyebrow">Identity</span>
-          <Show
-            when={editing()}
-            fallback={
-              <div class="grid grid-cols-2 gap-5">
-                <KVStacked
-                  bind="name"
-                  value={
-                    <span class="flex items-center gap-1.5">
-                      <span class="font-data text-sm">{n().raw.name}</span>
-                      {/* The pen-ownership tracking chip (#627 Task 15d): a
-                          name the platform picked, not one an operator typed.
-                          :rename clears this forever; :resetName is the only
-                          way back, which is why the affordance to get here
-                          lives beside the name in edit mode, not here. */}
-                      <Show when={n().raw.name_generated}>
-                        <span class="badge badge-ghost badge-xs" title="The platform generated this name from the component's type. Renaming it hands the pen to you for good; :resetName is the only way back.">Generated</span>
-                      </Show>
-                    </span>
-                  }
-                />
-                <KVStacked label="ID" value={<span class="font-data text-xs text-base-content/50">{n().raw.id}</span>} />
-              </div>
-            }
-          >
-            <div class="flex flex-col gap-3">
-              <LabelPenField pen={displayPen} entity={() => n().raw} placeholder="Ceiling Mic 2" />
-              <FieldRow
-                bind="name"
-                info="Renaming changes the address; existing links to the old name stop resolving."
-              >
-                <>
-                  <div class="join w-full">
-                    <input
-                      class="input input-bordered join-item w-full font-data"
-                      value={name()}
-                      onInput={(e) => { setName(e.currentTarget.value); setNameCheck(null); }}
-                    />
-                    <Button
-                      square
-                      size="md"
-                      icon={Search}
-                      label="Check name"
-                      title="Check availability"
-                      class="join-item"
-                      disabled={checking() || !name().trim() || name().trim() === n().raw.name}
-                      onClick={() => void runCheck()}
-                    />
-                    {/* :resetName (#627 Task 15d): hands the pen back to the
-                        platform, regenerating from the component's current
-                        type and placement, whether or not the name is
-                        already platform-owned (the API's own contract). Its
-                        own immediate act, not folded into Save. Gated on
-                        component:rename (review minor, task-15-review.md):
-                        the API's own gate, narrower than the component:update
-                        that opens edit mode at all. */}
-                    <Show when={canRename()}>
-                      <Button
-                        square
-                        size="md"
-                        icon={RotateCcw}
-                        label="Reset to generated name"
-                        title="Regenerate this name from the component's type"
-                        class="join-item"
-                        disabled={resetting()}
-                        onClick={() => void resetName()}
-                      />
-                    </Show>
-                  </div>
-                  <Show when={n().raw.name_generated}>
-                    <span class="text-[11px] text-base-content/50">The platform generated this name; renaming it hands you the pen for good.</span>
-                  </Show>
-                  <Show when={nameCheck()}>
-                    {(c) => (
-                      <span
-                        class="text-[11px]"
-                        classList={{ "text-success": c().valid && c().available, "text-error": !c().valid || !c().available }}
-                      >
-                        {!c().valid ? (c().reason ?? "Use lowercase, digits, hyphens.") : c().available ? "Available" : (c().reason ?? "Taken")}
-                      </span>
-                    )}
-                  </Show>
-                </>
-              </FieldRow>
-            </div>
-          </Show>
-        </div>
-
-        <div class="flex flex-col gap-1.5">
-          <span class="eyebrow">Placement</span>
-          <div class="grid grid-cols-2 gap-5">
-            <KVStacked
-              label="System"
-              value={sysName() ? (
-                <span class="flex items-baseline gap-1.5">
-                  <button class="link text-sm" onClick={() => navigate(`/systems/${encodeURIComponent(n().systemId)}`)}>{n().systemName}</button>
-                  {/* Its primary is only part of the answer when it serves more than
-                      one, so the row says so rather than implying exclusivity. */}
-                  <Show when={n().systemCount > 1}>
-                    <span class="text-[11px] text-warning">+{n().systemCount - 1} more</span>
-                  </Show>
-                </span>
-              ) : <span class="text-base-content/50">{EMPTY_VALUE}</span>}
-            />
-            <KVStacked label="Location" value={<span>{n().locationName || EMPTY_VALUE}</span>} />
-            <KVStacked
-              label="Parent"
-              value={parent() ? <button class="link text-sm" onClick={() => ctx.go(parent()!)}>{parent()!.display}</button> : <span class="text-base-content/50">Root</span>}
-            />
-            <KVStacked
-              label="Product"
-              value={n().raw.product ? <span class="font-data text-sm">{n().raw.product}</span> : <span class="text-base-content/50">{EMPTY_VALUE}</span>}
-            />
-          </div>
-        </div>
-
-        <Show when={n().children.length}>
-          <div class="flex flex-col gap-1.5">
-            <span class="eyebrow">Sub-components</span>
-            <div class="overflow-hidden rounded-box border border-base-300">
-              <For each={n().children}>
-                {(c, i) => (
-                  <button class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5" classList={{ "border-t border-base-300": i() > 0 }} onClick={() => ctx.go(c)}>
-                    <span class="flex-1 truncate text-sm">{c.display}</span>
-                    <Show when={c.product}><span class="badge badge-ghost badge-sm text-[10px] font-data">{c.product}</span></Show>
-                    <ChevronRight size={14} />
-                  </button>
-                )}
-              </For>
-            </div>
-          </div>
-        </Show>
-        {/* Every panel below is addressed by the component's uuid (#627 review
-            finding 1), not its name: two components can legally share a name
-            in different placements (#627 Task 10), and every one of these
-            routes dual-accepts uuid-or-name (ADR-0062) but refuses an
-            ambiguous bare name with a 409. Addressing by id is what keeps a
-            duplicate-named component's panels working rather than routinely
-            409ing, since a room's first component is always named
-            "display-1" (#627 Task 14's generator). */}
-        <ReachabilityPanel
-          name={n().raw.id}
-          onAdd={can(me.data, "interface", "create") ? () => ctx.openBlade({ kind: "interface-create", id: n().raw.id }) : undefined}
-          onOpenInterface={can(me.data, "interface", "read") ? (id) => ctx.openBlade({ kind: "interface", id }) : undefined}
-        />
-        {/* What is wrong with this component, and how badly. This is where fleet
-            health starts: an alarm takes the component's own verdict down, and
-            any role it fills stops counting it toward quorum while it stays
-            down. Raising and clearing write immediately (like tags), so the
-            controls appear only in edit mode, which keeps view read-only. */}
-        <AlarmsPanel
-          component={n().raw.id}
-          canUpdate={editing() && canUpdate()}
-          canAcknowledge={can(me.data, "alarm", "acknowledge")}
-        />
-        <EventsPanel name={n().raw.id} />
-        <LogsPanel name={n().raw.id} />
-        {/* What we want vs what the device reports: the provenance pivot
-            (declared/intended/observed) per property, with drift computed on the
-            server. Read-only, and the teaching surface for reconciliation. */}
-        <ReconciliationPanel name={n().raw.id} />
-        {/* Why the tag values are what they are, and for a shared component,
-            which system it is being asked about. The list's pills answer what;
-            this answers why, which is the only question when one looks wrong. */}
-        <ResolutionPanel component={n().raw.id} />
-        <PropertiesPanel
-          component={n().raw.id}
-          edit={edit}
-          onOpen={(property) => ctx.openBlade({ kind: "property-resolution", id: propertyBladeId(n().raw.id, property) })}
-        />
-
-        <TagAdder kind="component" name={n().raw.id} canUpdate={editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
-
-        <Show when={ctx.full}>
-          <div class="flex flex-wrap items-center gap-2 border-t border-base-300 pt-4">
-            <Show
-              when={editing()}
-              fallback={
-                <>
-                  <Show when={can(me.data, "component", "delete")}>
-                    <Button intent="danger" onClick={() => del(n())}>Delete</Button>
-                  </Show>
-                  <span class="flex-1" />
-                  <Show when={edit?.editable()}>
-                    <Button intent="action" icon={Pencil} onClick={() => editUrl.request()}>Edit</Button>
-                  </Show>
-                </>
-              }
-            >
-              <span class="flex-1" />
-              <Button icon={X} onClick={() => edit!.cancel()}>Cancel</Button>
-              <Button type="button" intent="action" icon={Save} disabled={edit!.saving()} onClick={() => { void edit!.save().catch(() => {}); }}>Save changes</Button>
-            </Show>
-          </div>
-        </Show>
-      </div>
-    );
-  }
-
-  // ComponentCreate: the draft-create surface at /components/create. Classification
-  // and Placement are writable and come FIRST, because they are what the naming
-  // and labelling rules read; Identity follows and is optional throughout. The
-  // binding sections (Tags) are shown locked until the component exists. Create
-  // commits the row and hands off to /components/<id> in edit mode.
+  // The classic detail body retired with the face (#800 slice 3): the blade
+  // is the override, the full page unreachable, so the config renders null.
   function ComponentCreate(): JSX.Element {
     // Independent fields, NOT createIdentity's derive-from-display coupling
     // (#627 Task 15d): a blank name here means "the platform generates one
@@ -818,7 +494,7 @@ export default function Components() {
     onNew: () => navigate("/components/create"),
     onEdit: (n) => navigate(`/components/${encodeURIComponent(n.id)}?edit=1`),
     renderCreate: () => <ComponentCreate />,
-    renderDetail: (n, ctx) => <ComponentDetail node={n} ctx={ctx} />,
+    renderDetail: () => null,
     // The condensed fleet blade replaces the inventory-era detail blade (#799);
     // the other fleet kinds register so its drills nest on this page's stack.
     bladeOverride: componentBlade,

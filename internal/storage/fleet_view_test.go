@@ -82,7 +82,7 @@ func newFleetFixture(t *testing.T) *fleetFixture {
 		t.Fatalf("declare role: %v", err)
 	}
 
-	bar := "kestrel-vroom"
+	bar := storagetest.MintProduct(t, ctx, gw, "video-bar").Name
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "bar-1", ProductName: &bar}, f.all, f.all, f.all, f.all); err != nil {
 		t.Fatalf("create component: %v", err)
 	}

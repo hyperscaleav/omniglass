@@ -38,7 +38,7 @@ type pen struct {
 	LabelGenerated bool   `json:"label_generated"`
 }
 
-func penHarness(t *testing.T) (*apiClient, string, func()) {
+func penHarness(t *testing.T) (*apiClient, string, storage.Product, func()) {
 	t.Helper()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -59,8 +59,9 @@ func penHarness(t *testing.T) (*apiClient, string, func()) {
 		gw.Close()
 		t.Fatalf("bootstrap: %v", err)
 	}
+	p := storagetest.MintProduct(t, ctx, gw, "")
 	srv := httptest.NewServer(api.NewHandler(gw))
-	return &apiClient{t: t, ctx: ctx, base: srv.URL}, ownerTok, func() {
+	return &apiClient{t: t, ctx: ctx, base: srv.URL}, ownerTok, p, func() {
 		srv.Close()
 		gw.Close()
 	}
@@ -78,7 +79,7 @@ func decodePen(t *testing.T, what string, raw []byte) pen {
 // The field exists on the read body of every labelled entity, with the polarity
 // name_generated already established: TRUE means the platform owns it.
 func TestLabelPenOnTheWire(t *testing.T) {
-	c, tok, stop := penHarness(t)
+	c, tok, p, stop := penHarness(t)
 	defer stop()
 
 	cases := []struct {
@@ -92,8 +93,8 @@ func TestLabelPenOnTheWire(t *testing.T) {
 		{
 			kind:   "component",
 			path:   "/components",
-			blank:  map[string]any{"name": "pen-blank", "product": "boreal-edge-55"},
-			typed:  map[string]any{"name": "pen-typed", "label": "Operator Typed", "product": "boreal-edge-55"},
+			blank:  map[string]any{"name": "pen-blank", "product": p.Name},
+			typed:  map[string]any{"name": "pen-typed", "label": "Operator Typed", "product": p.Name},
 			addr:   "/components/pen-typed",
 			blankA: "/components/pen-blank",
 		},
@@ -154,10 +155,10 @@ func TestLabelPenOnTheWire(t *testing.T) {
 // cannot claim or surrender it except by writing the label itself. Huma refuses
 // an unknown body field, so the assertion is that the write is refused at all.
 func TestLabelPenIsNotWritable(t *testing.T) {
-	c, tok, stop := penHarness(t)
+	c, tok, p, stop := penHarness(t)
 	defer stop()
 
-	c.do(tok, http.MethodPost, "/components", map[string]any{"name": "pen-ro", "product": "boreal-edge-55"}, http.StatusCreated)
+	c.do(tok, http.MethodPost, "/components", map[string]any{"name": "pen-ro", "product": p.Name}, http.StatusCreated)
 	c.do(tok, http.MethodPatch, "/components/pen-ro",
 		map[string]any{"label_generated": false}, http.StatusUnprocessableEntity)
 }

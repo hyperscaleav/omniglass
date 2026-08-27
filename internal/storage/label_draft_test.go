@@ -485,6 +485,7 @@ func TestTheDraftLabelAllocatesNothing(t *testing.T) {
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
+	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
 	if _, err := gw.CreateLocation(ctx, "", storage.LocationSpec{Name: "hq", LocationType: "building"}, all); err != nil {
 		t.Fatalf("create building: %v", err)
 	}

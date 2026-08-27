@@ -42,7 +42,7 @@ func decodeRecompute(t *testing.T, what string, raw []byte) labelRecomputeWire {
 	return w
 }
 
-func recomputeHarness(t *testing.T) (*apiClient, string, string, func()) {
+func recomputeHarness(t *testing.T) (*apiClient, string, string, storage.Product, func()) {
 	t.Helper()
 	dsn := storagetest.NewDSN(t)
 	ctx := context.Background()
@@ -63,8 +63,11 @@ func recomputeHarness(t *testing.T) (*apiClient, string, string, func()) {
 		gw.Close()
 		t.Fatalf("bootstrap: %v", err)
 	}
+	// Every case drives the display type's rules, so the harness mints a
+	// product classified display for the components it creates.
+	disp := storagetest.MintProduct(t, ctx, gw, "display")
 	srv := httptest.NewServer(api.NewHandler(gw))
-	return &apiClient{t: t, ctx: ctx, base: srv.URL}, ownerTok, dsn, func() {
+	return &apiClient{t: t, ctx: ctx, base: srv.URL}, ownerTok, dsn, disp, func() {
 		srv.Close()
 		gw.Close()
 	}
@@ -73,7 +76,7 @@ func recomputeHarness(t *testing.T) (*apiClient, string, string, func()) {
 // A rule edit, previewed, applied, and applied again: the whole verb, on the
 // wire, with the fleet checked between each step.
 func TestRuleChangePreviewsThenAppliesOverHTTP(t *testing.T) {
-	c, tok, _, stop := recomputeHarness(t)
+	c, tok, _, disp, stop := recomputeHarness(t)
 	defer stop()
 
 	c.do(tok, http.MethodPost, "/locations",
@@ -82,11 +85,11 @@ func TestRuleChangePreviewsThenAppliesOverHTTP(t *testing.T) {
 		map[string]any{"name": "room-a", "location_type": "room", "parent": "hq"}, http.StatusCreated)
 	for range 3 {
 		c.do(tok, http.MethodPost, "/components",
-			map[string]any{"product": "boreal-edge-55", "location": "room-a"}, http.StatusCreated)
+			map[string]any{"product": disp.Name, "location": "room-a"}, http.StatusCreated)
 	}
 	// One label the operator typed, which no recompute may touch.
 	c.do(tok, http.MethodPost, "/components",
-		map[string]any{"name": "hand-named", "product": "boreal-edge-55", "location": "room-a", "label": "The Operator's Own"}, http.StatusCreated)
+		map[string]any{"name": "hand-named", "product": disp.Name, "location": "room-a", "label": "The Operator's Own"}, http.StatusCreated)
 
 	// The rule edit itself is a component_type edit, the tier an operator
 	// actually reaches: it forks the shipped row rather than writing it.
@@ -149,7 +152,7 @@ func TestRuleChangePreviewsThenAppliesOverHTTP(t *testing.T) {
 // changes, so the operator sees the true blast radius rather than the first hop
 // of it.
 func TestALocationRecomputeReportsWhatItStales(t *testing.T) {
-	c, tok, _, stop := recomputeHarness(t)
+	c, tok, _, disp, stop := recomputeHarness(t)
 	defer stop()
 
 	c.do(tok, http.MethodPost, "/locations",
@@ -157,7 +160,7 @@ func TestALocationRecomputeReportsWhatItStales(t *testing.T) {
 	c.do(tok, http.MethodPost, "/locations",
 		map[string]any{"name": "room-a", "location_type": "room", "parent": "hq"}, http.StatusCreated)
 	c.do(tok, http.MethodPost, "/components",
-		map[string]any{"product": "boreal-edge-55", "location": "room-a"}, http.StatusCreated)
+		map[string]any{"product": disp.Name, "location": "room-a"}, http.StatusCreated)
 	c.do(tok, http.MethodPatch, "/component-types/display",
 		map[string]any{"label_rule": "{{.LocationLabel}} {{.TypeName}}"}, http.StatusOK)
 	c.do(tok, http.MethodPost, "/components:recomputeLabels", nil, http.StatusOK)
@@ -189,7 +192,7 @@ func TestALocationRecomputeReportsWhatItStales(t *testing.T) {
 // A viewer can neither preview nor apply, on any of the three kinds: both
 // halves are gated by the entity's own :update, and a viewer holds only :read.
 func TestAViewerCannotPreviewOrRecomputeLabels(t *testing.T) {
-	c, tok, dsn, stop := recomputeHarness(t)
+	c, tok, dsn, _, stop := recomputeHarness(t)
 	defer stop()
 	c.do(tok, http.MethodPost, "/locations",
 		map[string]any{"name": "hq", "location_type": "building"}, http.StatusCreated)
@@ -217,7 +220,7 @@ func TestAViewerCannotPreviewOrRecomputeLabels(t *testing.T) {
 // first pass of this file, and previewing on the read scope alone is what the
 // verb did until ADR-0100's scoping was applied to both halves.
 func TestAPreviewIsBoundedByTheUpdateScopeJustAsTheApplyIs(t *testing.T) {
-	c, tok, dsn, stop := recomputeHarness(t)
+	c, tok, dsn, disp, stop := recomputeHarness(t)
 	defer stop()
 	ctx := context.Background()
 
@@ -228,9 +231,9 @@ func TestAPreviewIsBoundedByTheUpdateScopeJustAsTheApplyIs(t *testing.T) {
 	c.do(tok, http.MethodPost, "/locations",
 		map[string]any{"name": "room-b", "location_type": "room", "parent": "hq"}, http.StatusCreated)
 	mine := decodePen(t, "mine", c.do(tok, http.MethodPost, "/components",
-		map[string]any{"name": "mine", "product": "boreal-edge-55", "location": "room-a"}, http.StatusCreated))
+		map[string]any{"name": "mine", "product": disp.Name, "location": "room-a"}, http.StatusCreated))
 	theirs := decodePen(t, "theirs", c.do(tok, http.MethodPost, "/components",
-		map[string]any{"name": "theirs", "product": "boreal-edge-55", "location": "room-b"}, http.StatusCreated))
+		map[string]any{"name": "theirs", "product": disp.Name, "location": "room-b"}, http.StatusCreated))
 	_ = theirs
 
 	// A rule everything drifts against.

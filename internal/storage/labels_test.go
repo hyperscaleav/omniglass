@@ -22,11 +22,17 @@ import (
 // the defect the invariant test at the bottom of this file exists to catch.
 //
 // The seeded global rule for a component is
-// "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}", and boreal-edge-55 is
-// classified under the "display" component_type whose label is
+// "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}", and the harness mints
+// labels-display under the "display" component_type whose label is
 // "Display", so the first display in an empty bucket labels "Display 1".
+// The products are minted, not borrowed from the seed catalog (#804): the
+// label walk under test reads the TYPE tree, so the product is only a doorway.
 
-const edge55 = "boreal-edge-55"
+const edge55 = "labels-display"
+
+const labelsMic = "labels-mic"
+
+const labelsBar = "labels-bar"
 
 // A component created with a product and a location gets a label without the
 // operator typing one: the first acceptance behavior.
@@ -925,13 +931,13 @@ func TestEveryStoredLabelEqualsWhatItsRuleProduces(t *testing.T) {
 	// whether or not a move re-renders at all.
 	var built []string
 	for _, spec := range []storage.ComponentSpec{
-		{ProductName: strptr(edge55), LocationName: &roomA},        // 0 renamed
-		{ProductName: strptr(edge55), LocationName: &roomA},        // 1 moved
-		{ProductName: strptr(edge55), LocationName: &roomB},        // 2 reclassified
-		{ProductName: strptr(edge55), LocationName: &roomB},        // 3 the blocker
-		{ProductName: &mine.Name, LocationName: &roomA},            // 4 reset
-		{ProductName: &mine.Name, LocationName: &roomB},            // 5 hand-labelled
-		{ProductName: strptr("lyra-arc-a2"), LocationName: &roomA}, // 6 renamed then reset
+		{ProductName: strptr(edge55), LocationName: &roomA},    // 0 renamed
+		{ProductName: strptr(edge55), LocationName: &roomA},    // 1 moved
+		{ProductName: strptr(edge55), LocationName: &roomB},    // 2 reclassified
+		{ProductName: strptr(edge55), LocationName: &roomB},    // 3 the blocker
+		{ProductName: &mine.Name, LocationName: &roomA},        // 4 reset
+		{ProductName: &mine.Name, LocationName: &roomB},        // 5 hand-labelled
+		{ProductName: strptr(labelsMic), LocationName: &roomA}, // 6 renamed then reset
 		{Name: "hand-named", ProductName: strptr(edge55), LocationName: &roomB},
 	} {
 		c, err := gw.CreateComponent(ctx, "", spec, all, all, all, all)
@@ -1140,6 +1146,15 @@ func seededGatewayDSN(t *testing.T) (*storage.PG, context.Context, string) {
 	t.Cleanup(gw.Close)
 	if err := seed.Run(ctx, gw); err != nil {
 		t.Fatalf("seed: %v", err)
+	}
+	for _, p := range []storage.Product{
+		{Name: edge55, Label: "Labels Display", ComponentType: "display"},
+		{Name: labelsMic, Label: "Labels Mic", ComponentType: "ceiling-mic"},
+		{Name: labelsBar, Label: "Labels Bar", ComponentType: "video-bar"},
+	} {
+		if _, err := gw.CreateProduct(ctx, "", p); err != nil {
+			t.Fatalf("mint %s: %v", p.Name, err)
+		}
 	}
 	return gw, ctx, dsn
 }

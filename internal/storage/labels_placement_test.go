@@ -816,7 +816,7 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 		{ProductName: strptr(edge55), LocationName: &roomA.Name, SystemName: &board.Name}, // 1 moves rooms
 		{ProductName: strptr(edge55), LocationName: &roomB, SystemName: &huddle.Name},     // 2 re-defaulted
 		{ProductName: strptr(edge55), LocationName: &roomB},                               // 3 bound later
-		{ProductName: strptr("lyra-arc-a2"), LocationName: &roomC},                        // 4 renamed then reset
+		{ProductName: strptr(labelsMic), LocationName: &roomC},                            // 4 renamed then reset
 		{ProductName: strptr(edge55), LocationName: &roomC, Label: "Operator's Own"},      // 5 the pen stays theirs
 		{ProductName: strptr(edge55), LocationName: &roomC, SystemName: &mover.Name},      // 6 its system moves
 	} {
@@ -865,7 +865,7 @@ func TestNoActLeavesALabelStaleAnywhere(t *testing.T) {
 			return err
 		}},
 		{"reclassify a component", func() error {
-			_, err := gw.UpdateComponent(ctx, "", comps[0], storage.ComponentPatch{ProductName: strptr("lyra-arc-a2")}, all, all)
+			_, err := gw.UpdateComponent(ctx, "", comps[0], storage.ComponentPatch{ProductName: strptr(labelsMic)}, all, all)
 			return err
 		}},
 		{"bind a component to a system", func() error {
@@ -965,7 +965,7 @@ func TestStaffingARoleRestampsTheComponentItBinds(t *testing.T) {
 		t.Fatalf("create system: %v", err)
 	}
 	bar, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
-		ProductName: strptr("kestrel-vroom"), LocationName: &room,
+		ProductName: strptr(labelsBar), LocationName: &room,
 	}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create video bar: %v", err)

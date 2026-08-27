@@ -16,13 +16,9 @@ screenshots:
       - ".og-statestrip"
   - id: entity-edit-face
     path: /web/locations/east?edit=1
-    alt: "A location's full detail page lands directly in edit mode from an ?edit=1 deep link."
-    mask:
-      - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
-      - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
-      - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
-      - ".og-statestrip"
-      - ".og-system-dot"
+    alt: "An ?edit=1 deep link lands the workspace on its Configure tab, already editing."
+    # No mask: the Configure tab replaces the overview (and its since-line
+    # clock), and the form renders from the seed deterministically.
 ---
 
 Once you have [found an entity](/guides/operator/inventory/), you open it, read it, and change
@@ -32,11 +28,12 @@ it the same way everywhere in the console.
 
 Click a row to open its **blade**, a panel that slides in from the right with the entity's
 details. From a blade you can drill into a child (it stacks another blade behind the first),
-step back with the breadcrumb, or **Maximize** to the full detail page. The full page has its
-own URL, so it is shareable and bookmarkable; a blade opened by a click is a quick look that
-does not change the URL, though a blade can be addressed by one (a user's `?u=<id>` deep link,
-which the create flow uses for its own handoff). Rows are keyboard-operable: Tab to a row and
-press Enter to open it.
+step back with the breadcrumb, or **Expand** to the entity's own page: a fleet entity opens
+its workspace, an identity entity its full detail. The page has its own URL, so it is
+shareable and bookmarkable; a blade opened by a click is a quick look that does not change
+the URL, though a blade can be addressed by one (a user's `?u=<id>` deep link, which the
+create flow uses for its own handoff). Rows are keyboard-operable: Tab to a row and press
+Enter to open it.
 
 ::screenshot{#entity-blade}
 
@@ -56,9 +53,11 @@ read-only reference.
 
 ## Edit through the footer action bar
 
-A detail blade opens **read-only**, and every entity is edited the same way through the **footer action bar**.
-The blade header is chrome only (back, full-page, close); the actions live in the bar at the foot of the blade.
-**Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
+A blade opens **read-only**, and its actions live in the **footer action bar**; the header is
+chrome only (back, full-page, close). What Edit opens depends on the kind: a **fleet** blade edits
+its label and tags in place and jumps into the workspace's [Configure tab](/guides/operator/fleet/)
+for everything deeper, while an **identity** blade (a user, a group) edits whole-face, in place.
+On an identity blade, **Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
 cluster swaps to **Cancel** and **Save**. Changes stage locally so you can check your work first; **Save**
 commits them together, **Cancel** discards them. The **destructive** action sits on the **left** and is always
 available, with no need to enter edit mode: a red **Delete** for a group (a user instead has the escalating
@@ -76,16 +75,18 @@ file) or as its own blade (New interface) puts its **Create** button in the bar 
 panel, never floating after the last field, and greys it out until the form is complete. **Cancel**
 sits beside it on the forms that offer one; where it does not, the header **x** closes the panel.
 
-## Deep-link the edit face
+## Deep-link the edit
 
-The mode is part of the address: append `?edit=1` to an inventory detail's URL (or to a user's
-`?u=<id>` deep link) and the page lands **already editing**, so a "fix the label on this room"
-handoff is one link, not a link plus instructions. It is the same edit you reach through the
-footer bar, behind the same permission: without `<resource>:update` the link lands on the
-read-only face, quietly. Leaving edit (Cancel or Save) strips the param again, so refreshing
-mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already left.
-The console itself uses these links for its handoffs: creating an entity lands on
-`/…/<id>?edit=1`, and the row pencil is that same address.
+The mode is part of the address: append `?edit=1` to a fleet entity's URL and it lands on
+the workspace's **Configure** tab, already editing (#800), so a "fix the label on this
+room" handoff is one link, not a link plus instructions. The blade's own jump affordances
+(rename, change, move beside its read-only facts) produce exactly these addresses, anchored
+to the section they name. The same permission gates apply: without `<resource>:update` the
+link lands reading, quietly. Leaving edit (Cancel or Save) strips the param, so refreshing
+mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already
+left. The console itself uses these links for its handoffs: creating an entity lands on
+`/…/<id>?edit=1`, and a user's `?u=<id>&edit=1` deep link keeps the same contract on the
+identity pages.
 
 ::screenshot{#entity-edit-face}
 

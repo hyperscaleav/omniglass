@@ -76,7 +76,7 @@ function mountBlade(ref: { kind: string; id: string }) {
   qc.setQueryData([...systemMetricsKey(uuidFor("eb-sys"))], [
     { metric_type_name: "room-temperature", label: "Room temperature", value: "22.5", is_sampled: true, from_contract: false },
   ]);
-  qc.setQueryData([...SYSTEMS_KEY], [{ id: uuidFor("eb-sys"), name: "boardroom", label: "Boardroom", standard: "huddle-room", actions: ["update"] }]);
+  qc.setQueryData([...SYSTEMS_KEY], [{ id: uuidFor("eb-sys"), name: "boardroom", label: "Boardroom", standard: "huddle-room", actions: ["update", "rename"] }]);
   qc.setQueryData([...LOCATIONS_KEY], [
     { id: uuidFor("eb-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", actions: ["update"] },
   ]);
@@ -172,5 +172,28 @@ describe("the location blade", () => {
     expect(screen.getByText(/1 system/)).toBeTruthy();
     const rows = screen.getByText("Needs attention").parentElement!;
     expect(within(rows).getByText("Boardroom")).toBeTruthy();
+  });
+});
+
+
+// Slice 2 of #800: the blade is the quick face of the ONE editor. Label (and
+// tags) edit in place; the deep facts read with a jump that opens Configure
+// anchored and already editing.
+describe("the blade points at the configure face (#800)", () => {
+  it("renders the deep facts as rows with jumps to the anchored editor", async () => {
+    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
+    const blade = await screen.findByRole("dialog");
+    const nameRow = within(blade).getByTestId("quick-name");
+    expect(within(nameRow).getByText("boardroom")).toBeTruthy();
+    const jump = within(nameRow).getByRole("link", { name: /rename/i });
+    expect(jump.getAttribute("href")).toBe(`/systems/${uuidFor("eb-sys")}?tab=configure&edit=1#identity`);
+    const stdRow = within(blade).getByTestId("quick-classification");
+    expect(within(stdRow).getByRole("link", { name: /change/i })).toBeTruthy();
+  });
+
+  it("keeps tags editable in place on the blade", async () => {
+    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
+    const blade = await screen.findByRole("dialog");
+    expect(within(blade).getByTestId("quick-tags")).toBeTruthy();
   });
 });

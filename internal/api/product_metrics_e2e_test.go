@@ -105,9 +105,9 @@ func TestProductMetricsAPI(t *testing.T) {
 
 	// The seeded official product ships its contract with the release, so both
 	// writes are refused (the official read-only rule, not a permission fault).
-	c.do(ownerTok, http.MethodPut, "/products/kestrel-vroom/metrics/icmp-rtt-avg",
+	c.do(ownerTok, http.MethodPut, "/products/generic-device/metrics/icmp-rtt-avg",
 		map[string]any{"required": true}, http.StatusUnprocessableEntity)
-	c.do(ownerTok, http.MethodDelete, "/products/kestrel-vroom/metrics/icmp-rtt-avg", nil, http.StatusUnprocessableEntity)
+	c.do(ownerTok, http.MethodDelete, "/products/generic-device/metrics/icmp-rtt-avg", nil, http.StatusUnprocessableEntity)
 
 	// A metric the catalog does not know is a request fault, not a 500, and an
 	// unknown product is a 404.

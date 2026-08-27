@@ -39,7 +39,8 @@ func TestHistoryWindowsAreBoundedByTheDatabaseClock(t *testing.T) {
 	}
 	all := scope.Set{All: true}
 
-	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "clock-1", ProductName: strPtr("boreal-edge-55")}, all, all, all, all)
+	clockProduct := storagetest.MintProduct(t, ctx, gw, "")
+	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "clock-1", ProductName: strPtr(clockProduct.Name)}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}
@@ -113,7 +114,8 @@ func TestAZeroWindowBindsNoBoundary(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	all := scope.Set{All: true}
-	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "clock-2", ProductName: strPtr("boreal-edge-55")}, all, all, all, all)
+	clockProduct := storagetest.MintProduct(t, ctx, gw, "")
+	comp, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "clock-2", ProductName: strPtr(clockProduct.Name)}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create component: %v", err)
 	}

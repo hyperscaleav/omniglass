@@ -46,9 +46,9 @@ func newMemberFixture(t *testing.T, ctx context.Context) *memberFixture {
 			t.Fatalf("system %s: %v", s, err)
 		}
 	}
-	bar := "kestrel-vroom"
+	minted := storagetest.MintProduct(t, ctx, gw, "").Name
 	for _, c := range []string{"dsp", "mic-a", "mic-b"} {
-		product := bar
+		product := minted
 		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{
 			Name: c, ProductName: &product}, f.all, all, all, all); err != nil {
 			t.Fatalf("component %s: %v", c, err)

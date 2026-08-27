@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
-import { useNavigate, useParams } from "@solidjs/router";
+import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
@@ -7,6 +7,12 @@ import HealthBadge from "../components/HealthBadge";
 import SystemCard from "../components/SystemCard";
 import FleetShell from "../components/FleetShell";
 import FleetRows from "../components/FleetRows";
+import TabRail from "../components/TabRail";
+import ConfigureFace from "../components/ConfigureFace";
+import BladeStack from "../components/BladeStack";
+import PropertiesPanel, { ownerPropertyBladeId, propertyResolutionBlade } from "../components/PropertiesPanel";
+import { BladesContext, createBladeController } from "../lib/blades";
+import { fleetRegistry } from "../lib/fleetBlades";
 import { locationTileSpec } from "../lib/fleet_tiles";
 import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
 import {
@@ -23,6 +29,7 @@ import {
 } from "../lib/fleet";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { entityLabel } from "../lib/entities";
+import { can, useMe } from "../lib/auth";
 import { durationText } from "../lib/timeline";
 import { sinceOf } from "../lib/system_zoom";
 import { describeError, fmtTime } from "../lib/format";
@@ -38,6 +45,21 @@ export default function LocationZoom() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   const id = () => params.id;
+  const me = useMe();
+  const blades = createBladeController();
+  // The zoom grows the Configure facet (#800): two tabs, Overview the default.
+  const [zoomSearch] = useSearchParams();
+  const zoomTabs = createMemo(() => [
+    { key: "overview", label: "Overview" },
+    ...(can(me.data, "location", "update") ? [{ key: "configure", label: "Configure" }] : []),
+  ]);
+  const zoomTab = () => {
+    const t = Array.isArray(zoomSearch.tab) ? zoomSearch.tab[0] : zoomSearch.tab;
+    if (t && zoomTabs().some((x) => x.key === t)) return t;
+    const editing = (Array.isArray(zoomSearch.edit) ? zoomSearch.edit[0] : zoomSearch.edit) === "1";
+    if (editing && zoomTabs().some((x) => x.key === "configure")) return "configure";
+    return "overview";
+  };
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const locHealth = useQuery(() => ({ queryKey: locationHealthKey(id()), queryFn: () => locationHealth(id()) }));
   // Pinned at setup, like the system zoom's: a moving now re-ages the line.
@@ -109,10 +131,19 @@ export default function LocationZoom() {
   });
 
   return (
+    <BladesContext.Provider value={blades}>
     <Page
       title={anchor() ? entityLabel(anchor()!) : "Location"}
       breadcrumb={<Breadcrumb crumbs={crumbs()} />}
     >
+      <Show
+        when={!(view.data && !anchor() && !(view.data.locations ?? []).some((x) => x.name === id()))}
+        fallback={
+          <div role="alert" class="alert alert-warning alert-soft text-sm">
+            <span>No location answers this address. It may have been deleted, or the link is stale.</span>
+          </div>
+        }
+      >
       <Show when={!view.isPending} fallback={<div class="skeleton h-32 w-full" />}>
         <Show
           when={!view.isError}
@@ -122,7 +153,23 @@ export default function LocationZoom() {
             </div>
           }
         >
-          <FleetShell
+          <div class="flex flex-col gap-3">
+          <TabRail tabs={zoomTabs()} activeKey={zoomTab} />
+          <Show when={zoomTab() === "configure"}>
+            <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace
+              kind="location"
+              id={id()}
+              panels={(slot) => (
+                <PropertiesPanel
+                  location={id()}
+                  edit={slot}
+                  onOpen={(property) => blades.push({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "location", name: id() }, property) })}
+                />
+              )}
+            /></div>
+          </Show>
+          <Show when={zoomTab() === "overview"}>
+<FleetShell
             storageKey="fleet"
             tiles={tiles()}
             list={<div class="card overflow-hidden border border-base-300 bg-base-200 p-0"><FleetRows rows={bands().flatMap((b) => b.clusters)} view={view.data!} onOpen={(sid) => navigate(`/systems/${sid}`)} /></div>}
@@ -166,9 +213,14 @@ export default function LocationZoom() {
               </div>
             </div>
           </FleetShell>
+          </Show>
+          </div>
         </Show>
       </Show>
+      </Show>
     </Page>
+    <BladeStack controller={blades} registry={{ ...fleetRegistry, "property-resolution": propertyResolutionBlade }} />
+    </BladesContext.Provider>
   );
 
   function ZoomBand(props: { band: Band; view: FleetView }) {

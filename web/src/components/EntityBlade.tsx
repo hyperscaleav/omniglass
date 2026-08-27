@@ -5,6 +5,7 @@ import HealthBadge from "./HealthBadge";
 import HealthHistory from "./HealthHistory";
 import Button from "./Button";
 import BladeField from "./BladeField";
+import TagAdder from "./TagAdder";
 import { Maximize } from "./icons";
 import { useBlades, useBladeEdit, type BladeDef } from "../lib/blades";
 import { FLEET_VIEW_KEY, fleetView, byChildOfLocation, bandsOf } from "../lib/fleet";
@@ -38,6 +39,35 @@ function SinceLine(props: { since: { ts: string; ms: number } | null | undefined
     <Show when={props.since}>
       {(s) => <span data-testid="blade-since" class="tabular-nums text-xs text-base-content/60">since {fmtTime(s().ts)} · {durationText(s().ms)}</span>}
     </Show>
+  );
+}
+
+// A deep fact on the blade reads, and its jump opens the ONE editor anchored
+// and already editing (#800 slice 2): the blade closes, the workspace's
+// Configure tab receives the intent through ?edit=1.
+function QuickRow(props: { id: string; label: string; value: string; mono?: boolean; jump?: { label: string; to: string } }) {
+  const navigate = useNavigate();
+  const blades = useBlades();
+  return (
+    <div data-testid={props.id} class="flex items-center gap-2 rounded-field border border-base-300 px-3 py-2 text-sm">
+      <span class="w-24 flex-none text-xs text-base-content/60">{props.label}</span>
+      <span class="min-w-0 truncate" classList={{ "font-mono text-[12.5px]": props.mono }}>{props.value}</span>
+      <Show when={props.jump}>
+        {(j) => (
+          <a
+            class="ml-auto flex-none text-xs text-primary hover:underline"
+            href={j().to}
+            onClick={(e) => {
+              e.preventDefault();
+              blades.close();
+              navigate(j().to);
+            }}
+          >
+            {j().label} ↗
+          </a>
+        )}
+      </Show>
+    </div>
   );
 }
 
@@ -157,6 +187,9 @@ function SystemBody(props: { id: string }) {
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
       </div>
       <BladeField bind="label" value={() => (cluster() ? entityLabel(cluster()!) : "")} draft={draft} onInput={setDraft} placeholder="Operator label" />
+      <QuickRow id="quick-name" label="Name" mono value={row()?.name ?? ""} jump={(row()?.actions ?? []).includes("rename") ? { label: "rename", to: `/systems/${props.id}?tab=configure&edit=1#identity` } : undefined} />
+      <QuickRow id="quick-classification" label="Standard" value={(row()?.standard as string) || "None (a one-off system)"} jump={(row()?.actions ?? []).includes("update") ? { label: "change", to: `/systems/${props.id}?tab=configure&edit=1#classification` } : undefined} />
+      <div data-testid="quick-tags"><TagAdder kind="system" name={props.id} canUpdate={(row()?.actions ?? []).includes("update")} canCreateKey={false} /></div>
       <Show when={alarms().length > 0}>
         <div class={section}>
           <span class={eyebrow}>Why</span>
@@ -246,6 +279,8 @@ function ComponentBody(props: { id: string }) {
         <SinceLine since={leafAlarmSince(alarmsQ.data ?? [], now)} />
       </div>
       <BladeField bind="label" value={() => (row() ? entityLabel(row()!) : "")} draft={draft} onInput={setDraft} placeholder="Operator label" />
+      <QuickRow id="quick-name" label="Name" mono value={row()?.name ?? ""} jump={(row()?.actions ?? []).includes("rename") ? { label: "rename", to: `/components/${props.id}?tab=configure&edit=1#identity` } : undefined} />
+      <div data-testid="quick-tags"><TagAdder kind="component" name={props.id} canUpdate={(row()?.actions ?? []).includes("update")} canCreateKey={false} /></div>
       <Show when={active().length > 0}>
         <div class={section}>
           <span class={eyebrow}>Why</span>
@@ -283,6 +318,11 @@ function LocationBody(props: { id: string }) {
   const anchor = () => view.data?.locations?.find((l) => l.id === props.id);
   const clusters = createMemo(() => (view.data ? bandsOf(view.data, byChildOfLocation(props.id)).flatMap((b) => b.clusters) : []));
   const worst = createMemo(() => clusters().filter((c) => c.verdict !== null && c.verdict !== "healthy"));
+  const parentLabel = () => {
+    const pid = (row() as { parent_id?: string | null } | undefined)?.parent_id;
+    const parent = pid ? (locations.data ?? []).find((l) => l.id === pid) : undefined;
+    return parent ? entityLabel(parent) : "Root";
+  };
 
   const { draft, setDraft, err } = useEntityEdit({
     kindLabel: "location",
@@ -305,6 +345,9 @@ function LocationBody(props: { id: string }) {
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
       </div>
       <BladeField bind="label" value={() => (row() ? entityLabel(row()!) : "")} draft={draft} onInput={setDraft} placeholder="Operator label" />
+      <QuickRow id="quick-name" label="Name" mono value={row()?.name ?? ""} jump={(row()?.actions ?? []).includes("rename") ? { label: "rename", to: `/locations/${props.id}?tab=configure&edit=1#identity` } : undefined} />
+      <QuickRow id="quick-placement" label="Parent" value={parentLabel()} jump={(row()?.actions ?? []).includes("move") ? { label: "move", to: `/locations/${props.id}?tab=configure&edit=1#placement` } : undefined} />
+      <div data-testid="quick-tags"><TagAdder kind="location" name={props.id} canUpdate={(row()?.actions ?? []).includes("update")} canCreateKey={false} /></div>
       <div class={section}>
         <span class={eyebrow}>Beneath</span>
         <span class="text-xs text-base-content/60">

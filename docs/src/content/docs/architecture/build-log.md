@@ -5727,6 +5727,29 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   classroom. The fixture fleet restaffs to match, one bar per room at the front; the
   duplicate standard stubs and the control-room stub die; the guards pin per-variant
   quorums and prefix-paired archetypes.
+- **The classic face retires**
+  ([#800](https://github.com/hyperscaleav/omniglass/issues/800) slice 3, completing
+  ADR-0129's ruled target). `?view=detail` stops being an address: the identity routes
+  render the zoom, the workspace, and the leaf whatever the params say, with an honest
+  miss face for an address no row answers. The classic detail bodies are deleted; the
+  manage surfaces they were the only home of move to Configure, which the workspaces
+  now host per kind: the system's role staffing and resolved properties, the location's
+  parent mover (narrowed to its type's allowed parents, uuid-valued, the #627 rule) and
+  properties, the component's reconciliation, tag resolution, properties, reachability
+  with the interface blades, and alarm controls, with the leaf gaining an Events tab.
+  The dead tests retire with the face; the behaviors that survive re-home in the
+  workspace suites.
+- **Behavior tests stop borrowing the seed catalog**
+  ([#804](https://github.com/hyperscaleav/omniglass/issues/804), the #802 rename's
+  structural lesson). Behavior tests mint their own products
+  (`storagetest.MintProduct`, classified under the one type the test depends on)
+  instead of naming seeded SKUs; the official-row refusal tests anchor on the
+  generic floor rather than a brand; the seed-contract pins derive counts, role
+  shapes, accepted types, and contract defaults from the embedded YAML instead of
+  restating them; and a repo guard in `internal/build` fails any test file that
+  names a catalog SKU outside the designated pin files, reading the SKU list from
+  the seed's own render. A catalog change now touches the YAML and the pin files,
+  nothing else.
 - **Every system carries its components**
   (dev seed ruling, 2026-08-26). The demo fleet staffs every system to its standard's
   quorum: the lab pods gain their displays, wireless mics, and touch panels (keeping

@@ -114,6 +114,38 @@ either mechanism fires), sweep them with `make clean-testcontainers`. It
 force-removes leftover Postgres test containers, scoped by the testcontainers
 label and the `postgres:18` image so it never touches the compose dev stack.
 
+## Fixtures are minted, not borrowed
+
+A behavior test that needs "a product classified display" mints one:
+
+```go
+p := storagetest.MintProduct(t, ctx, gw, "display")
+```
+
+`MintProduct` creates a throwaway, randomly named product under the
+component type the test chose, which is the only fact the test actually
+depends on (an empty type takes the gateway's own generic floor). What it
+replaces is borrowing a seeded SKU as a fixture of convenience: the #802
+catalog rename broke ~50 tests and only ~15 were seed-contract pins doing
+their job; the rest were behavior tests that had coupled themselves to the
+catalog's identity for no reason the test could state.
+
+The rule is enforced, not documented, in the house pattern: a guard in
+`internal/build` fails any `*_test.go` that names a seeded product SKU
+outside the designated pin files (the seed's own tests and the demo fleet's),
+reading the SKU list from the seed's own render so it can never drift from
+the catalog it protects. The pin files, in turn, derive their expectations
+(counts, role shapes, accepted types, contract defaults) from the embedded
+YAML instead of restating it. A future catalog change touches the YAML and
+the pin files, and nothing else (#804).
+
+Two edges of the rule: a test about **official-row behavior** (the seed-owned
+read-only refusals) still needs a genuinely seeded product and uses the
+generic floor (`generic-device`), which is catalog vocabulary rather than a
+brand; and a test whose assertions read the **type tree** (stems, labels,
+inherited facts) mints a product under the type it needs, because the walk
+under test never looked at the product anyway.
+
 ## Three performance instruments, two of which gate
 
 Performance has three instruments in this repo, and they are deliberately not the same

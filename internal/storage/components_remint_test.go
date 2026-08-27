@@ -23,8 +23,6 @@ import (
 // reclassify still re-mint, and the label follows the name wherever it
 // legitimately moves.
 
-const ceilingMic = "lyra-arc-a2"
-
 // TestAMoveThatRestatesItsPlacementKeepsTheName is #696's reproduction: a
 // pre-filled move form sends the current placement back, the move API requires
 // at least one field, so re-stating the current location is the ordinary path.
@@ -248,7 +246,7 @@ func TestARealReclassifyStillReMintsAndTheLabelFollows(t *testing.T) {
 
 	// A mic already in the bucket, so the reclassified row cannot land on
 	// ordinal 1 and pass by accident.
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(ceilingMic), LocationName: &room}, all, all, all, all); err != nil {
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(labelsMic), LocationName: &room}, all, all, all, all); err != nil {
 		t.Fatalf("create the sitting mic: %v", err)
 	}
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: strptr(edge55), LocationName: &room}, all, all, all, all)
@@ -259,7 +257,7 @@ func TestARealReclassifyStillReMintsAndTheLabelFollows(t *testing.T) {
 		t.Fatalf("precondition = %q / %q, want display-1 / Display 1", c.Name, c.Label)
 	}
 
-	after, err := gw.UpdateComponent(ctx, "", c.ID, storage.ComponentPatch{ProductName: strptr(ceilingMic)}, all, all)
+	after, err := gw.UpdateComponent(ctx, "", c.ID, storage.ComponentPatch{ProductName: strptr(labelsMic)}, all, all)
 	if err != nil {
 		t.Fatalf("reclassify: %v", err)
 	}

@@ -1,8 +1,20 @@
 import { For, Show, createEffect, createMemo } from "solid-js";
-import { useNavigate, useParams } from "@solidjs/router";
+import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
+import TabRail from "../components/TabRail";
+import ConfigureFace from "../components/ConfigureFace";
+import BladeStack from "../components/BladeStack";
+import PropertiesPanel, { propertyBladeId, propertyResolutionBlade } from "../components/PropertiesPanel";
+import ReachabilityPanel from "../components/ReachabilityPanel";
+import AlarmsPanel from "../components/AlarmsPanel";
+import EventsPanel from "../components/EventsPanel";
+import ReconciliationPanel from "../components/ReconciliationPanel";
+import ResolutionPanel from "../components/ResolutionPanel";
+import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
+import { BladesContext, createBladeController } from "../lib/blades";
+import { fleetRegistry } from "../lib/fleetBlades";
 import HealthBadge from "../components/HealthBadge";
 import FleetShell from "../components/FleetShell";
 import { componentTileSpec } from "../lib/fleet_tiles";
@@ -20,6 +32,7 @@ import { NODES_KEY, listNodes } from "../lib/nodes";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
+import { can, useMe } from "../lib/auth";
 import {describeError, fmtTime } from "../lib/format";
 
 // The component leaf (#637): the end of the walk. What it is (product,
@@ -45,6 +58,21 @@ export default function ComponentLeaf() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   const id = () => params.id;
+  const me = useMe();
+  const blades = createBladeController();
+  const [leafSearch] = useSearchParams();
+  const leafTabs = createMemo(() => [
+    { key: "overview", label: "Overview" },
+    { key: "events", label: "Events" },
+    ...(can(me.data, "component", "update") ? [{ key: "configure", label: "Configure" }] : []),
+  ]);
+  const leafTab = () => {
+    const t = Array.isArray(leafSearch.tab) ? leafSearch.tab[0] : leafSearch.tab;
+    if (t && leafTabs().some((x) => x.key === t)) return t;
+    const editing = (Array.isArray(leafSearch.edit) ? leafSearch.edit[0] : leafSearch.edit) === "1";
+    if (editing && leafTabs().some((x) => x.key === "configure")) return "configure";
+    return "overview";
+  };
 
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
@@ -123,10 +151,19 @@ export default function ComponentLeaf() {
   });
 
   return (
+    <BladesContext.Provider value={blades}>
     <Page
       title={component() ? entityLabel(component()!) : "Component"}
       breadcrumb={<Breadcrumb crumbs={crumbs()} />}
     >
+      <Show
+        when={!((view.data && components.data) && !component() && !(components.data ?? []).some((x) => x.name === id()))}
+        fallback={
+          <div role="alert" class="alert alert-warning alert-soft text-sm">
+            <span>No component answers this address. It may have been deleted, or the link is stale.</span>
+          </div>
+        }
+      >
       <Show when={!view.isPending && !components.isPending} fallback={<div class="skeleton h-32 w-full" />}>
         <Show
           when={!view.isError && !components.isError}
@@ -136,7 +173,36 @@ export default function ComponentLeaf() {
             </div>
           }
         >
-          <FleetShell
+          <div class="flex flex-col gap-3">
+          <TabRail tabs={leafTabs()} activeKey={leafTab} />
+          <Show when={leafTab() === "configure"}>
+            <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace
+              kind="component"
+              id={id()}
+              panels={(slot) => (
+                <>
+                  <ReconciliationPanel name={id()} />
+                  <ResolutionPanel component={id()} />
+                  <PropertiesPanel
+                    component={id()}
+                    edit={slot}
+                    onOpen={(property) => blades.push({ kind: "property-resolution", id: propertyBladeId(id(), property) })}
+                  />
+                  <ReachabilityPanel
+                    name={id()}
+                    onAdd={can(me.data, "interface", "create") ? () => blades.push({ kind: "interface-create", id: id() }) : undefined}
+                    onOpenInterface={can(me.data, "interface", "read") ? (ifid) => blades.push({ kind: "interface", id: ifid }) : undefined}
+                  />
+                  <AlarmsPanel component={id()} canUpdate={slot.editing() && can(me.data, "component", "update")} canAcknowledge={can(me.data, "alarm", "acknowledge")} />
+                </>
+              )}
+            /></div>
+          </Show>
+          <Show when={leafTab() === "events"}>
+            <div class="card border border-base-300 bg-base-200 p-4"><EventsPanel name={id()} /></div>
+          </Show>
+          <Show when={leafTab() === "overview"}>
+<FleetShell
             storageKey="fleet"
             tiles={tiles()}
             rows={[]}
@@ -331,8 +397,13 @@ export default function ComponentLeaf() {
             </section>
           </div>
           </FleetShell>
+          </Show>
+          </div>
         </Show>
       </Show>
+      </Show>
     </Page>
+    <BladeStack controller={blades} registry={{ ...fleetRegistry, "property-resolution": propertyResolutionBlade, interface: interfaceBlade, "interface-create": interfaceCreateBlade }} />
+    </BladesContext.Provider>
   );
 }

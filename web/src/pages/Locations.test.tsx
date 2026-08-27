@@ -125,160 +125,6 @@ describe("Locations create-as-route", () => {
     expect(screen.getByText(/Available once the location is created/)).toBeTruthy();
   });
 
-  it("shows an existing location read-only in view: no tag add control, an Edit affordance", async () => {
-    mount("/locations/hq?view=detail");
-    // The detail resolves and renders the read-only facts.
-    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
-    // No in-body mutation control in view: the TagAdder add row is absent.
-    expect(screen.queryByPlaceholderText(/Add a tag/)).toBeNull();
-    // The view footer offers Edit (which would flip the accordion to edit mode).
-    expect(screen.getByText("Edit")).toBeTruthy();
-  });
-
-  it("edit mode narrows the parent picker to the type's allowed_parent_types and excludes the node's own subtree", async () => {
-    mount("/locations/hq-b1?view=detail");
-    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
-    fireEvent.click(screen.getByText("Edit"));
-    // building's allowed_parent_types is [root, campus]: both campuses (HQ, Lab)
-    // are offered; hq-b1 itself never appears (self-exclusion); there is no
-    // "Root (current)" option since hq-b1 already has a parent.
-    const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
-    const optionLabels = Array.from(select.options).map((o) => o.textContent?.trim());
-    expect(optionLabels).toContain("HQ");
-    expect(optionLabels).toContain("Lab");
-    expect(optionLabels).not.toContain("Root (current)");
-    expect(optionLabels.some((l) => l?.includes("HQ B1"))).toBe(false);
-  });
-
-  it("offers only the current-root placeholder when the type's allowed set has no real matching location", async () => {
-    mount("/locations/hq?view=detail");
-    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
-    fireEvent.click(screen.getByText("Edit"));
-    // campus's allowed_parent_types is [root]: no location is of type "root" (it
-    // is not a real location_type), so the only option is the current-root
-    // placeholder; hq has nowhere else it could move in this fixture.
-    const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
-    const optionLabels = Array.from(select.options).map((o) => o.textContent?.trim());
-    expect(optionLabels).toEqual(["Root (current)"]);
-  });
-
-  it("selecting a different parent updates the picker's value, seeded from the current parent", async () => {
-    mount("/locations/hq-b1?view=detail");
-    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
-    fireEvent.click(screen.getByText("Edit"));
-    const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
-    // The picker is keyed and valued on uuid, not name (#627), so its value
-    // seeds from the current parent's id, not "hq".
-    expect(select.value).toBe(hq.id);
-    fireEvent.change(select, { target: { value: lab.id } });
-    expect(select.value).toBe(lab.id);
-  });
-
-  it("offers a real non-root parent for a currently-root location and sends the move on save", async () => {
-    // b2 is a building sitting at root (no parent_id), same as hq-b1 started life
-    // per the motivating scenario: an operator creates a building at root, later
-    // adds a campus, then moves the building under it. building's allowed_parent_types
-    // is [root, campus], so the real campus HQ must be offered as a candidate even
-    // though b2 is currently root, not filtered out just because there is no current
-    // parent to compare against.
-    const b2: Location = { id: uuidFor("l-b2"), name: "b2", label: "B2", location_type: "building", effective_tags: {} };
-    mount("/locations/b2?view=detail", [b2]);
-    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
-    fireEvent.click(screen.getByText("Edit"));
-    const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
-    const optionLabels = Array.from(select.options).map((o) => o.textContent?.trim());
-    expect(optionLabels).toContain("HQ");
-    expect(optionLabels).toContain("Root (current)");
-    // The picker is keyed and valued on uuid, not name (#627).
-    fireEvent.change(select, { target: { value: hq.id } });
-    expect(select.value).toBe(hq.id);
-    let captured: unknown;
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const req = input as Request;
-      const method = req.method;
-      const url = req.url;
-      if (method === "PATCH" && url.includes(`/locations/${b2.id}`)) {
-        return new Response(JSON.stringify(b2), { status: 200, headers: { "Content-Type": "application/json" } });
-      }
-      // The move is its own call, POST .../{id}:move, not a PATCH field
-      // (#627): placement left the patch body entirely. Addressed by uuid
-      // (#627 review finding 1), not the name the route used to carry.
-      if (method === "POST" && url.includes(`/locations/${b2.id}:move`)) {
-        captured = JSON.parse(await req.clone().text());
-        return new Response(JSON.stringify({ ...b2, parent: "hq" }), { status: 200, headers: { "Content-Type": "application/json" } });
-      }
-      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
-    });
-    fireEvent.click(screen.getByText("Save changes"));
-    await waitFor(() => expect(captured).toBeTruthy());
-    // Posted as the uuid (the API dual-accepts uuid-or-name, ADR-0062), not
-    // the name the picker used to send.
-    expect((captured as { parent?: string }).parent).toBe(hq.id);
-  });
-
-  it("saving a rejected move surfaces the 422 through the existing inline alert and stays in edit mode", async () => {
-    mount("/locations/hq-b1?view=detail");
-    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
-    fireEvent.click(screen.getByText("Edit"));
-    const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
-    fireEvent.change(select, { target: { value: "lab" } });
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const req = input as Request;
-      const method = req.method;
-      const url = req.url;
-      if (method === "PATCH" && url.includes(`/locations/${hqB1.id}`)) {
-        return new Response(JSON.stringify(hqB1), { status: 200, headers: { "Content-Type": "application/json" } });
-      }
-      if (method === "POST" && url.includes(`/locations/${hqB1.id}:move`)) {
-        return new Response(JSON.stringify({ detail: "building may not be placed under campus lab" }), { status: 422, headers: { "Content-Type": "application/json" } });
-      }
-      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
-    });
-    fireEvent.click(screen.getByText("Save changes"));
-    expect(await screen.findByText(/may not be placed under/)).toBeTruthy();
-    // Still in edit mode: the picker (not the read-only fact) is still on screen.
-    expect(screen.getByLabelText("Parent")).toBeTruthy();
-  });
-
-  it("excludes the node's own subtree, keyed and excluded by uuid (#466, #627)", async () => {
-    // area is unconstrained, so the candidate pool is every location; only
-    // subtree exclusion can keep area1 and its child out. The candidates are
-    // now keyed by uuid, not name (#627: two locations can share a name), and
-    // excludeSubtreeOf passes the location's uuid to match, so the exclusion
-    // still keeps the node and its own subtree out.
-    const area1: Location = { id: uuidFor("l-area1"), name: "area1", label: "Area 1", location_type: "area", effective_tags: {} };
-    const area2: Location = { id: uuidFor("l-area2"), name: "area2", label: "Area 2", location_type: "area", parent: "area1", parent_id: area1.id, effective_tags: {} };
-    mount("/locations/area1?view=detail", [area1, area2]);
-    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
-    fireEvent.click(screen.getByText("Edit"));
-    const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
-    const optionLabels = Array.from(select.options).map((o) => o.textContent?.trim());
-    expect(optionLabels).toContain("HQ");
-    expect(optionLabels.some((l) => l?.includes("Area 1"))).toBe(false);
-    expect(optionLabels.some((l) => l?.includes("Area 2"))).toBe(false);
-  });
-
-  it("offers two same-named parent candidates as distinct, independently selectable options (#627)", async () => {
-    // Two roots named "annex" (legal after #627): a name-keyed picker would
-    // have collapsed them into one value-identical option, so choosing
-    // "annex" could never say which one was meant, and posting it would name
-    // an ambiguous ref the API refuses. Keyed by uuid, both render and each
-    // is selectable on its own.
-    const annexA: Location = { id: uuidFor("l-annex-a"), name: "annex", label: "Annex", location_type: "campus", effective_tags: {} };
-    const annexB: Location = { id: uuidFor("l-annex-b"), name: "annex", label: "Annex", location_type: "campus", effective_tags: {} };
-    mount("/locations/hq-b1?view=detail", [annexA, annexB]);
-    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
-    fireEvent.click(screen.getByText("Edit"));
-    const select = (await screen.findByLabelText("Parent")) as HTMLSelectElement;
-    const values = Array.from(select.options).map((o) => o.value);
-    expect(values).toContain(annexA.id);
-    expect(values).toContain(annexB.id);
-    fireEvent.change(select, { target: { value: annexB.id } });
-    expect(select.value).toBe(annexB.id);
-    fireEvent.change(select, { target: { value: annexA.id } });
-    expect(select.value).toBe(annexA.id);
-  });
-
   it("posts the location_type handle, never the uuid, on create (#466)", async () => {
     let captured: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -318,202 +164,11 @@ describe("Locations create-as-route", () => {
     expect(row.querySelector('path[d^="M20 10c0 6-8 12"]')).toBeNull();
   });
 
-  it("edit mode exposes an editable name with a check button", async () => {
-    mount("/locations/hq?view=detail");
-    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
-    fireEvent.click(screen.getByText("Edit"));
-    // The name becomes an editable input seeded from the row.
-    const nameInput = (await screen.findByDisplayValue("hq")) as HTMLInputElement;
-    expect(nameInput.disabled).toBe(false);
-    // An inline check button sits beside it.
-    expect(screen.getByLabelText("Check name")).toBeTruthy();
-  });
-
-  it("a fresh detail view keeps the name read-only", async () => {
-    mount("/locations/hq?view=detail");
-    await waitFor(() => expect(screen.getByText("Name")).toBeTruthy());
-    // No check button until edit begins: the name is a read-only fact.
-    expect(screen.queryByLabelText("Check name")).toBeNull();
-  });
-
-  // #627 Task 15c: routes take :id now. A name-shaped deep link (an old
-  // bookmark, or one of this same page's own name-only cross-entity panel
-  // links) resolves through TreeList's byAddr fallback and corrects the
-  // address bar to the uuid (replace, not push); a rename afterward must
-  // leave that URL alone, since the id it addresses never changes.
-  it("redirects a name-shaped deep link to the resolved uuid, and a rename leaves the route where it is", async () => {
-    mount("/locations/hq?view=detail");
-    await waitFor(() => expect(window.location.pathname).toBe(`/locations/${hq.id}`));
-    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
-    fireEvent.click(screen.getByText("Edit"));
-    const nameInput = (await screen.findByDisplayValue("hq")) as HTMLInputElement;
-    fireEvent.input(nameInput, { target: { value: "headquarters" } });
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const req = input as Request;
-      const { method, url } = req;
-      if (method === "PATCH" && url.includes(`/locations/${hq.id}`)) {
-        return new Response(JSON.stringify(hq), { status: 200, headers: { "Content-Type": "application/json" } });
-      }
-      if (method === "POST" && url.includes(`/locations/${hq.id}:rename`)) {
-        return new Response(JSON.stringify({ ...hq, name: "headquarters" }), { status: 200, headers: { "Content-Type": "application/json" } });
-      }
-      if (method === "GET") {
-        // The finally-block invalidation refetches the list; answer with the
-        // renamed row so this is not what fails the test.
-        return new Response(JSON.stringify({ locations: [{ ...hq, name: "headquarters" }, lab, hqB1] }), { status: 200, headers: { "Content-Type": "application/json" } });
-      }
-      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
-    });
-    fireEvent.click(screen.getByText("Save changes"));
-    await waitFor(() => expect(screen.queryByLabelText("Check name")).toBeNull());
-    // Unchanged: no hand-off navigate to /locations/headquarters, which
-    // would have been a valid URL turned unresolvable by the save that just
-    // succeeded.
-    expect(window.location.pathname).toBe(`/locations/${hq.id}`);
-  });
-
-  it("renders an explicit not-found state for an address that matches no location, not the old silent list fallback", async () => {
-    mount("/locations/no-such-place?view=detail");
-    expect(await screen.findByText(/No such location/)).toBeTruthy();
-    expect(screen.getByText(/old address/)).toBeTruthy();
-    // Not the pre-15c behavior: the unfiltered list is not what renders.
-    expect(screen.queryByText("HQ")).toBeNull();
-  });
-
-  // Review finding 1 (task-15-review.md #3): two locations sharing a name
-  // under different parents is #627's own legal default outcome (#627 Task
-  // 10), and the URL already carries the uuid, but the detail page's writes
-  // must not fall back to n().raw.name (ErrAmbiguousName, mapped to a 409).
-  it("addresses every write on the detail page by uuid, not by name, so a duplicate-named location stays editable", async () => {
-    const twinA: Location = { id: uuidFor("l-twin-a"), name: "twin", location_type: "room", parent: "hq-b1", parent_id: hqB1.id, effective_tags: {} };
-    const twinB: Location = { id: uuidFor("l-twin-b"), name: "twin", location_type: "room", parent: "lab", parent_id: lab.id, effective_tags: {} };
-    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...LOCATIONS_KEY], [hq, lab, hqB1, twinA, twinB]);
-    qc.setQueryData([...LOCATION_TYPES_KEY], types);
-    qc.setQueryData([...ME_KEY], me);
-    qc.setQueryData([...TAGS_KEY], []);
-    qc.setQueryData([...entityTagsKey("location", twinA.id)], []);
-    qc.setQueryData([...ownerPropertiesKey("location", twinA.id)], []);
-    window.history.pushState({}, "", `/locations/${twinA.id}?view=detail`);
-    render(() => (
-      <QueryClientProvider client={qc}>
-        <Router>
-          <Route path="/locations" component={Locations} />
-          <Route path="/locations/:id" component={Locations} />
-        </Router>
-      </QueryClientProvider>
-    ));
-    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
-    fireEvent.click(screen.getByText("Edit"));
-    const nameInput = (await screen.findByDisplayValue("twin")) as HTMLInputElement;
-    fireEvent.input(nameInput, { target: { value: "twin-renamed" } });
-    const seen: string[] = [];
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const req = input as Request;
-      const { method, url } = req;
-      if (method === "PATCH" && url.includes(`/locations/${twinA.id}`)) {
-        seen.push("patch");
-        return new Response(JSON.stringify(twinA), { status: 200, headers: { "Content-Type": "application/json" } });
-      }
-      if (method === "POST" && url.includes(`/locations/${twinA.id}:rename`)) {
-        seen.push("rename");
-        return new Response(JSON.stringify({ ...twinA, name: "twin-renamed" }), { status: 200, headers: { "Content-Type": "application/json" } });
-      }
-      if (method === "GET") {
-        return new Response(JSON.stringify({ locations: [hq, lab, hqB1, twinA, twinB] }), { status: 200, headers: { "Content-Type": "application/json" } });
-      }
-      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
-    });
-    fireEvent.click(screen.getByText("Save changes"));
-    // Wait for the save to fully resolve (edit mode exits), not just for the
-    // fetch calls to have fired: the accordion's own save() still has an
-    // awaited invalidateQueries after the rename resolves, so checking seen
-    // alone races the view/edit mode switch the Delete button depends on.
-    await waitFor(() => expect(screen.queryByLabelText("Check name")).toBeNull());
-    expect(seen).toContain("patch");
-    expect(seen).toContain("rename");
-
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const req = input as Request;
-      const { method, url } = req;
-      if (method === "DELETE" && url.includes(`/locations/${twinA.id}`)) {
-        seen.push("delete");
-        return new Response(null, { status: 204 });
-      }
-      if (method === "GET") {
-        return new Response(JSON.stringify({ locations: [hq, lab, hqB1, twinB] }), { status: 200, headers: { "Content-Type": "application/json" } });
-      }
-      throw new Error(`unexpected fetch in this test: ${method} ${url}`);
-    });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-    fireEvent.click(screen.getByText("Delete"));
-    await waitFor(() => expect(seen).toContain("delete"));
-  });
 });
 
 // The Properties panel on the location detail is the shared owner panel, pointed at
 // the location arc: the location type's contract resolved against the location's own
 // values, with anything the location sets that no contract declares grouped apart.
-describe("Locations properties panel", () => {
-  afterEach(() => window.history.pushState({}, "", "/"));
-
-  it("resolves the location type's contract on the detail, off-contract values apart", async () => {
-    mount("/locations/hq?view=detail");
-    await waitFor(() => expect(screen.getByText("Properties")).toBeTruthy());
-    expect(screen.getByText("the location type contract, resolved")).toBeTruthy();
-    expect(screen.getByText("Time zone")).toBeTruthy();
-    expect(screen.getByText("UTC")).toBeTruthy();
-    const offContract = screen.getByRole("group", { name: /off contract/i });
-    expect(within(offContract).getByText("Note")).toBeTruthy();
-    expect(screen.getByText("set on this location, not declared by its location type")).toBeTruthy();
-  });
-
-  it("says where a location's properties come from when nothing is declared or set", async () => {
-    mount("/locations/lab?view=detail");
-    await waitFor(() => expect(screen.getByText("Properties")).toBeTruthy());
-    expect(screen.getByText(/come from its location type/)).toBeTruthy();
-  });
-
-  it("stages an override and flushes it to the location's own property route on Save", async () => {
-    const calls: { method: string; url: string; body: string }[] = [];
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const req = input as Request;
-      let body = "";
-      try { body = await req.clone().text(); } catch { body = ""; }
-      calls.push({ method: req.method, url: req.url, body });
-      if (req.method === "PUT") {
-        return new Response(JSON.stringify({ location: "hq", property_type_name: "site.timezone", property_type_id: "site.timezone-id", value: "America/Denver", value_id: "v-1" }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ ...hq, locations: [hq], properties: hqProperties }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    });
-
-    mount("/locations/hq?view=detail");
-    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
-    fireEvent.click(screen.getByText("Edit"));
-
-    const cell = (screen.getByText("Time zone").closest("div") as HTMLElement).parentElement as HTMLElement;
-    fireEvent.click(within(cell).getByRole("checkbox"));
-    fireEvent.input(within(cell).getByRole("textbox"), { target: { value: "America/Denver" } });
-
-    fireEvent.click(screen.getByText("Save changes"));
-
-    await waitFor(() => {
-      const put = calls.find((c) => c.method === "PUT");
-      expect(put).toBeTruthy();
-      // Addressed by uuid (#627 review finding 1), not the name the route
-      // used to carry.
-      expect(put!.url).toContain(`/locations/${hq.id}/properties/site.timezone`);
-      expect(JSON.parse(put!.body)).toEqual({ value: "America/Denver" });
-    });
-  });
-});
-
 // #627 scopes name uniqueness to placement, not the whole fleet: two
 // locations under different parents may now legally share a name. The tree
 // builder used to key its construction-time map on the bare name
@@ -855,122 +510,50 @@ describe("Locations list keeps a floor under the Name column (#690)", () => {
 // WIRED to the shared field (components/LabelPenField.test.tsx proves the
 // field's own contract) and proves the half no component test can see: what a
 // Save actually posts.
-describe("Locations edit blade carries the label pen (#693)", () => {
-  const gen: Location = {
-    id: uuidFor("l-pen"), name: "level-1", label: "Level 1",
-    label_generated: true, location_type: "campus", effective_tags: {},
-  };
-
-  function patchBodies(): { bodies: Record<string, unknown>[] } {
-    const bodies: Record<string, unknown>[] = [];
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const req = input as Request;
-      if (req.method === "PATCH") {
-        bodies.push(JSON.parse(await req.clone().text()));
-        return new Response(JSON.stringify(gen), { status: 200, headers: { "Content-Type": "application/json" } });
-      }
-      return new Response(JSON.stringify({ locations: [hq, lab, hqB1, gen] }), { status: 200, headers: { "Content-Type": "application/json" } });
-    });
-    return { bodies };
-  }
-
-  it("opens the label locked on a row the platform labelled", async () => {
-    mount(`/locations/${gen.id}?view=detail`, [gen]);
-    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
-    fireEvent.click(screen.getByText("Edit"));
-    const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
-    expect(label.value).toBe("Level 1");
-    expect(label.readOnly).toBe(true);
-    expect(screen.getByText(/Rendered from a label rule/)).toBeTruthy();
-  });
-
-  // The defect the lock exists to fix, and the one worth breaking a build over.
-  // Every blade seeded a plain signal from raw.label and posted
-  // `display() || undefined`, so opening the pencil on a platform-labelled row
-  // and saving ANYTHING (a type, a tag, a parent) posted the platform's own
-  // rendering straight back as an override and took the pen, silently. A locked
-  // field posts the empty string, which is how the API says "still yours".
-  it("does not claim the pen when an unrelated field is saved", async () => {
-    const { bodies } = patchBodies();
-    mount(`/locations/${gen.id}?view=detail`, [gen]);
-    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
-    fireEvent.click(screen.getByText("Edit"));
-    await screen.findByLabelText("Label");
-    fireEvent.click(screen.getByText("Save changes"));
-    await waitFor(() => expect(bodies).toHaveLength(1));
-    expect(bodies[0].label).toBe("");
-  });
-
-  it("posts the operator's words once they take the pen", async () => {
-    const { bodies } = patchBodies();
-    mount(`/locations/${gen.id}?view=detail`, [gen]);
-    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
-    fireEvent.click(screen.getByText("Edit"));
-    const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
-    fireEvent.click(screen.getByRole("button", { name: "Override the label" }));
-    fireEvent.input(label, { target: { value: "Ground Floor" } });
-    fireEvent.click(screen.getByText("Save changes"));
-    await waitFor(() => expect(bodies).toHaveLength(1));
-    expect(bodies[0].label).toBe("Ground Floor");
-  });
-
-  it("opens editable, and hands the label back on restore, for a row the operator labelled", async () => {
-    const { bodies } = patchBodies();
-    mount(`/locations/${hq.id}?view=detail`);
-    await waitFor(() => expect(screen.getByText("Edit")).toBeTruthy());
-    fireEvent.click(screen.getByText("Edit"));
-    const label = (await screen.findByLabelText("Label")) as HTMLInputElement;
-    expect(label.value).toBe("HQ");
-    expect(label.readOnly).toBe(false);
-    fireEvent.click(screen.getByRole("button", { name: "Restore the label to default" }));
-    expect(label.readOnly).toBe(true);
-    fireEvent.click(screen.getByText("Save changes"));
-    await waitFor(() => expect(bodies).toHaveLength(1));
-    // "" is the API's hand-back (labelPen, #682), which is the ONLY way back
-    // from the console: before this the field posted `display() || undefined`,
-    // so clearing it left the operator's label exactly where it was.
-    expect(bodies[0].label).toBe("");
-  });
-});
-
 // The edit face is a URL fact: ?edit=1 on the detail route requests edit mode, and
 // leaving edit strips it. The one-shot in-memory handoff (pendingedit) is gone, so
 // a deep link, a refresh mid-edit, and the create/pencil handoffs all express the
 // mode in the URL itself.
-describe("edit as a URL fact", () => {
-  afterEach(() => window.history.pushState({}, "", "/"));
-
-  it("opens the detail in edit when the URL carries ?edit=1", async () => {
-    mount(`/locations/${hq.id}?edit=1&view=detail`);
-    await waitFor(() => expect(screen.getByText("Save changes")).toBeTruthy());
+// Slice 2 of #800: the identity route with ?edit=1 renders the ZOOM (whose
+// configure face receives the intent), not the classic face; only
+// ?view=detail still reaches the classic editor until slice 3 retires it.
+describe("?edit=1 stops routing to the classic face (#800)", () => {
+  it("lands on the location zoom with the configure face editing", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...ME_KEY], me);
+    window.history.pushState({}, "", `/locations/${hq.id}?edit=1`);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/locations/:id" component={Locations} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    // The zoom mounts (its skeleton is fine: the routing is the assertion);
+    // the classic face's identity accordion must NOT appear.
+    await waitFor(() => expect(document.querySelector('[data-testid="configure-face"], .skeleton')).toBeTruthy());
+    expect(screen.queryByText("PLACEMENT")).toBeNull();
   });
+});
 
-  it("lands read-only when ?edit=1 arrives without the update permission", async () => {
-    const reader: Me = { principal: { id: "u-read", kind: "human" }, human: { username: "reader" }, permissions: ["location:read"], grants: [] };
-    mount(`/locations/${hq.id}?edit=1&view=detail`, [], reader);
-    // The detail renders (the name is on the read-only face) with no edit surface
-    // and no error.
-    await waitFor(() => expect(screen.getByText("hq")).toBeTruthy());
-    expect(screen.queryByText("Save changes")).toBeNull();
-  });
 
-  it("strips the param on Cancel, so the URL no longer requests edit", async () => {
-    mount(`/locations/${hq.id}?edit=1&view=detail`);
-    await waitFor(() => expect(screen.getByText("Save changes")).toBeTruthy());
-    fireEvent.click(screen.getByText("Cancel"));
-    await waitFor(() => expect(screen.queryByText("Save changes")).toBeNull());
-    // The strip is a router replace, delivered a beat after the mode flips.
-    await waitFor(() => expect(window.location.search).not.toContain("edit"));
-    // The read-only affordance is back.
-    expect(screen.getByText("Edit")).toBeTruthy();
-  });
-
-  it("keeps ?edit=1 across the name-to-uuid redirect", async () => {
-    // A name-shaped deep link resolves to the uuid route (#627); the query string
-    // must survive that replace, or a shared edit link to a named entity opens
-    // read-only.
-    mount(`/locations/hq?edit=1&view=detail`);
-    await waitFor(() => expect(screen.getByText("Save changes")).toBeTruthy());
-    expect(window.location.pathname.endsWith(hq.id)).toBe(true);
+// Slice 3 of #800: the classic face retires. ?view=detail stops being an
+// address; the identity route renders the zoom whatever the params say, and
+// only the reserved create segment keeps this page's own shell.
+describe("the classic face is gone (#800)", () => {
+  it("?view=detail renders the zoom, not the classic accordion", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...ME_KEY], me);
+    window.history.pushState({}, "", `/locations/${hq.id}?view=detail`);
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router>
+          <Route path="/locations/:id" component={Locations} />
+        </Router>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(document.querySelector('[data-testid="tab-rail"], .skeleton')).toBeTruthy());
+    expect(screen.queryByText("PLACEMENT")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^cancel$/i })).toBeNull();
   });
 });

@@ -163,7 +163,10 @@ func TestClearingAStemOnAShippedTypeForksAndTheWalkResumesAPI(t *testing.T) {
 	owner := principalWithGrants(t, ctx, dsn, "ifc-owner", []grant{{role: "owner", scopeKind: "all"}})
 
 	c.do(owner, http.MethodPost, "/locations", map[string]any{"name": "ifc-hq", "location_type": "building"}, http.StatusCreated)
-	draft := map[string]any{"product": "lyra-arc-a2", "location": "ifc-hq"}
+	// A minted ceiling-mic product: the walk under test is the TYPE tree's
+	// (ceiling-mic inherits its stem), so the product is only the doorway in.
+	mic := storagetest.MintProduct(t, ctx, gw, "ceiling-mic")
+	draft := map[string]any{"product": mic.Name, "location": "ifc-hq"}
 
 	if got := renderLabelAt(t, c, owner, "/components:renderLabel", draft, http.StatusOK); got.Name != "mic-1" {
 		t.Fatalf("drafted name = %q before any edit, want the inherited mic-1", got.Name)

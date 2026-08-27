@@ -26,7 +26,7 @@ func TestGeneratedNameRecordsItsOrdinal(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	edge55 := "boreal-edge-55"
+	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
 	first, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &edge55}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create first: %v", err)
@@ -67,7 +67,7 @@ func TestOperatorTypedNameHasNoOrdinal(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	edge55 := "boreal-edge-55"
+	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
 	typed, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", ProductName: &edge55}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create typed: %v", err)
@@ -94,7 +94,7 @@ func TestOperatorTypedNameHoldsItsSlot(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	edge55 := "boreal-edge-55"
+	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "display-1", ProductName: &edge55}, all, all, all, all); err != nil {
 		t.Fatalf("create the hand-typed occupant: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestRenameClearsTheOrdinalAndResetReMints(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	edge55 := "boreal-edge-55"
+	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &edge55}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -169,7 +169,7 @@ func TestMoveReRecordsTheOrdinal(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	edge55 := "boreal-edge-55"
+	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &edge55}, all, all, all, all); err != nil {
 		t.Fatalf("create first: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestReclassifyReRecordsTheOrdinal(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	edge55, mic := "boreal-edge-55", "lyra-arc-a2"
+	edge55, mic := storagetest.MintProduct(t, ctx, gw, "display").Name, storagetest.MintProduct(t, ctx, gw, "ceiling-mic").Name
 	// A mic already sitting in the bucket, so the reclassified row cannot land
 	// back on ordinal 1 and pass by accident.
 	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &mic}, all, all, all, all); err != nil {
@@ -233,8 +233,8 @@ func TestReclassifyReRecordsTheOrdinal(t *testing.T) {
 // TestBareRenderReadsTheStoredOrdinal proves the render consumes the fact: a
 // generated row compacts to <abbrev><ordinal>, and a renamed row whose name
 // still looks exactly like a generated one is left alone, which is the #654
-// guarantee surviving the mechanism change. boreal-edge-55 classifies under
-// component_type "display" (stem "display", abbrev "fp").
+// guarantee surviving the mechanism change. The minted product classifies
+// under component_type "display" (stem "display", abbrev "fp").
 func TestBareRenderReadsTheStoredOrdinal(t *testing.T) {
 	gw := storagetest.NewDB(t)
 	ctx := context.Background()
@@ -242,7 +242,7 @@ func TestBareRenderReadsTheStoredOrdinal(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	edge55 := "boreal-edge-55"
+	edge55 := storagetest.MintProduct(t, ctx, gw, "display").Name
 	c, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{ProductName: &edge55}, all, all, all, all)
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -299,7 +299,7 @@ func TestStemlessAllocationWorks(t *testing.T) {
 
 	// Occupy it for real, through the ordinary create path, so the second
 	// allocation reads a row the database actually holds.
-	edge55 := "boreal-edge-55"
+	edge55 := storagetest.MintProduct(t, ctx, pg, "display").Name
 	if _, err := pg.CreateComponent(ctx, "", storage.ComponentSpec{Name: "1", ProductName: &edge55}, all, all, all, all); err != nil {
 		t.Fatalf("create a component named %q: %v", "1", err)
 	}
@@ -371,7 +371,7 @@ func TestStoredOrdinalsRecomputeToThemselves(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	edge55, mic := "boreal-edge-55", "lyra-arc-a2"
+	edge55, mic := storagetest.MintProduct(t, ctx, pg, "display").Name, storagetest.MintProduct(t, ctx, pg, "ceiling-mic").Name
 	if _, err := pg.CreateLocation(ctx, "", storage.LocationSpec{Name: "invariant-room", LocationType: "campus"}, all); err != nil {
 		t.Fatalf("create location: %v", err)
 	}

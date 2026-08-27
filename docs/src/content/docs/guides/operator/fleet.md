@@ -23,6 +23,11 @@ screenshots:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "text=/unacknowledged/ >> xpath=ancestor::div[1]"
       - "text=/acknowledged/ >> xpath=ancestor::div[1]"
+  - id: fleet-configure
+    path: /web/systems/huddle?tab=configure
+    alt: "The Configure tab: Identity with the label pen and the name precheck, Classification, Placement, and Tags, edited in place on the workspace."
+    mask:
+      - "[data-testid=since-line] >> xpath=ancestor::div[1]"
   - id: fleet-system
     path: /web/systems/huddle
     alt: "The system zoom: one card per role with the reported arithmetic, choices grouped with the build in use marked, and the no-role list."
@@ -142,8 +147,8 @@ so a pasted link lands on the same face, and the old `/locations`, `/systems`, a
 ## Zoom into a location
 
 Clicking a band opens the location at its own address: the zoom **is** the identity
-route's face. The classic detail face stays reachable at `?view=detail` while editing
-still lives there; it retires when edit moves into the blades.
+route's face, the only one it has: editing lives on the Configure tab (#800), and an
+old `?view=detail` link simply lands here.
 
 ::screenshot{#fleet-location}
 
@@ -215,6 +220,22 @@ The **Events** tab is the room's story on the event lane: the system's own event
 members', newest first, each row labeled by the owner that raised it. The **Logs** tab is
 the members' raw lines merged, each naming the component that wrote it. Both cover the
 last 24 hours, capped; both scope to what you can read.
+
+## Configure
+
+Editing lives on the workspace (#800): the **Configure** tab renders for anyone holding an
+edit verb on the entity, and inside it the sections gate one by one. **Identity** carries
+the label (with the platform's pen) and the name with its advisory precheck; renaming
+breaks bookmarks and integrations by design, so the check and the consequence line sit
+beside the field. **Classification** is the standard and type selects (a component's
+product is fixed at creation). **Placement** moves a location under a new parent, its own
+permission and its own audit verb; systems and components read where they sit.
+**Tags** edit in place. One save model everywhere: Edit stages drafts, Save commits them
+together (the rename last, so a refusal leaves the rest saved), Cancel reverts. A
+`?edit=1` address lands already editing. The location zoom and the component leaf carry
+the same tab.
+
+::screenshot{#fleet-configure}
 
 ## The data
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, within, cleanup, waitFor } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -107,7 +107,13 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`) {
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...LOCATION_TYPES_KEY], types);
-  qc.setQueryData([...LOCATIONS_KEY], []);
+  // The configure face self-fetches its row and parent options from this
+  // list; a test that strips it renders the face as a skeleton (#800-1).
+  qc.setQueryData([...LOCATIONS_KEY], [
+    { id: uuidFor("lz-hq"), name: "hq", label: "Headquarters", location_type: "campus", parent_id: null, actions: ["update", "delete", "move", "rename"] },
+    { id: uuidFor("lz-b1"), name: "west", label: "West Building", location_type: "building", parent_id: uuidFor("lz-hq"), actions: ["update", "delete", "move", "rename"] },
+    { id: uuidFor("lz-hq2"), name: "lab", label: "Lab", location_type: "campus", parent_id: null, actions: ["update"] },
+  ]);
   qc.setQueryData([...SYSTEMS_KEY], []);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...systemHealthKey(uuidFor("lz-s-lobby"))], lobbyHealth);
@@ -293,5 +299,98 @@ describe("the location list density", () => {
     const toggle = screen.getByTestId("view-toggle");
     fireEvent.click(within(toggle).getByRole("button", { name: /list/i }));
     await waitFor(() => expect(window.location.search).toContain("view=list"));
+  });
+});
+
+
+// The location zoom grows the same Configure facet (#800 slice 1): a
+// two-tab rail (Overview, Configure), the parent mover with its consequence
+// copy living where the room to explain it exists.
+describe("the location configure tab (#800)", () => {
+  it("offers Configure and renders identity, the parent mover, and tags", async () => {
+    mount(`/web/locations/${uuidFor("lz-hq")}?tab=configure`);
+    const face = await screen.findByTestId("configure-face");
+    expect(within(face).getByText("Identity")).toBeTruthy();
+    expect(within(face).getByText("Placement")).toBeTruthy();
+    expect(within(face).getAllByText("Tags").length).toBeGreaterThan(0);
+    expect(within(face).getByText("hq")).toBeTruthy();
+  });
+
+  it("keeps the Overview the default facet", async () => {
+    mount();
+    const rail = await screen.findByTestId("tab-rail");
+    expect(within(rail).getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe("true");
+    expect(within(rail).getByRole("tab", { name: "Configure" })).toBeTruthy();
+    expect(screen.getByTestId("location-header")).toBeTruthy();
+  });
+});
+
+
+// The mover behaviors the classic face carried, re-homed on Configure
+// (#800 slice 3): narrowed candidates, uuid-valued options, self-exclusion,
+// root only when currently root, and the refused move surfacing in place.
+describe("the configure mover keeps the classic contract (#800)", () => {
+  it("narrows to allowed_parent_types, excludes the subtree, uuid-valued", async () => {
+    mount(`/web/locations/${uuidFor("lz-b1")}?tab=configure&edit=1`);
+    const face = await screen.findByTestId("configure-face");
+    const select = (await within(face).findByLabelText("Parent")) as HTMLSelectElement;
+    const labels = Array.from(select.options).map((o) => o.textContent?.trim());
+    // building allows [root, campus]: both campuses offered, never itself,
+    // and no root option since it already has a parent.
+    expect(labels).toContain("Headquarters");
+    expect(labels).toContain("Lab");
+    expect(labels.some((l) => l?.includes("West Building"))).toBe(false);
+    expect(labels).not.toContain("Root (current)");
+    // seeded from and valued by uuid (#627)
+    expect(select.value).toBe(uuidFor("lz-hq"));
+    fireEvent.change(select, { target: { value: uuidFor("lz-hq2") } });
+    expect(select.value).toBe(uuidFor("lz-hq2"));
+  });
+
+  it("offers only the current-root placeholder when nothing matches the allowed set", async () => {
+    mount(`/web/locations/${uuidFor("lz-hq")}?tab=configure&edit=1`);
+    const face = await screen.findByTestId("configure-face");
+    const select = (await within(face).findByLabelText("Parent")) as HTMLSelectElement;
+    const labels = Array.from(select.options).map((o) => o.textContent?.trim());
+    // campus allows [root] only: no location is of type root, so the only
+    // option is the current-root placeholder.
+    expect(labels).toEqual(["Root (current)"]);
+  });
+
+  it("sends the move by uuid on save and surfaces a refusal in place", async () => {
+    const calls: { method: string; url: string; body: string }[] = [];
+    const stub = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request;
+      const body = req.method === "PATCH" || req.method === "POST" ? await req.clone().text() : "";
+      calls.push({ method: req.method, url: req.url, body });
+      if (req.url.includes(":move")) {
+        return new Response(JSON.stringify({ title: "Unprocessable Entity", detail: "a building cannot contain a campus" }), { status: 422, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({}), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    try {
+      mount(`/web/locations/${uuidFor("lz-b1")}?tab=configure&edit=1`);
+      const face = await screen.findByTestId("configure-face");
+      const select = (await within(face).findByLabelText("Parent")) as HTMLSelectElement;
+      fireEvent.change(select, { target: { value: uuidFor("lz-hq2") } });
+      fireEvent.click(within(face).getByRole("button", { name: /save/i }));
+      await waitFor(() => {
+        const move = calls.find((c) => c.method === "POST" && c.url.includes(":move"));
+        expect(move, "the :move custom method").toBeTruthy();
+        expect(JSON.parse(move!.body).parent).toBe(uuidFor("lz-hq2"));
+        // the refusal keeps edit mode and says why, in place
+        expect(within(face).getByRole("alert").textContent).toContain("cannot contain");
+      });
+    } finally {
+      stub.mockRestore();
+    }
+  });
+});
+
+describe("the miss face (#800)", () => {
+  it("an address matching no location renders the explicit miss, not a silent fallback", async () => {
+    mount("/web/locations/no-such-place");
+    expect(await screen.findByText(/No location answers this address/)).toBeTruthy();
+    expect(screen.queryByText("Contained systems")).toBeNull();
   });
 });
