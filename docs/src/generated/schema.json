@@ -1723,6 +1723,70 @@
      }
     ]
    },
+   "endpoint": {
+    "columns": [
+     {
+      "name": "id",
+      "type": "uuid",
+      "nullable": false,
+      "default": "uuidv7()",
+      "pk": true
+     },
+     {
+      "name": "name",
+      "type": "text",
+      "nullable": false
+     },
+     {
+      "name": "params",
+      "type": "jsonb",
+      "nullable": false,
+      "default": "'{}'::jsonb"
+     },
+     {
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "nullable": false,
+      "default": "now()"
+     },
+     {
+      "name": "component",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "component.id"
+     },
+     {
+      "name": "node_name",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "node.principal_id"
+     },
+     {
+      "name": "label",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "transport",
+      "type": "text",
+      "nullable": false
+     }
+    ],
+    "uniques": [
+     {
+      "name": "endpoint_component_name_key",
+      "definition": "CREATE UNIQUE INDEX endpoint_component_name_key ON public.endpoint USING btree (component, name)"
+     }
+    ]
+   },
    "location": {
     "columns": [
      {
@@ -3796,72 +3860,6 @@
      {
       "name": "property_type_handle_key",
       "definition": "CREATE UNIQUE INDEX property_type_handle_key ON public.property_type USING btree (name)"
-     }
-    ]
-   }
-  },
-  "unclustered": {
-   "endpoint": {
-    "columns": [
-     {
-      "name": "id",
-      "type": "uuid",
-      "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
-     },
-     {
-      "name": "name",
-      "type": "text",
-      "nullable": false
-     },
-     {
-      "name": "params",
-      "type": "jsonb",
-      "nullable": false,
-      "default": "'{}'::jsonb"
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "updated_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "component",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "component.id"
-     },
-     {
-      "name": "node_name",
-      "type": "uuid",
-      "nullable": true,
-      "fk": true,
-      "fk_target": "node.principal_id"
-     },
-     {
-      "name": "label",
-      "type": "text",
-      "nullable": true
-     },
-     {
-      "name": "transport",
-      "type": "text",
-      "nullable": false
-     }
-    ],
-    "uniques": [
-     {
-      "name": "endpoint_component_name_key",
-      "definition": "CREATE UNIQUE INDEX endpoint_component_name_key ON public.endpoint USING btree (component, name)"
      }
     ]
    }

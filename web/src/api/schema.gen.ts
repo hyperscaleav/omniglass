@@ -1836,7 +1836,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a node
-         * @description Decommissions a node: a hard delete that cascades its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
+         * @description Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
          */
         delete: operations["delete-node"];
         options?: never;
@@ -5150,7 +5150,7 @@ export interface components {
             attributes?: unknown;
             /** @description The event_type's uuid, the stable form of key */
             event_type_id: string;
-            /** @description The series discriminator (e.g. the interface), when set */
+            /** @description The series discriminator (e.g. the endpoint), when set */
             instance?: string;
             /** @description The event_type name of the occurrence (e.g. call-started) */
             key: string;
@@ -5160,7 +5160,7 @@ export interface components {
             origin: string;
             /** @description The lineage of the occurrence (observed for direct collection) */
             provenance: string;
-            /** @description The interface type that produced the occurrence */
+            /** @description The transport that produced the occurrence */
             source?: string;
             /**
              * Format: date-time
@@ -5443,7 +5443,7 @@ export interface components {
             readonly $schema?: string;
             /** @description The command_type to invoke */
             command_type: string;
-            /** @description The series discriminator (e.g. an interface), when the target is instanced */
+            /** @description The series discriminator (e.g. an endpoint), when the target is instanced */
             instance?: string;
             /** @description The invocation params, stored on the command and the caused event */
             params?: unknown;
@@ -7233,7 +7233,7 @@ export interface components {
             attributes?: unknown;
             /** @description The event_type's uuid, the stable form of key */
             event_type_id: string;
-            /** @description The series discriminator (e.g. the interface), when set */
+            /** @description The series discriminator (e.g. the endpoint), when set */
             instance?: string;
             /** @description The event_type name of the occurrence (e.g. call-started) */
             key: string;
@@ -7247,7 +7247,7 @@ export interface components {
             owner_kind: string;
             /** @description The lineage of the occurrence (observed for direct collection) */
             provenance: string;
-            /** @description The interface type that produced the occurrence */
+            /** @description The transport that produced the occurrence */
             source?: string;
             /**
              * Format: date-time

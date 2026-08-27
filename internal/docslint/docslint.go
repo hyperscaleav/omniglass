@@ -38,6 +38,18 @@ type BannedTerm struct {
 // Banned is the denylist. Order is presentation only.
 var Banned = []BannedTerm{
 	{
+		// The entity an API is reached through renamed to endpoint (#811,
+		// #603's naming ruling): interface_type retired outright with its
+		// table (transports are the internal/transport code registry), and
+		// the entity noun's own spellings retire with it. The noun is banned
+		// in its entity phrasings rather than as a bare word, because
+		// "network interface" legitimately survives as the teaching contrast
+		// on the collection page and "user interface" is ordinary English.
+		Pattern:     regexp.MustCompile("\\binterface_type\\b|\\binterface-reachable\\b|\\ban interface\\b|\\bthe interface\\b|\\binterfaces\\b"),
+		Replacement: "endpoint (the entity), transport (the wire registry), endpoint-reachable (the datapoint)",
+		Origin:      "ADR-0134",
+	},
+	{
 		// The create form's precondition field, retired by ADR-0104's #702-review
 		// amendment: it binds the drafted NAME, because a name carries the stem
 		// and the suppression rule as well as the number and an ordinal claim was

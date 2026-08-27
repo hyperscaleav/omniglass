@@ -172,6 +172,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0131](#adr-0131-the-device-taxonomy-is-oavc-and-the-demo-catalog-is-fictional) | 2026-08-24 | Accepted | The component_type tree mirrors the OpenAVCloud AV Device Taxonomy v1.1 (category roots, subcategory types, form-factor mic subtypes); the seed catalog goes fictional (the omniglass-lab brand universe, AV-iQ as the realism source); standards become integrator-style room chains with size-serialized variants, and the impossible shared bar yields to the divisible pair's shared DSP and amplifier rack |
 | [ADR-0132](#adr-0132-configure-is-the-one-deep-editor) | 2026-08-25 | Accepted | Every fleet workspace carries a Configure tab as the ONE deep editor; the blade stays a quick face whose rows jump into it; `?edit=1` retargets to Configure and the classic detail face retires with an explicit miss face (#800, diverging deliberately from ADR-0129's edit-in-blade target) |
 | [ADR-0133](#adr-0133-a-select-over-a-loaded-collection-binds-through-a-ref-not-a-value-prop) | 2026-08-27 | Accepted | A `<select>` whose options come from a collection the server answers for takes its value from `bindSelectValue(value, ...options)` (`web/src/lib/selectvalue.ts`) used as the element's `ref`, never from a `value=` prop: the control keeps no value it has no option for, and a value binding does not re-run when the OPTIONS are what arrived. Thirteen controls convert, the workspace Configure face's four among them. Two shapes stay on `value=` and the exemption is deliberate: a hard-coded or generated option list has no async gap, and a control whose value starts empty and only moves because the operator moved it has nothing stored to lose |
+| [ADR-0134](#adr-0134-the-entity-an-api-is-reached-through-is-an-endpoint) | 2026-08-28 | Accepted | The entity formerly named `interface` renames to `endpoint` end to end (table, routes, `endpoint:*` permission nouns, console, docs, the `endpoint-reachable` datapoint renamed in place), executing #603's naming ruling as ADR-0073's transports-become-code lands: `service` was disqualified by the existing service-principal table, `api` by the platform's own API vocabulary, and `endpoint` is the word the design already used for this thing's address, which becomes `address` so the schema never reads `endpoint.endpoint` |
 
 ## Entries
 
@@ -6164,3 +6165,31 @@ interface create form, since that name is the platform's to mint.
   `entity-edit-face` shot flipped between two location types across captures
   ([ADR-0121](#adr-0121-the-console-ships-its-own-typefaces) landed the gate that caught it)
   (#398, #772, #782).
+
+### ADR-0134: The entity an API is reached through is an endpoint
+
+- **Date:** 2026-08-28 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/),
+  [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [API](/architecture/api/),
+  [identity and access](/architecture/identity-access/)
+- **Decision:** The entity formerly named `interface` is an **endpoint**, renamed end to end in one
+  slice (#811, the naming ruling on #603): the table (with the task arc's column and every
+  constraint code names), the routes (`/endpoints`, plus `GET /transports` serving the code
+  registry), the permission nouns (`endpoint:*`, with existing role arrays rewritten in place), the
+  console surfaces and gate words, the docs corpus, and the canonical `interface-reachable`
+  datapoint, whose registry row renames in place to `endpoint-reachable` so every uuid-keyed sample
+  keeps its history. The designed driver-spec field that used to be called `endpoint` (the probed
+  `host[:port]`) is `address` from here on, so the schema never reads `endpoint.endpoint`; the
+  reachability read already serves it as `address`. `interface` and `interface_type` join the
+  docslint denylist; the decision log and build log keep their historical spellings.
+- **Context:** The word had to move before the collection epic multiplied its vocabulary (sessions,
+  listeners, and command bindings all hang off this entity), and slice 1 was the lifetime-cheapest
+  carrier since ADR-0073's transports-become-code was already reshaping the row. The candidates:
+  keeping `interface` carried the Zabbix host-interface precedent but a growing collision with real
+  network interfaces as monitored objects; `service` read naturally (the SSH service on a host) but
+  `public.service` already names the service-principal identity, and one word naming two unrelated
+  entities in one schema is the worse collision; `api` read well in operator speech but fights the
+  platform's own API-first vocabulary (`internal/api`, `/api/v1`, the generated OpenAPI) in every
+  sentence needing both senses. `endpoint` is the word the architecture of record already reached
+  for when describing this entity's address, is observability-native (a scrape endpoint, a
+  monitoring endpoint) and network-native (the SSH endpoint on a host), and composes cleanly
+  (`endpoint:*`, `/endpoints`, `endpoint-reachable`).

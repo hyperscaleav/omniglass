@@ -20,7 +20,7 @@ The reasons are structural:
 
 - **It is agentless.** AV gear is firmware appliances: you ask the device from the outside and take
   whatever it is willing, or able, to give you.
-- **There is no standard, and the APIs are uneven.** Control interfaces are usually decent;
+- **There is no standard, and the APIs are uneven.** Control endpoints are usually decent;
   *management* data is an afterthought, when it exists at all. Different port, protocol, and format
   for every vendor, every product, sometimes every firmware revision. Every integration is bespoke.
 - **The system is the hard part.** A room is not a device. It is a signal chain (a display, a video
@@ -39,7 +39,7 @@ standard API to read, and a host that is the thing you actually care about.** Po
 and it has no idea what a "room" is, no language for an AV control protocol, no concept of a
 redundant mic. It can tell you a host is up, not that the room is usable.
 
-You *can* bend these tools to AV. Skilled people do it every day, scraping web interfaces and
+You *can* bend these tools to AV. Skilled people do it every day, scraping web endpoints and
 gluing middleware on the side to reach the gear the platform cannot. But that is doing the
 platform's job for it, by hand, forever, and it still has no model of the room at the end.
 

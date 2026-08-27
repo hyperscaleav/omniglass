@@ -30,8 +30,8 @@ Internal traffic splits by what is moving:
   publish to a **raw ingress subject** (the wire unit is a `Sample` in a `TelemetryBatch`); an
   **admission consumer** owner-confines each sample and re-publishes only confined ones to the
   **trusted** samples stream. The confinement set is **per publisher class**: a node's payload owner
-  is checked against its placement `visible_set`, a central webhook's against the interface's
-  declared owner (the trusted server-set `interface` label). The republish copies the original
+  is checked against its placement `visible_set`, a central webhook's against the endpoint's
+  declared owner (the trusted server-set `endpoint` label). The republish copies the original
   `Nats-Msg-Id`, `correlation_id`, and `source_event_id` headers verbatim, so dedup survives the
   hop. **Trusted server-internal producers publish straight to the trusted stream**, no admission
   pass: calc output (owner from the validated `calc_rule` scope) and the action layer's intended
@@ -64,7 +64,7 @@ Internal traffic splits by what is moving:
 
 Three ingest paths exist today, and this list is the enumeration's one home:
 
-- **The node bus path.** A node publishes a `TelemetryBatch` on its own subject (`og.v1.telemetry.<node>`), and the server binds each sample's owner from the task's interface ([collection](/architecture/collection/)).
+- **The node bus path.** A node publishes a `TelemetryBatch` on its own subject (`og.v1.telemetry.<node>`), and the server binds each sample's owner from the task's endpoint ([collection](/architecture/collection/)).
 - **The API push path.** `POST /telemetry:push` is the first-party HTTP ingest write: a scoped caller declares the owner and the route's scope check is the fence. The API publishes the batch onto the bus (`og.v1.api.telemetry`, trusted by subject, below) rather than writing Postgres directly, so pushed records are visible to the same stream consumers and land in history the same way ([API](/architecture/api/)).
 - **The raw log path.** A raw log line rides either transport in the same batch but lands on its own untyped lane, `log_line`: no property name, no registry gate ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
 

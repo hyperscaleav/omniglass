@@ -493,7 +493,7 @@ Records a command invocation, writes a caused event, and (for a settleable comma
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--command-type` | string | (none) | The command_type to invoke |
-| `--instance` | string | (none) | The series discriminator (e.g. an interface), when the target is instanced |
+| `--instance` | string | (none) | The series discriminator (e.g. an endpoint), when the target is instanced |
 | `--params` | string | (none) | The invocation params, stored on the command and the caused event |
 | `--value` | string | (none) | The intended value for the target property (a settleable command) |
 
@@ -2321,7 +2321,7 @@ Delete a node
 omniglass node delete <name>
 ```
 
-Decommissions a node: a hard delete that cascades its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
+Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
 
 Example:
 

@@ -656,7 +656,7 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().StringVar(&fCommandType, "command-type", "", "The command_type to invoke")
 					_ = cmd.MarkFlagRequired("command-type")
-					cmd.Flags().StringVar(&fInstance, "instance", "", "The series discriminator (e.g. an interface), when the target is instanced")
+					cmd.Flags().StringVar(&fInstance, "instance", "", "The series discriminator (e.g. an endpoint), when the target is instanced")
 					cmd.Flags().StringVar(&fParams, "params", "", "The invocation params, stored on the command and the caused event")
 					cmd.Flags().StringVar(&fValue, "value", "", "The intended value for the target property (a settleable command)")
 					return cmd
@@ -3067,7 +3067,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a node",
-					Long:    "Decommissions a node: a hard delete that cascades its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.",
+					Long:    "Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.",
 					Example: "  omniglass node delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {

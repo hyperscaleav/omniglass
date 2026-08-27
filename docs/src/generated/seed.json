@@ -15,7 +15,7 @@
   {
    "id": "operator",
    "label": "Operator",
-   "description": "Day-to-day operations: create or edit components, interfaces, secrets, variables, and the property, metric, event, and command catalogs, and issue commands in scope. Sees and reveals the device secrets in its scope (never the admin-sensitive platform credentials). Inherits Viewer.",
+   "description": "Day-to-day operations: create or edit components, endpoints, secrets, variables, and the property, metric, event, and command catalogs, and issue commands in scope. Sees and reveals the device secrets in its scope (never the admin-sensitive platform credentials). Inherits Viewer.",
    "inherits": [
     "viewer"
    ],
@@ -236,10 +236,10 @@
  ],
  "property_types": [
   {
-   "name": "interface-reachable",
+   "name": "endpoint-reachable",
    "data_type": "string",
-   "label": "Interface Reachable",
-   "description": "Per-interface reachability verdict, the AND of the interface's probe results (up = every applicable probe reached the target). A built-in state: availability is time_in_state over it. Unknown/stale are read-time derivations, not stored values."
+   "label": "Endpoint Reachable",
+   "description": "Per-endpoint reachability verdict, the AND of the endpoint's probe results (up = every applicable probe reached the target). A built-in state: availability is time_in_state over it. Unknown/stale are read-time derivations, not stored values."
   },
   {
    "name": "health",

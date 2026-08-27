@@ -12,7 +12,7 @@ import (
 )
 
 // The endpoint CRUD surface: operator authoring of placement-bound connections
-// (the entity ADR-0073's ruling renamed from interface). Both authz layers
+// (ADR-0134: the entity renamed from the old noun). Both authz layers
 // apply on every route: an endpoint:<action> permission (require middleware)
 // AND scope injected by the gateway, cascading through the owning component
 // (an out-of-scope component's endpoint is a non-disclosing 404, exactly like

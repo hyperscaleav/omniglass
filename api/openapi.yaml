@@ -1996,7 +1996,7 @@ components:
           description: The event_type's uuid, the stable form of key
           type: string
         instance:
-          description: The series discriminator (e.g. the interface), when set
+          description: The series discriminator (e.g. the endpoint), when set
           type: string
         key:
           description: The event_type name of the occurrence (e.g. call-started)
@@ -2011,7 +2011,7 @@ components:
           description: The lineage of the occurrence (observed for direct collection)
           type: string
         source:
-          description: The interface type that produced the occurrence
+          description: The transport that produced the occurrence
           type: string
         ts:
           description: When the occurrence happened
@@ -2562,7 +2562,7 @@ components:
           minLength: 1
           type: string
         instance:
-          description: The series discriminator (e.g. an interface), when the target is instanced
+          description: The series discriminator (e.g. an endpoint), when the target is instanced
           type: string
         params:
           description: The invocation params, stored on the command and the caused event
@@ -5835,7 +5835,7 @@ components:
           description: The event_type's uuid, the stable form of key
           type: string
         instance:
-          description: The series discriminator (e.g. the interface), when set
+          description: The series discriminator (e.g. the endpoint), when set
           type: string
         key:
           description: The event_type name of the occurrence (e.g. call-started)
@@ -5856,7 +5856,7 @@ components:
           description: The lineage of the occurrence (observed for direct collection)
           type: string
         source:
-          description: The interface type that produced the occurrence
+          description: The transport that produced the occurrence
           type: string
         ts:
           description: When the occurrence happened
@@ -10130,7 +10130,7 @@ paths:
       x-omniglass-permission: node:create
   /nodes/{name}:
     delete:
-      description: "Decommissions a node: a hard delete that cascades its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete."
+      description: "Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete."
       operationId: delete-node
       parameters:
         - description: The node's unique name

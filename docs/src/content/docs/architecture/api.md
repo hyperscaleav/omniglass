@@ -19,7 +19,7 @@ route honors.
 Built today: the Huma-over-chi API with the OpenAPI 3.1 document generated from the Go structs
 (`make gen`), the AIP-style resource and `:verb` routing, and the problem+json error model
 ([ADR-0068](/architecture/decisions/#adr-0068-the-api-error-model-is-the-stock-rfc-9457-shape)), proven
-on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/interfaces`, `/tasks`, the
+on `/auth`, `/roles`, `/locations`, `/systems`, `/components`, `/nodes`, `/endpoints`, `/tasks`, the
 first-party ingest write `POST /telemetry:push` (gated `telemetry:push`, owner declared in the body and
 fenced by the caller's scope), the per-component reachability read, the type registries, the
 `/products` and `/standards` catalogs, the classifier-contract and instance-value property routes, the
@@ -265,10 +265,10 @@ method is the front door; **dispatch is over NATS**: the action fans out through
   **permission universe** the [Roles
   view](/architecture/identity-access/#the-permission-universe-published-per-route) reports.
 
-## The collection surface: nodes, interfaces, tasks
+## The collection surface: nodes, endpoints, tasks
 
 The [collection](/architecture/collection/) authoring routes are the first concrete resources that
-exercise every convention above at once: the standard family per resource (`/nodes`, `/interfaces`,
+exercise every convention above at once: the standard family per resource (`/nodes`, `/endpoints`,
 `/tasks`) plus the `:verb` custom methods and the per-component reads (`reachability`,
 `reconciliation`, `events`), all `component:read`-gated. The routes live in the
 [generated API reference](/reference/api/), rendered from the OpenAPI document on every build, each
@@ -284,15 +284,15 @@ password). It is the surface's **one public route**, unauthenticated because the
 authentication, and an invalid token is a **401** (a claim must not disclose which nodes exist). A node
 is fleet-wide, so `node:read` and `node:create` require an **all-scope** grant.
 
-**The interface is authored; the task is derived.** An interface is addressed by a surrogate `id` and
-**named by its protocol**: `name` derives from `interface_type`, unique **within its component**
+**The endpoint is authored; the task is derived.** An endpoint is addressed by a surrogate `id` and
+**named by its protocol**: `name` derives from `transport`, unique **within its component**
 (create takes a type, not a name; a duplicate protocol on one component is a **409**). Creating an
-interface **derives its one poll task**, so the task surface is **read-only** (`GET /tasks`,
-`GET /tasks/{id}`): no task write routes or grants. A task references its interface by
-`interface_id`, its id **content-addressed** over interface, mode, and spec, with **no node column**:
-placement **projects from the interface**. An interface belongs to a component (or is server-hosted,
-needing an all-scoped grant), a task to an interface, so both inherit the component's
-[scope](/architecture/identity-access/): an out-of-read-scope component's interface or task is a
+endpoint **derives its one poll task**, so the task surface is **read-only** (`GET /tasks`,
+`GET /tasks/{id}`): no task write routes or grants. A task references its endpoint by
+`endpoint_id`, its id **content-addressed** over endpoint, mode, and spec, with **no node column**:
+placement **projects from the endpoint**. An endpoint belongs to a component (or is server-hosted,
+needing an all-scoped grant), a task to an endpoint, so both inherit the component's
+[scope](/architecture/identity-access/): an out-of-read-scope component's endpoint or task is a
 non-disclosing **404**.
 
 **Three per-component reads stand in until the `ViewResult` framework lands**, each a hand-written
@@ -300,8 +300,8 @@ typed `GET`, gated `component:read` and scope-injected through the same `GetComp
 out-of-scope component is a non-disclosing 404 (a deliberate early exception to
 [reads beyond one resource are views](#reads-beyond-one-resource-are-views)):
 
-- `GET /components/{name}/reachability` composes, per interface, the latest verdict state
-  (`interface-reachable`), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics), and
+- `GET /components/{name}/reachability` composes, per endpoint, the latest verdict state
+  (`endpoint-reachable`), the probe-layer signals that compose it (the raw `icmp`/`tcp` metrics), and
   the recent verdict transitions the availability strip reads.
 - `GET /components/{name}/events` is the log-kind mirror: the component's recent **log occurrences**
   (the [`event` log sink](/architecture/core-entities/#the-event-sink-the-first-arc-owned-occurrence)),
@@ -309,7 +309,7 @@ out-of-scope component is a non-disclosing 404 (a deliberate early exception to
   `event_type` name it is typed by (on the wire as `key`, e.g. `call-started`) with its
   `event_type_id` beside it, `origin` (caught/caused/derived/scheduled), `instance`,
   `message`, optional `attributes`, `provenance` (`observed` for direct collection), and the `source`
-  interface type.
+  endpoint type.
 - `GET /components/{name}/reconciliation` pivots want/told/is over the series: per declared
   property, the **want** (the current declared value, with the contract default coalesced in), the
   **told** (the `intended` value a command
@@ -340,12 +340,12 @@ and (for a settleable command) opens an intended value, returning the computed s
 
 :::note[Thin cuts today]
 The operationally useful slice, not the full CRUD matrix. A **node** carries the full set (create,
-list, get, update, delete, plus `:enroll` and `:claim`); its delete **cascades** its interfaces, their
-derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. An **interface**
+list, get, update, delete, plus `:enroll` and `:claim`); its delete **cascades** its endpoints, their
+derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. An **endpoint**
 `PATCH` changes only its node placement and its params (target); the type (and the name it derives)
 and the owning component are fixed at creation, and a delete is refused while a task still references
-it (a **409**). The four built interface types are `icmp`, `tcp`, `ssh`, and `http`; there is no
-`interface_type` list route yet.
+it (a **409**). The four built endpoint types are `icmp`, `tcp`, `ssh`, and `http`; there is no
+`transport` list route yet.
 :::
 ## Secrets: masked reads, an audited reveal
 

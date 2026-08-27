@@ -84,7 +84,7 @@ slightly differently.
 
 One exception, narrow: **an entity addressed by id**, either because nobody names it (a stored
 property value, an audit row, a grant, a principal) or because its name is not unique fleet-wide
-(an interface, named after its interface_type and unique only within its component). A **registry**
+(an endpoint, named after its transport and unique only within its component). A **registry**
 used to be a second exception, a slug-keyed catalog whose id *was* its
 name (`product_id: "kestrel-vroom"`); that is gone. Every registry now has a uuid primary key and
 a renameable `name` ([ADR-0062](/architecture/decisions/#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle)),

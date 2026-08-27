@@ -100,7 +100,7 @@ and each row that maps to an endpoint a **Manage** affordance opening that endpo
 To author a reachability check, add an **endpoint** to the component (above): a proper
 driver-based authoring flow is a later collection slice, so today a check is an endpoint plus
 its derived poll task, created from this panel on the component's own detail (there is no
-standalone Interfaces page).
+standalone Endpoints page).
 
 ## Events
 
