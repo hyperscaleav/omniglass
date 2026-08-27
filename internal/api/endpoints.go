@@ -69,12 +69,12 @@ type endpointPathInput struct {
 
 type createEndpointInput struct {
 	Body struct {
-		Transport string          `json:"transport,omitempty" doc:"A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set"`
-		Label     string          `json:"label,omitempty" maxLength:"200" doc:"What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for"`
-		Component *string         `json:"component,omitempty" doc:"Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant)"`
-		Node      *string         `json:"node,omitempty" doc:"Node placement, by name or id"`
-		Params    json.RawMessage `json:"params,omitempty" doc:"Address/target settings (jsonb); an attach derives them from the inputs instead"`
-		Driver    *string         `json:"driver,omitempty" doc:"Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions"`
+		Transport string            `json:"transport,omitempty" doc:"A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set"`
+		Label     string            `json:"label,omitempty" maxLength:"200" doc:"What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for"`
+		Component *string           `json:"component,omitempty" doc:"Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant)"`
+		Node      *string           `json:"node,omitempty" doc:"Node placement, by name or id"`
+		Params    json.RawMessage   `json:"params,omitempty" doc:"Address/target settings (jsonb); an attach derives them from the inputs instead"`
+		Driver    *string           `json:"driver,omitempty" doc:"Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions"`
 		Inputs    map[string]string `json:"inputs,omitempty" doc:"The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest"`
 	}
 }
