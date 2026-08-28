@@ -24,6 +24,8 @@ func nodePermissions(node string) *server.Permissions {
 			collection.WorklistSubject(node),
 			collection.HeartbeatSubject(node),
 			collection.TelemetrySubject(node),
+			collection.CommandSubject(node),
+			collection.CommandStatusSubject(node),
 		}},
 		Subscribe: &server.SubjectPermission{Allow: []string{
 			collection.WorklistChangedSubject(node),

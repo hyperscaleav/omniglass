@@ -538,6 +538,10 @@ type Gateway interface {
 	AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error)
 	RecordHeartbeat(ctx context.Context, name string) error
 	NodeWorklist(ctx context.Context, name string) (Worklist, error)
+	// The command wire (#815): a node's pending queue, resolved and rendered,
+	// and its execution reports.
+	PendingNodeCommands(ctx context.Context, name string) ([]CommandDelivery, error)
+	RecordCommandExecution(ctx context.Context, name string, commandID int64, execErr string) error
 	// ResolveTaskOwner binds a task's owner component and confines the node to its
 	// own tasks, for the telemetry ingest consumer.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error)

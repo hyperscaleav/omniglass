@@ -128,7 +128,49 @@ func (s *Server) subscribe() error {
 	if err != nil {
 		return fmt.Errorf("bus: subscribe heartbeat: %w", err)
 	}
-	s.subs = append(s.subs, wl, hb)
+
+	// The command queue pull (#815): request-reply like the worklist, same
+	// reply-inbox confinement, the reply the node's rendered pending commands
+	// (the pull itself marks them dispatched).
+	cq, err := nc.Subscribe(collection.CommandWildcard, func(msg *nats.Msg) {
+		node := collection.NodeFromSubject(msg.Subject)
+		if msg.Reply == "" || !strings.HasPrefix(msg.Reply, collection.InboxPrefix(node)+".") {
+			return
+		}
+		pending, err := s.store.PendingNodeCommands(context.Background(), node)
+		if err != nil {
+			return // read failed; drop, the node re-pulls next tick
+		}
+		reply := collection.CommandPullReply{}
+		for _, d := range pending {
+			reply.Commands = append(reply.Commands, collection.CommandDelivery{
+				ID: d.ID, CommandType: d.CommandType, Transport: d.Transport, Target: d.Target, Line: d.Line,
+			})
+		}
+		b, err := json.Marshal(reply)
+		if err != nil {
+			return
+		}
+		_ = msg.Respond(b)
+	})
+	if err != nil {
+		return fmt.Errorf("bus: subscribe command queue: %w", err)
+	}
+
+	// The execution report sink: the subject grant trusts the node name, and
+	// the store re-checks the placement before stamping.
+	cs, err := nc.Subscribe(collection.CommandStatusWildcard, func(msg *nats.Msg) {
+		node := collection.NodeFromSubject(msg.Subject)
+		var st collection.CommandStatus
+		if err := json.Unmarshal(msg.Data, &st); err != nil {
+			return
+		}
+		_ = s.store.RecordCommandExecution(context.Background(), node, st.ID, st.Error)
+	})
+	if err != nil {
+		return fmt.Errorf("bus: subscribe command status: %w", err)
+	}
+	s.subs = append(s.subs, wl, hb, cq, cs)
 
 	// The telemetry ingest path: a JetStream stream + durable consumer over the
 	// same internal client. It carries the node -> server sample flow.

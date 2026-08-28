@@ -268,3 +268,39 @@ func TestCollectDriverTask(t *testing.T) {
 		t.Fatalf("missing credential: faults %v", faults)
 	}
 }
+
+// lineRecorder records the lines an actuation sends and answers each one.
+type lineRecorder struct {
+	sent []string
+	err  error
+}
+
+func (l *lineRecorder) Exchange(_ context.Context, _, line string, _ time.Duration) (string, error) {
+	if l.err != nil {
+		return "", l.err
+	}
+	l.sent = append(l.sent, line)
+	return "OK", nil
+}
+
+// TestExecuteDelivery pins the actuation contract (#815): a rendered line goes
+// to the device once, any answer counts as actuated (settlement judges the
+// outcome), and a transport with no actuator is a failure story, not a panic.
+func TestExecuteDelivery(t *testing.T) {
+	rec := &lineRecorder{}
+	runner := &collection.Runner{Line: rec}
+	d := collection.CommandDelivery{ID: 7, CommandType: "set-input", Transport: "tcp", Target: "10.0.0.5:4998", Line: "SET INPUT hdmi-2"}
+	if out := executeDelivery(t.Context(), runner, d); out != "" {
+		t.Fatalf("actuation failed: %s", out)
+	}
+	if len(rec.sent) != 1 || rec.sent[0] != "SET INPUT hdmi-2" {
+		t.Fatalf("device saw %v", rec.sent)
+	}
+	if out := executeDelivery(t.Context(), runner, collection.CommandDelivery{ID: 8, Transport: "snmp"}); out == "" {
+		t.Fatal("an unactuatable transport reported success")
+	}
+	rec.err = context.DeadlineExceeded
+	if out := executeDelivery(t.Context(), runner, d); out == "" {
+		t.Fatal("a dead device reported success")
+	}
+}

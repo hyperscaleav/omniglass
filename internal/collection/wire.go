@@ -17,6 +17,10 @@ const (
 	// (single-token node wildcard), so a node name is always one subject token.
 	WorklistWildcard  = subjectPrefix + "worklist.*"
 	HeartbeatWildcard = subjectPrefix + "heartbeat.*"
+	// CommandWildcard / CommandStatusWildcard are the server-side subscriptions
+	// for the command queue pull and the execution reports (#815).
+	CommandWildcard       = subjectPrefix + "command.*"
+	CommandStatusWildcard = subjectPrefix + "commandstatus.*"
 	// TelemetryWildcard is the server-side JetStream stream subject: every node's
 	// telemetry publish (single-token node wildcard), mirroring WorklistWildcard.
 	TelemetryWildcard = subjectPrefix + "telemetry.*"
@@ -47,6 +51,14 @@ func TelemetrySubject(node string) string { return subjectPrefix + "telemetry." 
 // WorklistChangedSubject is reserved: the server publishes here to nudge a node
 // to re-pull when its config generation advances.
 func WorklistChangedSubject(node string) string { return subjectPrefix + "worklist-changed." + node }
+
+// CommandSubject is where a node pulls its pending command queue (#815), a
+// request-reply mirroring the worklist: the reply is the commands resolved and
+// rendered for this node, marked dispatched by the pull itself.
+func CommandSubject(node string) string { return subjectPrefix + "command." + node }
+
+// CommandStatusSubject is where a node reports a command's execution outcome.
+func CommandStatusSubject(node string) string { return subjectPrefix + "commandstatus." + node }
 
 // InboxPrefix is a node's private request-reply inbox namespace, so a node's
 // subscribe grant covers only its own reply inboxes, never another node's.
@@ -88,4 +100,27 @@ type WorklistReply struct {
 type Heartbeat struct {
 	Node string    `json:"node"`
 	At   time.Time `json:"at"`
+}
+
+// CommandDelivery is one command rendered for a node's queue (#815): what to
+// send (the rendered line), over which transport, to which target.
+type CommandDelivery struct {
+	ID          int64  `json:"id"`
+	CommandType string `json:"command_type"`
+	Transport   string `json:"transport"`
+	Target      string `json:"target"`
+	Line        string `json:"line,omitempty"`
+}
+
+// CommandPullReply is the server's response to a command queue pull.
+type CommandPullReply struct {
+	Commands []CommandDelivery `json:"commands"`
+}
+
+// CommandStatus is a node's execution report for one command: an empty Error
+// is a successful actuation. Settlement stays the server's separate judgment
+// of observed against intended.
+type CommandStatus struct {
+	ID    int64  `json:"id"`
+	Error string `json:"error,omitempty"`
 }

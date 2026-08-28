@@ -448,6 +448,12 @@ func (UnimplementedGateway) RecordHeartbeat(context.Context, string) error { ret
 func (UnimplementedGateway) NodeWorklist(context.Context, string) (Worklist, error) {
 	return Worklist{}, nil
 }
+func (UnimplementedGateway) PendingNodeCommands(context.Context, string) ([]CommandDelivery, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) RecordCommandExecution(context.Context, string, int64, string) error {
+	return nil
+}
 func (UnimplementedGateway) ResolveTaskOwner(context.Context, string, string) (TaskOwner, bool, error) {
 	return TaskOwner{}, false, nil
 }

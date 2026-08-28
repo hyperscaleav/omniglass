@@ -119,9 +119,14 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		return collection.WorklistReply{}, err
 	}
 	logger.Info("worklist pulled", "facility", "collection", "tasks", len(wl.Tasks))
+	// executedCommands remembers each pulled command's outcome for the life of
+	// the run: at-least-once delivery means redelivery, and idempotence per
+	// command id lives here (the report repeats, the device is not touched twice).
+	executedCommands := map[int64]string{}
 	if err := runTasks(ctx, nc, cfg.Name, wl, runner, verdicts); err != nil {
 		return wl, err
 	}
+	runCommands(ctx, nc, cfg.Name, runner, executedCommands)
 	if err := publishHeartbeat(nc, cfg.Name); err != nil {
 		return wl, err
 	}
@@ -153,6 +158,8 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			// Run the worklist's tcp tasks and publish their telemetry. A publish
 			// failure is non-fatal (retry next tick).
 			_ = runTasks(ctx, nc, cfg.Name, wl, runner, verdicts)
+			// Pull and actuate the pending command queue (#815).
+			runCommands(ctx, nc, cfg.Name, runner, executedCommands)
 			// Ship whatever the node logged this tick as self-logs.
 			publishSelfLogs(nc, cfg.Name, sink)
 		}
