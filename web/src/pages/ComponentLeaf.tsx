@@ -353,7 +353,7 @@ export default function ComponentLeaf() {
             </Show>
             <section data-testid="leaf-collection" class="rounded-box border border-base-300 bg-base-100 p-3.5 text-sm">
               <h2 class="eyebrow">Collection</h2>
-              <Show when={reach.data && (reach.data.endpoints ?? []).length > 0} fallback={<p class="text-base-content/60">No interface declared yet, so nothing collects from this component.</p>}>
+              <Show when={reach.data && (reach.data.endpoints ?? []).length > 0} fallback={<p class="text-base-content/60">No endpoint declared yet, so nothing collects from this component.</p>}>
                 <ul class="flex flex-col gap-1">
                   <For each={reach.data!.endpoints}>
                     {(iface) => {
