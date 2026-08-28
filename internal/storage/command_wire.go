@@ -1,8 +1,10 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -47,20 +49,35 @@ type CommandDelivery struct {
 // is skipped with its execution error recorded, so it stops being redelivered
 // and the fault is visible on the row.
 func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDelivery, error) {
+	// Pick ONE actuating endpoint per command, globally: only an endpoint whose
+	// driver spec binds the command's type is a candidate (the jsonb_path_exists
+	// predicate), so the distinct-on can never collapse to a non-binding
+	// endpoint, and the same binding endpoint is chosen deterministically on
+	// every pull. The node filter is applied to that chosen endpoint, so a
+	// command is delivered to exactly one node (never once per node), which is
+	// what makes the render-fault terminal stamp below correct: there is no
+	// other endpoint that would have rendered it differently.
 	rows, err := p.pool.Query(ctx, `
-		select distinct on (c.id) c.id, ct.name, c.params, i.transport, i.params, d.spec,
-			(select pr.value from property pr where pr.command_id = c.id and pr.provenance = 'intended' order by pr.ts desc limit 1),
-			(select m.value from metric m where m.command_id = c.id and m.provenance = 'intended' order by m.ts desc limit 1)
-		from command c
-		join command_type ct on ct.id = c.command_type_id
-		join endpoint i on i.component = c.component_id and i.driver_id is not null
-		join driver d on d.id = i.driver_id
-		where c.owner_kind = 'component'
-		  and c.executed_at is null
-		  and (c.dispatched_at is null or c.dispatched_at < now() - interval '`+redeliverAfter+`')
-		  and c.ts > now() - interval '`+deliveryTTL+`'
-		  and i.node_name = (select principal_id from node where name = $1)
-		order by c.id, i.name`, node)
+		with candidate as (
+			select distinct on (c.id)
+				c.id, ct.name as command_type, c.params, i.id as endpoint_id, i.transport,
+				i.params as endpoint_params, i.node_name, d.spec,
+				(select pr.value from property pr where pr.command_id = c.id and pr.provenance = 'intended' order by pr.ts desc limit 1) as intended_prop,
+				(select m.value from metric m where m.command_id = c.id and m.provenance = 'intended' order by m.ts desc limit 1) as intended_metric
+			from command c
+			join command_type ct on ct.id = c.command_type_id
+			join endpoint i on i.component = c.component_id and i.driver_id is not null
+			join driver d on d.id = i.driver_id
+			where c.owner_kind = 'component'
+			  and c.executed_at is null
+			  and (c.dispatched_at is null or c.dispatched_at < now() - interval '`+redeliverAfter+`')
+			  and c.ts > now() - interval '`+deliveryTTL+`'
+			  and jsonb_path_exists(d.spec, '$.commands[*] ? (@.command_type == $ct)', jsonb_build_object('ct', ct.name))
+			order by c.id, i.name
+		)
+		select id, command_type, params, endpoint_id, transport, endpoint_params, spec, intended_prop, intended_metric
+		from candidate
+		where node_name = (select principal_id from node where name = $1)`, node)
 	if err != nil {
 		return nil, fmt.Errorf("storage: pending commands for %q: %w", node, err)
 	}
@@ -70,6 +87,7 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 		id             int64
 		commandType    string
 		params         []byte
+		endpointID     string
 		transport      string
 		endpointParams []byte
 		spec           []byte
@@ -79,7 +97,7 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 	var pending []pendingRow
 	for rows.Next() {
 		var r pendingRow
-		if err := rows.Scan(&r.id, &r.commandType, &r.params, &r.transport, &r.endpointParams, &r.spec, &r.intendedProp, &r.intendedMetric); err != nil {
+		if err := rows.Scan(&r.id, &r.commandType, &r.params, &r.endpointID, &r.transport, &r.endpointParams, &r.spec, &r.intendedProp, &r.intendedMetric); err != nil {
 			return nil, fmt.Errorf("storage: scan pending command: %w", err)
 		}
 		pending = append(pending, r)
@@ -88,8 +106,12 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 		return nil, fmt.Errorf("storage: pending commands for %q: %w", node, err)
 	}
 
+	type dispatch struct {
+		id         int64
+		endpointID string
+	}
 	var out []CommandDelivery
-	var delivered []int64
+	var delivered []dispatch
 	for _, r := range pending {
 		sp, err := driver.Parse(r.spec)
 		if err != nil {
@@ -103,14 +125,15 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			}
 		}
 		if binding == nil {
-			continue // this driver does not actuate this command type
+			continue // the jsonb predicate already ensured this, defensively kept
 		}
 		req, err := driver.RenderRequest(binding.Request, intendedString(r.intendedProp, r.intendedMetric), paramsMap(r.params))
 		if err != nil {
-			// An unrenderable binding is terminal, not retryable: record it as
-			// the execution error so the row stops being redelivered and the
-			// fault is visible where the operator looks.
-			if _, uerr := p.pool.Exec(ctx, `update command set executed_at = now(), exec_error = $2 where id = $1 and executed_at is null`, r.id, err.Error()); uerr != nil {
+			// An unrenderable binding is terminal, not retryable, and there is
+			// exactly one delivery endpoint per command, so recording the fault
+			// on the row (which stops redelivery and shows the operator the
+			// cause) cannot strand a delivery another endpoint would have made.
+			if _, uerr := p.pool.Exec(ctx, `update command set executed_at = now(), exec_error = $2, dispatched_endpoint_id = $3 where id = $1 and executed_at is null`, r.id, err.Error(), r.endpointID); uerr != nil {
 				return nil, fmt.Errorf("storage: record render fault for command %d: %w", r.id, uerr)
 			}
 			continue
@@ -122,35 +145,48 @@ func (p *PG) PendingNodeCommands(ctx context.Context, node string) ([]CommandDel
 			Target:      targetOf(r.endpointParams),
 			Line:        req.Line,
 		})
-		delivered = append(delivered, r.id)
+		delivered = append(delivered, dispatch{r.id, r.endpointID})
 	}
-	if len(delivered) > 0 {
-		if _, err := p.pool.Exec(ctx, `update command set dispatched_at = now() where id = any($1)`, delivered); err != nil {
-			return nil, fmt.Errorf("storage: mark commands dispatched: %w", err)
+	for _, d := range delivered {
+		if _, err := p.pool.Exec(ctx, `update command set dispatched_at = now(), dispatched_endpoint_id = $2 where id = $1`, d.id, d.endpointID); err != nil {
+			return nil, fmt.Errorf("storage: mark command %d dispatched: %w", d.id, err)
 		}
 	}
 	return out, nil
 }
 
 // RecordCommandExecution stamps a node's execution report, once: a redelivered
-// report is a no-op, and only the node the command's endpoint is placed on may
-// stamp it (the same confinement the worklist carries).
+// report is a no-op, and only the node the command's DISPATCHED endpoint is
+// placed on may stamp it. Confining on the dispatched endpoint (not merely on
+// any endpoint of the command's component) is what keeps a second node that
+// happens to hold an unrelated endpoint on the same component from stamping a
+// command it never received. An update that matches no row (a report for a
+// command dispatched to a different node, or already stamped) is ErrCommandNotDispatchedHere,
+// which the bus logs rather than silently dropping.
 func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID int64, execErr string) error {
 	tag, err := p.pool.Exec(ctx, `
 		update command c set executed_at = now(), exec_error = nullif($3, '')
 		where c.id = $1
 		  and c.executed_at is null
+		  and c.dispatched_endpoint_id is not null
 		  and exists (
 			select 1 from endpoint i
-			where i.component = c.component_id
+			where i.id = c.dispatched_endpoint_id
 			  and i.node_name = (select principal_id from node where name = $2))`,
 		commandID, node, execErr)
 	if err != nil {
 		return fmt.Errorf("storage: record execution of command %d: %w", commandID, err)
 	}
-	_ = tag
+	if tag.RowsAffected() == 0 {
+		return ErrCommandNotDispatchedHere
+	}
 	return nil
 }
+
+// ErrCommandNotDispatchedHere marks an execution report a node had no standing
+// to make: the command was not dispatched to an endpoint on that node, or was
+// already stamped. The bus logs it; it is never a silent drop.
+var ErrCommandNotDispatchedHere = errors.New("storage: command not dispatched to this node")
 
 // intendedString renders a command's intended value for the request template:
 // the property arm's jsonb unquoted, or the metric arm's number.
@@ -168,13 +204,17 @@ func intendedString(prop []byte, metric *float64) string {
 	return ""
 }
 
-// paramsMap decodes a command's params for template args; nil on none.
+// paramsMap decodes a command's params for template args; nil on none. Numbers
+// decode as json.Number (via UseNumber), so a preset like 1000000 renders as
+// "1000000" rather than float64 "%v"'s "1e+06" when substituted into a request.
 func paramsMap(raw []byte) map[string]any {
 	if len(raw) == 0 {
 		return nil
 	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
 	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
+	if err := dec.Decode(&m); err != nil {
 		return nil
 	}
 	return m

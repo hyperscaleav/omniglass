@@ -375,7 +375,7 @@ func (p *PG) RecordHeartbeat(ctx context.Context, name string) error {
 // worklist subject. An unknown node returns an empty worklist, not an error.
 func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	rows, err := p.pool.Query(ctx, `
-		select t.id, t.mode, i.name, i.transport, i.params, t.spec, i.inputs, d.spec
+		select t.id, t.mode, i.name, i.transport, i.params, t.spec, i.inputs, i.component, d.spec
 		from task t
 		join endpoint i on i.id = t.endpoint_id
 		left join driver d on d.id = i.driver_id
@@ -386,12 +386,13 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	}
 	defer rows.Close()
 	var wl Worklist
-	type secretRef struct{ input, ref string }
+	type secretRef struct{ input, ref, componentID string }
 	pending := map[int][]secretRef{} // task index -> the secret inputs to unseal
 	for rows.Next() {
 		var wt WorklistTask
 		var epInputs, driverSpec []byte
-		if err := rows.Scan(&wt.ID, &wt.Mode, &wt.EndpointName, &wt.Transport, &wt.EndpointParams, &wt.Spec, &epInputs, &driverSpec); err != nil {
+		var componentID *string
+		if err := rows.Scan(&wt.ID, &wt.Mode, &wt.EndpointName, &wt.Transport, &wt.EndpointParams, &wt.Spec, &epInputs, &componentID, &driverSpec); err != nil {
 			return Worklist{}, fmt.Errorf("storage: scan worklist task: %w", err)
 		}
 		// A driver task's secret inputs travel with it: the spec says which
@@ -403,8 +404,12 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 			if err != nil {
 				return Worklist{}, fmt.Errorf("storage: node worklist %q task %s: %w", name, wt.ID, err)
 			}
+			cid := ""
+			if componentID != nil {
+				cid = *componentID
+			}
 			for input, ref := range refs {
-				pending[len(wl.Tasks)] = append(pending[len(wl.Tasks)], secretRef{input, ref})
+				pending[len(wl.Tasks)] = append(pending[len(wl.Tasks)], secretRef{input, ref, cid})
 			}
 		}
 		wl.Tasks = append(wl.Tasks, wt)
@@ -412,21 +417,26 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	if err := rows.Err(); err != nil {
 		return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
 	}
-	// Unseal after the row scan (one connection at a time), caching by
-	// reference so two tasks sharing a credential unseal it once. A reference
-	// that no longer resolves is delivered as absence: the node lands a
-	// collection-failed naming the missing credential, which is the visible
-	// story an operator can act on.
+	// Unseal after the row scan (one connection at a time), caching by the
+	// (reference, component) pair so two tasks on one component sharing a
+	// credential unseal it once. Delivery is confined to a secret that CASCADES
+	// ONTO the endpoint's component (platform, an ancestor location or system,
+	// or the component itself): the attach scoped the reference to the operator,
+	// and this re-check keeps a rename or a name collision from drifting a node
+	// onto a secret its component does not own. A reference that resolves to
+	// nothing deliverable is delivered as absence: the node lands a
+	// collection-failed naming the missing credential.
 	unsealed := map[string]map[string]string{}
 	for idx, refs := range pending {
 		for _, r := range refs {
-			fields, ok := unsealed[r.ref]
+			key := r.ref + "\x00" + r.componentID
+			fields, ok := unsealed[key]
 			if !ok {
-				f, err := p.nodeSecretFields(ctx, r.ref)
+				f, err := p.nodeSecretFields(ctx, r.ref, r.componentID)
 				if err != nil {
 					continue
 				}
-				fields, unsealed[r.ref] = f, f
+				fields, unsealed[key] = f, f
 			}
 			if wl.Tasks[idx].Secrets == nil {
 				wl.Tasks[idx].Secrets = map[string]map[string]string{}

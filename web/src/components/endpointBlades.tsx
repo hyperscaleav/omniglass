@@ -120,7 +120,7 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
   async function removeEndpoint() {
     const iface = i();
     if (!iface) return;
-    if (!confirm(`Delete endpoint "${iface.label || iface.name}"?`)) return;
+    if (!confirm(`Delete endpoint "${entityLabel(iface)}"?`)) return;
     setErr(null);
     try {
       await deleteEndpoint(iface.id);
@@ -140,7 +140,10 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
     // unchanged: the API has no clear-placement, so an empty node would FK-fault (422).
     const patch: UpdateEndpoint = {};
     if (node() && node() !== (iface.node ?? "")) patch.node = node();
-    if (target() && target() !== endpointTarget(iface)) patch.params = { target: target().trim() };
+    // A driver-attached endpoint's target is derived, and the server refuses a
+    // params patch on it; the editor above is read-only for one, so this only
+    // ever fires for a bare probe endpoint.
+    if (!iface.driver && target() && target() !== endpointTarget(iface)) patch.params = { target: target().trim() };
     // The label is sent whenever it differs, including when it is now empty:
     // clearing one is an instruction, not an omission.
     if (label() !== (iface.label ?? "")) patch.label = label();
@@ -200,10 +203,26 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
                 <label class="eyebrow mb-1.5 block" for="edit-iface-node">Node</label>
                 <NodeSelect id="edit-iface-node" value={node()} onChange={setNode} />
               </div>
-              <div>
-                <label class="eyebrow mb-1.5 block" for="edit-iface-target">Target</label>
-                <input id="edit-iface-target" autocomplete="off" class="input input-bordered w-full font-data" value={target()} placeholder="10.0.0.1:22" onInput={(e) => setTarget(e.currentTarget.value)} />
-              </div>
+              {/* A driver-attached endpoint's target is DERIVED from its inputs
+                  (the host and port the attach resolved), not an operator fact,
+                  and the credential rides to the placed node; editing it here
+                  would desync the address from the inputs, so it is read-only
+                  for an attachment (re-attach to change it). */}
+              <Show
+                when={!iface().driver}
+                fallback={
+                  <div>
+                    <span class="eyebrow mb-1.5 block">Target</span>
+                    <div class="input input-bordered flex w-full items-center font-data text-sm text-base-content/60">{endpointTarget(iface()) || "derived from inputs"}</div>
+                    <p class="mt-1 text-[11px] text-base-content/40">Derived from the driver's inputs. Re-attach the driver to change it.</p>
+                  </div>
+                }
+              >
+                <div>
+                  <label class="eyebrow mb-1.5 block" for="edit-iface-target">Target</label>
+                  <input id="edit-iface-target" autocomplete="off" class="input input-bordered w-full font-data" value={target()} placeholder="10.0.0.1:22" onInput={(e) => setTarget(e.currentTarget.value)} />
+                </div>
+              </Show>
             </div>
           </Show>
         </div>
@@ -241,7 +260,7 @@ function EndpointCreateBody(props: { component: string }): JSX.Element {
 // `component` is set the endpoint always belongs to it, so the form pre-sets that
 // component and hides the picker. On success it invalidates the list and hands the
 // created endpoint to onCreated, which opens its detail blade.
-function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; component?: string }) {
+export function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; component?: string }) {
   const qc = useQueryClient();
   // Always fetched (not gated on `!props.component`): a preset component still
   // needs this list to resolve its uuid to a readable label below. The
@@ -290,6 +309,10 @@ function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; component
   });
 
   async function submit() {
+    // The footer button is disabled without a driver in attach mode, but the
+    // form's implicit submission (Enter in the single label field) bypasses the
+    // footer, so the guard lives here too.
+    if (mode() === "attach" && !driverName()) return;
     setBusy(true);
     setErr(null);
     try {
@@ -336,8 +359,8 @@ function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; component
         {/* Probe first: it is what exists end to end today. Attach derives the
             endpoint from a driver's spec (#813); its collection engine lands
             with the following slices. */}
-        <button type="button" role="tab" class="tab" classList={{ "tab-active": mode() === "probe" }} onClick={() => setMode("probe")}>Probe</button>
-        <button type="button" role="tab" class="tab" classList={{ "tab-active": mode() === "attach" }} onClick={() => setMode("attach")}>Attach a driver</button>
+        <button type="button" role="tab" aria-selected={mode() === "probe" ? "true" : "false"} class="tab" classList={{ "tab-active": mode() === "probe" }} onClick={() => setMode("probe")}>Probe</button>
+        <button type="button" role="tab" aria-selected={mode() === "attach" ? "true" : "false"} class="tab" classList={{ "tab-active": mode() === "attach" }} onClick={() => setMode("attach")}>Attach a driver</button>
       </div>
       <Show when={mode() === "probe"}>
         <div>

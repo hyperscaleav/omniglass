@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"time"
@@ -20,6 +21,10 @@ type LineExchanger interface {
 	Exchange(ctx context.Context, target, line string, timeout time.Duration) (string, error)
 }
 
+// maxLineAnswer bounds one answer line so a device that never terminates cannot
+// exhaust the node.
+const maxLineAnswer = 64 * 1024
+
 // NewLineExchanger returns the real dialer-backed exchanger.
 func NewLineExchanger() LineExchanger { return &lineExchanger{} }
 
@@ -35,12 +40,22 @@ func (e *lineExchanger) Exchange(ctx context.Context, target, line string, timeo
 		return "", fmt.Errorf("collection: line dial %s: %w", target, err)
 	}
 	defer func() { _ = conn.Close() }()
-	_ = conn.SetDeadline(time.Now().Add(timeout))
+	deadline := time.Now().Add(timeout)
+	if dl, ok := ctx.Deadline(); ok && dl.Before(deadline) {
+		deadline = dl
+	}
+	_ = conn.SetDeadline(deadline)
 	if _, err := fmt.Fprintf(conn, "%s\r\n", line); err != nil {
 		return "", fmt.Errorf("collection: line send %s: %w", target, err)
 	}
-	answer, err := bufio.NewReader(conn).ReadString('\n')
+	// Bound the answer: a device that never sends a newline would otherwise let
+	// the read grow until the deadline (hundreds of MB on a fast LAN), and the
+	// node is the whole collection agent for its placement.
+	answer, err := bufio.NewReader(io.LimitReader(conn, maxLineAnswer)).ReadString('\n')
 	if err != nil {
+		if len(answer) >= maxLineAnswer {
+			return "", fmt.Errorf("collection: line read %s: answer exceeded %d bytes with no terminator", target, maxLineAnswer)
+		}
 		return "", fmt.Errorf("collection: line read %s: %w", target, err)
 	}
 	return strings.TrimRight(answer, "\r\n"), nil

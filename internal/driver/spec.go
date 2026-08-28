@@ -218,6 +218,13 @@ func (s *Spec) Validate(cat Catalog) error {
 		if p.Request.Empty() {
 			return fmt.Errorf("driver: poll %q has an empty request", p.Name)
 		}
+		// The request and its extractors must fit the transport, so a spec that
+		// cannot be interpreted (an snmp poll with no OIDs, a poll on a
+		// transport with no wired fetcher) refuses at authoring time rather
+		// than faulting on every tick forever (ADR-0135).
+		if err := checkPollShape(s.Transport, p); err != nil {
+			return err
+		}
 		if err := validateEmits("poll", p.Name, p.Emits, cat); err != nil {
 			return err
 		}
@@ -252,6 +259,15 @@ func (s *Spec) Validate(cat Catalog) error {
 		}
 		if c.Request.Empty() {
 			return fmt.Errorf("driver: command binding %q has an empty request", c.CommandType)
+		}
+		// Only the line-protocol actuation wire exists today, so a binding on a
+		// transport it cannot reach refuses at write rather than dispatching a
+		// request no node can send.
+		if s.Transport != "tcp" {
+			return fmt.Errorf("driver: command binding %q rides transport %q, which has no actuation wire (only tcp actuates today)", c.CommandType, s.Transport)
+		}
+		if c.Request.Line == "" {
+			return fmt.Errorf("driver: command binding %q on tcp needs a line request", c.CommandType)
 		}
 		// Template references are checked at write: only ${value} (the
 		// intended value) and ${arg.key} (an issue param) render, so a typo
@@ -319,6 +335,31 @@ func validateTransform(fn, name string, tr Transform) error {
 	case "", "int", "float", "text":
 	default:
 		return fmt.Errorf("driver: %s emit %q has unknown cast %q", fn, name, tr.Cast)
+	}
+	return nil
+}
+
+// checkPollShape binds a poll's request and extractors to the transport it
+// rides, so an uninterpretable combination refuses at write. Only snmp and tcp
+// have wired poll fetchers today (internal/collection); a poll on any other
+// transport refuses rather than faulting every tick.
+func checkPollShape(tr string, p Poll) error {
+	switch tr {
+	case "snmp":
+		if len(p.Request.Get) == 0 {
+			return fmt.Errorf("driver: snmp poll %q needs a get request (the scalar OIDs to read)", p.Name)
+		}
+		for _, em := range p.Emits {
+			if em.Extract.OID == "" {
+				return fmt.Errorf("driver: snmp poll %q emit %q must locate by oid", p.Name, em.Name)
+			}
+		}
+	case "tcp":
+		if p.Request.Line == "" {
+			return fmt.Errorf("driver: tcp poll %q needs a line request", p.Name)
+		}
+	default:
+		return fmt.Errorf("driver: poll %q rides transport %q, which has no poll fetcher (only snmp and tcp poll today)", p.Name, tr)
 	}
 	return nil
 }

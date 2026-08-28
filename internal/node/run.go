@@ -113,6 +113,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// ticks, so the node emits endpoint-reachable only on a flip or first
 	// observation (transition-only). It lives for the whole run, not per tick.
 	verdicts := map[string]string{}
+	// faultseen remembers each driver task's last fault set so a static
+	// misconfiguration lands one collection-failed, not one per tick (#814).
+	faultseen := map[string]string{}
 
 	wl, err := pullWorklist(nc, cfg.Name)
 	if err != nil {
@@ -123,7 +126,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	// the run: at-least-once delivery means redelivery, and idempotence per
 	// command id lives here (the report repeats, the device is not touched twice).
 	executedCommands := map[int64]string{}
-	if err := runTasks(ctx, nc, cfg.Name, wl, runner, verdicts); err != nil {
+	if err := runTasks(ctx, nc, cfg.Name, wl, runner, verdicts, faultseen); err != nil {
 		return wl, err
 	}
 	runCommands(ctx, nc, cfg.Name, runner, executedCommands)
@@ -157,7 +160,7 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			}
 			// Run the worklist's tcp tasks and publish their telemetry. A publish
 			// failure is non-fatal (retry next tick).
-			_ = runTasks(ctx, nc, cfg.Name, wl, runner, verdicts)
+			_ = runTasks(ctx, nc, cfg.Name, wl, runner, verdicts, faultseen)
 			// Pull and actuate the pending command queue (#815).
 			runCommands(ctx, nc, cfg.Name, runner, executedCommands)
 			// Ship whatever the node logged this tick as self-logs.

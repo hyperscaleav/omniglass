@@ -157,9 +157,11 @@ func TestAttachDriverAuthorsTheEndpointAndDerivesTasks(t *testing.T) {
 	// Attaching with inputs (host; community from a secret) derives everything:
 	// no transport typed, no tasks authored.
 	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
-		Driver:    &drv,
-		Component: &comp,
-		Inputs:    map[string]string{"host": "10.20.4.40", "community": "lab-community"},
+		Driver:     &drv,
+		Component:  &comp,
+		Inputs:     map[string]string{"host": "10.20.4.40", "community": "lab-community"},
+		SecretRead: all,
+		CanAdmin:   true,
 	}, all)
 	if err != nil {
 		t.Fatalf("attach: %v", err)
@@ -230,7 +232,8 @@ func TestAttachDriverAuthorsTheEndpointAndDerivesTasks(t *testing.T) {
 	// the same driver on the same component is the usual one-per-transport 409.
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp,
-		Inputs: map[string]string{"host": "10.20.4.40", "community": "lab-community"},
+		Inputs:     map[string]string{"host": "10.20.4.40", "community": "lab-community"},
+		SecretRead: all, CanAdmin: true,
 	}, all); !errors.Is(err, storage.ErrEndpointExists) {
 		t.Fatalf("second attach: err = %v, want ErrEndpointExists", err)
 	}
@@ -322,6 +325,7 @@ func TestAttachDriverRefusals(t *testing.T) {
 	attach := func(inputs map[string]string) error {
 		_, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 			Driver: &drv, Component: &comp, Inputs: inputs,
+			SecretRead: all, CanAdmin: true,
 		}, all)
 		return err
 	}
@@ -333,7 +337,7 @@ func TestAttachDriverRefusals(t *testing.T) {
 	}{
 		{"missing required input", map[string]string{"community": "lab-community"}, "host"},
 		{"input the spec does not declare", map[string]string{"host": "h", "community": "lab-community", "warp": "9"}, "warp"},
-		{"secret reference to a missing row", map[string]string{"host": "h", "community": "no-such-secret"}, "no-such-secret"},
+		{"secret reference to a missing row", map[string]string{"host": "h", "community": "no-such-secret"}, "does not exist or is not yours"},
 		{"secret reference of the wrong shape", map[string]string{"host": "h", "community": "wrong-shape"}, "snmp-community"},
 	}
 	for _, tc := range cases {
@@ -362,7 +366,7 @@ func TestAttachDriverRefusals(t *testing.T) {
 	}, all, true); err != nil {
 		t.Fatalf("create dup-secret 2: %v", err)
 	}
-	if err := attach(map[string]string{"host": "h", "community": "dup-secret"}); !errors.Is(err, storage.ErrAttachInvalid) || !strings.Contains(err.Error(), "more than one") {
+	if err := attach(map[string]string{"host": "h", "community": "dup-secret"}); !errors.Is(err, storage.ErrAttachInvalid) || !strings.Contains(err.Error(), "more than one secret you can use") {
 		t.Fatalf("ambiguous secret reference: err = %v, want ErrAttachInvalid naming the collision", err)
 	}
 
@@ -387,6 +391,7 @@ func TestAttachDriverRefusals(t *testing.T) {
 	_ = tr
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Transport: "tcp", Component: &comp, Inputs: map[string]string{"host": "h", "community": "lab-community"},
+		SecretRead: all, CanAdmin: true,
 	}, all); !errors.Is(err, storage.ErrAttachInvalid) {
 		t.Fatalf("driver+transport: err = %v, want ErrAttachInvalid", err)
 	}
@@ -431,7 +436,8 @@ func TestNodeWorklistDeliversSecretInputs(t *testing.T) {
 	comp, drv, node := "amp-3", "snmp-scalar", "edge-3"
 	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
 		Driver: &drv, Component: &comp, Node: &node,
-		Inputs: map[string]string{"host": "10.20.4.40", "community": "lab-community"},
+		Inputs:     map[string]string{"host": "10.20.4.40", "community": "lab-community"},
+		SecretRead: all, CanAdmin: true,
 	}, all); err != nil {
 		t.Fatalf("attach: %v", err)
 	}
@@ -562,9 +568,11 @@ func TestCommandWireDelivery(t *testing.T) {
 		t.Fatalf("immediate re-pull = %v (err %v), want empty", again, err)
 	}
 
-	// Another node cannot stamp the execution; the placed node can, once.
-	if err := gw.RecordCommandExecution(ctx, "edge-idle", cmd.ID, ""); err != nil {
-		t.Fatalf("record from wrong node: %v", err)
+	// Another node cannot stamp the execution: a report from a node the command
+	// was not dispatched to is rejected (not a silent no-op), so a stray or
+	// forged status cannot close a command a different node owns.
+	if err := gw.RecordCommandExecution(ctx, "edge-idle", cmd.ID, ""); !errors.Is(err, storage.ErrCommandNotDispatchedHere) {
+		t.Fatalf("record from wrong node: err = %v, want ErrCommandNotDispatchedHere", err)
 	}
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -589,8 +597,8 @@ func TestCommandWireDelivery(t *testing.T) {
 		t.Fatal("execution not stamped")
 	}
 	first := *executed
-	if err := gw.RecordCommandExecution(ctx, "edge-9", cmd.ID, "late duplicate"); err != nil {
-		t.Fatalf("re-record: %v", err)
+	if err := gw.RecordCommandExecution(ctx, "edge-9", cmd.ID, "late duplicate"); !errors.Is(err, storage.ErrCommandNotDispatchedHere) {
+		t.Fatalf("re-record: err = %v, want ErrCommandNotDispatchedHere (already stamped)", err)
 	}
 	if executed = row(); !executed.Equal(first) {
 		t.Fatal("a redelivered report re-stamped the execution")
@@ -603,5 +611,133 @@ func TestCommandWireDelivery(t *testing.T) {
 	}
 	if got, err := gw.PendingNodeCommands(ctx, "edge-9"); err != nil || len(got) != 0 {
 		t.Fatalf("unbound command delivered: %v (err %v)", got, err)
+	}
+}
+
+// TestAttachScopesSecretReference is the authz regression for the rollup review:
+// an attach may only bind a secret the CALLER could themselves read, so an
+// out-of-scope secret and an admin-sensitive one (without the admin tier) both
+// refuse indistinguishably from an absent one, with no existence-or-type oracle.
+func TestAttachScopesSecretReference(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t), storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "west-amp"}, all, all, all, all); err != nil {
+		t.Fatalf("create west-amp: %v", err)
+	}
+	// A platform community secret (in reach only under an all secret-read scope)
+	// and a platform admin-sensitive one.
+	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+		Name: "east-community", SecretType: "snmp-community", OwnerKind: "platform",
+		Fields: map[string]string{"community": "east-secret"},
+	}, all, true); err != nil {
+		t.Fatalf("create platform secret: %v", err)
+	}
+	adminSensitive := true
+	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+		Name: "priv-community", SecretType: "snmp-community", OwnerKind: "platform",
+		AdminSensitive: &adminSensitive,
+		Fields:         map[string]string{"community": "privileged"},
+	}, all, true); err != nil {
+		t.Fatalf("create admin-sensitive secret: %v", err)
+	}
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "snmp-scalar", Label: "SNMP Scalar", Version: "1.0.0", Spec: []byte(snmpSpec)}); err != nil {
+		t.Fatalf("create driver: %v", err)
+	}
+
+	// An empty secret-read scope admits nothing, standing in for an operator
+	// whose secret reach does not cover this credential.
+	noReach := scope.Set{}
+	comp, drv := "west-amp", "snmp-scalar"
+	attachAs := func(ref string, secretRead scope.Set, canAdmin bool) error {
+		_, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+			Driver: &drv, Component: &comp,
+			Inputs:     map[string]string{"host": "h", "community": ref},
+			SecretRead: secretRead, CanAdmin: canAdmin,
+		}, all)
+		return err
+	}
+
+	// An out-of-scope secret refuses with the SAME message as an absent one:
+	// no existence oracle for the west operator over east's secrets.
+	errOut := attachAs("east-community", noReach, false)
+	errAbsent := attachAs("no-such", noReach, false)
+	if !errors.Is(errOut, storage.ErrAttachInvalid) || !strings.Contains(errOut.Error(), "does not exist or is not yours") {
+		t.Fatalf("out-of-scope secret: err = %v, want the non-disclosing refusal", errOut)
+	}
+	if errOut.Error() != errAbsent.Error() {
+		t.Fatalf("out-of-scope refusal differs from absent (%q vs %q): an oracle", errOut, errAbsent)
+	}
+
+	// An admin-sensitive secret is invisible without the admin tier, and the
+	// refusal never names its type either.
+	if err := attachAs("priv-community", all, false); !errors.Is(err, storage.ErrAttachInvalid) || strings.Contains(err.Error(), "snmp-community") {
+		t.Fatalf("admin-sensitive without tier: err = %v, want the non-disclosing refusal", err)
+	}
+	// With the admin tier it resolves.
+	if err := attachAs("priv-community", all, true); err != nil {
+		t.Fatalf("admin-sensitive with tier: %v", err)
+	}
+}
+
+// TestUpdateEndpointRefusesDriverParams pins the second half of the credential
+// confinement (rollup review): a driver-attached endpoint's params are derived
+// from its inputs, so endpoint:update cannot repoint them (which would send the
+// credential to a target the inputs never named). The re-attach is the write
+// path for its address.
+func TestUpdateEndpointRefusesDriverParams(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	gw, err := storage.NewPG(ctx, storagetest.NewDSN(t), storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "amp-8"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+		Name: "lab-community", SecretType: "snmp-community", OwnerKind: "platform",
+		Fields: map[string]string{"community": "public"},
+	}, all, true); err != nil {
+		t.Fatalf("create secret: %v", err)
+	}
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "snmp-scalar", Label: "SNMP Scalar", Version: "1.0.0", Spec: []byte(snmpSpec)}); err != nil {
+		t.Fatalf("create driver: %v", err)
+	}
+	comp, drv := "amp-8", "snmp-scalar"
+	ep, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+		Driver: &drv, Component: &comp,
+		Inputs:     map[string]string{"host": "10.20.4.40", "community": "lab-community"},
+		SecretRead: all, CanAdmin: true,
+	}, all)
+	if err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+	// A params patch on the attached endpoint refuses.
+	if _, err := gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Params: []byte(`{"target":"attacker:161"}`)}, all, all); !errors.Is(err, storage.ErrEndpointDriverParams) {
+		t.Fatalf("params patch on attached endpoint: err = %v, want ErrEndpointDriverParams", err)
+	}
+	// A label-only patch still works (it moves nothing about the address).
+	label := "Room amp"
+	if _, err := gw.UpdateEndpoint(ctx, "", ep.ID, storage.EndpointPatch{Label: &label}, all, all); err != nil {
+		t.Fatalf("label patch on attached endpoint: %v", err)
 	}
 }

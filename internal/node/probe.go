@@ -35,7 +35,7 @@ type endpointParams struct {
 // never stalls the rest of the worklist. tcp and icmp are the wired probe types;
 // their samples ride the same pipeline (the ingest consumer does not branch
 // on probe type).
-func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, runner *collection.Runner, verdicts map[string]string) error {
+func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, runner *collection.Runner, verdicts map[string]string, faultseen map[string]string) error {
 	for _, task := range wl.Tasks {
 		// A standing listen task is inert until the stateful arc arms
 		// listeners over held sessions (#603 slices 6 and 7): skip without a
@@ -47,13 +47,23 @@ func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.Wor
 		// probes: fetch over the transport, locate and type each emit. Its
 		// faults are per-emit collection-failed stories beside whatever
 		// samples still landed, so a payload missing one value never
-		// silently drops the rest.
+		// silently drops the rest. Faults publish transition-only (like the
+		// reachability verdict): a static misconfiguration that faults every
+		// tick lands one event, not one per tick forever, so a stuck driver
+		// does not flood the event lane.
 		if driver.IsBaked(task.Spec) {
 			dps, faults := collectDriverTask(ctx, runner, task)
+			current := ""
 			for _, f := range faults {
-				slog.Warn("driver poll fault", "facility", "collection", "task", task.ID, "error", f.Error())
-				if pubErr := publishCollectionFailed(nc, node, task.ID, f); pubErr != nil {
-					return pubErr
+				current += f.Error() + "\n"
+			}
+			if current != faultseen[task.ID] {
+				faultseen[task.ID] = current
+				for _, f := range faults {
+					slog.Warn("driver poll fault", "facility", "collection", "task", task.ID, "error", f.Error())
+					if pubErr := publishCollectionFailed(nc, node, task.ID, f); pubErr != nil {
+						return pubErr
+					}
 				}
 			}
 			if len(dps) == 0 {

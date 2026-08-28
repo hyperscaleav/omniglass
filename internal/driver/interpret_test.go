@@ -1,6 +1,7 @@
 package driver_test
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -204,5 +205,61 @@ func TestRenderRequest(t *testing.T) {
 	}
 	if _, err := driver.RenderRequest(driver.Request{Line: "X ${warp.factor}"}, "v", nil); err == nil {
 		t.Fatal("unknown template field rendered")
+	}
+}
+
+func TestRenderRequestRefusesInjection(t *testing.T) {
+	// A control character in a substituted value would inject a second framed
+	// line onto the wire (a command outside the driver menu), so it refuses.
+	if _, err := driver.RenderRequest(driver.Request{Line: "SET INPUT ${value}"}, "hdmi-2\r\nSET POWER off", nil); err == nil {
+		t.Fatal("a CRLF-carrying value rendered")
+	}
+	if _, err := driver.RenderRequest(driver.Request{Line: "SET ${arg.zone}"}, "", map[string]any{"zone": "3\nDANGER"}); err == nil {
+		t.Fatal("a newline-carrying arg rendered")
+	}
+	// A clean value still renders.
+	got, err := driver.RenderRequest(driver.Request{Line: "SET INPUT ${value}"}, "hdmi-2", nil)
+	if err != nil || got.Line != "SET INPUT hdmi-2" {
+		t.Fatalf("clean render = %q err %v", got.Line, err)
+	}
+}
+
+func TestRenderRequestNumberFormatting(t *testing.T) {
+	// A large integer param renders as a plain decimal, never %g's 1e+06.
+	got, err := driver.RenderRequest(driver.Request{Line: "RECALL ${arg.preset}"}, "", map[string]any{"preset": json.Number("1000000")})
+	if err != nil || got.Line != "RECALL 1000000" {
+		t.Fatalf("number render = %q err %v", got.Line, err)
+	}
+	// An explicit null param refuses like an absent one.
+	if _, err := driver.RenderRequest(driver.Request{Line: "SET ${arg.x}"}, "", map[string]any{"x": nil}); err == nil {
+		t.Fatal("a null arg rendered")
+	}
+}
+
+func TestValidateTransportShape(t *testing.T) {
+	cat := catalog()
+	cases := []struct {
+		name string
+		spec string
+		want string
+	}{
+		{"snmp poll without get", `{"version":1,"transport":"snmp","polls":[{"name":"p","schedule":{"every":"60s"},"request":{"line":"X"},"emits":[{"name":"uptime","extract":{"oid":"1.3"}}]}]}`, "get request"},
+		{"snmp emit not by oid", `{"version":1,"transport":"snmp","polls":[{"name":"p","schedule":{"every":"60s"},"request":{"get":["1.3"]},"emits":[{"name":"uptime","extract":{"regex":"x"}}]}]}`, "oid"},
+		{"poll on an unfetchable transport", `{"version":1,"transport":"http","polls":[{"name":"p","schedule":{"every":"60s"},"request":{"path":"/"},"emits":[{"name":"uptime","extract":{"jsonpath":"a"}}]}]}`, "no poll fetcher"},
+		{"command binding on non-tcp", `{"version":1,"transport":"snmp","polls":[{"name":"p","schedule":{"every":"60s"},"request":{"get":["1.3"]},"emits":[{"name":"uptime","extract":{"oid":"1.3"}}]}],"commands":[{"command_type":"set-input","request":{"line":"X ${value}"}}]}`, "no actuation wire"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// uptime is a metric-lane emit in the fake catalog; add it.
+			cat.lanes["uptime"] = "metric"
+			s, err := driver.Parse([]byte(tc.spec))
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			err = s.Validate(cat)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("validate = %v, want a refusal naming %q", err, tc.want)
+			}
+		})
 	}
 }

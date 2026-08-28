@@ -23,6 +23,7 @@ var (
 	ErrUnknownTransport          = errors.New("storage: unknown transport")
 	ErrEndpointComponentNotFound = errors.New("storage: endpoint component not found")
 	ErrEndpointNodeNotFound      = errors.New("storage: endpoint node not found")
+	ErrEndpointDriverParams      = errors.New("storage: a driver-attached endpoint's params are derived; re-attach to change its address")
 )
 
 // Endpoint is a named, placement-bound connection: Transport names the wire it
@@ -73,6 +74,14 @@ type EndpointSpec struct {
 	// tasks in the same transaction.
 	Driver *string
 	Inputs map[string]string
+	// SecretRead and CanAdmin fence the attach's secret-reference resolution to
+	// what the CALLER may read: a reference resolves only to a secret in this
+	// read scope, and an admin-sensitive one only with the admin tier. Without
+	// them a bare-name lookup would let an operator bind (and the worklist
+	// deliver) any tenant's credential; the API tier fills them from
+	// secret:read.
+	SecretRead scope.Set
+	CanAdmin   bool
 }
 
 // EndpointPatch is the update input: nil fields unchanged. Type and component
@@ -303,7 +312,7 @@ func (p *PG) CreateEndpoint(ctx context.Context, actorID string, spec EndpointSp
 	// derives the transport, the params, and (after the insert) the tasks.
 	var plan *attachPlan
 	if spec.Driver != nil {
-		plan, err = resolveAttach(ctx, tx, spec)
+		plan, err = p.resolveAttach(ctx, tx, spec)
 		if err != nil {
 			return nil, err
 		}
@@ -376,6 +385,15 @@ func (p *PG) UpdateEndpoint(ctx context.Context, actorID, id string, patch Endpo
 	before, err := resolveEndpointScoped(ctx, tx, id, read, action)
 	if err != nil {
 		return nil, err
+	}
+	// A driver-attached endpoint's params are DERIVED from its inputs (the host
+	// and port the attach resolved), not an operator fact, and its credential
+	// rides the worklist to the placed node. Letting endpoint:update repoint the
+	// params would send that credential to a target the inputs never named, so a
+	// params patch on an attached endpoint refuses: the re-attach is the write
+	// path for its address.
+	if before.DriverID != nil && len(patch.Params) > 0 {
+		return nil, ErrEndpointDriverParams
 	}
 	nodeID, err := endpointNodeID(ctx, tx, patch.Node)
 	if err != nil {

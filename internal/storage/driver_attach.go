@@ -128,7 +128,7 @@ type attachPlan struct {
 // that resolves to nothing or to the wrong shape. Defaults are baked here, so
 // the stored inputs are the effective ones the derived tasks assume. Secret
 // references are stored by name; the uuid-stable binding is #820.
-func resolveAttach(ctx context.Context, q querier, es EndpointSpec) (*attachPlan, error) {
+func (p *PG) resolveAttach(ctx context.Context, q querier, es EndpointSpec) (*attachPlan, error) {
 	if es.Transport != "" {
 		return nil, fmt.Errorf("%w: an attach declares a driver, and the transport is the spec's fact; drop the transport field", ErrAttachInvalid)
 	}
@@ -174,35 +174,58 @@ func resolveAttach(ctx context.Context, q querier, es EndpointSpec) (*attachPlan
 		if !ok {
 			continue
 		}
+		// Resolve the secret reference under the CALLER'S secret read scope and
+		// admin tier, never by bare name: an attach must not bind (and the
+		// worklist must not later deliver) a secret the operator could not
+		// themselves read. A candidate outside the read scope, or admin-sensitive
+		// without the admin tier, is filtered out here, so an out-of-scope or
+		// privileged name is indistinguishable from an absent one (no existence
+		// or type oracle). Only a reference the caller can actually see reaches
+		// the type check, where naming the wrong shape is a legitimate hint.
 		rows, err := q.Query(ctx, `
-			select st.name from secret s join secret_type st on st.id = s.secret_type
+			select s.owner_kind,
+				coalesce(s.component_id::text, s.system_id::text, s.location_id::text),
+				s.admin_sensitive, st.name
+			from secret s join secret_type st on st.id = s.secret_type
 			where s.name = $1`, ref)
 		if err != nil {
 			return nil, fmt.Errorf("storage: resolve secret reference %q: %w", ref, err)
 		}
-		var typeNames []string
+		var visibleTypes []string
 		for rows.Next() {
-			var tn string
-			if err := rows.Scan(&tn); err != nil {
+			var ownerKind, typeName string
+			var ownerID *string
+			var adminSensitive bool
+			if err := rows.Scan(&ownerKind, &ownerID, &adminSensitive, &typeName); err != nil {
 				rows.Close()
 				return nil, fmt.Errorf("storage: scan secret reference %q: %w", ref, err)
 			}
-			typeNames = append(typeNames, tn)
+			if adminSensitive && !es.CanAdmin {
+				continue
+			}
+			inScope, err := p.secretOwnerInScope(ctx, q, ownerKind, ownerID, es.SecretRead)
+			if err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("storage: scope secret reference %q: %w", ref, err)
+			}
+			if inScope {
+				visibleTypes = append(visibleTypes, typeName)
+			}
 		}
 		rows.Close()
 		if err := rows.Err(); err != nil {
 			return nil, fmt.Errorf("storage: resolve secret reference %q: %w", ref, err)
 		}
 		switch {
-		case len(typeNames) == 0:
-			return nil, fmt.Errorf("%w: input %q references secret %q, which does not exist", ErrAttachInvalid, in.Name, ref)
-		case len(typeNames) > 1:
+		case len(visibleTypes) == 0:
+			return nil, fmt.Errorf("%w: input %q references a secret that does not exist or is not yours to use", ErrAttachInvalid, in.Name)
+		case len(visibleTypes) > 1:
 			// Refused rather than guessed: the reference is stored by name, so
-			// a collision would make the worklist deliver an arbitrary
-			// tenant's credential (#820 is the uuid-stable binding).
-			return nil, fmt.Errorf("%w: input %q references secret %q, which names more than one secret", ErrAttachInvalid, in.Name, ref)
-		case typeNames[0] != in.SecretType:
-			return nil, fmt.Errorf("%w: input %q needs a %s secret, and %q is a %s", ErrAttachInvalid, in.Name, in.SecretType, ref, typeNames[0])
+			// a collision would make the worklist deliver an arbitrary in-scope
+			// credential (#820 is the uuid-stable binding).
+			return nil, fmt.Errorf("%w: input %q references secret %q, which names more than one secret you can use", ErrAttachInvalid, in.Name, ref)
+		case visibleTypes[0] != in.SecretType:
+			return nil, fmt.Errorf("%w: input %q needs a %s secret, and %q is a %s", ErrAttachInvalid, in.Name, in.SecretType, ref, visibleTypes[0])
 		}
 	}
 

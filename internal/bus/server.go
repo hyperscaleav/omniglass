@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -165,7 +166,13 @@ func (s *Server) subscribe() error {
 		if err := json.Unmarshal(msg.Data, &st); err != nil {
 			return
 		}
-		_ = s.store.RecordCommandExecution(context.Background(), node, st.ID, st.Error)
+		// A report a node had no standing to make (a command dispatched to a
+		// different node, or already stamped) is logged, never silently
+		// dropped: it is either a race or a misbehaving node, and both want a
+		// trail.
+		if err := s.store.RecordCommandExecution(context.Background(), node, st.ID, st.Error); err != nil {
+			slog.Warn("command execution report rejected", "facility", "command", "node", node, "command", st.ID, "error", err.Error())
+		}
 	})
 	if err != nil {
 		return fmt.Errorf("bus: subscribe command status: %w", err)

@@ -47,7 +47,9 @@ func toEndpointBody(it *storage.Endpoint) endpointBody {
 		b.Params = json.RawMessage(it.Params)
 	}
 	b.Driver, b.DriverID = it.Driver, it.DriverID
-	if len(it.Inputs) > 2 { // "{}" is the bare-create floor, not an attachment
+	// Inputs render for an attachment (a driver-authored endpoint), keyed off the
+	// fact the row actually carries rather than the byte length of its jsonb.
+	if it.DriverID != nil && len(it.Inputs) > 0 {
 		b.Inputs = json.RawMessage(it.Inputs)
 	}
 	return b
@@ -162,6 +164,12 @@ func registerEndpointRoutes(api huma.API, a *authenticator, gw storage.Gateway) 
 			Params:    []byte(in.Body.Params),
 			Driver:    in.Body.Driver,
 			Inputs:    in.Body.Inputs,
+			// An attach resolves its secret references under the caller's own
+			// secret read scope and admin tier, so it can only bind a secret the
+			// operator could themselves read (never another tenant's, never an
+			// admin-sensitive one without the tier).
+			SecretRead: a.scopeFor(ctx, "secret", "read"),
+			CanAdmin:   a.canSecretAdmin(ctx, "read"),
 		}, a.scopeFor(ctx, "endpoint", "create"))
 		if err != nil {
 			return nil, mapEndpointErr(err)
@@ -224,8 +232,10 @@ func mapEndpointErr(err error) error {
 		return huma.Error422UnprocessableEntity("unknown transport")
 	case errors.Is(err, storage.ErrEndpointComponentNotFound):
 		return huma.Error422UnprocessableEntity("component not found")
-	case errors.Is(err, storage.ErrEndpointNodeNotFound):
+	case errors.Is(err, storage.ErrEndpointNodeNotFound), errors.Is(err, storage.ErrNodeNotFound):
 		return huma.Error422UnprocessableEntity("node not found")
+	case errors.Is(err, storage.ErrEndpointDriverParams):
+		return huma.Error422UnprocessableEntity("a driver-attached endpoint's address is derived from its inputs; re-attach the driver to change it")
 	default:
 		return huma.Error500InternalServerError("endpoint operation failed")
 	}

@@ -3162,6 +3162,13 @@
       "name": "exec_error",
       "type": "text",
       "nullable": true
+     },
+     {
+      "name": "dispatched_endpoint_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "endpoint.id"
      }
     ],
     "checks": [

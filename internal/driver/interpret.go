@@ -225,33 +225,75 @@ func jsonPath(doc []byte, path string) (string, error) {
 // command's intended value, ${arg.key} a key of its params.
 var argPattern = regexp.MustCompile(`\$\{([a-zA-Z0-9_.-]+)\}`)
 
+// substituted renders one template value to a string and refuses a control
+// character in it: a line protocol frames on \r\n, so a substituted value
+// carrying a terminator would inject a second, unbound line onto the wire (a
+// command outside the driver menu, invisible to the audit trail). A JSON number
+// param renders without %v's %g exponent form, so a large or fractional preset
+// is a plain decimal, never "1e+06"; an explicit JSON null is refused like an
+// absent reference rather than rendering "<nil>".
+func substituted(v any) (string, error) {
+	var s string
+	switch t := v.(type) {
+	case nil:
+		return "", fmt.Errorf("is null")
+	case string:
+		s = t
+	case json.Number:
+		s = t.String()
+	case float64:
+		s = strconv.FormatFloat(t, 'f', -1, 64)
+	case bool:
+		s = strconv.FormatBool(t)
+	default:
+		s = fmt.Sprintf("%v", t)
+	}
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return "", fmt.Errorf("carries a control character")
+		}
+	}
+	return s, nil
+}
+
 // RenderRequest resolves a command binding's request template against one
 // issued command: ${value} takes the intended value, ${arg.key} a param.
-// A reference nothing supplies refuses, so a half-rendered line is never sent
-// to a device.
+// A reference nothing supplies, or a value carrying a control character,
+// refuses, so a half-rendered or injected line is never sent to a device.
 func RenderRequest(req Request, value string, params map[string]any) (Request, error) {
 	render := func(s string) (string, error) {
-		var missing error
+		var fault error
 		out := argPattern.ReplaceAllStringFunc(s, func(m string) string {
 			ref := m[2 : len(m)-1]
 			if ref == "value" {
 				if value == "" {
-					missing = fmt.Errorf("driver: request references ${value}, and the command carries none")
+					fault = fmt.Errorf("driver: request references ${value}, and the command carries none")
+					return m
 				}
-				return value
+				rendered, err := substituted(value)
+				if err != nil {
+					fault = fmt.Errorf("driver: request's ${value} %v", err)
+					return m
+				}
+				return rendered
 			}
 			if key, ok := strings.CutPrefix(ref, "arg."); ok {
 				v, present := params[key]
 				if !present {
-					missing = fmt.Errorf("driver: request references ${arg.%s}, and the command's params carry no %q", key, key)
+					fault = fmt.Errorf("driver: request references ${arg.%s}, and the command's params carry no %q", key, key)
 					return m
 				}
-				return fmt.Sprintf("%v", v)
+				rendered, err := substituted(v)
+				if err != nil {
+					fault = fmt.Errorf("driver: request's ${arg.%s} %v", key, err)
+					return m
+				}
+				return rendered
 			}
-			missing = fmt.Errorf("driver: request references unknown template field %q", ref)
+			fault = fmt.Errorf("driver: request references unknown template field %q", ref)
 			return m
 		})
-		return out, missing
+		return out, fault
 	}
 	line, err := render(req.Line)
 	if err != nil {

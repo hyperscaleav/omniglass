@@ -586,6 +586,51 @@ order by r.name, r.band desc, r.depth asc`
 
 // --- helpers -----------------------------------------------------------------
 
+// secretCoversComponent reports whether a secret owned at (ownerKind, ownerID)
+// cascades onto componentID, the same cascade resolveSecretsSQL ranks: platform
+// always covers; a location owner covers when it is in the component's location
+// chain; a component owner covers when it is the component or an ancestor of it.
+// A secret has no system band (a credential's owner is never the room a device
+// serves), so a system-owned secret never covers a component here. It is the
+// worklist delivery's confinement (#814), keeping a node off a credential its
+// endpoint's component does not own.
+func (p *PG) secretCoversComponent(ctx context.Context, ownerKind string, ownerID *string, componentID string) (bool, error) {
+	if ownerKind == "platform" {
+		return true, nil
+	}
+	if ownerID == nil || componentID == "" {
+		return false, nil
+	}
+	var covers bool
+	switch ownerKind {
+	case "component":
+		if err := p.pool.QueryRow(ctx, `
+			with recursive chain(id) as (
+				select id from component where id = $1
+				union all
+				select c.parent_id from component c join chain ch on c.id = ch.id
+				where c.parent_id is not null
+			) cycle id set cyc using path
+			select exists (select 1 from chain where id = $2)`, componentID, *ownerID).Scan(&covers); err != nil {
+			return false, err
+		}
+	case "location":
+		if err := p.pool.QueryRow(ctx, `
+			with recursive loc_chain(id) as (
+				select location_id from component where id = $1 and location_id is not null
+				union all
+				select l.parent_id from location l join loc_chain lc on l.id = lc.id
+				where l.parent_id is not null
+			) cycle id set cyc using path
+			select exists (select 1 from loc_chain where id = $2)`, componentID, *ownerID).Scan(&covers); err != nil {
+			return false, err
+		}
+	default:
+		return false, nil
+	}
+	return covers, nil
+}
+
 // resolveSecretOwner turns an owner kind + optional name into the owning id,
 // enforcing the create scope: a platform secret needs an all create scope; a
 // scoped one resolves its owner in the matching tree, within the create scope
@@ -912,13 +957,17 @@ func mapSecretWriteErr(err error) error {
 // nodeSecretFields unseals a secret's fields by name for worklist delivery
 // (#814): a driver task's secret inputs must reach the placed node as usable
 // credentials, so the server unseals them into the per-node worklist reply
-// (the node's NATS grant is the isolation boundary). This is machine delivery,
-// not an operator read: there is no scope check (the attach that bound the
-// reference was the scoped, audited operator action) and no per-pull audit
-// row, since the node re-pulls at heartbeat pace and a row per pull would
-// bury the audit log. An ambiguous name refuses rather than guessing, since
-// delivering the wrong tenant's credential is worse than delivering none.
-func (p *PG) nodeSecretFields(ctx context.Context, name string) (map[string]string, error) {
+// (the node's NATS grant is the isolation boundary). Delivery is confined to a
+// secret that CASCADES onto the endpoint's componentID (platform, an ancestor
+// location or system, or the component itself, the same cascade ResolveSecrets
+// reads): the attach scoped the reference to the operator, and this re-check
+// keeps a rename or a name collision from drifting a node onto a secret its
+// component does not own. There is no per-pull audit row (the node re-pulls at
+// heartbeat pace, and a row per pull would bury the log; the attach was the
+// audited operator action) and no admin-sensitivity gate (that was the attach's
+// job). An ambiguous name after the cascade filter refuses rather than
+// guessing. The uuid-stable binding that removes the name-drift class is #820.
+func (p *PG) nodeSecretFields(ctx context.Context, name, componentID string) (map[string]string, error) {
 	if p.secret == nil {
 		return nil, ErrNoSecretProvider
 	}
@@ -944,6 +993,13 @@ func (p *PG) nodeSecretFields(ctx context.Context, name string) (map[string]stri
 			return nil, fmt.Errorf("storage: scan node secret %q: %w", name, err)
 		}
 		r.ownerID = ownerID
+		covers, err := p.secretCoversComponent(ctx, r.ownerKind, ownerID, componentID)
+		if err != nil {
+			return nil, fmt.Errorf("storage: cascade node secret %q: %w", name, err)
+		}
+		if !covers {
+			continue
+		}
 		found = append(found, struct {
 			row      secretRow
 			typeName string
