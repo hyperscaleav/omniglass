@@ -269,8 +269,12 @@ method is the front door; **dispatch is over NATS**: the action fans out through
 
 The [collection](/architecture/collection/) authoring routes are the first concrete resources that
 exercise every convention above at once: the standard family per resource (`/nodes`, `/endpoints`,
-`/tasks`) plus the `:verb` custom methods and the per-component reads (`reachability`,
-`reconciliation`, `events`), all `component:read`-gated. The routes live in the
+`/tasks`) plus the `:verb` custom methods, the per-component reads (`reachability`,
+`reconciliation`, `events`), all `component:read`-gated, and the read-only `GET /transports`
+(the code registry the endpoint picker consumes, `endpoint:read`-gated, #811). An endpoint
+create takes either a `transport` (a bare probe endpoint) or a `driver` plus `inputs` (an
+attach, #813: the driver's spec derives the transport, params, and tasks), and the `/drivers`
+family carries each driver's declarative `spec`, validated at write. The routes live in the
 [generated API reference](/reference/api/), rendered from the OpenAPI document on every build, each
 operation's description naming its permission gate verbatim (a guard test enforces that, alongside the
 spec-contract test that every gated operation carries its `x-omniglass-permission` stamp and
@@ -336,7 +340,8 @@ own scope** on the component tier rather than by `component:read`,
 [ADR-0117](/architecture/decisions/#adr-0117-an-actuation-is-fenced-by-the-permission-that-authorizes-it))
 is the write: it records the invocation, writes a caused event,
 and (for a settleable command) opens an intended value, returning the computed settlement verdict
-(none/pending/settled/failed).
+(none/pending/settled/failed); the invocation then actuates over the per-node command queue
+([commands](/architecture/commands/#actuation-the-wire-to-the-device), #815).
 
 :::note[Thin cuts today]
 The operationally useful slice, not the full CRUD matrix. A **node** carries the full set (create,

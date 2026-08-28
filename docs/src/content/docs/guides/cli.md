@@ -191,6 +191,14 @@ omniglass endpoint create \
   --transport tcp --component disp-1 --node edge-hq \
   --params '{"target":"10.0.0.1:22"}'                          # needs endpoint:create
 
+# Or ATTACH a driver instead of picking a transport: the driver's spec derives the
+# transport, the target (from the host and port inputs), and the endpoint's tasks
+# (a poll task per poll function, a standing listen task per listener). Secret
+# inputs are references: the NAME of a secret of the declared shape, never a value.
+omniglass endpoint create \
+  --driver snmp-generic --component amp-1 --node edge-hq \
+  --inputs '{"host":"10.0.0.40","community":"lab-community"}'  # needs endpoint:create
+
 omniglass endpoint list
 omniglass endpoint get <id>                                     # endpoints are addressed by id
 omniglass endpoint update <id> --node edge-hq --params '{"target":"10.0.0.2:22"}'
@@ -202,8 +210,10 @@ omniglass task get <id>
 ```
 
 The transports are a code registry the binary ships (`omniglass transport list` reads it):
-`icmp` and `tcp` probe today, `ssh` and `http` probe as a tcp connect, and `udp` and `snmp`
-arrive with their drivers. An endpoint is **named by its transport** (the `--transport`),
+`icmp` and `tcp` probe layers 3 and 4, `ssh` and `http` climb to layer 7 (the probe draws a
+real response, so reached-but-not-responsive and responded-but-not-authenticated are visible
+states), and `udp` and `snmp` carry no standalone probe (`snmp` collects through its driver).
+An endpoint is **named by its transport** (the `--transport`, or the attached driver's spec),
 unique within its component. An endpoint `update` changes only its node placement and
 params. A **task** is **derived** when its endpoint is created, so there is no
 `task create`, `update`, or `delete`; its placement follows the endpoint's. A node purge
@@ -346,9 +356,11 @@ A **driver** names the implementation that gets, emits, or sets a product's sign
 
 ```sh
 omniglass driver list                                               # the driver registry
-omniglass driver create --name barco-snmp --label "Barco SNMP" --version 1.0.0
+omniglass driver get snmp-generic                                   # includes the spec body, when authored
+omniglass driver create --name barco-snmp --label "Barco SNMP" --version 1.0.0 \
+  --spec '{"version":1,"transport":"snmp", ...}'                    # validated at write: a broken spec is a 422 naming the fault
 omniglass driver update barco-snmp --version 1.1.0
-omniglass driver delete barco-snmp                                  # refused (422) if official
+omniglass driver delete barco-snmp                                  # refused (422) if official, or while an endpoint is attached through it
 ```
 
 An **official** row, for example the `crestron` vendor, is read-only: `update` and `delete` both
@@ -418,7 +430,10 @@ The [command type](/architecture/commands/#the-command_type-registry) commands c
 catalog: what a component can be told, with a target property and a settle window. `command_type:read`
 sits on the viewer floor; create/update/delete are admin-gated, official types read-only. Issuing a
 command (`command:issue`) records the invocation, writes a caused event, and returns the computed
-settlement verdict.
+settlement verdict; the invocation then rides the per-node command queue to the placed node,
+which actuates it through the attached driver's command binding, and the settle loop closes
+against the observed value the driver's polls report back
+([commands](/architecture/commands/#actuation-the-wire-to-the-device)).
 
 ```sh
 omniglass command-type list                                         # the command type catalog

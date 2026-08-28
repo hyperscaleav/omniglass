@@ -56,14 +56,24 @@ give it one ("Control processor") to say what the connection is FOR, since `ssh`
 reached and reads the same on every component in the fleet. It is optional, and an endpoint
 without one reads its transport name exactly.
 
-- With `endpoint:create`, **Add endpoint** on the component detail creates one: give it a
-  **label** (optional, and the only name-like string you type here), choose a
-  **transport** (the picker reads the code registry the binary ships, `GET /transports`:
-  `icmp` and `tcp` probe today, `ssh` and `http` probe as a tcp connect, `udp` and `snmp`
-  arrive with their drivers; there is no free-text name),
-  a node placement, and a target (`host:port` for the tcp-family transports, `host` for icmp).
-  The owning component is the one you are on. Creating an endpoint **derives its poll task**
-  for you, so a fresh endpoint is a working reachability check with no second step.
+- With `endpoint:create`, **Add endpoint** on the component detail creates one, in either of
+  two faces:
+  - **Probe**: give it a **label** (optional, and the only name-like string you type here),
+    choose a **transport** (the picker reads the code registry the binary ships,
+    `GET /transports`: `icmp` and `tcp` probe layers 3 and 4, `ssh` and `http` climb to
+    layer 7 (the probe draws a real response, so reached-but-not-responsive and
+    responded-but-not-authenticated are visible states), `udp` and `snmp` have no standalone
+    probe; there is no free-text name), a node placement, and a target (`host:port` for the
+    tcp-family transports, `host` for icmp).
+  - **Attach a driver**: pick a **driver** (only drivers whose declarative spec exists are
+    offered) and fill the **inputs** its spec declares: a host, a port with its default
+    pre-filled, credentials as **secret references** (the name of a secret of the declared
+    shape, never a value). The spec derives the transport, the target, and the endpoint's
+    tasks: a poll task per poll function, a standing listen task per listener. The
+    [Drivers](/guides/admin/drivers/) page shows each spec's menu before you attach it.
+
+  The owning component is the one you are on. Either face **derives the endpoint's tasks**
+  for you, so a fresh endpoint is working collection with no second step.
 - With `endpoint:update`, editing an endpoint changes only its **node placement** and its
   **target**; the transport (and so the name) is fixed at creation.
 - With `endpoint:delete`, deleting an endpoint removes it and **cascades its derived task**.
@@ -79,9 +89,10 @@ endpoint creates its one poll task. A task has **no name**: it is a binding, a *
 running over an **endpoint**, so it reads as its endpoint (the anchor) plus that function,
 never a redundant label. There is no standalone Tasks surface. A node's derived tasks read as a
 **panel on the node's detail** (open a node from **Nodes**, with `task:read`): each
-shows its endpoint, the function it runs (today the built-in **reachability** check, with a
-provisional marker since named collection functions arrive with device drivers), and an
-**enabled** state; the node it runs on follows its endpoint's placement. To change what a node
+shows its endpoint, the function it runs (the built-in **reachability** check, or a driver
+function carried whole in the task's spec: `snmp-generic/scalars`, `newtron-nvp/status`, a
+standing listener), and an **enabled** state; the node it runs on follows its endpoint's
+placement. To change what a node
 collects, add or remove the **endpoint**; there is no task create, edit, or delete.
 
 ## Reachability
@@ -90,17 +101,20 @@ Every component's detail carries an **Endpoints** panel showing composed reachab
 of its endpoints reachable, and why. One row per endpoint shows the endpoint (its label, or its
 transport name where it has none) and its address, a **verdict
 pill** (responding, down, stale, or unknown), an **availability strip** drawn from the
-verdict's up/down transitions over time, and an expandable **gate breakdown** (the L3/L4 ping
-and port probes this slice ships) with each probe's signal and timing, then the composed
-verdict (the endpoint is up only when every applicable probe passed). A down endpoint also
-shows a plain-language **why** line. Every value is a real reading from the node, and the panel
+verdict's up/down transitions over time, and an expandable **gate breakdown** with each probe's signal and timing, then the composed
+verdict (the endpoint is up only when every applicable probe passed). An `http` or `ssh`
+endpoint also wears its upper rungs as chips once a probe has climbed them: **responds** (the
+API drew a real answer) or **no response** (the port accepted but the service never spoke),
+and for `ssh` **auth ok** / **auth failed** (shown only when a credential was actually
+tried). A down endpoint also shows a plain-language **why** line. Every value is a real reading from the node, and the panel
 is also the authoring surface: its header carries **Add endpoint** (with `endpoint:create`)
 and each row that maps to an endpoint a **Manage** affordance opening that endpoint's detail.
 
-To author a reachability check, add an **endpoint** to the component (above): a proper
-driver-based authoring flow is a later collection slice, so today a check is an endpoint plus
-its derived poll task, created from this panel on the component's own detail (there is no
-standalone Endpoints page).
+To author a reachability check, add an **endpoint** to the component (above), from this
+panel's own header: a bare probe endpoint is the reachability check, and **attaching a
+driver** is the authoring flow for real collection (the spec's functions become the
+endpoint's tasks, and their samples land on the component). There is no standalone
+Endpoints page.
 
 ## Events
 
