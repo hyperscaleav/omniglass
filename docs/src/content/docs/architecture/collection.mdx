@@ -39,7 +39,12 @@ component), so create takes a type, not a name; a task is **read-only plumbing**
 and `GET /tasks/{id}`) with **no node column** (placement **projects from its endpoint**), and a **node purge cascades** endpoints and derived
 tasks. Both surfaces carry the two authorization layers, **scope cascading through the
 owning component** (out-of-scope = non-disclosing 404, no new scope kind). Built: the reach gate
-over four transports; the protocol **drivers** come next. See
+over four transports, and the **driver poll path**: a driver's baked poll tasks fetch over their
+transport (a v2c scalar SNMP GET, a stateless line exchange over tcp), the node interprets each
+emit (locate by OID, regex capture, dotted JSON path, or key; apply the declared transform; type
+by the baked lane), the worklist delivers a task's secret inputs unsealed on the per-node subject,
+and anything that does not parse lands a `collection-failed` event naming the task, never a silent
+drop and never a wrong-lane sample. Sessions and listeners are the stateful arc, next. See
 [ADR-0037](/architecture/decisions/#adr-0037-telemetry-is-a-protobuf-event-over-jetstream-with-an-inline-owner-confining-consumer),
 [ADR-0038](/architecture/decisions/#adr-0038-the-reachability-verdict-is-a-built-in-state),
 [ADR-0039](/architecture/decisions/#adr-0039-an-endpoint-is-a-device-api-the-endpoint-type-is-its-transport-not-its-driver),
@@ -409,8 +414,19 @@ shape. A driver row without a spec is a **stub** that cannot be attached. The co
 create offers both moves (a bare probe endpoint, or attach a driver and fill its inputs), and the
 Drivers page renders each spec as the menu it is.
 
-The interpreter that runs the poll functions lands with the next slice; sessions and listeners
-with the stateful arc. The ship-with set:
+**The interpreter runs the poll functions** (#814): the node tells a baked driver task from a
+probe task by its spec, fetches over the transport (the v2c scalar GET rides `gosnmp`, proven
+against a from-the-spec BER agent; a line poll runs one stateless ask over a throwaway
+connection until the stateful arc holds a session), and interprets the payload against the baked
+function: locate each emit by its one extractor, apply the declared transform (enum map, then
+scale, then cast), and type it by the baked lane. A metric-lane value that is not numeric is a
+fault, never a wrong-lane sample; a missing emit faults by name while the rest of the payload
+still lands; a failed fetch lands nothing; every fault is a `collection-failed` event naming the
+task. Secret inputs reach the node **unsealed in the worklist reply**: the server resolves each
+reference once per pull (the per-node NATS grant is the isolation boundary, and the attach that
+bound the reference is the audited operator action), and a reference that no longer resolves is
+delivered as absence, which the node reports as the missing credential. Sessions and listeners
+arrive with the stateful arc. The ship-with set:
 
 <SeededSet kind="drivers" />
 
