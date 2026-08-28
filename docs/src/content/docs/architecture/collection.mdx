@@ -409,8 +409,13 @@ defaults bake, and the spec's functions derive the endpoint's tasks in the same 
 poll task per poll function, a standing listen task per listener, each task's spec carrying the
 function **whole with its emit lanes resolved at attach** (the compile step: the node never
 looks up a catalog at runtime). Refusals name the fault as a 422: a missing required input, an
-input the spec does not declare, a secret reference that resolves to nothing or to the wrong
-shape. A driver row without a spec is a **stub** that cannot be attached. The console's endpoint
+input the spec does not declare, an ambiguous secret name. A secret input is resolved under the
+**caller's own secret read scope and admin tier**, so an attach can only bind a credential the
+operator could themselves read: an out-of-scope or admin-sensitive secret refuses
+indistinguishably from an absent one, no name or type oracle. The worklist delivery re-confines
+to a secret that cascades onto the endpoint's component, and a driver-attached endpoint's params
+are read-only afterwards (the address is derived from the inputs; re-attach to change it). A
+driver row without a spec is a **stub** that cannot be attached. The console's endpoint
 create offers both moves (a bare probe endpoint, or attach a driver and fill its inputs), and the
 Drivers page renders each spec as the menu it is.
 

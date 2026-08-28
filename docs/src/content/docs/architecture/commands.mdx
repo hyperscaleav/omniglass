@@ -38,10 +38,14 @@ The issue records; the **wire actuates** (#815). The moving parts:
   business alone.
 - **Rendered at dispatch.** The server resolves the binding's request template against the
   command at delivery time: `${value}` is the intended value, `${arg.key}` an issue param
-  (template references are validated at spec write). The node receives a finished instruction
-  (transport, target, the line to send), never a template. A binding that cannot render (a
-  reference the issue did not supply) is recorded terminal on the row (`exec_error`) instead of
-  redelivering forever.
+  (template references are validated at spec write). A substituted value carrying a control
+  character (a `\r\n` that would inject a second framed line onto the device) refuses, so an
+  operator-supplied value can never smuggle a command outside the driver menu; numbers render as
+  plain decimals. The node receives a finished instruction (transport, target, the line to send),
+  never a template. A binding that cannot render (a reference the issue did not supply) is
+  recorded terminal on the row (`exec_error`) instead of redelivering forever. Exactly one
+  actuating endpoint is chosen per command (only an endpoint whose driver binds the type is a
+  candidate), so a command is delivered to one node, never once per node.
 - **At-least-once, idempotent.** The pull marks the row `dispatched_at`; a dispatched command
   whose execution report never lands is redelivered after a silence interval, and past a delivery
   TTL it stops being deliverable at all (settlement's `timed-out` covers a command no node picked
@@ -49,10 +53,12 @@ The issue records; the **wire actuates** (#815). The moving parts:
   never the actuation.
 - **The report is not the verdict.** The node reports execution on
   `og.v1.commandstatus.<node>` (any device answer counts as actuated; a failure carries its
-  story into `exec_error`), and the row stamps `executed_at` once, under the same placement
-  confinement the worklist carries. Whether the device **did** it stays settlement's judgment of
-  observed against intended; the settle loop now closes with real observed values, since the
-  driver's polls (#814) are what report the device's state back.
+  story into `exec_error`), and the row stamps `executed_at` once, confined to the node the
+  command's **dispatched endpoint** is placed on: a report from any other node is rejected and
+  logged, never a silent stamp, so a second node holding an unrelated endpoint on the same
+  component cannot close a command it never received. Whether the device **did** it stays
+  settlement's judgment of observed against intended; the settle loop now closes with real
+  observed values, since the driver's polls (#814) are what report the device's state back.
 
 A **command** is the "do" half of the telemetry model, alongside a [metric or property](/architecture/properties/) (**know**) and an [event](/architecture/events/) (**happen**): it records what a component was **told**. Its registry is `command_type`, the driver-owned twin of the sample and event catalogs.
 
@@ -134,6 +140,7 @@ The physical layout (the owner arc, the caused-event lineage, partitioning) live
     dispatched_at: 'When a node&#39;s queue pull last delivered it (#815); null until a node picks it up',
     executed_at: 'When the node&#39;s execution report stamped, once; the actuation fact beside the settlement verdict',
     exec_error: 'A failed or unrenderable actuation&#39;s story; null on success',
+    dispatched_endpoint_id: 'The endpoint a dispatch chose to actuate over; the confinement anchor for the execution report',
   }}
 />
 
