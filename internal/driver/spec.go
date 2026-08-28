@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/transport"
@@ -251,6 +252,17 @@ func (s *Spec) Validate(cat Catalog) error {
 		}
 		if c.Request.Empty() {
 			return fmt.Errorf("driver: command binding %q has an empty request", c.CommandType)
+		}
+		// Template references are checked at write: only ${value} (the
+		// intended value) and ${arg.key} (an issue param) render, so a typo
+		// refuses here rather than half-rendering at actuation.
+		for _, tpl := range []string{c.Request.Line, c.Request.Path} {
+			for _, m := range argPattern.FindAllStringSubmatch(tpl, -1) {
+				ref := m[1]
+				if ref != "value" && !strings.HasPrefix(ref, "arg.") {
+					return fmt.Errorf("driver: command binding %q references unknown template field %q", c.CommandType, ref)
+				}
+			}
 		}
 	}
 	return nil

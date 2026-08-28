@@ -220,3 +220,46 @@ func jsonPath(doc []byte, path string) (string, error) {
 		return "", fmt.Errorf("path %q lands on a non-scalar", path)
 	}
 }
+
+// argPattern matches the request template's references: ${value} is the
+// command's intended value, ${arg.key} a key of its params.
+var argPattern = regexp.MustCompile(`\$\{([a-zA-Z0-9_.-]+)\}`)
+
+// RenderRequest resolves a command binding's request template against one
+// issued command: ${value} takes the intended value, ${arg.key} a param.
+// A reference nothing supplies refuses, so a half-rendered line is never sent
+// to a device.
+func RenderRequest(req Request, value string, params map[string]any) (Request, error) {
+	render := func(s string) (string, error) {
+		var missing error
+		out := argPattern.ReplaceAllStringFunc(s, func(m string) string {
+			ref := m[2 : len(m)-1]
+			if ref == "value" {
+				if value == "" {
+					missing = fmt.Errorf("driver: request references ${value}, and the command carries none")
+				}
+				return value
+			}
+			if key, ok := strings.CutPrefix(ref, "arg."); ok {
+				v, present := params[key]
+				if !present {
+					missing = fmt.Errorf("driver: request references ${arg.%s}, and the command's params carry no %q", key, key)
+					return m
+				}
+				return fmt.Sprintf("%v", v)
+			}
+			missing = fmt.Errorf("driver: request references unknown template field %q", ref)
+			return m
+		})
+		return out, missing
+	}
+	line, err := render(req.Line)
+	if err != nil {
+		return Request{}, err
+	}
+	path, err := render(req.Path)
+	if err != nil {
+		return Request{}, err
+	}
+	return Request{Get: req.Get, Line: line, Path: path}, nil
+}

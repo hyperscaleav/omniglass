@@ -178,3 +178,31 @@ func TestParseBaked(t *testing.T) {
 		t.Fatal("a baked function not recognized")
 	}
 }
+
+func TestRenderRequest(t *testing.T) {
+	req := driver.Request{Line: "SET INPUT ${value}"}
+	got, err := driver.RenderRequest(req, "hdmi-2", nil)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if got.Line != "SET INPUT hdmi-2" {
+		t.Fatalf("line = %q", got.Line)
+	}
+
+	got, err = driver.RenderRequest(driver.Request{Line: "SET LEVEL ${arg.zone} ${value}"}, "-20", map[string]any{"zone": 3})
+	if err != nil || got.Line != "SET LEVEL 3 -20" {
+		t.Fatalf("line = %q err %v", got.Line, err)
+	}
+
+	// A reference nothing supplies refuses: a half-rendered line never
+	// reaches a device.
+	if _, err := driver.RenderRequest(driver.Request{Line: "SET INPUT ${arg.input}"}, "", nil); err == nil {
+		t.Fatal("missing arg rendered")
+	}
+	if _, err := driver.RenderRequest(driver.Request{Line: "SET INPUT ${value}"}, "", nil); err == nil {
+		t.Fatal("missing value rendered")
+	}
+	if _, err := driver.RenderRequest(driver.Request{Line: "X ${warp.factor}"}, "v", nil); err == nil {
+		t.Fatal("unknown template field rendered")
+	}
+}

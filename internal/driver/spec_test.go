@@ -120,6 +120,9 @@ func TestValidateRefusals(t *testing.T) {
 		{"duplicate command bindings", func(s *driver.Spec) {
 			s.Commands = append(s.Commands, driver.CommandBinding{CommandType: "set-input", Request: driver.Request{Line: "x"}})
 		}, "set-input"},
+		{"command binding with an unknown template field", func(s *driver.Spec) {
+			s.Commands[0].Request.Line = "SET ${warp.factor}"
+		}, "warp.factor"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

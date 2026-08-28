@@ -7,12 +7,15 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/hyperscaleav/omniglass/internal/auth"
 	"github.com/hyperscaleav/omniglass/internal/scope"
 	"github.com/hyperscaleav/omniglass/internal/secret"
 	"github.com/hyperscaleav/omniglass/internal/seed"
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+	"github.com/jackc/pgx/v5"
 )
 
 // The driver spec's write gate and the attach flow (#813): a spec that fails
@@ -45,7 +48,7 @@ const lineProtoSpec = `{
 		]
 	}],
 	"commands": [
-		{"command_type": "set-input", "request": {"line": "SET INPUT ${arg.input}"}}
+		{"command_type": "set-input", "request": {"line": "SET INPUT ${value}"}}
 	]
 }`
 
@@ -435,5 +438,152 @@ func TestNodeWorklistDeliversSecretInputs(t *testing.T) {
 	}
 	if len(reachTask.Secrets) != 0 {
 		t.Fatalf("the reachability task carries secrets it has no use for: %v", reachTask.Secrets)
+	}
+}
+
+// TestCommandWireDelivery pins the storage side of the actuation path (#815):
+// a node's pending queue resolves the commands its placed endpoints can
+// actuate, renders the binding's request against the intended value, marks
+// them dispatched (redelivered only after silence), and records the execution
+// report once, under the same per-node confinement the worklist carries.
+func TestCommandWireDelivery(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "switcher-9"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	for _, n := range []string{"edge-9", "edge-idle"} {
+		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: n}, all, all); err != nil {
+			t.Fatalf("create node %s: %v", n, err)
+		}
+	}
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "line-proto", Label: "Line Proto", Version: "1.0.0", Spec: []byte(lineProtoSpec)}); err != nil {
+		t.Fatalf("create driver: %v", err)
+	}
+	comp, drv, node := "switcher-9", "line-proto", "edge-9"
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+		Driver: &drv, Component: &comp, Node: &node,
+		Inputs: map[string]string{"host": "10.20.4.50"},
+	}, all); err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+
+	_, hash, prefix, err := auth.NewBearerToken()
+	if err != nil {
+		t.Fatalf("mint owner: %v", err)
+	}
+	if _, err := gw.BootstrapOwner(ctx, storage.OwnerSpec{Username: "root", SecretHash: hash, Prefix: prefix}); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	conn0, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	var actor string
+	if err := conn0.QueryRow(ctx, `select principal_id from human where username = 'root'`).Scan(&actor); err != nil {
+		t.Fatalf("resolve actor: %v", err)
+	}
+	conn0.Close(ctx)
+
+	cmd, err := gw.IssueCommand(ctx, actor, "component", "switcher-9", "set-input", "", json.RawMessage(`"hdmi-2"`), nil)
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+	if cmd.Status != "issued" {
+		t.Fatalf("status = %q, want issued (settleable, unsettled)", cmd.Status)
+	}
+
+	// A node the endpoint is NOT placed on sees nothing.
+	if got, err := gw.PendingNodeCommands(ctx, "edge-idle"); err != nil || len(got) != 0 {
+		t.Fatalf("idle node queue = %v (err %v), want empty", got, err)
+	}
+
+	// The placed node gets the rendered actuation, once.
+	got, err := gw.PendingNodeCommands(ctx, "edge-9")
+	if err != nil {
+		t.Fatalf("pending: %v", err)
+	}
+	if len(got) != 1 {
+		connD, errD := pgx.Connect(ctx, dsn)
+		if errD == nil {
+			var st, execErr *string
+			var disp, exec *time.Time
+			_ = connD.QueryRow(ctx, `select status, exec_error, dispatched_at, executed_at from command where id = $1`, cmd.ID).Scan(&st, &execErr, &disp, &exec)
+			connD.Close(ctx)
+			t.Fatalf("queue = %+v, want the one command (row: status=%v exec_error=%v dispatched=%v executed=%v)", got, deref(st), deref(execErr), disp, exec)
+		}
+		t.Fatalf("queue = %+v, want the one command", got)
+	}
+	d := got[0]
+	if d.ID != cmd.ID || d.CommandType != "set-input" || d.Transport != "tcp" {
+		t.Fatalf("delivery = %+v", d)
+	}
+	if d.Line != "SET INPUT hdmi-2" {
+		t.Fatalf("rendered line = %q, want the intended value substituted", d.Line)
+	}
+	if d.Target != "10.20.4.50:4998" {
+		t.Fatalf("target = %q, want the endpoint's derived target", d.Target)
+	}
+
+	// Dispatched: an immediate re-pull redelivers nothing (at-least-once
+	// means silence redelivers, not every pull).
+	if again, err := gw.PendingNodeCommands(ctx, "edge-9"); err != nil || len(again) != 0 {
+		t.Fatalf("immediate re-pull = %v (err %v), want empty", again, err)
+	}
+
+	// Another node cannot stamp the execution; the placed node can, once.
+	if err := gw.RecordCommandExecution(ctx, "edge-idle", cmd.ID, ""); err != nil {
+		t.Fatalf("record from wrong node: %v", err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+	var executed *time.Time
+	row := func() *time.Time {
+		var ts *time.Time
+		if err := conn.QueryRow(ctx, `select executed_at from command where id = $1`, cmd.ID).Scan(&ts); err != nil {
+			t.Fatalf("read executed_at: %v", err)
+		}
+		return ts
+	}
+	if executed = row(); executed != nil {
+		t.Fatalf("wrong node stamped execution")
+	}
+	if err := gw.RecordCommandExecution(ctx, "edge-9", cmd.ID, ""); err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	if executed = row(); executed == nil {
+		t.Fatal("execution not stamped")
+	}
+	first := *executed
+	if err := gw.RecordCommandExecution(ctx, "edge-9", cmd.ID, "late duplicate"); err != nil {
+		t.Fatalf("re-record: %v", err)
+	}
+	if executed = row(); !executed.Equal(first) {
+		t.Fatal("a redelivered report re-stamped the execution")
+	}
+
+	// A command no driver binds (reboot is not in the line-proto spec) is
+	// never delivered; its arc is settlement's business alone.
+	if _, err := gw.IssueCommand(ctx, actor, "component", "switcher-9", "reboot", "", nil, nil); err != nil {
+		t.Fatalf("issue reboot: %v", err)
+	}
+	if got, err := gw.PendingNodeCommands(ctx, "edge-9"); err != nil || len(got) != 0 {
+		t.Fatalf("unbound command delivered: %v (err %v)", got, err)
 	}
 }
