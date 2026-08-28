@@ -348,6 +348,24 @@ func TestAttachDriverRefusals(t *testing.T) {
 		})
 	}
 
+	// A name two secrets share refuses rather than guessing: the reference is
+	// stored by name, and guessing could bind another tenant's credential.
+	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+		Name: "dup-secret", SecretType: "snmp-community", OwnerKind: "platform",
+		Fields: map[string]string{"community": "one"},
+	}, all, true); err != nil {
+		t.Fatalf("create dup-secret 1: %v", err)
+	}
+	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+		Name: "dup-secret", SecretType: "snmp-community", OwnerKind: "component", OwnerName: strPtr("amp-2"),
+		Fields: map[string]string{"community": "two"},
+	}, all, true); err != nil {
+		t.Fatalf("create dup-secret 2: %v", err)
+	}
+	if err := attach(map[string]string{"host": "h", "community": "dup-secret"}); !errors.Is(err, storage.ErrAttachInvalid) || !strings.Contains(err.Error(), "more than one") {
+		t.Fatalf("ambiguous secret reference: err = %v, want ErrAttachInvalid naming the collision", err)
+	}
+
 	// An unknown driver reference is the registry's not-found, mapped by the
 	// API tier to a 422 like the other reference faults.
 	ghost := "no-such-driver"

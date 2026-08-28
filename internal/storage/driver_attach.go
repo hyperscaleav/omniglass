@@ -126,7 +126,8 @@ type attachPlan struct {
 // endpoint fields, refusing (ErrAttachInvalid) anything the spec does not
 // sanction: an undeclared input, a missing required one, a secret reference
 // that resolves to nothing or to the wrong shape. Defaults are baked here, so
-// the stored inputs are the effective ones the derived tasks assume.
+// the stored inputs are the effective ones the derived tasks assume. Secret
+// references are stored by name; the uuid-stable binding is #820.
 func resolveAttach(ctx context.Context, q querier, es EndpointSpec) (*attachPlan, error) {
 	if es.Transport != "" {
 		return nil, fmt.Errorf("%w: an attach declares a driver, and the transport is the spec's fact; drop the transport field", ErrAttachInvalid)
@@ -173,18 +174,35 @@ func resolveAttach(ctx context.Context, q querier, es EndpointSpec) (*attachPlan
 		if !ok {
 			continue
 		}
-		var typeName string
-		err := q.QueryRow(ctx, `
+		rows, err := q.Query(ctx, `
 			select st.name from secret s join secret_type st on st.id = s.secret_type
-			where s.name = $1`, ref).Scan(&typeName)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("%w: input %q references secret %q, which does not exist", ErrAttachInvalid, in.Name, ref)
-		}
+			where s.name = $1`, ref)
 		if err != nil {
 			return nil, fmt.Errorf("storage: resolve secret reference %q: %w", ref, err)
 		}
-		if typeName != in.SecretType {
-			return nil, fmt.Errorf("%w: input %q needs a %s secret, and %q is a %s", ErrAttachInvalid, in.Name, in.SecretType, ref, typeName)
+		var typeNames []string
+		for rows.Next() {
+			var tn string
+			if err := rows.Scan(&tn); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("storage: scan secret reference %q: %w", ref, err)
+			}
+			typeNames = append(typeNames, tn)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("storage: resolve secret reference %q: %w", ref, err)
+		}
+		switch {
+		case len(typeNames) == 0:
+			return nil, fmt.Errorf("%w: input %q references secret %q, which does not exist", ErrAttachInvalid, in.Name, ref)
+		case len(typeNames) > 1:
+			// Refused rather than guessed: the reference is stored by name, so
+			// a collision would make the worklist deliver an arbitrary
+			// tenant's credential (#820 is the uuid-stable binding).
+			return nil, fmt.Errorf("%w: input %q references secret %q, which names more than one secret", ErrAttachInvalid, in.Name, ref)
+		case typeNames[0] != in.SecretType:
+			return nil, fmt.Errorf("%w: input %q needs a %s secret, and %q is a %s", ErrAttachInvalid, in.Name, in.SecretType, ref, typeNames[0])
 		}
 	}
 
