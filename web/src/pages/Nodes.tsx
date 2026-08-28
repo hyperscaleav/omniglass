@@ -167,7 +167,7 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
   async function removeNode() {
     const node = n();
     if (!node) return;
-    if (!confirm(`Delete node "${nodeLabel(node)}"? Its interfaces, tasks, and enrollment are removed. This cannot be undone.`)) return;
+    if (!confirm(`Delete node "${nodeLabel(node)}"? Its endpoints, tasks, and enrollment are removed. This cannot be undone.`)) return;
     setErr(null);
     try {
       await deleteNode(node.name);

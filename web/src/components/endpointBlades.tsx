@@ -30,18 +30,18 @@ import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
 // component, so it surfaces as a panel there, not a top-level tab). Two kinds:
 //   endpoint         the read -> edit -> save detail blade (edit node placement and
 //                    target, Delete), addressed by the endpoint's surrogate id.
-//   interface-create the new-interface Drawer body, addressed by the OWNING
-//                    component's name (an interface added from a component always
+//   endpoint-create   the new-endpoint Drawer body, addressed by the OWNING
+//                    component's name (an endpoint added from a component always
 //                    belongs to it), so the create form pre-sets and hides the
 //                    component picker.
-// Both invalidate the interfaces list AND the component's reachability read after a
-// write, so the component's Interfaces panel (ReachabilityPanel) refreshes. They
+// Both invalidate the endpoints list AND the component's reachability read after a
+// write, so the component's Endpoints panel (ReachabilityPanel) refreshes. They
 // deliberately never touch the components query, so the TreeList blade index stays
 // stable and the blade survives on the stack (like the secret cascade blade).
 
 function useEndpointById(id: string): () => Endpoint | null {
-  const interfaces = useQuery(() => ({ queryKey: ENDPOINTS_KEY, queryFn: () => listEndpoints() }));
-  return () => interfaces.data?.find((x) => x.id === id) ?? null;
+  const endpoints = useQuery(() => ({ queryKey: ENDPOINTS_KEY, queryFn: () => listEndpoints() }));
+  return () => endpoints.data?.find((x) => x.id === id) ?? null;
 }
 
 // A node-placement select shared by the create and edit forms: the enrolled nodes
@@ -59,7 +59,7 @@ function NodeSelect(props: { value: string; onChange: (v: string) => void; disab
   );
 }
 
-// endpointBlade renders an interface on the shared blade stack (same chrome and
+// endpointBlade renders an endpoint on the shared blade stack (same chrome and
 // footer action rail as the identity blades): read-only facts, a pencil into an
 // inline edit of the mutable fields (node placement, target), and Delete as the one
 // destructive action.
@@ -71,14 +71,14 @@ export const endpointBlade: BladeDef = {
 // The heading is the label, falling back to the derived name in the data face,
 // through the one blade-heading primitive. It was a bare span until the entity
 // gained a label (#613), which is the moment #581 said to switch, and it matters
-// more here than anywhere: every SSH interface in the fleet is named `ssh`, so
+// more here than anywhere: every SSH endpoint in the fleet is named `ssh`, so
 // without a label two blades on two components are titled identically.
 function EndpointBladeTitle(props: { id: string }): JSX.Element {
   const iface = useEndpointById(props.id);
   return <BladeTitle row={() => iface() ?? undefined} fallback="endpoint" />;
 }
 
-// EndpointBladeBody re-derives the interface from the live query by id (not a row
+// EndpointBladeBody re-derives the endpoint from the live query by id (not a row
 // snapshot), so an edit reflects after the invalidate. Only the node placement and
 // the probed target are mutable (name, type, and owning component are fixed at
 // creation); the edit slot seeds its inputs each time edit begins, and a Cancel
@@ -94,10 +94,10 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
   const [label, setLabel] = createSignal("");
   const [err, setErr] = createSignal<string | null>(null);
 
-  // Invalidate the interfaces list and, when the interface is on a component, that
-  // component's reachability read, so the component's Interfaces panel refreshes.
+  // Invalidate the endpoints list and, when the endpoint is on a component, that
+  // component's reachability read, so the component's Endpoints panel refreshes.
   // Keyed on component_id (the uuid), not component (a NAME per the wire,
-  // internal/api/interfaces.go): ReachabilityPanel reads REACHABILITY_KEY by the
+  // internal/api/endpoints.go): ReachabilityPanel reads REACHABILITY_KEY by the
   // component's uuid (#627 review finding 1), and a name-keyed invalidate here
   // missed that cache entry entirely (review round 3, regression 2).
   async function refresh(iface: Endpoint) {
@@ -120,7 +120,7 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
   async function removeEndpoint() {
     const iface = i();
     if (!iface) return;
-    if (!confirm(`Delete interface "${iface.name}"?`)) return;
+    if (!confirm(`Delete endpoint "${iface.label || iface.name}"?`)) return;
     setErr(null);
     try {
       await deleteEndpoint(iface.id);
@@ -162,7 +162,7 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
   });
 
   return (
-    <Show when={i()} fallback={<p class="text-sm text-base-content/50">This interface is no longer available.</p>}>
+    <Show when={i()} fallback={<p class="text-sm text-base-content/50">This endpoint is no longer available.</p>}>
       {(iface) => (
         <div class="flex flex-col gap-4">
           <div class="flex items-center gap-3">
@@ -212,12 +212,12 @@ function EndpointBladeBody(props: { id: string }): JSX.Element {
   );
 }
 
-// endpointCreateBlade hosts the new-interface form on the shared blade stack,
+// endpointCreateBlade hosts the new-endpoint form on the shared blade stack,
 // addressed by the OWNING component's name. On success it invalidates the
-// component's reachability read (the form already invalidates the interfaces list)
-// and swaps itself for the created interface's detail blade.
+// component's reachability read (the form already invalidates the endpoints list)
+// and swaps itself for the created endpoint's detail blade.
 export const endpointCreateBlade: BladeDef = {
-  Title: () => <span>New interface</span>,
+  Title: () => <span>New endpoint</span>,
   Body: (p) => <EndpointCreateBody component={p.id} />,
 };
 
@@ -236,11 +236,11 @@ function EndpointCreateBody(props: { component: string }): JSX.Element {
   );
 }
 
-// CreateEndpointForm is the new-interface form: type (the built types), owning
+// CreateEndpointForm is the new-endpoint form: transport or driver attach, owning
 // component (or server-hosted), node placement, and the probed target. When
-// `component` is set the interface always belongs to it, so the form pre-sets that
+// `component` is set the endpoint always belongs to it, so the form pre-sets that
 // component and hides the picker. On success it invalidates the list and hands the
-// created interface to onCreated, which opens its detail blade.
+// created endpoint to onCreated, which opens its detail blade.
 function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; component?: string }) {
   const qc = useQueryClient();
   // Always fetched (not gated on `!props.component`): a preset component still

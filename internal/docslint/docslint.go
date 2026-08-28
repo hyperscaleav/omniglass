@@ -392,6 +392,12 @@ var operatorStrings = []string{
 	filepath.Join("..", "..", "internal", "seed", "command_types.yaml"),
 	filepath.Join("..", "..", "internal", "seed", "roles.yaml"),
 	filepath.Join("..", "..", "web", "src", "lib", "nav.ts"),
+	// The collection surfaces whose labels, confirms, and empty states an
+	// operator reads on the component detail: exactly where "2 interfaces"
+	// survived the #811 rename until the rollup's screenshot pass caught it.
+	filepath.Join("..", "..", "web", "src", "components", "ReachabilityPanel.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "endpointBlades.tsx"),
+	filepath.Join("..", "..", "web", "src", "lib", "fleet_tiles.ts"),
 	filepath.Join("..", "..", "README.md"),
 	// The generated OpenAPI document carries every Huma operation and field
 	// description (#451): the doc: tags flow to the spec, the CLI reference,

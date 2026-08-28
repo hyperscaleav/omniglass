@@ -55,9 +55,9 @@ function mount(data: Reachability = seed) {
 }
 
 describe("ReachabilityPanel", () => {
-  it("renders the interface count and a verdict pill per interface", () => {
+  it("renders the endpoint count and a verdict pill per endpoint", () => {
     const { getByText, getAllByText } = mount();
-    expect(getByText("2 interfaces")).toBeTruthy();
+    expect(getByText("2 endpoints")).toBeTruthy();
     expect(getByText("responding")).toBeTruthy();
     expect(getByText("down")).toBeTruthy();
     // both endpoints render as type · endpoint fragments
@@ -70,7 +70,7 @@ describe("ReachabilityPanel", () => {
     expect(getAllByText(/% up/).length).toBe(2);
   });
 
-  it("expands a row to the gate breakdown and the reason line for a down interface", () => {
+  it("expands a row to the gate breakdown and the reason line for a down endpoint", () => {
     const { getByText, queryByText } = mount();
     // reason line hidden until expanded
     expect(queryByText(/service down, box up/i)).toBeNull();
@@ -96,14 +96,14 @@ describe("ReachabilityPanel", () => {
     expect(getByText("unknown")).toBeTruthy();
   });
 
-  it("shows the empty state when a component has no interfaces", () => {
+  it("shows the empty state when a component has no endpoints", () => {
     const { getByText } = mount({ component: "c3", endpoints: [] });
-    expect(getByText(/no interfaces on this component/i)).toBeTruthy();
+    expect(getByText(/no endpoints on this component/i)).toBeTruthy();
   });
 });
 
 // The panel doubles as the component's Interfaces management surface: it shows an
-// "Add interface" header affordance and a per-row "Manage" affordance ONLY when the
+// "Add endpoint" header affordance and a per-row "Manage" affordance ONLY when the
 // component detail passes their callbacks (which it gates on interface:create /
 // interface:read). A row maps to its interface id via the seeded interfaces list,
 // matched by component_id (#627): the console addresses this panel by the
@@ -127,17 +127,17 @@ function mountManaged(opts: { onAdd?: () => void; onOpenEndpoint?: (id: string) 
 }
 
 describe("ReachabilityPanel management affordances", () => {
-  it("shows the Add interface affordance only when onAdd is provided", () => {
+  it("shows the Add endpoint affordance only when onAdd is provided", () => {
     const { queryByText, unmount } = mountManaged({});
-    expect(queryByText("Add interface")).toBeNull();
+    expect(queryByText("Add endpoint")).toBeNull();
     unmount();
     const onAdd = vi.fn();
     mountManaged({ onAdd });
-    fireEvent.click(screen.getByText("Add interface"));
+    fireEvent.click(screen.getByText("Add endpoint"));
     expect(onAdd).toHaveBeenCalledOnce();
   });
 
-  it("surfaces a per-row Manage affordance that opens the interface by id", () => {
+  it("surfaces a per-row Manage affordance that opens the endpoint by id", () => {
     const opened: string[] = [];
     mountManaged({ onOpenEndpoint: (id) => opened.push(id) });
     // No Manage affordance without the callback.
