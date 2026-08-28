@@ -192,9 +192,10 @@ Every control-plane subject is `og.v1.<verb>.<node>`
 the node name is the **last token, exactly one token**, which is what lets the server subscribe
 per-verb single-token wildcards (`og.v1.worklist.*`) and lets a node's credential be an explicit
 allow-list of its own subjects plus its private reply namespace (`_INBOX.<node>`). The verb family
-today is `worklist` (request-reply), `heartbeat`, and `telemetry` (the JetStream firehose);
-`worklist-changed` is reserved for the server's re-pull nudge, and `og.v1.command.<node>` is the
-committed future per-node command queue. The trusted push lane `og.v1.api.telemetry` deliberately
+today is `worklist` (request-reply), `heartbeat`, `telemetry` (the JetStream firehose),
+`command` (the per-node command-queue pull, request-reply like the worklist, #815), and
+`commandstatus` (the node's execution reports); `worklist-changed` is reserved for the server's
+re-pull nudge. The trusted push lane `og.v1.api.telemetry` deliberately
 sits in its **own segment** rather than as a reserved node name under `og.v1.telemetry.*` (above):
 structural impossibility beats a naming convention.
 

@@ -3147,6 +3147,21 @@
       "name": "settled_at",
       "type": "timestamp with time zone",
       "nullable": true
+     },
+     {
+      "name": "dispatched_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "executed_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "exec_error",
+      "type": "text",
+      "nullable": true
      }
     ],
     "checks": [

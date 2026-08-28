@@ -174,6 +174,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0133](#adr-0133-a-select-over-a-loaded-collection-binds-through-a-ref-not-a-value-prop) | 2026-08-27 | Accepted | A `<select>` whose options come from a collection the server answers for takes its value from `bindSelectValue(value, ...options)` (`web/src/lib/selectvalue.ts`) used as the element's `ref`, never from a `value=` prop: the control keeps no value it has no option for, and a value binding does not re-run when the OPTIONS are what arrived. Thirteen controls convert, the workspace Configure face's four among them. Two shapes stay on `value=` and the exemption is deliberate: a hard-coded or generated option list has no async gap, and a control whose value starts empty and only moves because the operator moved it has nothing stored to lose |
 | [ADR-0134](#adr-0134-the-entity-an-api-is-reached-through-is-an-endpoint) | 2026-08-28 | Accepted | The entity formerly named `interface` renames to `endpoint` end to end (table, routes, `endpoint:*` permission nouns, console, docs, the `endpoint-reachable` datapoint renamed in place), executing #603's naming ruling as ADR-0073's transports-become-code lands: `service` was disqualified by the existing service-principal table, `api` by the platform's own API vocabulary, and `endpoint` is the word the design already used for this thing's address, which becomes `address` so the schema never reads `endpoint.endpoint` |
 | [ADR-0135](#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it) | 2026-08-28 | Accepted | A driver's body is a versioned declarative spec (jsonb on the driver row, validated against the catalogs at every write): one transport, typed inputs with secret references, and three function families (polls, listeners, command bindings). Attach derives the endpoint and its tasks from the spec, emit lanes baked at attach; a listener's arm conversation is session plumbing, never recorded command rows |
+| [ADR-0136](#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch) | 2026-08-28 | Accepted | The command wire is a per-node pull (`og.v1.command.<node>`, request-reply like the worklist) with the binding's request rendered server-side at dispatch: at-least-once delivery (redeliver after silence, a delivery TTL past which settlement's timed-out covers abandonment), execution idempotent per command id at the node, the report (`og.v1.commandstatus.<node>`) stamping `executed_at` once under placement confinement, and the report never the verdict: settlement stays the judgment of observed against intended |
 
 ## Entries
 
@@ -6224,3 +6225,30 @@ interface create form, since that name is the platform's to mint.
   authoring model (#489) this layer will slot under. The lane bake executes the authoring model's
   compile step at the earliest point it exists; transforms stay declared data operations so the
   expression engine (#524) is not a dependency of the collection path.
+
+### ADR-0136: Actuation is a per-node pull, rendered at dispatch
+
+- **Date:** 2026-08-28 | **Status:** Accepted | **Pages:** [commands](/architecture/commands/),
+  [messaging](/architecture/messaging/), [collection](/architecture/collection/)
+- **Decision:** The command wire (#815) is a **pull**: a node asks `og.v1.command.<node>`
+  (request-reply mirroring the worklist, the same reply-inbox confinement and per-node subject
+  grant) and receives the commands whose owning component has a driver-attached endpoint placed
+  on it and whose driver binds the command's type. The binding's request template renders
+  **server-side at dispatch** (`${value}` the intended value, `${arg.key}` an issue param,
+  references validated at spec write), so the node executes a finished instruction and holds no
+  template logic; an unrenderable binding records terminal `exec_error` instead of redelivering.
+  Delivery is at-least-once: the pull stamps `dispatched_at`, silence redelivers after an
+  interval, and a delivery TTL bounds the queue (a command no node picks up falls to settlement's
+  `timed-out`). Execution is idempotent per command id at the node (a redelivery repeats the
+  report, not the actuation), and the report on `og.v1.commandstatus.<node>` stamps
+  `executed_at` once, under the same placement confinement the worklist carries. The report is
+  **not** the verdict: any device answer counts as actuated, and whether the device did it stays
+  settlement's judgment of observed (the driver's polls, #814) against intended.
+- **Context:** The epic reserved the subject and demanded at-least-once delivery with idempotent
+  execution and per-node isolation. A pull over the existing request-reply grammar reuses the
+  proven worklist confinement and needs no JetStream API grants per node; a durable JetStream
+  per-node consumer remains open as the scale evolution (#430's topology). Rendering at dispatch
+  keeps secrets and template semantics server-side and makes the delivered payload inspectable;
+  the execution arc (`dispatched_at`, `executed_at`, `exec_error`) lands beside the settlement
+  arc rather than inside it because "the device was told" and "the device did" are different
+  facts, and conflating them is how a wire ack gets mistaken for an outcome.
