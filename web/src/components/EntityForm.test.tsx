@@ -2,12 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import EntityForm from "./EntityForm";
+import EntityForm, { EntityCreateForm } from "./EntityForm";
 import { BladesContext, createBladeController, createEditSlot, type BladeEdit } from "../lib/blades";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { STANDARDS_KEY } from "../lib/standards";
+import { PRODUCTS_KEY } from "../lib/products";
 import { SYSTEM_TYPES_KEY } from "../lib/system_types";
 import { TAGS_KEY } from "../lib/tags";
 import { ME_KEY, type Me } from "../lib/auth";
@@ -130,5 +131,51 @@ describe("the one form, editing", () => {
       `rename:${uuidFor("ef-room")}:huddle-2`,
     ]);
     expect(slot().editing()).toBe(false);
+  });
+});
+
+describe("the one form, empty", () => {
+  function mountCreate(kind: "system" | "location" | "component", under?: string) {
+    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
+    qc.setQueryData([...ME_KEY], owner);
+    qc.setQueryData([...SYSTEMS_KEY], []);
+    qc.setQueryData([...LOCATIONS_KEY], [
+      { id: uuidFor("ef-hq"), name: "hq", label: "Headquarters", location_type: "campus", parent_id: null, actions: ["update"] },
+      { id: uuidFor("ef-west"), name: "west", label: "West Building", location_type: "building", parent_id: uuidFor("ef-hq"), actions: ["update"] },
+    ]);
+    qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("t-room"), name: "room", label: "Room", allowed_parent_types: ["building"] }]);
+    qc.setQueryData([...STANDARDS_KEY], []);
+    qc.setQueryData([...SYSTEM_TYPES_KEY], []);
+    qc.setQueryData([...PRODUCTS_KEY], []);
+    window.history.pushState({}, "", "/web/x");
+    render(() => (
+      <QueryClientProvider client={qc}>
+        <Router base="/web">
+          <Route path="/x" component={() => <EntityCreateForm kind={kind} under={under} onCreated={() => {}} onCancel={() => {}} />} />
+        </Router>
+      </QueryClientProvider>
+    ));
+  }
+
+  it("renders what and where before identity, and the create verb named for the kind", async () => {
+    mountCreate("system");
+    const form = await screen.findByTestId("entity-create-form");
+    const eyebrows = within(form).getAllByText(/^(Classification|Placement|Identity|Tags)$/).map((e) => e.textContent);
+    expect(eyebrows).toEqual(["Classification", "Placement", "Identity", "Tags"]);
+    expect(within(form).getByRole("button", { name: /create system/i })).toBeTruthy();
+  });
+
+  it("prefills the placement from `under`, the explorer's create-where-you-stand", async () => {
+    mountCreate("system", uuidFor("ef-west"));
+    const form = await screen.findByTestId("entity-create-form");
+    const location = within(form).getByLabelText("Location") as HTMLSelectElement;
+    await waitFor(() => expect(location.value).toBe(uuidFor("ef-west")));
+  });
+
+  it("prefills a location's parent from `under`", async () => {
+    mountCreate("location", uuidFor("ef-west"));
+    const form = await screen.findByTestId("entity-create-form");
+    const parent = within(form).getByLabelText("Parent") as HTMLSelectElement;
+    await waitFor(() => expect(parent.value).toBe(uuidFor("ef-west")));
   });
 });

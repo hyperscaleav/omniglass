@@ -22,6 +22,19 @@ import { COMPONENTS_KEY, listComponents, updateComponent, renameComponent, reset
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { SYSTEM_TYPES_KEY, listSystemTypes } from "../lib/system_types";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
+import { PRODUCTS_KEY, listProducts } from "../lib/products";
+import { createSystem } from "../lib/systems";
+import { createLocation } from "../lib/locations";
+import { createComponent } from "../lib/components";
+import TreeSelect from "./TreeSelect";
+import FieldRow from "./FieldRow";
+import CreateIdentity from "./CreateIdentity";
+import SystemTypeSelect from "./SystemTypeSelect";
+import { Plus, X } from "./icons";
+import { byLabel } from "../lib/entities";
+import { bucketPhrase, nameBucket, penIncomplete } from "../lib/namegen";
+import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
+import { pathTo, type TreeNode } from "../lib/treeselect";
 
 // EntityForm (#826 slice 1): the ONE form per fleet kind. The original blade
 // vision, restored: view and edit are one component, and whether it renders
@@ -400,4 +413,258 @@ function placementLine(kind: EntityKind, rec: Record<string, unknown> | undefine
   const ref = (rec.location_id ?? rec.location) as string | undefined;
   const loc = ref ? (locations ?? []).find((l) => l.id === ref || l.name === ref) : undefined;
   return loc ? entityLabel(loc) : "Unplaced";
+}
+
+// ---------------------------------------------------------------------------
+// Create: the same form, empty. What and where come BEFORE identity, because
+// they are what the naming and labelling rules read (a stem from the
+// classification, an ordinal from the placement bucket), and both identity
+// fields open locked on the value the platform will use (#688, #699, #702).
+// The three create pages used to carry three near-identical copies of this;
+// one lives here now, and the explorer's "+ here" creates reuse it with the
+// placement prefilled (`under`).
+
+const KIND_NOUN: Record<EntityKind, string> = { system: "system", location: "location", component: "component" };
+const TYPE_RANK: Record<string, number> = { campus: 0, site: 0, region: 0, building: 1, floor: 2, room: 3 };
+
+export function EntityCreateForm(props: {
+  kind: EntityKind;
+  // A location uuid to prefill placement with: the explorer's create-where-you-stand.
+  under?: string;
+  onCreated: (created: { id: string }) => void;
+  onCancel: () => void;
+}) {
+  const me = useMe();
+  const qc = useQueryClient();
+  const isSystem = () => props.kind === "system";
+  const isLocation = () => props.kind === "location";
+  const isComponent = () => props.kind === "component";
+
+  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
+  const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems, enabled: !isLocation() }));
+  const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents, enabled: isComponent() }));
+  const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts, enabled: isComponent() }));
+  const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards, enabled: isSystem() }));
+  const systemTypes = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes, enabled: isSystem() }));
+  const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes, enabled: isLocation() }));
+
+  // Keyed AND valued on uuid, not name (#627): two same-named rows would
+  // otherwise render as identical options, and posting either would name an
+  // ambiguous ref. The API dual-accepts uuid-or-name (ADR-0062).
+  const locationItems = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 })));
+  const systemItems = createMemo<TreeNode[]>(() => (systems.data ?? []).map((sy) => ({ id: sy.id, value: sy.id, label: entityLabel(sy), parentId: sy.parent_id })));
+  const componentItems = createMemo<TreeNode[]>(() => (components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: entityLabel(c), parentId: c.parent_id })));
+  // The systems a component may be bound to on create: those the caller's
+  // system:update SCOPE actually reaches (#707), so the form never offers a
+  // choice the platform refuses on submit.
+  const bindableSystemItems = createMemo<TreeNode[]>(() => {
+    const rows = (systems.data ?? []).filter((sy) => sy.actions?.includes("update"));
+    const present = new Set(rows.map((sy) => sy.id));
+    return rows.map((sy) => ({ id: sy.id, value: sy.id, label: entityLabel(sy), parentId: sy.parent_id && present.has(sy.parent_id) ? sy.parent_id : undefined }));
+  });
+  const mayBindSystem = () => can(me.data, "system", "update") && bindableSystemItems().length > 0;
+  const bindNeedsPermission = () => !can(me.data, "system", "update");
+  const standardOptions = createMemo(() => [...(standards.data ?? [])].sort(byLabel));
+  const productOptions = createMemo(() => [...(products.data ?? [])].sort(byLabel));
+
+  const displayPen = createPen();
+  const namePen = createPen();
+  const [standard, setStandard] = createSignal("");
+  const [systemType, setSystemType] = createSignal("");
+  const [locationType, setLocationType] = createSignal("");
+  const [location, setLocation] = createSignal(isLocation() ? "" : (props.under ?? ""));
+  const [parent, setParent] = createSignal(isLocation() ? (props.under ?? "") : "");
+  const [system, setSystem] = createSignal("");
+  const [product, setProduct] = createSignal("");
+  const [busy, setBusy] = createSignal(false);
+  const [formErr, setFormErr] = createSignal<string | null>(null);
+
+  // The name and the label the platform would write, both rendered by the one
+  // engine on the server (ADR-0098, #702) from the same body this form posts.
+  // Asked only once the classification is chosen where the classification is
+  // what names it; a system is always asked, since the global rule may still
+  // render something and the refusal to name one is the answer the field needs.
+  const labelDraft = useLabelDraft(() => {
+    if (isSystem()) {
+      return { kind: "system" as const, body: { system_type_id: systemType() || undefined, standard_id: standard() || undefined, name: namePen.value().trim() || undefined, parent: parent() || undefined, location: location() || undefined } };
+    }
+    if (isLocation()) {
+      return locationType().trim()
+        ? { kind: "location" as const, body: { location_type: locationType().trim(), name: namePen.value().trim() || undefined, parent: parent() || undefined } }
+        : null;
+    }
+    return product()
+      ? { kind: "component" as const, body: { product: product(), name: namePen.value().trim() || undefined, parent: parent() || undefined, location: location() || undefined, system: system() || undefined } }
+      : null;
+  });
+
+  const bucket = createMemo(() => (isLocation() ? nameBucket(parent()) : nameBucket(parent(), location())));
+  const bucketText = createMemo(() => {
+    const b = bucket();
+    if (isLocation()) return bucketPhrase("location", b, pathTo(locationItems(), b.id));
+    const path = b.under === "parent" ? pathTo(isSystem() ? systemItems() : componentItems(), b.id) : b.under === "location" ? pathTo(locationItems(), b.id) : [];
+    return bucketPhrase(props.kind, b, path);
+  });
+
+  async function create(e: Event) {
+    e.preventDefault();
+    setBusy(true);
+    setFormErr(null);
+    const nm = namePen.value().trim();
+    // An empty name is OMITTED rather than posted as "": omitted is "generate
+    // one", where "" is a name of nothing the API refuses. The create response
+    // is bound by id (#627): the locally typed name is not a reliable handle.
+    try {
+      let created: { id: string };
+      if (isSystem()) {
+        created = await createSystem({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, standard_id: standard() || undefined, system_type_id: systemType() || undefined, label: displayPen.value().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
+        await qc.invalidateQueries({ queryKey: [...SYSTEMS_KEY] });
+      } else if (isLocation()) {
+        created = await createLocation({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, location_type: locationType().trim(), label: displayPen.value().trim() || undefined, parent: parent() || undefined });
+        await qc.invalidateQueries({ queryKey: [...LOCATIONS_KEY] });
+      } else {
+        created = await createComponent({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, label: displayPen.value().trim() || undefined, system: system() || undefined, location: location() || undefined, parent: parent() || undefined, product: product() });
+        await qc.invalidateQueries({ queryKey: [...COMPONENTS_KEY] });
+      }
+      props.onCreated(created);
+    } catch (er) {
+      setFormErr(await recoverFromMovedName(er, labelDraft.refetch));
+      setBusy(false);
+    }
+  }
+
+  const ready = () => {
+    if (isLocation()) return !!locationType().trim();
+    if (isComponent()) return !!product();
+    return true;
+  };
+  const placeholders = () => {
+    if (isSystem()) return { name: "exec-boardroom", display: "Executive Boardroom" };
+    if (isLocation()) return { name: "boardroom", display: "Conf Room 301" };
+    return { name: "mic-2 (optional)", display: "Ceiling Mic 2" };
+  };
+
+  return (
+    <form data-testid="entity-create-form" class="flex flex-col gap-5" onSubmit={create}>
+      <div class="flex items-center gap-2">
+        <h2 class="text-lg font-semibold tracking-tight">New {KIND_NOUN[props.kind]}</h2>
+        <span class="badge badge-warning badge-sm">Draft</span>
+      </div>
+      <Show when={formErr()}>
+        <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
+      </Show>
+
+      <div class="flex flex-col gap-1.5">
+        <span class={EYEBROW}>Classification</span>
+        <div class="flex flex-col gap-3">
+          <Show when={isSystem()}>
+            <FieldRow label="Type" hint="What kind of space this is (a boardroom, a classroom, a video wall). Separate from the standard: the type is what it IS, the standard is what it is built to. It is also where a generated name's stem comes from.">
+              <SystemTypeSelect types={systemTypes.data ?? []} value={systemType()} onChange={setSystemType} emptyLabel="Unclassified" />
+            </FieldRow>
+            <FieldRow label="Standard" hint="The blueprint this system conforms to. Optional.">
+              <select class="select select-bordered w-full" value={standard()} onChange={(e) => setStandard(e.currentTarget.value)}>
+                <option value="">None (a one-off system)</option>
+                <For each={standardOptions()}>{(st) => <option value={st.name}>{st.label}</option>}</For>
+              </select>
+            </FieldRow>
+          </Show>
+          <Show when={isLocation()}>
+            <FieldRow label="Location type" hint="What kind of place this is. It decides which parents are legal, and whether the platform can name it.">
+              <select class="select select-bordered w-full" value={locationType()} onChange={(e) => setLocationType(e.currentTarget.value)}>
+                <option value="" disabled>Select a type…</option>
+                <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.label}</option>}</For>
+              </select>
+            </FieldRow>
+          </Show>
+          <Show when={isComponent()}>
+            <FieldRow label="Product" hint="What this component is an instance of. Required; use a generic until a real product is modeled.">
+              <select class="select select-bordered w-full" value={product()} onChange={(e) => setProduct(e.currentTarget.value)}>
+                <option value="" disabled>Choose a product…</option>
+                <For each={productOptions()}>{(pr) => <option value={pr.name}>{pr.label}</option>}</For>
+              </select>
+            </FieldRow>
+          </Show>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <span class={EYEBROW}>Placement</span>
+        <Show when={isSystem()}>
+          <div class="grid grid-cols-2 gap-3">
+            <FieldRow label="Location">
+              <TreeSelect items={locationItems()} value={location()} onChange={setLocation} rootLabel="None" />
+            </FieldRow>
+            <FieldRow label="Parent system">
+              <TreeSelect items={systemItems()} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />
+            </FieldRow>
+          </div>
+        </Show>
+        <Show when={isLocation()}>
+          <div class="grid grid-cols-2 gap-3">
+            <FieldRow label="Parent">
+              <TreeSelect items={locationItems()} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />
+            </FieldRow>
+          </div>
+        </Show>
+        <Show when={isComponent()}>
+          <div class="grid grid-cols-2 gap-3">
+            {/* A system on a create is the component's primary MEMBERSHIP, gated
+                on system:update and resolved in that scope (#707). The slot keeps
+                the grid and explains itself instead of vanishing, naming whichever
+                of the two layers is the thing to ask for. */}
+            <Show
+              when={mayBindSystem()}
+              fallback={
+                <div class="flex flex-col gap-1">
+                  <span class="text-[12px] font-medium text-base-content/70">System</span>
+                  <Show
+                    when={bindNeedsPermission()}
+                    fallback={<p class="text-xs text-base-content/60">Putting a component in a system writes that system's membership, and none of the systems you can see is inside your <code>system:update</code> scope. Create it here, and someone whose grant covers the system can add it after.</p>}
+                  >
+                    <p class="text-xs text-base-content/60">Putting a component in a system writes that system's membership, which needs <code>system:update</code>. Create it here, and someone holding that permission can add it to a system after.</p>
+                  </Show>
+                </div>
+              }
+            >
+              <FieldRow label="System">
+                <TreeSelect items={bindableSystemItems()} value={system()} onChange={setSystem} rootLabel="None" />
+              </FieldRow>
+            </Show>
+            <FieldRow label="Location">
+              <TreeSelect items={locationItems()} value={location()} onChange={setLocation} rootLabel="None" />
+            </FieldRow>
+          </div>
+          <FieldRow label="Parent component" hint="Omit for a root component.">
+            <TreeSelect items={componentItems()} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />
+          </FieldRow>
+        </Show>
+      </div>
+
+      <CreateIdentity
+        kind={props.kind}
+        draft={() => labelDraft.data}
+        pending={() => labelDraft.isFetching}
+        nameRefused={() => nameRefused(labelDraft.error)}
+        bucket={bucketText}
+        namePen={namePen}
+        displayPen={displayPen}
+        namePlaceholder={placeholders().name}
+        displayPlaceholder={placeholders().display}
+      />
+
+      <div class="flex items-center gap-2 border-t border-base-300 pt-4">
+        <Button icon={X} onClick={() => props.onCancel()}>Cancel</Button>
+        <span class="flex-1" />
+        {/* A name is required only when the platform will not mint one; the
+            classification that names it stays required where it is the only
+            shape-definer (a location's type, a component's product). */}
+        <Button type="submit" intent="action" icon={Plus} disabled={busy() || !ready() || penIncomplete(!!labelDraft.data?.name, namePen)}>Create {KIND_NOUN[props.kind]}</Button>
+      </div>
+
+      <div class="flex flex-col gap-1 opacity-50">
+        <span class={EYEBROW}>Tags</span>
+        <span class="text-sm text-base-content/40">Available once the {KIND_NOUN[props.kind]} is created.</span>
+      </div>
+    </form>
+  );
 }

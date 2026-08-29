@@ -1,35 +1,26 @@
-import { byLabel, entityLabel } from "../lib/entities";
+import { entityLabel } from "../lib/entities";
 import { componentBlade, systemBlade, locationBlade } from "../components/EntityBlade";
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import { EntityCreateForm } from "../components/EntityForm";
+import { Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListNode, type PageDescriptor } from "../components/TreeList";
 
-import FieldRow from "../components/FieldRow";
 
-import TreeSelect from "../components/TreeSelect";
 import {
   type Component as Comp,
     COMPONENTS_KEY,
   listComponents,
-  createComponent,
   
   
   deleteComponent,
 } from "../lib/components";
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
-import { PRODUCTS_KEY, listProducts } from "../lib/products";
-import { bucketPhrase, createPen, nameBucket, penIncomplete } from "../lib/namegen";
-import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
-import { pathTo, type TreeNode } from "../lib/treeselect";
-import CreateIdentity from "../components/CreateIdentity";
 
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
 
-import { Plus, X } from "../components/icons";
-import Button from "../components/Button";
 import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
 
@@ -111,7 +102,6 @@ function ComponentsIndex() {
   // The product catalog for the create form's required Product picker (#614:
   // component.product_id is NOT NULL, so every component is an instance of a
   // product; the generics fit anything not yet modeled more specifically).
-  const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts }));
   // Keyed on uuid, not name (#627: name uniqueness is scoped to placement, so
   // two systems or two locations can legally share a name; a name-keyed map
   // would silently collapse them to whichever sorted last).
@@ -140,16 +130,6 @@ function ComponentsIndex() {
   // than dropped: its parentId would name a node no longer in the list, and the
   // tree flattener would lose the row entirely. What the picker shows is the set
   // of legal choices, not the shape of the fleet.
-  const bindableSystemItems = createMemo<TreeNode[]>(() => {
-    const rows = (systems.data ?? []).filter((s) => s.actions?.includes("update"));
-    const present = new Set(rows.map((s) => s.id));
-    return rows.map((s) => ({
-      id: s.id, value: s.id, label: entityLabel(s),
-      parentId: s.parent_id && present.has(s.parent_id) ? s.parent_id : undefined,
-    }));
-  });
-  const locationItems = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id })));
-  const componentItems = createMemo<TreeNode[]>(() => (components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: entityLabel(c), parentId: c.parent_id })));
 
   // One filter facet per tag key present across the components, derived from
   // their effective tags, so the bar can filter by any tag like any other field.
@@ -238,210 +218,8 @@ function ComponentsIndex() {
   // The classic detail body retired with the face (#800 slice 3): the blade
   // is the override, the full page unreachable, so the config renders null.
   function ComponentCreate(): JSX.Element {
-    // Independent fields, NOT createIdentity's derive-from-display coupling
-    // (#627 Task 15d): a blank name here means "the platform generates one
-    // from the product's component_type" (the same "<stem>-<n>" rule
-    // :resetName applies), so auto-filling it from whatever the operator
-    // types as a label would silently claim the pen on their behalf
-    // the moment they typed a label. #688 moved system and location to the
-    // same footing, and createIdentity's derive path stays in use on the
-    // registry and identity pages, whose names have no generator and stay
-    // globally unique.
-    const displayPen = createPen();
-    const namePen = createPen();
-    // The gate on the membership half of this create, and it is TWO conditions
-    // because authorization is two layers and both are enforced (#707 and its
-    // review): the system:update permission the API stamps on the route, and a
-    // system:update SCOPE that actually reaches something. A permission-only gate
-    // offered the picker to a principal holding system:update over nothing at
-    // all, which is the ordinary shape of a location-scoped deploy grant while
-    // the cross-tier expansion is unbuilt (#10): the form filled in, and the
-    // submit came back refused. It decides what the form OFFERS, never what the
-    // caller may do, which stays the server's call.
-    const mayBindSystem = () => can(me.data, "system", "update") && bindableSystemItems().length > 0;
-    // Which of the two is missing, so the empty slot says the true thing. The
-    // recovery differs: one is a permission to ask for, the other is a grant that
-    // covers a system.
-    const bindNeedsPermission = () => !can(me.data, "system", "update");
-    const [system, setSystem] = createSignal("");
-    const [location, setLocation] = createSignal("");
-    const [parent, setParent] = createSignal("");
-    const [product, setProduct] = createSignal("");
-    const [busy, setBusy] = createSignal(false);
-    const [formErr, setFormErr] = createSignal<string | null>(null);
-
-    // Sorted by label, generics included: the fallback choice for
-    // anything not yet modeled as a real SKU sits in the same list as every
-    // named product, not behind a separate affordance.
-    const productOptions = createMemo(() =>
-      [...(products.data ?? [])].sort(byLabel),
-    );
-
-    // What the platform would NAME and LABEL this, which only the server can
-    // answer: a label rule is a Go template over a closed map and a name is a
-    // stem the gateway resolves plus the lowest ordinal free in this bucket, so
-    // the console asks rather than re-implements either (ADR-0098, ADR-0104 as
-    // amended by #702). Asked with the same body the create posts, and only once
-    // the classification is chosen, so a half-filled form is never sent a
-    // question it cannot answer.
-    //
-    // The placement is in the body because it is not decoration: the ordinal is
-    // read from the bucket a parent, else a location, else neither makes.
-    const labelDraft = useLabelDraft(() =>
-      product()
-        ? {
-            kind: "component" as const,
-            body: {
-              product: product(),
-              name: namePen.value().trim() || undefined,
-              parent: parent() || undefined,
-              location: location() || undefined,
-              system: system() || undefined,
-            },
-          }
-        : null,
-    );
-
-    const bucket = createMemo(() => nameBucket(parent(), location()));
-    const bucketText = createMemo(() => {
-      const b = bucket();
-      const path = b.under === "parent" ? pathTo(componentItems(), b.id) : b.under === "location" ? pathTo(locationItems(), b.id) : [];
-      return bucketPhrase("component", b, path);
-    });
-
-    async function create(e: Event) {
-      e.preventDefault();
-      setBusy(true);
-      setFormErr(null);
-      const nm = namePen.value().trim();
-      try {
-        // Bind the create response (#627 Task 15c): under uuid addressing
-        // the locally typed name is not a reliable handle to navigate by,
-        // and now (#627 Task 15d) it may be empty entirely; the server's
-        // own id always resolves. An empty name omits the field rather than
-        // posting "", which the API would refuse against the entity name
-        // pattern: omitted is "generate one," not "generate a name of
-        // nothing."
-        const created = await createComponent({
-          name: nm || undefined,
-          expected_name: nm ? undefined : labelDraft.data?.name,
-          label: displayPen.value().trim() || undefined,
-          system: system() || undefined,
-          location: location() || undefined,
-          parent: parent() || undefined,
-          product: product(),
-        });
-        await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
-        navigate(`/components/${encodeURIComponent(created.id)}?edit=1`);
-      } catch (er) {
-        setFormErr(await recoverFromMovedName(er, labelDraft.refetch));
-        setBusy(false);
-      }
-    }
-
-    return (
-      <form class="flex flex-col gap-5" onSubmit={create}>
-        <div class="flex items-center gap-2">
-          <h2 class="text-lg font-semibold tracking-tight">New component</h2>
-          <span class="badge badge-warning badge-sm">Draft</span>
-        </div>
-        <Show when={formErr()}>
-          <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
-        </Show>
-
-        {/* What it is, then where it sits, then what it is called. The
-            classification carries the stem and the placement carries the
-            ordinal's bucket, so both are answered before the form has anything
-            to say about the name. */}
-        <div class="flex flex-col gap-1.5">
-          <span class="eyebrow">Classification</span>
-          <FieldRow
-            label="Product"
-            hint="What this component is an instance of. Required; use a generic until a real product is modeled."
-          >
-            <select class="select select-bordered w-full" value={product()} onChange={(e) => setProduct(e.currentTarget.value)}>
-              <option value="" disabled>Choose a product…</option>
-              <For each={productOptions()}>{(p) => <option value={p.name}>{p.label}</option>}</For>
-            </select>
-          </FieldRow>
-        </div>
-
-        <div class="flex flex-col gap-1.5">
-          <span class="eyebrow">Placement</span>
-          <div class="grid grid-cols-2 gap-3">
-            {/* A system on a create is not a field on the component, it is the
-                component's primary MEMBERSHIP, so the API gates naming one on
-                system:update and resolves it in that scope, exactly as the
-                membership route does (#707). Offering a choice the platform
-                refuses on submit is what #699's rule exists to prevent, and both
-                layers can refuse it, so both are read here. The slot keeps the
-                grid and explains itself instead of vanishing, naming whichever of
-                the two is the thing to ask for. */}
-            <Show
-              when={mayBindSystem()}
-              fallback={
-                <div class="flex flex-col gap-1">
-                  <span class="text-[12px] font-medium text-base-content/70">System</span>
-                  <Show
-                    when={bindNeedsPermission()}
-                    fallback={
-                      <p class="text-xs text-base-content/60">
-                        Putting a component in a system writes that system's membership, and none of the systems you can see is inside your <code>system:update</code> scope. Create it here, and someone whose grant covers the system can add it after.
-                      </p>
-                    }
-                  >
-                    <p class="text-xs text-base-content/60">
-                      Putting a component in a system writes that system's membership, which needs <code>system:update</code>. Create it here, and someone holding that permission can add it to a system after.
-                    </p>
-                  </Show>
-                </div>
-              }
-            >
-              <FieldRow label="System">
-                <TreeSelect items={bindableSystemItems()} value={system()} onChange={setSystem} rootLabel="None" />
-              </FieldRow>
-            </Show>
-            <FieldRow label="Location">
-              <TreeSelect items={locationItems()} value={location()} onChange={setLocation} rootLabel="None" />
-            </FieldRow>
-          </div>
-          <FieldRow
-            label="Parent component"
-            hint="Omit for a root component."
-          >
-            <TreeSelect items={componentItems()} value={parent()} onChange={setParent} rootLabel="Root (no parent)" />
-          </FieldRow>
-        </div>
-
-        <CreateIdentity
-          kind="component"
-          draft={() => labelDraft.data}
-          pending={() => labelDraft.isFetching}
-          nameRefused={() => nameRefused(labelDraft.error)}
-          bucket={bucketText}
-          namePen={namePen}
-          displayPen={displayPen}
-          namePlaceholder="mic-2 (optional)"
-          displayPlaceholder="Ceiling Mic 2"
-        />
-
-        <div class="flex items-center gap-2 border-t border-base-300 pt-4">
-          <Button icon={X} onClick={() => navigate("/components")}>Cancel</Button>
-          <span class="flex-1" />
-          {/* A name is required only where nothing will mint one: a product
-              whose component_type chain carries no stem (#699 closes the
-              asymmetry the other two forms did not have). Product stays
-              required, the #614 classification floor and the generator's own
-              stem source. */}
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !product() || penIncomplete(!!labelDraft.data?.name, namePen)}>Create component</Button>
-        </div>
-
-        <div class="flex flex-col gap-1 opacity-50">
-          <span class="eyebrow">Tags</span>
-          <span class="text-sm text-base-content/40">Available once the component is created.</span>
-        </div>
-      </form>
-    );
+    // The one form, empty (#826): the page only says where to go next.
+    return <EntityCreateForm kind="component" onCreated={(created) => navigate(`/components/${encodeURIComponent(created.id)}?edit=1`)} onCancel={() => navigate("/components")} />;
   }
 
   // A cross-page deep link from a system seeds a system facet by the system's
