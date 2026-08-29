@@ -46,10 +46,12 @@ export default function Explore() {
   const [search, setSearch] = useSearchParams();
 
   // The face: the URL wins, then this browser's last choice, then the tree.
+  // A ?node= address is a tree intent (it names a node to open), so the
+  // stored table face never overrides it: a shared link lands where it says.
   const param = (k: string) => { const v = search[k]; return Array.isArray(v) ? v[0] : v; };
   const face = () => (param("face") === "table" ? "table" : "tree");
   onMount(() => {
-    if (!param("face") && readStoredFace() === "table") setSearch({ face: "table" }, { replace: true });
+    if (!param("face") && !param("node") && readStoredFace() === "table") setSearch({ face: "table" }, { replace: true });
   });
   const setFace = (f: "tree" | "table") => {
     storeFace(f);
