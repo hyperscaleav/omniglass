@@ -46,10 +46,16 @@ screenshots:
   - id: fleet-map
     path: /web/systems/huddle
     alt: "The map inside Overview: the standard's declared room rendered top-down, one marker per role position, solid where staffed and hollow where not."
-    # The header's since-line ages with the capture (baseline only; the docs
-    # embed the clean render).
+    # The header's since-line ages with the capture, and Overview carries the
+    # compact history (its strip and rows move with the seed's own clock), so
+    # the fleet-system masks apply here too (baseline only; the docs embed the
+    # clean render).
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
+      - ".og-statestrip"
+      - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
+      - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
+      - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
   # The auditorium (reached through its band) carries the fleet's live
   # critical alarm, so the history tab has something real to say.
   - id: fleet-history
@@ -71,6 +77,8 @@ screenshots:
       - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
       - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
       - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
+      # The logs under the incidents render seed-run stamps.
+      - "[data-testid=logs-tab]"
   - id: fleet-data
     path: /web/systems/huddle
     steps:
@@ -85,6 +93,11 @@ screenshots:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=timeseries-chart]"
       - "[data-testid=sparkline]"
+      # Overview's compact history, as on fleet-system.
+      - ".og-statestrip"
+      - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
+      - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
+      - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
   - id: fleet-location
     path: /web/locations/east
     alt: "The location workspace: the breadcrumb, the verdict header, the counts line, a band per child location, system cards with slot strips, and the allowed child types."

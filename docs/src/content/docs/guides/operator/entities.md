@@ -3,17 +3,15 @@ title: Work with an entity
 description: "Opening an entity's blade, drilling into its children, and creating, editing, or deleting through the footer action bar."
 screenshots:
   - id: entity-blade
-    path: /web/fleet?view=list
+    path: /web/explore?face=table&kind=locations
     alt: "A location's blade slides in from the right with its details and a footer action bar."
     steps:
       - action: click
         selector: "text=East Campus"
-    # The condensed blade (#799) renders two regions no clock can pin: the
-    # since line's age counts from the capture's own seed-to-shoot latency,
-    # and the 30-day strip weights its spans by that same moving now.
+    # The blade renders one region no clock can pin: the since line's age
+    # counts from the capture's own seed-to-shoot latency.
     mask:
       - "[data-testid=blade-since]"
-      - ".og-statestrip"
   - id: entity-edit-face
     path: /web/locations/east?edit=1
     alt: "An ?edit=1 deep link lands the workspace on its Configure tab, already editing."

@@ -3,7 +3,7 @@ title: Find things in your fleet
 description: "The inventory pages, the chip filter, and the tree, list, and column controls for locating a location, system, or component."
 screenshots:
   - id: inventory
-    path: /web/fleet?view=list
+    path: /web/explore?face=table&kind=locations
     alt: "The fleet's list view: kind tabs for Locations, Systems, and Components over the chip filter and the tree of campuses."
 ---
 
