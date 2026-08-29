@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { columnsFor, pathLabel, rowsFor, searchTree, subtreeVerdict } from "./explore";
+import { columnsFor, pathForNode, pathLabel, rowsFor, searchTree, subtreeVerdict } from "./explore";
 import { type FleetView } from "./fleet";
 import { uuidFor } from "./testids";
 
@@ -104,5 +104,18 @@ describe("pathLabel and searchTree", () => {
     expect(hits.some((h) => h.kind === "location" && h.label === "Level 2")).toBe(true);
     expect(searchTree(view, "classroom").map((h) => h.label)).toEqual(["Classroom", "Classroom 2"]);
     expect(searchTree(view, "")).toEqual([]);
+  });
+});
+
+describe("pathForNode", () => {
+  it("resolves a uuid to its path, minus a location that collapses into its system", () => {
+    expect(pathForNode(view, uuidFor("s-huddle"))).toEqual({ path: [uuidFor("hq"), uuidFor("west"), uuidFor("l2")], selected: uuidFor("s-huddle") });
+    expect(pathForNode(view, uuidFor("west"))).toEqual({ path: [uuidFor("hq"), uuidFor("west")], selected: uuidFor("west") });
+  });
+
+  it("resolves a name-shaped address when it is unique, systems before locations, and refuses an ambiguous or unknown one", () => {
+    expect(pathForNode(view, "huddle")?.selected).toBe(uuidFor("s-huddle"));
+    expect(pathForNode(view, "west")?.selected).toBe(uuidFor("west"));
+    expect(pathForNode(view, "no-such-thing")).toBeNull();
   });
 });

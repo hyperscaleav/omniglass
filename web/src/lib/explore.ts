@@ -123,8 +123,20 @@ export function pathLabel(view: FleetView, locationId: string): string {
 // Where a ?node= address lands: the path to open and the row to select. A
 // system's path is its location's ancestry, minus the location itself when
 // the location collapses into the system's row.
-export function pathForNode(view: FleetView, nodeId: string): { path: string[]; selected: string } | null {
+export function pathForNode(view: FleetView, node: string): { path: string[]; selected: string } | null {
   const index = locationIndex(view);
+  // A name-shaped address resolves when it names exactly one system or, failing
+  // that, exactly one location (#759's rule, the uuid always winning). Names
+  // repeat across placements, so an ambiguous one resolves to nothing rather
+  // than guessing.
+  let nodeId = node;
+  if (!index.has(node) && !(view.systems ?? []).some((s) => s.id === node)) {
+    const systems = (view.systems ?? []).filter((s) => s.name === node);
+    const locations = (view.locations ?? []).filter((l) => l.name === node);
+    if (systems.length === 1) nodeId = systems[0].id;
+    else if (systems.length === 0 && locations.length === 1) nodeId = locations[0].id;
+    else return null;
+  }
   const loc = index.get(nodeId);
   if (loc) return { path: ancestors(nodeId, index).map((l) => l.id), selected: nodeId };
   const sys = (view.systems ?? []).find((s) => s.id === nodeId);
