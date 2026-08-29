@@ -44,14 +44,16 @@ satisfied by hover and the page itself stays scannable. The standard-editor's vo
 (choices, alternates, accepted types) never leads an operator view, and a system's body
 renders components-first: one card per component with its role as a badge, role-level chrome
 only where it says something a badge cannot (a quorum beyond one, a shortfall, an unstaffed
-role). The platform-wide sweep of the older pages is tracked in #784. The system zoom is growing
-into the workspace #788 defines: facets as `?tab=` URL facts (`TabRail`), the Map tab
-rendering the standard's declared room (ADR-0128) with live occupant state on each marker.
-Since ADR-0129 these faces ARE the identity routes' default, and since #800 they are the
-ONLY faces: one way to look, one altitude rule (locations drill, systems open full screen,
-components open in blades), editing on each workspace's Configure tab, and flat tables
-surviving as a list-density toggle for bulk work. The classic detail face is retired;
-`?view=detail` is ignored and `?edit=1` lands Configure already editing.
+role). The platform-wide sweep of the older pages is tracked in #784. The system zoom grew into
+the workspace #788 defines, and #826 settled its shape: three tabs as `?tab=` URL facts
+(`TabRail`), Overview (the room, the standard's declared map with live occupant state on
+each marker, ADR-0128, the vitals), Activity (the history, the events, the logs), and
+Configure (the one form). Since ADR-0129 these faces ARE the identity routes' default, and
+since #800 they are the ONLY faces: one way to look, one altitude rule (Explore drills the
+place tree, systems open full screen, components open in blades), editing through the one
+`EntityForm` wherever the operator meets the entity (ADR-0134), and the table face behind
+Explore's toggle for bulk work. The classic detail face is retired; `?view=detail` is
+ignored and `?edit=1` lands Configure already editing.
 
 ## One renderer library, two composition modes
 
