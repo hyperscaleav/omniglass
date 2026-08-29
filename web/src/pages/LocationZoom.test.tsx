@@ -134,7 +134,7 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`, lateTypes = false) {
     <QueryClientProvider client={qc}>
       <Router base="/web">
         <Route path="/locations/:id" component={Locations} />
-        <Route path="/fleet" component={() => <div data-testid="fleet-page" />} />
+        <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
         <Route path="/systems/:id" component={() => <div data-testid="system-page" />} />
       </Router>
     </QueryClientProvider>
@@ -249,7 +249,7 @@ describe("the location zoom", () => {
   it("the breadcrumb walks the ancestor chain to the parent; the page itself is the title, not a crumb", () => {
     mount(`/web/locations/${uuidFor("lz-room")}`);
     const trail = screen.getByTestId("breadcrumb");
-    expect(within(trail).getByText("Fleet")).toBeTruthy();
+    expect(within(trail).getByText("Explore")).toBeTruthy();
     expect(within(trail).getByText("Headquarters")).toBeTruthy();
     expect(within(trail).getByText("West Building")).toBeTruthy();
     // Boardroom A is the page: in the heading, not repeated in the trail.

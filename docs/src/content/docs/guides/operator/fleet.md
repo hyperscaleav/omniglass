@@ -1,6 +1,6 @@
 ---
 title: Explore your fleet
-description: "The Fleet page: every system as a cluster of dots grouped by root location, with zoom pages for locations, systems, and components."
+description: "Explore: the drill-down tree to a system, the glance beside it, and the workspaces for locations, systems, and components."
 screenshots:
   # Component names repeat across rooms (every huddle has a videobar-1), so the
   # leaf is reached the way an operator reaches it: from the location zoom into
@@ -96,14 +96,46 @@ screenshots:
     alt: "The fleet zoom: the summary rail, the filter bar, a band per root location with one round mark per system, and dashed holes."
 ---
 
-**Fleet** shows every system you can read on one page: a band per root location, one round
-mark per system, coloured by the system's verdict, worst first. The
-[inventory pages](/guides/operator/inventory/) list rows; this page answers which systems
-need you and how many.
+The fleet has one door in the sidebar: **Explore**. It opens on the place tree, drawn as
+columns you walk down to a system; the same page wears a table face behind the toggle in
+its header. The canvas the sections below describe is the fleet's at-a-glance page at
+`/fleet`, and it retires with #832; until then both addresses work.
 
-::screenshot{#fleet}
+## Explore
 
-## Reading the page
+Explore is a drill-down tree. The first column lists the locations with no parent,
+whatever their types: a campus and a stand-alone building sit side by side if that is
+how your fleet is built, since the tree is yours and the page assumes nothing about its
+depth. Click a location and the next column lists what is under it: its child locations
+first (any type: a wing, a floor, a room, a type you defined), then the systems placed
+directly in it. Each location row wears its type, the worst verdict of every system under
+it, and how many systems that is; a location with nothing under it reads **empty**, so an
+unfinished tree is visible rather than hidden.
+
+**A room with one system is the system.** A location with exactly one system and no
+sub-locations collapses into that system's row, the location named underneath it ("Huddle,
+in Huddle Room"), because the system is what you came for. A room with two systems stays a
+node whose column lists both.
+
+The rightmost column is the **glance**. Select a system and it shows the verdict, the path
+(names repeat across rooms; the path is what makes one unambiguous), and the entity's
+[form](/guides/operator/entities/) in read mode, with **Open workspace** to the monitoring
+page and **Edit** to change it in place. Select a location and the glance shows its
+roll-up, what sits under it, **Open location**, and, when you hold the create permissions,
+**+ Location here** and **+ System here**: the same create form, empty, with the placement
+already filled in.
+
+**Search** (the box at the top, or `/`) matches a system or a location by name or by any
+fragment of its path, systems first and worst first; the hits replace the columns and each
+carries its path, and choosing one rebuilds the columns down to it. Esc restores the
+columns where you were. The address carries the walk: `?node=<id>` lands on that location
+or system with its columns open, so a copied link lands where you stood; `?face=table`
+lands on the table face, and `t` toggles between the two.
+
+Verdicts on this page are a glance. Monitoring lives on the workspaces and, later, the
+dashboards.
+
+## Reading the canvas
 
 - **The summary rail** on top, the same shape as the inventory pages: a verdict mix bar,
   how many need attention (click to show only those), and the counts. Expand it for the

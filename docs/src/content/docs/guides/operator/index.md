@@ -20,8 +20,8 @@ There are two ways to operate, and they are the same API with the same checks be
 
 - **[Sign in and your profile](/guides/operator/sign-in/)**: getting in with a password or a
   bearer token, and managing your own label, picture, and password.
-- **[Explore your fleet](/guides/operator/fleet/)**: every system as a cluster of dots on
-  one page, grouped by location, with zoom pages down to a single component.
+- **[Explore your fleet](/guides/operator/fleet/)**: walk the place tree down to a system,
+  glance at it, edit it where you found it, and open its workspace.
 - **[Find things in your fleet](/guides/operator/inventory/)**: the inventory pages, the chip
   filter, and the tree, list, and column controls.
 - **[Work with an entity](/guides/operator/entities/)**: opening a blade, drilling into

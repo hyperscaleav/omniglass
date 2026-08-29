@@ -34,6 +34,9 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
 
   { path: "/", shell: "protected", page: "Home", smoke: "/" },
   { path: "/fleet", shell: "protected", page: "Fleet", smoke: "/fleet" },
+  // Explore (#826): the drill-down tree to a system, the sidebar's one door
+  // into the fleet; it replaced the Fleet entry and the reserved Explore stub.
+  { path: "/explore", shell: "protected", page: "Explore", smoke: "/explore" },
   // Inventory pages on the generic TreeList. The :id route opens the same page
   // focused on one entity (the addressable full-page detail), addressed by uuid
   // (#627 Task 15c: name uniqueness is scoped to placement, so a name alone is
@@ -64,7 +67,6 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/dashboards", shell: "protected", page: "SectionStub", smoke: "/dashboards" },
   { path: "/alarms", shell: "protected", page: "SectionStub", smoke: "/alarms" },
   { path: "/templates", shell: "protected", page: "SectionStub", smoke: "/templates" },
-  { path: "/explore", shell: "protected", page: "SectionStub", smoke: "/explore" },
   { path: "/learn", shell: "protected", page: "SectionStub", smoke: "/learn" },
   { path: "/config", shell: "protected", page: "SectionStub", smoke: "/config" },
   { path: "/log-types", shell: "protected", page: "SectionStub", smoke: "/log-types" },

@@ -140,7 +140,7 @@ export default function ComponentLeaf() {
     // The leaf itself is the page title, so it is not the last crumb.
     const primary = rows().find((r) => r.primary);
     return [
-      { key: "fleet", label: "Fleet", onClick: () => navigate("/fleet") },
+      { key: "explore", label: "Explore", onClick: () => navigate("/explore") },
       ...chainList.map((l) => ({ key: l.id, label: entityLabel(l), onClick: () => navigate(`/locations/${l.id}`) })),
       ...(primary && primary.systemId ? [{ key: primary.systemId, label: primary.label, onClick: () => navigate(`/systems/${primary.systemId}`) }] : []),
     ];

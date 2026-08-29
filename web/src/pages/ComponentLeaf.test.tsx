@@ -93,7 +93,7 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
     <QueryClientProvider client={qc}>
       <Router base="/web">
         <Route path="/components/:id" component={Components} />
-        <Route path="/fleet" component={() => <div data-testid="fleet-page" />} />
+        <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
       </Router>
     </QueryClientProvider>
   ));
@@ -105,7 +105,7 @@ describe("the component leaf", () => {
   it("arriving directly renders the breadcrumb from the ancestor chain through the primary system, no prior navigation", () => {
     mount();
     const trail = screen.getByTestId("breadcrumb");
-    expect(within(trail).getByText("Fleet")).toBeTruthy();
+    expect(within(trail).getByText("Explore")).toBeTruthy();
     expect(within(trail).getByText("Headquarters")).toBeTruthy();
     expect(within(trail).getByText("Boardroom A")).toBeTruthy();
     // The primary system is the last crumb; the leaf itself is the title.

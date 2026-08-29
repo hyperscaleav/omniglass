@@ -3,7 +3,7 @@ import { systemBlade, componentBlade, locationBlade } from "../components/Entity
 import { EntityCreateForm } from "../components/EntityForm";
 import { Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { useNavigate, useParams } from "@solidjs/router";
+import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListNode, type PageDescriptor } from "../components/TreeList";
 
 
@@ -164,8 +164,10 @@ function SystemsIndex() {
   // is the override, the full page unreachable, so the config renders null.
 
   function SystemCreate(): JSX.Element {
-    // The one form, empty (#826): the page only says where to go next.
-    return <EntityCreateForm kind="system" onCreated={(created) => navigate(`/systems/${encodeURIComponent(created.id)}?edit=1`)} onCancel={() => navigate("/systems")} />;
+    // The one form, empty (#826): the page only says where to go next; ?under=
+    // prefills placement (the explorer's create-where-you-stand).
+    const [createParams] = useSearchParams();
+    return <EntityCreateForm kind="system" under={(Array.isArray(createParams.under) ? createParams.under[0] : createParams.under) || undefined} onCreated={(created) => navigate(`/systems/${encodeURIComponent(created.id)}?edit=1`)} onCancel={() => navigate("/systems")} />;
   }
 
   const cfg: ListConfig<SysNode> = {
