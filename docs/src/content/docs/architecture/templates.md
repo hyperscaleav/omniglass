@@ -19,7 +19,7 @@ single install.
 Nothing on this page is built. Interim: standards and location types **seed as ordinary rows**
 (`official: false`, inserted only if absent, so an operator's edit is never reverted on boot). The
 template loader, its catalog, and the create-from-template flow are tracked by
-[#317](https://github.com/hyperscaleav/omniglass/issues/317).
+[#827](https://github.com/hyperscaleav/omniglass/issues/827).
 :::
 
 ## Fork, not pin
@@ -77,7 +77,7 @@ Open, and the answer decides how much a fork scaffolds in one write: only the ro
 (trivial), or also a **property contract** and later **[system roles](/architecture/health/)**,
 letting "start from: huddle room" scaffold the slots a room needs filled, most of the operator
 value. Tracked as the open question on
-[#317](https://github.com/hyperscaleav/omniglass/issues/317).
+[#827](https://github.com/hyperscaleav/omniglass/issues/827).
 
 ## Trust: the signature and the capability manifest
 
