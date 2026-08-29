@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, on, onCleanup, onMount } from "solid-js";
+import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
@@ -90,6 +90,15 @@ export default function Explore() {
     setSearch({ node: id ?? undefined }, { replace: true });
   };
 
+  // The columns scroll among themselves while the glance stays pinned beside
+  // them, so a deep walk never pushes the glance out of view; each new column
+  // scrolls the strip to its right end, where the newest column is.
+  const [scroller, setScroller] = createSignal<HTMLDivElement>();
+  createEffect(() => {
+    columns().length;
+    const el = scroller();
+    if (el) el.scrollLeft = el.scrollWidth;
+  });
   const columns = createMemo(() => (view.data ? columnsFor(view.data, path()) : []));
   const hits = createMemo(() => (view.data ? searchTree(view.data, query()) : []));
   const crumbs = createMemo(() => {
@@ -186,10 +195,11 @@ export default function Explore() {
                     <button type="button" class="hover:underline" onClick={() => { setPath([]); select(null); }}>Locations</button>
                     <For each={crumbs()}>{(c, i) => <><span> / </span><button type="button" class="hover:underline" onClick={() => { setPath(path().slice(0, i() + 1)); select(c.id); }}>{c.label}</button></>}</For>
                   </nav>
-                  <div class="flex overflow-x-auto rounded-box border border-base-300 bg-base-200" style={{ "min-height": "20rem" }}>
+                  <div class="flex rounded-box border border-base-300 bg-base-200" style={{ "min-height": "20rem" }}>
+                    <div data-testid="explore-columns" class="flex min-w-0 flex-1 overflow-x-auto" ref={(el) => setScroller(el)}>
                     <For each={columns()}>
                       {(col, depth) => (
-                        <div data-testid={`explore-column-${col.header}`} class="flex w-52 flex-none flex-col border-r border-base-300 py-1" onKeyDown={(e) => onColumnKey(e, depth())}>
+                        <div data-testid={`explore-column-${col.header}`} class="flex w-64 flex-none flex-col border-r border-base-300 py-1" onKeyDown={(e) => onColumnKey(e, depth())}>
                           <span class="px-3 pb-1 pt-2 text-[10px] uppercase tracking-wider text-base-content/50">{col.header}</span>
                           <For each={col.rows}>
                             {(row) => (
@@ -199,13 +209,14 @@ export default function Explore() {
                                 class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-base-content/5"
                                 classList={{ "bg-base-content/10": selected() === row.id || path()[depth()] === row.id }}
                                 aria-current={selected() === row.id ? "true" : undefined}
+                                title={row.label}
                                 onClick={() => onRow(row, depth())}
                               >
                                 <span class="w-3 flex-none text-xs" classList={{ "text-primary": row.kind === "system", "text-base-content/50": row.kind === "location" }}>{row.kind === "system" ? "◆" : "▸"}</span>
                                 <span class="min-w-0 flex-1">
-                                  <span class="truncate">{row.label}</span>
-                                  <Show when={row.kind === "location"}><span class="ml-1.5 text-[10px] uppercase tracking-wider text-base-content/50">{(row as { type: string }).type}</span></Show>
-                                  <Show when={row.kind === "system" && row.inLocation}>{(l) => <span class="block text-xs text-base-content/50">in {l().label}</span>}</Show>
+                                  <span class="block truncate">{row.label}</span>
+                                  <Show when={row.kind === "location"}><span class="block text-[10px] uppercase tracking-wider text-base-content/50">{(row as { type: string }).type}</span></Show>
+                                  <Show when={row.kind === "system" && row.inLocation}>{(l) => <span class="block truncate text-xs text-base-content/50">in {l().label}</span>}</Show>
                                 </span>
                                 <Show when={row.kind === "location" && row.systems === 0 && row.children === 0} fallback={
                                   <span class="flex flex-none items-center gap-1">
@@ -222,6 +233,7 @@ export default function Explore() {
                         </div>
                       )}
                     </For>
+                    </div>
                     <Show when={selected()}>{(id) => <Glance id={id()} />}</Show>
                   </div>
                 </Show>
@@ -264,7 +276,7 @@ export default function Explore() {
       return parts.join(" · ");
     };
     return (
-      <aside data-testid="explore-glance" class="flex w-80 flex-none flex-col gap-3 border-l border-base-300 bg-base-100 p-3 text-sm">
+      <aside data-testid="explore-glance" class="flex w-[26rem] min-w-0 flex-none flex-col gap-3 overflow-hidden border-l border-base-300 bg-base-100 p-3 text-sm">
         <span class="text-[10px] uppercase tracking-wider text-base-content/50">{slot.editing() ? "Edit" : "Glance"}</span>
         <Show when={loc() ?? sys()} fallback={<span class="text-base-content/60">Nothing answers this address.</span>}>
           {(row) => (

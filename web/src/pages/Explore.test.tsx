@@ -115,6 +115,22 @@ describe("the columns", () => {
     expect(window.location.search).toContain(`node=${uuidFor("s-huddle")}`);
   });
 
+  it("pins the glance beside the column strip, outside the strip's own scroller", async () => {
+    // Four columns deep, the strip overflows and scrolls; a glance rendered
+    // inside the scroller rode out of view with it (the first capture of the
+    // fleet shot clipped the path and the roles). The glance is a sibling.
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: /Headquarters/ }));
+    fireEvent.click(within(column("Headquarters")).getByRole("button", { name: /West Building/ }));
+    fireEvent.click(within(column("West Building")).getByRole("button", { name: /Level 2/ }));
+    fireEvent.click(within(column("Level 2")).getByRole("button", { name: /Huddle/ }));
+    const glance = await screen.findByTestId("explore-glance");
+    const strip = screen.getByTestId("explore-columns");
+    expect(strip.contains(column("Level 2"))).toBe(true);
+    expect(strip.contains(glance)).toBe(false);
+    expect(glance.parentElement).toBe(strip.parentElement);
+  });
+
   it("keeps a room with two systems as a node whose column lists both", async () => {
     mount();
     fireEvent.click(await screen.findByRole("button", { name: /Headquarters/ }));

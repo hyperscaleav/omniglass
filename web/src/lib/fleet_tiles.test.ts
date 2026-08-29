@@ -143,4 +143,19 @@ describe("countsLine", () => {
     };
     expect(countsLine(spec)).toEqual(["3 components", "2 of 2 slots filled"]);
   });
+
+  it("singularises a count of one by the label's own ending", () => {
+    const spec = {
+      subject: "systems",
+      ratio: { healthy: 0, incomplete: 1, degraded: 0, outage: 0, total: 1 },
+      attention: { outage: 0, degraded: 0, incomplete: 1, total: 1 },
+      counts: [
+        { key: "children", label: "children", value: 1 },
+        { key: "campuses", label: "Campuses", value: 1 },
+        { key: "alarms", label: "active alarms", value: 1 },
+        { key: "slots", label: "slots filled", value: "1 of 1" },
+      ],
+    };
+    expect(countsLine(spec)).toEqual(["1 system", "1 needs attention", "1 child", "1 Campus", "1 active alarm", "1 of 1 slots filled"]);
+  });
 });

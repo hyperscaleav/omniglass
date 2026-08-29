@@ -174,14 +174,31 @@ export function componentTileSpec(view: FleetView, componentId: string, activeAl
 // (a slot ratio) rides as written, an empty one is dropped. Rendered by the
 // shared header on every altitude; nothing else counts anything.
 export function countsLine(spec: TileSpec): string[] {
-  const parts: string[] = [`${spec.ratio.total} ${spec.subject}`];
-  if (spec.attention.total > 0) parts.push(`${spec.attention.total} need attention`);
+  const parts: string[] = [counted(spec.ratio.total, spec.subject)];
+  if (spec.attention.total > 0) parts.push(counted(spec.attention.total, "need attention"));
   for (const c of spec.counts) {
     if (typeof c.value === "number") {
-      if (c.value > 0) parts.push(`${c.value} ${c.label}`);
+      if (c.value > 0) parts.push(counted(c.value, c.label));
     } else if (c.value.trim() !== "") {
       parts.push(`${c.value} ${c.label}`);
     }
   }
   return parts;
+}
+
+// A count reads with its label, singular at one. Labels arrive plural from the
+// specs (a type's own display name included), so the singular is derived from
+// the ending rather than looked up: "children" to "child", "Campuses" to
+// "Campus", "active alarms" to "active alarm"; the attention part is a verb.
+function counted(n: number, label: string): string {
+  return `${n} ${n === 1 ? singular(label) : label}`;
+}
+
+function singular(label: string): string {
+  if (label === "need attention") return "needs attention";
+  if (label.endsWith("children")) return `${label.slice(0, -8)}child`;
+  if (/(ss|sh|ch|x|us)es$/.test(label)) return label.slice(0, -2);
+  if (/[^aeiou]ies$/.test(label)) return `${label.slice(0, -3)}y`;
+  if (label.endsWith("s") && !label.endsWith("ss")) return label.slice(0, -1);
+  return label;
 }

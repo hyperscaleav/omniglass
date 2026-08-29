@@ -79,8 +79,8 @@ export default function FleetShell(props: {
           <div data-testid="counts-line" class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-base-content/70">
             {countsLine(t()).map((part, idx) => (
               <>
-                <Show when={idx > 0}><span class="text-base-content/30">\u00b7</span></Show>
-                <Show when={part.endsWith(" need attention") && props.filterKeys.length > 0} fallback={<span class="tabular-nums">{part}</span>}>
+                <Show when={idx > 0}><span class="text-base-content/30">{"\u00b7"}</span></Show>
+                <Show when={/ needs? attention$/.test(part) && props.filterKeys.length > 0} fallback={<span class="tabular-nums">{part}</span>}>
                   <Button size="xs" intent={attentionOn() ? "action" : "quiet"} onClick={toggleAttention} title="Filter to what needs attention">{part}</Button>
                 </Show>
               </>
