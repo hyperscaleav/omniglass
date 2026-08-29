@@ -247,6 +247,7 @@ func TestValidateTransportShape(t *testing.T) {
 		{"snmp emit not by oid", `{"version":1,"transport":"snmp","polls":[{"name":"p","schedule":{"every":"60s"},"request":{"get":["1.3"]},"emits":[{"name":"uptime","extract":{"regex":"x"}}]}]}`, "oid"},
 		{"poll on an unfetchable transport", `{"version":1,"transport":"http","polls":[{"name":"p","schedule":{"every":"60s"},"request":{"path":"/"},"emits":[{"name":"uptime","extract":{"jsonpath":"a"}}]}]}`, "no poll fetcher"},
 		{"command binding on non-tcp", `{"version":1,"transport":"snmp","polls":[{"name":"p","schedule":{"every":"60s"},"request":{"get":["1.3"]},"emits":[{"name":"uptime","extract":{"oid":"1.3"}}]}],"commands":[{"command_type":"set-input","request":{"line":"X ${value}"}}]}`, "no actuation wire"},
+		{"tcp emit not by regex", `{"version":1,"transport":"tcp","polls":[{"name":"p","schedule":{"every":"60s"},"request":{"line":"STATUS"},"emits":[{"name":"video-input","extract":{"key":"in"}}]}]}`, "must locate by regex"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -261,5 +262,39 @@ func TestValidateTransportShape(t *testing.T) {
 				t.Fatalf("validate = %v, want a refusal naming %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// A tcp poll whose emits locate by regex (the only extractor a line response
+// can feed) validates clean: the shape check refuses the wrong extractor, not
+// the right one.
+func TestValidateTCPPollRegexEmitOK(t *testing.T) {
+	cat := catalog()
+	s, err := driver.Parse([]byte(`{"version":1,"transport":"tcp","polls":[{"name":"p","schedule":{"every":"60s"},"request":{"line":"STATUS"},"emits":[{"name":"video-input","extract":{"regex":"^INPUT (\\S+)$"}}]}]}`))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if err := s.Validate(cat); err != nil {
+		t.Fatalf("validate = %v, want clean (a tcp regex emit is valid)", err)
+	}
+}
+
+// The getter stores a response OID with the leading dot stripped; a spec
+// authored in the standard MIB ".1.3..." form must still locate its value,
+// not fault every tick.
+func TestInterpretSNMPLeadingDotOID(t *testing.T) {
+	fn := &driver.BakedFunction{
+		Driver: "snmp-generic", Function: "scalars",
+		Emits: []driver.BakedEmit{
+			{Name: "model-number", Lane: "property", Extract: driver.Extract{OID: ".1.3.6.1.2.1.1.1.0"}},
+		},
+	}
+	payload := driver.Payload{Values: map[string]string{"1.3.6.1.2.1.1.1.0": "Boreal AirWall 3"}}
+	emitted, faults := fn.Interpret(payload, time.Now())
+	if len(faults) != 0 {
+		t.Fatalf("faults = %v, want none (a leading-dot OID should match)", faults)
+	}
+	if len(emitted) != 1 || emitted[0].Text != "Boreal AirWall 3" {
+		t.Fatalf("emitted = %+v, want the model number located", emitted)
 	}
 }

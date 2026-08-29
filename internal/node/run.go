@@ -122,10 +122,11 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 		return collection.WorklistReply{}, err
 	}
 	logger.Info("worklist pulled", "facility", "collection", "tasks", len(wl.Tasks))
-	// executedCommands remembers each pulled command's outcome for the life of
-	// the run: at-least-once delivery means redelivery, and idempotence per
-	// command id lives here (the report repeats, the device is not touched twice).
-	executedCommands := map[int64]string{}
+	// executedCommands remembers each pulled command's outcome across ticks:
+	// at-least-once delivery means redelivery, and idempotence per command id
+	// lives here (the report repeats, the device is not touched twice). It is
+	// pruned past the redelivery window so it does not grow for the life of the run.
+	executedCommands := map[int64]commandOutcome{}
 	if err := runTasks(ctx, nc, cfg.Name, wl, runner, verdicts, faultseen); err != nil {
 		return wl, err
 	}

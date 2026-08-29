@@ -218,14 +218,18 @@ func (s *Spec) Validate(cat Catalog) error {
 		if p.Request.Empty() {
 			return fmt.Errorf("driver: poll %q has an empty request", p.Name)
 		}
-		// The request and its extractors must fit the transport, so a spec that
-		// cannot be interpreted (an snmp poll with no OIDs, a poll on a
-		// transport with no wired fetcher) refuses at authoring time rather
-		// than faulting on every tick forever (ADR-0135).
-		if err := checkPollShape(s.Transport, p); err != nil {
+		// Validate each emit first (exactly one extractor, a known name, a
+		// compilable regex), then bind the request and extractors to the
+		// transport: a spec that cannot be interpreted (an snmp poll with no
+		// OIDs, a tcp emit that locates by oid/key/jsonpath, a poll on a
+		// transport with no wired fetcher) refuses at authoring time rather than
+		// faulting on every tick forever (ADR-0135). Shape runs after the
+		// per-emit check so a malformed extractor names the extractor fault, not
+		// the transport one.
+		if err := validateEmits("poll", p.Name, p.Emits, cat); err != nil {
 			return err
 		}
-		if err := validateEmits("poll", p.Name, p.Emits, cat); err != nil {
+		if err := checkPollShape(s.Transport, p); err != nil {
 			return err
 		}
 	}
@@ -357,6 +361,16 @@ func checkPollShape(tr string, p Poll) error {
 	case "tcp":
 		if p.Request.Line == "" {
 			return fmt.Errorf("driver: tcp poll %q needs a line request", p.Name)
+		}
+		for _, em := range p.Emits {
+			// A line response is text: only a regex extractor can read it. An
+			// emit that names an oid, key, or jsonpath (the keyed and json forms)
+			// would validate clean yet fault every tick, so refuse it here. An
+			// emit with no extractor at all is the general "exactly one extractor"
+			// refusal's job, not this one.
+			if em.Extract.OID != "" || em.Extract.Key != "" || em.Extract.JSONPath != "" {
+				return fmt.Errorf("driver: tcp poll %q emit %q must locate by regex (a line response carries no keyed or json body to read an oid, key, or jsonpath from)", p.Name, em.Name)
+			}
 		}
 	default:
 		return fmt.Errorf("driver: poll %q rides transport %q, which has no poll fetcher (only snmp and tcp poll today)", p.Name, tr)

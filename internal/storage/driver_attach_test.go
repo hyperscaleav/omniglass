@@ -465,6 +465,66 @@ func TestNodeWorklistDeliversSecretInputs(t *testing.T) {
 	}
 }
 
+// TestNodeWorklistPropagatesUnsealFailure pins the other half of the delivery
+// contract: a driver task references a real, in-scope secret, but the credential
+// can no longer be unsealed (here the key provider cannot open the envelope,
+// standing in for a provider outage or envelope corruption). That is NOT
+// absence, so the worklist pull FAILS rather than delivering a phantom-absent
+// credential. Swallowing it would mask an infra fault as a missing secret and
+// send operators chasing a credential that exists. The node keeps its last-good
+// worklist on a failed pull and retries.
+func TestNodeWorklistPropagatesUnsealFailure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x7}, 32))))
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "amp-3"}, all, all, all, all); err != nil {
+		t.Fatalf("create component: %v", err)
+	}
+	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-3"}, all, all); err != nil {
+		t.Fatalf("create node: %v", err)
+	}
+	if _, err := gw.CreateSecret(ctx, "", storage.SecretSpec{
+		Name: "lab-community", SecretType: "snmp-community", OwnerKind: "platform",
+		Fields: map[string]string{"community": "very-secret"},
+	}, all, true); err != nil {
+		t.Fatalf("create secret: %v", err)
+	}
+	if _, err := gw.CreateDriver(ctx, "", storage.Driver{Name: "snmp-scalar", Label: "SNMP Scalar", Version: "1.0.0", Spec: []byte(snmpSpec)}); err != nil {
+		t.Fatalf("create driver: %v", err)
+	}
+	comp, drv, node := "amp-3", "snmp-scalar", "edge-3"
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+		Driver: &drv, Component: &comp, Node: &node,
+		Inputs:     map[string]string{"host": "10.20.4.40", "community": "lab-community"},
+		SecretRead: all, CanAdmin: true,
+	}, all); err != nil {
+		t.Fatalf("attach: %v", err)
+	}
+	gw.Close()
+
+	// Reopen on the same database with a DIFFERENT provider key: the sealed
+	// community can no longer be opened, a real unseal failure (AES-GCM refuses
+	// the wrong key), distinct from a secret that resolves to nothing.
+	bad, err := storage.NewPG(ctx, dsn, storage.WithSecretProvider(secret.NewStaticProvider(bytes.Repeat([]byte{0x9}, 32))))
+	if err != nil {
+		t.Fatalf("reopen gateway: %v", err)
+	}
+	defer bad.Close()
+	if _, err := bad.NodeWorklist(ctx, "edge-3"); err == nil {
+		t.Fatalf("NodeWorklist succeeded despite an unopenable credential; a real unseal failure must not be masked as an absent secret")
+	}
+}
+
 // TestCommandWireDelivery pins the storage side of the actuation path (#815):
 // a node's pending queue resolves the commands its placed endpoints can
 // actuate, renders the binding's request against the intended value, marks

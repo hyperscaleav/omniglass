@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
 	"github.com/nats-io/nats.go"
@@ -13,13 +14,39 @@ import (
 // request-reply mirroring the worklist), actuate each delivery over its
 // transport, and report the outcome on the status subject. Delivery is
 // at-least-once, so execution is idempotent per command id: `executed`
-// remembers each command's outcome for the life of the run, and a redelivery
-// repeats the report without touching the device again.
+// remembers each command's outcome, and a redelivery repeats the report without
+// touching the device again.
+
+// commandMemoryTTL bounds how long a command's remembered outcome is kept. The
+// server's redelivery window is deliveryTTL (10 minutes, internal/storage); once
+// a command can no longer be redelivered its remembered outcome is dead weight,
+// so the map is pruned past a margin over that window rather than growing for the
+// life of the run.
+const commandMemoryTTL = 15 * time.Minute
+
+// commandOutcome is a remembered execution: the failure story (empty on success)
+// and when it was recorded, so a stale entry can be pruned.
+type commandOutcome struct {
+	outcome string
+	at      time.Time
+}
+
+// pruneCommandMemory drops outcomes older than commandMemoryTTL: they can no
+// longer be redelivered, so keeping them only grows the map over a long run.
+func pruneCommandMemory(executed map[int64]commandOutcome, now time.Time) {
+	for id, o := range executed {
+		if now.Sub(o.at) > commandMemoryTTL {
+			delete(executed, id)
+		}
+	}
+}
 
 // runCommands runs one pull-execute-report cycle. A pull failure is silent
 // (the next tick re-pulls, the server redelivers); a report publish failure is
 // also survivable, since the redelivered command finds its outcome remembered.
-func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collection.Runner, executed map[int64]string) {
+func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collection.Runner, executed map[int64]commandOutcome) {
+	now := time.Now()
+	pruneCommandMemory(executed, now)
 	msg, err := nc.Request(collection.CommandSubject(name), nil, worklistTimeout)
 	if err != nil {
 		return
@@ -29,10 +56,11 @@ func runCommands(ctx context.Context, nc *nats.Conn, name string, runner *collec
 		return
 	}
 	for _, d := range reply.Commands {
-		outcome, done := executed[d.ID]
+		o, done := executed[d.ID]
+		outcome := o.outcome
 		if !done {
 			outcome = executeDelivery(ctx, runner, d)
-			executed[d.ID] = outcome
+			executed[d.ID] = commandOutcome{outcome: outcome, at: now}
 			if outcome == "" {
 				slog.Info("command actuated", "facility", "command", "command", d.ID, "type", d.CommandType)
 			} else {

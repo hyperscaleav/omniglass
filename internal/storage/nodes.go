@@ -434,7 +434,20 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 			if !ok {
 				f, err := p.nodeSecretFields(ctx, r.ref, r.componentID)
 				if err != nil {
-					continue
+					// Absence is deliverable: a reference that resolves to nothing
+					// this component owns (ErrSecretNotFound), or to more than one
+					// candidate (ErrAmbiguousName), rides as an absent credential
+					// and the node lands a collection-failed naming it. A REAL
+					// failure (no key provider, a DB error, an envelope that will
+					// not open) is NOT absence: swallowing it would mask infra
+					// failure as a missing secret and send operators chasing a
+					// credential that exists. Fail the pull instead; the node keeps
+					// its last-good worklist and retries next heartbeat.
+					var amb *ErrAmbiguousName
+					if errors.Is(err, ErrSecretNotFound) || errors.As(err, &amb) {
+						continue
+					}
+					return Worklist{}, fmt.Errorf("storage: node worklist %q unseal %q: %w", name, r.ref, err)
 				}
 				fields, unsealed[key] = f, f
 			}

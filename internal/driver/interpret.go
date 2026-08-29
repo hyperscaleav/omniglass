@@ -157,7 +157,10 @@ func interpretEmit(em BakedEmit, p Payload, ts time.Time) (Emitted, error) {
 func locate(ex Extract, p Payload) (string, error) {
 	switch {
 	case ex.OID != "":
-		v, ok := p.Values[ex.OID]
+		// The getter normalizes a response OID by stripping a leading dot, so
+		// strip it on the lookup side too: a spec authored in the standard MIB
+		// ".1.3.6..." form matches, not only the no-dot form.
+		v, ok := p.Values[strings.TrimPrefix(ex.OID, ".")]
 		if !ok {
 			return "", fmt.Errorf("the response carries no value for OID %s", ex.OID)
 		}
