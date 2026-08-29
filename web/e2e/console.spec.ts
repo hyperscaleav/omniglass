@@ -250,15 +250,24 @@ test.describe("operator console", () => {
     await page.waitForURL(/\/web\/explore$/);
     await expect(page.getByTestId("explore-column-Locations")).toBeVisible();
 
-    // Clean up: delete the system, then the building, then the campus, through the blades.
+    // Clean up: the system through its blade on the flat Systems tab (the blade
+    // delete under test), then the building and the campus through the API on
+    // the browser's own session. The Locations tab renders the tree collapsed,
+    // so a nested building has no row to click until its campus is expanded;
+    // the locations walk above already proves a location's blade delete.
     page.on("dialog", (d) => d.accept());
-    for (const [kind, match] of [["systems", new RegExp(`${stamp}[- ]sys`, "i")], ["locations", new RegExp(`^${buildingLabel}$`)], ["locations", new RegExp(`^${campusLabel}$`)]] as const) {
-      await page.goto(`/web/explore?face=table&kind=${kind}`);
-      await page.getByText(match).first().click();
-      await expect(page.locator("aside[data-blade]")).toBeVisible();
-      await page.locator('aside[data-blade] button:text-is("Delete")').click();
-      await expect(page.locator("main")).not.toContainText(match);
+    const sysMatch = new RegExp(`${stamp}[- ]sys`, "i");
+    await page.goto("/web/explore?face=table&kind=systems");
+    await page.getByText(sysMatch).first().click();
+    await expect(page.locator("aside[data-blade]")).toBeVisible();
+    await page.locator('aside[data-blade] button:text-is("Delete")').click();
+    await expect(page.locator("main")).not.toContainText(sysMatch);
+    for (const id of [buildingId, campusId]) {
+      const res = await page.request.delete(`/api/v1/locations/${id}`);
+      expect(res.ok(), `delete location ${id}: ${res.status()}`).toBeTruthy();
     }
+    await page.goto("/web/explore");
+    await expect(page.getByTestId("explore-column-Locations")).not.toContainText(campusLabel);
   });
 
 });
