@@ -196,6 +196,12 @@ test.describe("operator console", () => {
     // displacement case: the room collapses into the system's row.
     const stamp = Date.now();
     const campus = `e2e-fleet-${stamp}`;
+    // What the rows and the column headers SHOW: a shipped fleet renders a
+    // location's label from its name ({{title (words .Name)}}, ADR-0105), so
+    // the walk matches labels, derived here rather than hard-coded.
+    const titled = (n: string) => n.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+    const campusLabel = titled(campus);
+    const buildingLabel = titled(`${campus}-b`);
     await page.goto("/web/locations/create");
     await page.getByLabel("Location type").selectOption("campus");
     await page.getByLabel("Name", { exact: true }).fill(campus);
@@ -226,13 +232,15 @@ test.describe("operator console", () => {
     // The tree: the campus is a parentless row; drilling into it lists the
     // building, which collapses into the system's row (one system, no sub-locations).
     await page.goto("/web/explore");
-    await page.getByTestId("explore-column-Locations").getByRole("button", { name: new RegExp(campus) }).click();
-    const col = page.getByTestId(`explore-column-${campus}`);
+    await page.getByTestId("explore-column-Locations").getByRole("button", { name: new RegExp(String(stamp)) }).click();
+    const col = page.getByTestId(`explore-column-${campusLabel}`);
     await expect(col).toBeVisible();
-    const row = col.getByRole("button", { name: new RegExp(`${campus}-sys`) });
-    await expect(row).toContainText(`in ${campus}-b`);
+    // The system's label follows its own rule (its name, when it has no type),
+    // so the row matches on the stamp and the "sys" suffix in either spelling.
+    const row = col.getByRole("button", { name: new RegExp(`${stamp}[- ]sys`, "i") });
+    await expect(row).toContainText(`in ${buildingLabel}`);
     await row.click();
-    await expect(page.getByTestId("explore-glance")).toContainText(campus);
+    await expect(page.getByTestId("explore-glance")).toContainText(String(stamp));
     await expect(page).toHaveURL(new RegExp(`node=${systemId}`));
     await page.getByTestId("explore-glance").getByRole("button", { name: /open workspace/i }).click();
     await page.waitForURL(new RegExp(`/web/systems/${systemId}`));
@@ -244,12 +252,12 @@ test.describe("operator console", () => {
 
     // Clean up: delete the system, then the building, then the campus, through the blades.
     page.on("dialog", (d) => d.accept());
-    for (const [kind, label] of [["systems", `${campus}-sys`], ["locations", `${campus}-b`], ["locations", campus]] as const) {
+    for (const [kind, match] of [["systems", new RegExp(`${stamp}[- ]sys`, "i")], ["locations", new RegExp(`^${buildingLabel}$`)], ["locations", new RegExp(`^${campusLabel}$`)]] as const) {
       await page.goto(`/web/explore?face=table&kind=${kind}`);
-      await page.getByText(label, { exact: true }).first().click();
+      await page.getByText(match).first().click();
       await expect(page.locator("aside[data-blade]")).toBeVisible();
       await page.locator('aside[data-blade] button:text-is("Delete")').click();
-      await expect(page.locator("main")).not.toContainText(label);
+      await expect(page.locator("main")).not.toContainText(match);
     }
   });
 
