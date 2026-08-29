@@ -5838,5 +5838,8 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   seed and save, keeps every field's own gate (a caller with update but not rename sees
   the name read-only, with the reason), wires its kind panels through the ambient blade
   stack, and keeps the ruled save order (update, move, rename last, uuid-addressed).
-  The #800 jump-anchor rows retire; the blade's members, strip, and vitals move to the
-  workspace they summarised.
+  Create is the same form empty (`EntityCreateForm`: what and where before identity,
+  the platform-named identity fields locked on the value they will carry, and an
+  `under` prefill for the explorer's create-where-you-stand), so the three create pages
+  become hosts that only say where to go next. The #800 jump-anchor rows retire; the
+  blade's members, strip, and vitals move to the workspace they summarised.
