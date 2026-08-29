@@ -412,6 +412,18 @@ describe("the history tab (#792)", () => {
   });
 });
 
+describe("the Activity tab's order (#826)", () => {
+  it("reads like a status page: uptime and incidents first, then the events, then the logs", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=activity`);
+    const history = await screen.findByTestId("history-tab");
+    const events = await screen.findByTestId("events-tab");
+    const logs = await screen.findByTestId("logs-tab");
+    // compareDocumentPosition: FOLLOWING (4) means the argument comes after.
+    expect(history.compareDocumentPosition(events) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(events.compareDocumentPosition(logs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
 describe("the events and logs tabs (#793)", () => {
   it("the events tab lists the room's story newest first, each row labeled by its owner", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=events`);

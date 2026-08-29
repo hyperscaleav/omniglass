@@ -266,41 +266,6 @@ export default function SystemZoom() {
                   <ConfigureFace kind="system" id={id()} />
                 </Show>
                 <Show when={tab() === "activity"}>
-                  <section data-testid="events-tab" class="flex flex-col gap-2 p-4">
-                    <Eyebrow label="Events" hint="The room's story on the event lane: the system's own events and its members', newest first, each row labeled by the owner that raised it. The last 24 hours, capped." />
-                    <Show when={(eventsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No events in the window.</p>}>
-                      <ul class="divide-y divide-base-300 rounded-box border border-base-300 text-sm">
-                        <For each={eventsQ.data ?? []}>
-                          {(e) => (
-                            <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-2">
-                              <span class="text-xs tabular-nums text-base-content/50">{fmtTime(e.ts)}</span>
-                              <span class="font-mono text-xs text-base-content/70">{e.owner}</span>
-                              <span class="font-mono text-xs">{e.key}</span>
-                              <span class="min-w-0 flex-1 truncate text-base-content/80">{e.message}</span>
-                            </li>
-                          )}
-                        </For>
-                      </ul>
-                    </Show>
-                  </section>
-                </Show>
-                <Show when={tab() === "activity"}>
-                  <section data-testid="logs-tab" class="flex flex-col gap-2 p-4">
-                    <Eyebrow label="Logs" hint="The members' raw log lines merged newest first, each naming the component that wrote it. The last 24 hours, capped; a node's own logs live on the node." />
-                    <Show when={(logsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No lines in the window.</p>}>
-                      <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100 p-2 font-mono text-[11.5px] leading-relaxed">
-                        <For each={logsQ.data ?? []}>
-                          {(l) => (
-                            <div class="whitespace-pre" classList={{ "text-error": l.severity === "error" || l.severity === "critical", "text-warning": l.severity === "warning", "text-base-content/70": !l.severity || l.severity === "info" }}>
-                              {`${fmtTime(l.ts)}  ${(l.component ?? "").padEnd(12)} ${(l.severity ?? "").padEnd(7)} ${l.message}`}
-                            </div>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-                  </section>
-                </Show>
-                <Show when={tab() === "activity"}>
                   <section data-testid="history-tab" class="flex flex-col gap-4 p-4">
                     <div class="flex flex-wrap items-stretch gap-3">
                       <div data-testid="uptime-kpi" class="flex min-w-36 flex-col justify-between gap-1 rounded-box border border-base-300 bg-base-100 p-3.5">
@@ -430,6 +395,41 @@ export default function SystemZoom() {
                             )}
                           </For>
                         </ul>
+                      </div>
+                    </Show>
+                  </section>
+                </Show>
+                <Show when={tab() === "activity"}>
+                  <section data-testid="events-tab" class="flex flex-col gap-2 p-4">
+                    <Eyebrow label="Events" hint="The room's story on the event lane: the system's own events and its members', newest first, each row labeled by the owner that raised it. The last 24 hours, capped." />
+                    <Show when={(eventsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No events in the window.</p>}>
+                      <ul class="divide-y divide-base-300 rounded-box border border-base-300 text-sm">
+                        <For each={eventsQ.data ?? []}>
+                          {(e) => (
+                            <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-2">
+                              <span class="text-xs tabular-nums text-base-content/50">{fmtTime(e.ts)}</span>
+                              <span class="font-mono text-xs text-base-content/70">{e.owner}</span>
+                              <span class="font-mono text-xs">{e.key}</span>
+                              <span class="min-w-0 flex-1 truncate text-base-content/80">{e.message}</span>
+                            </li>
+                          )}
+                        </For>
+                      </ul>
+                    </Show>
+                  </section>
+                </Show>
+                <Show when={tab() === "activity"}>
+                  <section data-testid="logs-tab" class="flex flex-col gap-2 p-4">
+                    <Eyebrow label="Logs" hint="The members' raw log lines merged newest first, each naming the component that wrote it. The last 24 hours, capped; a node's own logs live on the node." />
+                    <Show when={(logsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No lines in the window.</p>}>
+                      <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100 p-2 font-mono text-[11.5px] leading-relaxed">
+                        <For each={logsQ.data ?? []}>
+                          {(l) => (
+                            <div class="whitespace-pre" classList={{ "text-error": l.severity === "error" || l.severity === "critical", "text-warning": l.severity === "warning", "text-base-content/70": !l.severity || l.severity === "info" }}>
+                              {`${fmtTime(l.ts)}  ${(l.component ?? "").padEnd(12)} ${(l.severity ?? "").padEnd(7)} ${l.message}`}
+                            </div>
+                          )}
+                        </For>
                       </div>
                     </Show>
                   </section>
