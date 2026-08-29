@@ -37,13 +37,15 @@ Enter to open it.
 
 ::screenshot{#entity-blade}
 
-A fleet entity's blade (a location, a system, a component) is a condensed read of its
-workspace: the verdict and since-when lead, the active alarms say why, the 30-day strip
-shows the shape of its history, and a system lists its members (each opening its own
-component blade on the same stack) with the room vitals as chips. **Expand** in the header
-promotes to the full workspace at the entity's own address. The label edits in place
-through the footer's pencil, and Delete sits on the left behind a confirm, both gated by
-your permissions on that row.
+A fleet entity's blade (a location, a system, a component) leads with the verdict and
+since-when and the active alarms that say why, and the rest of the blade is the entity's
+**form**: identity, classification, placement, the kind's own panels (a system's roles, a
+location's properties, a component's reconciliation, reachability, and alarms), and tags.
+It is the same form the workspace's Configure tab renders, so what you can edit and how
+it saves is identical in both places. **Expand** in the header promotes to the full
+workspace at the entity's own address, where the members, the 30-day strip, and the room
+vitals live. Delete sits on the left of the footer behind a confirm, gated by your
+permissions on that row.
 
 The identity pages (Users, Groups, and Roles) use the same blade, and there drilling crosses entities: from a
 user you open a group's blade over it, and from a group you open a member's user blade, each stacking so you can
@@ -54,9 +56,10 @@ read-only reference.
 ## Edit through the footer action bar
 
 A blade opens **read-only**, and its actions live in the **footer action bar**; the header is
-chrome only (back, full-page, close). What Edit opens depends on the kind: a **fleet** blade edits
-its label and tags in place and jumps into the workspace's [Configure tab](/guides/operator/fleet/)
-for everything deeper, while an **identity** blade (a user, a group) edits whole-face, in place.
+chrome only (back, full-page, close). **Edit** turns the whole blade live in place, fleet
+and identity blades alike: a fleet blade's form (the same one the workspace's
+[Configure tab](/guides/operator/fleet/) renders) and an identity blade's profile, members,
+and grants.
 On an identity blade, **Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
 cluster swaps to **Cancel** and **Save**. Changes stage locally so you can check your work first; **Save**
 commits them together, **Cancel** discards them. The **destructive** action sits on the **left** and is always
@@ -79,9 +82,7 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
 
 The mode is part of the address: append `?edit=1` to a fleet entity's URL and it lands on
 the workspace's **Configure** tab, already editing (#800), so a "fix the label on this
-room" handoff is one link, not a link plus instructions. The blade's own jump affordances
-(rename, change, move beside its read-only facts) produce exactly these addresses, anchored
-to the section they name. The same permission gates apply: without `<resource>:update` the
+room" handoff is one link, not a link plus instructions. The same permission gates apply: without `<resource>:update` the
 link lands reading, quietly. Leaving edit (Cancel or Save) strips the param, so refreshing
 mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already
 left. The console itself uses these links for its handoffs: creating an entity lands on
