@@ -45,8 +45,9 @@ const view: FleetView = {
   ],
 } as unknown as FleetView;
 
-function mount(path = "/web/explore", me: Me = owner) {
+function mount(path = "/web/explore", me: Me = owner, storedFace?: "table") {
   localStorage.removeItem("explore-face");
+  if (storedFace) localStorage.setItem("explore-face", storedFace);
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], me);
@@ -180,5 +181,19 @@ describe("search and addresses", () => {
     fireEvent.click(screen.getByRole("button", { name: /^tree$/i }));
     expect(await screen.findByTestId("explore-column-Locations")).toBeTruthy();
     expect(window.location.search).not.toContain("face=table");
+  });
+});
+
+describe("the face memory and the address", () => {
+  it("a stored table face never overrides a ?node= deep link: the address wins", async () => {
+    mount(`/web/explore?node=${uuidFor("s-bay")}`, owner, "table");
+    expect(await screen.findByTestId("explore-column-Service Depot")).toBeTruthy();
+    expect(screen.queryByTestId("fleet-list-face")).toBeNull();
+    expect(window.location.search).not.toContain("face=table");
+  });
+
+  it("a stored table face still applies to a bare /explore", async () => {
+    mount("/web/explore", owner, "table");
+    expect(await screen.findByTestId("fleet-list-face")).toBeTruthy();
   });
 });
