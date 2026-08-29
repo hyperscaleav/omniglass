@@ -13,9 +13,9 @@ The console is one renderer over the same views the rest of the platform reads. 
 Roughly 22 live pages (inventory, catalog, values, admin, plus the shell) ship as **config-driven
 `ListShell` pages (with `FlatList` / `TreeList` bodies) over the typed CRUD client**, not as the
 `ViewResult` renderer described next: an inventory page is CRUD over a scoped resource. The
-**fleet zoom** (`/fleet`, #633) is the first surface that is neither: a canvas over its own
-views projection (`GET /views/fleet`), with the pure view model in `web/src/lib/fleet.ts` and
-the dot field painted per band. The views model, the renderer library, and composable
+**Explore** page (`/explore`, #826, which retired the #633 canvas) is the first surface that
+is neither: a drill-down tree over its own views projection (`GET /views/fleet`), with the pure
+view model in `web/src/lib/fleet.ts` and `web/src/lib/explore.ts`, and the workspaces it opens. The views model, the renderer library, and composable
 dashboards remain the intended **read side** for the analytical surfaces (alarms, sample
 history, the cascade view, fleet dashboards), not built yet.
 Realized shell: the [design system](/contributing/design-system/); operating it: the

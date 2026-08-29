@@ -16,6 +16,7 @@ function mountAt(path: string) {
       <Route path="/locations" component={FleetRedirect} />
       <Route path="/systems" component={FleetRedirect} />
       <Route path="/components" component={FleetRedirect} />
+      <Route path="/fleet" component={FleetRedirect} />
       <Route path="/explore" component={() => <div data-testid="explore-page" />} />
     </Router>
   ));
@@ -32,5 +33,14 @@ describe("the re-homed index addresses", () => {
     expect(window.location.pathname).toBe("/web/explore");
     expect(window.location.search).toContain("face=table");
     expect(window.location.search).toContain(`kind=${kind}`);
+  });
+});
+
+describe("the retired canvas address", () => {
+  it("/fleet lands on Explore's tree, no face or kind param", async () => {
+    mountAt("/web/fleet");
+    expect(await screen.findByTestId("explore-page")).toBeTruthy();
+    expect(window.location.pathname).toBe("/web/explore");
+    expect(window.location.search).toBe("");
   });
 });

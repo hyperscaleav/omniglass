@@ -33,7 +33,8 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/login", shell: "public", page: "Login", auth: false, smoke: "/login" },
 
   { path: "/", shell: "protected", page: "Home", smoke: "/" },
-  { path: "/fleet", shell: "protected", page: "Fleet", smoke: "/fleet" },
+  // The canvas address retired with #826; it redirects to Explore.
+  { path: "/fleet", shell: "protected", page: "FleetRedirect", smoke: "/fleet" },
   // Explore (#826): the drill-down tree to a system, the sidebar's one door
   // into the fleet; it replaced the Fleet entry and the reserved Explore stub.
   { path: "/explore", shell: "protected", page: "Explore", smoke: "/explore" },

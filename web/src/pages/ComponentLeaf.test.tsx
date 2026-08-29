@@ -133,9 +133,10 @@ describe("the component leaf", () => {
     expect(within(card).getByRole("button", { name: "Boardroom System" })).toBeTruthy();
   });
 
-  it("wears the same shell as every zoom: the fleet-wide summary rail on top, no right rail", () => {
+  it("wears the same shell as every workspace: one counts line on top, no rail", () => {
     mount();
-    expect(screen.getByTestId("fleet-summary")).toBeTruthy();
+    expect(screen.getByTestId("counts-line")).toBeTruthy();
+    expect(screen.queryByTestId("fleet-summary")).toBeNull();
     expect(screen.queryByTestId("zoom-rail")).toBeNull();
   });
 

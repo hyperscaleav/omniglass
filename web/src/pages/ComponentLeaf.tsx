@@ -57,13 +57,17 @@ export default function ComponentLeaf() {
   const me = useMe();
   const blades = createBladeController();
   const [leafSearch] = useSearchParams();
+  // Three tabs on every altitude (#826): Overview, Activity, Configure. A
+  // legacy ?tab=events address lands on Activity, which absorbed it.
   const leafTabs = createMemo(() => [
     { key: "overview", label: "Overview" },
-    { key: "events", label: "Events" },
+    { key: "activity", label: "Activity" },
     ...(can(me.data, "component", "update") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
+  const LEGACY_TAB: Record<string, string> = { events: "activity" };
   const leafTab = () => {
-    const t = Array.isArray(leafSearch.tab) ? leafSearch.tab[0] : leafSearch.tab;
+    const raw = Array.isArray(leafSearch.tab) ? leafSearch.tab[0] : leafSearch.tab;
+    const t = raw ? (LEGACY_TAB[raw] ?? raw) : raw;
     if (t && leafTabs().some((x) => x.key === t)) return t;
     const editing = (Array.isArray(leafSearch.edit) ? leafSearch.edit[0] : leafSearch.edit) === "1";
     if (editing && leafTabs().some((x) => x.key === "configure")) return "configure";
@@ -174,8 +178,8 @@ export default function ComponentLeaf() {
           <Show when={leafTab() === "configure"}>
             <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace kind="component" id={id()} /></div>
           </Show>
-          <Show when={leafTab() === "events"}>
-            <div class="card border border-base-300 bg-base-200 p-4"><EventsPanel name={id()} /></div>
+          <Show when={leafTab() === "activity"}>
+            <div data-testid="activity-tab" class="card border border-base-300 bg-base-200 p-4"><EventsPanel name={id()} /></div>
           </Show>
           <Show when={leafTab() === "overview"}>
 <FleetShell
