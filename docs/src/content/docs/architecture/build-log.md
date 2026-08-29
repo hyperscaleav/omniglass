@@ -5829,4 +5829,14 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   gap, and a control whose value starts empty and only moves because the operator moved it has
   nothing stored to lose. Every test drives the gap by hand, delivering the collection between two
   assertions rather than sleeping on a race (ADR-0133, #398, #772, #782).
-
+- **One form per kind**
+  ([#826](https://github.com/hyperscaleav/omniglass/issues/826) slice 1, #830). The
+  original blade vision, restored: `EntityForm` is the one component that renders a
+  location, a system, or a component read or edit, and whether it appears in the blade
+  or on the workspace's Configure tab is only where the operator clicked. The host owns
+  the edit slot (the blade's footer, the page's footer) and hands it in; the form binds
+  seed and save, keeps every field's own gate (a caller with update but not rename sees
+  the name read-only, with the reason), wires its kind panels through the ambient blade
+  stack, and keeps the ruled save order (update, move, rename last, uuid-addressed).
+  The #800 jump-anchor rows retire; the blade's members, strip, and vitals move to the
+  workspace they summarised.

@@ -6,12 +6,8 @@ import Breadcrumb from "../components/Breadcrumb";
 import TabRail from "../components/TabRail";
 import ConfigureFace from "../components/ConfigureFace";
 import BladeStack from "../components/BladeStack";
-import PropertiesPanel, { propertyBladeId, propertyResolutionBlade } from "../components/PropertiesPanel";
-import ReachabilityPanel from "../components/ReachabilityPanel";
-import AlarmsPanel from "../components/AlarmsPanel";
+import { propertyResolutionBlade } from "../components/PropertiesPanel";
 import EventsPanel from "../components/EventsPanel";
-import ReconciliationPanel from "../components/ReconciliationPanel";
-import ResolutionPanel from "../components/ResolutionPanel";
 import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
 import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
@@ -33,7 +29,7 @@ import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
 import { can, useMe } from "../lib/auth";
-import {describeError, fmtTime } from "../lib/format";
+import { describeError, fmtTime } from "../lib/format";
 
 // The component leaf (#637): the end of the walk. What it is (product,
 // vendor, driver), where it sits (the clickable ancestor chain), the
@@ -176,27 +172,7 @@ export default function ComponentLeaf() {
           <div class="flex flex-col gap-3">
           <TabRail tabs={leafTabs()} activeKey={leafTab} />
           <Show when={leafTab() === "configure"}>
-            <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace
-              kind="component"
-              id={id()}
-              panels={(slot) => (
-                <>
-                  <ReconciliationPanel name={id()} />
-                  <ResolutionPanel component={id()} />
-                  <PropertiesPanel
-                    component={id()}
-                    edit={slot}
-                    onOpen={(property) => blades.push({ kind: "property-resolution", id: propertyBladeId(id(), property) })}
-                  />
-                  <ReachabilityPanel
-                    name={id()}
-                    onAdd={can(me.data, "interface", "create") ? () => blades.push({ kind: "interface-create", id: id() }) : undefined}
-                    onOpenInterface={can(me.data, "interface", "read") ? (ifid) => blades.push({ kind: "interface", id: ifid }) : undefined}
-                  />
-                  <AlarmsPanel component={id()} canUpdate={slot.editing() && can(me.data, "component", "update")} canAcknowledge={can(me.data, "alarm", "acknowledge")} />
-                </>
-              )}
-            /></div>
+            <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace kind="component" id={id()} /></div>
           </Show>
           <Show when={leafTab() === "events"}>
             <div class="card border border-base-300 bg-base-200 p-4"><EventsPanel name={id()} /></div>

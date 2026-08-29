@@ -22,8 +22,7 @@ import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
 import TabRail from "../components/TabRail";
 import ConfigureFace from "../components/ConfigureFace";
-import RolesPanel from "../components/RolesPanel";
-import PropertiesPanel, { ownerPropertyBladeId, propertyResolutionBlade } from "../components/PropertiesPanel";
+import { propertyResolutionBlade } from "../components/PropertiesPanel";
 import { alarmRows, componentCards, sinceOf, systemZoomVM, type ComponentCard } from "../lib/system_zoom";
 import { vitalRows } from "../lib/component_leaf";
 import { slotStrip } from "../lib/slot_strip";
@@ -267,20 +266,7 @@ export default function SystemZoom() {
                   {(decl) => <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} onOpen={openComponent} />}
                 </Show>
                 <Show when={tab() === "configure"}>
-                  <ConfigureFace
-                    kind="system"
-                    id={id()}
-                    panels={(slot) => (
-                      <>
-                        <RolesPanel system={id()} canUpdate={slot.editing() && can(me.data, "system", "update")} />
-                        <PropertiesPanel
-                          system={id()}
-                          edit={slot}
-                          onOpen={(property) => blades.push({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "system", name: id() }, property) })}
-                        />
-                      </>
-                    )}
-                  />
+                  <ConfigureFace kind="system" id={id()} />
                 </Show>
                 <Show when={tab() === "events"}>
                   <section data-testid="events-tab" class="flex flex-col gap-2 p-4">
