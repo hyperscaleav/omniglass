@@ -180,13 +180,13 @@ describe("the location zoom", () => {
     expect(within(card).queryByText("outage")).toBeNull();
   });
 
-  it("wears the same shell as the fleet zoom: the fleet-wide summary on top, and the attention badge filters this zoom's cards", () => {
+  it("wears the same shell as every workspace: one counts line on top, and its need-attention count filters this zoom's cards", () => {
     mount();
-    const rail = screen.getByTestId("fleet-summary");
+    const line = screen.getByTestId("counts-line");
     expect(screen.queryByTestId("zoom-rail")).toBeNull();
-    // Two systems need attention fleet-wide (Boardroom degraded, Lobby AV incomplete).
-    const attention = within(rail).getByTestId("badge-attention");
-    expect(within(attention).getByText("2")).toBeTruthy();
+    expect(screen.queryByTestId("fleet-summary")).toBeNull();
+    // Two systems need attention here (Boardroom degraded, Lobby AV incomplete).
+    const attention = within(line).getByRole("button", { name: /2 need attention/ });
     fireEvent.click(attention);
     // The healthy Yard AV card is filtered out of this zoom; the others stay.
     expect(screen.queryByTestId(`syscard-${uuidFor("lz-s-yard")}`)).toBeNull();
@@ -194,19 +194,20 @@ describe("the location zoom", () => {
   });
 
   // #787: the location header matches the system zoom's shape.
-  it("the header wears the location's verdict, the since-line, and this subtree's needs-attention count", () => {
+  it("the header wears the location's verdict and the since-line; the counts line carries this subtree's needs-attention count", () => {
     mount();
     const header = screen.getByTestId("location-header");
     expect(within(header).getByText("degraded")).toBeTruthy();
     expect(within(header).getByText(/since/)).toBeTruthy();
+    expect(within(header).queryByText(/need attention/)).toBeNull();
     // Fixture: signage incomplete + boardroom degraded + horn healthy = 2.
-    expect(within(header).getByText(/2 need attention/)).toBeTruthy();
+    expect(within(screen.getByTestId("counts-line")).getByText(/2 need attention/)).toBeTruthy();
   });
 
-  it("clicking the needs-attention chip applies the worst-first verdict filter to this zoom's cards", () => {
+  it("clicking the counts line's need-attention applies the worst-first verdict filter to this zoom's cards", () => {
     mount();
     expect(screen.getByTestId(`syscard-${uuidFor("lz-s-yard")}`)).toBeTruthy();
-    fireEvent.click(within(screen.getByTestId("location-header")).getByRole("button", { name: /need attention/ }));
+    fireEvent.click(within(screen.getByTestId("counts-line")).getByRole("button", { name: /need attention/ }));
     expect(screen.queryByTestId(`syscard-${uuidFor("lz-s-yard")}`)).toBeNull();
     expect(screen.getByTestId(`syscard-${uuidFor("lz-s-board")}`)).toBeTruthy();
   });
@@ -273,13 +274,12 @@ describe("the location zoom", () => {
 
 // The summary reflects the page (#795 review): this location's subtree, never
 // the fleet's numbers.
-describe("the scoped summary", () => {
+describe("the one counts line", () => {
   it("counts this subtree: hq holds all three systems here, and the mix subject stays systems", () => {
     mount();
-    const rail = screen.getByTestId("fleet-summary");
-    expect(within(rail).getByText("systems")).toBeTruthy();
-    expect(within(rail).getAllByText("3").length).toBeGreaterThan(0);
-    expect(within(rail).getByText("children")).toBeTruthy();
+    const line = screen.getByTestId("counts-line");
+    expect(line.textContent).toContain("3 systems");
+    expect(line.textContent).toContain("children");
   });
 });
 

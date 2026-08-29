@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { componentTileSpec, fleetTileSpec, fleetTiles, locationTileSpec, systemMarks, systemTileSpec } from "./fleet_tiles";
+import { componentTileSpec, fleetTiles, locationTileSpec, systemTileSpec } from "./fleet_tiles";
 import type { FleetView } from "./fleet";
 import { uuidFor } from "./testids";
 
@@ -55,43 +55,11 @@ describe("fleetTiles", () => {
   });
 });
 
-describe("systemMarks", () => {
-  it("makes one cluster of ONE dot per system, the dot's verdict the system's, worst first within a band", () => {
-    const bands = systemMarks(view);
-    const hq = bands.find((b) => b.key === uuidFor("ft-hq"))!;
-    expect(hq.clusters.map((c) => c.dots.length)).toEqual([1, 1, 1]);
-    expect(hq.clusters.map((c) => c.dots[0].verdict)).toEqual(["outage", "incomplete", "healthy"]);
-    // The dot IS the system: it carries the system id so a click opens it.
-    expect(hq.clusters[0].dots[0].componentId).toBe(uuidFor("ft-s1"));
-    expect(hq.clusters[0].systemId).toBe(uuidFor("ft-s1"));
-  });
-  it("keeps the band's own counts and recorded verdict", () => {
-    const hq = systemMarks(view).find((b) => b.key === uuidFor("ft-hq"))!;
-    expect(hq.systemCount).toBe(3);
-    expect(hq.componentCount).toBe(6);
-    expect(hq.recordedVerdict).toBe("outage");
-  });
-  it("filters by verdict when asked", () => {
-    const only = systemMarks(view, { verdicts: new Set(["outage", "incomplete"]) });
-    const hq = only.find((b) => b.key === uuidFor("ft-hq"))!;
-    expect(hq.clusters.map((c) => c.dots[0].verdict)).toEqual(["outage", "incomplete"]);
-    // A root left with nothing after the filter still appears, empty, so
-    // the operator sees it was filtered rather than missing.
-    const depot = only.find((b) => b.key === uuidFor("ft-depot"))!;
-    expect(depot.clusters).toEqual([]);
-  });
-});
 
 // The summary reflects the page it is on (#795 review): each scope builds its
 // own TileSpec, so a system's rail talks about ITS components, never the
 // whole fleet's numbers.
 describe("the scoped tile specs", () => {
-  it("the fleet spec carries the fleet-wide numbers under the systems subject", () => {
-    const spec = fleetTileSpec(view);
-    expect(spec.subject).toBe("systems");
-    expect(spec.ratio.total).toBe(4);
-    expect(spec.counts.map((c) => c.key)).toEqual(["gaps", "components", "roots"]);
-  });
 
   it("a location's spec counts only its own subtree", () => {
     const spec = locationTileSpec(view, uuidFor("ft-b1"));
@@ -139,5 +107,40 @@ describe("the scoped tile specs", () => {
     expect(spec.counts.find((c) => c.key === "systems")!.value).toBe(1);
     expect(spec.counts.find((c) => c.key === "alarms")!.value).toBe(2);
     expect(spec.counts.find((c) => c.key === "interfaces")!.value).toBe(1);
+  });
+});
+
+// The one counts line (#826 slice 3): what the summary rail said, as one
+// sentence with the zero values left out, so a healthy room says nothing it
+// does not need to.
+import { countsLine } from "./fleet_tiles";
+describe("countsLine", () => {
+  it("leads with the mix total, adds need-attention only when non-zero, then the non-zero counts", () => {
+    const spec = {
+      subject: "systems",
+      ratio: { healthy: 39, incomplete: 1, degraded: 1, outage: 0, total: 41 },
+      attention: { outage: 0, degraded: 1, incomplete: 1, total: 2 },
+      counts: [
+        { key: "gaps", label: "gaps", value: 2 },
+        { key: "components", label: "components", value: 206 },
+        { key: "roots", label: "roots", value: 5 },
+      ],
+    };
+    expect(countsLine(spec)).toEqual(["41 systems", "2 need attention", "2 gaps", "206 components", "5 roots"]);
+  });
+
+  it("drops zeros and empty strings, keeps a non-empty string count, and pluralises by the spec's own label", () => {
+    const spec = {
+      subject: "components",
+      ratio: { healthy: 3, incomplete: 0, degraded: 0, outage: 0, total: 3 },
+      attention: { outage: 0, degraded: 0, incomplete: 0, total: 0 },
+      counts: [
+        { key: "slots", label: "slots filled", value: "2 of 2" },
+        { key: "alarms", label: "active alarms", value: 0 },
+        { key: "shared", label: "shared", value: 0 },
+        { key: "empty", label: "gaps", value: "" },
+      ],
+    };
+    expect(countsLine(spec)).toEqual(["3 components", "2 of 2 slots filled"]);
   });
 });

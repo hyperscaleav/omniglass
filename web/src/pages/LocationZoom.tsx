@@ -93,20 +93,6 @@ export default function LocationZoom() {
   const holes = createMemo(() => (view.data ? holesUnder(id(), view.data) : new Map()));
   // This subtree's own attention count, unfiltered: what the header chip
   // reports and the chip's click narrows the cards to.
-  const ATTENTION = ["outage", "degraded", "incomplete"];
-  const attention = createMemo(() => {
-    if (!view.data) return 0;
-    return bandsOf(view.data, byChildOfLocation(id())).reduce(
-      (n, b) => n + b.clusters.filter((c) => c.verdict !== null && c.verdict !== "healthy").length,
-      0,
-    );
-  });
-  const attentionOn = () => chips().some((c) => c.key === "verdict" && c.values.some((v) => ATTENTION.includes(v)));
-  const toggleAttention = () => {
-    const rest = chips().filter((c) => c.key !== "verdict");
-    setChips(attentionOn() ? rest : [...rest, { key: "verdict", op: "eq", values: ATTENTION }]);
-  };
-
   const crumbs = createMemo(() => {
     if (!view.data) return [];
     const chain = ancestors(id(), locationIndex(view.data));
@@ -173,17 +159,6 @@ export default function LocationZoom() {
                 <HealthBadge verdict={anchor()?.verdict ?? undefined} size="sm" />
                 <Show when={locHealth.data && sinceOf(locHealth.data, pageNow)}>
                   {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
-                </Show>
-                <Show when={attention() > 0}>
-                  <button
-                    type="button"
-                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-field border px-2 py-0.5 text-xs"
-                    classList={{ "border-primary bg-primary/10": attentionOn(), "border-base-300": !attentionOn() }}
-                    onClick={toggleAttention}
-                  >
-                    <span class="h-1.5 w-1.5 flex-none rounded-full bg-warning" />
-                    {attention()} need attention
-                  </button>
                 </Show>
               </div>
             }

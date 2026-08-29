@@ -172,6 +172,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0131](#adr-0131-the-device-taxonomy-is-oavc-and-the-demo-catalog-is-fictional) | 2026-08-24 | Accepted | The component_type tree mirrors the OpenAVCloud AV Device Taxonomy v1.1 (category roots, subcategory types, form-factor mic subtypes); the seed catalog goes fictional (the omniglass-lab brand universe, AV-iQ as the realism source); standards become integrator-style room chains with size-serialized variants, and the impossible shared bar yields to the divisible pair's shared DSP and amplifier rack |
 | [ADR-0132](#adr-0132-configure-is-the-one-deep-editor) | 2026-08-25 | Accepted | Every fleet workspace carries a Configure tab as the ONE deep editor; the blade stays a quick face whose rows jump into it; `?edit=1` retargets to Configure and the classic detail face retires with an explicit miss face (#800, diverging deliberately from ADR-0129's edit-in-blade target) |
 | [ADR-0133](#adr-0133-a-select-over-a-loaded-collection-binds-through-a-ref-not-a-value-prop) | 2026-08-27 | Accepted | A `<select>` whose options come from a collection the server answers for takes its value from `bindSelectValue(value, ...options)` (`web/src/lib/selectvalue.ts`) used as the element's `ref`, never from a `value=` prop: the control keeps no value it has no option for, and a value binding does not re-run when the OPTIONS are what arrived. Thirteen controls convert, the workspace Configure face's four among them. Two shapes stay on `value=` and the exemption is deliberate: a hard-coded or generated option list has no async gap, and a control whose value starts empty and only moves because the operator moved it has nothing stored to lose |
+| [ADR-0134](#adr-0134-explore-is-the-fleets-door-and-the-form-is-one-component) | 2026-08-29 | Accepted | Explore (`/explore`) is the fleet's one door: a depth-agnostic drill down the place tree with the glance beside it and a table face behind the toggle; one EntityForm per kind renders in blade, glance, and Configure; three tabs and one counts line per workspace; the band canvas, KPI chips, and jump anchors retire (#826, superseding ADR-0132's anchors and ADR-0129's canvas landing) |
 
 ## Entries
 
@@ -6164,3 +6165,26 @@ interface create form, since that name is the platform's to mint.
   `entity-edit-face` shot flipped between two location types across captures
   ([ADR-0121](#adr-0121-the-console-ships-its-own-typefaces) landed the gate that caught it)
   (#398, #772, #782).
+
+### ADR-0134: Explore is the fleet's door, and the form is one component
+
+- **Date:** 2026-08-29 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/), [views](/architecture/views/)
+- **Decision:** The sidebar has one door into the fleet, **Explore** (`/explore`): a
+  depth-agnostic drill down the place tree to a system (the parentless locations first,
+  then each node's children, locations of any type before systems; a location with one
+  system and no sub-locations collapses into that system's row), with the glance as its
+  rightmost column and a table face behind the header's toggle (`?face=table`, this
+  browser's memory, never over a `?node=` address). One `EntityForm` per kind renders read
+  or edit wherever the operator meets the entity: the blade, the glance, and the workspace's
+  Configure tab; create is the same form empty (`?under=` prefills placement). Every
+  workspace carries three tabs, Overview, Activity, Configure, and one counts line with the
+  zero values left out. The band canvas (`/fleet`), the KPI chip rows, and the blade's jump
+  anchors retire. "Fleet" stays the noun (ADR-0122); the sidebar entry is the verb.
+- **Context:** The #779 canvas conflated exploring with monitoring (a KPI wall as
+  navigation), and the #800 anchors patched a blade that had diverged from the page
+  instead of restoring the original vision that view and edit are one component. The
+  "Why the Fleet Feels Off" float and its proof-of-concept screens (#826) ruled the
+  three-surface model: Explore to find, the form to change, the workspace to monitor.
+  This supersedes ADR-0132's blade-as-quick-face-with-anchors (its Configure tab survives
+  as the form's page host) and ADR-0129's canvas landing (its identity-route default
+  stands: the workspaces are the routes' faces). The path-first table face is phase 2, #828.
