@@ -1,6 +1,6 @@
 ---
 title: Explore your fleet
-description: "The Fleet page: every system as a cluster of dots grouped by root location, with zoom pages for locations, systems, and components."
+description: "Explore: the drill-down tree to a system, the glance beside it, and the workspaces for locations, systems, and components."
 screenshots:
   # Component names repeat across rooms (every huddle has a videobar-1), so the
   # leaf is reached the way an operator reaches it: from the location zoom into
@@ -44,8 +44,8 @@ screenshots:
       - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
       - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
   - id: fleet-map
-    path: /web/systems/huddle?tab=map
-    alt: "The Map tab: the standard's declared room rendered top-down, one marker per role position, solid where staffed and hollow where not."
+    path: /web/systems/huddle
+    alt: "The map inside Overview: the standard's declared room rendered top-down, one marker per role position, solid where staffed and hollow where not."
     # The header's since-line ages with the capture (baseline only; the docs
     # embed the clean render).
     mask:
@@ -58,10 +58,10 @@ screenshots:
       - action: click
         selector: "text=Auditorium"
       - action: click
-        selector: "role=tab[name='History']"
+        selector: "role=tab[name='Activity']"
       - action: click
         selector: "[data-testid=incident-0] button"
-    alt: "The History tab, statuspage style: the window's uptime, the timeline, and the ongoing incident expanded to the alarm that explains it."
+    alt: "The Activity tab, statuspage style: the window's uptime, the timeline, the ongoing incident expanded to the alarm that explains it, then the events and the logs."
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=uptime-kpi]"
@@ -72,11 +72,11 @@ screenshots:
       - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
       - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
   - id: fleet-data
-    path: /web/systems/huddle?tab=data
+    path: /web/systems/huddle
     steps:
       - action: click
         selector: "[data-testid=metric-row-room-temperature]"
-    alt: "The Data tab: every declared metric stacked with a sparkline and its latest value, the temperature row expanded to the full chart."
+    alt: "The data section inside Overview: every declared metric stacked with a sparkline and its latest value, the temperature row expanded to the full chart."
     # The since-line ages with the capture, and every chart x-position
     # divides seed-to-shoot latency by the window (CI proved it crosses a
     # pixel boundary), so the plots mask in the BASELINE while the docs
@@ -87,62 +87,70 @@ screenshots:
       - "[data-testid=sparkline]"
   - id: fleet-location
     path: /web/locations/east
-    alt: "The location zoom: the breadcrumb, the verdict header with the needs-attention chip, a band per child location, system cards with slot strips, and the allowed child types."
+    alt: "The location workspace: the breadcrumb, the verdict header, the counts line, a band per child location, system cards with slot strips, and the allowed child types."
     # The since-line ages with the capture.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
   - id: fleet
-    path: /web/fleet
-    alt: "The fleet zoom: the summary rail, the filter bar, a band per root location with one round mark per system, and dashed holes."
+    path: /web/explore?node=huddle
+    alt: "Explore: the columns walked down to the huddle room, the system's row standing in for its room, and the glance beside it."
 ---
 
-**Fleet** shows every system you can read on one page: a band per root location, one round
-mark per system, coloured by the system's verdict, worst first. The
-[inventory pages](/guides/operator/inventory/) list rows; this page answers which systems
-need you and how many.
+The fleet has one door in the sidebar: **Explore**. It opens on the place tree, drawn as
+columns you walk down to a system; the same page wears a table face behind the toggle in
+its header. From a system you open its **workspace**, the monitoring page, at the
+system's own address. The old `/fleet` address lands on Explore.
+
+## Explore
 
 ::screenshot{#fleet}
 
-## Reading the page
+Explore is a drill-down tree. The first column lists the locations with no parent,
+whatever their types: a campus and a stand-alone building sit side by side if that is
+how your fleet is built, since the tree is yours and the page assumes nothing about its
+depth. Click a location and the next column lists what is under it: its child locations
+first (any type: a wing, a floor, a room, a type you defined), then the systems placed
+directly in it. Each location row wears its type, the worst verdict of every system under
+it, and how many systems that is; a location with nothing under it reads **empty**, so an
+unfinished tree is visible rather than hidden.
 
-- **The summary rail** on top, the same shape as the inventory pages: a verdict mix bar,
-  how many need attention (click to show only those), and the counts. Expand it for the
-  verdict donut with a clickable legend and the count tiles. **The summary reflects the
-  page it is on**: the fleet page counts the fleet, a location its own subtree, a system
-  its own components (slots, alarms, shared members), the leaf itself.
-- **The filter bar** narrows the canvas by verdict, system name, or room, with the same chips
-  the inventory pages use.
-- **A band is a root location.** Its chip shows the location's recorded verdict. The subtitle
-  counts systems, components, and levels.
-- **A round mark is a system.** Its colour is the system's verdict: green healthy, or
-  incomplete, degraded, outage. Marks order worst first inside a band. **Round means system;
-  square means component**, one zoom down.
-- **Incomplete is not failure.** It means hardware was never installed, not that installed
-  hardware broke.
-- **A dashed card is a location with no system.** It is inert for now.
+**A room with one system is the system.** A location with exactly one system and no
+sub-locations collapses into that system's row, the location named underneath it ("Huddle,
+in Huddle Room"), because the system is what you came for. A room with two systems stays a
+node whose column lists both.
 
-Hover a mark for the system and its room. **Click a mark to open the system in the blade**:
-its health panel, and buttons to open the system or its location. Click a band to open the
-location; the browser back button returns here.
+The rightmost column is the **glance**. Select a system and it shows the verdict, the path
+(names repeat across rooms; the path is what makes one unambiguous), and the entity's
+[form](/guides/operator/entities/) in read mode, with **Open workspace** to the monitoring
+page and **Edit** to change it in place. Select a location and the glance shows its
+roll-up, what sits under it, **Open location**, and, when you hold the create permissions,
+**+ Location here** and **+ System here**: the same create form, empty, with the placement
+already filled in.
 
-## Moving between zooms
+**Search** (the box at the top, or `/`) matches a system or a location by name or by any
+fragment of its path, systems first and worst first; the hits replace the columns and each
+carries its path, and choosing one rebuilds the columns down to it. Esc restores the
+columns where you were. The address carries the walk: `?node=<id>` lands on that location
+or system with its columns open, so a copied link lands where you stood; `?face=table`
+lands on the table face, and `t` toggles between the two.
 
-Every zoom keeps the same layout: the summary rail, the filter bar, then the zoom's own
-content. Click a band or a card to go deeper; the breadcrumb above the title walks back out
-(Fleet, then each location, then the system a component belongs to). Right-hand drawers open
-only as detail blades.
+Verdicts on this page are a glance. Monitoring lives on the workspaces and, later, the
+dashboards.
 
-The dashed **+** cards mark where a location or a system would go. They do nothing yet.
+## Every workspace, the same shape
 
-## The list view
+A location, a system, and a component each open at their own address, and each opens the
+same way: a header line with the verdict and **since when**, then one **counts line** that
+says only what is non-zero (the systems or components under it, how many need attention,
+the gaps, the slots filled), then three tabs. **Overview** is the entity itself.
+**Activity** is what happened to it. **Configure** is the [form](/guides/operator/entities/)
+that edits it in place. A tab with nothing to show for the kind is absent rather than
+empty. The breadcrumb above the title walks back out (Explore, then each location, then
+the system a component belongs to), and each crumb keeps you in the workspace family.
 
-The toggle at the top right swaps density, not data. On the fleet it replaces the canvas
-with the index tables under three kind tabs, Locations, Systems, and Components: the same
-tree, chip filter, and blades the [inventory guide](/guides/operator/inventory/) teaches.
-Inside a location it lists the subtree one row per system, verdict first; a row opens the
-system full screen, exactly as its card would. The view rides the address (`?view=list`),
-so a pasted link lands on the same face, and the old `/locations`, `/systems`, and
-`/components` addresses land on their tabs.
+Inside a location, the density toggle lists the subtree one row per system, verdict
+first; a row opens the system full screen, exactly as its card would. The view rides the
+address (`?view=list`), so a pasted link lands on the same face.
 
 ## Zoom into a location
 
@@ -152,9 +160,9 @@ old `?view=detail` link simply lands here.
 
 ::screenshot{#fleet-location}
 
-One zoom down, the header repeats the shape the system zoom set: the location's verdict,
-since when, and a **needs-attention count** for this subtree that applies the worst-first
-filter on click. Marks are **square components** inside a **system outline** (the outline
+One zoom down, the header repeats the shape the system zoom set: the location's verdict
+and since when; the counts line beneath it carries this subtree's **need attention**
+count, which applies the worst-first filter on click. Marks are **square components** inside a **system outline** (the outline
 is the system's verdict, quiet when healthy). One band per direct child, whatever its type, plus a **placed here** band for systems
 attached to this location itself. Each system is a card: a status dot and border, the room
 and standard, a **slot strip** (one square per slot the standard wants: filled squares in
@@ -192,34 +200,40 @@ last recorded change and its age). Below it, cause before arithmetic:
 - A shared occupant is badged with the other system it serves; a member filling no role
   is a card with a "no role" badge, and that is a normal state.
 
-## The map
+## Overview: the map and the data
 
 A standard may declare the room's layout: where each role position sits, top-down. Every
-system built to that standard gets the **Map** tab for free, one marker per declared
-position: solid in the occupant's state (click it to open the leaf), hollow where nobody
-is staffed. The label is the role, its position number when the role wants several, and
-the component holding it.
+system built to that standard draws the **map** inside Overview, under the components:
+one marker per declared position, solid in the occupant's state (click it to open the
+leaf), hollow where nobody is staffed. The label is the role, its position number when
+the role wants several, and the component holding it.
 
 ::screenshot{#fleet-map}
 
-## The history
+Below the map, when the standard declares metrics, the **data** section stacks every one
+of them: a sparkline of the last 24 hours beside the latest value, one row per series, so
+the room's numbers read together. Click a row for the full chart, newest at the right,
+the latest sample's value floating on its dot. Raw samples, capped; a series still on its
+contract default has nothing to chart yet, and says so.
 
-Every system carries the **History** tab, read the way a status page reads: the window's
-**uptime** up top (the health KPI over time), the timeline beside it with one marker per
-alarm raise, then **incidents**: one entry per contiguous stretch away from healthy,
-ongoing first, each expanding to the verdict changes inside it and the alarms that explain
-them. An alarm the room absorbed without going unhealthy lists under **other alarms**. A
-room that flaps weekly and a room that failed once look different here, which is the
-point.
+::screenshot{#fleet-data}
+
+## Activity: the history, the events, the logs
+
+**Activity** reads the way a status page reads: the window's **uptime** up top (the
+health KPI over time), the timeline beside it with one marker per alarm raise, then
+**incidents**: one entry per contiguous stretch away from healthy, ongoing first, each
+expanding to the verdict changes inside it and the alarms that explain them. An alarm the
+room absorbed without going unhealthy lists under **other alarms**. A room that flaps
+weekly and a room that failed once look different here, which is the point.
 
 ::screenshot{#fleet-history}
 
-## The events and the logs
-
-The **Events** tab is the room's story on the event lane: the system's own events and its
-members', newest first, each row labeled by the owner that raised it. The **Logs** tab is
-the members' raw lines merged, each naming the component that wrote it. Both cover the
-last 24 hours, capped; both scope to what you can read.
+Under the incidents, the **events** are the room's story on the event lane: the system's
+own events and its members', newest first, each row labeled by the owner that raised it;
+and the **logs** are the members' raw lines merged, each naming the component that wrote
+it. Both cover the last 24 hours, capped; both scope to what you can read. A component's
+Activity tab carries its own events the same way.
 
 ## Configure
 
@@ -232,20 +246,10 @@ product is fixed at creation). **Placement** moves a location under a new parent
 permission and its own audit verb; systems and components read where they sit.
 **Tags** edit in place. One save model everywhere: Edit stages drafts, Save commits them
 together (the rename last, so a refusal leaves the rest saved), Cancel reverts. A
-`?edit=1` address lands already editing. The location zoom and the component leaf carry
-the same tab.
+`?edit=1` address lands already editing. The location and component workspaces carry the
+same tab, and the same form renders in the blade and in Explore's glance.
 
 ::screenshot{#fleet-configure}
-
-## The data
-
-The **Data** tab stacks every metric the standard declares: a sparkline of the last 24
-hours beside the latest value, one row per series, so the room's numbers read together.
-Click a row for the full chart, newest at the right, the latest sample's value floating
-on its dot. Raw samples, capped; a series still on its contract default has nothing to
-chart yet, and says so.
-
-::screenshot{#fleet-data}
 
 ## The component leaf
 

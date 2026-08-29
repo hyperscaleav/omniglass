@@ -22,9 +22,9 @@ test.describe("operator console", () => {
   test("signs in, lists locations, creates a location, opens it, deletes it", async ({ page }) => {
     await page.goto("/web/locations");
 
-    // The bare index address redirects into the fleet list face's Locations
-    // kind tab (#798): the shell says Fleet, the list face carries the kind.
-    await page.waitForURL(/fleet\?view=list&kind=locations/);
+    // The bare index address redirects into Explore's table face on the
+    // Locations kind tab (#798, #826).
+    await page.waitForURL(/explore\?face=table&kind=locations/);
     await expect(page.getByTestId("fleet-list-face")).toBeVisible();
 
     // Create a throwaway campus through the create-as-route draft. Campus
@@ -152,7 +152,7 @@ test.describe("operator console", () => {
     // confirm-delete (#799); the leaf itself has no destructive footer.
     page.on("dialog", (d) => d.accept());
     await page.goto("/web/components");
-    await page.waitForURL(/fleet\?view=list&kind=components/);
+    await page.waitForURL(/explore\?face=table&kind=components/);
     await page.getByText(draftedLabel, { exact: true }).first().click();
     await expect(page.locator("aside[data-blade]")).toBeVisible();
     await page.locator('aside[data-blade] button:text-is("Delete")').click();
@@ -189,73 +189,85 @@ test.describe("operator console", () => {
     });
   }
 
-  test("the fleet zoom: bands render, a band click lands on the location by uuid, back returns", async ({ page }) => {
-    // Arrange through the API with the session the login already minted: the
-    // e2e database starts with the boot seed only, so the fleet under test is
-    // this test's own. A campus holding one system, and an empty building
-    // beside it: one band, one hole.
+  test("explore: the columns walk the tree, a system row opens the glance, Open workspace lands on the system by uuid", async ({ page }) => {
+    // The e2e database starts with the boot seed only, so the tree under test
+    // is created here: a campus, a building under it, a room under that, and
+    // a system in the room. One system in a room with no sub-locations is the
+    // displacement case: the room collapses into the system's row.
     const stamp = Date.now();
     const campus = `e2e-fleet-${stamp}`;
-    const hole = `e2e-hole-${stamp}`;
-    const mk = async (path: string, body: Record<string, unknown>) => {
-      const res = await page.request.post(`/api/v1${path}`, { data: body });
-      expect(res.status(), `POST ${path} ${await res.text()}`).toBe(201);
-      return (await res.json()) as { id: string };
-    };
-    const root = await mk("/locations", { name: campus, location_type: "campus" });
-    await mk("/locations", { name: hole, location_type: "building", parent: campus });
-    await mk("/systems", { name: `e2e-sys-${stamp}`, location: campus });
+    // What the rows and the column headers SHOW: a shipped fleet renders a
+    // location's label from its name ({{title (words .Name)}}, ADR-0105), so
+    // the walk matches labels, derived here rather than hard-coded.
+    const titled = (n: string) => n.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+    const campusLabel = titled(campus);
+    const buildingLabel = titled(`${campus}-b`);
+    await page.goto("/web/locations/create");
+    await page.getByLabel("Location type").selectOption("campus");
+    await page.getByLabel("Name", { exact: true }).fill(campus);
+    await page.getByRole("button", { name: /create location/i }).click();
+    await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}/);
+    const campusId = page.url().match(/locations\/([0-9a-f-]{36})/)![1];
+    await page.getByRole("button", { name: /^cancel$/i }).first().click();
 
+    // Create the building and the system where you stand: the location glance's creates.
+    await page.goto(`/web/explore?node=${campusId}`);
+    const glance = page.getByTestId("explore-glance");
+    await expect(glance).toBeVisible();
+    await glance.getByRole("button", { name: /location here/i }).click();
+    await page.waitForURL(/\/web\/locations\/create\?under=/);
+    await page.getByLabel("Location type").selectOption("building");
+    await page.getByLabel("Name", { exact: true }).fill(`${campus}-b`);
+    await page.getByRole("button", { name: /create location/i }).click();
+    await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}\?edit=1/);
+    const buildingId = page.url().match(/locations\/([0-9a-f-]{36})/)![1];
+    await page.goto(`/web/explore?node=${buildingId}`);
+    await page.getByTestId("explore-glance").getByRole("button", { name: /system here/i }).click();
+    await page.waitForURL(/\/web\/systems\/create\?under=/);
+    await page.getByLabel("Name", { exact: true }).fill(`${campus}-sys`);
+    await page.getByRole("button", { name: /create system/i }).click();
+    await page.waitForURL(/\/web\/systems\/[0-9a-f-]{36}\?edit=1/);
+    const systemId = page.url().match(/systems\/([0-9a-f-]{36})/)![1];
+
+    // The tree: the campus is a parentless row; drilling into it lists the
+    // building, which collapses into the system's row (one system, no sub-locations).
+    await page.goto("/web/explore");
+    await page.getByTestId("explore-column-Locations").getByRole("button", { name: new RegExp(String(stamp)) }).click();
+    const col = page.getByTestId(`explore-column-${campusLabel}`);
+    await expect(col).toBeVisible();
+    // The system's label follows its own rule (its name, when it has no type),
+    // so the row matches on the stamp and the "sys" suffix in either spelling.
+    const row = col.getByRole("button", { name: new RegExp(`${stamp}[- ]sys`, "i") });
+    await expect(row).toContainText(`in ${buildingLabel}`);
+    await row.click();
+    await expect(page.getByTestId("explore-glance")).toContainText(String(stamp));
+    await expect(page).toHaveURL(new RegExp(`node=${systemId}`));
+    await page.getByTestId("explore-glance").getByRole("button", { name: /open workspace/i }).click();
+    await page.waitForURL(new RegExp(`/web/systems/${systemId}`));
+
+    // The retired canvas address lands on Explore.
     await page.goto("/web/fleet");
+    await page.waitForURL(/\/web\/explore$/);
+    await expect(page.getByTestId("explore-column-Locations")).toBeVisible();
 
-    // The chrome: title, ladder, inspector, breadcrumb.
-    await expect(page.getByRole("heading", { name: "Fleet" })).toBeVisible();
-    await expect(page.getByTestId("fleet-summary")).toBeVisible();
-
-    // The band for this test's own root, and the canvas element inside it
-    // (role img so the pixels have an accessible name). The system holds no
-    // components yet, so the raster itself is proven by the screenshot step
-    // against the seeded dev fleet, not here.
-    const band = page.getByTestId(`band-${root.id}`);
-    await expect(band).toBeVisible();
-    await expect(band.getByText(/1 system/)).toBeVisible();
-    await expect(band.locator("canvas")).toHaveAttribute("role", "img");
-
-    // The empty building renders as a dashed hole, named.
-    const holeLabel = hole.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-    await expect(page.getByText(holeLabel).first()).toBeVisible();
-
-    // The summary is on top, badges by default; expanding it shows the tile
-    // board that carries what the right rail carried (design ruling
-    // 2026-08-18), and no right rail exists.
-    await expect(page.getByTestId("fleet-tiles")).toHaveCount(0);
-    await page.getByRole("button", { name: "Expand summary" }).first().click();
-    await expect(page.getByTestId("fleet-tiles")).toBeVisible();
-    await page.getByRole("button", { name: "Collapse" }).click();
-    await expect(page.getByTestId("zoom-rail")).toHaveCount(0);
-
-    // Clicking a system mark on the canvas opens the blade with the health
-    // panel; the mark is the system. This test's system has no components,
-    // so its round mark is the band's only one: click the canvas centre-left.
-    // The mark sits at the canvas origin plus padY (a round 10px mark).
-    await band.locator("canvas").click({ position: { x: 5, y: 7 } });
-    const blade = page.locator("aside[data-blade]").last();
-    await expect(blade).toBeVisible();
-    await expect(blade).toContainText(/e2e-sys/);
-    await page.keyboard.press("Escape");
-    await expect(page.locator("aside[data-blade]")).toHaveCount(0);
-
-    // A band click navigates to the root location BY UUID, and the browser
-    // back button returns to the fleet zoom (#633 acceptance).
-    await band.getByRole("button").first().click();
-    await page.waitForURL(new RegExp(`/web/locations/${root.id}$`));
-    // The zoom face renders at the identity route (ADR-0126): the breadcrumb
-    // walks back to the fleet, and the summary rail is the same one.
-    await expect(page.getByTestId("breadcrumb")).toBeVisible();
-    await expect(page.getByTestId("fleet-summary")).toBeVisible();
-    await page.goBack();
-    await page.waitForURL(/\/web\/fleet/);
-    await expect(page.getByTestId("fleet-summary")).toBeVisible();
+    // Clean up: the system through its blade on the flat Systems tab (the blade
+    // delete under test), then the building and the campus through the API on
+    // the browser's own session. The Locations tab renders the tree collapsed,
+    // so a nested building has no row to click until its campus is expanded;
+    // the locations walk above already proves a location's blade delete.
+    page.on("dialog", (d) => d.accept());
+    const sysMatch = new RegExp(`${stamp}[- ]sys`, "i");
+    await page.goto("/web/explore?face=table&kind=systems");
+    await page.getByText(sysMatch).first().click();
+    await expect(page.locator("aside[data-blade]")).toBeVisible();
+    await page.locator('aside[data-blade] button:text-is("Delete")').click();
+    await expect(page.locator("main")).not.toContainText(sysMatch);
+    for (const id of [buildingId, campusId]) {
+      const res = await page.request.delete(`/api/v1/locations/${id}`);
+      expect(res.ok(), `delete location ${id}: ${res.status()}`).toBeTruthy();
+    }
+    await page.goto("/web/explore");
+    await expect(page.getByTestId("explore-column-Locations")).not.toContainText(campusLabel);
   });
 
 });

@@ -5829,4 +5829,42 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   gap, and a control whose value starts empty and only moves because the operator moved it has
   nothing stored to lose. Every test drives the gap by hand, delivering the collection between two
   assertions rather than sleeping on a race (ADR-0133, #398, #772, #782).
-
+- **One form per kind**
+  ([#826](https://github.com/hyperscaleav/omniglass/issues/826) slice 1, #830). The
+  original blade vision, restored: `EntityForm` is the one component that renders a
+  location, a system, or a component read or edit, and whether it appears in the blade
+  or on the workspace's Configure tab is only where the operator clicked. The host owns
+  the edit slot (the blade's footer, the page's footer) and hands it in; the form binds
+  seed and save, keeps every field's own gate (a caller with update but not rename sees
+  the name read-only, with the reason), wires its kind panels through the ambient blade
+  stack, and keeps the ruled save order (update, move, rename last, uuid-addressed).
+  Create is the same form empty (`EntityCreateForm`: what and where before identity,
+  the platform-named identity fields locked on the value they will carry, and an
+  `under` prefill for the explorer's create-where-you-stand), so the three create pages
+  become hosts that only say where to go next. The #800 jump-anchor rows retire; the
+  blade's members, strip, and vitals move to the workspace they summarised.
+- **The Explore page**
+  ([#826](https://github.com/hyperscaleav/omniglass/issues/826) slice 2, #831). The
+  sidebar's one door into the fleet is Explore: a depth-agnostic drill down the place
+  tree to a system, built from the fleet view's parent pointers. The first column is the
+  locations with no parent, whatever their types; every later column is one node's
+  children, locations of any type first, systems after; a location with one system and
+  no sub-locations collapses into that system's row. The rightmost column is the glance:
+  the system's verdict and path over the one form, editable in place, or a location's
+  roll-up with the two creates that make sense under it (the same form, empty, placement
+  prefilled through `?under=`). Search by name or path fragment replaces the columns
+  with hits that carry their paths; `?node=` lands on a node with the columns rebuilt;
+  the header's toggle wears today's list face at `?face=table` until #828. The Fleet
+  entry and the reserved Explore stub retire from the sidebar; `/fleet` survives until
+  the canvas retires in #832.
+- **Three tabs and one counts line**
+  ([#826](https://github.com/hyperscaleav/omniglass/issues/826) slice 3, #832). Every
+  workspace carries Overview, Activity, Configure: the system's map and vitals fold into
+  Overview, its history, events, and logs into Activity, and the retired tab addresses
+  map onto the tab that absorbed them so old links still land. The shared header shows
+  one counts line with the zero values left out (`countsLine` over the scoped tile spec
+  every altitude already built), and need-attention stays a filter where the page has
+  rows to filter; the KPI summary rail, the tiles board, and the location header's
+  duplicate attention chip retire. The band canvas retires with them: the Fleet page,
+  BandCanvas, and the paint core are deleted, `/fleet` redirects to Explore, and a guard
+  over the source tree keeps the retired surfaces retired.

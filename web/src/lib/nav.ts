@@ -53,7 +53,12 @@ export const navItems: NavItem[] = [
   // The fleet zoom (#633): the whole fleet on one canvas, systems as dot
   // clusters under their root locations. Gated like the place tree it draws;
   // the projection scopes each tier on its own read underneath.
-  { label: "Fleet", path: "/fleet", icon: Icons.Grid, live: true, anyResource: ["location", "system", "component"], hint: "Every system as a cluster of dots on one page, grouped by location and coloured by status." },
+  // Explore (#826): the drill-down tree to a system, the sidebar's one door
+  // into the fleet ("fleet" stays the noun, ADR-0122). It replaced the Fleet
+  // entry and the Explore stub once reserved for a data explorer, which takes a
+  // later name. Gated like the place tree it draws; the projection scopes each
+  // tier on its own read underneath.
+  { label: "Explore", path: "/explore", icon: Icons.Compass, live: true, anyResource: ["location", "system", "component"], hint: "Find a system by walking the place tree, or scan them all at table density." },
   { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
   { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering sample." },
   // The fleet has ONE door (#798, the reconciliation ruled on the #795 review):
@@ -84,7 +89,6 @@ export const navItems: NavItem[] = [
   // route-guard gate. The per-registry pages stay declared off-rail (OFF_RAIL
   // below): that carries their top-bar identity and their route-guard gates.
   { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, hint: "Everything the fleet is typed by: every registry, browsable in one place." },
-  { label: "Explore", path: "/explore", icon: Icons.Compass, hint: "Sample history, the event log, and the cascade resolve view." },
   { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned samples." },
   {
     label: "Admin", icon: Icons.Settings, hint: "Platform administration: users, roles, groups, the audit trail, and platform settings.",
@@ -185,7 +189,7 @@ export const navByPath: Record<string, NavMeta> = (() => {
 // so every unlive rail entry resolves to a registered stub rather than NotFound.
 export const STUBS = [
   "/dashboards", "/alarms",
-  "/templates", "/rules", "/explore", "/learn",
+  "/templates", "/rules", "/learn",
   "/config", "/log-types", "/notifications",
 ];
 

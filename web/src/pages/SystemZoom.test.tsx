@@ -138,7 +138,7 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
       <Router base="/web">
         <Route path="/systems/:id" component={Systems} />
         <Route path="/locations/:id" component={() => <div data-testid="location-page" />} />
-        <Route path="/fleet" component={() => <div data-testid="fleet-page" />} />
+        <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
         <Route
           path="/components/:id"
           component={() => {
@@ -314,13 +314,15 @@ describe("the map tab (#791)", () => {
     ] },
   }];
 
-  it("a standard with a map yields the Map tab; without one the tab is absent (History keeps the rail)", () => {
+  it("a standard with a map draws it inside Overview; without one there is no map, and the rail stays three tabs", () => {
     mount(undefined, health, [], MAPPED);
-    expect(screen.getByRole("tab", { name: "Map" })).toBeTruthy();
+    expect(screen.getByTestId("system-map")).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Map" })).toBeNull();
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Activity", "Configure"]);
     cleanup();
     mount();
     expect(screen.getByTestId("tab-rail")).toBeTruthy();
-    expect(screen.queryByRole("tab", { name: "Map" })).toBeNull();
+    expect(screen.queryByTestId("system-map")).toBeNull();
   });
 
   it("the map tab renders one marker per declared position of the build in use, occupants solid and gaps hollow", () => {
@@ -393,10 +395,11 @@ describe("the history tab (#792)", () => {
     expect(await within(tab).findByText("Fan speed high")).toBeTruthy();
   });
 
-  it("is always on the rail, with the timeline and raise markers", async () => {
+  it("Activity is always on the rail, with the timeline and raise markers", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);
-    expect(screen.getByRole("tab", { name: "History" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Activity" })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "History" })).toBeNull();
     expect(screen.getByTestId("health-history-full")).toBeTruthy();
     await screen.findByText("Fan speed high");
   });
@@ -406,6 +409,18 @@ describe("the history tab (#792)", () => {
     seedAlarms(r.qc);
     await screen.findByText("No route to host");
     expect(screen.getAllByTestId(/^incident-marker-/)).toHaveLength(2);
+  });
+});
+
+describe("the Activity tab's order (#826)", () => {
+  it("reads like a status page: uptime and incidents first, then the events, then the logs", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=activity`);
+    const history = await screen.findByTestId("history-tab");
+    const events = await screen.findByTestId("events-tab");
+    const logs = await screen.findByTestId("logs-tab");
+    // compareDocumentPosition: FOLLOWING (4) means the argument comes after.
+    expect(history.compareDocumentPosition(events) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(events.compareDocumentPosition(logs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 
@@ -473,20 +488,22 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
     expect(screen.queryByTestId("timeseries-chart")).toBeNull();
   });
 
-  it("hides the tab with nothing declared", () => {
+  it("draws no data section with nothing declared, and no Data tab ever", () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=data`, health, []);
     expect(screen.queryByRole("tab", { name: "Data" })).toBeNull();
+    expect(screen.queryByTestId("data-tab")).toBeNull();
   });
 });
 
-describe("the scoped summary (#795 review)", () => {
-  it("talks about THIS system's components: mix subject, slots, alarms", () => {
+describe("the one counts line (#826)", () => {
+  it("talks about THIS system's components in one line, zeros left out", () => {
     mount();
-    const rail = screen.getByTestId("fleet-summary");
-    expect(within(rail).getByText("components")).toBeTruthy();
-    expect(within(rail).queryByText("roots")).toBeNull();
-    expect(within(rail).getByText("slots filled")).toBeTruthy();
-    expect(within(rail).getByText(/active alarms?/)).toBeTruthy();
+    const line = screen.getByTestId("counts-line");
+    expect(line.textContent).toContain("components");
+    expect(line.textContent).not.toContain("roots");
+    expect(line.textContent).toContain("slots filled");
+    expect(line.textContent).toMatch(/active alarms?/);
+    expect(screen.queryByTestId("fleet-summary")).toBeNull();
   });
 });
 
