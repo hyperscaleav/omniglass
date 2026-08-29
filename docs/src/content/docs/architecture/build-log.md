@@ -5843,3 +5843,17 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   `under` prefill for the explorer's create-where-you-stand), so the three create pages
   become hosts that only say where to go next. The #800 jump-anchor rows retire; the
   blade's members, strip, and vitals move to the workspace they summarised.
+- **The Explore page**
+  ([#826](https://github.com/hyperscaleav/omniglass/issues/826) slice 2, #831). The
+  sidebar's one door into the fleet is Explore: a depth-agnostic drill down the place
+  tree to a system, built from the fleet view's parent pointers. The first column is the
+  locations with no parent, whatever their types; every later column is one node's
+  children, locations of any type first, systems after; a location with one system and
+  no sub-locations collapses into that system's row. The rightmost column is the glance:
+  the system's verdict and path over the one form, editable in place, or a location's
+  roll-up with the two creates that make sense under it (the same form, empty, placement
+  prefilled through `?under=`). Search by name or path fragment replaces the columns
+  with hits that carry their paths; `?node=` lands on a node with the columns rebuilt;
+  the header's toggle wears today's list face at `?face=table` until #828. The Fleet
+  entry and the reserved Explore stub retire from the sidebar; `/fleet` survives until
+  the canvas retires in #832.

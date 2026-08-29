@@ -182,7 +182,7 @@ export default function SystemZoom() {
     if (!view.data) return [];
     const chain = system()?.location ? ancestors(system()!.location!, locationIndex(view.data)) : [];
     return [
-      { key: "fleet", label: "Fleet", onClick: () => navigate("/fleet") },
+      { key: "explore", label: "Explore", onClick: () => navigate("/explore") },
       ...chain.map((l) => ({
         key: l.id,
         label: entityLabel(l),

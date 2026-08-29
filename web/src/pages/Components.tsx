@@ -218,8 +218,10 @@ function ComponentsIndex() {
   // The classic detail body retired with the face (#800 slice 3): the blade
   // is the override, the full page unreachable, so the config renders null.
   function ComponentCreate(): JSX.Element {
-    // The one form, empty (#826): the page only says where to go next.
-    return <EntityCreateForm kind="component" onCreated={(created) => navigate(`/components/${encodeURIComponent(created.id)}?edit=1`)} onCancel={() => navigate("/components")} />;
+    // The one form, empty (#826): the page only says where to go next; ?under=
+    // prefills placement (the explorer's create-where-you-stand).
+    const [createParams] = useSearchParams();
+    return <EntityCreateForm kind="component" under={(Array.isArray(createParams.under) ? createParams.under[0] : createParams.under) || undefined} onCreated={(created) => navigate(`/components/${encodeURIComponent(created.id)}?edit=1`)} onCancel={() => navigate("/components")} />;
   }
 
   // A cross-page deep link from a system seeds a system facet by the system's

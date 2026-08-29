@@ -2,6 +2,7 @@ import type { Component } from "solid-js";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Fleet from "./pages/Fleet";
+import Explore from "./pages/Explore";
 import FleetRedirect from "./pages/FleetRedirect";
 import Locations from "./pages/Locations";
 import Systems from "./pages/Systems";
@@ -42,6 +43,7 @@ export const PAGES: Record<string, Component> = {
   Login,
   Home,
   Fleet,
+  Explore,
   FleetRedirect,
   Locations,
   Systems,

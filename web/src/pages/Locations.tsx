@@ -3,7 +3,7 @@ import { locationBlade, systemBlade, componentBlade } from "../components/Entity
 import { EntityCreateForm } from "../components/EntityForm";
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { useNavigate, useParams } from "@solidjs/router";
+import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListNode, type PageDescriptor, type Widget } from "../components/TreeList";
 import Donut from "../components/Donut";
 
@@ -243,8 +243,10 @@ function LocationsIndex() {
   // The classic detail body retired with the face (#800 slice 3): the blade
   // is the override, the full page unreachable, so the config renders null.
   function LocationCreate(): JSX.Element {
-    // The one form, empty (#826): the page only says where to go next.
-    return <EntityCreateForm kind="location" onCreated={(created) => navigate(`/locations/${encodeURIComponent(created.id)}?edit=1`)} onCancel={() => navigate("/locations")} />;
+    // The one form, empty (#826): the page only says where to go next; ?under=
+    // prefills placement (the explorer's create-where-you-stand).
+    const [createParams] = useSearchParams();
+    return <EntityCreateForm kind="location" under={(Array.isArray(createParams.under) ? createParams.under[0] : createParams.under) || undefined} onCreated={(created) => navigate(`/locations/${encodeURIComponent(created.id)}?edit=1`)} onCancel={() => navigate("/locations")} />;
   }
 
   const cfg: ListConfig<LocNode> = {

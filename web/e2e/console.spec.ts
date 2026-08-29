@@ -22,9 +22,9 @@ test.describe("operator console", () => {
   test("signs in, lists locations, creates a location, opens it, deletes it", async ({ page }) => {
     await page.goto("/web/locations");
 
-    // The bare index address redirects into the fleet list face's Locations
-    // kind tab (#798): the shell says Fleet, the list face carries the kind.
-    await page.waitForURL(/fleet\?view=list&kind=locations/);
+    // The bare index address redirects into Explore's table face on the
+    // Locations kind tab (#798, #826).
+    await page.waitForURL(/explore\?face=table&kind=locations/);
     await expect(page.getByTestId("fleet-list-face")).toBeVisible();
 
     // Create a throwaway campus through the create-as-route draft. Campus
@@ -152,7 +152,7 @@ test.describe("operator console", () => {
     // confirm-delete (#799); the leaf itself has no destructive footer.
     page.on("dialog", (d) => d.accept());
     await page.goto("/web/components");
-    await page.waitForURL(/fleet\?view=list&kind=components/);
+    await page.waitForURL(/explore\?face=table&kind=components/);
     await page.getByText(draftedLabel, { exact: true }).first().click();
     await expect(page.locator("aside[data-blade]")).toBeVisible();
     await page.locator('aside[data-blade] button:text-is("Delete")').click();

@@ -7,8 +7,8 @@ screenshots:
     alt: "The fleet's list view: kind tabs for Locations, Systems, and Components over the chip filter and the tree of campuses."
 ---
 
-The fleet has one door. The [Fleet page](/guides/operator/fleet/) opens on the canvas; the
-**list view** (the toggle at the top right, or `?view=list` in the address) swaps it for
+The fleet has one door. [Explore](/guides/operator/fleet/) opens on the place tree; its
+**table** face (the toggle in the header, or `?face=table` in the address) swaps it for
 the index tables, one kind tab each for Locations, Systems, and Components. Nodes keeps
 its own sidebar entry: collection infrastructure, not fleet inventory. The tabs share one shape,
 so once you know one you know them all. This page is how you **find** something in that

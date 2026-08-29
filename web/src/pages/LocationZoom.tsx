@@ -111,7 +111,7 @@ export default function LocationZoom() {
     if (!view.data) return [];
     const chain = ancestors(id(), locationIndex(view.data));
     return [
-      { key: "fleet", label: "Fleet", onClick: () => navigate("/fleet") },
+      { key: "explore", label: "Explore", onClick: () => navigate("/explore") },
       // The trail ends at the parent: the current location is the page title,
       // and repeating it as the last crumb would say it twice.
       ...chain.slice(0, -1).map((l) => ({

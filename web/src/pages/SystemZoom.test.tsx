@@ -138,7 +138,7 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
       <Router base="/web">
         <Route path="/systems/:id" component={Systems} />
         <Route path="/locations/:id" component={() => <div data-testid="location-page" />} />
-        <Route path="/fleet" component={() => <div data-testid="fleet-page" />} />
+        <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
         <Route
           path="/components/:id"
           component={() => {
