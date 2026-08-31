@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js";
+import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
@@ -485,21 +485,37 @@ function PresetBar(props: {
   );
 }
 
-// One chip, through the Button primitive, so the pressed look is the intent
-// vocabulary rather than a raw daisyUI colour repeated per control.
-function Chip(props: { active: boolean; onPick: () => void; children: JSX.Element }) {
-  return (
-    <Button size="xs" intent={props.active ? "action" : "quiet"} pressed={props.active} onClick={props.onPick}>
-      {props.children}
-    </Button>
-  );
-}
-
 // The control panel. Every control here changes HOW the fleet is drawn, never
 // WHAT is in it: that line is what keeps this an explorer rather than a
 // dashboard with no owner and no permissions. The one filter allowed,
 // need-attention, is a predicate over live state rather than a naming of
 // subjects, so it rides the URL with the drilled node.
+//
+// One row of selects rather than four rows of chips. Chips show every option at
+// once, which is the right trade at three options and the wrong one at
+// fourteen: the panel ended up taller than the fleet it framed. A select shows
+// the setting in force and hides the rest until asked, which is what a setting
+// wants, and the presets above cover the common cases without opening one.
+//
+// These are hard-coded option lists, so ADR-0133's ref binding does not apply:
+// there is no async gap in which the control could hold a value it has no
+// option for.
+function Field(props: { label: string; value: string; options: string[]; onPick: (v: string) => void }) {
+  return (
+    <label class="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-base-content/50">
+      {props.label}
+      <select
+        class="select select-xs select-bordered w-auto text-xs normal-case tracking-normal text-base-content"
+        value={props.value}
+        onChange={(e) => props.onPick(e.currentTarget.value)}
+        aria-label={props.label}
+      >
+        <For each={props.options}>{(o) => <option value={o}>{o[0].toUpperCase() + o.slice(1)}</option>}</For>
+      </select>
+    </label>
+  );
+}
+
 function Controls(props: {
   prefs: Prefs;
   onPrefs: (patch: Partial<Prefs>) => void;
@@ -508,35 +524,16 @@ function Controls(props: {
   drilled: boolean;
 }) {
   return (
-    <div data-testid="explore-controls" class="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-box border border-base-300 bg-base-200 px-3 py-2">
-      <div class="flex items-center gap-1">
-        <span class="mr-1 text-[10px] uppercase tracking-wider text-base-content/50">View</span>
-        <For each={["cards", "bands", "mosaic", "matrix"] as RendererKey[]}>
-          {(r) => <Chip active={props.prefs.renderer === r} onPick={() => props.onPrefs({ renderer: r })}>{r[0].toUpperCase() + r.slice(1)}</Chip>}
-        </For>
-      </div>
-      <div class="flex items-center gap-1">
-        <span class="mr-1 text-[10px] uppercase tracking-wider text-base-content/50">Labels</span>
-        <For each={["auto", "always", "off"] as LabelMode[]}>
-          {(m) => <Chip active={props.prefs.labelMode === m} onPick={() => props.onPrefs({ labelMode: m })}>{m}</Chip>}
-        </For>
-      </div>
-      <div class="flex items-center gap-1">
-        <span class="mr-1 text-[10px] uppercase tracking-wider text-base-content/50">Density</span>
-        <For each={["compact", "cozy", "roomy"] as Density[]}>
-          {(d) => <Chip active={props.prefs.density === d} onPick={() => props.onPrefs({ density: d })}>{d}</Chip>}
-        </For>
-      </div>
-      <div class="flex items-center gap-1">
-        <span class="mr-1 text-[10px] uppercase tracking-wider text-base-content/50">Sort</span>
-        <Chip active={props.prefs.sort === "worst"} onPick={() => props.onPrefs({ sort: "worst" })}>Worst first</Chip>
-        <Chip active={props.prefs.sort === "name"} onPick={() => props.onPrefs({ sort: "name" })}>By name</Chip>
-      </div>
-      <label class="flex cursor-pointer items-center gap-2 text-xs">
+    <div data-testid="explore-controls" class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-box border border-base-300 bg-base-200 px-3 py-1.5">
+      <Field label="View" value={props.prefs.renderer} options={["cards", "bands", "mosaic", "matrix"]} onPick={(v) => props.onPrefs({ renderer: v as RendererKey })} />
+      <Field label="Labels" value={props.prefs.labelMode} options={["auto", "always", "off"]} onPick={(v) => props.onPrefs({ labelMode: v as LabelMode })} />
+      <Field label="Density" value={props.prefs.density} options={["compact", "cozy", "roomy"]} onPick={(v) => props.onPrefs({ density: v as Density })} />
+      <Field label="Sort" value={props.prefs.sort} options={["worst", "name"]} onPick={(v) => props.onPrefs({ sort: v as "worst" | "name" })} />
+      <label class="flex cursor-pointer items-center gap-1.5 text-xs">
         <input type="checkbox" class="checkbox checkbox-xs" checked={props.prefs.roomBox} onChange={(e) => props.onPrefs({ roomBox: e.currentTarget.checked })} />
         Room boxes
       </label>
-      <label class="flex cursor-pointer items-center gap-2 text-xs">
+      <label class="flex cursor-pointer items-center gap-1.5 text-xs">
         <input type="checkbox" class="checkbox checkbox-xs" checked={props.attentionOnly} onChange={(e) => props.onAttentionOnly(e.currentTarget.checked)} />
         Only what needs attention
       </label>

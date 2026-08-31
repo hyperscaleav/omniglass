@@ -167,7 +167,7 @@ describe("the label budget", () => {
   it("lets the operator force them off, which the status line then reports", async () => {
     mount();
     await screen.findByTestId("explore-status");
-    fireEvent.click(within(screen.getByTestId("explore-controls")).getByRole("button", { name: "off" }));
+    fireEvent.change(screen.getByLabelText("Labels"), { target: { value: "off" } });
     expect(screen.getByTestId("explore-status").textContent).toContain("labels off (forced)");
   });
 
@@ -183,7 +183,7 @@ describe("the controls change how it is drawn, never what is in it", () => {
   it("switches renderer without changing which systems are shown", async () => {
     mount();
     const before = (await screen.findByTestId(`explore-section-${uuidFor("hq")}`)).querySelectorAll("[data-dot]").length;
-    fireEvent.click(within(screen.getByTestId("explore-controls")).getByRole("button", { name: "Bands" }));
+    fireEvent.change(screen.getByLabelText("View"), { target: { value: "bands" } });
     const after = screen.getByTestId(`explore-section-${uuidFor("hq")}`).querySelectorAll("[data-dot]").length;
     expect(after).toBe(before);
   });
@@ -191,10 +191,10 @@ describe("the controls change how it is drawn, never what is in it", () => {
   it("remembers the renderer per browser but never the drilled node", async () => {
     mount();
     await screen.findByTestId("explore-controls");
-    fireEvent.click(screen.getByRole("button", { name: "Bands" }));
+    fireEvent.change(screen.getByLabelText("View"), { target: { value: "bands" } });
     cleanup();
     mount("/web/explore", owner, undefined, true);
-    expect((await screen.findByRole("button", { name: "Bands" })).getAttribute("aria-pressed")).toBe("true");
+    expect((await screen.findByLabelText("View")) as HTMLSelectElement).toHaveProperty("value", "bands");
     expect(screen.getByRole("button", { name: "All locations" })).toBeDisabled();
   });
 
@@ -220,14 +220,14 @@ describe("presets", () => {
     expect(within(bar).getByRole("button", { name: "Fleet overview" })).toBeTruthy();
     fireEvent.click(within(bar).getByRole("button", { name: "Standards audit" }));
     expect(await screen.findByTestId("explore-matrix")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Matrix" }).getAttribute("aria-pressed")).toBe("true");
+    expect((screen.getByLabelText("View") as HTMLSelectElement).value).toBe("matrix");
   });
 
   it("lights the chip that matches the controls, and only that one", async () => {
     mount();
     const bar = await screen.findByTestId("explore-presets");
     expect(within(bar).getByRole("button", { name: "Fleet overview" }).getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "Mosaic" }));
+    fireEvent.change(screen.getByLabelText("View"), { target: { value: "mosaic" } });
     expect(within(bar).getByRole("button", { name: "Shape of the fleet" }).getAttribute("aria-pressed")).toBe("true");
     expect(within(bar).getByRole("button", { name: "Fleet overview" }).getAttribute("aria-pressed")).toBe("false");
   });
@@ -245,7 +245,7 @@ describe("presets", () => {
   it("saves the current view under a name, then forgets it", async () => {
     mount();
     await screen.findByTestId("explore-presets");
-    fireEvent.click(screen.getByRole("button", { name: "Bands" }));
+    fireEvent.change(screen.getByLabelText("View"), { target: { value: "bands" } });
     fireEvent.click(screen.getByRole("button", { name: "Save this view" }));
     const box = await screen.findByLabelText("Name this view");
     fireEvent.input(box, { target: { value: "My sweep" } });
@@ -261,7 +261,7 @@ describe("presets", () => {
   it("brings a saved view back in the next session", async () => {
     mount();
     await screen.findByTestId("explore-presets");
-    fireEvent.click(screen.getByRole("button", { name: "Matrix" }));
+    fireEvent.change(screen.getByLabelText("View"), { target: { value: "matrix" } });
     fireEvent.click(screen.getByRole("button", { name: "Save this view" }));
     const box = await screen.findByLabelText("Name this view");
     fireEvent.input(box, { target: { value: "Audit" } });
@@ -292,7 +292,7 @@ describe("the mosaic and matrix renderers", () => {
   it("draws the mosaic over the same sections, one frame per root", async () => {
     mount();
     await screen.findByTestId("explore-controls");
-    fireEvent.click(screen.getByRole("button", { name: "Mosaic" }));
+    fireEvent.change(screen.getByLabelText("View"), { target: { value: "mosaic" } });
     const mosaic = await screen.findByTestId("explore-mosaic");
     // Every cut node is a tile, and a tile carries its counts for a reader.
     expect(mosaic.querySelectorAll("[data-tile]").length).toBeGreaterThan(0);
@@ -302,7 +302,7 @@ describe("the mosaic and matrix renderers", () => {
   it("drills from a mosaic tile, the same as from a card", async () => {
     mount();
     await screen.findByTestId("explore-controls");
-    fireEvent.click(screen.getByRole("button", { name: "Mosaic" }));
+    fireEvent.change(screen.getByLabelText("View"), { target: { value: "mosaic" } });
     const mosaic = await screen.findByTestId("explore-mosaic");
     fireEvent.click(within(mosaic).getByLabelText(/West Building, /));
     expect(await screen.findByRole("button", { name: "Open Media Lab" })).toBeTruthy();
@@ -311,7 +311,7 @@ describe("the mosaic and matrix renderers", () => {
   it("pivots place against standard, rows following each root's own cut", async () => {
     mount();
     await screen.findByTestId("explore-controls");
-    fireEvent.click(screen.getByRole("button", { name: "Matrix" }));
+    fireEvent.change(screen.getByLabelText("View"), { target: { value: "matrix" } });
     const matrix = await screen.findByTestId("explore-matrix");
     expect(within(matrix).getByRole("columnheader", { name: "Place" })).toBeTruthy();
     // hq has two buildings so it cuts there; depot has a single room, so it is
@@ -324,9 +324,9 @@ describe("the mosaic and matrix renderers", () => {
   it("switches renderer without changing which systems are in scope", async () => {
     mount();
     await screen.findByTestId("explore-controls");
-    fireEvent.click(screen.getByRole("button", { name: "Mosaic" }));
+    fireEvent.change(screen.getByLabelText("View"), { target: { value: "mosaic" } });
     expect(await screen.findByTestId("explore-mosaic")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Cards" }));
+    fireEvent.change(screen.getByLabelText("View"), { target: { value: "cards" } });
     expect(await screen.findByRole("button", { name: "Open West Building" })).toBeTruthy();
     expect(screen.queryByTestId("explore-mosaic")).toBeNull();
   });
