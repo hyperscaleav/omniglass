@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createMemo, createSignal, For, onCleanup, onMount, Show, type JSX } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
@@ -29,6 +29,19 @@ import {
 } from "../lib/explore_view";
 import { labelsAffordable, roomBoxesAffordable, type LabelMode } from "../lib/view_budgets";
 import { matrixFor } from "../lib/matrix";
+import {
+  applyTo,
+  DEFAULT_STATE,
+  loadPresets,
+  matches,
+  remove as removePreset,
+  savePresets,
+  STOCK_PRESETS,
+  upsert,
+  type Preset,
+  type PresetState,
+  type RendererKey,
+} from "../lib/presets";
 import { listSystems, SYSTEMS_KEY } from "../lib/systems";
 import { entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
@@ -54,11 +67,18 @@ import { describeError } from "../lib/format";
 const FACE_KEY = "explore-face";
 const PREFS_KEY = "explore-prefs";
 
-type RendererKey = "cards" | "bands" | "mosaic" | "matrix";
+// The browser half of a preset. The other half, the drilled node and the
+// filter, rides the URL so a link carries it, which is the split ?face=table
+// already uses.
+type Prefs = Pick<PresetState, "renderer" | "density" | "labelMode" | "roomBox" | "sort">;
 
-type Prefs = { renderer: RendererKey; density: Density; labelMode: LabelMode; roomBox: boolean; sort: "worst" | "name" };
-
-const DEFAULT_PREFS: Prefs = { renderer: "cards", density: "compact", labelMode: "auto", roomBox: true, sort: "worst" };
+const DEFAULT_PREFS: Prefs = {
+  renderer: DEFAULT_STATE.renderer,
+  density: DEFAULT_STATE.density,
+  labelMode: DEFAULT_STATE.labelMode,
+  roomBox: DEFAULT_STATE.roomBox,
+  sort: DEFAULT_STATE.sort,
+};
 
 function readStoredFace(): "cards" | "table" {
   try { return localStorage.getItem(FACE_KEY) === "table" ? "table" : "cards"; } catch { return "cards"; }
@@ -129,6 +149,41 @@ export default function Explore() {
   const setSite = (id: string | null) => setSearch({ node: id ?? undefined });
   const attentionOnly = () => param("attention") === "1";
   const setAttentionOnly = (on: boolean) => setSearch({ attention: on ? "1" : undefined });
+
+  const [saved, setSaved] = createSignal<Preset[]>(loadPresets());
+  const [storageWorks, setStorageWorks] = createSignal(true);
+
+  // A preset is a snapshot of the same object the controls write to, so this
+  // reads straight off them rather than keeping a second copy in step.
+  const currentState = createMemo<PresetState>(() => ({
+    ...prefs(),
+    attentionOnly: attentionOnly(),
+    node: site(),
+  }));
+
+  const applyPreset = (preset: Preset) => {
+    const v = view.data;
+    const next = applyTo(preset, (id) => (v ? locationIndex(v).has(id) : false));
+    setPrefs({
+      renderer: next.renderer,
+      density: next.density,
+      labelMode: next.labelMode,
+      roomBox: next.roomBox,
+      sort: next.sort,
+    });
+    setSearch({ node: next.node ?? undefined, attention: next.attentionOnly ? "1" : undefined });
+  };
+
+  const saveCurrent = (name: string) => {
+    const next = upsert(saved(), name, currentState());
+    setSaved(next);
+    setStorageWorks(savePresets(next));
+  };
+  const forget = (name: string) => {
+    const next = removePreset(saved(), name);
+    setSaved(next);
+    setStorageWorks(savePresets(next));
+  };
 
   const [query, setQuery] = createSignal("");
   const [hovered, setHovered] = createSignal<{ label: string; verdict: string } | null>(null);
@@ -249,6 +304,15 @@ export default function Explore() {
                   <Show when={hits().length === 0}><p class="px-3 py-4 text-sm text-base-content/60">Nothing matches.</p></Show>
                 </div>
               }>
+                <PresetBar
+                  presets={[...STOCK_PRESETS, ...saved()]}
+                  state={currentState()}
+                  storageWorks={storageWorks()}
+                  onApply={applyPreset}
+                  onSave={saveCurrent}
+                  onForget={forget}
+                />
+
                 <Controls
                   prefs={prefs()}
                   onPrefs={setPrefs}
@@ -342,6 +406,95 @@ export default function Explore() {
 }
 
 
+// The preset bar. A preset is a way of looking, named after the job it serves,
+// and it is a snapshot of the same object the controls write to, so a saved
+// view can never mean something the controls cannot produce.
+//
+// What is deliberately absent is any way to save a SCOPE. Every field a preset
+// carries changes how the estate is drawn or which live state is filtered; none
+// names a subject to include. The moment one needs sharing or its own scope it
+// has become a dashboard widget, and that is a promotion rather than a feature
+// here.
+function PresetBar(props: {
+  presets: Preset[];
+  state: PresetState;
+  storageWorks: boolean;
+  onApply: (p: Preset) => void;
+  onSave: (name: string) => void;
+  onForget: (name: string) => void;
+}) {
+  const [naming, setNaming] = createSignal(false);
+  const [draft, setDraft] = createSignal("");
+  const commit = () => {
+    const name = draft().trim();
+    if (name) props.onSave(name);
+    setDraft("");
+    setNaming(false);
+  };
+  return (
+    <div data-testid="explore-presets" class="flex flex-wrap items-center gap-2">
+      <span class="text-[10px] uppercase tracking-wider text-base-content/50">Presets</span>
+      <For each={props.presets}>
+        {(preset) => (
+          <span class="join">
+            <Button
+              size="xs"
+              intent={matches(props.state, preset) ? "action" : "quiet"}
+              pressed={matches(props.state, preset)}
+              class={preset.stock ? "join-item" : "join-item border-dashed"}
+              title={preset.why}
+              onClick={() => props.onApply(preset)}
+            >
+              {preset.name}
+            </Button>
+            <Show when={!preset.stock}>
+              <Button
+                size="xs"
+                class="join-item px-1.5"
+                label={`Forget ${preset.name}`}
+                onClick={() => props.onForget(preset.name)}
+              >
+                ×
+              </Button>
+            </Show>
+          </span>
+        )}
+      </For>
+      <Show
+        when={naming()}
+        fallback={
+          <Button size="xs" class="border-dashed" onClick={() => setNaming(true)}>Save this view</Button>
+        }
+      >
+        <input
+          type="text"
+          class="input input-xs input-bordered w-40"
+          placeholder="Name this view"
+          aria-label="Name this view"
+          value={draft()}
+          autofocus
+          onInput={(e) => setDraft(e.currentTarget.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") { setDraft(""); setNaming(false); } }}
+          onBlur={commit}
+        />
+      </Show>
+      <Show when={!props.storageWorks}>
+        <span class="text-[10px] text-warning">Saved views cannot be stored in this browser; the shipped ones still work.</span>
+      </Show>
+    </div>
+  );
+}
+
+// One chip, through the Button primitive, so the pressed look is the intent
+// vocabulary rather than a raw daisyUI colour repeated per control.
+function Chip(props: { active: boolean; onPick: () => void; children: JSX.Element }) {
+  return (
+    <Button size="xs" intent={props.active ? "action" : "quiet"} pressed={props.active} onClick={props.onPick}>
+      {props.children}
+    </Button>
+  );
+}
+
 // The control panel. Every control here changes HOW the estate is drawn, never
 // WHAT is in it: that line is what keeps this an explorer rather than a
 // dashboard with no owner and no permissions. The one filter allowed,
@@ -354,36 +507,30 @@ function Controls(props: {
   onAttentionOnly: (on: boolean) => void;
   drilled: boolean;
 }) {
-  const chip = (active: boolean) => `btn btn-xs ${active ? "btn-primary" : "btn-ghost"}`;
   return (
     <div data-testid="explore-controls" class="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-box border border-base-300 bg-base-200 px-3 py-2">
       <div class="flex items-center gap-1">
         <span class="mr-1 text-[10px] uppercase tracking-wider text-base-content/50">View</span>
-        <button type="button" class={chip(props.prefs.renderer === "cards")} aria-pressed={props.prefs.renderer === "cards"} onClick={() => props.onPrefs({ renderer: "cards" })}>Cards</button>
-        <button type="button" class={chip(props.prefs.renderer === "bands")} aria-pressed={props.prefs.renderer === "bands"} onClick={() => props.onPrefs({ renderer: "bands" })}>Bands</button>
-        <button type="button" class={chip(props.prefs.renderer === "mosaic")} aria-pressed={props.prefs.renderer === "mosaic"} onClick={() => props.onPrefs({ renderer: "mosaic" })}>Mosaic</button>
-        <button type="button" class={chip(props.prefs.renderer === "matrix")} aria-pressed={props.prefs.renderer === "matrix"} onClick={() => props.onPrefs({ renderer: "matrix" })}>Matrix</button>
+        <For each={["cards", "bands", "mosaic", "matrix"] as RendererKey[]}>
+          {(r) => <Chip active={props.prefs.renderer === r} onPick={() => props.onPrefs({ renderer: r })}>{r[0].toUpperCase() + r.slice(1)}</Chip>}
+        </For>
       </div>
       <div class="flex items-center gap-1">
         <span class="mr-1 text-[10px] uppercase tracking-wider text-base-content/50">Labels</span>
         <For each={["auto", "always", "off"] as LabelMode[]}>
-          {(m) => (
-            <button type="button" class={chip(props.prefs.labelMode === m)} aria-pressed={props.prefs.labelMode === m} onClick={() => props.onPrefs({ labelMode: m })}>{m}</button>
-          )}
+          {(m) => <Chip active={props.prefs.labelMode === m} onPick={() => props.onPrefs({ labelMode: m })}>{m}</Chip>}
         </For>
       </div>
       <div class="flex items-center gap-1">
         <span class="mr-1 text-[10px] uppercase tracking-wider text-base-content/50">Density</span>
         <For each={["compact", "cozy", "roomy"] as Density[]}>
-          {(d) => (
-            <button type="button" class={chip(props.prefs.density === d)} aria-pressed={props.prefs.density === d} onClick={() => props.onPrefs({ density: d })}>{d}</button>
-          )}
+          {(d) => <Chip active={props.prefs.density === d} onPick={() => props.onPrefs({ density: d })}>{d}</Chip>}
         </For>
       </div>
       <div class="flex items-center gap-1">
         <span class="mr-1 text-[10px] uppercase tracking-wider text-base-content/50">Sort</span>
-        <button type="button" class={chip(props.prefs.sort === "worst")} aria-pressed={props.prefs.sort === "worst"} onClick={() => props.onPrefs({ sort: "worst" })}>Worst first</button>
-        <button type="button" class={chip(props.prefs.sort === "name")} aria-pressed={props.prefs.sort === "name"} onClick={() => props.onPrefs({ sort: "name" })}>By name</button>
+        <Chip active={props.prefs.sort === "worst"} onPick={() => props.onPrefs({ sort: "worst" })}>Worst first</Chip>
+        <Chip active={props.prefs.sort === "name"} onPick={() => props.onPrefs({ sort: "name" })}>By name</Chip>
       </div>
       <label class="flex cursor-pointer items-center gap-2 text-xs">
         <input type="checkbox" class="checkbox checkbox-xs" checked={props.prefs.roomBox} onChange={(e) => props.onPrefs({ roomBox: e.currentTarget.checked })} />

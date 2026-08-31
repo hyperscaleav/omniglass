@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@solidjs/testing-library";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route, useSearchParams } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Explore from "./Explore";
@@ -210,6 +210,81 @@ describe("the controls change how it is drawn, never what is in it", () => {
     mount("/web/explore?attention=1");
     await screen.findByTestId("explore-controls");
     expect((screen.getByLabelText("Only what needs attention") as HTMLInputElement).checked).toBe(true);
+  });
+});
+
+describe("presets", () => {
+  it("ships a set named after jobs, and applying one moves the controls", async () => {
+    mount();
+    const bar = await screen.findByTestId("explore-presets");
+    expect(within(bar).getByRole("button", { name: "Estate overview" })).toBeTruthy();
+    fireEvent.click(within(bar).getByRole("button", { name: "Standards audit" }));
+    expect(await screen.findByTestId("explore-matrix")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Matrix" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("lights the chip that matches the controls, and only that one", async () => {
+    mount();
+    const bar = await screen.findByTestId("explore-presets");
+    expect(within(bar).getByRole("button", { name: "Estate overview" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Mosaic" }));
+    expect(within(bar).getByRole("button", { name: "Shape of the estate" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(bar).getByRole("button", { name: "Estate overview" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("carries the filter as well as the drawing, since triage is a way of looking", async () => {
+    mount();
+    await screen.findByTestId("explore-presets");
+    fireEvent.click(screen.getByRole("button", { name: "Morning triage" }));
+    await waitFor(() =>
+      expect((screen.getByLabelText("Only what needs attention") as HTMLInputElement).checked).toBe(true),
+    );
+    expect(screen.queryByTestId(`explore-section-${uuidFor("depot")}`)).toBeNull();
+  });
+
+  it("saves the current view under a name, then forgets it", async () => {
+    mount();
+    await screen.findByTestId("explore-presets");
+    fireEvent.click(screen.getByRole("button", { name: "Bands" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save this view" }));
+    const box = await screen.findByLabelText("Name this view");
+    fireEvent.input(box, { target: { value: "My sweep" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+
+    const bar = await screen.findByTestId("explore-presets");
+    expect(within(bar).getByRole("button", { name: "My sweep" })).toBeTruthy();
+
+    fireEvent.click(within(bar).getByRole("button", { name: "Forget My sweep" }));
+    expect(within(screen.getByTestId("explore-presets")).queryByRole("button", { name: "My sweep" })).toBeNull();
+  });
+
+  it("brings a saved view back in the next session", async () => {
+    mount();
+    await screen.findByTestId("explore-presets");
+    fireEvent.click(screen.getByRole("button", { name: "Matrix" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save this view" }));
+    const box = await screen.findByLabelText("Name this view");
+    fireEvent.input(box, { target: { value: "Audit" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    cleanup();
+
+    mount("/web/explore", owner, undefined, true);
+    const bar = await screen.findByTestId("explore-presets");
+    fireEvent.click(within(bar).getByRole("button", { name: "Audit" }));
+    expect(await screen.findByTestId("explore-matrix")).toBeTruthy();
+  });
+
+  it("falls back to the fleet when a saved view names a node that is gone", async () => {
+    localStorage.setItem(
+      "explore-presets",
+      JSON.stringify([{ name: "Stale", why: "", state: { renderer: "cards", node: uuidFor("vanished") } }]),
+    );
+    mount("/web/explore", owner, undefined, true);
+    const bar = await screen.findByTestId("explore-presets");
+    fireEvent.click(within(bar).getByRole("button", { name: "Stale" }));
+    // Landing on a blank page would be worse than landing somewhere real.
+    expect(await screen.findByRole("button", { name: "Open West Building" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "All locations" })).toBeDisabled();
   });
 });
 
