@@ -70,15 +70,16 @@ describe("sectionsFor", () => {
     expect(s.map((x) => x.label)).toEqual(["Headquarters", "Service Depot"]);
     expect(s[0].cutType).toBe("building");
     expect(s[0].cards.map((c) => c.label)).toEqual(["East Building", "West Building"]);
-    // depot has no container level below it, so it is its own single card
-    expect(s[1].isOwnCut).toBe(true);
-    expect(s[1].cards.map((c) => c.label)).toEqual(["Service Depot"]);
+    // depot holds only rooms, so those rooms are the cut: the deepest level is
+    // the right one when it is the only one there is.
+    expect(s[1].cutType).toBe("room");
+    expect(s[1].cards.map((c) => c.label)).toEqual(["Bay 1", "Bay 2"]);
   });
 
   it("names each card's own type, so a mixed estate reads as mixed", () => {
     const s = sectionsFor(view, all);
     expect(s[0].cards.map((c) => c.type)).toEqual(["building", "building"]);
-    expect(s[1].cards.map((c) => c.type)).toEqual(["building"]);
+    expect(s[1].cards.map((c) => c.type)).toEqual(["room", "room"]);
   });
 
   it("puts a system attached above the cut in the section, not in a card", () => {
@@ -91,6 +92,27 @@ describe("sectionsFor", () => {
   it("counts every system under a root once, including the one above the cut", () => {
     const hq = sectionsFor(view, all)[0];
     expect(hq.systems).toBe(4); // huddle, media, lab, paging
+  });
+
+  it("keeps an empty cut node as a card, so an unfinished tree stays visible", () => {
+    const withEmpty = {
+      ...view,
+      locations: [...(view.locations ?? []), loc("north", "North Building", "building", "hq")],
+    } as FleetView;
+    const hq = sectionsFor(withEmpty, all)[0];
+    expect(hq.cards.map((c) => c.label)).toEqual(["East Building", "North Building", "West Building"]);
+    const north = hq.cards.find((c) => c.label === "North Building")!;
+    expect(north.systems).toBe(0);
+    expect(north.field.items).toEqual([]);
+  });
+
+  it("drops an empty card when the operator is filtering", () => {
+    const withEmpty = {
+      ...view,
+      locations: [...(view.locations ?? []), loc("north", "North Building", "building", "hq")],
+    } as FleetView;
+    const hq = sectionsFor(withEmpty, attention)[0];
+    expect(hq.cards.map((c) => c.label)).not.toContain("North Building");
   });
 
   it("drops a section with nothing left after the filter", () => {
@@ -133,8 +155,18 @@ describe("insideOf", () => {
     expect(inside!.cards.map((c) => c.label)).toEqual(["East Building", "West Building"]);
   });
 
-  it("returns null for a node with nothing under it", () => {
-    expect(insideOf(view, uuidFor("bay1"), attention)).toBeNull();
+  it("returns a section for an existing node even when it holds nothing", () => {
+    // A campus created a moment ago has no children and no systems. Returning
+    // null there leaves nowhere to stand and no way to create the first thing.
+    const empty = insideOf(view, uuidFor("bay1"), attention);
+    expect(empty).not.toBeNull();
+    expect(empty!.cards).toEqual([]);
+    expect(empty!.above).toEqual([]);
+    expect(empty!.label).toBe("Bay 1");
+  });
+
+  it("returns null only when the node does not exist", () => {
+    expect(insideOf(view, uuidFor("nope"), all)).toBeNull();
   });
 });
 

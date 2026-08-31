@@ -175,9 +175,14 @@ function systemsUnder(view: FleetView, nodeId: string): FleetSystem[] {
   return out;
 }
 
+// A card for one cut node. An empty node still gets a card while nothing is
+// being filtered, because an unfinished tree should be visible rather than
+// hidden: a building created a moment ago must not disappear from the estate.
+// Under a filter it is dropped, since an operator triaging outages is not
+// asking about rooms that hold nothing.
 function cardFor(view: FleetView, node: FleetLocation, opts: ExploreOptions): CardModel | null {
   const field = fieldFor(view, node.id, opts);
-  if (!field) return null;
+  if (!field && opts.attentionOnly) return null;
   const all = systemsUnder(view, node.id).map(toItem);
   return {
     id: node.id,
@@ -185,7 +190,7 @@ function cardFor(view: FleetView, node: FleetLocation, opts: ExploreOptions): Ca
     type: node.location_type,
     systems: all.length,
     counts: countsOf(all),
-    field,
+    field: field ?? { id: node.id, label: entityLabel(node), type: node.location_type, height: 0, items: [], children: [] },
   };
 }
 
@@ -239,7 +244,10 @@ export function insideOf(view: FleetView, nodeId: string, opts: ExploreOptions):
     (view.systems ?? []).filter((s) => s.location === nodeId).map(toItem).filter((i) => keep(i, opts)),
     opts.sort,
   );
-  if (cards.length === 0 && own.length === 0) return null;
+  // An existing node ALWAYS returns a section, even an empty one. A campus
+  // created a moment ago holds nothing, and returning null there would render
+  // a blank page with no header, so there would be nowhere to stand and no way
+  // to create the first thing inside it.
   const all = systemsUnder(view, nodeId).map(toItem);
   return {
     id: node.id,

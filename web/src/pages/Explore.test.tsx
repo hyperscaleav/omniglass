@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@solidjs/testing-library";
-import { Router, Route } from "@solidjs/router";
+import { Router, Route, useSearchParams } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Explore from "./Explore";
 import { FLEET_VIEW_KEY, type FleetView } from "../lib/fleet";
@@ -78,11 +78,19 @@ function mount(path = "/web/explore", me: Me = owner, storedFace?: "table", keep
         <Route path="/explore" component={Explore} />
         <Route path="/systems/:id" component={() => <div data-testid="system-page" />} />
         <Route path="/locations/:id" component={() => <div data-testid="location-page" />} />
-        <Route path="/systems/create" component={() => <div data-testid="system-create">{window.location.search}</div>} />
-        <Route path="/locations/create" component={() => <div data-testid="location-create">{window.location.search}</div>} />
+        <Route path="/systems/create" component={() => <div data-testid="system-create">{underParam()}</div>} />
+        <Route path="/locations/create" component={() => <div data-testid="location-create">{underParam()}</div>} />
       </Router>
     </QueryClientProvider>
   ));
+}
+
+// The create stubs report where the form was told to land, read through the
+// router rather than window.location, which jsdom does not keep in step.
+function underParam() {
+  const [params] = useSearchParams();
+  const v = params.under;
+  return Array.isArray(v) ? (v[0] ?? "") : (v ?? "");
 }
 
 afterEach(cleanup);
@@ -202,6 +210,29 @@ describe("the controls change how it is drawn, never what is in it", () => {
     mount("/web/explore?attention=1");
     await screen.findByTestId("explore-controls");
     expect((screen.getByLabelText("Only what needs attention") as HTMLInputElement).checked).toBe(true);
+  });
+});
+
+describe("create where you stand", () => {
+  it("offers both creates on a drilled node, placed at that node", async () => {
+    mount(`/web/explore?node=${uuidFor("west")}`);
+    const head = await screen.findByTestId("explore-section-head");
+    expect(within(head).getByRole("button", { name: "+ Location here" })).toBeTruthy();
+    fireEvent.click(within(head).getByRole("button", { name: "+ System here" }));
+    const created = await screen.findByTestId("system-create");
+    expect(created.textContent).toBe(uuidFor("west"));
+  });
+
+  it("offers neither at the fleet level, where there is nowhere to stand", async () => {
+    mount();
+    await screen.findByTestId("explore-controls");
+    expect(screen.queryByRole("button", { name: "+ System here" })).toBeNull();
+  });
+
+  it("hides a create from a caller without the verb", async () => {
+    mount(`/web/explore?node=${uuidFor("west")}`, partial);
+    const head = await screen.findByTestId("explore-section-head");
+    expect(within(head).queryByRole("button", { name: "+ Location here" })).toBeNull();
   });
 });
 

@@ -94,20 +94,49 @@ describe("cutTypeFor", () => {
     expect(cutTypeFor(view, uuidFor("annex"))).toBe("campus");
   });
 
-  it("falls back to the root when the only level below it is a leaf type", () => {
-    // depot holds rooms directly. Rooms are where systems live, not cards.
-    expect(cutTypeFor(view, uuidFor("depot"))).toBe("building");
+  it("cuts at the deepest level when that is the only one there is", () => {
+    // depot holds two rooms and nothing else. Those rooms are the only
+    // grouping available, so they are the cut: whether a type is a "leaf" says
+    // nothing about whether it is the right level to card at.
+    expect(cutTypeFor(view, uuidFor("depot"))).toBe("room");
+  });
+
+  it("cuts at a type that holds systems directly, not just one holding locations", () => {
+    // campus > building, where the buildings hold systems and contain no
+    // locations at all. Building is the only sensible cut, and an earlier rule
+    // that skipped childless types made this campus fall back to itself.
+    const flat = {
+      locations: [
+        loc("c", "c", "Campus", "campus", ""),
+        loc("b1", "b1", "Building One", "building", "c"),
+        loc("b2", "b2", "Building Two", "building", "c"),
+      ],
+      systems: [sys("s1", "s1", "One AV", "b1")],
+    } as unknown as FleetView;
+    expect(cutTypeFor(flat, uuidFor("c"))).toBe("building");
+    expect(cutNodesFor(flat, uuidFor("c")).map((n) => n.label)).toEqual(["Building One", "Building Two"]);
   });
 });
 
 describe("cutNodesFor", () => {
-  it("returns the nodes at the cut, and only those with systems beneath them", () => {
+  it("returns every node at the cut, empty ones included", () => {
+    // An empty cut node is structure, not noise: a building created a moment
+    // ago must not vanish from the estate. Dropping it is a presentation
+    // policy and belongs to the view model.
     const nodes = cutNodesFor(view, uuidFor("hq"));
     expect(nodes.map((n) => n.label)).toEqual(["East Building", "West Building"]);
+    const withEmpty = {
+      ...view,
+      locations: [...(view.locations ?? []), loc("north-b", "north-b", "North Building", "building", "hq")],
+    } as FleetView;
+    expect(cutNodesFor(withEmpty, uuidFor("hq")).map((n) => n.label)).toEqual([
+      "East Building",
+      "North Building",
+      "West Building",
+    ]);
   });
 
   it("returns the root itself when the root is its own cut", () => {
-    expect(cutNodesFor(view, uuidFor("depot")).map((n) => n.label)).toEqual(["Service Depot"]);
     expect(cutNodesFor(view, uuidFor("annex")).map((n) => n.label)).toEqual(["North Annex"]);
   });
 
@@ -133,7 +162,7 @@ describe("aboveCutSystems", () => {
   });
 
   it("is empty when the root is its own cut, since nothing sits above it", () => {
-    expect(aboveCutSystems(view, uuidFor("depot"))).toEqual([]);
+    expect(aboveCutSystems(view, uuidFor("annex"))).toEqual([]);
   });
 });
 

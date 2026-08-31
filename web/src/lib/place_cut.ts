@@ -93,9 +93,8 @@ export function typeTiers(view: FleetView): Map<string, number> {
 }
 
 // isLeafType is true when no location of that type contains another location.
-// A leaf type is where systems live, not a level to cut at: cutting there
-// would make one card per room, which is the failure the budgets exist to
-// prevent rather than to produce.
+// It is a true fact about the tree, but it deliberately does NOT gate the cut:
+// see containersIn for why.
 export function isLeafType(view: FleetView, type: string): boolean {
   return leafTypes(view).has(type);
 }
@@ -124,17 +123,25 @@ function walk(view: FleetView, rootId: string, visit: (loc: FleetLocation, depth
 
 type TypeFact = { count: number; depth: number };
 
-// The container types inside one root, with how many of each and how shallow
-// the shallowest sits. The root's own type is excluded: cutting at it would
-// produce one card that is the root wearing another name.
+// The types inside one root, with how many of each and how shallow the
+// shallowest sits. Only the root's own type is excluded, because cutting there
+// would produce one card that is the root wearing another name.
+//
+// Nothing else is excluded, and an earlier version of this was wrong to try.
+// It skipped "leaf" types, meaning types that contain no other location, to
+// avoid making one card per room. But whether a type is a leaf says nothing
+// about whether it is the right level: in a tree of campus > building where
+// the buildings hold systems directly, building is a leaf AND the only
+// sensible cut, and the exclusion made such a campus fall back to itself.
+// Which level a type sits at is a fact about the tree; which levels are
+// "really" rooms is an assumption about vocabulary this must not make.
 function containersIn(view: FleetView, rootId: string): Map<string, TypeFact> {
   const index = locationIndex(view);
   const root = index.get(rootId);
   const facts = new Map<string, TypeFact>();
   if (!root) return facts;
-  const leaves = leafTypes(view);
   walk(view, rootId, (loc, depth) => {
-    if (loc.id !== root.id && loc.location_type !== root.location_type && !leaves.has(loc.location_type)) {
+    if (loc.id !== root.id && loc.location_type !== root.location_type) {
       const seen = facts.get(loc.location_type);
       if (seen) {
         seen.count++;
@@ -174,20 +181,12 @@ function systemsAt(view: FleetView, locationId: string): FleetSystem[] {
   return systemsByLocation(view).get(locationId) ?? [];
 }
 
-// Every system beneath a node, at any depth, including any attached to the
-// node itself.
-function systemsUnderNode(view: FleetView, nodeId: string): FleetSystem[] {
-  const out: FleetSystem[] = [];
-  walk(view, nodeId, (loc) => {
-    out.push(...systemsAt(view, loc.id));
-    return true;
-  });
-  return out;
-}
-
 // cutNodesFor returns the nodes that become cards: the shallowest nodes of the
-// cut type, and only those with systems beneath them, since an empty card
-// teaches nothing. Sorted by label so the render order is stable.
+// cut type, ALL of them, empty ones included. Whether an empty card is worth
+// drawing is a presentation policy and lives in the view model; a building
+// created a moment ago disappearing from the estate is the confusion that
+// decision must not produce, so the structure keeps it and the filter can drop
+// it. Sorted by label so the render order is stable.
 export function cutNodesFor(view: FleetView, rootId: string): FleetLocation[] {
   const cut = cutTypeFor(view, rootId);
   const out: FleetLocation[] = [];
@@ -198,9 +197,7 @@ export function cutNodesFor(view: FleetView, rootId: string): FleetLocation[] {
     }
     return true;
   });
-  return out
-    .filter((n) => systemsUnderNode(view, n.id).length > 0)
-    .sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
+  return out.sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
 }
 
 // aboveCutSystems returns the systems attached at or above the cut: a campus

@@ -262,6 +262,10 @@ export default function Explore() {
                       {(section) => (
                         <SectionView
                           section={section}
+                          drilled={site() !== null}
+                          canCreateLocation={can(me.data, "location", "create")}
+                          canCreateSystem={can(me.data, "system", "create")}
+                          onCreate={(kind, under) => navigate(`/${kind}/create?under=${encodeURIComponent(under)}`)}
                           renderer={prefs().renderer}
                           density={prefs().density}
                           showLabels={showLabels()}
@@ -290,7 +294,7 @@ export default function Explore() {
                 </Show>
               </Show>
             }>
-              <div class="flex flex-col gap-3">
+              <div data-testid="fleet-list-face" class="flex flex-col gap-3">
                 <div role="tablist" class="tabs tabs-box w-fit">
                   <For each={kinds()}>
                     {(k) => (
@@ -365,8 +369,18 @@ function Controls(props: {
 // One root's section: its cards at that root's own cut, plus anything attached
 // above the cut. A card names its own type, which is how a non-uniform estate
 // reads as non-uniform instead of being flattened.
+function sectionMeta(section: SectionModel): string {
+  const n = section.cards.length;
+  const kind = `${n} ${section.cutType}${n === 1 ? "" : "s"}`;
+  return `${section.type} · ${kind} · ${countsLine(section.counts)}`;
+}
+
 function SectionView(props: {
   section: SectionModel;
+  drilled: boolean;
+  canCreateLocation: boolean;
+  canCreateSystem: boolean;
+  onCreate: (kind: "locations" | "systems", under: string) => void;
   renderer: RendererKey;
   density: Density;
   showLabels: boolean;
@@ -378,13 +392,25 @@ function SectionView(props: {
   const attention = () => attentionOf(props.section.counts);
   return (
     <section data-testid={`explore-section-${props.section.id}`} class="flex flex-col gap-2">
-      <Show when={!props.section.isOwnCut || props.section.cards.length > 1}>
-        <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-base-300 pb-1">
+      <Show when={props.drilled || !props.section.isOwnCut || props.section.cards.length > 1}>
+        <div data-testid="explore-section-head" class="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-base-300 pb-1">
           <h2 class="text-base font-semibold">{props.section.label}</h2>
-          <span class="font-mono text-[11px] text-base-content/50">
-            {props.section.type} · {props.section.cards.length} {props.section.cutType}{props.section.cards.length === 1 ? "" : "s"} · {countsLine(props.section.counts)}
-          </span>
+          {/* One text node, not several: a run of JSX expressions renders as
+              separate nodes, which reads badly to a screen reader and cannot be
+              matched as a phrase. */}
+          <span class="font-mono text-[11px] text-base-content/50">{sectionMeta(props.section)}</span>
           <Show when={attention() > 0}><HealthBadge verdict={props.section.counts.outage ? "outage" : "degraded"} size="xs" /></Show>
+          {/* Create where you stand: the node in the header is the placement,
+              so the form opens already knowing where it lands. */}
+          <Show when={props.drilled}>
+            <span class="flex-1" />
+            <Show when={props.canCreateLocation}>
+              <Button size="xs" onClick={() => props.onCreate("locations", props.section.id)}>+ Location here</Button>
+            </Show>
+            <Show when={props.canCreateSystem}>
+              <Button size="xs" onClick={() => props.onCreate("systems", props.section.id)}>+ System here</Button>
+            </Show>
+          </Show>
         </div>
       </Show>
 
@@ -443,7 +469,7 @@ function CardView(props: {
     >
       <span class="block truncate text-sm font-semibold">{props.card.label}</span>
       <span class="block truncate font-mono text-[10px] text-base-content/50">
-        {props.card.type} · {countsLine(props.card.counts)}
+        {`${props.card.type} · ${countsLine(props.card.counts)}`}
       </span>
     </button>
   );
