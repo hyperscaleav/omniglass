@@ -294,3 +294,32 @@ export function countsLine(c: Counts): string {
   if (c.incomplete) parts.push(`${c.incomplete} incomplete`);
   return parts.join(" · ");
 }
+
+// resolveNode turns a ?node= address into the location to drill into.
+//
+// ADR-0062 makes the uuid the address, and #759's rule lets a name-shaped one
+// resolve when it names exactly one thing, systems before locations. The drill
+// has to keep both: the operator guide links /web/explore?node=huddle by name,
+// and a shared link landing on an empty page is worse than one that refuses.
+//
+// This deliberately does NOT reuse pathForNode. That resolver carries the
+// Miller-column collapse rule, where a room holding one system is replaced by
+// the system's own row, so it returns the room's PARENT. Cards have no such
+// collapse: the room is a real place to stand, and drilling to its parent would
+// silently show the operator somewhere other than the address they followed.
+export function resolveNode(view: FleetView, address: string): string | null {
+  if (!address) return null;
+  const index = locationIndex(view);
+  if (index.has(address)) return address;
+
+  const systems = view.systems ?? [];
+  const byId = systems.find((s) => s.id === address);
+  if (byId) return byId.location || null;
+
+  const namedSystems = systems.filter((s) => s.name === address);
+  if (namedSystems.length === 1) return namedSystems[0].location || null;
+  if (namedSystems.length > 1) return null; // ambiguous: refuse rather than guess
+
+  const namedLocations = (view.locations ?? []).filter((l) => l.name === address);
+  return namedLocations.length === 1 ? namedLocations[0].id : null;
+}

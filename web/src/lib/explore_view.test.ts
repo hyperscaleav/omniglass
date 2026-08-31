@@ -5,6 +5,7 @@ import {
   countsOf,
   fieldFor,
   insideOf,
+  resolveNode,
   roomsInView,
   sectionsFor,
   unplacedFor,
@@ -159,5 +160,27 @@ describe("roomsInView", () => {
   it("counts the leaf locations in front of the operator, not the estate's total", () => {
     expect(roomsInView(view, [uuidFor("hq"), uuidFor("depot")])).toBe(5);
     expect(roomsInView(view, [uuidFor("west")])).toBe(2);
+  });
+});
+
+describe("resolveNode", () => {
+  // ADR-0062: the uuid is the address, but a name-shaped one resolves when it
+  // is unique. #831 built that rule in pathForNode and the drill must keep it,
+  // or a documented link like ?node=huddle lands on an empty page.
+  it("takes a location's uuid", () => {
+    expect(resolveNode(view, uuidFor("west"))).toBe(uuidFor("west"));
+  });
+
+  it("takes a location's unique name", () => {
+    expect(resolveNode(view, "west")).toBe(uuidFor("west"));
+  });
+
+  it("drills to where a system is when given the system", () => {
+    expect(resolveNode(view, "s-lab")).toBe(uuidFor("lab"));
+  });
+
+  it("resolves nothing rather than guessing at an unknown address", () => {
+    expect(resolveNode(view, "nope")).toBeNull();
+    expect(resolveNode(view, "")).toBeNull();
   });
 });

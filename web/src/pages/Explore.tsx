@@ -16,6 +16,7 @@ import {
   attentionOf,
   countsLine,
   insideOf,
+  resolveNode,
   roomsInView,
   sectionsFor,
   unplacedFor,
@@ -105,7 +106,13 @@ export default function Explore() {
 
   // The drilled node and the filter live in the URL: a shared link lands on
   // the same thing, which the stored preferences must never override.
-  const site = () => param("node") ?? null;
+  // The address may be a uuid or a unique name (ADR-0062, #759's rule), so it
+  // is resolved against the view rather than used as an id directly.
+  const site = createMemo(() => {
+    const raw = param("node");
+    if (!raw || !view.data) return null;
+    return resolveNode(view.data, raw);
+  });
   const setSite = (id: string | null) => setSearch({ node: id ?? undefined });
   const attentionOnly = () => param("attention") === "1";
   const setAttentionOnly = (on: boolean) => setSearch({ attention: on ? "1" : undefined });

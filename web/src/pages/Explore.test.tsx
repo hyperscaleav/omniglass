@@ -135,6 +135,11 @@ describe("the drill", () => {
     expect(await screen.findByRole("button", { name: "Open Media Lab" })).toBeTruthy();
   });
 
+  it("lands a name-shaped address too, which the operator guide links by name", async () => {
+    mount("/web/explore?node=west");
+    expect(await screen.findByRole("button", { name: "Open Media Lab" })).toBeTruthy();
+  });
+
   it("opens a system when its dot is clicked", async () => {
     mount();
     const hq = await screen.findByTestId(`explore-section-${uuidFor("hq")}`);
