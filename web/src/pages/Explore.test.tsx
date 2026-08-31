@@ -213,6 +213,50 @@ describe("the controls change how it is drawn, never what is in it", () => {
   });
 });
 
+describe("the mosaic and matrix renderers", () => {
+  it("draws the mosaic over the same sections, one frame per root", async () => {
+    mount();
+    await screen.findByTestId("explore-controls");
+    fireEvent.click(screen.getByRole("button", { name: "Mosaic" }));
+    const mosaic = await screen.findByTestId("explore-mosaic");
+    // Every cut node is a tile, and a tile carries its counts for a reader.
+    expect(mosaic.querySelectorAll("[data-tile]").length).toBeGreaterThan(0);
+    expect(within(mosaic).getByLabelText(/West Building, \d+ systems/)).toBeTruthy();
+  });
+
+  it("drills from a mosaic tile, the same as from a card", async () => {
+    mount();
+    await screen.findByTestId("explore-controls");
+    fireEvent.click(screen.getByRole("button", { name: "Mosaic" }));
+    const mosaic = await screen.findByTestId("explore-mosaic");
+    fireEvent.click(within(mosaic).getByLabelText(/West Building, /));
+    expect(await screen.findByRole("button", { name: "Open Media Lab" })).toBeTruthy();
+  });
+
+  it("pivots place against standard, rows following each root's own cut", async () => {
+    mount();
+    await screen.findByTestId("explore-controls");
+    fireEvent.click(screen.getByRole("button", { name: "Matrix" }));
+    const matrix = await screen.findByTestId("explore-matrix");
+    expect(within(matrix).getByRole("columnheader", { name: "Place" })).toBeTruthy();
+    // hq has two buildings so it cuts there; depot has a single room, so it is
+    // its own row. Two roots, two different cuts, in one table.
+    expect(within(matrix).getByRole("button", { name: "Open West Building" })).toBeTruthy();
+    expect(within(matrix).getByRole("button", { name: "Open Service Depot" })).toBeTruthy();
+    expect(within(matrix).queryByRole("button", { name: "Open Bay 1" })).toBeNull();
+  });
+
+  it("switches renderer without changing which systems are in scope", async () => {
+    mount();
+    await screen.findByTestId("explore-controls");
+    fireEvent.click(screen.getByRole("button", { name: "Mosaic" }));
+    expect(await screen.findByTestId("explore-mosaic")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cards" }));
+    expect(await screen.findByRole("button", { name: "Open West Building" })).toBeTruthy();
+    expect(screen.queryByTestId("explore-mosaic")).toBeNull();
+  });
+});
+
 describe("create where you stand", () => {
   it("offers both creates on a drilled node, placed at that node", async () => {
     mount(`/web/explore?node=${uuidFor("west")}`);

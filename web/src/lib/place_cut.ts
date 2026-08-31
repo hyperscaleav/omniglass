@@ -160,9 +160,17 @@ function containersIn(view: FleetView, rootId: string): Map<string, TypeFact> {
 // again. With nothing qualifying, the root is its own card, which is the right
 // answer for a small annex and for a building that holds rooms directly.
 //
-// Ordering is by depth WITHIN this root first, so the choice reflects this
-// tree rather than the estate's deepest one; the global tier and then the name
-// break ties, which keeps the result independent of the order rows arrive in.
+// Ordering is by depth WITHIN this root first, so the choice reflects this tree
+// rather than the estate's deepest one. Ties break on the COARSER grouping,
+// meaning fewer nodes of that type: a cut exists to group, and three floors
+// group better than the fifteen rooms inside them.
+//
+// That tie-break used to consult the global tier first, which was wrong in a
+// way only a real estate showed. Under one campus, floors and rooms both start
+// at depth two, and the global tier then dragged in a fact about a DIFFERENT
+// root, where a room happens to sit one level down, so a fifteen-room campus
+// cut at room instead of at its three floors. A tie inside one root has to be
+// broken by something about that root.
 export function cutTypeFor(view: FleetView, rootId: string): string {
   const index = locationIndex(view);
   const root = index.get(rootId);
@@ -172,7 +180,10 @@ export function cutTypeFor(view: FleetView, rootId: string): string {
   if (candidates.length === 0) return root.location_type;
   candidates.sort(
     ([aName, a], [bName, b]) =>
-      a.depth - b.depth || (tiers.get(aName) ?? 0) - (tiers.get(bName) ?? 0) || aName.localeCompare(bName),
+      a.depth - b.depth ||
+      a.count - b.count ||
+      (tiers.get(aName) ?? 0) - (tiers.get(bName) ?? 0) ||
+      aName.localeCompare(bName),
   );
   return candidates[0][0];
 }

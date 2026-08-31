@@ -118,6 +118,30 @@ describe("cutTypeFor", () => {
   });
 });
 
+describe("a tie inside one root is broken by that root", () => {
+  it("prefers the coarser level when two types start at the same depth", () => {
+    // campus > building > {floors, a room}: floor and room both first appear
+    // two levels down, and three floors group better than the rooms in them.
+    const tied = {
+      locations: [
+        loc("c", "c", "Campus", "campus", ""),
+        loc("b", "b", "Building", "building", "c"),
+        loc("f1", "f1", "Level 1", "floor", "b"),
+        loc("f2", "f2", "Level 2", "floor", "b"),
+        loc("lobby", "lobby", "Lobby", "room", "b"),
+        loc("r1", "r1", "Room 1", "room", "f1"),
+        loc("r2", "r2", "Room 2", "room", "f2"),
+        loc("r3", "r3", "Room 3", "room", "f2"),
+        // a room one level down in ANOTHER root must not decide this one
+        loc("depot", "depot", "Depot", "building", ""),
+        loc("bay", "bay", "Bay", "room", "depot"),
+      ],
+      systems: [sys("s1", "s1", "One", "r1"), sys("s2", "s2", "Two", "r2")],
+    } as unknown as FleetView;
+    expect(cutTypeFor(tied, uuidFor("c"))).toBe("floor");
+  });
+});
+
 describe("cutNodesFor", () => {
   it("returns every node at the cut, empty ones included", () => {
     // An empty cut node is structure, not noise: a building created a moment

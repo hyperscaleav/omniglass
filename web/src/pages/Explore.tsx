@@ -6,6 +6,8 @@ import Page from "../components/Page";
 import HealthBadge from "../components/HealthBadge";
 import Button from "../components/Button";
 import DotField, { type Density } from "../components/DotField";
+import Mosaic from "../components/Mosaic";
+import MatrixFace from "../components/MatrixFace";
 import LocationsPage from "./Locations";
 import SystemsPage from "./Systems";
 import ComponentsPage from "./Components";
@@ -26,6 +28,8 @@ import {
   type SectionModel,
 } from "../lib/explore_view";
 import { labelsAffordable, roomBoxesAffordable, type LabelMode } from "../lib/view_budgets";
+import { matrixFor } from "../lib/matrix";
+import { listSystems, SYSTEMS_KEY } from "../lib/systems";
 import { entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 
@@ -50,7 +54,7 @@ import { describeError } from "../lib/format";
 const FACE_KEY = "explore-face";
 const PREFS_KEY = "explore-prefs";
 
-type RendererKey = "cards" | "bands";
+type RendererKey = "cards" | "bands" | "mosaic" | "matrix";
 
 type Prefs = { renderer: RendererKey; density: Density; labelMode: LabelMode; roomBox: boolean; sort: "worst" | "name" };
 
@@ -104,6 +108,15 @@ export default function Explore() {
     storePrefs(next);
   };
 
+  // The standard is on the systems list, not the fleet wire, and the matrix is
+  // the only face that needs it. The table face already loads this, so the
+  // join is usually free; enabling it only for the matrix keeps it that way.
+  const systems = useQuery(() => ({
+    queryKey: SYSTEMS_KEY,
+    queryFn: listSystems,
+    enabled: prefs().renderer === "matrix",
+  }));
+
   // The drilled node and the filter live in the URL: a shared link lands on
   // the same thing, which the stored preferences must never override.
   // The address may be a uuid or a unique name (ADR-0062, #759's rule), so it
@@ -150,6 +163,14 @@ export default function Explore() {
   });
   const showLabels = createMemo(() => labelsAffordable(rooms(), prefs().labelMode));
   const showBoxes = createMemo(() => roomBoxesAffordable(rooms(), prefs().labelMode, prefs().roomBox));
+
+  const standardOf = createMemo(() => {
+    const byId = new Map((systems.data ?? []).map((s) => [s.id, s.standard]));
+    return (id: string) => byId.get(id) || undefined;
+  });
+  const matrix = createMemo(() =>
+    view.data && prefs().renderer === "matrix" ? matrixFor(view.data, standardOf(), opts()) : null,
+  );
 
   const crumbs = createMemo(() => {
     const v = view.data;
@@ -257,7 +278,15 @@ export default function Explore() {
                     {attentionOnly() ? "Nothing needs attention." : "No locations to show."}
                   </p>
                 }>
-                  <div class="flex flex-col gap-5">
+                  <Show when={prefs().renderer === "mosaic"}>
+                    <Mosaic sections={sections()} onDrill={setSite} onHover={setHovered} />
+                  </Show>
+                  <Show when={prefs().renderer === "matrix"}>
+                    <Show when={matrix()} fallback={<div class="skeleton h-40 w-full" />}>
+                      {(m) => <MatrixFace model={m()} onDrill={setSite} onHover={setHovered} />}
+                    </Show>
+                  </Show>
+                  <div class="flex flex-col gap-5" classList={{ hidden: prefs().renderer === "mosaic" || prefs().renderer === "matrix" }}>
                     <For each={sections()}>
                       {(section) => (
                         <SectionView
@@ -332,6 +361,8 @@ function Controls(props: {
         <span class="mr-1 text-[10px] uppercase tracking-wider text-base-content/50">View</span>
         <button type="button" class={chip(props.prefs.renderer === "cards")} aria-pressed={props.prefs.renderer === "cards"} onClick={() => props.onPrefs({ renderer: "cards" })}>Cards</button>
         <button type="button" class={chip(props.prefs.renderer === "bands")} aria-pressed={props.prefs.renderer === "bands"} onClick={() => props.onPrefs({ renderer: "bands" })}>Bands</button>
+        <button type="button" class={chip(props.prefs.renderer === "mosaic")} aria-pressed={props.prefs.renderer === "mosaic"} onClick={() => props.onPrefs({ renderer: "mosaic" })}>Mosaic</button>
+        <button type="button" class={chip(props.prefs.renderer === "matrix")} aria-pressed={props.prefs.renderer === "matrix"} onClick={() => props.onPrefs({ renderer: "matrix" })}>Matrix</button>
       </div>
       <div class="flex items-center gap-1">
         <span class="mr-1 text-[10px] uppercase tracking-wider text-base-content/50">Labels</span>
