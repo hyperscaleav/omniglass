@@ -19,20 +19,24 @@ export const STALENESS_WINDOW_MS = 150_000;
 export type ReachVerdict = { value: string; ts: string };
 export type ReachLayer = { layer: string; check: string; value: number; detail?: string; ts: string };
 export type ReachHistory = { ts: string; value: string };
-export type ReachInterface = {
-  interface: string;
-  // The friendly string an operator reads for this interface. The row's
-  // identity field is called `interface`, not `name`, so a caller adapts it to
+export type ReachEndpoint = {
+  endpoint: string;
+  // The friendly string an operator reads for this endpoint. The row's
+  // identity field is called `endpoint`, not `name`, so a caller adapts it to
   // the structural `Labelled` shape before rendering it.
   label?: string;
-  interface_type: string;
-  endpoint?: string;
+  transport: string;
+  address?: string;
   node?: string;
   verdict: ReachVerdict | null;
+  // The layer-7 rungs (#812): responds (the protocol itself answered) and,
+  // only when a credential was tried, auth. Absent until a probe climbs them.
+  responsive?: ReachVerdict | null;
+  authenticated?: ReachVerdict | null;
   layers: ReachLayer[];
   history: ReachHistory[];
 };
-export type Reachability = { component: string; interfaces: ReachInterface[] };
+export type Reachability = { component: string; endpoints: ReachEndpoint[] };
 
 export const REACHABILITY_KEY = (name: string) => ["reachability", name] as const;
 
@@ -76,7 +80,7 @@ export function uptime(history: ReachHistory[], verdict: ReachVerdict | null, no
 // explain the failure. A host that answers ping but refuses the port is a service
 // fault on a live box; a host that fails ping is unreachable outright. Returns an
 // empty string when the interface is not down or the layers do not explain it.
-export function reason(iface: ReachInterface, now: number = Date.now()): string {
+export function reason(iface: ReachEndpoint, now: number = Date.now()): string {
   if (verdictWord(iface.verdict, now) !== "down") return "";
   const ping = iface.layers.find((l) => l.check === "icmp-reachable");
   const port = iface.layers.find((l) => l.check === "tcp-open");

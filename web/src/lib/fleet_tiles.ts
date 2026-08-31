@@ -181,7 +181,7 @@ export function systemTileSpec(view: FleetView, health: FleetHealth | undefined,
   };
 }
 
-export function componentTileSpec(view: FleetView, componentId: string, activeAlarms: number, interfaces: number): TileSpec {
+export function componentTileSpec(view: FleetView, componentId: string, activeAlarms: number, endpoints: number): TileSpec {
   let verdict: string | null = null;
   let memberships = 0;
   for (const s of view.systems ?? []) {
@@ -200,7 +200,7 @@ export function componentTileSpec(view: FleetView, componentId: string, activeAl
     counts: [
       { key: "systems", label: memberships === 1 ? "system" : "systems", value: memberships, sub: "slots it fills" },
       { key: "alarms", label: activeAlarms === 1 ? "active alarm" : "active alarms", value: activeAlarms, sub: "on this component, now" },
-      { key: "interfaces", label: interfaces === 1 ? "interface" : "interfaces", value: interfaces, sub: "collection paths" },
+      { key: "endpoints", label: endpoints === 1 ? "endpoint" : "endpoints", value: endpoints, sub: "collection paths" },
     ],
   };
 }

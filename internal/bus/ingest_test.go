@@ -88,21 +88,21 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values
-		('disp-1-tcp', (select id from interface_type where name = 'tcp'), (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), $1::jsonb),
-		('disp-2-tcp', (select id from interface_type where name = 'tcp'), (select id from component where name = 'disp-2'), (select principal_id from node where name = 'node-b'), '{"target":"127.0.0.1:1"}'::jsonb)`,
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values
+		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), $1::jsonb),
+		('disp-2-tcp', 'tcp', (select id from component where name = 'disp-2'), (select principal_id from node where name = 'node-b'), '{"target":"127.0.0.1:1"}'::jsonb)`,
 		`{"target":"`+target+`"}`); err != nil {
-		t.Fatalf("insert interfaces: %v", err)
+		t.Fatalf("insert endpoints: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, enabled) values
-		('t-a', 'poll', (select id from interface where name = 'disp-1-tcp'), true),
-		('t-b', 'poll', (select id from interface where name = 'disp-2-tcp'), true)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, enabled) values
+		('t-a', 'poll', (select id from endpoint where name = 'disp-1-tcp'), true),
+		('t-b', 'poll', (select id from endpoint where name = 'disp-2-tcp'), true)`); err != nil {
 		t.Fatalf("insert tasks: %v", err)
 	}
 	conn.Close(ctx)
 
-	// Register the interface_type so the interface FK is satisfiable was already
-	// handled at seed; start the bus + an API server that advertises it.
+	// The transport is a code-registry fact now (no seeded type row to
+	// arrange); start the bus + an API server that advertises it.
 	srv, err := bus.New(bus.Config{Host: "127.0.0.1", Port: -1}, gw)
 	if err != nil {
 		t.Fatalf("start bus: %v", err)
@@ -190,37 +190,37 @@ func TestTelemetryRoundTrip(t *testing.T) {
 		t.Fatalf("reject-not-project breached: unregistered name was written: %+v", got)
 	}
 
-	// --- PROPERTY LANE (cp5a, per-lane since #594): interface-reachable rides the
+	// --- PROPERTY LANE (cp5a, per-lane since #594): endpoint-reachable rides the
 	// properties array as canonical JSON text, under the SAME confinement and
 	// reject-not-project as a metric, plus the ingest-side transition-only guard.
 
-	// node-a publishes interface-reachable=up for its own t-a. The property lane
+	// node-a publishes endpoint-reachable=up for its own t-a. The property lane
 	// lands in property (not metric), owned disp-1 and instanced by the interface
 	// (disp-1-tcp).
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:     "t-a",
 		NodeId:     "node-a",
-		Properties: []*ogv1.PropertySample{{Name: "interface-reachable", ValueJson: `"up"`}},
+		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}},
 	})
-	waitProperty(t, ctx, gw, "disp-1", "interface-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "up" })
+	waitProperty(t, ctx, gw, "disp-1", "endpoint-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "up" })
 
-	// CONFINEMENT (property lane): node-a publishes interface-reachable=up for t-b,
+	// CONFINEMENT (property lane): node-a publishes endpoint-reachable=up for t-b,
 	// which belongs to node-b (owner disp-2). The same fence that drops a foreign
 	// metric drops a foreign verdict: disp-2 gets none.
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:     "t-b",
 		NodeId:     "node-a",
-		Properties: []*ogv1.PropertySample{{Name: "interface-reachable", ValueJson: `"up"`}},
+		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}},
 	})
 
 	// PER-LANE VALIDATION (#594): a property value violating the type's validation
-	// schema (interface-reachable is enum [up, down]) must never land. Refusal is
+	// schema (endpoint-reachable is enum [up, down]) must never land. Refusal is
 	// proven by the watermark pattern: the down flip below lands, so the consumer
 	// drained past this batch, and the series never contains "sideways".
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:     "t-a",
 		NodeId:     "node-a",
-		Properties: []*ogv1.PropertySample{{Name: "interface-reachable", ValueJson: `"sideways"`}},
+		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"sideways"`}},
 	})
 
 	// TRANSITION-ONLY (ingest guard): a repeated identical up must NOT add a second
@@ -229,18 +229,18 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:     "t-a",
 		NodeId:     "node-a",
-		Properties: []*ogv1.PropertySample{{Name: "interface-reachable", ValueJson: `"up"`}},
+		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}},
 	})
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId:     "t-a",
 		NodeId:     "node-a",
-		Properties: []*ogv1.PropertySample{{Name: "interface-reachable", ValueJson: `"down"`}},
+		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"down"`}},
 	})
-	waitProperty(t, ctx, gw, "disp-1", "interface-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "down" })
+	waitProperty(t, ctx, gw, "disp-1", "endpoint-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "down" })
 
 	// The series is exactly [up, down]: the duplicate up was guarded out, so the
 	// availability strip has one row per transition, not one per publish.
-	trans, err := gw.PropertyTransitions(ctx, "disp-1", "interface-reachable", "disp-1-tcp", 0)
+	trans, err := gw.PropertyTransitions(ctx, "disp-1", "endpoint-reachable", "disp-1-tcp", 0)
 	if err != nil {
 		t.Fatalf("property transitions: %v", err)
 	}
@@ -251,10 +251,10 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	// The current value of a series IS its latest row, both lanes (#591 retired
 	// the derived cache): the property series resolves to the "down" flip and the
 	// metric series to the probe value, each read by type, owner, and instance.
-	if got, err := gw.LatestProperty(ctx, "disp-1", "interface-reachable", "disp-1-tcp"); err != nil {
-		t.Fatalf("latest interface-reachable series row: %v", err)
+	if got, err := gw.LatestProperty(ctx, "disp-1", "endpoint-reachable", "disp-1-tcp"); err != nil {
+		t.Fatalf("latest endpoint-reachable series row: %v", err)
 	} else if got == nil || got.Value != "down" {
-		t.Fatalf("latest interface-reachable series row = %+v, want value down", got)
+		t.Fatalf("latest endpoint-reachable series row = %+v, want value down", got)
 	}
 	if dp, err := gw.LatestMetricInstance(ctx, "disp-1", "tcp-open", "disp-1-tcp"); err != nil {
 		t.Fatalf("latest tcp-open series row: %v", err)
@@ -263,7 +263,7 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	}
 
 	// Confinement held for the state path: disp-2 (node-b's component) got no verdict.
-	if got, err := gw.LatestProperty(ctx, "disp-2", "interface-reachable", "disp-2-tcp"); err != nil {
+	if got, err := gw.LatestProperty(ctx, "disp-2", "endpoint-reachable", "disp-2-tcp"); err != nil {
 		t.Fatalf("latest property disp-2: %v", err)
 	} else if got != nil {
 		t.Fatalf("state confinement breached: node-a landed a verdict on disp-2: %+v", got)
@@ -277,14 +277,14 @@ func TestTelemetryRoundTrip(t *testing.T) {
 	publishEvent(t, ncA, "node-a", &ogv1.TelemetryBatch{
 		TaskId: "t-a", NodeId: "node-a",
 		Metrics:    []*ogv1.MetricSample{{Name: "tcp-open", Value: 0}},
-		Properties: []*ogv1.PropertySample{{Name: "interface-reachable", ValueJson: `"up"`}},
+		Properties: []*ogv1.PropertySample{{Name: "endpoint-reachable", ValueJson: `"up"`}},
 		Events:     []*ogv1.EventSample{{Name: "call-started", Message: "call started"}},
 	})
 	waitEvent(t, ctx, gw, "disp-1", func(e storage.Event) bool {
 		return e.Message == "call started" && e.Origin == "caught" && e.Key == "call-started"
 	})
 	waitMetric(t, ctx, gw, "disp-1", "tcp-open", func(d *storage.MetricSample) bool { return d != nil && d.Value == 0 })
-	waitProperty(t, ctx, gw, "disp-1", "interface-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "up" })
+	waitProperty(t, ctx, gw, "disp-1", "endpoint-reachable", "disp-1-tcp", func(d *storage.PropertySample) bool { return d != nil && d.Value == "up" })
 
 	// RAW LOG LANE (ADR-0066): node-a ships its own self-log as a LogLine on the
 	// telemetry Event (no task, no registry name, no sample). It lands on

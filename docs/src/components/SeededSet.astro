@@ -122,6 +122,25 @@ if (nested && tree.length !== rows.length) {
         ))}
       </tbody>
     </table>
+  ) : kind === 'drivers' ? (
+    <table class="seeded-set">
+      <thead><tr><th>Name</th><th>Version</th><th>Rides</th><th>Menu</th></tr></thead>
+      <tbody>
+        {rows.map((d) => (
+          <tr>
+            <td><code>{d.id}</code></td>
+            <td>{d.version ?? ''}</td>
+            <td>{d.transport ? <code>{d.transport}</code> : ''}</td>
+            <td>{d.transport
+              ? [d.polls ? `${d.polls} poll${d.polls === 1 ? '' : 's'}` : '',
+                 d.listeners ? `${d.listeners} listener${d.listeners === 1 ? '' : 's'}` : '',
+                 d.commands ? `${d.commands} command${d.commands === 1 ? '' : 's'}` : '']
+                  .filter(Boolean).join(', ')
+              : 'stub, no spec yet'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   ) : kind === 'property_types' ? (
     <table class="seeded-set">
       <thead><tr><th>Name</th><th>Kind</th><th>Type</th><th>Unit</th><th>Description</th></tr></thead>

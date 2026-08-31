@@ -443,21 +443,21 @@ func TestDuplicateNamesDoNotBreakGatewayReads(t *testing.T) {
 	_ = crep
 
 	// Interface create, by uuid.
-	it, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "tcp", Component: strptr(compA.ID)}, all)
+	it, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: strptr(compA.ID)}, all)
 	if err != nil {
 		t.Fatalf("create interface by id: %v", err)
 	}
 	if it.ComponentID == nil || *it.ComponentID != compA.ID {
 		t.Fatalf("interface component = %v, want %s", it.ComponentID, compA.ID)
 	}
-	ifs, err := gw.ListComponentInterfaces(ctx, compA.ID)
+	ifs, err := gw.ListComponentEndpoints(ctx, compA.ID)
 	if err != nil {
 		t.Fatalf("list interfaces by id: %v", err)
 	}
 	if len(ifs) != 1 {
 		t.Fatalf("compA interfaces = %d, want 1", len(ifs))
 	}
-	ifsB, err := gw.ListComponentInterfaces(ctx, compB.ID)
+	ifsB, err := gw.ListComponentEndpoints(ctx, compB.ID)
 	if err != nil {
 		t.Fatalf("list interfaces compB by id: %v", err)
 	}

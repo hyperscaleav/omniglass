@@ -4,15 +4,32 @@
 # sample observes and a field declares. Numeric signals are metric types
 # (metric_types.yaml). validation is a JSON Schema fragment.
 property_types:
-  - name: interface-reachable
+  - name: endpoint-reachable
     data_type: string
     validation: { enum: [up, down] }
-    label: Interface Reachable
+    label: Endpoint Reachable
     description: >-
-      Per-interface reachability verdict, the AND of the interface's probe
+      Per-endpoint reachability verdict, the AND of the endpoint's probe
       results (up = every applicable probe reached the target). A built-in state:
       availability is time_in_state over it. Unknown/stale are read-time
       derivations, not stored values.
+  - name: endpoint-responsive
+    data_type: string
+    validation: { enum: [up, down] }
+    label: Endpoint Responsive
+    description: >-
+      The layer-7 rung beside endpoint-reachable: the protocol itself answered
+      (an HTTP request drew a response, an SSH exchange completed). A port that
+      accepts but never answers is reachable and not responsive, which is the
+      distinction this verdict exists to draw.
+  - name: endpoint-authenticated
+    data_type: string
+    validation: { enum: [yes, no] }
+    label: Endpoint Authenticated
+    description: >-
+      The auth rung: the credential the probe carried was accepted. Written only
+      when a credential was actually tried, so an unauthenticated probe never
+      reads as a failed login.
   - name: health
     data_type: string
     validation: { enum: [healthy, incomplete, degraded, outage] }

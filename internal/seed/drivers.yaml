@@ -4,14 +4,63 @@
 # operator-extensible later; tune freely. Fictional-brand drivers match the
 # omniglass-lab device surfaces: Kestrel speaks an HTTP JSON device API,
 # Newtron a vendor control protocol, Boreal and the audio rack SNMP.
+#
+# A driver's `spec` is its declarative body (#813): data, not code, interpreted
+# by one generic engine, validated against the catalogs at every seed. A driver
+# without one is a stub that cannot be attached yet.
 drivers:
   - id: snmp-generic
     label: Generic SNMP
     version: "1.0.0"
+    spec:
+      version: 1
+      transport: snmp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "161" }
+        - { name: community, kind: secret, secret_type: snmp-community, required: true }
+      polls:
+        - name: scalars
+          schedule: { every: 60s }
+          # The MIB-II system scalars every v2c agent answers: sysDescr and
+          # sysUpTime, the generic driver's whole menu (v2c scalar GET only;
+          # walk and discovery are out of the epic's scope).
+          request: { get: ["1.3.6.1.2.1.1.1.0", "1.3.6.1.2.1.1.3.0"] }
+          emits:
+            - { name: model-number, extract: { oid: "1.3.6.1.2.1.1.1.0" } }
+            # sysUpTime is timeticks (hundredths); the declared scale lands it
+            # in the canon's seconds.
+            - { name: uptime, extract: { oid: "1.3.6.1.2.1.1.3.0" }, transform: { scale: 0.01 } }
   - id: kestrel-api
     label: Kestrel Device API
   - id: newtron-nvp
     label: Newtron NVP
+    version: "1.0.0"
+    spec:
+      version: 1
+      transport: tcp
+      inputs:
+        - { name: host, kind: string, required: true }
+        - { name: port, kind: number, default: "51325" }
+      polls:
+        - name: status
+          schedule: { every: 30s }
+          request: { line: "GET INPUT" }
+          emits:
+            - { name: video-input, extract: { regex: "^INPUT (\\S+)$" } }
+      # The NVP conversation is line-oriented over a held TCP session: the
+      # subscribe arms on establish (and re-arms on every recover), and the
+      # device pushes EVT lines the listener claims by prefix. The session and
+      # listener runtimes arrive with the stateful arc (slices 6 and 7); the
+      # standing listen task derives now so the worklist shape is complete.
+      listeners:
+        - name: events
+          arm: ["SUBSCRIBE INPUT"]
+          match: { prefix: "EVT " }
+          emits:
+            - { name: video-input, extract: { regex: "^EVT INPUT (\\S+)$" } }
+      commands:
+        - { command_type: set-input, request: { line: "SET INPUT ${value}" } }
   - id: http-json
     label: HTTP JSON
     version: "1.0.0"

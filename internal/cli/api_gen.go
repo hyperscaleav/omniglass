@@ -656,7 +656,7 @@ func generatedCommands() []*cobra.Command {
 					}
 					cmd.Flags().StringVar(&fCommandType, "command-type", "", "The command_type to invoke")
 					_ = cmd.MarkFlagRequired("command-type")
-					cmd.Flags().StringVar(&fInstance, "instance", "", "The series discriminator (e.g. an interface), when the target is instanced")
+					cmd.Flags().StringVar(&fInstance, "instance", "", "The series discriminator (e.g. an endpoint), when the target is instanced")
 					cmd.Flags().StringVar(&fParams, "params", "", "The invocation params, stored on the command and the caused event")
 					cmd.Flags().StringVar(&fValue, "value", "", "The intended value for the target property (a settleable command)")
 					return cmd
@@ -1158,8 +1158,8 @@ func generatedCommands() []*cobra.Command {
 				cmd := func() *cobra.Command {
 					cmd := &cobra.Command{
 						Use:     "list <name>",
-						Short:   "Read a component's per-interface reachability",
-						Long:    "Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
+						Short:   "Read a component's per-endpoint reachability",
+						Long:    "Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.",
 						Example: "  omniglass component reachability list <name>",
 						Args:    cobra.ExactArgs(1),
 						RunE: func(cmd *cobra.Command, args []string) error {
@@ -1558,6 +1558,7 @@ func generatedCommands() []*cobra.Command {
 			cmd := func() *cobra.Command {
 				var fLabel string
 				var fName string
+				var fSpec string
 				var fVersion string
 				cmd := &cobra.Command{
 					Use:     "create",
@@ -1574,6 +1575,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("name") {
 							body["name"] = fName
 						}
+						if cmd.Flags().Changed("spec") {
+							body["spec"] = jsonOrString(fSpec)
+						}
 						if cmd.Flags().Changed("version") {
 							body["version"] = fVersion
 						}
@@ -1584,6 +1588,7 @@ func generatedCommands() []*cobra.Command {
 				_ = cmd.MarkFlagRequired("label")
 				cmd.Flags().StringVar(&fName, "name", "", "The globally unique name; renameable")
 				_ = cmd.MarkFlagRequired("name")
+				cmd.Flags().StringVar(&fSpec, "spec", "", "The declarative spec body; validated against the catalogs, and a spec that fails validation refuses the write (422)")
 				cmd.Flags().StringVar(&fVersion, "version", "", "A free-form version string, e.g. 1.0.0")
 				return cmd
 			}()
@@ -1643,6 +1648,7 @@ func generatedCommands() []*cobra.Command {
 		parent.AddCommand(func() *cobra.Command {
 			cmd := func() *cobra.Command {
 				var fLabel string
+				var fSpec string
 				var fVersion string
 				cmd := &cobra.Command{
 					Use:     "update <id>",
@@ -1656,6 +1662,9 @@ func generatedCommands() []*cobra.Command {
 						if cmd.Flags().Changed("label") {
 							body["label"] = fLabel
 						}
+						if cmd.Flags().Changed("spec") {
+							body["spec"] = jsonOrString(fSpec)
+						}
 						if cmd.Flags().Changed("version") {
 							body["version"] = fVersion
 						}
@@ -1663,7 +1672,152 @@ func generatedCommands() []*cobra.Command {
 					},
 				}
 				cmd.Flags().StringVar(&fLabel, "label", "", "A new operator-facing label")
+				cmd.Flags().StringVar(&fSpec, "spec", "", "A replacement spec body; validated like the create's, refused with a 422 when it cannot be interpreted")
 				cmd.Flags().StringVar(&fVersion, "version", "", "A new version string, e.g. 1.0.1")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "endpoint",
+			Short: "Commands for the endpoint resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fComponent string
+				var fDriver string
+				var fInputs string
+				var fLabel string
+				var fNode string
+				var fParams string
+				var fTransport string
+				cmd := &cobra.Command{
+					Use:     "create",
+					Short:   "Create an endpoint",
+					Long:    "Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by endpoint:create.",
+					Example: "  omniglass endpoint create",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/endpoints")
+						body := map[string]any{}
+						if cmd.Flags().Changed("component") {
+							body["component"] = fComponent
+						}
+						if cmd.Flags().Changed("driver") {
+							body["driver"] = fDriver
+						}
+						if cmd.Flags().Changed("inputs") {
+							body["inputs"] = jsonOrString(fInputs)
+						}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("node") {
+							body["node"] = fNode
+						}
+						if cmd.Flags().Changed("params") {
+							body["params"] = jsonOrString(fParams)
+						}
+						if cmd.Flags().Changed("transport") {
+							body["transport"] = fTransport
+						}
+						return runAPICommand(cmd, "POST", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fComponent, "component", "", "Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant)")
+				cmd.Flags().StringVar(&fDriver, "driver", "", "Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions")
+				cmd.Flags().StringVar(&fInputs, "inputs", "", "The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest")
+				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for")
+				cmd.Flags().StringVar(&fNode, "node", "", "Node placement, by name or id")
+				cmd.Flags().StringVar(&fParams, "params", "", "Address/target settings (jsonb); an attach derives them from the inputs instead")
+				cmd.Flags().StringVar(&fTransport, "transport", "", "A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set")
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "delete <id>",
+					Short:   "Delete an endpoint",
+					Long:    "Deletes an endpoint, refused while a task still references it. Gated by endpoint:delete; read and delete scopes (through the component) drive the 404 versus 403 split.",
+					Example: "  omniglass endpoint delete <id>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/endpoints/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "DELETE", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "get <id>",
+					Short:   "Get an endpoint",
+					Long:    "Fetches an endpoint by id. An endpoint whose component is out of the caller's read scope is a non-disclosing 404. Gated by endpoint:read.",
+					Example: "  omniglass endpoint get <id>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/endpoints/%s", url.PathEscape(args[0]))
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List endpoints in scope",
+					Long:    "Lists the endpoints whose owning component the caller may read (the component cascade). Gated by endpoint:read.",
+					Example: "  omniglass endpoint list",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/endpoints")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
+				return cmd
+			}()
+			return cmd
+		}())
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				var fLabel string
+				var fNode string
+				var fParams string
+				cmd := &cobra.Command{
+					Use:     "update <id>",
+					Short:   "Update an endpoint",
+					Long:    "Patches an endpoint's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.",
+					Example: "  omniglass endpoint update <id>",
+					Args:    cobra.ExactArgs(1),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/endpoints/%s", url.PathEscape(args[0]))
+						body := map[string]any{}
+						if cmd.Flags().Changed("label") {
+							body["label"] = fLabel
+						}
+						if cmd.Flags().Changed("node") {
+							body["node"] = fNode
+						}
+						if cmd.Flags().Changed("params") {
+							body["params"] = jsonOrString(fParams)
+						}
+						return runAPICommand(cmd, "PATCH", path, body)
+					},
+				}
+				cmd.Flags().StringVar(&fLabel, "label", "", "A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone")
+				cmd.Flags().StringVar(&fNode, "node", "", "Reassign the node placement, by name or id")
+				cmd.Flags().StringVar(&fParams, "params", "", "Replace the address/target settings (jsonb)")
 				return cmd
 			}()
 			return cmd
@@ -1932,141 +2086,6 @@ func generatedCommands() []*cobra.Command {
 			return cmd
 		}()
 		return cmd
-	}())
-	roots = append(roots, func() *cobra.Command {
-		parent := &cobra.Command{
-			Use:   "interface",
-			Short: "Commands for the interface resource",
-		}
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fComponent string
-				var fInterfaceType string
-				var fLabel string
-				var fNode string
-				var fParams string
-				cmd := &cobra.Command{
-					Use:     "create",
-					Short:   "Create an interface",
-					Long:    "Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by interface:create.",
-					Example: "  omniglass interface create --interface-type interface_type",
-					Args:    cobra.ExactArgs(0),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/interfaces")
-						body := map[string]any{}
-						if cmd.Flags().Changed("component") {
-							body["component"] = fComponent
-						}
-						if cmd.Flags().Changed("interface-type") {
-							body["interface_type"] = fInterfaceType
-						}
-						if cmd.Flags().Changed("label") {
-							body["label"] = fLabel
-						}
-						if cmd.Flags().Changed("node") {
-							body["node"] = fNode
-						}
-						if cmd.Flags().Changed("params") {
-							body["params"] = jsonOrString(fParams)
-						}
-						return runAPICommand(cmd, "POST", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fComponent, "component", "", "Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant)")
-				cmd.Flags().StringVar(&fInterfaceType, "interface-type", "", "An interface_type name (the protocol); the interface is named by it, unique within the component")
-				_ = cmd.MarkFlagRequired("interface-type")
-				cmd.Flags().StringVar(&fLabel, "label", "", "What an operator reads in lists (Control processor). Settable here because the name is derived from the type, so it says how the device is reached and never what the connection is for")
-				cmd.Flags().StringVar(&fNode, "node", "", "Node placement, by name or id")
-				cmd.Flags().StringVar(&fParams, "params", "", "Endpoint/target settings (jsonb)")
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "delete <id>",
-					Short:   "Delete an interface",
-					Long:    "Deletes an interface, refused while a task still references it. Gated by interface:delete; read and delete scopes (through the component) drive the 404 versus 403 split.",
-					Example: "  omniglass interface delete <id>",
-					Args:    cobra.ExactArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/interfaces/%s", url.PathEscape(args[0]))
-						return runAPICommand(cmd, "DELETE", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "get <id>",
-					Short:   "Get an interface",
-					Long:    "Fetches an interface by id. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.",
-					Example: "  omniglass interface get <id>",
-					Args:    cobra.ExactArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/interfaces/%s", url.PathEscape(args[0]))
-						return runAPICommand(cmd, "GET", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				cmd := &cobra.Command{
-					Use:     "list",
-					Short:   "List interfaces in scope",
-					Long:    "Lists the interfaces whose owning component the caller may read (the component cascade). Gated by interface:read.",
-					Example: "  omniglass interface list",
-					Args:    cobra.ExactArgs(0),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/interfaces")
-						return runAPICommand(cmd, "GET", path, nil)
-					},
-				}
-				return cmd
-			}()
-			return cmd
-		}())
-		parent.AddCommand(func() *cobra.Command {
-			cmd := func() *cobra.Command {
-				var fLabel string
-				var fNode string
-				var fParams string
-				cmd := &cobra.Command{
-					Use:     "update <id>",
-					Short:   "Update an interface",
-					Long:    "Patches an interface's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.",
-					Example: "  omniglass interface update <id>",
-					Args:    cobra.ExactArgs(1),
-					RunE: func(cmd *cobra.Command, args []string) error {
-						path := fmt.Sprintf("/api/v1/interfaces/%s", url.PathEscape(args[0]))
-						body := map[string]any{}
-						if cmd.Flags().Changed("label") {
-							body["label"] = fLabel
-						}
-						if cmd.Flags().Changed("node") {
-							body["node"] = fNode
-						}
-						if cmd.Flags().Changed("params") {
-							body["params"] = jsonOrString(fParams)
-						}
-						return runAPICommand(cmd, "PATCH", path, body)
-					},
-				}
-				cmd.Flags().StringVar(&fLabel, "label", "", "A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone")
-				cmd.Flags().StringVar(&fNode, "node", "", "Reassign the node placement, by name or id")
-				cmd.Flags().StringVar(&fParams, "params", "", "Replace the endpoint/target settings (jsonb)")
-				return cmd
-			}()
-			return cmd
-		}())
-		return parent
 	}())
 	roots = append(roots, func() *cobra.Command {
 		parent := &cobra.Command{
@@ -3067,7 +3086,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "delete <name>",
 					Short:   "Delete a node",
-					Long:    "Decommissions a node: a hard delete that cascades its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.",
+					Long:    "Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.",
 					Example: "  omniglass node delete <name>",
 					Args:    cobra.ExactArgs(1),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -6445,7 +6464,7 @@ func generatedCommands() []*cobra.Command {
 				cmd := &cobra.Command{
 					Use:     "list",
 					Short:   "List tasks in scope",
-					Long:    "Lists the tasks whose interface's owning component the caller may read (the component cascade). Tasks are derived from interfaces, not authored. Gated by task:read.",
+					Long:    "Lists the tasks whose endpoint's owning component the caller may read (the component cascade). Tasks are derived from endpoints, not authored. Gated by task:read.",
 					Example: "  omniglass task list",
 					Args:    cobra.ExactArgs(0),
 					RunE: func(cmd *cobra.Command, args []string) error {
@@ -6514,6 +6533,30 @@ func generatedCommands() []*cobra.Command {
 				cmd.Flags().StringVar(&fProperties, "properties", "", "Categorical observations, validated against property_type and each type's validation schema")
 				cmd.Flags().StringVar(&fSource, "source", "", "Who observed this batch (recorded as the provenance source on every row)")
 				cmd.Flags().StringVar(&fTs, "ts", "", "Batch timestamp; a per-item timestamp overrides it")
+				return cmd
+			}()
+			return cmd
+		}())
+		return parent
+	}())
+	roots = append(roots, func() *cobra.Command {
+		parent := &cobra.Command{
+			Use:   "transport",
+			Short: "Commands for the transport resource",
+		}
+		parent.AddCommand(func() *cobra.Command {
+			cmd := func() *cobra.Command {
+				cmd := &cobra.Command{
+					Use:     "list",
+					Short:   "List the transports the platform speaks",
+					Long:    "Lists the transport registry: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.",
+					Example: "  omniglass transport list",
+					Args:    cobra.ExactArgs(0),
+					RunE: func(cmd *cobra.Command, args []string) error {
+						path := fmt.Sprintf("/api/v1/transports")
+						return runAPICommand(cmd, "GET", path, nil)
+					},
+				}
 				return cmd
 			}()
 			return cmd

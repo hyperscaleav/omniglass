@@ -5830,3 +5830,107 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   nothing stored to lose. Every test drives the gap by hand, delivering the collection between two
   assertions rather than sleeping on a race (ADR-0133, #398, #772, #782).
 
+
+- **Transport becomes code, and the entity an API is reached through is an endpoint.** ADR-0073
+  executes and #603's naming ruling rides it (ADR-0134): the six wires (icmp, tcp, udp, ssh, http,
+  snmp) are a code registry the binary ships (`internal/transport`, a leaf package so the storage
+  gateway validates against it without an import cycle), the `interface_type` table and its FK
+  retire, and the entity renames end to end in one slice. The migration carries everything that
+  spells the old noun: the table (with the task arc's column and every constraint code names),
+  role permission arrays rewritten in place preserving order, and the canonical reachability
+  datapoint renamed row-in-place so every uuid-keyed sample keeps its history; a testcontainer
+  round-trip stands the database below the migration, plants pre-rename rows, and drives the
+  embedded SQL twice for idempotence, with the down exercised by the same test's rollback. An
+  unknown transport now refuses at write against the registry (422) instead of surfacing as a
+  null-FK insert error; `GET /transports` serves the registry to the console picker (bound
+  through `bindSelectValue`, since the options arrive after the blade opens), so no surface
+  hardcodes the pair the old picker showed. The docs corpus, the operator and CLI guides, the
+  glossary, and the seed catalogs speak endpoint; `interface_type`, `interface-reachable`, and
+  the entity phrasings of the old noun join the docslint denylist, which promptly caught five
+  stragglers, the seeded datapoint's own YAML among them (#811, #603).
+
+- **The ladder climbs to layer 7.** The `http` probe draws a real response off the API (any
+  status is an answer; the dial is hooked so port-closed classifies on the L4 rung while an
+  accepting port that never answers reads reached-but-not-responsive) and the `ssh` probe runs a
+  real key exchange (a completed exchange that refuses the credential reads
+  responded-but-not-authenticated, distinct from a daemon that never speaks SSH). The canon grows
+  five-lane-shaped: `http-response-time` and `ssh-handshake-time` on the metric lane,
+  `endpoint-responsive` and `endpoint-authenticated` (written only when a credential was actually
+  tried, so an unauthenticated probe never reads as a failed login) on the property lane, and the
+  `collection-failed` event type, which the node now lands for a task whose config cannot be used
+  instead of only whispering into its own self-logs. The reachability read serves the new rungs
+  per endpoint and the panel wears them as chips that appear only once a probe has climbed them.
+  Proof is the capability carve-out's both halves: fake-based sample shapes plus real-socket
+  integration tests, an httptest server, an in-process ed25519 SSH daemon whose password callback
+  genuinely adjudicates, and accept-and-hang listeners for the not-responsive rung (#812, #603).
+
+- **A driver carries its spec, and attach derives the endpoint.** The driver registry rows gain
+  their body: a versioned declarative spec (data, not code: one transport, typed inputs with
+  secret references, poll functions, listeners, command bindings), parsed strictly (an unknown
+  field refuses rather than projects) and validated against the live catalogs at every write, so
+  an unregistered emitted name or a phantom secret type refuses at authoring time with the
+  fault named (ADR-0135). Creating an endpoint with a driver reference becomes an attach: the
+  spec derives the transport and target, required inputs must be supplied and defaults bake,
+  secret inputs resolve by reference name against the secret store (a missing row or the wrong
+  shape is a 422 naming it), and the spec's functions derive the endpoint's tasks in the same
+  transaction, each carrying its function whole with emit lanes baked at attach so the node
+  never consults a catalog at runtime. The seeded `snmp-generic` (v2c scalar: sysDescr and
+  sysUpTime, timeticks scaled to the canon's seconds by a declared transform) and `newtron-nvp`
+  (line protocol: a status poll, an EVT listener with its subscribe arm, a set-input binding)
+  become real specs, `uptime` joins the metric canon, and the seed installs secret types before
+  drivers so a first boot validates cleanly. The console's endpoint create grows the attach face
+  (pick a driver, fill the inputs its spec declares) beside the bare probe, the Drivers page
+  renders each spec as the menu it is, and the docs' driver table renders from the same generated
+  facts. Proven by pure spec-validation units, testcontainer round-trips over the write gate and
+  the attach flow (derived tasks, lanes, refusals), and an HTTP e2e that attaches the seeded
+  driver (#813, #603).
+
+- **Poll collection interprets the driver.** The compiled unit the attach bakes (function, request,
+  emits with lanes) moves to the shared `internal/driver` package and gains its interpreter:
+  locate each emit by its one extractor (OID, regex capture, dotted JSON path, key), apply the
+  declared transform (enum map, then scale, then cast), type by the baked lane. The contracts the
+  tests pin hardest: a metric-lane value that is not numeric is a fault, never a wrong-lane
+  sample; a missing emit faults by name while the rest still land; an unmapped enum value refuses
+  rather than projecting the raw through; a failed fetch lands nothing at all. The node's
+  dispatch tells a baked driver poll from a probe task by its spec and publishes each fault as a
+  `collection-failed` event beside whatever landed; a standing listen task is skipped inert until
+  the stateful arc arms it. Fetching is two new capability wrappers, each proven on real wires:
+  the v2c scalar SNMP GET (`gosnmp`) against a hand-rolled from-the-BER-spec UDP agent (request-id
+  correlated, community adjudicated with silence for a wrong one, an OctetString sysDescr beside
+  a TimeTicks sysUpTime), and a stateless line exchange against a real listener. Credential
+  delivery closes the loop: the worklist reply resolves a driver task's secret inputs and ships
+  them unsealed on the per-node subject (the node's NATS grant is the boundary; the attach is the
+  audited operator action, so machine delivery writes no per-pull audit row), and a reference
+  that no longer resolves is delivered as absence, which the node turns into a
+  `collection-failed` naming the missing credential (#814, #603).
+
+- **The command wire actuates.** The subject the grammar reserved becomes real: a node pulls
+  `og.v1.command.<node>` (request-reply mirroring the worklist, the same reply-inbox confinement
+  and per-node grant) and receives the commands whose owning component has a driver-attached
+  endpoint placed on it and whose driver binds the command's type, each with its request rendered
+  server-side at dispatch (the intended value into `${value}`, issue params into `${arg.key}`,
+  references validated at spec write, an unrenderable binding recorded terminal instead of
+  redelivered forever). The command row grows the execution arc beside settlement:
+  `dispatched_at` stamped by the pull, redelivery after silence, a delivery TTL past which a
+  command no node picked up falls to settlement's timed-out, and `executed_at` stamped once by
+  the node's report on `og.v1.commandstatus.<node>` under placement confinement, with execution
+  idempotent per command id at the node (a redelivery repeats the report, never the actuation).
+  Any device answer counts as actuated; whether the device DID it stays settlement's judgment,
+  which now closes with real observed values from the driver's polls. Proven end to end in one
+  integration test: issue set-input, the node pulls and actuates a real line server over a real
+  socket, the report stamps, the observed value lands, the verdict reads settled past the window,
+  and the other node's pull dies inside the denied publish (ADR-0136, #815, #603).
+
+- **The stateless arc's review hardening.** A `/code-review` pass over the whole arc before
+  merge closed four robustness gaps, each with a regression test. The worklist no longer masks
+  an infrastructure fault as a missing credential: a real unseal failure (a key provider that
+  cannot open the envelope, a DB error) now fails the pull so the node keeps its last-good
+  worklist and retries, while only genuine absence (not-found or an ambiguous name) still rides
+  as a `collection-failed`. Driver-spec validation gained the symmetric transport-shape check it
+  was missing: a `tcp` poll emit that locates by oid, key, or jsonpath (forms a line response
+  cannot feed) refuses at write, the way an `snmp` emit already had to locate by oid, and the
+  per-emit extractor check runs first so a malformed extractor names its own fault. The SNMP
+  interpreter strips a leading dot from an emit's OID the same way the getter strips it from the
+  response, so a spec authored in the standard MIB `.1.3...` form matches instead of faulting
+  every tick. And the node prunes its per-command idempotence memory past the redelivery window,
+  so a long-lived node's command map no longer grows for the life of the run (#603).

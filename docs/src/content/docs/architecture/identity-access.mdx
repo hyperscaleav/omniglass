@@ -249,7 +249,7 @@ canDo(P, action, E)  iff  exists grant g in grants(P) such that
 :::
 
 Today each fleet entity is scoped by its own tier (a `location` scope contains locations only, and
-so on; only `secret` / `variable` / `interface` / `task` resolve through their owning entity's
+so on; only `secret` / `variable` / `endpoint` / `task` resolve through their owning entity's
 tier), and a `group` scope is refused with a 422.
 
 `expand` realizes a scope to a **bound id set** the gateway injects as a parameterized `owner IN (...)` predicate (or a closure-table join for deep trees), never string-built; the tree walk carries a cycle guard, and the set is **fleet-size-bounded** (entities), an indexed membership filter. `scope_kind` is enumerated; adding a kind is a schema change (CHECK constraint) plus a new `expand` case. `scope_id` is operator data.
@@ -496,7 +496,7 @@ promise:
   **write** a binding against, not one the caller may **read**, and a bare-name 403 is a
   name-existence oracle by construction (a caller learns a name exists somewhere in the fleet from
   the status code alone, with no candidates disclosed), predating this epic and tested
-  (`interfaces_scope_test.go:82`), now asymmetric with the read path's single 404 by design, not by
+  (`endpoints_scope_test.go:82`), now asymmetric with the read path's single 404 by design, not by
   omission.
 - **The cross-tier placement bind** (`resolvePlacementRef`, used by `CreateComponent`,
   `CreateSystem`, `MoveComponent`, and `MoveSystem` for the location and system a row is placed
@@ -632,7 +632,7 @@ invariant, and a bare `<img src>` cannot carry a bearer.
 Nodes do not use general role x scope. A node authenticates with a per-tenant **NATS JWT/nkey** credential bound to its `node.name` and is authorized only to **its own assignments**: publish telemetry, heartbeat, consume its commands. The scope is carried by **NATS subject permissions**, not a route authorizer:
 
 - A node is a NATS client over the WAN (outbound only). The connection resolves the principal (kind=`node`) from the nkey, and the JWT's subject permissions are the node's placement-derived `visible_set`: publish only to its own ingress and report subjects, consume only from its own durable command queue. Placement (the [cascade](/architecture/cascade/)) compiles into the account's subject grants, so a node can address only the owners it covers.
-- A node's published samples are owner-bound at **stream-consume time, ahead of any evaluation**, by the **admission consumer**: for a node it checks the payload owner against the node's placement-derived `visible_set`; for a central webhook, against the interface's declared owner ([messaging](/architecture/messaging/)). Only confined samples re-publish to the trusted stream; an owner outside the set is an orphan / discovery candidate, never an authoritative sample ([collection](/architecture/collection/)). The fence cannot live only at the durable write, because the rule engine consumes the stream **live**: a forged owner must be caught **before** it can open an alarm or fire an action. **Trusted server-internal producers** (calc, the action layer's intended write) publish to the trusted stream directly. The admission consumer runs in **system mode**; the persistence sink is a trusted system-mode `COPY` relying on confined owners upstream.
+- A node's published samples are owner-bound at **stream-consume time, ahead of any evaluation**, by the **admission consumer**: for a node it checks the payload owner against the node's placement-derived `visible_set`; for a central webhook, against the endpoint's declared owner ([messaging](/architecture/messaging/)). Only confined samples re-publish to the trusted stream; an owner outside the set is an orphan / discovery candidate, never an authoritative sample ([collection](/architecture/collection/)). The fence cannot live only at the durable write, because the rule engine consumes the stream **live**: a forged owner must be caught **before** it can open an alarm or fire an action. **Trusted server-internal producers** (calc, the action layer's intended write) publish to the trusted stream directly. The admission consumer runs in **system mode**; the persistence sink is a trusted system-mode `COPY` relying on confined owners upstream.
 
 A `node` credential whose subject permissions do not cover a subject is rejected by NATS at publish/subscribe time; a non-`node` principal cannot hold a node account's subject grants.
 :::

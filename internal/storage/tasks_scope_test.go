@@ -35,15 +35,15 @@ func TestTaskDerivedScope(t *testing.T) {
 
 	// Each interface DERIVES exactly one poll task. The interface is protocol-named
 	// (name = type), so these three differ by component / transport.
-	ifA, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "tcp", Component: strptr("comp-a")}, all)
+	ifA, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: strptr("comp-a")}, all)
 	if err != nil {
 		t.Fatalf("create interface on comp-a: %v", err)
 	}
-	ifB, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "tcp", Component: strptr("comp-b")}, all)
+	ifB, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: strptr("comp-b")}, all)
 	if err != nil {
 		t.Fatalf("create interface on comp-b: %v", err)
 	}
-	if _, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "icmp"}, all); err != nil {
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "icmp"}, all); err != nil {
 		t.Fatalf("create component-less interface: %v", err)
 	}
 
@@ -77,7 +77,7 @@ func TestTaskDerivedScope(t *testing.T) {
 	if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: "edge-1"}, all, all); err != nil {
 		t.Fatalf("create node: %v", err)
 	}
-	if _, err := gw.UpdateInterface(ctx, "", ifA.ID, storage.InterfacePatch{Node: strptr("edge-1")}, all, all); err != nil {
+	if _, err := gw.UpdateEndpoint(ctx, "", ifA.ID, storage.EndpointPatch{Node: strptr("edge-1")}, all, all); err != nil {
 		t.Fatalf("place interface on edge-1: %v", err)
 	}
 	placed, err := gw.GetTask(ctx, taskA.ID, all)
@@ -86,7 +86,7 @@ func TestTaskDerivedScope(t *testing.T) {
 	}
 
 	// Cascade DELETE: deleting the interface removes its derived task.
-	if err := gw.DeleteInterface(ctx, "", ifA.ID, all, all); err != nil {
+	if err := gw.DeleteEndpoint(ctx, "", ifA.ID, all, all); err != nil {
 		t.Fatalf("delete interface: %v", err)
 	}
 	if _, err := gw.GetTask(ctx, taskA.ID, all); !errors.Is(err, storage.ErrTaskNotFound) {
@@ -101,7 +101,7 @@ func TestTaskDerivedScope(t *testing.T) {
 func taskForInterface(t *testing.T, tasks []storage.Task, interfaceID string) storage.Task {
 	t.Helper()
 	for _, task := range tasks {
-		if task.InterfaceID == interfaceID {
+		if task.EndpointID == interfaceID {
 			return task
 		}
 	}

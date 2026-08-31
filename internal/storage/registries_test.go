@@ -10,8 +10,9 @@ import (
 )
 
 // TestRegistrySeed proves the boot seed lands the catalog canon on its two lanes
-// (the reachability metric_types, the non-numeric property_types) and the
-// icmp/tcp interface_types, and that a second Run is idempotent.
+// (the reachability metric_types, the non-numeric property_types) and that a
+// second Run is idempotent. The transports are a code registry (ADR-0073,
+// internal/transport), no longer seeded rows, so they are not asserted here.
 func TestRegistrySeed(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -62,7 +63,7 @@ func TestRegistrySeed(t *testing.T) {
 		official[prop.Name] = prop.Official
 	}
 	// The property lane holds the non-numeric canon, no numeric row among it.
-	for _, name := range []string{"interface-reachable", "health", "serial-number"} {
+	for _, name := range []string{"endpoint-reachable", "health", "serial-number"} {
 		if !official[name] {
 			t.Errorf("property %s: want seeded official=true, got %v", name, official)
 		}
@@ -71,15 +72,4 @@ func TestRegistrySeed(t *testing.T) {
 		t.Error("icmp-reachable seeded on the property lane; numbers are metrics")
 	}
 
-	its, err := gw.ListInterfaceTypes(ctx)
-	if err != nil {
-		t.Fatalf("list interface_types: %v", err)
-	}
-	seen := map[string]bool{}
-	for _, it := range its {
-		seen[it.Name] = it.Built
-	}
-	if !seen["icmp"] || !seen["tcp"] {
-		t.Errorf("interface_types: want icmp+tcp built, got %v", seen)
-	}
 }

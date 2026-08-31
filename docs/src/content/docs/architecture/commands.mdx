@@ -9,23 +9,56 @@ sidebar:
 
 import SchemaTable from '../../../components/SchemaTable.astro';
 
-:::note[Partial: the record and reconcile half is built; actuation is deferred]
+:::note[Partial: record, reconcile, and actuation are built; derived producers are deferred]
 The `command_type` registry, the `command` invocation log, computed settlement, the **recorded
 status** (`issued` / `settled` / `failed` / `timed-out`), and the **two-armed target** (a command
 may set a property or a metric; the metric arm is schema-and-storage deep, its authoring surface
 deferred until a metric command exists)
 are built
 ([ADR-0063](/architecture/decisions/#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables),
-[ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)).
-#396 is the do primitive's record-and-reconcile half.
+[ADR-0079](/architecture/decisions/#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus)),
+and since #815 so is **actuation**: the invocation reaches the placed node over the per-node
+command queue and actuates the device through the driver's command binding (below,
+[ADR-0136](/architecture/decisions/#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch)).
 :::
 
-:::design[The actuation path, tracked in #393; the `derived` producers are the `event_rule` (ADR-0050)]
-Still directional: the outbound **actuation** path (the physical push to a driver or node, the
-protobuf `Command` on the wire, the device acknowledgement) and the `event_rule`-driven `derived`
-producers. A command issued today is recorded, opens its intended value, and settles against the
-observed value; nothing yet carries the invocation to the device.
+:::design[The `derived` producers are the `event_rule` (ADR-0050), tracked in #393]
+Still directional: the `event_rule`-driven `derived` producers (a rule issuing commands), and
+scheduling, batching, and per-device queues beyond operator-issued actuation.
 :::
+
+## Actuation: the wire to the device
+
+The issue records; the **wire actuates** (#815). The moving parts:
+
+- **The queue is a per-node pull.** A node asks `og.v1.command.<node>` (request-reply, mirroring
+  the worklist, the same reply-inbox confinement) and receives the commands whose owning
+  component has a **driver-attached endpoint placed on it**, where that driver's spec **binds the
+  command's type**. A command no driver binds is never delivered; its lifecycle is settlement's
+  business alone.
+- **Rendered at dispatch.** The server resolves the binding's request template against the
+  command at delivery time: `${value}` is the intended value, `${arg.key}` an issue param
+  (template references are validated at spec write). A substituted value carrying a control
+  character (a `\r\n` that would inject a second framed line onto the device) refuses, so an
+  operator-supplied value can never smuggle a command outside the driver menu; numbers render as
+  plain decimals. The node receives a finished instruction (transport, target, the line to send),
+  never a template. A binding that cannot render (a reference the issue did not supply) is
+  recorded terminal on the row (`exec_error`) instead of redelivering forever. Exactly one
+  actuating endpoint is chosen per command (only an endpoint whose driver binds the type is a
+  candidate), so a command is delivered to one node, never once per node.
+- **At-least-once, idempotent.** The pull marks the row `dispatched_at`; a dispatched command
+  whose execution report never lands is redelivered after a silence interval, and past a delivery
+  TTL it stops being deliverable at all (settlement's `timed-out` covers a command no node picked
+  up). The node remembers each command's outcome per id, so a redelivery repeats the **report**,
+  never the actuation.
+- **The report is not the verdict.** The node reports execution on
+  `og.v1.commandstatus.<node>` (any device answer counts as actuated; a failure carries its
+  story into `exec_error`), and the row stamps `executed_at` once, confined to the node the
+  command's **dispatched endpoint** is placed on: a report from any other node is rejected and
+  logged, never a silent stamp, so a second node holding an unrelated endpoint on the same
+  component cannot close a command it never received. Whether the device **did** it stays
+  settlement's judgment of observed against intended; the settle loop now closes with real
+  observed values, since the driver's polls (#814) are what report the device's state back.
 
 A **command** is the "do" half of the telemetry model, alongside a [metric or property](/architecture/properties/) (**know**) and an [event](/architecture/events/) (**happen**): it records what a component was **told**. Its registry is `command_type`, the driver-owned twin of the sample and event catalogs.
 
@@ -104,6 +137,10 @@ The physical layout (the owner arc, the caused-event lineage, partitioning) live
     status: 'The recorded lifecycle: issued until a terminal settled, failed, or timed-out',
     settled_at: 'The terminal moment; null exactly while status is issued',
     caused_event_id: 'The recorded event this invocation caused',
+    dispatched_at: 'When a node&#39;s queue pull last delivered it (#815); null until a node picks it up',
+    executed_at: 'When the node&#39;s execution report stamped, once; the actuation fact beside the settlement verdict',
+    exec_error: 'A failed or unrenderable actuation&#39;s story; null on success',
+    dispatched_endpoint_id: 'The endpoint a dispatch chose to actuate over; the confinement anchor for the execution report',
   }}
 />
 

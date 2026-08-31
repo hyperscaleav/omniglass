@@ -17,19 +17,23 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// reachResp mirrors the reachability read body: per-interface verdict, layer
+// reachResp mirrors the reachability read body: per-endpoint verdict, layer
 // signals, and the transition history the availability strip reads.
 type reachResp struct {
-	Component  string `json:"component"`
-	Interfaces []struct {
-		Interface string `json:"interface"`
-		Type      string `json:"interface_type"`
-		Endpoint  string `json:"endpoint"`
-		Node      string `json:"node"`
-		Verdict   *struct {
+	Component string `json:"component"`
+	Endpoints []struct {
+		Endpoint string `json:"endpoint"`
+		Type     string `json:"transport"`
+		Address  string `json:"address"`
+		Node     string `json:"node"`
+		Verdict  *struct {
 			Value string    `json:"value"`
 			TS    time.Time `json:"ts"`
 		} `json:"verdict"`
+		Responsive *struct {
+			Value string    `json:"value"`
+			TS    time.Time `json:"ts"`
+		} `json:"responsive"`
 		Layers []struct {
 			Layer  string  `json:"layer"`
 			Check  string  `json:"check"`
@@ -40,11 +44,11 @@ type reachResp struct {
 			TS    time.Time `json:"ts"`
 			Value string    `json:"value"`
 		} `json:"history"`
-	} `json:"interfaces"`
+	} `json:"endpoints"`
 }
 
 // TestReachabilityAPI drives the reachability read over HTTP: an owner sees a
-// component's two interfaces composed with verdict, layers, and history from the
+// component's two endpoints composed with verdict, layers, and history from the
 // state and metric sinks; a viewer with no scope on the component gets a
 // non-disclosing 404 (permission gate + scope injection). Skipped under -short.
 func TestReachabilityAPI(t *testing.T) {
@@ -75,16 +79,16 @@ func TestReachabilityAPI(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 
-	// Two interfaces: disp-1-tcp (reachable) and disp-1-icmp (down).
+	// Two endpoints: disp-1-tcp (reachable) and disp-1-icmp (down).
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
 	defer conn.Close(ctx)
-	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, params) values
-		('disp-1-tcp', (select id from interface_type where name = 'tcp'), (select id from component where name = 'disp-1'), '{"target":"10.20.4.11","port":5000}'::jsonb),
-		('disp-1-icmp', (select id from interface_type where name = 'icmp'), (select id from component where name = 'disp-1'), '{"target":"10.20.4.11"}'::jsonb)`); err != nil {
-		t.Fatalf("insert interfaces: %v", err)
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, params) values
+		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), '{"target":"10.20.4.11","port":5000}'::jsonb),
+		('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), '{"target":"10.20.4.11"}'::jsonb)`); err != nil {
+		t.Fatalf("insert endpoints: %v", err)
 	}
 
 	t0 := time.Now().UTC().Add(-3 * time.Minute)
@@ -92,7 +96,8 @@ func TestReachabilityAPI(t *testing.T) {
 	t2 := t1.Add(time.Minute)
 	// disp-1-tcp: up verdict + tcp-open=1 + connect_time.
 	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface-reachable", Instance: "disp-1-tcp", Value: "up", Source: "tcp", TS: t2},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "disp-1-tcp", Value: "up", Source: "tcp", TS: t2},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-responsive", Instance: "disp-1-tcp", Value: "up", Source: "http", TS: t2},
 	}); err != nil {
 		t.Fatalf("insert tcp state: %v", err)
 	}
@@ -104,12 +109,12 @@ func TestReachabilityAPI(t *testing.T) {
 	}
 	// disp-1-icmp: down verdict with two transitions (up then down) + icmp-reachable=0.
 	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface-reachable", Instance: "disp-1-icmp", Value: "up", Source: "icmp", TS: t0},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "disp-1-icmp", Value: "up", Source: "icmp", TS: t0},
 	}); err != nil {
 		t.Fatalf("insert icmp up: %v", err)
 	}
 	if err := gw.InsertPropertySamples(ctx, []storage.PropertySampleWrite{
-		{OwnerKind: "component", OwnerID: "disp-1", Key: "interface-reachable", Instance: "disp-1-icmp", Value: "down", Source: "icmp", TS: t1},
+		{OwnerKind: "component", OwnerID: "disp-1", Key: "endpoint-reachable", Instance: "disp-1-icmp", Value: "down", Source: "icmp", TS: t1},
 	}); err != nil {
 		t.Fatalf("insert icmp down: %v", err)
 	}
@@ -128,20 +133,26 @@ func TestReachabilityAPI(t *testing.T) {
 	if err := json.Unmarshal(out, &r); err != nil {
 		t.Fatalf("decode reachability: %v", err)
 	}
-	if r.Component != "disp-1" || len(r.Interfaces) != 2 {
-		t.Fatalf("reachability: want disp-1 with 2 interfaces, got %+v", r)
+	if r.Component != "disp-1" || len(r.Endpoints) != 2 {
+		t.Fatalf("reachability: want disp-1 with 2 endpoints, got %+v", r)
 	}
-	// interfaces ordered by name: disp-1-icmp then disp-1-tcp.
-	icmp := r.Interfaces[0]
-	tcp := r.Interfaces[1]
-	if icmp.Interface != "disp-1-icmp" || tcp.Interface != "disp-1-tcp" {
-		t.Fatalf("interface order: got %s, %s", icmp.Interface, tcp.Interface)
+	// endpoints ordered by name: disp-1-icmp then disp-1-tcp.
+	icmp := r.Endpoints[0]
+	tcp := r.Endpoints[1]
+	if icmp.Endpoint != "disp-1-icmp" || tcp.Endpoint != "disp-1-tcp" {
+		t.Fatalf("endpoint order: got %s, %s", icmp.Endpoint, tcp.Endpoint)
 	}
 	if tcp.Verdict == nil || tcp.Verdict.Value != "up" {
 		t.Fatalf("tcp verdict: want up, got %+v", tcp.Verdict)
 	}
-	if tcp.Endpoint != "10.20.4.11:5000" {
-		t.Fatalf("tcp endpoint: want 10.20.4.11:5000, got %q", tcp.Endpoint)
+	if tcp.Responsive == nil || tcp.Responsive.Value != "up" {
+		t.Fatalf("tcp responds rung: want up, got %+v", tcp.Responsive)
+	}
+	if icmp.Responsive != nil {
+		t.Fatalf("icmp responds rung: no L7 probe ran, want absent, got %+v", icmp.Responsive)
+	}
+	if tcp.Address != "10.20.4.11:5000" {
+		t.Fatalf("tcp address: want 10.20.4.11:5000, got %q", tcp.Address)
 	}
 	if len(tcp.Layers) == 0 {
 		t.Fatalf("tcp layers: want at least the L4 layer, got none")
@@ -165,6 +176,6 @@ func TestReachabilityAPI(t *testing.T) {
 	}
 	viewerTok := setupScopedViewer(t, ctx, dsn, "viewer-other", "viewer", "component", otherID)
 	c.do(viewerTok, http.MethodGet, "/components/disp-1/reachability", nil, http.StatusNotFound)
-	// In-scope, its own component reachability is visible (empty interfaces).
+	// In-scope, its own component reachability is visible (empty endpoints).
 	c.do(viewerTok, http.MethodGet, "/components/other-1/reachability", nil, http.StatusOK)
 }

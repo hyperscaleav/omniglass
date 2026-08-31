@@ -172,6 +172,9 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0131](#adr-0131-the-device-taxonomy-is-oavc-and-the-demo-catalog-is-fictional) | 2026-08-24 | Accepted | The component_type tree mirrors the OpenAVCloud AV Device Taxonomy v1.1 (category roots, subcategory types, form-factor mic subtypes); the seed catalog goes fictional (the omniglass-lab brand universe, AV-iQ as the realism source); standards become integrator-style room chains with size-serialized variants, and the impossible shared bar yields to the divisible pair's shared DSP and amplifier rack |
 | [ADR-0132](#adr-0132-configure-is-the-one-deep-editor) | 2026-08-25 | Accepted | Every fleet workspace carries a Configure tab as the ONE deep editor; the blade stays a quick face whose rows jump into it; `?edit=1` retargets to Configure and the classic detail face retires with an explicit miss face (#800, diverging deliberately from ADR-0129's edit-in-blade target) |
 | [ADR-0133](#adr-0133-a-select-over-a-loaded-collection-binds-through-a-ref-not-a-value-prop) | 2026-08-27 | Accepted | A `<select>` whose options come from a collection the server answers for takes its value from `bindSelectValue(value, ...options)` (`web/src/lib/selectvalue.ts`) used as the element's `ref`, never from a `value=` prop: the control keeps no value it has no option for, and a value binding does not re-run when the OPTIONS are what arrived. Thirteen controls convert, the workspace Configure face's four among them. Two shapes stay on `value=` and the exemption is deliberate: a hard-coded or generated option list has no async gap, and a control whose value starts empty and only moves because the operator moved it has nothing stored to lose |
+| [ADR-0134](#adr-0134-the-entity-an-api-is-reached-through-is-an-endpoint) | 2026-08-28 | Accepted | The entity formerly named `interface` renames to `endpoint` end to end (table, routes, `endpoint:*` permission nouns, console, docs, the `endpoint-reachable` datapoint renamed in place), executing #603's naming ruling as ADR-0073's transports-become-code lands: `service` was disqualified by the existing service-principal table, `api` by the platform's own API vocabulary, and `endpoint` is the word the design already used for this thing's address, which becomes `address` so the schema never reads `endpoint.endpoint` |
+| [ADR-0135](#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it) | 2026-08-28 | Accepted | A driver's body is a versioned declarative spec (jsonb on the driver row, validated against the catalogs at every write): one transport, typed inputs with secret references, and three function families (polls, listeners, command bindings). Attach derives the endpoint and its tasks from the spec, emit lanes baked at attach; a listener's arm conversation is session plumbing, never recorded command rows |
+| [ADR-0136](#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch) | 2026-08-28 | Accepted | The command wire is a per-node pull (`og.v1.command.<node>`, request-reply like the worklist) with the binding's request rendered server-side at dispatch: at-least-once delivery (redeliver after silence, a delivery TTL past which settlement's timed-out covers abandonment), execution idempotent per command id at the node, the report (`og.v1.commandstatus.<node>`) stamping `executed_at` once under placement confinement, and the report never the verdict: settlement stays the judgment of observed against intended |
 
 ## Entries
 
@@ -6164,3 +6167,88 @@ interface create form, since that name is the platform's to mint.
   `entity-edit-face` shot flipped between two location types across captures
   ([ADR-0121](#adr-0121-the-console-ships-its-own-typefaces) landed the gate that caught it)
   (#398, #772, #782).
+
+### ADR-0134: The entity an API is reached through is an endpoint
+
+- **Date:** 2026-08-28 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/),
+  [nodes](/architecture/nodes/), [glossary](/architecture/glossary/), [API](/architecture/api/),
+  [identity and access](/architecture/identity-access/)
+- **Decision:** The entity formerly named `interface` is an **endpoint**, renamed end to end in one
+  slice (#811, the naming ruling on #603): the table (with the task arc's column and every
+  constraint code names), the routes (`/endpoints`, plus `GET /transports` serving the code
+  registry), the permission nouns (`endpoint:*`, with existing role arrays rewritten in place), the
+  console surfaces and gate words, the docs corpus, and the canonical `interface-reachable`
+  datapoint, whose registry row renames in place to `endpoint-reachable` so every uuid-keyed sample
+  keeps its history. The designed driver-spec field that used to be called `endpoint` (the probed
+  `host[:port]`) is `address` from here on, so the schema never reads `endpoint.endpoint`; the
+  reachability read already serves it as `address`. `interface` and `interface_type` join the
+  docslint denylist; the decision log and build log keep their historical spellings.
+- **Context:** The word had to move before the collection epic multiplied its vocabulary (sessions,
+  listeners, and command bindings all hang off this entity), and slice 1 was the lifetime-cheapest
+  carrier since ADR-0073's transports-become-code was already reshaping the row. The candidates:
+  keeping `interface` carried the Zabbix host-interface precedent but a growing collision with real
+  network interfaces as monitored objects; `service` read naturally (the SSH service on a host) but
+  `public.service` already names the service-principal identity, and one word naming two unrelated
+  entities in one schema is the worse collision; `api` read well in operator speech but fights the
+  platform's own API-first vocabulary (`internal/api`, `/api/v1`, the generated OpenAPI) in every
+  sentence needing both senses. `endpoint` is the word the architecture of record already reached
+  for when describing this entity's address, is observability-native (a scrape endpoint, a
+  monitoring endpoint) and network-native (the SSH endpoint on a host), and composes cleanly
+  (`endpoint:*`, `/endpoints`, `endpoint-reachable`).
+
+### ADR-0135: A driver's spec is data, one engine interprets it
+
+- **Date:** 2026-08-28 | **Status:** Accepted | **Pages:** [collection](/architecture/collection/),
+  [glossary](/architecture/glossary/)
+- **Decision:** A driver's body is a **versioned declarative spec** (`jsonb` on the driver row,
+  `version: 1`, parsed strictly so an unknown field refuses rather than projects) interpreted by
+  one generic engine, never per-driver code: the one transport it rides, typed inputs (`string`,
+  `number`, `secret` with a `secret_type`, supplied as a reference name and resolved at attach),
+  and three function families: poll functions (schedule, transport-shaped request, per-emit
+  extraction with declared transforms: cast, scale, enum map), listeners (an `arm` conversation,
+  a match rule, the same extraction), and command bindings (how a `command_type` actuates). Each
+  emit names its sample in a lane catalog (the ADR-0065 vocabulary: the name is the signal, what
+  lands is a sample). The
+  spec validates against the live catalogs at **every write** (create, update, boot seed; the seed
+  now installs secret types before drivers so a first boot validates cleanly), so an
+  uninterpretable spec refuses at authoring time with the fault named. **Attach derives, never
+  authors**: an endpoint created with a driver reference takes its transport and params from the
+  spec, and its tasks derive in the same transaction (a poll task per poll function, a standing
+  listen task per listener), each task carrying its function whole with **emit lanes baked at
+  attach**, so the node never consults a catalog at runtime. A listener's `arm` lines are session
+  **plumbing** re-sent on every recover (ruling 3 on #603), never recorded command rows: the
+  command lane records operator intent with settlement semantics, and machine chatter would flood
+  it.
+- **Context:** #813 (epic #603): the driver registry rows existed with no body, and the epic's
+  produce path needs the menu before the interpreter. Data-not-code keeps every driver inspectable
+  and diffable, keeps validation one function rather than a plugin ABI, and matches the template
+  authoring model (#489) this layer will slot under. The lane bake executes the authoring model's
+  compile step at the earliest point it exists; transforms stay declared data operations so the
+  expression engine (#524) is not a dependency of the collection path.
+
+### ADR-0136: Actuation is a per-node pull, rendered at dispatch
+
+- **Date:** 2026-08-28 | **Status:** Accepted | **Pages:** [commands](/architecture/commands/),
+  [messaging](/architecture/messaging/), [collection](/architecture/collection/)
+- **Decision:** The command wire (#815) is a **pull**: a node asks `og.v1.command.<node>`
+  (request-reply mirroring the worklist, the same reply-inbox confinement and per-node subject
+  grant) and receives the commands whose owning component has a driver-attached endpoint placed
+  on it and whose driver binds the command's type. The binding's request template renders
+  **server-side at dispatch** (`${value}` the intended value, `${arg.key}` an issue param,
+  references validated at spec write), so the node executes a finished instruction and holds no
+  template logic; an unrenderable binding records terminal `exec_error` instead of redelivering.
+  Delivery is at-least-once: the pull stamps `dispatched_at`, silence redelivers after an
+  interval, and a delivery TTL bounds the queue (a command no node picks up falls to settlement's
+  `timed-out`). Execution is idempotent per command id at the node (a redelivery repeats the
+  report, not the actuation), and the report on `og.v1.commandstatus.<node>` stamps
+  `executed_at` once, under the same placement confinement the worklist carries. The report is
+  **not** the verdict: any device answer counts as actuated, and whether the device did it stays
+  settlement's judgment of observed (the driver's polls, #814) against intended.
+- **Context:** The epic reserved the subject and demanded at-least-once delivery with idempotent
+  execution and per-node isolation. A pull over the existing request-reply grammar reuses the
+  proven worklist confinement and needs no JetStream API grants per node; a durable JetStream
+  per-node consumer remains open as the scale evolution (#430's topology). Rendering at dispatch
+  keeps secrets and template semantics server-side and makes the delivered payload inspectable;
+  the execution arc (`dispatched_at`, `executed_at`, `exec_error`) lands beside the settlement
+  arc rather than inside it because "the device was told" and "the device did" are different
+  facts, and conflating them is how a wire ack gets mistaken for an outcome.
