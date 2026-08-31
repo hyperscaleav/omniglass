@@ -17,9 +17,9 @@ describe("the label budget", () => {
     expect(labelsAffordable(602, "auto")).toBe(false);
   });
 
-  // The fleet level has the whole estate's rooms in view and a drilled card has
+  // The fleet level has the whole fleet's rooms in view and a drilled card has
   // a handful, so one ceiling produces both behaviours with no second rule.
-  it("turns names off across a whole estate and back on inside one card", () => {
+  it("turns names off across a whole fleet and back on inside one card", () => {
     expect(labelsAffordable(42, "auto")).toBe(false);
     expect(labelsAffordable(3, "auto")).toBe(true);
   });

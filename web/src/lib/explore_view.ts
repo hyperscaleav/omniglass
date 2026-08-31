@@ -71,7 +71,7 @@ export function totalOf(c: Counts): number {
 // What "needs attention" means in one place, so the filter, the counts line
 // and any fill that ramps on it can never disagree. Incomplete is deliberately
 // not attention: a commissioning gap is not a fault, and folding it in paints
-// a mid-rollout estate amber and teaches an operator to ignore the colour.
+// a mid-rollout fleet amber and teaches an operator to ignore the colour.
 export function attentionOf(c: Counts): number {
   return c.degraded + c.outage;
 }
@@ -177,7 +177,7 @@ function systemsUnder(view: FleetView, nodeId: string): FleetSystem[] {
 
 // A card for one cut node. An empty node still gets a card while nothing is
 // being filtered, because an unfinished tree should be visible rather than
-// hidden: a building created a moment ago must not disappear from the estate.
+// hidden: a building created a moment ago must not disappear from the fleet.
 // Under a filter it is dropped, since an operator triaging outages is not
 // asking about rooms that hold nothing.
 function cardFor(view: FleetView, node: FleetLocation, opts: ExploreOptions): CardModel | null {
@@ -270,7 +270,7 @@ export function unplacedFor(view: FleetView, opts: ExploreOptions): DotItem[] {
 }
 
 // roomsInView is what the label budget is spent against: the leaf locations
-// the operator is currently looking at, not the estate's total.
+// the operator is currently looking at, not the fleet's total.
 export function roomsInView(view: FleetView, nodeIds: string[]): number {
   const children = childrenIndex(view);
   const seen = new Set<string>();

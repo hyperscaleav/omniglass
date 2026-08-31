@@ -22,7 +22,7 @@ export type LabelMode = "auto" | "always" | "off";
 // names before they start running into each other and reading as one string.
 //
 // The number also produces the behaviour the design wants without a second
-// rule: at the fleet level the whole estate's rooms are in view, so names are
+// rule: at the fleet level the whole fleet's rooms are in view, so names are
 // off and the card header carries the identity, and drilling into one card
 // drops the count to a handful so the names come back on their own.
 export const LABEL_CEILING = 24;

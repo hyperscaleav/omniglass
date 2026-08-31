@@ -46,7 +46,7 @@ import { listSystems, SYSTEMS_KEY } from "../lib/systems";
 import { entityLabel } from "../lib/entities";
 import { describeError } from "../lib/format";
 
-// Explore (#839): one door into the estate, with a few renderers over one
+// Explore (#839): one door into the fleet, with a few renderers over one
 // model.
 //
 // What replaced the Miller columns and why: the columns spent a screen on four
@@ -257,7 +257,7 @@ export default function Explore() {
   const openSystem = (item: DotItem) => navigate(`/systems/${encodeURIComponent(item.id)}`);
 
   return (
-    <Page title="Explore" subtitle="The whole estate, however it is shaped.">
+    <Page title="Explore" subtitle="The whole fleet, however it is shaped.">
       <Show when={!view.isPending} fallback={<div class="skeleton h-32 w-full" />}>
         <Show
           when={!view.isError}
@@ -411,7 +411,7 @@ export default function Explore() {
 // view can never mean something the controls cannot produce.
 //
 // What is deliberately absent is any way to save a SCOPE. Every field a preset
-// carries changes how the estate is drawn or which live state is filtered; none
+// carries changes how the fleet is drawn or which live state is filtered; none
 // names a subject to include. The moment one needs sharing or its own scope it
 // has become a dashboard widget, and that is a promotion rather than a feature
 // here.
@@ -495,7 +495,7 @@ function Chip(props: { active: boolean; onPick: () => void; children: JSX.Elemen
   );
 }
 
-// The control panel. Every control here changes HOW the estate is drawn, never
+// The control panel. Every control here changes HOW the fleet is drawn, never
 // WHAT is in it: that line is what keeps this an explorer rather than a
 // dashboard with no owner and no permissions. The one filter allowed,
 // need-attention, is a predicate over live state rather than a naming of
@@ -545,7 +545,7 @@ function Controls(props: {
 }
 
 // One root's section: its cards at that root's own cut, plus anything attached
-// above the cut. A card names its own type, which is how a non-uniform estate
+// above the cut. A card names its own type, which is how a non-uniform fleet
 // reads as non-uniform instead of being flattened.
 function sectionMeta(section: SectionModel): string {
   const n = section.cards.length;

@@ -12,7 +12,7 @@ import { verdictOf } from "./health";
 // a reader can scan down it.
 //
 // Rows follow the SAME per-root cut the cards use, so the two faces agree
-// about what a unit of the estate is. An earlier sketch assumed rows were
+// about what a unit of the fleet is. An earlier sketch assumed rows were
 // "sites then floors", which is the depth assumption the whole epic exists to
 // remove.
 //
@@ -83,7 +83,7 @@ function keep(s: FleetSystem, opts: ExploreOptions): boolean {
 
 // matrixFor pivots the fleet: one row per root and, while the table is small
 // enough to read, one indented row per cut node under it. Columns are the
-// standards actually present, so an estate of one standard is one column
+// standards actually present, so a fleet of one standard is one column
 // rather than a catalogue of empties.
 export function matrixFor(
   view: FleetView,

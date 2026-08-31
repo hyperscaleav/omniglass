@@ -12,7 +12,7 @@ import type { Verdict } from "../lib/health";
 // and a two-level annex side by side.
 //
 // Hover and focus are handled by ONE delegated listener on the field, not by a
-// listener per dot: at a thousand systems in a real estate that is the
+// listener per dot: at a thousand systems in a real fleet that is the
 // difference between a few handlers and a few thousand.
 
 const VERDICT_CLASS: Record<string, string> = {

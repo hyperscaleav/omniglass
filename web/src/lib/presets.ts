@@ -9,10 +9,10 @@ import type { LabelMode } from "./view_budgets";
 // produce, and adding a control adds it to every preset for free.
 //
 // What a preset is NOT is a saved scope. Every field below changes how the
-// estate is drawn or which live state is filtered; none of them names a subject
+// fleet is drawn or which live state is filtered; none of them names a subject
 // to include or exclude. That line is what keeps this an explorer rather than a
 // dashboard with no owner, no permission and no audit row: the moment somebody
-// wants to share one, or scope one to a named part of the estate, it has become
+// wants to share one, or scope one to a named part of the fleet, it has become
 // a widget and belongs to a dashboard instead.
 
 export type RendererKey = "cards" | "bands" | "mosaic" | "matrix";
@@ -25,7 +25,7 @@ export type PresetState = {
   sort: "worst" | "name";
   attentionOnly: boolean;
   // Where the operator was standing. A node is an address, not a scope: it says
-  // where to look from, and the estate it names may not be the one a preset is
+  // where to look from, and the fleet it names may not be the one a preset is
   // later applied to.
   node: string | null;
 };
@@ -47,7 +47,7 @@ export const DEFAULT_STATE: PresetState = {
 // job rather than after the controls they move.
 export const STOCK_PRESETS: Preset[] = [
   {
-    name: "Estate overview",
+    name: "Fleet overview",
     why: "what the fleet looks like on arrival",
     stock: true,
     state: { ...DEFAULT_STATE },
@@ -59,7 +59,7 @@ export const STOCK_PRESETS: Preset[] = [
     state: { ...DEFAULT_STATE, density: "cozy", labelMode: "always", attentionOnly: true },
   },
   {
-    name: "Shape of the estate",
+    name: "Shape of the fleet",
     why: "which parts carry the weight",
     stock: true,
     state: { ...DEFAULT_STATE, renderer: "mosaic" },
@@ -114,7 +114,7 @@ export function matches(state: PresetState, preset: Preset): boolean {
   return keys.every((k) => state[k] === preset.state[k]);
 }
 
-// applyTo resolves a saved state against the estate in front of the operator.
+// applyTo resolves a saved state against the fleet in front of the operator.
 // A preset saved against one fleet and applied where its node no longer exists
 // falls back to the fleet level, because landing on a blank page is worse than
 // landing somewhere real.

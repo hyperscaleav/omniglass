@@ -14,8 +14,13 @@ Roughly 22 live pages (inventory, catalog, values, admin, plus the shell) ship a
 `ListShell` pages (with `FlatList` / `TreeList` bodies) over the typed CRUD client**, not as the
 `ViewResult` renderer described next: an inventory page is CRUD over a scoped resource. The
 **Explore** page (`/explore`, #826, which retired the #633 canvas) is the first surface that
-is neither: a drill-down tree over its own views projection (`GET /views/fleet`), with the pure
-view model in `web/src/lib/fleet.ts` and `web/src/lib/explore.ts`, and the workspaces it opens. The views model, the renderer library, and composable
+is neither: a small library of renderers (cards, bands, mosaic, matrix) over one projection
+(`GET /views/fleet`) and one pure view model, and the workspaces it opens. Its cores live in
+`web/src/lib/`: `place_cut.ts` decides which level of each root becomes a card (never a depth
+counted from the top, since `allowed_parent_types` makes depth a customer's fact),
+`view_budgets.ts` decides what a view can afford to draw, `explore_view.ts` turns the
+projection plus the controls into what every renderer consumes, and `presets.ts` saves a way
+of looking without ever saving a scope (ADR-0134). The views model, the renderer library, and composable
 dashboards remain the intended **read side** for the analytical surfaces (alarms, sample
 history, the cascade view, fleet dashboards), not built yet.
 Realized shell: the [design system](/contributing/design-system/); operating it: the

@@ -6,7 +6,7 @@ import type { MatrixCell, MatrixModel } from "../lib/matrix";
 //
 // The only view that answers "how is one standard doing everywhere", which no
 // place-grouped face can. Rows follow the same per-root cut the cards use, so
-// the two faces agree about what a unit of the estate is.
+// the two faces agree about what a unit of the fleet is.
 //
 // Past a size the cells stop being a grid of dots and become counts. That is
 // the model's call, not this component's, so the threshold is testable and the

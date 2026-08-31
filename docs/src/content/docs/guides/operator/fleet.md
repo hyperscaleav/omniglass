@@ -1,6 +1,6 @@
 ---
 title: Explore your fleet
-description: "Explore: the drill-down tree to a system, the glance beside it, and the workspaces for locations, systems, and components."
+description: "Explore: the whole fleet in one page, four ways of drawing it, and the workspaces for locations, systems, and components."
 screenshots:
   # Component names repeat across rooms (every huddle has a videobar-1), so the
   # leaf is reached the way an operator reaches it: from the location zoom into
@@ -56,7 +56,7 @@ screenshots:
       - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
       - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
       - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
-  # The auditorium (reached through its band) carries the fleet's live
+  # The auditorium (reached through its card) carries the fleet's live
   # critical alarm, so the history tab has something real to say.
   - id: fleet-history
     path: /web/locations/east
@@ -100,52 +100,92 @@ screenshots:
       - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
   - id: fleet-location
     path: /web/locations/east
-    alt: "The location workspace: the breadcrumb, the verdict header, the counts line, a band per child location, system cards with slot strips, and the allowed child types."
+    alt: "The location workspace: the breadcrumb, the verdict header, the counts line, a group per child location, system cards with slot strips, and the allowed child types."
     # The since-line ages with the capture.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
   - id: fleet
-    path: /web/explore?node=huddle
-    alt: "Explore: the columns walked down to the huddle room, the system's row standing in for its room, and the glance beside it."
+    path: /web/explore
+    alt: "Explore: a card per cut node, each naming its own type, with a dense dot field of the systems beneath it."
 ---
 
-The fleet has one door in the sidebar: **Explore**. It opens on the place tree, drawn as
-columns you walk down to a system; the same page wears a table face behind the toggle in
-its header. From a system you open its **workspace**, the monitoring page, at the
-system's own address. The old `/fleet` address lands on Explore.
+The fleet has one door in the sidebar: **Explore**. It opens on the whole fleet, drawn
+as cards you can read at a glance; the same page wears three other renderers and a table
+face behind the controls in its header. From a system you open its **workspace**, the
+monitoring page, at the system's own address. The old `/fleet` address lands on Explore.
 
 ## Explore
 
 ::screenshot{#fleet}
 
-Explore is a drill-down tree. The first column lists the locations with no parent,
-whatever their types: a campus and a stand-alone building sit side by side if that is
-how your fleet is built, since the tree is yours and the page assumes nothing about its
-depth. Click a location and the next column lists what is under it: its child locations
-first (any type: a wing, a floor, a room, a type you defined), then the systems placed
-directly in it. Each location row wears its type, the worst verdict of every system under
-it, and how many systems that is; a location with nothing under it reads **empty**, so an
-unfinished tree is visible rather than hidden.
+Explore shows every location you can read, grouped the way your own tree is shaped.
 
-**A room with one system is the system.** A location with exactly one system and no
-sub-locations collapses into that system's row, the location named underneath it ("Huddle,
-in Huddle Room"), because the system is what you came for. A room with two systems stays a
-node whose column lists both.
+**A card is a level of your tree, and the page works out which one.** It never counts
+levels from the top, because the depth of a place tree is yours rather than ours: one
+fleet's roots are buildings, another's root is a campus holding six of them, and two
+branches of the same tree can disagree. So for each root the page takes the shallowest
+container type that root has at least two of, and cards at that level. A campus of
+buildings cards at its buildings; a campus whose floors sit under a single building cards
+at its floors; a small building holding rooms directly is one card of its own. **Each card
+names its own type**, so a fleet that is not uniform reads as not uniform instead of
+being flattened into a shape it does not have.
 
-The rightmost column is the **glance**. Select a system and it shows the verdict, the path
-(names repeat across rooms; the path is what makes one unambiguous), and the entity's
-[form](/guides/operator/entities/) in read mode, with **Open workspace** to the monitoring
-page and **Edit** to change it in place. Select a location and the glance shows its
-roll-up, what sits under it, **Open location**, and, when you hold the create permissions,
-**+ Location here** and **+ System here**: the same create form, empty, with the placement
-already filled in.
+Inside a card, every system beneath it is a dot, coloured by its verdict and grouped the
+way the tree groups it: a wider gap means a level further up. A system attached above the
+cut, a campus paging system that belongs to no building, gets a strip on the section
+rather than being invented into a card it is not in. Clicking a card opens it; clicking a
+dot opens that system's workspace.
+
+**Names appear when the page can afford them.** Six hundred room names do not fit on a
+screen at any type size, so the page counts what is in front of you: under a couple of
+dozen rooms it names them, above that the card headers carry the identity and the dots
+carry the shape. Drill into one card and the names come back on their own, with no control
+touched. **Labels: always** overrides it when you want every name for a screenshot or a
+projector, and the status line always says which is in force.
+
+### Four ways of drawing the same fleet
+
+**Cards** is the default: one card per cut node, best for arriving and seeing the whole
+fleet. **Bands** draws the same thing as a full-width row per card, with the name and
+counts in a column on the left. **Mosaic** sizes each card by what it holds, so the parts
+of the fleet that carry the weight are obvious, and shades it by how much of it needs
+attention rather than by its worst single verdict, because at any real failure rate almost
+everything contains one outage and a worst-wins colour would paint the whole fleet red.
+**Matrix** pivots the fleet, place down the side and standard across the top, which is the
+only view that answers how one standard is doing everywhere at once.
+
+Switching between them is a control, not a page: the same fleet, the same grouping, the
+same marks.
+
+### Presets
+
+A **preset** is a way of looking, saved under the name of the job it serves. Five ship
+with the console: *Fleet overview* for arriving, *Morning triage* for only what is broken,
+*Shape of the fleet* for the mosaic, *Standards audit* for the pivot, and *Commissioning
+sweep* for going room by room with every name and box on. **Save this view** keeps your own
+alongside them, in this browser.
+
+A preset carries how the fleet is drawn and what live state is filtered. It never carries
+a scope: nothing in it names a part of your fleet to include or exclude. That is the line
+between this page and a dashboard, and it is deliberate.
+
+### Finding one thing
 
 **Search** (the box at the top, or `/`) matches a system or a location by name or by any
-fragment of its path, systems first and worst first; the hits replace the columns and each
-carries its path, and choosing one rebuilds the columns down to it. Esc restores the
-columns where you were. The address carries the walk: `?node=<id>` lands on that location
-or system with its columns open, so a copied link lands where you stood; `?face=table`
-lands on the table face, and `t` toggles between the two.
+fragment of its path, systems first and worst first; each hit carries its path, because
+names repeat across rooms and the path is what makes one unambiguous. Choosing a location
+opens it; choosing a system opens its workspace.
+
+The address carries where you stood: `?node=<id>` opens that location, and a name works
+too when it names exactly one thing, so `?node=huddle` lands on the huddle room.
+`?attention=1` carries the filter, so a link can hand somebody exactly what you were
+looking at. How you were looking, the renderer, the density, the sort, is remembered in
+your browser instead, so a shared link never overrides the other person's preferences.
+`?face=table` lands on the table face, and `t` toggles between the two.
+
+**Create where you stand.** Drill into a location and, when you hold the create
+permissions, the header offers **+ Location here** and **+ System here**: the same create
+[form](/guides/operator/entities/), empty, with the placement already filled in.
 
 Verdicts on this page are a glance. Monitoring lives on the workspaces and, later, the
 dashboards.
@@ -167,9 +207,9 @@ address (`?view=list`), so a pasted link lands on the same face.
 
 ## Zoom into a location
 
-Clicking a band opens the location at its own address: the zoom **is** the identity
-route's face, the only one it has: editing lives on the Configure tab (#800), and an
-old `?view=detail` link simply lands here.
+Opening a card takes you to that location at its own address: the zoom **is** the identity
+route's face, the only one it has. Editing lives on the Configure tab, and an old
+`?view=detail` link simply lands here.
 
 ::screenshot{#fleet-location}
 

@@ -27,9 +27,9 @@ const state = (over: Partial<PresetState> = {}): PresetState => ({ ...DEFAULT_ST
 describe("the shipped set", () => {
   it("is named after jobs, not after the controls it moves", () => {
     expect(STOCK_PRESETS.map((p) => p.name)).toEqual([
-      "Estate overview",
+      "Fleet overview",
       "Morning triage",
-      "Shape of the estate",
+      "Shape of the fleet",
       "Standards audit",
       "Commissioning sweep",
     ]);
@@ -67,7 +67,7 @@ describe("applying", () => {
   });
 
   it("falls back to the fleet when the saved node is gone", () => {
-    // Saved against one estate, applied to another, or applied after the
+    // Saved against one fleet, applied to another, or applied after the
     // location was deleted. Landing on a blank page is worse than landing
     // somewhere real.
     const saved: Preset = { name: "mine", why: "", state: state({ node: "vanished" }) };

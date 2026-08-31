@@ -5868,3 +5868,33 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   duplicate attention chip retire. The band canvas retires with them: the Fleet page,
   BandCanvas, and the paint core are deleted, `/fleet` redirects to Explore, and a guard
   over the source tree keeps the retired surfaces retired.
+
+### Explore becomes a renderer library over one cut (#826, slices #837 to #841)
+
+The Miller-column drill that slice 2 built was replaced before it shipped. Tested against a
+generated fleet of a thousand systems across twelve roots of four different tree shapes, it
+failed three ways: a screen spent on four levels of tree, a uniform depth assumed that
+`location_type` and `allowed_parent_types` do not guarantee, and one question answered where
+operators arrive with several.
+
+What replaced it is four renderers over one model. `place_cut.ts` chooses, per root, the
+shallowest container type that root has at least two of, so a campus of buildings and a
+two-level annex sit side by side with each card naming its own type; the rule took three
+attempts, and the two wrong ones (excluding childless types, breaking ties on a global tier)
+each passed their unit tests and were caught by a render and by the e2e walk. `view_budgets.ts`
+turns labels, area and z-order into things a view can afford rather than settings an operator
+chooses: the label ceiling is twenty-four rooms, measured against the console rather than
+picked. `explore_view.ts` is the one model every renderer consumes, so cards, bands, mosaic and
+matrix cannot disagree about which card a system lands in or what a count says.
+
+Two rules were earned by looking at output. A mosaic tile's fill is the **share** needing
+attention, not a worst-wins rollup, because the first render came out uniformly red: at any
+realistic failure rate almost every aggregate contains one outage. And the mosaic's layout is
+integer pixels with edges snapped once and widths derived from them, proved as a property test
+that every pixel of a frame is covered exactly once, because the percentage version left seams
+and overlaps that read as data.
+
+`presets.ts` saves a way of looking under the name of the job it serves. A preset is a snapshot
+of the same object the controls write to, so it can never mean something the controls cannot
+produce, and it carries no scope at all: that omission is the line between this page and a
+dashboard, and there is a test asserting it.

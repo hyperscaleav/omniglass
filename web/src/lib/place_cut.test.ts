@@ -5,7 +5,7 @@ import { uuidFor } from "./testids";
 
 // The place cut (#837): which level of a root's tree becomes a card. Never a
 // depth counted from the root, because location_type and allowed_parent_types
-// make depth a customer's fact: one estate roots at a campus holding several
+// make depth a customer's fact: one fleet roots at a campus holding several
 // buildings, the next roots at a building, and branches inside one tree
 // disagree with each other. The cut is chosen per root from the types that
 // root actually contains, and the tier order is derived from the tree rather
@@ -145,7 +145,7 @@ describe("a tie inside one root is broken by that root", () => {
 describe("cutNodesFor", () => {
   it("returns every node at the cut, empty ones included", () => {
     // An empty cut node is structure, not noise: a building created a moment
-    // ago must not vanish from the estate. Dropping it is a presentation
+    // ago must not vanish from the fleet. Dropping it is a presentation
     // policy and belongs to the view model.
     const nodes = cutNodesFor(view, uuidFor("hq"));
     expect(nodes.map((n) => n.label)).toEqual(["East Building", "West Building"]);

@@ -4,14 +4,14 @@ import { childrenIndex, locationIndex, type FleetLocation, type FleetSystem, typ
 //
 // The rule that matters is what this does NOT do. It never counts levels from
 // the root. `location_type` and `allowed_parent_types` make depth a customer's
-// fact, not a layout: one estate's roots are buildings, the next one's root is
+// fact, not a layout: one fleet's roots are buildings, the next one's root is
 // a campus holding six of them, a third runs campus, building, wing, floor,
 // room, and two branches of one tree can disagree with each other. A renderer
 // that says "level one is a site, level two is a floor" puts a card labelled
 // Campus beside a card labelled Building and loses everything past level three.
 //
 // So the cut is chosen per root, from the types that root actually contains,
-// and the card names its own type: a non-uniform estate then reads as
+// and the card names its own type: a non-uniform fleet then reads as
 // non-uniform instead of being flattened into a shape it does not have.
 //
 // The tier order is derived from the tree rather than from a list of type
@@ -161,12 +161,12 @@ function containersIn(view: FleetView, rootId: string): Map<string, TypeFact> {
 // answer for a small annex and for a building that holds rooms directly.
 //
 // Ordering is by depth WITHIN this root first, so the choice reflects this tree
-// rather than the estate's deepest one. Ties break on the COARSER grouping,
+// rather than the fleet's deepest one. Ties break on the COARSER grouping,
 // meaning fewer nodes of that type: a cut exists to group, and three floors
 // group better than the fifteen rooms inside them.
 //
 // That tie-break used to consult the global tier first, which was wrong in a
-// way only a real estate showed. Under one campus, floors and rooms both start
+// way only a real fleet showed. Under one campus, floors and rooms both start
 // at depth two, and the global tier then dragged in a fact about a DIFFERENT
 // root, where a room happens to sit one level down, so a fifteen-room campus
 // cut at room instead of at its three floors. A tie inside one root has to be
@@ -195,7 +195,7 @@ function systemsAt(view: FleetView, locationId: string): FleetSystem[] {
 // cutNodesFor returns the nodes that become cards: the shallowest nodes of the
 // cut type, ALL of them, empty ones included. Whether an empty card is worth
 // drawing is a presentation policy and lives in the view model; a building
-// created a moment ago disappearing from the estate is the confusion that
+// created a moment ago disappearing from the fleet is the confusion that
 // decision must not produce, so the structure keeps it and the filter can drop
 // it. Sorted by label so the render order is stable.
 export function cutNodesFor(view: FleetView, rootId: string): FleetLocation[] {

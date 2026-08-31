@@ -171,7 +171,7 @@ describe("the label budget", () => {
     expect(screen.getByTestId("explore-status").textContent).toContain("labels off (forced)");
   });
 
-  it("counts the rooms in front of the operator, not the estate's total", async () => {
+  it("counts the rooms in front of the operator, not the fleet's total", async () => {
     mount(`/web/explore?node=${uuidFor("west")}`);
     const status = await screen.findByTestId("explore-status");
     // west holds Level 2 (with a room), Media Lab and Storage: three leaves
@@ -217,7 +217,7 @@ describe("presets", () => {
   it("ships a set named after jobs, and applying one moves the controls", async () => {
     mount();
     const bar = await screen.findByTestId("explore-presets");
-    expect(within(bar).getByRole("button", { name: "Estate overview" })).toBeTruthy();
+    expect(within(bar).getByRole("button", { name: "Fleet overview" })).toBeTruthy();
     fireEvent.click(within(bar).getByRole("button", { name: "Standards audit" }));
     expect(await screen.findByTestId("explore-matrix")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Matrix" }).getAttribute("aria-pressed")).toBe("true");
@@ -226,10 +226,10 @@ describe("presets", () => {
   it("lights the chip that matches the controls, and only that one", async () => {
     mount();
     const bar = await screen.findByTestId("explore-presets");
-    expect(within(bar).getByRole("button", { name: "Estate overview" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(bar).getByRole("button", { name: "Fleet overview" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Mosaic" }));
-    expect(within(bar).getByRole("button", { name: "Shape of the estate" }).getAttribute("aria-pressed")).toBe("true");
-    expect(within(bar).getByRole("button", { name: "Estate overview" }).getAttribute("aria-pressed")).toBe("false");
+    expect(within(bar).getByRole("button", { name: "Shape of the fleet" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(bar).getByRole("button", { name: "Fleet overview" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("carries the filter as well as the drawing, since triage is a way of looking", async () => {

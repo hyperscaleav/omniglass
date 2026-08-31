@@ -76,7 +76,7 @@ describe("sectionsFor", () => {
     expect(s[1].cards.map((c) => c.label)).toEqual(["Bay 1", "Bay 2"]);
   });
 
-  it("names each card's own type, so a mixed estate reads as mixed", () => {
+  it("names each card's own type, so a mixed fleet reads as mixed", () => {
     const s = sectionsFor(view, all);
     expect(s[0].cards.map((c) => c.type)).toEqual(["building", "building"]);
     expect(s[1].cards.map((c) => c.type)).toEqual(["room", "room"]);
@@ -189,7 +189,7 @@ describe("counts", () => {
 });
 
 describe("roomsInView", () => {
-  it("counts the leaf locations in front of the operator, not the estate's total", () => {
+  it("counts the leaf locations in front of the operator, not the fleet's total", () => {
     expect(roomsInView(view, [uuidFor("hq"), uuidFor("depot")])).toBe(5);
     expect(roomsInView(view, [uuidFor("west")])).toBe(2);
   });

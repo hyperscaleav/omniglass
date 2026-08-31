@@ -6,7 +6,7 @@ import { uuidFor } from "./testids";
 
 // The matrix's pure core (#840): place against standard. Rows follow the same
 // per-root cut the cards use, so the two faces cannot disagree about what a
-// unit of the estate is.
+// unit of the fleet is.
 
 const loc = (handle: string, label: string, type: string, parent: string) => ({
   id: uuidFor(handle),
