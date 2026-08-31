@@ -38,7 +38,7 @@ function worstRatio(row: number[], side: number): number {
 
 // squarify lays values out in a rectangle, in float space. Values are areas:
 // the caller scales them so their sum is w * h.
-export function squarify<T>(items: Array<Weighted<T>>, x: number, y: number, w: number, h: number): Array<Placed<T>> {
+function squarify<T>(items: Array<Weighted<T>>, x: number, y: number, w: number, h: number): Array<Placed<T>> {
   const out: Array<Placed<T>> = [];
   const queue = [...items];
   let guard = queue.length * 4 + 16;

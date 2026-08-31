@@ -1,6 +1,6 @@
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { fillFor, layoutPx, type Fill } from "../lib/mosaic";
-import { foldToBudget } from "../lib/view_budgets";
+import { foldToBudget, frameLayout } from "../lib/view_budgets";
 import { attentionOf, countsLine, totalOf, type CardModel, type SectionModel } from "../lib/explore_view";
 
 // The mosaic (#840): area is what a card holds, colour is how much of it needs
@@ -19,8 +19,6 @@ import { attentionOf, countsLine, totalOf, type CardModel, type SectionModel } f
 //   The frame is measured, not assumed. Pixel layout needs a real width, so a
 //   ResizeObserver redraws when it changes.
 
-const HEADER_H = 18;
-const FRAME_PAD = 3;
 const HEIGHT = 420;
 
 function tint(fill: Fill): string {
@@ -86,11 +84,13 @@ function SectionFrame(props: {
   onDrill: (id: string) => void;
   onHover: (h: { label: string; verdict: string } | null) => void;
 }) {
-  // The header is reserved space, dropped only when the frame is too small to
-  // carry it: a title is given up before the contents are.
-  const headerH = () => (props.h >= 46 && props.w >= 96 ? HEADER_H : 0);
-  const innerW = () => Math.max(1, props.w - FRAME_PAD * 2);
-  const innerH = () => Math.max(1, props.h - headerH() - FRAME_PAD);
+  // The z-order budget decides the header, not this component: a title is
+  // reserved space and is given up before the contents are, and that rule
+  // belongs in one place rather than once per renderer.
+  const box = () => frameLayout(props.w, props.h);
+  const headerH = () => box().headerH;
+  const innerW = () => Math.max(1, box().w);
+  const innerH = () => Math.max(1, box().h);
 
   // The area budget, before the layout rather than after it.
   const tiles = () => {
@@ -133,7 +133,7 @@ function SectionFrame(props: {
       <Show when={headerH() > 0}>
         <div
           class="truncate px-1.5 font-semibold uppercase tracking-wider text-base-content/70"
-          style={{ "font-size": "10px", "line-height": `${HEADER_H}px`, height: `${HEADER_H}px` }}
+          style={{ "font-size": "10px", "line-height": `${headerH()}px`, height: `${headerH()}px` }}
           title={props.section.label}
         >
           {props.section.label}
@@ -142,8 +142,8 @@ function SectionFrame(props: {
       <div
         class="absolute"
         style={{
-          left: `${FRAME_PAD}px`,
-          top: `${headerH() > 0 ? headerH() : FRAME_PAD}px`,
+          left: `${box().x}px`,
+          top: `${box().y}px`,
           width: `${innerW()}px`,
           height: `${innerH()}px`,
         }}

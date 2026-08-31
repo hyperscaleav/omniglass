@@ -25,7 +25,7 @@ export type LabelMode = "auto" | "always" | "off";
 // rule: at the fleet level the whole fleet's rooms are in view, so names are
 // off and the card header carries the identity, and drilling into one card
 // drops the count to a handful so the names come back on their own.
-export const LABEL_CEILING = 24;
+const LABEL_CEILING = 24;
 
 // labelsAffordable: the label budget. Auto is the arithmetic, always and off
 // are the operator overriding it in either direction.
@@ -53,8 +53,8 @@ export function roomBoxesAffordable(
 // The smallest tile worth drawing, in square pixels, and the shortest side it
 // may have. Below either, a tile is not a thing an operator can point at; it
 // is texture that reads as data.
-export const MIN_TILE_AREA = 240;
-export const MAX_TILES = 48;
+const MIN_TILE_AREA = 240;
+const MAX_TILES = 48;
 
 export type FoldResult<T> = { drawn: T[]; folded: T[] };
 

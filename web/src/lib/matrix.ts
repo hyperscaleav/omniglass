@@ -1,7 +1,7 @@
 import { type FleetLocation, type FleetSystem, type FleetView } from "./fleet";
 import { entityLabel } from "./entities";
-import { cutNodesFor, cutTypeFor } from "./place_cut";
-import { countsOf, emptyCounts, type Counts, type ExploreOptions } from "./explore_view";
+import { cutNodesFor } from "./place_cut";
+import { countsOf, type Counts, type ExploreOptions } from "./explore_view";
 import { verdictOf } from "./health";
 
 // The matrix's pure core (#840): place against standard.
@@ -36,7 +36,7 @@ export type MatrixModel = {
   dense: boolean;
 };
 
-export const DENSE_ABOVE = 120;
+const DENSE_ABOVE = 120;
 
 function systemsUnder(view: FleetView, nodeId: string, children: Map<string, FleetLocation[]>): FleetSystem[] {
   const out: FleetSystem[] = [];
@@ -128,11 +128,3 @@ export function matrixFor(
 
   return { columns, rows, dense };
 }
-
-// The cut type each root uses, for the row group's caption. Exposed so the
-// renderer can say "3 buildings" rather than inventing a word for the level.
-export function cutLabelFor(view: FleetView, rootId: string): string {
-  return cutTypeFor(view, rootId);
-}
-
-export const emptyCell = (): MatrixCell => ({ count: 0, counts: emptyCounts() });
