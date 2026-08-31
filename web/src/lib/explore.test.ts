@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { columnsFor, pathForNode, pathLabel, rowsFor, searchTree, subtreeVerdict } from "./explore";
+import { pathForNode, pathLabel, searchTree, subtreeVerdict } from "./explore";
 import { type FleetView } from "./fleet";
 import { uuidFor } from "./testids";
 
-// The explorer's pure core (#826 slice 2): a column is nothing but "this
-// node's children" at any depth, locations of any type first, systems after;
-// a location with one system and no sub-locations collapses into that
-// system's row; a location's verdict rolls up from every system under it;
-// search matches by name or path fragment, systems first.
+// What survives of the original explore core (#826). The Miller-column
+// builders retired with the columns themselves; what a card renderer still
+// needs from here is the roll-up, the path an address resolves through, and
+// search, because a name repeats across rooms and only the path disambiguates.
 
 const loc = (handle: string, name: string, label: string, type: string, parent: string, verdict: string | null) => ({
   id: uuidFor(handle), name, label, location_type: type, location_type_id: uuidFor(`t-${type}`), parent: parent ? uuidFor(parent) : "", verdict,
@@ -37,57 +36,11 @@ const view: FleetView = {
   ],
 } as unknown as FleetView;
 
-describe("rowsFor", () => {
-  it("lists the parentless locations, of any type, as the first column", () => {
-    const rows = rowsFor(view, null);
-    expect(rows.map((r) => r.label)).toEqual(["Headquarters", "Service Depot"]);
-    expect(rows.map((r) => r.kind)).toEqual(["location", "location"]);
-  });
-
-  it("lists a node's children: locations first, then the systems placed directly in it", () => {
-    const rows = rowsFor(view, uuidFor("west"));
-    expect(rows.map((r) => r.label)).toEqual(["Level 2", "Media Lab", "Storage"]);
-  });
-
-  it("collapses a location with one system and no sub-locations into that system's row", () => {
-    const rows = rowsFor(view, uuidFor("l2"));
-    expect(rows).toHaveLength(1);
-    expect(rows[0].kind).toBe("system");
-    expect(rows[0].label).toBe("Huddle");
-    expect(rows[0].kind === "system" && rows[0].inLocation?.label).toBe("Huddle Room");
-  });
-
-  it("keeps a room with two systems as a node, and lists both systems in its column", () => {
-    const west = rowsFor(view, uuidFor("west")).find((r) => r.label === "Media Lab")!;
-    expect(west.kind).toBe("location");
-    expect(rowsFor(view, uuidFor("media-lab")).map((r) => r.label)).toEqual(["Classroom", "Classroom 2"]);
-  });
-
-  it("marks a location with nothing under it as empty, still a row", () => {
-    const storage = rowsFor(view, uuidFor("west")).find((r) => r.label === "Storage")!;
-    expect(storage.kind === "location" && storage.systems).toBe(0);
-    expect(storage.verdict).toBeNull();
-  });
-});
-
 describe("subtreeVerdict", () => {
   it("rolls up the worst system verdict under a location, at any depth", () => {
     expect(subtreeVerdict(view, uuidFor("hq"))).toBe("degraded");
     expect(subtreeVerdict(view, uuidFor("l2"))).toBe("healthy");
     expect(subtreeVerdict(view, uuidFor("storage"))).toBeNull();
-  });
-});
-
-describe("columnsFor", () => {
-  it("builds one column per path step, headed by the node whose children it lists", () => {
-    const cols = columnsFor(view, [uuidFor("hq"), uuidFor("west")]);
-    expect(cols.map((c) => c.header)).toEqual(["Locations", "Headquarters", "West Building"]);
-    expect(cols[2].rows.map((r) => r.label)).toEqual(["Level 2", "Media Lab", "Storage"]);
-  });
-
-  it("stops at a displaced or empty node: nothing deeper to list", () => {
-    const cols = columnsFor(view, [uuidFor("hq"), uuidFor("west"), uuidFor("storage")]);
-    expect(cols.map((c) => c.header)).toEqual(["Locations", "Headquarters", "West Building"]);
   });
 });
 

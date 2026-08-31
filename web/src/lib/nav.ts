@@ -50,7 +50,7 @@ export type NavItem = {
 
 export const navItems: NavItem[] = [
   { label: "Home", path: "/", icon: Icons.Home, live: true, hint: "Your environment at a glance, and what needs attention right now." },
-  // The fleet zoom (#633): the whole fleet on one canvas, systems as dot
+  // The fleet zoom (#633, retired): the whole fleet on one canvas, systems as dot
   // clusters under their root locations. Gated like the place tree it draws;
   // the projection scopes each tier on its own read underneath.
   // Explore (#826): the drill-down tree to a system, the sidebar's one door
@@ -58,7 +58,7 @@ export const navItems: NavItem[] = [
   // entry and the Explore stub once reserved for a data explorer, which takes a
   // later name. Gated like the place tree it draws; the projection scopes each
   // tier on its own read underneath.
-  { label: "Explore", path: "/explore", icon: Icons.Compass, live: true, anyResource: ["location", "system", "component"], hint: "Find a system by walking the place tree, or scan them all at table density." },
+  { label: "Explore", path: "/explore", icon: Icons.Compass, live: true, anyResource: ["location", "system", "component"], hint: "The whole fleet at a glance, four ways of drawing it, or all of it at table density." },
   { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
   { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering sample." },
   // The fleet has ONE door (#798, the reconciliation ruled on the #795 review):

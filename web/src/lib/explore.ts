@@ -14,27 +14,6 @@ export type Verdict = string;
 const RANK: Record<string, number> = { outage: 0, degraded: 1, incomplete: 2, healthy: 3 };
 const rank = (v: string | null | undefined) => (v && v in RANK ? RANK[v] : 9);
 
-export type LocationRow = {
-  kind: "location";
-  id: string;
-  label: string;
-  type: string;
-  verdict: Verdict | null;
-  // Systems anywhere under it, and direct child locations.
-  systems: number;
-  children: number;
-};
-export type SystemRow = {
-  kind: "system";
-  id: string;
-  label: string;
-  verdict: Verdict | null;
-  locationId: string;
-  // Set when the row stands in for its location (the displacement rule).
-  inLocation?: { id: string; label: string };
-};
-export type ExploreRow = LocationRow | SystemRow;
-export type ExploreColumn = { header: string; parentId: string | null; rows: ExploreRow[] };
 export type ExploreHit = { kind: "system" | "location"; id: string; label: string; path: string; verdict: Verdict | null };
 
 const byLabel = <T extends { label?: string; name: string }>(a: T, b: T) => entityLabel(a).localeCompare(entityLabel(b));
@@ -71,49 +50,6 @@ function displaces(view: FleetView, loc: FleetLocation): FleetSystem | null {
   if (kids.length > 0) return null;
   const here = systemsIn(view, loc.id);
   return here.length === 1 ? here[0] : null;
-}
-
-function locationRow(view: FleetView, loc: FleetLocation): ExploreRow {
-  const stand = displaces(view, loc);
-  if (stand) {
-    return { kind: "system", id: stand.id, label: entityLabel(stand), verdict: stand.verdict ?? null, locationId: loc.id, inLocation: { id: loc.id, label: entityLabel(loc) } };
-  }
-  return {
-    kind: "location",
-    id: loc.id,
-    label: entityLabel(loc),
-    type: loc.location_type ?? "",
-    verdict: subtreeVerdict(view, loc.id),
-    systems: systemsUnder(view, loc.id).length,
-    children: (childrenIndex(view).get(loc.id) ?? []).length,
-  };
-}
-
-// One column's rows: the children of parentId (null = the parentless
-// locations), locations first, then the systems placed directly there.
-export function rowsFor(view: FleetView, parentId: string | null): ExploreRow[] {
-  const locs = (view.locations ?? []).filter((l) => (parentId === null ? !l.parent : l.parent === parentId)).sort(byLabel);
-  const rows: ExploreRow[] = locs.map((l) => locationRow(view, l));
-  if (parentId !== null) {
-    for (const s of systemsIn(view, parentId)) rows.push({ kind: "system", id: s.id, label: entityLabel(s), verdict: s.verdict ?? null, locationId: parentId });
-  }
-  return rows;
-}
-
-// The columns for a path of location ids, root-first. A displaced or empty
-// node ends the walk: it has nothing deeper to list.
-export function columnsFor(view: FleetView, path: string[]): ExploreColumn[] {
-  const index = locationIndex(view);
-  const children = childrenIndex(view);
-  const cols: ExploreColumn[] = [{ header: "Locations", parentId: null, rows: rowsFor(view, null) }];
-  for (const id of path) {
-    const node = index.get(id);
-    if (!node) break;
-    const kids = (children.get(id) ?? []).length;
-    if (kids === 0 && systemsIn(view, id).length <= 1) break;
-    cols.push({ header: entityLabel(node), parentId: id, rows: rowsFor(view, id) });
-  }
-  return cols;
 }
 
 export function pathLabel(view: FleetView, locationId: string): string {

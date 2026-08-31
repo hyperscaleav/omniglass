@@ -11,11 +11,17 @@ const RETIRED = [
   ["fleet-summary", "the KPI summary rail; the shared header's one counts line replaced it"],
   ["fleet-tiles", "the summary board; nothing counts anything but the counts line"],
   ["badge-attention", "the rail's attention badge; the counts line carries need-attention"],
-  ["BandCanvas", "the band canvas; Explore's columns replaced it"],
+  ["BandCanvas", "the band canvas; the Explore renderers replaced it"],
   ["fleet_canvas", "the canvas paint core; retired with the canvas"],
   ["quick-name", "the blade's jump-anchor rows; the blade renders the EntityForm"],
   ["quick-classification", "the blade's jump-anchor rows; the blade renders the EntityForm"],
   ["quick-placement", "the blade's jump-anchor rows; the blade renders the EntityForm"],
+  // Retired by the same epic that first built them (#839): the Miller-column
+  // drill was replaced before it shipped, so these never reached a release and
+  // there is no version of the console where they are the right answer.
+  ["explore-column", "the Miller-column strip; a card is a level the cut works out"],
+  ["explore-glance", "the columns' rightmost pane; a dot opens the system's workspace"],
+  ["columnsFor", "the column builder; sectionsFor and insideOf replaced it"],
 ] as const;
 
 function walk(dir: string, out: string[] = []): string[] {
