@@ -13,12 +13,15 @@ import { TAGS_KEY } from "../lib/tags";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
-// The Explore page (#826 slice 2): a depth-agnostic Miller-column drill down
-// the location tree to a system, with the glance as its rightmost column.
-// The tree's shape is the fleet view's parent pointers, nothing assumed.
+// The Explore page (#839): one card per CUT NODE, where the cut is chosen per
+// root from the types that root contains, so a campus of buildings and a
+// two-level annex sit side by side with each card naming its own type. Labels
+// and room boxes are budgets rather than preferences. The fixture is
+// deliberately uneven: hq cuts at building, depot has no container level and is
+// its own card, and one system hangs above the cut on the campus itself.
 
 const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
-const viewer: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["location:read", "system:read", "component:read", "tag:read"], grants: [] };
+const partial: Me = { principal: { id: "u-view", kind: "human" }, human: { username: "viewer" }, permissions: ["location:read", "system:read", "tag:read"], grants: [] };
 
 const loc = (handle: string, name: string, label: string, type: string, parent: string, verdict: string | null) => ({
   id: uuidFor(handle), name, label, location_type: type, location_type_id: uuidFor(`t-${type}`), parent: parent ? uuidFor(parent) : "", verdict,
@@ -34,6 +37,9 @@ const view: FleetView = {
     loc("huddle-room", "huddle-room", "Huddle Room", "room", "l2", "healthy"),
     loc("media-lab", "media-lab", "Media Lab", "room", "west", "degraded"),
     loc("storage", "storage", "Storage", "room", "west", null),
+    loc("east", "east", "East Building", "building", "hq", "healthy"),
+    loc("l1", "level-1", "Level 1", "floor", "east", "healthy"),
+    loc("lab", "lab", "Lab", "room", "l1", "healthy"),
     loc("depot", "depot", "Service Depot", "building", "", "healthy"),
     loc("bay-1", "bay-1", "Bay 1", "room", "depot", "healthy"),
   ],
@@ -41,12 +47,18 @@ const view: FleetView = {
     sys("s-huddle", "huddle", "Huddle", "huddle-room", "healthy"),
     sys("s-class", "classroom", "Classroom", "media-lab", "degraded"),
     sys("s-class2", "classroom-2", "Classroom 2", "media-lab", "healthy"),
+    sys("s-lab", "lab-av", "Lab AV", "lab", "healthy"),
     sys("s-bay", "bay-av", "Bay AV", "bay-1", "healthy"),
+    // attached to the campus itself: it belongs to no building and no room
+    sys("s-paging", "paging", "Campus Paging", "hq", "healthy"),
+    // readable, but its location is not in this payload
+    { id: uuidFor("s-hidden"), name: "hidden", label: "Hidden AV", location: uuidFor("elsewhere"), verdict: "healthy", dots: [] },
   ],
 } as unknown as FleetView;
 
-function mount(path = "/web/explore", me: Me = owner, storedFace?: "table") {
+function mount(path = "/web/explore", me: Me = owner, storedFace?: "table", keepPrefs = false) {
   localStorage.removeItem("explore-face");
+  if (!keepPrefs) localStorage.removeItem("explore-prefs");
   if (storedFace) localStorage.setItem("explore-face", storedFace);
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...FLEET_VIEW_KEY], view);
@@ -75,141 +87,141 @@ function mount(path = "/web/explore", me: Me = owner, storedFace?: "table") {
 
 afterEach(cleanup);
 
-const column = (header: string) => screen.getByTestId(`explore-column-${header}`);
+const section = (id: string) => screen.getByTestId(`explore-section-${uuidFor(id)}`);
 
-describe("the columns", () => {
-  it("opens on the parentless locations, whatever their types, under a Locations header", async () => {
+describe("the cut decides the cards", () => {
+  it("cards a campus at its buildings, each card naming its own type", async () => {
     mount();
-    const roots = await screen.findByTestId("explore-column-Locations");
-    expect(within(roots).getByText("Headquarters")).toBeTruthy();
-    expect(within(roots).getByText("Service Depot")).toBeTruthy();
-    expect(within(roots).getByText("building")).toBeTruthy();
-    expect(screen.queryByText("West Building")).toBeNull();
+    const hq = await screen.findByTestId(`explore-section-${uuidFor("hq")}`);
+    expect(within(hq).getByRole("button", { name: "Open West Building" })).toBeTruthy();
+    expect(within(hq).getAllByText(/building ·/).length).toBe(2);
   });
 
-  it("drills one column per click, each headed by the node whose children it lists", async () => {
+  it("makes a root with no container level its own single card", async () => {
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: /Headquarters/ }));
-    fireEvent.click(within(column("Headquarters")).getByRole("button", { name: /West Building/ }));
-    const west = column("West Building");
-    expect(within(west).getByText("Level 2")).toBeTruthy();
-    expect(within(west).getByText("Media Lab")).toBeTruthy();
-    expect(within(west).getByText("Storage")).toBeTruthy();
-    expect(within(west).getByText("empty")).toBeTruthy();
+    await screen.findByTestId(`explore-section-${uuidFor("hq")}`);
+    const depot = section("depot");
+    expect(within(depot).getByRole("button", { name: "Open Service Depot" })).toBeTruthy();
   });
 
-  it("collapses a lone system into its location's row, and selecting it opens the system glance", async () => {
+  it("puts a system attached above the cut in its own strip, not in a card", async () => {
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: /Headquarters/ }));
-    fireEvent.click(within(column("Headquarters")).getByRole("button", { name: /West Building/ }));
-    fireEvent.click(within(column("West Building")).getByRole("button", { name: /Level 2/ }));
-    const l2 = column("Level 2");
-    const row = within(l2).getByRole("button", { name: /Huddle/ });
-    expect(within(row).getByText(/in Huddle Room/)).toBeTruthy();
-    fireEvent.click(row);
-    const glance = await screen.findByTestId("explore-glance");
-    expect(within(glance).getByTestId("glance-title").textContent).toBe("Huddle");
-    expect(within(glance).getByText("Headquarters / West Building / Level 2 / Huddle Room")).toBeTruthy();
-    expect(within(glance).getByRole("button", { name: /open workspace/i })).toBeTruthy();
-    expect(await within(glance).findByTestId("entity-form")).toBeTruthy();
-    expect(window.location.search).toContain(`node=${uuidFor("s-huddle")}`);
+    await screen.findByTestId(`explore-section-${uuidFor("hq")}`);
+    const strip = within(section("hq")).getByTestId("explore-above-cut");
+    expect(strip.textContent).toContain("1 system attached above this level");
+    expect(within(strip).getByLabelText(/Campus Paging/)).toBeTruthy();
   });
 
-  it("pins the glance beside the column strip, outside the strip's own scroller", async () => {
-    // Four columns deep, the strip overflows and scrolls; a glance rendered
-    // inside the scroller rode out of view with it (the first capture of the
-    // fleet shot clipped the path and the roles). The glance is a sibling.
+  it("surfaces a readable system whose location the caller cannot read", async () => {
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: /Headquarters/ }));
-    fireEvent.click(within(column("Headquarters")).getByRole("button", { name: /West Building/ }));
-    fireEvent.click(within(column("West Building")).getByRole("button", { name: /Level 2/ }));
-    fireEvent.click(within(column("Level 2")).getByRole("button", { name: /Huddle/ }));
-    const glance = await screen.findByTestId("explore-glance");
-    const strip = screen.getByTestId("explore-columns");
-    expect(strip.contains(column("Level 2"))).toBe(true);
-    expect(strip.contains(glance)).toBe(false);
-    expect(glance.parentElement).toBe(strip.parentElement);
-  });
-
-  it("keeps a room with two systems as a node whose column lists both", async () => {
-    mount();
-    fireEvent.click(await screen.findByRole("button", { name: /Headquarters/ }));
-    fireEvent.click(within(column("Headquarters")).getByRole("button", { name: /West Building/ }));
-    fireEvent.click(within(column("West Building")).getByRole("button", { name: /Media Lab/ }));
-    const lab = column("Media Lab");
-    expect(within(lab).getByRole("button", { name: /Classroom 2/ })).toBeTruthy();
-    expect(within(lab).getAllByRole("button").length).toBe(2);
+    const unplaced = await screen.findByTestId("explore-unplaced");
+    expect(within(unplaced).getByLabelText(/Hidden AV/)).toBeTruthy();
   });
 });
 
-describe("the location glance", () => {
-  it("selecting a location shows its own glance with the roll-up, Open location, and the two creates under it", async () => {
+describe("the drill", () => {
+  it("opens a card into its children and back out again", async () => {
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: /Headquarters/ }));
-    fireEvent.click(within(column("Headquarters")).getByRole("button", { name: /West Building/ }));
-    const glance = await screen.findByTestId("explore-glance");
-    expect(within(glance).getByTestId("glance-title").textContent).toBe("West Building");
-    expect(within(glance).getByText(/3 systems/)).toBeTruthy();
-    expect(within(glance).getByRole("button", { name: /open location/i })).toBeTruthy();
-    fireEvent.click(within(glance).getByRole("button", { name: /system here/i }));
-    await screen.findByTestId("system-create");
-    expect(window.location.pathname).toBe("/web/systems/create");
-    expect(window.location.search).toContain(`under=${uuidFor("west")}`);
+    const hq = await screen.findByTestId(`explore-section-${uuidFor("hq")}`);
+    fireEvent.click(within(hq).getByRole("button", { name: "Open West Building" }));
+    expect(await screen.findByRole("button", { name: "Open Level 2" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Open Media Lab" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "All locations" }));
+    expect(await screen.findByRole("button", { name: "Open West Building" })).toBeTruthy();
   });
 
-  it("hides the creates and Edit from a caller without the verbs", async () => {
-    mount("/web/explore", viewer);
-    fireEvent.click(await screen.findByRole("button", { name: /Headquarters/ }));
-    const glance = await screen.findByTestId("explore-glance");
-    expect(within(glance).queryByRole("button", { name: /system here/i })).toBeNull();
-    expect(within(glance).queryByRole("button", { name: /location here/i })).toBeNull();
-    expect(within(glance).queryByRole("button", { name: /^edit$/i })).toBeNull();
-    expect(within(glance).getByRole("button", { name: /open location/i })).toBeTruthy();
+  it("carries the drilled node in the URL so a link lands on it", async () => {
+    mount(`/web/explore?node=${uuidFor("west")}`);
+    expect(await screen.findByRole("button", { name: "Open Media Lab" })).toBeTruthy();
+  });
+
+  it("opens a system when its dot is clicked", async () => {
+    mount();
+    const hq = await screen.findByTestId(`explore-section-${uuidFor("hq")}`);
+    fireEvent.click(within(hq).getByLabelText(/Campus Paging/));
+    expect(await screen.findByTestId("system-page")).toBeTruthy();
   });
 });
 
-describe("search and addresses", () => {
-  it("typing replaces the columns with hits carrying their paths, systems first; choosing one rebuilds the columns", async () => {
+describe("the label budget", () => {
+  it("affords labels at this size, and says so in the status line", async () => {
     mount();
-    await screen.findByTestId("explore-column-Locations");
-    fireEvent.input(screen.getByRole("searchbox"), { target: { value: "class" } });
-    const hits = await screen.findByTestId("explore-hits");
-    const rows = within(hits).getAllByRole("button");
-    expect(rows[0].textContent).toContain("Classroom");
-    expect(rows[0].textContent).toContain("Headquarters / West Building / Media Lab");
-    expect(screen.queryByTestId("explore-column-Locations")).toBeNull();
-    fireEvent.click(rows[0]);
-    expect(await screen.findByTestId("explore-column-Media Lab")).toBeTruthy();
-    expect(within(await screen.findByTestId("explore-glance")).getByTestId("glance-title").textContent).toBe("Classroom");
+    const status = await screen.findByTestId("explore-status");
+    expect(status.textContent).toContain("rooms in view");
+    expect(status.textContent).toContain("labels on (auto)");
   });
 
-  it("lands a ?node= deep link on the node with its columns rebuilt", async () => {
-    mount(`/web/explore?node=${uuidFor("s-bay")}`);
-    expect(await screen.findByTestId("explore-column-Service Depot")).toBeTruthy();
-    const glance = await screen.findByTestId("explore-glance");
-    expect(within(glance).getByTestId("glance-title").textContent).toBe("Bay AV");
+  it("lets the operator force them off, which the status line then reports", async () => {
+    mount();
+    await screen.findByTestId("explore-status");
+    fireEvent.click(within(screen.getByTestId("explore-controls")).getByRole("button", { name: "off" }));
+    expect(screen.getByTestId("explore-status").textContent).toContain("labels off (forced)");
   });
 
-  it("?face=table wears today's list face behind the toggle, and the toggle returns to the tree", async () => {
+  it("counts the rooms in front of the operator, not the estate's total", async () => {
+    mount(`/web/explore?node=${uuidFor("west")}`);
+    const status = await screen.findByTestId("explore-status");
+    // west holds Level 2 (with a room), Media Lab and Storage: three leaves
+    expect(status.textContent).toContain("3 rooms in view");
+  });
+});
+
+describe("the controls change how it is drawn, never what is in it", () => {
+  it("switches renderer without changing which systems are shown", async () => {
+    mount();
+    const before = (await screen.findByTestId(`explore-section-${uuidFor("hq")}`)).querySelectorAll("[data-dot]").length;
+    fireEvent.click(within(screen.getByTestId("explore-controls")).getByRole("button", { name: "Bands" }));
+    const after = screen.getByTestId(`explore-section-${uuidFor("hq")}`).querySelectorAll("[data-dot]").length;
+    expect(after).toBe(before);
+  });
+
+  it("remembers the renderer per browser but never the drilled node", async () => {
+    mount();
+    await screen.findByTestId("explore-controls");
+    fireEvent.click(screen.getByRole("button", { name: "Bands" }));
+    cleanup();
+    mount("/web/explore", owner, undefined, true);
+    expect((await screen.findByRole("button", { name: "Bands" })).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "All locations" })).toBeDisabled();
+  });
+
+  it("filters to what needs attention, and drops a section with nothing left", async () => {
+    mount();
+    await screen.findByTestId("explore-controls");
+    fireEvent.click(screen.getByLabelText("Only what needs attention"));
+    expect(await screen.findByTestId(`explore-section-${uuidFor("hq")}`)).toBeTruthy();
+    expect(screen.queryByTestId(`explore-section-${uuidFor("depot")}`)).toBeNull();
+  });
+
+  it("carries the filter in the URL so a link reproduces it", async () => {
+    mount("/web/explore?attention=1");
+    await screen.findByTestId("explore-controls");
+    expect((screen.getByLabelText("Only what needs attention") as HTMLInputElement).checked).toBe(true);
+  });
+});
+
+describe("the faces", () => {
+  it("wears today's list face behind ?face=table, and returns to the fleet", async () => {
     mount("/web/explore?face=table");
-    expect(await screen.findByTestId("fleet-list-face")).toBeTruthy();
-    expect(screen.queryByTestId("explore-column-Locations")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /^tree$/i }));
-    expect(await screen.findByTestId("explore-column-Locations")).toBeTruthy();
-    expect(window.location.search).not.toContain("face=table");
-  });
-});
-
-describe("the face memory and the address", () => {
-  it("a stored table face never overrides a ?node= deep link: the address wins", async () => {
-    mount(`/web/explore?node=${uuidFor("s-bay")}`, owner, "table");
-    expect(await screen.findByTestId("explore-column-Service Depot")).toBeTruthy();
-    expect(screen.queryByTestId("fleet-list-face")).toBeNull();
-    expect(window.location.search).not.toContain("face=table");
+    expect(await screen.findByRole("tab", { name: "Locations" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "fleet" }));
+    expect(await screen.findByTestId("explore-controls")).toBeTruthy();
   });
 
-  it("a stored table face still applies to a bare /explore", async () => {
+  it("never lets a stored table face override a ?node= address", async () => {
+    mount(`/web/explore?node=${uuidFor("west")}`, owner, "table");
+    expect(await screen.findByRole("button", { name: "Open Media Lab" })).toBeTruthy();
+  });
+
+  it("still applies a stored table face to a bare /explore", async () => {
     mount("/web/explore", owner, "table");
-    expect(await screen.findByTestId("fleet-list-face")).toBeTruthy();
+    expect(await screen.findByRole("tab", { name: "Locations" })).toBeTruthy();
+  });
+
+  it("offers a kind tab only to a caller who may read that kind", async () => {
+    mount("/web/explore?face=table", partial, "table");
+    expect(await screen.findByRole("tab", { name: "Locations" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Systems" })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Components" })).toBeNull();
   });
 });

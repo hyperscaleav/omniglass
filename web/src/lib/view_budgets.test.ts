@@ -8,13 +8,20 @@ import { foldToBudget, frameLayout, labelsAffordable, roomBoxesAffordable, type 
 
 describe("the label budget", () => {
   it("affords labels while the rooms in view stay under the ceiling", () => {
-    expect(labelsAffordable(23, "auto")).toBe(true);
-    expect(labelsAffordable(59, "auto")).toBe(true);
+    expect(labelsAffordable(3, "auto")).toBe(true);
+    expect(labelsAffordable(24, "auto")).toBe(true);
   });
 
   it("stops affording them past it: 602 room labels do not fit at any type size", () => {
-    expect(labelsAffordable(61, "auto")).toBe(false);
+    expect(labelsAffordable(25, "auto")).toBe(false);
     expect(labelsAffordable(602, "auto")).toBe(false);
+  });
+
+  // The fleet level has the whole estate's rooms in view and a drilled card has
+  // a handful, so one ceiling produces both behaviours with no second rule.
+  it("turns names off across a whole estate and back on inside one card", () => {
+    expect(labelsAffordable(42, "auto")).toBe(false);
+    expect(labelsAffordable(3, "auto")).toBe(true);
   });
 
   it("lets always and off override the arithmetic in both directions", () => {
@@ -25,9 +32,9 @@ describe("the label budget", () => {
   it("drops room boxes before labels, since a box costs more width than a name", () => {
     // At the same count, boxes need the operator to have asked for them AND
     // the budget to allow them; labels only need the budget.
-    expect(labelsAffordable(40, "auto")).toBe(true);
-    expect(roomBoxesAffordable(40, "auto", true)).toBe(true);
-    expect(roomBoxesAffordable(40, "auto", false)).toBe(false);
+    expect(labelsAffordable(20, "auto")).toBe(true);
+    expect(roomBoxesAffordable(20, "auto", true)).toBe(true);
+    expect(roomBoxesAffordable(20, "auto", false)).toBe(false);
     expect(roomBoxesAffordable(602, "auto", true)).toBe(false);
   });
 

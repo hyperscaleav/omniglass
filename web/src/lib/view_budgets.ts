@@ -14,10 +14,18 @@
 
 export type LabelMode = "auto" | "always" | "off";
 
-// Rooms in view past which names stop fitting. Sixty is where a fleet-level
-// card grid still reads and a drilled card comfortably does; it is a measured
-// default, not a constant anybody should need to think about.
-export const LABEL_CEILING = 60;
+// Rooms in view past which names stop fitting.
+//
+// Twenty-four, measured against the real console rather than guessed. A room
+// name needs about 7rem and a card is about 16rem, so a card fits two labelled
+// groups per row; at a screen of eight or so cards that is roughly two dozen
+// names before they start running into each other and reading as one string.
+//
+// The number also produces the behaviour the design wants without a second
+// rule: at the fleet level the whole estate's rooms are in view, so names are
+// off and the card header carries the identity, and drilling into one card
+// drops the count to a handful so the names come back on their own.
+export const LABEL_CEILING = 24;
 
 // labelsAffordable: the label budget. Auto is the arithmetic, always and off
 // are the operator overriding it in either direction.
