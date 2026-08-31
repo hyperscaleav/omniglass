@@ -222,3 +222,23 @@ export function aboveCutSystems(view: FleetView, rootId: string): FleetSystem[] 
   });
   return out.sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
 }
+
+// unplacedSystems is the bucket every walk from the roots must not silently
+// drop: a system the caller may read whose LOCATION it may not.
+//
+// This is reachable rather than theoretical. FleetProjection scopes locations
+// and systems through two separate scope sets, each running its own
+// scopedTreeQuery, so a principal whose system:read scope is wider than its
+// location:read scope receives systems whose location uuid is absent from the
+// payload. A renderer that builds cards by walking down from the roots would
+// show that system nowhere and count it in nothing, which reads to the
+// operator as a system that does not exist.
+//
+// A system placed nowhere at all (location unset) lands here too, and for the
+// same reason: it belongs to no card, so something has to name it.
+export function unplacedSystems(view: FleetView): FleetSystem[] {
+  const index = locationIndex(view);
+  return (view.systems ?? [])
+    .filter((s) => !s.location || !index.has(s.location))
+    .sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
+}

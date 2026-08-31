@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aboveCutSystems, cutNodesFor, cutTypeFor, isLeafType, typeTiers } from "./place_cut";
+import { aboveCutSystems, cutNodesFor, cutTypeFor, isLeafType, typeTiers, unplacedSystems } from "./place_cut";
 import { type FleetView } from "./fleet";
 import { uuidFor } from "./testids";
 
@@ -159,5 +159,41 @@ describe("the cut is a function of the tree alone", () => {
       systems: [],
     } as unknown as FleetView;
     expect(() => cutTypeFor(cyclic, uuidFor("a"))).not.toThrow();
+  });
+});
+
+describe("unplacedSystems", () => {
+  // The fleet view scopes locations and systems through two separate scope
+  // sets, so a principal whose system:read scope is wider than its
+  // location:read scope receives systems whose location is not in the payload.
+  // Walking from the roots alone would drop them silently.
+  it("returns systems whose location the caller cannot read", () => {
+    const partial = {
+      locations: [loc("depot", "depot", "Service Depot", "building", ""), loc("bay-1", "bay-1", "Bay 1", "room", "depot")],
+      systems: [
+        sys("s-bay1", "bay-1-av", "Bay 1 AV", "bay-1"),
+        // its location is real, but not one this caller may read
+        sys("s-hidden", "hidden", "Hidden AV", "huddle"),
+      ],
+    } as unknown as FleetView;
+    expect(unplacedSystems(partial).map((s) => s.label)).toEqual(["Hidden AV"]);
+  });
+
+  it("returns a system placed nowhere at all", () => {
+    const nowhere = {
+      locations: [loc("depot", "depot", "Service Depot", "building", "")],
+      systems: [{ id: uuidFor("s-svc"), name: "svc", label: "Booking Service", verdict: "healthy", dots: [] }],
+    } as unknown as FleetView;
+    expect(unplacedSystems(nowhere).map((s) => s.label)).toEqual(["Booking Service"]);
+  });
+
+  it("is empty when every system's location is readable", () => {
+    expect(unplacedSystems(view)).toEqual([]);
+  });
+
+  it("does not double-count a system already above a cut", () => {
+    const above = aboveCutSystems(view, uuidFor("hq")).map((s) => s.id);
+    const unplaced = unplacedSystems(view).map((s) => s.id);
+    expect(unplaced.filter((id) => above.includes(id))).toEqual([]);
   });
 });
