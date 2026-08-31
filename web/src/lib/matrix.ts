@@ -23,7 +23,7 @@ import { verdictOf } from "./health";
 
 // A system that conforms to no standard is first class (see lib/systems.ts),
 // so it gets a column rather than being dropped.
-export const NO_STANDARD = "— none";
+export const NO_STANDARD = "(none)";
 
 export type MatrixCell = { count: number; counts: Counts };
 export type MatrixRow = { id: string; label: string; type: string; indent: boolean; cells: Record<string, MatrixCell> };
