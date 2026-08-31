@@ -5844,19 +5844,15 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   become hosts that only say where to go next. The #800 jump-anchor rows retire; the
   blade's members, strip, and vitals move to the workspace they summarised.
 - **The Explore page**
-  ([#826](https://github.com/hyperscaleav/omniglass/issues/826) slice 2, #831). The
-  sidebar's one door into the fleet is Explore: a depth-agnostic drill down the place
-  tree to a system, built from the fleet view's parent pointers. The first column is the
-  locations with no parent, whatever their types; every later column is one node's
-  children, locations of any type first, systems after; a location with one system and
-  no sub-locations collapses into that system's row. The rightmost column is the glance:
-  the system's verdict and path over the one form, editable in place, or a location's
-  roll-up with the two creates that make sense under it (the same form, empty, placement
-  prefilled through `?under=`). Search by name or path fragment replaces the columns
-  with hits that carry their paths; `?node=` lands on a node with the columns rebuilt;
-  the header's toggle wears today's list face at `?face=table` until #828. The Fleet
-  entry and the reserved Explore stub retire from the sidebar; `/fleet` survives until
-  the canvas retires in #832.
+  ([#826](https://github.com/hyperscaleav/omniglass/issues/826) slices #831 and #837 to
+  #841). The sidebar's one door into the fleet is Explore. What it draws, and why it is
+  not the Miller-column drill this slice first built, is the entry below: the columns
+  were replaced before anything shipped. What survives from here is the page's frame:
+  search by name or path fragment, with hits carrying their paths because a name repeats
+  across rooms; `?node=` landing on a node by uuid or by a unique name; create where you
+  stand, the same form empty with the placement prefilled through `?under=`; and the
+  header's toggle wearing today's list face at `?face=table` until #828. The Fleet entry
+  and the reserved Explore stub retire from the sidebar; `/fleet` redirects here.
 - **Three tabs and one counts line**
   ([#826](https://github.com/hyperscaleav/omniglass/issues/826) slice 3, #832). Every
   workspace carries Overview, Activity, Configure: the system's map and vitals fold into
