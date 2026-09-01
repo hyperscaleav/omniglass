@@ -31,6 +31,11 @@ export default function Button(props: {
   // Accessible name. For a square (icon-only) button it is the only name, so set
   // it. For a labelled button it overrides the text name (rarely needed).
   label?: string;
+  // A toggle's state. Set it and the button announces itself as pressed, which
+  // is what a chip in a control group is: not a link that was clicked, but a
+  // setting that is on. Left undefined the button is a plain action and carries
+  // no aria-pressed at all.
+  pressed?: boolean;
   tabindex?: number;
   class?: string;
   children?: JSX.Element;
@@ -58,6 +63,7 @@ export default function Button(props: {
       title={props.title}
       tabindex={props.tabindex}
       aria-label={props.label ?? (props.square ? props.title : undefined)}
+      aria-pressed={props.pressed === undefined ? undefined : props.pressed}
     >
       <Show when={!props.iconTrailing}>{iconEl}</Show>
       <Show when={!props.square}>{props.children}</Show>

@@ -5829,4 +5829,87 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   gap, and a control whose value starts empty and only moves because the operator moved it has
   nothing stored to lose. Every test drives the gap by hand, delivering the collection between two
   assertions rather than sleeping on a race (ADR-0133, #398, #772, #782).
+- **One form per kind**
+  ([#826](https://github.com/hyperscaleav/omniglass/issues/826) slice 1, #830). The
+  original blade vision, restored: `EntityForm` is the one component that renders a
+  location, a system, or a component read or edit, and whether it appears in the blade
+  or on the workspace's Configure tab is only where the operator clicked. The host owns
+  the edit slot (the blade's footer, the page's footer) and hands it in; the form binds
+  seed and save, keeps every field's own gate (a caller with update but not rename sees
+  the name read-only, with the reason), wires its kind panels through the ambient blade
+  stack, and keeps the ruled save order (update, move, rename last, uuid-addressed).
+  Create is the same form empty (`EntityCreateForm`: what and where before identity,
+  the platform-named identity fields locked on the value they will carry, and an
+  `under` prefill for the explorer's create-where-you-stand), so the three create pages
+  become hosts that only say where to go next. The #800 jump-anchor rows retire; the
+  blade's members, strip, and vitals move to the workspace they summarised.
+- **The Explore page**
+  ([#826](https://github.com/hyperscaleav/omniglass/issues/826) slices #831 and #837 to
+  #841). The sidebar's one door into the fleet is Explore. What it draws, and why it is
+  not the Miller-column drill this slice first built, is the entry below: the columns
+  were replaced before anything shipped. What survives from here is the page's frame:
+  finding one thing by name or by path fragment (a hit list at first, the console's filter
+  bar by the end of the epic); `?node=` landing on a node by uuid or by a unique name; create where you
+  stand, the same form empty with the placement prefilled through `?under=`; and the
+  header's toggle wearing today's list face at `?face=table` until #828. The Fleet entry
+  and the reserved Explore stub retire from the sidebar; `/fleet` redirects here.
+- **Three tabs and one counts line**
+  ([#826](https://github.com/hyperscaleav/omniglass/issues/826) slice 3, #832). Every
+  workspace carries Overview, Activity, Configure: the system's map and vitals fold into
+  Overview, its history, events, and logs into Activity, and the retired tab addresses
+  map onto the tab that absorbed them so old links still land. The shared header shows
+  one counts line with the zero values left out (`countsLine` over the scoped tile spec
+  every altitude already built), and need-attention stays a filter where the page has
+  rows to filter; the KPI summary rail, the tiles board, and the location header's
+  duplicate attention chip retire. The band canvas retires with them: the Fleet page,
+  BandCanvas, and the paint core are deleted, `/fleet` redirects to Explore, and a guard
+  over the source tree keeps the retired surfaces retired.
 
+### Explore becomes a renderer library over one cut (#826, slices #837 to #841)
+
+The Miller-column drill that slice 2 built was replaced before it shipped. Tested against a
+generated fleet of a thousand systems across twelve roots of four different tree shapes, it
+failed three ways: a screen spent on four levels of tree, a uniform depth assumed that
+`location_type` and `allowed_parent_types` do not guarantee, and one question answered where
+operators arrive with several.
+
+What replaced it is four renderers over one model. `place_cut.ts` chooses, per root, the
+shallowest container type that root has at least two of, so a campus of buildings and a
+two-level annex sit side by side with each card naming its own type; the rule took three
+attempts, and the two wrong ones (excluding childless types, breaking ties on a global tier)
+each passed their unit tests and were caught by a render and by the e2e walk. `view_budgets.ts`
+turns labels, area and z-order into things a view can afford rather than settings an operator
+chooses: the label ceiling is twenty-four rooms, measured against the console rather than
+picked. `explore_view.ts` is the one model every renderer consumes, so cards, bands, mosaic and
+matrix cannot disagree about which card a system lands in or what a count says.
+
+Two rules were earned by looking at output. A mosaic tile's fill is the **share** needing
+attention, not a worst-wins rollup, because the first render came out uniformly red: at any
+realistic failure rate almost every aggregate contains one outage. And the mosaic's layout is
+integer pixels with edges snapped once and widths derived from them, proved as a property test
+that every pixel of a frame is covered exactly once, because the percentage version left seams
+and overlaps that read as data.
+
+`presets.ts` saves a way of looking under the name of the job it serves. A preset is a snapshot
+of the same object the controls write to, so it can never mean something the controls cannot
+produce, and it carries no scope at all: that omission is the line between this page and a
+dashboard, and there is a test asserting it.
+
+The page then took the console's standard chrome, which is what the rest of the fleet already
+wears: a counts line on top whose need-attention count is itself the quick filter, then
+`ListShell` (filter bar and card) around the body. Three bespoke things retire with it. The
+search box and its hit list become the filter bar's bare term, matching a system by name or by
+the place it sits in, and `lib/explore.ts` is deleted with them. The attention checkbox becomes
+the counts line's own button, writing the same verdict chip the filter bar shows, so the two
+cannot disagree. And the status line folds into the counts line. Filtering drops a card whose
+systems all fall outside it, which is what makes the filter read as a search; the filter keys
+are verdict, location type, standard, path and name, and deliberately not a location facet,
+since naming a subject is the drill's job and the line this page holds.
+
+Two defects came out of the alignment. The page's `attentionOf` had excluded `incomplete` while
+the console's fleet tiles had always counted it, so the counts line said one when two systems
+needed somebody; the older surface won, and the badge and the mosaic then had to learn that
+incomplete is its own hue rather than a shade of degraded or the colour of an empty tile. And
+the hover readout grew the counts line when a dot was hovered, reflowing the page under the
+pointer and moving the dot out from under the click that was landing on it, which the e2e walk
+caught; its slot is now reserved.

@@ -13,9 +13,14 @@ The console is one renderer over the same views the rest of the platform reads. 
 Roughly 22 live pages (inventory, catalog, values, admin, plus the shell) ship as **config-driven
 `ListShell` pages (with `FlatList` / `TreeList` bodies) over the typed CRUD client**, not as the
 `ViewResult` renderer described next: an inventory page is CRUD over a scoped resource. The
-**fleet zoom** (`/fleet`, #633) is the first surface that is neither: a canvas over its own
-views projection (`GET /views/fleet`), with the pure view model in `web/src/lib/fleet.ts` and
-the dot field painted per band. The views model, the renderer library, and composable
+**Explore** page (`/explore`, #826, which retired the #633 canvas) is the first surface that
+is neither: a small library of renderers (cards, bands, mosaic, matrix) over one projection
+(`GET /views/fleet`) and one pure view model, and the workspaces it opens. Its cores live in
+`web/src/lib/`: `place_cut.ts` decides which level of each root becomes a card (never a depth
+counted from the top, since `allowed_parent_types` makes depth a customer's fact),
+`view_budgets.ts` decides what a view can afford to draw, `explore_view.ts` turns the
+projection plus the controls into what every renderer consumes, and `presets.ts` saves a way
+of looking without ever saving a scope (ADR-0134). The views model, the renderer library, and composable
 dashboards remain the intended **read side** for the analytical surfaces (alarms, sample
 history, the cascade view, fleet dashboards), not built yet.
 Realized shell: the [design system](/contributing/design-system/); operating it: the
@@ -44,14 +49,16 @@ satisfied by hover and the page itself stays scannable. The standard-editor's vo
 (choices, alternates, accepted types) never leads an operator view, and a system's body
 renders components-first: one card per component with its role as a badge, role-level chrome
 only where it says something a badge cannot (a quorum beyond one, a shortfall, an unstaffed
-role). The platform-wide sweep of the older pages is tracked in #784. The system zoom is growing
-into the workspace #788 defines: facets as `?tab=` URL facts (`TabRail`), the Map tab
-rendering the standard's declared room (ADR-0128) with live occupant state on each marker.
-Since ADR-0129 these faces ARE the identity routes' default, and since #800 they are the
-ONLY faces: one way to look, one altitude rule (locations drill, systems open full screen,
-components open in blades), editing on each workspace's Configure tab, and flat tables
-surviving as a list-density toggle for bulk work. The classic detail face is retired;
-`?view=detail` is ignored and `?edit=1` lands Configure already editing.
+role). The platform-wide sweep of the older pages is tracked in #784. The system zoom grew into
+the workspace #788 defines, and #826 settled its shape: three tabs as `?tab=` URL facts
+(`TabRail`), Overview (the room, the standard's declared map with live occupant state on
+each marker, ADR-0128, the vitals), Activity (the history, the events, the logs), and
+Configure (the one form). Since ADR-0129 these faces ARE the identity routes' default, and
+since #800 they are the ONLY faces: one way to look, one altitude rule (Explore drills the
+place tree, systems open full screen, components open in blades), editing through the one
+`EntityForm` wherever the operator meets the entity (ADR-0134), and the table face behind
+Explore's toggle for bulk work. The classic detail face is retired; `?view=detail` is
+ignored and `?edit=1` lands Configure already editing.
 
 ## One renderer library, two composition modes
 
@@ -156,8 +163,8 @@ Two layers, deliberately decoupled:
    `/components`, `/templates`, `/config`); a URL addresses the *entity*, never its place in the
    menu, so deep links stay stable however the menu is reorganized. No taxonomy-nested routes, no
    redirects to maintain.
-2. **The sidebar groups those flat routes into clusters for browsing**: Home, Fleet (the one
-   canvas, #633), Dashboards, Alarms,
+2. **The sidebar groups those flat routes into clusters for browsing**: Home, Explore (the one
+   door into the fleet, #826), Dashboards, Alarms,
    Inventory (locations, systems, components, nodes), Values (variables, secrets, config, files),
    Catalog (a single entry opening the catalog shell, next), Explore, Learn, Admin (users, roles,
    groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:

@@ -2074,7 +2074,7 @@ components:
       additionalProperties: false
       properties:
         component:
-          description: "The component's uuid: what the canvas navigates to when a dot is clicked"
+          description: "The component's uuid: what a renderer navigates to when a dot is clicked"
           type: string
         name:
           description: The component's name, for the dot's hover title
@@ -2145,7 +2145,7 @@ components:
       additionalProperties: false
       properties:
         id:
-          description: The location's uuid, the address the canvas navigates by
+          description: The location's uuid, the address a renderer navigates by
           type: string
         label:
           type: string
@@ -2182,7 +2182,7 @@ components:
             - array
             - "null"
         id:
-          description: The system's uuid, the address the canvas navigates by
+          description: The system's uuid, the address a renderer navigates by
           type: string
         label:
           type: string

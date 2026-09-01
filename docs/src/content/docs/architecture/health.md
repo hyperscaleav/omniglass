@@ -111,7 +111,7 @@ will ever fire for, because nothing exists yet to alarm. A role short for the se
 `incomplete`.
 
 The distinction earns its place on the fleet view. Most of a real fleet is mid-commissioning
-for months at a time, and folding an empty slot into `outage` paints the whole canvas red and
+for months at a time, and folding an empty slot into `outage` paints the whole fleet red and
 teaches an operator to ignore the colour. Ranked between `healthy` and `degraded`, a gap is
 visible above a finished room and invisible beneath anything actually broken.
 

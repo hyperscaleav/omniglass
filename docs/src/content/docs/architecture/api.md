@@ -681,26 +681,26 @@ very rows served beside it, so a report can never disagree with its own evidence
 Every read above answers "what is this row". A **view** answers "what does this screen need", and it
 earns its own tier only when composing the entity reads in the browser would be the wrong shape.
 
-- `GET /views/fleet` (`location:read`) is the read behind the fleet canvas: every location flat
+- `GET /views/fleet` (`location:read`) is the read behind Explore: every location flat
   with its `parent` and `verdict`, every system with its `location` and `verdict`, and one **dot**
   per component in each system. A dot is `{component, name, verdict, primary, shared}` and nothing
-  else. The canvas paints a square per component across the whole fleet, so a component **row** per
-  square is a fleet-sized payload on every paint; the projection is the shape that avoids it, and
+  else. A renderer draws a mark per component across the whole fleet, so a component **row** per
+  mark is a fleet-sized payload on every draw; the projection is the shape that avoids it, and
   the wire is pinned by test against being widened back into a component list.
 
 Two properties are worth stating because they are easy to lose:
 
 - **Flat, not nested.** Locations carry a parent id and the client assembles the tree. The server
-  says what exists and how it is placed; the client decides how the fleet is **gathered into
-  bands**, which is what lets a future grouping (by standard, by vendor, by tag) be a mapper rather
-  than a second endpoint.
+  says what exists and how it is placed; the client decides how the fleet is **grouped**, which is
+  what lets a grouping (by place, by standard, by vendor, by tag) be a mapper rather than a second
+  endpoint. Explore's own cut of the place tree is one such mapper (ADR-0134).
 - **Scoped per tier.** The three tiers resolve their own read scope, so a principal who may read the
   place tree but not its components gets the shape of their fleet with no contents, and one with no
-  fleet scope at all gets an **empty canvas rather than a refusal**: there is simply nothing of
+  fleet scope at all gets an **empty fleet rather than a refusal**: there is simply nothing of
   theirs to draw.
 
 A view is a read and only a read. It adds no write path and no judgement of its own: the verdicts it
-serves are the ones the health rollup already recorded, so the canvas and the detail page cannot land
+serves are the ones the health rollup already recorded, so Explore and the detail page cannot land
 on different answers about the same room.
 
 ## Files: content-addressed bytes behind a handle

@@ -1,13 +1,12 @@
 import { entityLabel } from "../lib/entities";
 import { locationBlade, systemBlade, componentBlade } from "../components/EntityBlade";
+import { EntityCreateForm } from "../components/EntityForm";
 import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
-import { useNavigate, useParams } from "@solidjs/router";
+import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListNode, type PageDescriptor, type Widget } from "../components/TreeList";
 import Donut from "../components/Donut";
-import TreeSelect from "../components/TreeSelect";
 
-import FieldRow from "../components/FieldRow";
 import TagPills from "../components/TagPills";
 import { tagFilterKeys } from "../lib/predicate";
 
@@ -15,22 +14,16 @@ import {
   type Location,
     LOCATIONS_KEY,
   listLocations,
-  createLocation,
   
   
   deleteLocation,
 } from "../lib/locations";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
-import CreateIdentity from "../components/CreateIdentity";
 
-import { bucketPhrase, createPen, nameBucket, penIncomplete } from "../lib/namegen";
-import { nameRefused, recoverFromMovedName, useLabelDraft } from "../lib/labeldraft";
-import { pathTo, type TreeNode } from "../lib/treeselect";
 
 import { describeError } from "../lib/format";
 
-import { Plus, X, resolveIcon } from "../components/icons";
-import Button from "../components/Button";
+import { resolveIcon } from "../components/icons";
 import { propertyResolutionBlade } from "../components/PropertiesPanel";
 
 import LocationZoom from "./LocationZoom";
@@ -250,133 +243,10 @@ function LocationsIndex() {
   // The classic detail body retired with the face (#800 slice 3): the blade
   // is the override, the full page unreachable, so the config renders null.
   function LocationCreate(): JSX.Element {
-    // Independent fields (#688). This form derived the name from the display
-    // name until a location_type could name its own rows (#687): a blank name is
-    // now the request to mint one from the type's name rule, so deriving one
-    // claimed the pen the moment the operator typed a label, and the
-    // always-required name gate meant the console could not reach the generator
-    // at all. createIdentity keeps its place on the registry pages.
-    const displayPen = createPen();
-    const namePen = createPen();
-    const [type, setType] = createSignal("");
-    const [parent, setParent] = createSignal("");
-    const [busy, setBusy] = createSignal(false);
-    const [formErr, setFormErr] = createSignal<string | null>(null);
-
-    // A location has TWO buckets, not three: it has no located-at column, so
-    // the shape falls out of asking for the bucket with no location at all.
-    const parentItems = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 })));
-    // The label the platform would write. A shipped fleet answers with the
-    // global location rule's render of the name (#657); an empty answer means no
-    // rule resolves at any tier, which the form still has to be honest about,
-    // since it shows the name there rather than a locked empty field.
-    const labelDraft = useLabelDraft(() =>
-      type().trim()
-        ? {
-            kind: "location" as const,
-            body: {
-              location_type: type().trim(),
-              name: namePen.value().trim() || undefined,
-              parent: parent() || undefined,
-            },
-          }
-        : null,
-    );
-
-    const bucket = createMemo(() => nameBucket(parent()));
-    const bucketText = createMemo(() => bucketPhrase("location", bucket(), pathTo(parentItems(), bucket().id)));
-
-    async function create(e: Event) {
-      e.preventDefault();
-      setBusy(true);
-      setFormErr(null);
-      const nm = namePen.value().trim();
-      try {
-        // Bind the create response (#627 Task 15c): see Components.tsx's
-        // own create() for why the id, not the locally typed name, is what
-        // the URL hands off to the detail.
-        // An empty name is OMITTED rather than posted as "": omitted is
-        // "generate one from the type's rule", where "" is a name of nothing
-        // the API refuses against the entity-name pattern.
-        const created = await createLocation({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, location_type: type().trim(), label: displayPen.value().trim() || undefined, parent: parent() || undefined });
-        await qc.invalidateQueries({ queryKey: LOCATIONS_KEY });
-        navigate(`/locations/${encodeURIComponent(created.id)}?edit=1`);
-      } catch (er) {
-        setFormErr(await recoverFromMovedName(er, labelDraft.refetch));
-        setBusy(false);
-      }
-    }
-
-    return (
-      <form class="flex flex-col gap-5" onSubmit={create}>
-        <div class="flex items-center gap-2">
-          <h2 class="text-lg font-semibold tracking-tight">New location</h2>
-          <span class="badge badge-warning badge-sm">Draft</span>
-        </div>
-        <Show when={formErr()}>
-          <div role="alert" class="alert alert-error alert-soft text-sm"><span>{formErr()}</span></div>
-        </Show>
-
-        {/* What it is, then where it sits, then what it is called: the type
-            carries the name rule and the parent carries the ordinal's bucket, so
-            both are answered before the form has anything to say about the
-            name. */}
-        <div class="flex flex-col gap-1.5">
-          <span class="eyebrow">Classification</span>
-          <FieldRow
-            label="Location type"
-            hint="What kind of place this is. It decides which parents are legal, and whether the platform can name it."
-          >
-            <select class="select select-bordered w-full" value={type()} onChange={(e) => setType(e.currentTarget.value)}>
-              <option value="" disabled>Select a type…</option>
-              <For each={locationTypes.data}>{(t) => <option value={t.name}>{t.label}</option>}</For>
-            </select>
-          </FieldRow>
-        </div>
-
-        <div class="flex flex-col gap-1.5">
-          <span class="eyebrow">Placement</span>
-          <div class="grid grid-cols-2 gap-3">
-            <FieldRow label="Parent">
-              {/* Keyed AND valued on uuid, not name (#627): see
-                  parentCandidates above for why. */}
-              <TreeSelect
-                items={parentItems()}
-                value={parent()}
-                onChange={setParent}
-                rootLabel="Root (no parent)"
-              />
-            </FieldRow>
-          </div>
-        </div>
-
-        <CreateIdentity
-          kind="location"
-          draft={() => labelDraft.data}
-          pending={() => labelDraft.isFetching}
-          nameRefused={() => nameRefused(labelDraft.error)}
-          bucket={bucketText}
-          namePen={namePen}
-          displayPen={displayPen}
-          namePlaceholder="boardroom"
-          displayPlaceholder="Conf Room 301"
-        />
-
-        <div class="flex items-center gap-2 border-t border-base-300 pt-4">
-          <Button icon={X} onClick={() => navigate("/locations")}>Cancel</Button>
-          <span class="flex-1" />
-          {/* A name is required only when the chosen type carries no name
-              rule, which is every shipped type (ADR-0103). The type itself
-              stays required: for a location it is the only shape-definer. */}
-          <Button type="submit" intent="action" icon={Plus} disabled={busy() || !type().trim() || penIncomplete(!!labelDraft.data?.name, namePen)}>Create location</Button>
-        </div>
-
-        <div class="flex flex-col gap-1 opacity-50">
-          <span class="eyebrow">Tags</span>
-          <span class="text-sm text-base-content/40">Available once the location is created.</span>
-        </div>
-      </form>
-    );
+    // The one form, empty (#826): the page only says where to go next; ?under=
+    // prefills placement (the explorer's create-where-you-stand).
+    const [createParams] = useSearchParams();
+    return <EntityCreateForm kind="location" under={(Array.isArray(createParams.under) ? createParams.under[0] : createParams.under) || undefined} onCreated={(created) => navigate(`/locations/${encodeURIComponent(created.id)}?edit=1`)} onCancel={() => navigate("/locations")} />;
   }
 
   const cfg: ListConfig<LocNode> = {

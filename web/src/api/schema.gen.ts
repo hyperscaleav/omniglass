@@ -5167,7 +5167,7 @@ export interface components {
             size: number;
         };
         FleetDotBody: {
-            /** @description The component's uuid: what the canvas navigates to when a dot is clicked */
+            /** @description The component's uuid: what a renderer navigates to when a dot is clicked */
             component: string;
             /** @description The component's name, for the dot's hover title */
             name: string;
@@ -5197,7 +5197,7 @@ export interface components {
             verdict: string;
         };
         FleetLocationBody: {
-            /** @description The location's uuid, the address the canvas navigates by */
+            /** @description The location's uuid, the address a renderer navigates by */
             id: string;
             label: string;
             /** @description The type's name, which the band renders as its type chip */
@@ -5213,7 +5213,7 @@ export interface components {
         FleetSystemBody: {
             /** @description One entry per component in this system; empty when the caller may read the system but not its components */
             dots: components["schemas"]["FleetDotBody"][] | null;
-            /** @description The system's uuid, the address the canvas navigates by */
+            /** @description The system's uuid, the address a renderer navigates by */
             id: string;
             label: string;
             /** @description The uuid of the location this system is placed at; absent when it is placed nowhere */

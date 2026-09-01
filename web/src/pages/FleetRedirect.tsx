@@ -1,12 +1,16 @@
 import { Navigate, useLocation } from "@solidjs/router";
 
-// The re-homed index addresses (#798): the bare /locations, /systems, and
-// /components URLs land on the fleet list face's matching kind tab. Only the
-// index address moved; the :id detail routes still render their pages.
+// The re-homed addresses (#798, moved again by #826): the bare /locations,
+// /systems, and /components URLs land on Explore's table face on the matching
+// kind tab, and the retired /fleet canvas address lands on Explore.
+// Only the index addresses moved; the :id detail routes still render their
+// pages.
 export default function FleetRedirect() {
   const location = useLocation();
   // pathname carries the router base (/web/locations); the kind is the last
   // segment, which is also the tab key.
   const kind = location.pathname.replace(/\/+$/, "").split("/").pop();
-  return <Navigate href={`/fleet?view=list&kind=${kind}`} />;
+  // The retired canvas address (#826) lands on Explore itself.
+  if (kind === "fleet") return <Navigate href="/explore" />;
+  return <Navigate href={`/explore?face=table&kind=${kind}`} />;
 }
