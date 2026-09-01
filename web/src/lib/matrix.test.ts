@@ -54,8 +54,10 @@ const standards: Record<string, string> = {
 };
 const standardOf = (id: string) => standards[id];
 
-const all: ExploreOptions = { attentionOnly: false, sort: "worst" };
-const attention: ExploreOptions = { attentionOnly: true, sort: "worst" };
+const all: ExploreOptions = { sort: "worst" };
+// The chrome filters the rows and hands down the survivors; here, the two that
+// need attention.
+const attention: ExploreOptions = { sort: "worst", include: (id) => id === uuidFor("s-w2") || id === uuidFor("s-e1") };
 
 describe("columns", () => {
   it("lists only the standards actually present, sorted", () => {

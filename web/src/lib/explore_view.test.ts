@@ -8,6 +8,7 @@ import {
   resolveNode,
   roomsInView,
   sectionsFor,
+  systemRows,
   unplacedFor,
   type ExploreOptions,
 } from "./explore_view";
@@ -61,8 +62,10 @@ const view: FleetView = {
   ],
 } as unknown as FleetView;
 
-const all: ExploreOptions = { attentionOnly: false, sort: "worst" };
-const attention: ExploreOptions = { attentionOnly: true, sort: "worst" };
+const all: ExploreOptions = { sort: "worst" };
+// What the chrome hands down once its chips have run: the ids that survived.
+const onlyBad = (ids: string[]): ExploreOptions => ({ sort: "worst", include: (id) => ids.includes(id) });
+const attention: ExploreOptions = onlyBad([uuidFor("s-media"), uuidFor("s-lab")]);
 
 describe("sectionsFor", () => {
   it("makes one section per root, each cut at its own level", () => {
@@ -158,10 +161,9 @@ describe("insideOf", () => {
   it("returns a section for an existing node even when it holds nothing", () => {
     // A campus created a moment ago has no children and no systems. Returning
     // null there leaves nowhere to stand and no way to create the first thing.
-    const empty = insideOf(view, uuidFor("bay1"), attention);
+    const empty = insideOf(view, uuidFor("bay1"), all);
     expect(empty).not.toBeNull();
     expect(empty!.cards).toEqual([]);
-    expect(empty!.above).toEqual([]);
     expect(empty!.label).toBe("Bay 1");
   });
 
@@ -177,9 +179,10 @@ describe("unplacedFor", () => {
 });
 
 describe("counts", () => {
-  it("treats incomplete as not needing attention, since it is a commissioning gap", () => {
+  it("counts incomplete as attention, the same as the console's fleet tiles", () => {
     const c = countsOf([{ verdict: "incomplete" }, { verdict: "degraded" }, { verdict: "outage" }]);
-    expect(attentionOf(c)).toBe(2);
+    expect(attentionOf(c)).toBe(3);
+    expect(attentionOf(countsOf([{ verdict: "healthy" }]))).toBe(0);
   });
 
   it("writes one line, zeros left out, singular reading as a fact", () => {
@@ -192,6 +195,29 @@ describe("roomsInView", () => {
   it("counts the leaf locations in front of the operator, not the fleet's total", () => {
     expect(roomsInView(view, [uuidFor("hq"), uuidFor("depot")])).toBe(5);
     expect(roomsInView(view, [uuidFor("west")])).toBe(2);
+  });
+});
+
+describe("systemRows", () => {
+  // The row shape the filter bar facets over. It exists so the page never has
+  // to teach the chrome about the place tree.
+  it("carries the place path and the type of the place it sits in", () => {
+    const row = systemRows(view).find((r) => r.id === uuidFor("s-lab"))!;
+    expect(row.path).toBe("Headquarters / East Building / Level 1 / Lab");
+    expect(row.locationType).toBe("room");
+  });
+
+  it("searches the label, the handle, and the place in one haystack", () => {
+    const row = systemRows(view).find((r) => r.id === uuidFor("s-lab"))!;
+    expect(row.search).toContain("Lab AV");
+    expect(row.search).toContain("s-lab");
+    expect(row.search).toContain("East Building");
+  });
+
+  it("leaves the path empty for a system whose location it cannot read", () => {
+    const row = systemRows(view).find((r) => r.id === uuidFor("s-orphan"));
+    expect(row?.path).toBe("");
+    expect(row?.locationType).toBe("");
   });
 });
 

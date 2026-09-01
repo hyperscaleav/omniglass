@@ -49,6 +49,8 @@ const view: FleetView = {
     sys("s-class2", "classroom-2", "Classroom 2", "media-lab", "healthy"),
     sys("s-lab", "lab-av", "Lab AV", "lab", "healthy"),
     sys("s-bay", "bay-av", "Bay AV", "bay-1", "healthy"),
+    // A commissioning gap, so the fixture has one of each kind of attention.
+    sys("s-store", "store-av", "Store AV", "storage", "incomplete"),
     // attached to the campus itself: it belongs to no building and no room
     sys("s-paging", "paging", "Campus Paging", "hq", "healthy"),
     // readable, but its location is not in this payload
@@ -96,6 +98,11 @@ function underParam() {
 afterEach(cleanup);
 
 const section = (id: string) => screen.getByTestId(`explore-section-${uuidFor(id)}`);
+// The counts line's need-attention segment is the quick filter, the same
+// control FleetShell puts on every other fleet page.
+const filterInput = () => screen.getByPlaceholderText(/^filter:/) as HTMLInputElement;
+const attentionToggle = async () =>
+  within(await screen.findByTestId("explore-counts")).getByRole("button", { name: /needs? attention/ });
 
 describe("the cut decides the cards", () => {
   it("cards a campus at its buildings, each card naming its own type", async () => {
@@ -159,21 +166,21 @@ describe("the drill", () => {
 describe("the label budget", () => {
   it("affords labels at this size, and says so in the status line", async () => {
     mount();
-    const status = await screen.findByTestId("explore-status");
+    const status = await screen.findByTestId("explore-counts");
     expect(status.textContent).toContain("rooms in view");
     expect(status.textContent).toContain("labels on (auto)");
   });
 
   it("lets the operator force them off, which the status line then reports", async () => {
     mount();
-    await screen.findByTestId("explore-status");
+    await screen.findByTestId("explore-counts");
     fireEvent.change(screen.getByLabelText("Labels"), { target: { value: "off" } });
-    expect(screen.getByTestId("explore-status").textContent).toContain("labels off (forced)");
+    expect(screen.getByTestId("explore-counts").textContent).toContain("labels off (forced)");
   });
 
   it("counts the rooms in front of the operator, not the fleet's total", async () => {
     mount(`/web/explore?node=${uuidFor("west")}`);
-    const status = await screen.findByTestId("explore-status");
+    const status = await screen.findByTestId("explore-counts");
     // west holds Level 2 (with a room), Media Lab and Storage: three leaves
     expect(status.textContent).toContain("3 rooms in view");
   });
@@ -201,15 +208,98 @@ describe("the controls change how it is drawn, never what is in it", () => {
   it("filters to what needs attention, and drops a section with nothing left", async () => {
     mount();
     await screen.findByTestId("explore-controls");
-    fireEvent.click(screen.getByLabelText("Only what needs attention"));
+    fireEvent.click(await attentionToggle());
     expect(await screen.findByTestId(`explore-section-${uuidFor("hq")}`)).toBeTruthy();
     expect(screen.queryByTestId(`explore-section-${uuidFor("depot")}`)).toBeNull();
   });
 
   it("carries the filter in the URL so a link reproduces it", async () => {
-    mount("/web/explore?attention=1");
-    await screen.findByTestId("explore-controls");
-    expect((screen.getByLabelText("Only what needs attention") as HTMLInputElement).checked).toBe(true);
+    mount(`/web/explore?chips=${encodeURIComponent(JSON.stringify([{ key: "verdict", op: "eq", values: ["outage", "degraded", "incomplete"] }]))}`);
+    expect((await attentionToggle()).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByTestId(`explore-section-${uuidFor("depot")}`)).toBeNull();
+  });
+});
+
+describe("the counts line", () => {
+  it("reserves the hover readout's space instead of growing when one arrives", async () => {
+    // The readout used to appear on hover, which reflowed everything below it
+    // and moved the dot out from under the click landing on it. The slot is
+    // always in the DOM; only its text changes.
+    mount();
+    const slot = within(await screen.findByTestId("explore-counts")).getByTestId("explore-hover");
+    expect(slot.textContent).toBe("");
+  });
+});
+
+describe("the table face", () => {
+  it("keeps the total but not the controls that only the fleet face can honour", async () => {
+    mount("/web/explore?face=table&kind=locations");
+    const counts = await screen.findByTestId("explore-counts");
+    expect(counts.textContent).toContain("8 systems");
+    expect(counts.textContent).not.toContain("rooms in view");
+    expect(within(counts).queryByRole("button", { name: /needs? attention/ })).toBeNull();
+  });
+});
+
+describe("the badge names the worst thing present", () => {
+  // Incomplete counts as attention, so a card whose only trouble is unfinished
+  // commissioning gets a badge. Badging it "degraded" would say a fault where
+  // there is a gap.
+  it("does not call a commissioning gap degraded", async () => {
+    mount(`/web/explore?node=${uuidFor("storage")}`);
+    const head = await screen.findByTestId("explore-section-head");
+    expect(within(head).getByText("incomplete")).toBeTruthy();
+    expect(within(head).queryByText("degraded")).toBeNull();
+  });
+
+  it("still calls an outage an outage when both are present", async () => {
+    mount(`/web/explore?node=${uuidFor("west")}`);
+    const head = await screen.findByTestId("explore-section-head");
+    expect(within(head).getByText("degraded")).toBeTruthy();
+  });
+});
+
+describe("the filter bar narrows what is drawn", () => {
+  it("finds a place by name, which is what the search box it replaced did", async () => {
+    mount();
+    await screen.findByTestId(`explore-section-${uuidFor("hq")}`);
+    const input = filterInput();
+    fireEvent.input(input, { target: { value: "Media Lab" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(screen.queryByTestId(`explore-section-${uuidFor("depot")}`)).toBeNull());
+    // West survives because the two systems in its Media Lab did; East is gone.
+    const hq = section("hq");
+    expect(within(hq).getByRole("button", { name: "Open West Building" })).toBeTruthy();
+    expect(within(hq).queryByRole("button", { name: "Open East Building" })).toBeNull();
+  });
+
+  it("drops a card whose systems all failed the filter", async () => {
+    mount();
+    await screen.findByTestId(`explore-section-${uuidFor("hq")}`);
+    const input = filterInput();
+    fireEvent.input(input, { target: { value: "verdict:degraded" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(screen.queryByTestId(`explore-section-${uuidFor("depot")}`)).toBeNull());
+    expect(within(section("hq")).queryByRole("button", { name: "Open East Building" })).toBeNull();
+    expect(screen.queryByTestId("explore-unplaced")).toBeNull();
+  });
+
+  it("says so rather than showing an empty page when nothing survives", async () => {
+    mount();
+    await screen.findByTestId(`explore-section-${uuidFor("hq")}`);
+    const input = filterInput();
+    fireEvent.input(input, { target: { value: "nothing-is-called-this" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(await screen.findByText("Nothing here matches the filter.")).toBeTruthy();
+  });
+
+  it("counts the whole fleet even while the filter narrows the body", async () => {
+    mount();
+    const counts = await screen.findByTestId("explore-counts");
+    expect(counts.textContent).toContain("8 systems");
+    fireEvent.click(await attentionToggle());
+    await waitFor(() => expect(screen.queryByTestId(`explore-section-${uuidFor("depot")}`)).toBeNull());
+    expect(screen.getByTestId("explore-counts").textContent).toContain("8 systems");
   });
 });
 
@@ -236,9 +326,7 @@ describe("presets", () => {
     mount();
     await screen.findByTestId("explore-presets");
     fireEvent.click(screen.getByRole("button", { name: "Morning triage" }));
-    await waitFor(() =>
-      expect((screen.getByLabelText("Only what needs attention") as HTMLInputElement).checked).toBe(true),
-    );
+    await waitFor(async () => expect((await attentionToggle()).getAttribute("aria-pressed")).toBe("true"));
     expect(screen.queryByTestId(`explore-section-${uuidFor("depot")}`)).toBeNull();
   });
 

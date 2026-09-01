@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fillFor, layoutPx } from "./mosaic";
+import { fillFor, layoutPx, tint } from "./mosaic";
 import { emptyCounts, type Counts } from "./explore_view";
 
 // The mosaic's pure core (#840). The two claims worth testing are the two the
@@ -136,9 +136,21 @@ describe("aggregate colour is a share, not a rollup", () => {
     expect(fillFor(emptyCounts())).toEqual({ severity: "idle", share: 0 });
   });
 
-  it("does not count incomplete as attention, so commissioning is not a fault", () => {
+  it("gives a card whose only trouble is commissioning its own hue", () => {
+    // Incomplete counts as attention (the console's fleet tiles have always
+    // counted it), but it is not degraded and must not be coloured as if it
+    // were: half unfinished reads as half, in the commissioning hue.
     const c: Counts = { ...emptyCounts(), healthy: 5, incomplete: 5 };
-    expect(fillFor(c)).toEqual({ severity: "healthy", share: 0 });
+    expect(fillFor(c)).toEqual({ severity: "incomplete", share: Math.sqrt(0.5) });
+  });
+
+  it("never paints an unfinished card the colour of an empty one", () => {
+    // The one confusion the mosaic cannot afford: an empty tile means nothing
+    // is there, and a card with a commissioning gap has something in it.
+    const gap = tint(fillFor({ ...emptyCounts(), incomplete: 4 }));
+    expect(gap).not.toContain("--color-base-300");
+    expect(gap).toContain("--og-incomplete");
+    expect(tint(fillFor(emptyCounts()))).toBe("var(--color-base-300)");
   });
 
   it("reaches full share when everything is wrong", () => {

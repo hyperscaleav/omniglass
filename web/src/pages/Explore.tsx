@@ -3,6 +3,7 @@ import { Dynamic } from "solid-js/web";
 import { useNavigate, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
+import ListShell from "../components/ListShell";
 import HealthBadge from "../components/HealthBadge";
 import Button from "../components/Button";
 import DotField, { type Density } from "../components/DotField";
@@ -13,16 +14,20 @@ import SystemsPage from "./Systems";
 import ComponentsPage from "./Components";
 import { can, useMe } from "../lib/auth";
 import { FLEET_VIEW_KEY, fleetView, locationIndex, ancestors } from "../lib/fleet";
-import { pathForNode, searchTree } from "../lib/explore";
 import {
   attentionOf,
   countsLine,
+  countsOf,
   insideOf,
+  systemRows,
+  totalOf,
+  type SystemRow,
   resolveNode,
   roomsInView,
   sectionsFor,
   unplacedFor,
   type CardModel,
+  type Counts,
   type DotItem,
   type ExploreOptions,
   type SectionModel,
@@ -44,6 +49,8 @@ import {
 } from "../lib/presets";
 import { listSystems, SYSTEMS_KEY } from "../lib/systems";
 import { entityLabel } from "../lib/entities";
+import type { Verdict } from "../lib/health";
+import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
 import { describeError } from "../lib/format";
 
 // Explore (#839): one door into the fleet, with a few renderers over one
@@ -147,8 +154,23 @@ export default function Explore() {
     return resolveNode(view.data, raw);
   });
   const setSite = (id: string | null) => setSearch({ node: id ?? undefined });
-  const attentionOnly = () => param("attention") === "1";
-  const setAttentionOnly = (on: boolean) => setSearch({ attention: on ? "1" : undefined });
+  // The chips are the filter. They ride the URL so a link carries what the
+  // other person was looking at, the same split ?face=table already uses.
+  const chips = createMemo<Chip[]>(() => {
+    const raw = param("chips");
+    if (!raw) return [];
+    try { return JSON.parse(raw) as Chip[]; } catch { return []; }
+  });
+  const setChips = (next: Chip[]) => setSearch({ chips: next.length ? JSON.stringify(next) : undefined });
+
+  // The console's one definition of needing attention, as a chip, so the counts
+  // line's quick filter and the filter bar are the same control.
+  const ATTENTION = ["outage", "degraded", "incomplete"];
+  const attentionOn = () => chips().some((c) => c.key === "verdict" && ATTENTION.every((v) => c.values.includes(v)));
+  const toggleAttention = () => {
+    const rest = chips().filter((c) => c.key !== "verdict");
+    setChips(attentionOn() ? rest : [...rest, { key: "verdict", op: "eq", values: ATTENTION }]);
+  };
 
   const [saved, setSaved] = createSignal<Preset[]>(loadPresets());
   const [storageWorks, setStorageWorks] = createSignal(true);
@@ -157,7 +179,7 @@ export default function Explore() {
   // reads straight off them rather than keeping a second copy in step.
   const currentState = createMemo<PresetState>(() => ({
     ...prefs(),
-    attentionOnly: attentionOnly(),
+    attentionOnly: attentionOn(),
     node: site(),
   }));
 
@@ -171,7 +193,13 @@ export default function Explore() {
       roomBox: next.roomBox,
       sort: next.sort,
     });
-    setSearch({ node: next.node ?? undefined, attention: next.attentionOnly ? "1" : undefined });
+    // A preset that wanted the attention filter sets the chip the filter bar
+    // owns, rather than a second flag that could disagree with it.
+    const rest = chips().filter((c) => c.key !== "verdict");
+    setSearch({
+      node: next.node ?? undefined,
+      chips: next.attentionOnly ? JSON.stringify([...rest, { key: "verdict", op: "eq", values: ATTENTION }]) : undefined,
+    });
   };
 
   const saveCurrent = (name: string) => {
@@ -185,14 +213,47 @@ export default function Explore() {
     setStorageWorks(savePresets(next));
   };
 
-  const [query, setQuery] = createSignal("");
   const [hovered, setHovered] = createSignal<{ label: string; verdict: string } | null>(null);
-  let searchBox: HTMLInputElement | undefined;
 
   const kinds = createMemo(() => KINDS.filter((k) => can(me.data, k.resource, "read")));
   const activeKind = createMemo(() => kinds().find((k) => k.key === param("kind")) ?? kinds()[0]);
 
-  const opts = createMemo<ExploreOptions>(() => ({ attentionOnly: attentionOnly(), sort: prefs().sort }));
+  const rows = createMemo<SystemRow[]>(() => (view.data ? systemRows(view.data) : []));
+  const filterKeys: FilterKey<SystemRow>[] = [
+    // The bare term the operator types lands here (FilterBar's fallback is the
+    // first substring key), so it matches a system's name OR where it sits.
+    // That is what the search box this replaced did: it looked through systems
+    // and locations both, and typing a building name still has to find the
+    // things in that building.
+    { key: "name", type: "string", hint: "substring", get: (r) => r.search },
+    // Path narrows to a place by typing it. Deliberately a substring match and
+    // not a facet of location ids: naming a subject is what the drill is for,
+    // and it is the line between this page and a dashboard.
+    { key: "path", type: "string", hint: "substring", get: (r) => r.path },
+    { key: "verdict", type: "string", get: (r) => r.verdict ?? "healthy", values: () => ["healthy", "incomplete", "degraded", "outage"] },
+    { key: "type", type: "string", get: (r) => r.locationType, values: (rs) => [...new Set(rs.map((r) => r.locationType).filter(Boolean))].sort() },
+    { key: "standard", type: "string", get: (r) => standardOf()(r.id) ?? "", values: (rs) => [...new Set(rs.map((r) => standardOf()(r.id)).filter(Boolean) as string[])].sort() },
+  ];
+
+  // The chips are applied here rather than by ListShell, because the body is a
+  // tree of cards and not a row list: the model has to know which systems
+  // survived so a card that lost all of its own can be dropped. ListShell's own
+  // `filtered` memo is pull-based and never runs for a body that ignores it,
+  // which is the contract the tree pages already use.
+  const kept = createMemo(() => {
+    const cs = chips();
+    if (cs.length === 0) return null;
+    const pass = buildPredicate(filterKeys, cs);
+    return new Set(rows().filter(pass).map((r) => r.id));
+  });
+  const opts = createMemo<ExploreOptions>(() => {
+    const set = kept();
+    return { sort: prefs().sort, include: set ? (id: string) => set.has(id) : undefined };
+  });
+
+  const fleetCounts = createMemo(() => countsOf(rows()));
+  const total = () => totalOf(fleetCounts());
+  const needing = () => attentionOf(fleetCounts());
 
   const sections = createMemo<SectionModel[]>(() => {
     const v = view.data;
@@ -206,7 +267,6 @@ export default function Explore() {
   });
 
   const unplaced = createMemo<DotItem[]>(() => (view.data && !site() ? unplacedFor(view.data, opts()) : []));
-  const hits = createMemo(() => (view.data ? searchTree(view.data, query()) : []));
 
   // The label budget is spent against what is in front of the operator now,
   // which is why drilling gives the names back with no control touched.
@@ -234,20 +294,10 @@ export default function Explore() {
     return ancestors(node, locationIndex(v)).map((l) => ({ id: l.id, label: entityLabel(l) }));
   });
 
-  const onHit = (id: string) => {
-    const v = view.data;
-    if (!v) return;
-    setQuery("");
-    const hit = pathForNode(v, id);
-    // A hit is either a location to drill into or a system to open.
-    if (hit && locationIndex(v).has(hit.selected)) setSite(hit.selected);
-    else navigate(`/systems/${encodeURIComponent(id)}`);
-  };
-
   const onKey = (e: KeyboardEvent) => {
     const tag = (e.target as HTMLElement | null)?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-    if (e.key === "/") { e.preventDefault(); searchBox?.focus(); }
+    if (e.key === "/") { e.preventDefault(); document.querySelector<HTMLInputElement>('input[role="combobox"]')?.focus(); }
     if (e.key === "t") setFace(face() === "cards" ? "table" : "cards");
     if (e.key === "Escape" && site()) setSite(null);
   };
@@ -264,17 +314,42 @@ export default function Explore() {
           fallback={<div role="alert" class="alert alert-error alert-soft text-sm">{describeError(view.error)}</div>}
         >
           <div class="flex flex-col gap-3">
-            <div class="flex flex-wrap items-center gap-2">
-              <input
-                ref={searchBox}
-                type="search"
-                role="searchbox"
-                class="input input-bordered w-full max-w-xl"
-                placeholder="Search: a system by name or path, a location (/)"
-                value={query()}
-                onInput={(e) => setQuery(e.currentTarget.value)}
-                onKeyDown={(e) => { if (e.key === "Escape") setQuery(""); if (e.key === "Enter" && hits()[0]) onHit(hits()[0].id); }}
-              />
+            <div data-testid="explore-counts" class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-base-content/70">
+              <Show when={face() === "cards"}>
+                {/* The drill, the quick filter and the label state belong to the
+                    fleet face: the table face draws no dots to label, and each
+                    of its tabs carries its own filter bar, so a control here
+                    would claim to do something it cannot. */}
+                <nav aria-label="Path" class="flex items-center gap-1">
+                  <button type="button" class="font-medium hover:underline" classList={{ "text-primary": site() !== null }} disabled={site() === null} onClick={() => setSite(null)}>All locations</button>
+                  <For each={crumbs()}>
+                    {(c, i) => (
+                      <>
+                        <span aria-hidden="true">{"\u203a"}</span>
+                        <button type="button" class="hover:underline" disabled={i() === crumbs().length - 1} onClick={() => setSite(c.id)}>{c.label}</button>
+                      </>
+                    )}
+                  </For>
+                </nav>
+                <span class="text-base-content/30">{"\u00b7"}</span>
+              </Show>
+              <span class="tabular-nums">{total()} {total() === 1 ? "system" : "systems"}</span>
+              <Show when={face() === "cards"}>
+                <Show when={needing() > 0}>
+                  <span class="text-base-content/30">{"\u00b7"}</span>
+                  <Button size="xs" intent={attentionOn() ? "action" : "quiet"} pressed={attentionOn()} onClick={toggleAttention} title="Filter to what needs attention">
+                    {needing()} need{needing() === 1 ? "s" : ""} attention
+                  </Button>
+                </Show>
+                <span class="text-base-content/30">{"\u00b7"}</span>
+                <span class="text-xs">{rooms()} {rooms() === 1 ? "room" : "rooms"} in view, labels {showLabels() ? "on" : "off"} ({prefs().labelMode === "auto" ? "auto" : "forced"})</span>
+                {/* A fixed slot, always present. Growing the line on hover
+                    reflowed the page under the pointer, which moved the dot out
+                    from under the click that was landing on it. */}
+                <span data-testid="explore-hover" class="w-56 flex-none truncate font-mono text-xs text-base-content/80">
+                  <Show when={hovered()}>{(h) => <>{h().label} {"\u00b7"} {h().verdict}</>}</Show>
+                </span>
+              </Show>
               <span class="flex-1" />
               <div class="join" role="group" aria-label="Face">
                 <Button size="sm" class="join-item" intent={face() === "cards" ? "action" : undefined} aria-pressed={face() === "cards"} onClick={() => setFace("cards")}>fleet</Button>
@@ -283,27 +358,7 @@ export default function Explore() {
             </div>
 
             <Show when={face() === "table"} fallback={
-              <Show when={query().trim() === ""} fallback={
-                <div data-testid="explore-hits" class="card border border-base-300 bg-base-200">
-                  <div class="flex items-center justify-between px-3 py-2 text-xs text-base-content/60">
-                    <span>{hits().length === 1 ? "1 match" : `${hits().length} matches`} · systems first, then locations</span>
-                    <span>Esc clears · Enter opens</span>
-                  </div>
-                  <For each={hits()}>
-                    {(h) => (
-                      <button type="button" class="flex w-full cursor-pointer items-center gap-3 border-t border-base-300 px-3 py-2 text-left text-sm hover:bg-base-content/5" onClick={() => onHit(h.id)}>
-                        <span class="w-3 flex-none text-xs" classList={{ "text-primary": h.kind === "system", "text-base-content/50": h.kind === "location" }}>{h.kind === "system" ? "◆" : "▸"}</span>
-                        <span class="min-w-0 flex-1">
-                          <span class="font-medium">{h.label}</span>
-                          <span class="block truncate text-xs text-base-content/60">{h.path}</span>
-                        </span>
-                        <HealthBadge verdict={h.verdict ?? undefined} size="xs" />
-                      </button>
-                    )}
-                  </For>
-                  <Show when={hits().length === 0}><p class="px-3 py-4 text-sm text-base-content/60">Nothing matches.</p></Show>
-                </div>
-              }>
+              <>
                 <PresetBar
                   presets={[...STOCK_PRESETS, ...saved()]}
                   state={currentState()}
@@ -313,33 +368,19 @@ export default function Explore() {
                   onForget={forget}
                 />
 
-                <Controls
-                  prefs={prefs()}
-                  onPrefs={setPrefs}
-                  attentionOnly={attentionOnly()}
-                  onAttentionOnly={setAttentionOnly}
-                  drilled={site() !== null}
-                />
-
-                <div data-testid="explore-status" class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-base-content/60">
-                  <nav aria-label="Path" class="flex items-center gap-1">
-                    <button type="button" class="font-medium hover:underline" classList={{ "text-primary": site() !== null }} disabled={site() === null} onClick={() => setSite(null)}>All locations</button>
-                    <For each={crumbs()}>
-                      {(c, i) => (
-                        <>
-                          <span aria-hidden="true">›</span>
-                          <button type="button" class="hover:underline" disabled={i() === crumbs().length - 1} onClick={() => setSite(c.id)}>{c.label}</button>
-                        </>
-                      )}
-                    </For>
-                  </nav>
-                  <span>{rooms()} {rooms() === 1 ? "room" : "rooms"} in view · labels {showLabels() ? "on" : "off"} ({prefs().labelMode === "auto" ? "auto" : "forced"})</span>
-                  <Show when={hovered()}>{(h) => <span class="font-mono text-base-content/80">{h().label} · {h().verdict}</span>}</Show>
-                </div>
-
+                <ListShell
+                  filterKeys={filterKeys}
+                  rows={rows()}
+                  chips={chips}
+                  onChips={setChips}
+                  placeholder="filter: verdict, type, standard, path, name"
+                  trailing={<Controls prefs={prefs()} onPrefs={setPrefs} />}
+                >
+                  {() => (
+                    <div class="flex flex-col gap-3.5 p-3">
                 <Show when={sections().length > 0 || unplaced().length > 0} fallback={
                   <p class="rounded-box border border-dashed border-base-300 px-4 py-8 text-center text-sm text-base-content/60">
-                    {attentionOnly() ? "Nothing needs attention." : "No locations to show."}
+                    {chips().length > 0 ? "Nothing here matches the filter." : "No locations to show."}
                   </p>
                 }>
                   <Show when={prefs().renderer === "mosaic"}>
@@ -385,7 +426,10 @@ export default function Explore() {
                     </Show>
                   </div>
                 </Show>
-              </Show>
+                    </div>
+                  )}
+                </ListShell>
+              </>
             }>
               <div data-testid="fleet-list-face" class="flex flex-col gap-3">
                 <div role="tablist" class="tabs tabs-box w-fit">
@@ -519,9 +563,6 @@ function Field(props: { label: string; value: string; options: string[]; onPick:
 function Controls(props: {
   prefs: Prefs;
   onPrefs: (patch: Partial<Prefs>) => void;
-  attentionOnly: boolean;
-  onAttentionOnly: (on: boolean) => void;
-  drilled: boolean;
 }) {
   return (
     <div data-testid="explore-controls" class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-box border border-base-300 bg-base-200 px-3 py-1.5">
@@ -533,10 +574,6 @@ function Controls(props: {
         <input type="checkbox" class="checkbox checkbox-xs" checked={props.prefs.roomBox} onChange={(e) => props.onPrefs({ roomBox: e.currentTarget.checked })} />
         Room boxes
       </label>
-      <label class="flex cursor-pointer items-center gap-1.5 text-xs">
-        <input type="checkbox" class="checkbox checkbox-xs" checked={props.attentionOnly} onChange={(e) => props.onAttentionOnly(e.currentTarget.checked)} />
-        Only what needs attention
-      </label>
     </div>
   );
 }
@@ -544,6 +581,13 @@ function Controls(props: {
 // One root's section: its cards at that root's own cut, plus anything attached
 // above the cut. A card names its own type, which is how a non-uniform fleet
 // reads as non-uniform instead of being flattened.
+// The badge hue is the WORST thing present, which is not the same question as
+// whether anything needs attention: a section whose only trouble is unfinished
+// commissioning needs somebody, and is not degraded.
+function worstOf(c: Counts): Verdict {
+  return c.outage > 0 ? "outage" : c.degraded > 0 ? "degraded" : "incomplete";
+}
+
 function sectionMeta(section: SectionModel): string {
   const n = section.cards.length;
   const kind = `${n} ${section.cutType}${n === 1 ? "" : "s"}`;
@@ -574,7 +618,7 @@ function SectionView(props: {
               separate nodes, which reads badly to a screen reader and cannot be
               matched as a phrase. */}
           <span class="font-mono text-[11px] text-base-content/50">{sectionMeta(props.section)}</span>
-          <Show when={attention() > 0}><HealthBadge verdict={props.section.counts.outage ? "outage" : "degraded"} size="xs" /></Show>
+          <Show when={attention() > 0}><HealthBadge verdict={worstOf(props.section.counts)} size="xs" /></Show>
           {/* Create where you stand: the node in the header is the placement,
               so the form opens already knowing where it lands. */}
           <Show when={props.drilled}>
@@ -655,7 +699,7 @@ function CardView(props: {
         <div class="grid grid-cols-[12rem_1fr] items-start gap-4 py-2">
           <div>
             {header}
-            <Show when={attention() > 0}><HealthBadge verdict={props.card.counts.outage ? "outage" : "degraded"} size="xs" /></Show>
+            <Show when={attention() > 0}><HealthBadge verdict={worstOf(props.card.counts)} size="xs" /></Show>
           </div>
           <DotField node={props.card.field} density={props.density} showLabels={props.showLabels} showBoxes={props.showBoxes} onHover={props.onHover} onPick={props.onPick} />
         </div>

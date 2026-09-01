@@ -123,7 +123,7 @@ export function layoutPx<T>(items: Array<Weighted<T>>, w: number, h: number): Ar
     .filter((p) => p.w > 0 && p.h > 0);
 }
 
-export type Severity = "idle" | "healthy" | "degraded" | "outage";
+export type Severity = "idle" | "healthy" | "incomplete" | "degraded" | "outage";
 
 // A tile's colour, as a severity and how much of the tile is that way. The
 // renderer turns this into pixels; keeping it as data is what makes "one
@@ -139,8 +139,30 @@ export function fillFor(c: Counts): Fill {
   if (total === 0) return { severity: "idle", share: 0 };
   const bad = attentionOf(c);
   if (bad === 0) return { severity: "healthy", share: 0 };
-  return {
-    severity: c.outage > 0 ? "outage" : "degraded",
-    share: Math.sqrt(bad / total),
-  };
+  // Hue is the worst thing present, and incomplete is its own: a card whose
+  // only trouble is unfinished commissioning must not read as degraded.
+  const severity: Severity = c.outage > 0 ? "outage" : c.degraded > 0 ? "degraded" : "incomplete";
+  return { severity, share: Math.sqrt(bad / total) };
+}
+
+
+// The tile's colour, as CSS. It lives beside fillFor because it is the other
+// half of the same rule: the fill says how much and how bad, this says what
+// that looks like, and both are testable without a DOM.
+export function tint(fill: Fill): string {
+  if (fill.severity === "idle") return "var(--color-base-300)";
+  if (fill.severity === "healthy") return "var(--color-success)";
+  const hue =
+    fill.severity === "outage" ? "var(--color-error)"
+    : fill.severity === "degraded" ? "var(--color-warning)"
+    // The console's own commissioning hue (--og-incomplete, what
+    // .badge-incomplete and .bg-incomplete paint with). Falling through to the
+    // neutral here made an unfinished card look like an EMPTY one, which is the
+    // one thing the mosaic must not confuse: a room with a gap in it has
+    // something in it.
+    : "var(--og-incomplete)";
+  // A share of 0 would be pure green and a share of 1 pure red; in between the
+  // tile reads as "mostly fine with something wrong" rather than as an alarm.
+  const pct = Math.round(20 + fill.share * 80);
+  return `color-mix(in srgb, ${hue} ${pct}%, var(--color-success))`;
 }

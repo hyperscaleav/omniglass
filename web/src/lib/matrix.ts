@@ -76,9 +76,7 @@ function cellFor(systems: FleetSystem[]): MatrixCell {
 }
 
 function keep(s: FleetSystem, opts: ExploreOptions): boolean {
-  if (!opts.attentionOnly) return true;
-  const v = verdictOf(s.verdict);
-  return v === "degraded" || v === "outage";
+  return !opts.include || opts.include(s.id);
 }
 
 // matrixFor pivots the fleet: one row per root and, while the table is small

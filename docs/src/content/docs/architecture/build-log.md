@@ -5848,8 +5848,8 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   #841). The sidebar's one door into the fleet is Explore. What it draws, and why it is
   not the Miller-column drill this slice first built, is the entry below: the columns
   were replaced before anything shipped. What survives from here is the page's frame:
-  search by name or path fragment, with hits carrying their paths because a name repeats
-  across rooms; `?node=` landing on a node by uuid or by a unique name; create where you
+  finding one thing by name or by path fragment (a hit list at first, the console's filter
+  bar by the end of the epic); `?node=` landing on a node by uuid or by a unique name; create where you
   stand, the same form empty with the placement prefilled through `?under=`; and the
   header's toggle wearing today's list face at `?face=table` until #828. The Fleet entry
   and the reserved Explore stub retire from the sidebar; `/fleet` redirects here.
@@ -5894,3 +5894,22 @@ and overlaps that read as data.
 of the same object the controls write to, so it can never mean something the controls cannot
 produce, and it carries no scope at all: that omission is the line between this page and a
 dashboard, and there is a test asserting it.
+
+The page then took the console's standard chrome, which is what the rest of the fleet already
+wears: a counts line on top whose need-attention count is itself the quick filter, then
+`ListShell` (filter bar and card) around the body. Three bespoke things retire with it. The
+search box and its hit list become the filter bar's bare term, matching a system by name or by
+the place it sits in, and `lib/explore.ts` is deleted with them. The attention checkbox becomes
+the counts line's own button, writing the same verdict chip the filter bar shows, so the two
+cannot disagree. And the status line folds into the counts line. Filtering drops a card whose
+systems all fall outside it, which is what makes the filter read as a search; the filter keys
+are verdict, location type, standard, path and name, and deliberately not a location facet,
+since naming a subject is the drill's job and the line this page holds.
+
+Two defects came out of the alignment. The page's `attentionOf` had excluded `incomplete` while
+the console's fleet tiles had always counted it, so the counts line said one when two systems
+needed somebody; the older surface won, and the badge and the mosaic then had to learn that
+incomplete is its own hue rather than a shade of degraded or the colour of an empty tile. And
+the hover readout grew the counts line when a dot was hovered, reflowing the page under the
+pointer and moving the dot out from under the click that was landing on it, which the e2e walk
+caught; its slot is now reserved.

@@ -1,5 +1,5 @@
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import { fillFor, layoutPx, type Fill } from "../lib/mosaic";
+import { fillFor, layoutPx, tint } from "../lib/mosaic";
 import { foldToBudget, frameLayout } from "../lib/view_budgets";
 import { attentionOf, countsLine, totalOf, type CardModel, type SectionModel } from "../lib/explore_view";
 
@@ -20,16 +20,6 @@ import { attentionOf, countsLine, totalOf, type CardModel, type SectionModel } f
 //   ResizeObserver redraws when it changes.
 
 const HEIGHT = 420;
-
-function tint(fill: Fill): string {
-  if (fill.severity === "idle") return "var(--color-base-300)";
-  if (fill.severity === "healthy") return "var(--color-success)";
-  const hue = fill.severity === "outage" ? "var(--color-error)" : "var(--color-warning)";
-  // A share of 0 would be pure green and a share of 1 pure red; in between the
-  // tile reads as "mostly fine with something wrong" rather than as an alarm.
-  const pct = Math.round(20 + fill.share * 80);
-  return `color-mix(in srgb, ${hue} ${pct}%, var(--color-success))`;
-}
 
 type Tile = { card: CardModel; folded?: number };
 

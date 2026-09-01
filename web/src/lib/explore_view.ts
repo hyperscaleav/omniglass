@@ -51,7 +51,10 @@ export type SectionModel = {
   counts: Counts;
 };
 
-export type ExploreOptions = { attentionOnly: boolean; sort: Sort };
+// include is the filter the chrome applies. The shell owns the chips and the
+// predicate; the model only asks whether a system survived them, so the two
+// cannot disagree about what is on screen.
+export type ExploreOptions = { sort: Sort; include?: (systemId: string) => boolean };
 
 export const emptyCounts = (): Counts => ({ healthy: 0, incomplete: 0, degraded: 0, outage: 0 });
 
@@ -69,11 +72,16 @@ export function totalOf(c: Counts): number {
 }
 
 // What "needs attention" means in one place, so the filter, the counts line
-// and any fill that ramps on it can never disagree. Incomplete is deliberately
-// not attention: a commissioning gap is not a fault, and folding it in paints
-// a mid-rollout fleet amber and teaches an operator to ignore the colour.
+// and any fill that ramps on it can never disagree.
+//
+// This counts INCOMPLETE, which the console's fleet tiles have always counted
+// (lib/fleet_tiles). An earlier version here left it out on the grounds that a
+// commissioning gap is not a fault, which is true of how it should be RANKED
+// and false of whether somebody has to act on it. Two surfaces in one console
+// disagreeing about what needs attention is worse than either answer, and the
+// older surface is the console's.
 export function attentionOf(c: Counts): number {
-  return c.degraded + c.outage;
+  return c.degraded + c.outage + c.incomplete;
 }
 
 const RANK: Record<string, number> = { healthy: 0, incomplete: 1, degraded: 2, outage: 3 };
@@ -95,7 +103,7 @@ function sortItems(items: DotItem[], sort: Sort): DotItem[] {
 }
 
 function keep(item: DotItem, opts: ExploreOptions): boolean {
-  return !opts.attentionOnly || item.verdict === "degraded" || item.verdict === "outage";
+  return !opts.include || opts.include(item.id);
 }
 
 // heightOf is how deep a subtree runs below a node, in levels. It is what the
@@ -182,7 +190,7 @@ function systemsUnder(view: FleetView, nodeId: string): FleetSystem[] {
 // asking about rooms that hold nothing.
 function cardFor(view: FleetView, node: FleetLocation, opts: ExploreOptions): CardModel | null {
   const field = fieldFor(view, node.id, opts);
-  if (!field && opts.attentionOnly) return null;
+  if (!field && opts.include) return null;
   const all = systemsUnder(view, node.id).map(toItem);
   return {
     id: node.id,
@@ -267,6 +275,50 @@ export function insideOf(view: FleetView, nodeId: string, opts: ExploreOptions):
 // own section so they are visible rather than silently missing.
 export function unplacedFor(view: FleetView, opts: ExploreOptions): DotItem[] {
   return sortItems(unplacedSystems(view).map(toItem).filter((i) => keep(i, opts)), opts.sort);
+}
+
+// The rows the chrome filters: every system the view carries, with the facts a
+// facet needs already resolved. Deriving them here keeps the page from teaching
+// the filter bar about the place tree.
+export type SystemRow = {
+  id: string;
+  name: string;
+  label: string;
+  verdict: Verdict | null;
+  path: string;
+  locationType: string;
+  // The haystack the bare typed term searches: the system's rendered label, its
+  // handle, and the place it sits in. It is built here rather than in the page
+  // so the label is already resolved once, by the one renderer, before anything
+  // concatenates it.
+  search: string;
+};
+
+export function systemRows(view: FleetView): SystemRow[] {
+  const index = locationIndex(view);
+  const pathOf = (id: string | undefined): string => {
+    if (!id) return "";
+    const parts: string[] = [];
+    let cur = index.get(id);
+    let guard = (view.locations?.length ?? 0) + 1;
+    while (cur && guard-- > 0) {
+      parts.unshift(entityLabel(cur));
+      cur = cur.parent ? index.get(cur.parent) : undefined;
+    }
+    return parts.join(" / ");
+  };
+  return (view.systems ?? []).map((s) => {
+    const path = pathOf(s.location);
+    return {
+      id: s.id,
+      name: s.name,
+      label: entityLabel(s),
+      verdict: verdictOf(s.verdict),
+      path,
+      locationType: s.location ? (index.get(s.location)?.location_type ?? "") : "",
+      search: [entityLabel(s), s.name, path].join(" "),
+    };
+  });
 }
 
 // roomsInView is what the label budget is spent against: the leaf locations

@@ -111,7 +111,7 @@ screenshots:
 
 The fleet has one door in the sidebar: **Explore**. It opens on the whole fleet, drawn
 as cards you can read at a glance; the same page wears three other renderers and a table
-face behind the controls in its header. From a system you open its **workspace**, the
+face behind the controls in its filter bar. From a system you open its **workspace**, the
 monitoring page, at the system's own address. The old `/fleet` address lands on Explore.
 
 ## Explore
@@ -141,7 +141,7 @@ screen at any type size, so the page counts what is in front of you: under a cou
 dozen rooms it names them, above that the card headers carry the identity and the dots
 carry the shape. Drill into one card and the names come back on their own, with no control
 touched. **Labels: always** overrides it when you want every name for a screenshot or a
-projector, and the status line always says which is in force.
+projector, and the counts line always says which is in force.
 
 ### Four ways of drawing the same fleet
 
@@ -171,17 +171,28 @@ between this page and a dashboard, and it is deliberate.
 
 ### Finding one thing
 
-**Search** (the box at the top, or `/`) matches a system or a location by name or by any
-fragment of its path, systems first and worst first; each hit carries its path, because
-names repeat across rooms and the path is what makes one unambiguous. Choosing a location
-opens it; choosing a system opens its workspace.
+Explore wears the same chrome as every other fleet page: a **counts line** across the top
+that says what the whole fleet looks like, and the **filter bar** below it. Typing a bare
+term (or pressing `/`) matches a system by name or by any fragment of the place it sits
+in, so typing a building name narrows the page to that building. `verdict:`, `type:`,
+`standard:` and `path:` narrow it precisely. A card whose systems all fall outside the
+filter is dropped rather than drawn empty, which is what makes filtering read as a search.
+
+The counts line's **needs attention** count is itself the filter: click it and the page
+keeps only what is in outage, degraded, or incomplete. It is the same control the other
+fleet pages carry, and it is the same verdict chip the filter bar shows, so the two can
+never disagree about what needs attention.
+
+What the filter bar does **not** offer is a location facet. Naming a part of your fleet to
+include is choosing a subject, which is what drilling in does, and it is the line between
+this page and a dashboard.
 
 The address carries where you stood: `?node=<id>` opens that location, and a name works
-too when it names exactly one thing, so `?node=huddle` lands on the huddle room.
-`?attention=1` carries the filter, so a link can hand somebody exactly what you were
-looking at. How you were looking, the renderer, the density, the sort, is remembered in
-your browser instead, so a shared link never overrides the other person's preferences.
-`?face=table` lands on the table face, and `t` toggles between the two.
+too when it names exactly one thing, so `?node=huddle` lands on the huddle room. `?chips=`
+carries the filter, so a link can hand somebody exactly what you were looking at. How you
+were looking, the renderer, the density, the sort, is remembered in your browser instead,
+so a shared link never overrides the other person's preferences. `?face=table` lands on
+the table face, and `t` toggles between the two.
 
 **Create where you stand.** Drill into a location and, when you hold the create
 permissions, the header offers **+ Location here** and **+ System here**: the same create

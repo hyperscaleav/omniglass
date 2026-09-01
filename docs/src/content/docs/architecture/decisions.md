@@ -6196,8 +6196,11 @@ interface create form, since that name is the platform's to mint.
   renderers over one model, one cut and one mark vocabulary, so a fifth costs a chip. A
   preset is a snapshot of the same object the controls write to, and carries how the fleet
   is drawn and which live state is filtered, **never a scope**. That last clause is the line
-  between this page and a dashboard: a control that changes what is included rather than how
-  it is drawn does not belong here.
+  between this page and a dashboard, and it is about kind rather than degree: filtering on a
+  **predicate over live state** (verdict, standard, location type, a name or path fragment)
+  is exploring, and it is what the page's filter bar does; **naming subjects** to include is
+  choosing a scope, which is what drilling does and what a dashboard widget owns. So there is
+  no location facet in the filter bar, and no preset carries one.
 
   Alongside these, one `EntityForm` per kind renders read or edit wherever the operator
   meets the entity (blade, drilled header, Configure tab; create is the same form empty with
