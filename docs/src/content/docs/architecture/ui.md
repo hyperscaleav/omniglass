@@ -163,8 +163,8 @@ Two layers, deliberately decoupled:
    `/components`, `/templates`, `/config`); a URL addresses the *entity*, never its place in the
    menu, so deep links stay stable however the menu is reorganized. No taxonomy-nested routes, no
    redirects to maintain.
-2. **The sidebar groups those flat routes into clusters for browsing**: Home, Fleet (the one
-   canvas, #633), Dashboards, Alarms,
+2. **The sidebar groups those flat routes into clusters for browsing**: Home, Explore (the one
+   door into the fleet, #826), Dashboards, Alarms,
    Inventory (locations, systems, components, nodes), Values (variables, secrets, config, files),
    Catalog (a single entry opening the catalog shell, next), Explore, Learn, Admin (users, roles,
    groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:

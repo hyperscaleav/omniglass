@@ -35,7 +35,7 @@ import { sinceOf } from "../lib/system_zoom";
 import { describeError, fmtTime } from "../lib/format";
 import { locationHealth, locationHealthKey } from "../lib/health";
 
-// The location zoom (#635): the same canvas one level down, at the identity
+// The location zoom (#635): the same cards one level down, at the identity
 // route, the DEFAULT face since ADR-0129. One band per direct child whatever its
 // type, the placed-here band first with this location's own systems as cards,
 // the subtree's holes dashed under the child that contains them, and the

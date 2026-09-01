@@ -29,10 +29,14 @@ export default function FleetShell(props: {
   // zoom has nothing to filter; above the body when it has both.
   header?: JSX.Element;
   // The density toggle's list face (#798, ADR-0129: tables survive as a
-  // list-density toggle). When set, the shell offers canvas/list buttons and
-  // `?view=list` swaps the whole body (summary, filter bar, canvas) for this
+  // list-density toggle). When set, the shell offers cards/list buttons and
+  // `?view=list` swaps the whole body (header, filter bar, cards) for this
   // face; the view is a URL fact, so the address deep-links. Leaving the list
   // clears `kind` with it (the fleet root's tab param has no meaning off it).
+  //
+  // The other face is CARDS, not a canvas: the band canvas retired with #826
+  // and this toggle outlived the thing it was named after, which is why the
+  // label said "Canvas view" for a while after there was no canvas.
   list?: JSX.Element;
   children: JSX.Element;
 }) {
@@ -40,7 +44,7 @@ export default function FleetShell(props: {
   const listMode = () => props.list != null && search.view === "list";
   const viewToggle = () => (
     <div data-testid="view-toggle" class="join flex-none">
-      <Button square icon={Grid} title="Canvas view" label="Canvas view" class="join-item" intent={listMode() ? "quiet" : "action"} onClick={() => setSearch({ view: undefined, kind: undefined })} />
+      <Button square icon={Grid} title="Cards view" label="Cards view" class="join-item" intent={listMode() ? "quiet" : "action"} onClick={() => setSearch({ view: undefined, kind: undefined })} />
       <Button square icon={Rows} title="List view" label="List view" class="join-item" intent={listMode() ? "action" : "quiet"} onClick={() => setSearch({ view: "list" })} />
     </div>
   );
@@ -59,16 +63,16 @@ export default function FleetShell(props: {
   if (props.list != null) {
     return (
       <section class="fade-in flex flex-col gap-3.5">
-        <Show when={listMode()} fallback={canvasFace(viewToggle)}>
+        <Show when={listMode()} fallback={cardsFace(viewToggle)}>
           <div class="flex items-center justify-end">{viewToggle()}</div>
           {props.list}
         </Show>
       </section>
     );
   }
-  return canvasFace();
+  return cardsFace();
 
-  function canvasFace(toggle?: () => JSX.Element) {
+  function cardsFace(toggle?: () => JSX.Element) {
     return (
     <div class="flex flex-col gap-3.5">
       {/* The one counts line (#826): what the summary rail said, with the
