@@ -36,7 +36,10 @@ Not a vibe at each gate, a check:
   the deferred items (each its own issue), and the authorization surface (the permission checked
   and the scope injected). **No worktree or branch is created until the issue exists and the
   architect has approved its scope,** so the boundary is agreed before any code, not discovered
-  at review.
+  at review. The one carve-out is the [autopilot](/contributing/autopilot/)
+  ([ADR-0138](/architecture/decisions/#adr-0138-the-autopilot-ships-a-daily-slice-and-pr-review-is-its-approval-gate)):
+  a slice it scopes for itself files the marked definition and proceeds, and the architect's
+  approval is paid at the PR instead; what it may self-scope is bounded on that page.
 - **Tests are tiered and fresh.** Unit (pure, fast), integration (real Postgres via
   testcontainers, no mocking the database), and end-to-end (drive the entry point as the user).
   `make test` is the gate, run without a cache: a cached pass or a `-short` run hides the
