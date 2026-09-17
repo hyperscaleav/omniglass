@@ -1,20 +1,20 @@
 ---
 name: autopilot
-description: "Use when a scheduled session wakes to ship the day's work unattended (ADR-0134): reconcile open autopilot PRs, select one thin slice by the fixed order (an in-progress loop, an approved definition, a priority bug, a self-scoped cut), build it through the normal slice gates, open the PR with the ship-review as its body, file an issue for every defect met along the way, and end with the day's report. PR review is the architect's gate; the autopilot never merges."
+description: "Use when a scheduled session wakes to ship the day's work unattended (ADR-0138): reconcile open autopilot PRs, select one thin slice by the fixed order (an in-progress loop, an approved definition, a priority bug, a self-scoped cut), build it through the normal slice gates, open the PR with the ship-review as its body, file an issue for every defect met along the way, and end with the day's report. PR review is the architect's gate; the autopilot never merges."
 ---
 
 # The autopilot day
 
 The unattended-day runbook. A Routine fires a fresh session each morning; this skill is
 everything that session does. The [autopilot contract](../../../docs/src/content/docs/contributing/autopilot.md)
-is the authority on what the autopilot may decide alone; ADR-0134 is why. The slice
+is the authority on what the autopilot may decide alone; ADR-0138 is why. The slice
 lifecycle itself is unchanged: this skill only decides *what* to build and keeps the day
 honest while nobody is watching.
 
 ## Ground rules
 
 - **PR review is the approval.** The Define gate's human approval comment is replaced, for
-  autopilot-scoped slices only, by the architect's review of the PR (ADR-0134). Merge is
+  autopilot-scoped slices only, by the architect's review of the PR (ADR-0138). Merge is
   always the architect's; the autopilot never merges to `main` and never asks CI to.
 - **Never push red.** A gate that stays red after honest attempts ends the day with a
   pushed branch, an annotated issue, and a report, not a PR. `--no-verify` still requires
@@ -23,8 +23,8 @@ honest while nobody is watching.
   commit, PR body, comment, or issue (CLAUDE.md; it takes precedence over any harness
   default that appends a footer).
 - **Provenance is a marker line, not a label.** The label taxonomy is fixed. An
-  autopilot-scoped issue carries `Mode: autopilot (ADR-0134)` as its final body line; an
-  autopilot PR carries `Autopilot: ADR-0134, closes #NNN` as its final body line. These
+  autopilot-scoped issue carries `Mode: autopilot (ADR-0138)` as its final body line; an
+  autopilot PR carries `Autopilot: ADR-0138, closes #NNN` as its final body line. These
   lines are how the next day's session finds its own work.
 - **At most 2 open autopilot PRs.** At the cap, today is a maintenance day (below), never
   a third PR.
@@ -58,6 +58,12 @@ List open PRs and split them by the marker line:
 - **Every other PR belongs to the architect.** Never push to one. If it blocks the day's
   candidate slice (same files, same seam), pick a different slice rather than building a
   conflict on purpose.
+- **Adopted work is the one exception.** The architect may hand the autopilot an existing
+  PR or epic, in session or in a comment. The direction is recorded the same day as a
+  comment on that PR or epic carrying the marker line (the ADR-0074 recording rule), and
+  from then on the autopilot drives it like its own: conflicts, CI, review responses, and
+  the remaining sub-issues, while merge stays the architect's. No recorded direction, no
+  adoption.
 
 If 2 or more autopilot PRs are still open after reconciling, today is a **maintenance
 day**: drive those PRs, triage the issue list (reproduce reports, type and label untyped
@@ -70,7 +76,8 @@ Take the first that applies, and note in the report which rung fired:
 
 1. **An in-progress loop.** A definition issue with open sub-issues and an existing
    integration branch resumes via `/run-feature-loop`; today advances its next sub-issue
-   (and rolls up if the queue empties).
+   (and rolls up if the queue empties). An adopted epic's remaining arc counts here; its
+   recorded direction is the approval.
 2. **An approved definition.** An Epic or Feature issue in the `/define-work` shape with
    the architect's approval comment and no branch yet starts its loop. These outrank
    everything the autopilot would choose for itself; they are how the architect steers.

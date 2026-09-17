@@ -1,6 +1,6 @@
 ---
 title: Autopilot
-description: "A scheduled session ships one thin slice per day unattended: how it chooses work, what it may decide alone, and why PR review is its approval gate (ADR-0134)."
+description: "A scheduled session ships one thin slice per day unattended: how it chooses work, what it may decide alone, and why PR review is its approval gate (ADR-0138)."
 ---
 
 The **autopilot** is the repo shipping without its architect in the room: a scheduled
@@ -9,17 +9,17 @@ Routine fires a fresh agent session each morning, the session runs the
 end to end, and the day ends as one reviewable PR plus a set of filed issues. The
 [slice workflow](/contributing/slice-workflow/) is unchanged inside the day; what changes
 is where its one human gate is paid
-([ADR-0134](/architecture/decisions/#adr-0134-the-autopilot-ships-a-daily-slice-and-pr-review-is-its-approval-gate)).
+([ADR-0138](/architecture/decisions/#adr-0138-the-autopilot-ships-a-daily-slice-and-pr-review-is-its-approval-gate)).
 
 ## The contract
 
 The slice workflow's Define stage is a hard gate: no branch until the issue exists and
 the architect has approved its scope. That gate assumed a present architect; unattended,
-it deadlocks. ADR-0134 resolves it without weakening the boundary:
+it deadlocks. ADR-0138 resolves it without weakening the boundary:
 
 - For a slice the autopilot **scopes itself**, it files the definition issue in the
   [`/define-work`](/contributing/feature-loops/) shape, marks it
-  `Mode: autopilot (ADR-0134)`, and proceeds. The architect's approval moves to the PR:
+  `Mode: autopilot (ADR-0138)`, and proceeds. The architect's approval moves to the PR:
   **approving and merging is the accept, closing is the veto, a review comment is the
   redirect** (the autopilot answers and pushes).
 - The ship-review stays the approval artifact, front-loading the two lines the architect
@@ -32,9 +32,11 @@ it deadlocks. ADR-0134 resolves it without weakening the boundary:
 1. **Reconcile.** Open autopilot PRs (found by their marker line) are driven back to
    green first: conflicts merged out, red CI root-caused, review comments implemented or
    answered. A green PR waiting only on the architect is left alone. PRs without the
-   marker belong to the architect and are never touched. Two or more autopilot PRs still
-   open means today is a **maintenance day**: drive them, triage the issue list, file
-   what the sweep finds, no new branch.
+   marker belong to the architect and are never touched, with one exception: a PR or
+   epic the architect has explicitly handed over (the direction recorded as a marker
+   comment on it) is **adopted**, and the autopilot drives it like its own from then on.
+   Two or more autopilot PRs still open means today is a **maintenance day**: drive
+   them, triage the issue list, file what the sweep finds, no new branch.
 2. **Choose.** The first rung that applies: an in-progress
    [feature loop](/contributing/feature-loops/) resumes; an architect-approved
    definition starts its loop; an open `Bug` by board priority gets its fix, regression
@@ -72,7 +74,9 @@ The architect steers without attending:
   tomorrow's work, ahead of anything the autopilot would choose.
 - **Set board priority** on `Bug` issues; the autopilot takes `High` before `Medium`.
 - **Review the PRs.** Comments are implemented or answered; a close is a respected veto.
-- **Find its work** by searching issues and PRs for `ADR-0134` (the marker line).
+- **Hand it existing work.** A direction on a PR or epic (given in session and recorded
+  there as a marker comment) makes that work autopilot-driven until it merges or closes.
+- **Find its work** by searching issues and PRs for `ADR-0138` (the marker line).
 - **Pause or retime it** by disabling or editing the Routine; delete it and the
   autopilot simply never wakes again.
 
@@ -86,7 +90,7 @@ behavior lives in the versioned skill rather than in trigger config:
 ```text
 Omniglass autopilot: ship today's slice. Work in the hyperscaleav/omniglass clone in
 this environment. Read CLAUDE.md, then invoke the /autopilot skill and follow it end
-to end: reconcile the standing autopilot PRs, select one thin slice by the ADR-0134
+to end: reconcile the standing autopilot PRs, select one thin slice by the ADR-0138
 order, build it through the full gates (test-first, docs-with-everything, /assess-ui
 for any operator surface, /adversarial-review, /ship-slice), open the PR with the
 ship-review as its body, subscribe to its activity, file an issue for every defect or

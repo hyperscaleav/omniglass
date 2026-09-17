@@ -5833,7 +5833,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
 - **The autopilot harness: an unattended day ships a reviewed slice**
   ([#844](https://github.com/hyperscaleav/omniglass/issues/844)). The Define gate assumed a present
   architect: no approval comment, no branch, so a day nobody attended shipped nothing while the
-  backlog aged. ADR-0134 moves that approval to the PR for slices the autopilot scopes itself: a
+  backlog aged. ADR-0138 moves that approval to the PR for slices the autopilot scopes itself: a
   scheduled Routine fires a fresh session each morning, the session reconciles the standing
   autopilot PRs, then takes the first rung that applies (an in-progress loop, an
   architect-approved definition, a `Bug` by board priority, else it files a marked definition in

@@ -30,7 +30,7 @@ issue the same day, so the paper trail never depends on a chat transcript. A loo
 creating its own; adoption carries a verification step, the breakdown must add up to the
 approved definition and no more, and any mismatch goes back to the architect. The
 [autopilot](/contributing/autopilot/) is the bounded exception: for the slices it scopes
-itself, ADR-0134 moves this approval to the PR.
+itself, ADR-0138 moves this approval to the PR.
 
 **Loop.** On approval the loop creates the sub-issues under the parent and opens one
 **integration branch** for the definition. Each sub-issue is one slice, built test-first

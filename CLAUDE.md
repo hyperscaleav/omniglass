@@ -78,7 +78,7 @@ PR-only. Branch from `origin/main`, do the work in a git worktree under
 work executed as a feature loop rolls its slices up into one PR per approved definition
 instead of one per slice ([docs/contributing/feature-loops.md](docs/src/content/docs/contributing/feature-loops.md), ADR-0074).
 A scheduled autopilot session ships one thin slice per day unattended, with PR review as
-its approval gate ([docs/contributing/autopilot.md](docs/src/content/docs/contributing/autopilot.md), ADR-0134).
+its approval gate ([docs/contributing/autopilot.md](docs/src/content/docs/contributing/autopilot.md), ADR-0138).
 
 ```bash
 git fetch origin main
@@ -154,7 +154,7 @@ Procedural workflows live under [.claude/skills/](.claude/skills/). Invoke with
 - **`/ship-slice`** - the pre-ship validation pass (fresh `make test`, `make gen` drift check,
   em-dash and attribution scan, a reviewer pass, docs-with-everything) and the ship-review report
   the architect approves from. Run at PR-ready.
-- **`/autopilot`** - the unattended daily run (ADR-0134): reconcile the standing autopilot PRs,
+- **`/autopilot`** - the unattended daily run (ADR-0138): reconcile the standing autopilot PRs,
   pick one thin slice (an in-progress loop, an approved definition, a priority bug, else a
   self-scoped cut), build it through the full gates, ship the PR, file everything found, report.
   PR review is the architect's gate; see [docs/contributing/autopilot.md](docs/src/content/docs/contributing/autopilot.md).
