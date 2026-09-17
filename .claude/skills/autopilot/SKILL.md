@@ -38,9 +38,13 @@ Hub 403s through the proxy
 (`docker pull mirror.gcr.io/library/postgres:18 && docker tag mirror.gcr.io/library/postgres:18 postgres:18`,
 same for `testcontainers/ryuk:0.13.0`), and the pinned protoc pair when `make gen` will
 run (protoc 34.1 plus `protoc-gen-go@v1.36.11`; `make gen` also needs Docker, since
-`erdgen` applies the migrations to a throwaway container). A gate that genuinely cannot
-run in the environment is named in the ship-review with CI as the stated proof, never
-silently skipped.
+`erdgen` applies the migrations to a throwaway container). Two Go integration tests
+wrap the ICMP capability: widen the ping group first
+(`sysctl -w net.ipv4.ping_group_range="0 2147483647"`, the same widening CI applies),
+and know that the remote sandbox answers echoes even for unroutable targets
+(TEST-NET-1), so the pinger's unreachable case can only prove itself in CI. A gate that
+genuinely cannot run in the environment is named in the ship-review with CI as the
+stated proof, never silently skipped.
 
 ## 2. Reconcile the standing PRs first
 
