@@ -38,6 +38,18 @@ type BannedTerm struct {
 // Banned is the denylist. Order is presentation only.
 var Banned = []BannedTerm{
 	{
+		// The entity an API is reached through renamed to endpoint (#811,
+		// #603's naming ruling): interface_type retired outright with its
+		// table (transports are the internal/transport code registry), and
+		// the entity noun's own spellings retire with it. The noun is banned
+		// in its entity phrasings rather than as a bare word, because
+		// "network interface" legitimately survives as the teaching contrast
+		// on the collection page and "user interface" is ordinary English.
+		Pattern:     regexp.MustCompile("\\binterface_type\\b|\\binterface-reachable\\b|\\ban interface\\b|\\bthe interface\\b|\\binterfaces\\b"),
+		Replacement: "endpoint (the entity), transport (the wire registry), endpoint-reachable (the datapoint)",
+		Origin:      "ADR-0134",
+	},
+	{
 		// The create form's precondition field, retired by ADR-0104's #702-review
 		// amendment: it binds the drafted NAME, because a name carries the stem
 		// and the suppression rule as well as the number and an ordinal claim was
@@ -378,9 +390,16 @@ var operatorStrings = []string{
 	filepath.Join("..", "..", "internal", "seed", "property_types.yaml"),
 	filepath.Join("..", "..", "internal", "seed", "metric_types.yaml"),
 	filepath.Join("..", "..", "internal", "seed", "command_types.yaml"),
-	filepath.Join("..", "..", "internal", "seed", "interface_types.yaml"),
 	filepath.Join("..", "..", "internal", "seed", "roles.yaml"),
 	filepath.Join("..", "..", "web", "src", "lib", "nav.ts"),
+	// The collection surfaces whose labels, confirms, and empty states an
+	// operator reads on the component detail: exactly where "2 interfaces" and
+	// "No interface declared yet" survived the #811 rename until the rollup's
+	// screenshot pass caught them.
+	filepath.Join("..", "..", "web", "src", "components", "ReachabilityPanel.tsx"),
+	filepath.Join("..", "..", "web", "src", "components", "endpointBlades.tsx"),
+	filepath.Join("..", "..", "web", "src", "lib", "fleet_tiles.ts"),
+	filepath.Join("..", "..", "web", "src", "pages", "ComponentLeaf.tsx"),
 	filepath.Join("..", "..", "README.md"),
 	// The generated OpenAPI document carries every Huma operation and field
 	// description (#451): the doc: tags flow to the spec, the CLI reference,

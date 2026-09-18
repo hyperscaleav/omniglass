@@ -6,7 +6,7 @@ import {
   reason,
   layerWord,
   STALENESS_WINDOW_MS,
-  type ReachInterface,
+  type ReachEndpoint,
 } from "./reachability";
 
 const now = Date.parse("2026-07-07T12:00:00Z");
@@ -51,15 +51,15 @@ describe("segments and uptime", () => {
 });
 
 describe("reason", () => {
-  const base: ReachInterface = {
-    interface: "disp-1-tcp",
-    interface_type: "tcp",
+  const base: ReachEndpoint = {
+    endpoint: "disp-1-tcp",
+    transport: "tcp",
     verdict: { value: "down", ts: ago(5_000) },
     layers: [],
     history: [],
   };
   it("explains ping-up port-down as a live box with a dead service", () => {
-    const iface: ReachInterface = {
+    const iface: ReachEndpoint = {
       ...base,
       layers: [
         { layer: "ping", check: "icmp-reachable", value: 1, ts: ago(5_000) },
@@ -69,7 +69,7 @@ describe("reason", () => {
     expect(reason(iface, now)).toMatch(/service down, box up/i);
   });
   it("explains ping-down as unreachable", () => {
-    const iface: ReachInterface = {
+    const iface: ReachEndpoint = {
       ...base,
       layers: [{ layer: "ping", check: "icmp-reachable", value: 0, ts: ago(5_000) }],
     };

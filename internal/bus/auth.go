@@ -17,6 +17,10 @@ type Store interface {
 	AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error)
 	NodeWorklist(ctx context.Context, name string) (storage.Worklist, error)
 	RecordHeartbeat(ctx context.Context, name string) error
+	// The command wire (#815): resolve-and-dispatch a node's pending command
+	// queue, and record its execution reports.
+	PendingNodeCommands(ctx context.Context, name string) ([]storage.CommandDelivery, error)
+	RecordCommandExecution(ctx context.Context, name string, commandID int64, execErr string) error
 	// The telemetry ingest consumer surface: resolve+confine a task's owner,
 	// snapshot the sample registry (reject-not-project), and write the typed
 	// metric rows through cp1's insert path. The catalog is two lanes (#587):

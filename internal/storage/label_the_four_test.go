@@ -425,8 +425,8 @@ func TestASecretsLabelReachesEveryProjectionThatCarriesItsName(t *testing.T) {
 // TestAnInterfacesLabelIsItsOnlyOperatorTypedString is the case D2 was decided
 // on, and it is the strongest of the four rather than the weakest.
 //
-// An interface's name is SERVER-derived: InterfaceSpec carries no Name and the
-// column is set from spec.Type, an already-validated interface_type name. So an
+// An interface's name is SERVER-derived: EndpointSpec carries no Name and the
+// column is set from spec.Transport, a name the code registry already validated. So an
 // interface's only string is the protocol it speaks, which says what it talks
 // and nothing about what it is FOR, and the declared name exemption in
 // KeyProvedElsewhere is not something the label replaces: it is the ARGUMENT for
@@ -453,8 +453,8 @@ func TestAnInterfacesLabelIsItsOnlyOperatorTypedString(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 
-	first, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{
-		Type: "ssh", Component: strptr(comp.Name), Label: "Control processor",
+	first, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+		Transport: "ssh", Component: strptr(comp.Name), Label: "Control processor",
 	}, all)
 	if err != nil {
 		t.Fatalf("create first interface: %v", err)
@@ -465,7 +465,7 @@ func TestAnInterfacesLabelIsItsOnlyOperatorTypedString(t *testing.T) {
 	}
 
 	// Read it back, since a create return can be right while the column is not.
-	loaded, err := gw.GetInterface(ctx, first.ID, all)
+	loaded, err := gw.GetEndpoint(ctx, first.ID, all)
 	if err != nil {
 		t.Fatalf("get interface: %v", err)
 	}
@@ -478,17 +478,17 @@ func TestAnInterfacesLabelIsItsOnlyOperatorTypedString(t *testing.T) {
 
 	// The patch half, on the same row, and it moves nothing else.
 	relabelled := "Control processor (rack A)"
-	moved, err := gw.UpdateInterface(ctx, "", first.ID, storage.InterfacePatch{Label: &relabelled}, all, all)
+	moved, err := gw.UpdateEndpoint(ctx, "", first.ID, storage.EndpointPatch{Label: &relabelled}, all, all)
 	if err != nil {
 		t.Fatalf("relabel: %v", err)
 	}
-	if moved.Label != relabelled || moved.Name != first.Name || moved.Type != "ssh" || moved.ID != first.ID {
+	if moved.Label != relabelled || moved.Name != first.Name || moved.Transport != "ssh" || moved.ID != first.ID {
 		t.Errorf("relabel moved something else: %+v", moved)
 	}
 
 	// A patch that says nothing about the label leaves it alone, which is what
 	// makes a node reassignment safe.
-	kept, err := gw.UpdateInterface(ctx, "", first.ID, storage.InterfacePatch{Params: []byte(`{"target":"10.0.0.9"}`)}, all, all)
+	kept, err := gw.UpdateEndpoint(ctx, "", first.ID, storage.EndpointPatch{Params: []byte(`{"target":"10.0.0.9"}`)}, all, all)
 	if err != nil {
 		t.Fatalf("retarget: %v", err)
 	}
@@ -499,17 +499,17 @@ func TestAnInterfacesLabelIsItsOnlyOperatorTypedString(t *testing.T) {
 	// A SECOND interface of the same protocol is refused, which is the fact the
 	// D2 argument got wrong and the reason the label's case is the narrower one
 	// stated above rather than "tell three ssh interfaces apart".
-	if _, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{
-		Type: "ssh", Component: strptr(comp.Name), Label: "Second control processor",
-	}, all); !errors.Is(err, storage.ErrInterfaceExists) {
-		t.Errorf("a second ssh interface on one component = %v, want ErrInterfaceExists.\n"+
+	if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+		Transport: "ssh", Component: strptr(comp.Name), Label: "Second control processor",
+	}, all); !errors.Is(err, storage.ErrEndpointExists) {
+		t.Errorf("a second ssh interface on one component = %v, want ErrEndpointExists.\n"+
 			"If this now succeeds, the label is what tells the two apart and the tests and docs "+
 			"that say a component holds one interface per protocol are stale (#613).", err)
 	}
 
 	// An interface created with no label reads back empty and renders its
 	// derived name verbatim, never a prettified version of it.
-	bare, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "http", Component: strptr(comp.Name)}, all)
+	bare, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "http", Component: strptr(comp.Name)}, all)
 	if err != nil {
 		t.Fatalf("create bare interface: %v", err)
 	}
@@ -519,7 +519,7 @@ func TestAnInterfacesLabelIsItsOnlyOperatorTypedString(t *testing.T) {
 }
 
 // TestAnUnlabelledInterfaceSortsLast is D4 on the last of the four. Both arms of
-// ListInterfaces are ordered, the all-scope one and the component-subtree one,
+// ListEndpoints are ordered, the all-scope one and the component-subtree one,
 // so both are driven here.
 func TestAnUnlabelledInterfaceSortsLast(t *testing.T) {
 	gw := tagGateway(t)
@@ -536,15 +536,15 @@ func TestAnUnlabelledInterfaceSortsLast(t *testing.T) {
 		{"ssh", "Zulu"},
 		{"icmp", "Alpha"},
 	} {
-		if _, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{
-			Type: r.kind, Component: strptr(comp.Name), Label: r.label,
+		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{
+			Transport: r.kind, Component: strptr(comp.Name), Label: r.label,
 		}, all); err != nil {
 			t.Fatalf("create %s interface: %v", r.kind, err)
 		}
 	}
 
 	want := []string{"icmp", "ssh", "tcp"} // Alpha, Zulu, then the unlabelled
-	check := func(label string, got []storage.Interface) {
+	check := func(label string, got []storage.Endpoint) {
 		t.Helper()
 		var seen []string
 		for _, it := range got {
@@ -564,13 +564,13 @@ func TestAnUnlabelledInterfaceSortsLast(t *testing.T) {
 		}
 	}
 
-	allScope, err := gw.ListInterfaces(ctx, all)
+	allScope, err := gw.ListEndpoints(ctx, all)
 	if err != nil {
 		t.Fatalf("list interfaces (all): %v", err)
 	}
 	check("all scope", allScope)
 
-	scoped, err := gw.ListInterfaces(ctx, scope.Set{IDs: []string{comp.ID}})
+	scoped, err := gw.ListEndpoints(ctx, scope.Set{IDs: []string{comp.ID}})
 	if err != nil {
 		t.Fatalf("list interfaces (scoped): %v", err)
 	}

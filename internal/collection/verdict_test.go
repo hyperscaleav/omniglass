@@ -25,9 +25,9 @@ func TestInterfaceVerdict(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			up, ok := InterfaceVerdict(c.dps)
+			up, ok := EndpointVerdict(c.dps)
 			if up != c.wantUp || ok != c.wantOk {
-				t.Fatalf("InterfaceVerdict = (%v,%v), want (%v,%v)", up, ok, c.wantUp, c.wantOk)
+				t.Fatalf("EndpointVerdict = (%v,%v), want (%v,%v)", up, ok, c.wantUp, c.wantOk)
 			}
 		})
 	}

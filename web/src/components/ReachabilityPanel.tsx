@@ -5,7 +5,7 @@ import Button from "./Button";
 import StateStrip from "./StateStrip";
 import { rel } from "../lib/format";
 import { entityLabel } from "../lib/entities";
-import { INTERFACES_KEY, listInterfaces } from "../lib/interfaces";
+import { ENDPOINTS_KEY, listEndpoints } from "../lib/endpoints";
 import {
   REACHABILITY_KEY,
   getReachability,
@@ -14,22 +14,22 @@ import {
   uptime,
   reason,
   layerWord,
-  type ReachInterface,
+  type ReachEndpoint,
   type VerdictWord,
 } from "../lib/reachability";
 
-// The Interfaces panel on the component detail: an interface belongs to its
-// component, so it surfaces here (not a top-level tab). One row per interface (an
-// interface is usable or not): the endpoint, an availability strip built from the
+// The Endpoints panel on the component detail: an endpoint belongs to its
+// component, so it surfaces here (not a top-level tab). One row per endpoint (an
+// endpoint is usable or not): the endpoint, an availability strip built from the
 // verdict's transition history, and a 4-state verdict pill derived at read time.
 // Expanding a row reveals the layered-gate breakdown (ping L3, port L4) plus a
-// "why" reason line when the interface is down. The verdict/strip/reason are
+// "why" reason line when the endpoint is down. The verdict/strip/reason are
 // read-only (derived from real fields, no invented latency or history); the panel
-// header carries the "Add interface" affordance and each row a "Manage" affordance,
+// header carries the "Add endpoint" affordance and each row a "Manage" affordance,
 // both wired by the component detail into its shared blade stack (create + the
-// read-edit-save detail blade). Those write through the interfaces API and refresh
+// read-edit-save detail blade). Those write through the endpoints API and refresh
 // this panel. The management affordances render only when the component detail
-// passes their callbacks (gated on interface:create / interface:read).
+// passes their callbacks (gated on endpoint:create / endpoint:read).
 
 // The pill hue and label per derived verdict word.
 const PILL: Record<VerdictWord, { cls: string; label: string }> = {
@@ -46,7 +46,7 @@ function segClass(value: string): string {
 // AvailabilityStrip renders the up/down segments as flex weights, with an uptime
 // hint. A single-value strip (or none) still reads correctly. The bar itself is the
 // shared StateStrip primitive, the same one the health history draws.
-function AvailabilityStrip(p: { iface: ReachInterface }) {
+function AvailabilityStrip(p: { iface: ReachEndpoint }) {
   const now = Date.now();
   const segs = createMemo(() => segments(p.iface.history, p.iface.verdict, now));
   const up = createMemo(() => uptime(p.iface.history, p.iface.verdict, now));
@@ -60,9 +60,9 @@ function AvailabilityStrip(p: { iface: ReachInterface }) {
 }
 
 // GateBreakdown lists one line per probe layer (dot + word + timing detail) and
-// the "why" reason line for a down interface. It is the pedagogical payoff: the
+// the "why" reason line for a down endpoint. It is the pedagogical payoff: the
 // verdict is the AND of the layers, shown as the layers.
-function GateBreakdown(p: { iface: ReachInterface }) {
+function GateBreakdown(p: { iface: ReachEndpoint }) {
   const now = Date.now();
   const why = createMemo(() => reason(p.iface, now));
   const verdictOk = createMemo(() => p.iface.verdict?.value === "up");
@@ -87,7 +87,7 @@ function GateBreakdown(p: { iface: ReachInterface }) {
       <div class="flex items-center gap-2">
         <span class={`inline-block size-2 shrink-0 rounded-full ${verdictOk() ? "bg-success" : "bg-error"}`} />
         <span class="w-10 shrink-0 uppercase tracking-wide text-base-content/45 text-[10px]">verdict</span>
-        <span class="text-base-content/60">interface {verdictOk() ? "up" : "down"}</span>
+        <span class="text-base-content/60">endpoint {verdictOk() ? "up" : "down"}</span>
       </div>
       <Show when={why()}>
         <p class="mt-0.5 rounded-md bg-warning/10 px-2 py-1.5 text-[11.5px] text-base-content/70">{why()}</p>
@@ -96,7 +96,7 @@ function GateBreakdown(p: { iface: ReachInterface }) {
   );
 }
 
-function InterfaceRow(p: { iface: ReachInterface; manageId?: string; onManage?: (id: string) => void }) {
+function EndpointRow(p: { iface: ReachEndpoint; manageId?: string; onManage?: (id: string) => void }) {
   const [open, setOpen] = createSignal(false);
   const word = createMemo(() => verdictWord(p.iface.verdict));
   const pill = createMemo(() => PILL[word()]);
@@ -113,25 +113,34 @@ function InterfaceRow(p: { iface: ReachInterface; manageId?: string; onManage?: 
           <span class={`shrink-0 text-base-content/40 transition-transform ${open() ? "rotate-90" : ""}`}><ChevronRight size={14} /></span>
           <div class="flex w-52 shrink-0 flex-col gap-0.5">
             {/* The label over the derived name, through the one renderer. This
-                panel is where two interfaces of one protocol sit beside each
+                panel is where two endpoints of one transport sit beside each
                 other, so it is where the label earns its place (#613). */}
-            <span class="truncate text-sm">{entityLabel({ name: p.iface.interface, label: p.iface.label })}</span>
+            <span class="truncate text-sm">{entityLabel({ name: p.iface.endpoint, label: p.iface.label })}</span>
             <span class="truncate font-data text-[11px] text-base-content/50">
-              {p.iface.interface_type}
-              <Show when={p.iface.endpoint}> · {p.iface.endpoint}</Show>
+              {p.iface.transport}
+              <Show when={p.iface.address}> · {p.iface.address}</Show>
             </span>
           </div>
           <div class="min-w-0 flex-1">
             <AvailabilityStrip iface={p.iface} />
           </div>
+          {/* The layer-7 rungs (#812): responds and, when a credential was
+              tried, auth. Rendered only once a probe has climbed them, so a
+              tcp/icmp endpoint's row stays exactly as it was. */}
+          <Show when={p.iface.responsive}>
+            {(r) => <span class={`badge badge-soft badge-sm shrink-0 ${r().value === "up" ? "badge-success" : "badge-error"}`}>{r().value === "up" ? "responds" : "no response"}</span>}
+          </Show>
+          <Show when={p.iface.authenticated}>
+            {(a) => <span class={`badge badge-soft badge-sm shrink-0 ${a().value === "yes" ? "badge-success" : "badge-error"}`}>{a().value === "yes" ? "auth ok" : "auth failed"}</span>}
+          </Show>
           <span class={`badge badge-soft badge-sm shrink-0 ${pill().cls}`}>{pill().label}</span>
         </button>
         <Show when={canManage()}>
           <button
             type="button"
             class="flex shrink-0 items-center px-2.5 text-base-content/40 hover:bg-base-content/5 hover:text-base-content"
-            title="Manage interface"
-            aria-label={`Manage ${entityLabel({ name: p.iface.interface, label: p.iface.label })}`}
+            title="Manage endpoint"
+            aria-label={`Manage ${entityLabel({ name: p.iface.endpoint, label: p.iface.label })}`}
             onClick={() => p.onManage!(p.manageId!)}
           >
             <Sliders size={15} />
@@ -158,52 +167,52 @@ export default function ReachabilityPanel(p: {
   // by uuid now, since its name is scoped to placement and not reliably
   // unique; getReachability dual-accepts either, ADR-0062).
   name: string;
-  // Present -> the panel header shows "Add interface", opening a create surface for
-  // this component (the caller gates on interface:create).
+  // Present -> the panel header shows "Add endpoint", opening a create surface for
+  // this component (the caller gates on endpoint:create).
   onAdd?: () => void;
-  // Present -> each row that maps to a known interface shows "Manage", opening that
-  // interface's detail blade by id (the caller gates on interface:read).
-  onOpenInterface?: (id: string) => void;
+  // Present -> each row that maps to a known endpoint shows "Manage", opening that
+  // endpoint's detail blade by id (the caller gates on endpoint:read).
+  onOpenEndpoint?: (id: string) => void;
 }) {
   const q = useQuery(() => ({ queryKey: REACHABILITY_KEY(p.name), queryFn: () => getReachability(p.name) }));
-  const ifaces = createMemo(() => q.data?.interfaces ?? []);
-  // Only load the interface list when the caller can open interface details; map an
-  // interface's name (the reachability row key) to its surrogate id so a row can
+  const ifaces = createMemo(() => q.data?.endpoints ?? []);
+  // Only load the endpoint list when the caller can open endpoint details; map an
+  // endpoint's name (the reachability row key) to its surrogate id so a row can
   // open its detail blade. Matched by component_id, not the component name
   // (#627): p.name is now the component's own uuid, and two components can
   // legally share a name, so a name match could pull in a sibling's rows.
-  const interfaces = useQuery(() => ({ queryKey: INTERFACES_KEY, queryFn: () => listInterfaces(), enabled: !!p.onOpenInterface }));
+  const endpoints = useQuery(() => ({ queryKey: ENDPOINTS_KEY, queryFn: () => listEndpoints(), enabled: !!p.onOpenEndpoint }));
   const idByName = createMemo(() => {
     const m = new Map<string, string>();
-    for (const it of interfaces.data ?? []) if (it.component_id === p.name) m.set(it.name, it.id);
+    for (const it of endpoints.data ?? []) if (it.component_id === p.name) m.set(it.name, it.id);
     return m;
   });
   return (
     <div class="flex flex-col gap-1.5">
       <div class="flex items-center gap-2">
-        <span class="eyebrow">Interfaces</span>
+        <span class="eyebrow">Endpoints</span>
         <Show when={ifaces().length}>
           <span class="text-[11px] text-base-content/40">
-            {ifaces().length} interface{ifaces().length === 1 ? "" : "s"}
+            {ifaces().length} endpoint{ifaces().length === 1 ? "" : "s"}
           </span>
         </Show>
         <span class="flex-1" />
         <Show when={p.onAdd}>
-          <Button intent="quiet" icon={Plus} onClick={() => p.onAdd!()}>Add interface</Button>
+          <Button intent="quiet" icon={Plus} onClick={() => p.onAdd!()}>Add endpoint</Button>
         </Show>
       </div>
       <Show
         when={ifaces().length}
         fallback={
           <div class="rounded-box border border-dashed border-base-300 px-3 py-4 text-center text-[12px] text-base-content/45">
-            <Show when={q.isLoading} fallback="No interfaces on this component yet.">
-              Loading interfaces…
+            <Show when={q.isLoading} fallback="No endpoints on this component yet.">
+              Loading endpoints…
             </Show>
           </div>
         }
       >
         <div class="divide-y divide-base-300 overflow-hidden rounded-box border border-base-300">
-          <For each={ifaces()}>{(iface) => <InterfaceRow iface={iface} manageId={idByName().get(iface.interface)} onManage={p.onOpenInterface} />}</For>
+          <For each={ifaces()}>{(iface) => <EndpointRow iface={iface} manageId={idByName().get(iface.endpoint)} onManage={p.onOpenEndpoint} />}</For>
         </div>
       </Show>
     </div>

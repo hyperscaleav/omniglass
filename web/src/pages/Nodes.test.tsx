@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Nodes from "./Nodes";
 import { NODES_KEY, type Node } from "../lib/nodes";
 import { TASKS_KEY, type Task } from "../lib/tasks";
-import { INTERFACES_KEY, type Interface } from "../lib/interfaces";
+import { ENDPOINTS_KEY, type Endpoint } from "../lib/endpoints";
 import { LOCATIONS_KEY, type Location } from "../lib/locations";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
@@ -25,8 +25,8 @@ const locSeed: Location[] = [
   { name: "hq", label: "HQ", location_type: "campus" } as Location,
   { name: "east", label: "East", location_type: "campus" } as Location,
 ];
-const taskSeed: Task[] = [{ id: "t-hq", interface_id: uuidFor("if-hq"), mode: "poll", enabled: true, node: "edge-hq" }];
-const ifaceSeed: Interface[] = [{ id: uuidFor("if-hq"), name: "disp-1-tcp", interface_type: "tcp", component: "disp-1", node: "edge-hq" }];
+const taskSeed: Task[] = [{ id: "t-hq", endpoint_id: uuidFor("if-hq"), mode: "poll", enabled: true, node: "edge-hq" }];
+const ifaceSeed: Endpoint[] = [{ id: uuidFor("if-hq"), name: "disp-1-tcp", transport: "tcp", component: "disp-1", node: "edge-hq" }];
 
 const owner: Me = { principal: { id: "p", kind: "human" }, permissions: [">"], grants: [] };
 const reader: Me = { principal: { id: "r", kind: "human" }, permissions: ["node:read"], grants: [] };
@@ -43,7 +43,7 @@ function mount(me: Me, lateLocations = false) {
   qc.setQueryData([...NODES_KEY], seed);
   qc.setQueryData([...LOCATIONS_KEY], lateLocations ? [] : locSeed);
   qc.setQueryData([...TASKS_KEY], taskSeed);
-  qc.setQueryData([...INTERFACES_KEY], ifaceSeed);
+  qc.setQueryData([...ENDPOINTS_KEY], ifaceSeed);
   qc.setQueryData([...ME_KEY], me);
   return Object.assign(
     render(() => (

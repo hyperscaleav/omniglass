@@ -94,7 +94,7 @@ each role carrying an **impact**. See [implementation status](/architecture/stat
   rendered from the seed on the [location types guide](/guides/admin/location-types/) rather than
   listed in two places.
 - A **node** is the edge process (`omniglass node run`) that pulls work, reaches components over
-  interfaces, and ships results ([nodes](/architecture/nodes/)). It is structural because it is a
+  endpoints, and ships results ([nodes](/architecture/nodes/)). It is structural because it is a
   first-class **owner** of its own self-health telemetry and node-owned alarms.
 
 ```d2
@@ -720,7 +720,7 @@ names them. An operator names the component, not the metric.
 
 Every table an operator names carries one, and the declaration says so rather than leaving it to be
 noticed. That is not how it started: the shape said what the identifier was and nothing about the
-friendly string beside it, so `tag`, `variable`, `secret` and `interface` went without a label, no
+friendly string beside it, so `tag`, `variable`, `secret` and `endpoint` went without a label, no
 guard failed, and an operator who could no longer write `cost_center` (the tightening
 [ADR-0076](/architecture/decisions/#adr-0076-a-renameable-human-typed-identifier-stays-in-the-url-and-the-write-returns-the-uuid)
 made) had nowhere to write "Cost Center" instead. All four carry one now

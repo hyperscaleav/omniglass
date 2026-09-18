@@ -586,6 +586,51 @@ order by r.name, r.band desc, r.depth asc`
 
 // --- helpers -----------------------------------------------------------------
 
+// secretCoversComponent reports whether a secret owned at (ownerKind, ownerID)
+// cascades onto componentID, the same cascade resolveSecretsSQL ranks: platform
+// always covers; a location owner covers when it is in the component's location
+// chain; a component owner covers when it is the component or an ancestor of it.
+// A secret has no system band (a credential's owner is never the room a device
+// serves), so a system-owned secret never covers a component here. It is the
+// worklist delivery's confinement (#814), keeping a node off a credential its
+// endpoint's component does not own.
+func (p *PG) secretCoversComponent(ctx context.Context, ownerKind string, ownerID *string, componentID string) (bool, error) {
+	if ownerKind == "platform" {
+		return true, nil
+	}
+	if ownerID == nil || componentID == "" {
+		return false, nil
+	}
+	var covers bool
+	switch ownerKind {
+	case "component":
+		if err := p.pool.QueryRow(ctx, `
+			with recursive chain(id) as (
+				select id from component where id = $1
+				union all
+				select c.parent_id from component c join chain ch on c.id = ch.id
+				where c.parent_id is not null
+			) cycle id set cyc using path
+			select exists (select 1 from chain where id = $2)`, componentID, *ownerID).Scan(&covers); err != nil {
+			return false, err
+		}
+	case "location":
+		if err := p.pool.QueryRow(ctx, `
+			with recursive loc_chain(id) as (
+				select location_id from component where id = $1 and location_id is not null
+				union all
+				select l.parent_id from location l join loc_chain lc on l.id = lc.id
+				where l.parent_id is not null
+			) cycle id set cyc using path
+			select exists (select 1 from loc_chain where id = $2)`, componentID, *ownerID).Scan(&covers); err != nil {
+			return false, err
+		}
+	default:
+		return false, nil
+	}
+	return covers, nil
+}
+
 // resolveSecretOwner turns an owner kind + optional name into the owning id,
 // enforcing the create scope: a platform secret needs an all create scope; a
 // scoped one resolves its owner in the matching tree, within the create scope
@@ -907,4 +952,100 @@ func mapSecretWriteErr(err error) error {
 		}
 	}
 	return fmt.Errorf("storage: secret write: %w", err)
+}
+
+// nodeSecretFields unseals a secret's fields by name for worklist delivery
+// (#814): a driver task's secret inputs must reach the placed node as usable
+// credentials, so the server unseals them into the per-node worklist reply
+// (the node's NATS grant is the isolation boundary). Delivery is confined to a
+// secret that CASCADES onto the endpoint's componentID (platform, an ancestor
+// location or system, or the component itself, the same cascade ResolveSecrets
+// reads): the attach scoped the reference to the operator, and this re-check
+// keeps a rename or a name collision from drifting a node onto a secret its
+// component does not own. There is no per-pull audit row (the node re-pulls at
+// heartbeat pace, and a row per pull would bury the log; the attach was the
+// audited operator action) and no admin-sensitivity gate (that was the attach's
+// job). An ambiguous name after the cascade filter refuses rather than
+// guessing. The uuid-stable binding that removes the name-drift class is #820.
+func (p *PG) nodeSecretFields(ctx context.Context, name, componentID string) (map[string]string, error) {
+	if p.secret == nil {
+		return nil, ErrNoSecretProvider
+	}
+	rows, err := p.pool.Query(ctx, `
+		select s.id, s.name, s.owner_kind,
+			coalesce(s.component_id::text, s.system_id::text, s.location_id::text),
+			s.value, st.name
+		from secret s join secret_type st on st.id = s.secret_type
+		where s.name = $1`, name)
+	if err != nil {
+		return nil, fmt.Errorf("storage: node secret %q: %w", name, err)
+	}
+	defer rows.Close()
+	var found []struct {
+		row      secretRow
+		typeName string
+	}
+	for rows.Next() {
+		var r secretRow
+		var ownerID *string
+		var typeName string
+		if err := rows.Scan(&r.id, &r.name, &r.ownerKind, &ownerID, &r.value, &typeName); err != nil {
+			return nil, fmt.Errorf("storage: scan node secret %q: %w", name, err)
+		}
+		r.ownerID = ownerID
+		covers, err := p.secretCoversComponent(ctx, r.ownerKind, ownerID, componentID)
+		if err != nil {
+			return nil, fmt.Errorf("storage: cascade node secret %q: %w", name, err)
+		}
+		if !covers {
+			continue
+		}
+		found = append(found, struct {
+			row      secretRow
+			typeName string
+		}{r, typeName})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("storage: node secret %q: %w", name, err)
+	}
+	if len(found) == 0 {
+		return nil, ErrSecretNotFound
+	}
+	if len(found) > 1 {
+		return nil, &ErrAmbiguousName{Kind: "secret", Ref: name}
+	}
+	shapes, err := p.shapeIndex(ctx)
+	if err != nil {
+		return nil, err
+	}
+	shape, ok := shapes[found[0].typeName]
+	if !ok {
+		return nil, fmt.Errorf("storage: node secret %q: unknown secret type %q", name, found[0].typeName)
+	}
+	row := found[0].row
+	out := make(map[string]string, len(row.value))
+	for _, f := range shape.Fields {
+		raw, ok := row.value[f.Name]
+		if !ok {
+			continue
+		}
+		if !f.Secret {
+			var v string
+			if err := json.Unmarshal(raw, &v); err != nil {
+				return nil, fmt.Errorf("storage: decode node secret field %q: %w", f.Name, err)
+			}
+			out[f.Name] = v
+			continue
+		}
+		var env secret.Envelope
+		if err := json.Unmarshal(raw, &env); err != nil {
+			return nil, fmt.Errorf("storage: decode node secret envelope %q: %w", f.Name, err)
+		}
+		pt, err := secret.Open(ctx, p.secret, env, secretAAD(row.ownerKind, row.ownerID, row.name, f.Name))
+		if err != nil {
+			return nil, fmt.Errorf("storage: unseal node secret field %q: %w", f.Name, err)
+		}
+		out[f.Name] = string(pt)
+	}
+	return out, nil
 }

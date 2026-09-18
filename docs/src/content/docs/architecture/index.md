@@ -58,7 +58,7 @@ system -> c3
 
 AV gear is **agentless**: nothing can be installed inside it, so the reading comes from outside.
 Sometimes the component **pushes** it to Omniglass; usually Omniglass **polls** on an interval. Either way, a **[node](/architecture/nodes/)** running close to the gear reaches a
-component over an **[interface](/architecture/collection/)** (whatever the device speaks: SNMP, HTTP,
+component over an **[endpoint](/architecture/collection/)** (whatever the device speaks: SNMP, HTTP,
 SSH, a control processor's own command language) and reads.
 
 How to reach a class of device, and what to read from it, is declared once in the component's

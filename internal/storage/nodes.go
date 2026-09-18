@@ -60,20 +60,24 @@ type NodePatch struct {
 }
 
 // WorklistTask is one enabled task resolved for a node: the content-addressed
-// task plus the placement-bound interface it runs over. InterfaceParams and Spec
-// are raw jsonb passed through to the node.
+// task plus the placement-bound endpoint it runs over. EndpointParams and Spec
+// are raw jsonb passed through to the node. Secrets carries a driver task's
+// unsealed secret inputs (input name to the secret's fields), resolved here so
+// the node can present the credential to the device (#814); it is empty for
+// every non-driver task.
 type WorklistTask struct {
-	ID              string
-	Mode            string
-	InterfaceName   string
-	InterfaceType   string
-	InterfaceParams []byte
-	Spec            []byte
+	ID             string
+	Mode           string
+	EndpointName   string
+	Transport      string
+	EndpointParams []byte
+	Spec           []byte
+	Secrets        map[string]map[string]string
 }
 
 // Worklist is a node's resolved work plus the config generation (the max
-// interface updated_at across the node's interfaces, epoch seconds; 0 when the
-// node has no interfaces). A steady generation lets the node serve from cache; a
+// endpoint updated_at across the node's endpoints, epoch seconds; 0 when the
+// node has no endpoints). A steady generation lets the node serve from cache; a
 // bump forces a refresh.
 type Worklist struct {
 	Tasks            []WorklistTask
@@ -366,14 +370,15 @@ func (p *PG) RecordHeartbeat(ctx context.Context, name string) error {
 	return nil
 }
 
-// NodeWorklist resolves a node's enabled tasks (joined to their interface) plus
+// NodeWorklist resolves a node's enabled tasks (joined to their endpoint) plus
 // the config generation. Keyed by the node name the server extracts from the
 // worklist subject. An unknown node returns an empty worklist, not an error.
 func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	rows, err := p.pool.Query(ctx, `
-		select t.id, t.mode, i.name, (select it.name from interface_type it where it.id = i.type), i.params, t.spec
+		select t.id, t.mode, i.name, i.transport, i.params, t.spec, i.inputs, i.component, d.spec
 		from task t
-		join interface i on i.id = t.interface_id
+		join endpoint i on i.id = t.endpoint_id
+		left join driver d on d.id = i.driver_id
 		where i.node_name = (select principal_id from node where name = $1) and t.enabled = true
 		order by t.id`, name)
 	if err != nil {
@@ -381,21 +386,82 @@ func (p *PG) NodeWorklist(ctx context.Context, name string) (Worklist, error) {
 	}
 	defer rows.Close()
 	var wl Worklist
+	type secretRef struct{ input, ref, componentID string }
+	pending := map[int][]secretRef{} // task index -> the secret inputs to unseal
 	for rows.Next() {
 		var wt WorklistTask
-		if err := rows.Scan(&wt.ID, &wt.Mode, &wt.InterfaceName, &wt.InterfaceType, &wt.InterfaceParams, &wt.Spec); err != nil {
+		var epInputs, driverSpec []byte
+		var componentID *string
+		if err := rows.Scan(&wt.ID, &wt.Mode, &wt.EndpointName, &wt.Transport, &wt.EndpointParams, &wt.Spec, &epInputs, &componentID, &driverSpec); err != nil {
 			return Worklist{}, fmt.Errorf("storage: scan worklist task: %w", err)
+		}
+		// A driver task's secret inputs travel with it: the spec says which
+		// inputs are secret, the endpoint's inputs say which secret row each
+		// references, and the unseal below turns the references into fields.
+		// The reachability probe (a bare spec) carries none.
+		if len(driverSpec) > 0 && len(wt.Spec) > 2 {
+			refs, err := secretRefsOf(driverSpec, epInputs)
+			if err != nil {
+				return Worklist{}, fmt.Errorf("storage: node worklist %q task %s: %w", name, wt.ID, err)
+			}
+			cid := ""
+			if componentID != nil {
+				cid = *componentID
+			}
+			for input, ref := range refs {
+				pending[len(wl.Tasks)] = append(pending[len(wl.Tasks)], secretRef{input, ref, cid})
+			}
 		}
 		wl.Tasks = append(wl.Tasks, wt)
 	}
 	if err := rows.Err(); err != nil {
 		return Worklist{}, fmt.Errorf("storage: node worklist %q: %w", name, err)
 	}
-	// config_generation moves at operator-config pace: the max interface
-	// updated_at (epoch seconds) across the node's interfaces, 0 when none.
+	// Unseal after the row scan (one connection at a time), caching by the
+	// (reference, component) pair so two tasks on one component sharing a
+	// credential unseal it once. Delivery is confined to a secret that CASCADES
+	// ONTO the endpoint's component (platform, an ancestor location or system,
+	// or the component itself): the attach scoped the reference to the operator,
+	// and this re-check keeps a rename or a name collision from drifting a node
+	// onto a secret its component does not own. A reference that resolves to
+	// nothing deliverable is delivered as absence: the node lands a
+	// collection-failed naming the missing credential.
+	unsealed := map[string]map[string]string{}
+	for idx, refs := range pending {
+		for _, r := range refs {
+			key := r.ref + "\x00" + r.componentID
+			fields, ok := unsealed[key]
+			if !ok {
+				f, err := p.nodeSecretFields(ctx, r.ref, r.componentID)
+				if err != nil {
+					// Absence is deliverable: a reference that resolves to nothing
+					// this component owns (ErrSecretNotFound), or to more than one
+					// candidate (ErrAmbiguousName), rides as an absent credential
+					// and the node lands a collection-failed naming it. A REAL
+					// failure (no key provider, a DB error, an envelope that will
+					// not open) is NOT absence: swallowing it would mask infra
+					// failure as a missing secret and send operators chasing a
+					// credential that exists. Fail the pull instead; the node keeps
+					// its last-good worklist and retries next heartbeat.
+					var amb *ErrAmbiguousName
+					if errors.Is(err, ErrSecretNotFound) || errors.As(err, &amb) {
+						continue
+					}
+					return Worklist{}, fmt.Errorf("storage: node worklist %q unseal %q: %w", name, r.ref, err)
+				}
+				fields, unsealed[key] = f, f
+			}
+			if wl.Tasks[idx].Secrets == nil {
+				wl.Tasks[idx].Secrets = map[string]map[string]string{}
+			}
+			wl.Tasks[idx].Secrets[r.input] = fields
+		}
+	}
+	// config_generation moves at operator-config pace: the max endpoint
+	// updated_at (epoch seconds) across the node's endpoints, 0 when none.
 	if err := p.pool.QueryRow(ctx, `
 		select coalesce(extract(epoch from max(updated_at))::bigint, 0)
-		from interface where node_name = (select principal_id from node where name = $1)`, name).Scan(&wl.ConfigGeneration); err != nil {
+		from endpoint where node_name = (select principal_id from node where name = $1)`, name).Scan(&wl.ConfigGeneration); err != nil {
 		return Worklist{}, fmt.Errorf("storage: node config generation %q: %w", name, err)
 	}
 	return wl, nil

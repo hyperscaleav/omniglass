@@ -118,7 +118,7 @@ func LabelledTables() []string {
 var IdentityShapes = map[string]TableIdentity{
 	// Key-bearing. The shape is the whole explanation.
 	"component": {Shape: ShapeKeyBearing},
-	"driver":    {Shape: ShapeKeyBearing}, "interface": {Shape: ShapeKeyBearing},
+	"driver":    {Shape: ShapeKeyBearing}, "endpoint": {Shape: ShapeKeyBearing},
 	"location":      {Shape: ShapeKeyBearing},
 	"location_type": {Shape: ShapeKeyBearing}, "node": {Shape: ShapeKeyBearing},
 	"principal_group": {Shape: ShapeKeyBearing}, "product": {Shape: ShapeKeyBearing},
@@ -133,14 +133,6 @@ var IdentityShapes = map[string]TableIdentity{
 	// within its choice (choice_id, name), one level narrower, the same
 	// relationship component_type's root/child split already has.
 	"role_choice": {Shape: ShapeKeyBearing}, "choice_alternate": {Shape: ShapeKeyBearing},
-	// The one type registry with no label, and the only key-bearing table left
-	// without one after #613. It is not an oversight and not a gap to fill: the
-	// table retires with the interface.type FK (ADR-0073), so a column added
-	// here would be dropped with the table it sits on.
-	"interface_type": {Shape: ShapeKeyBearing,
-		NoLabel: "retires with the interface.type FK (ADR-0073); a label added here would be " +
-			"dropped with the table"},
-
 	// Keyspace: a name, on the other rule.
 	"property_type": {Shape: ShapeKeyspace, Reason: "serial-number, a signal name referenced from drivers and templates"},
 	"metric_type":   {Shape: ShapeKeyspace, Reason: "icmp-rtt-avg, a numeric-series name referenced from drivers and templates"},
@@ -197,13 +189,12 @@ var IdentityShapes = map[string]TableIdentity{
 // with the reason it cannot be reached that way. Classification without proof is a
 // claim and not a guard, so the excuse is written down rather than inferred.
 var KeyProvedElsewhere = map[string]string{
-	"interface_type":   "seeded only, no create path on the gateway",
 	"role":             "seeded only, no create path on the gateway",
 	"secret_type":      "seeded only, no create path on the gateway",
 	"role_choice":      "seeded only, no create path on the gateway",
 	"choice_alternate": "seeded only, no create path on the gateway",
-	"interface": "the name is server-derived, not operator-typed: InterfaceSpec carries no Name " +
-		"and the column is set from spec.Type, an already-validated interface_type name",
+	"endpoint": "the name is server-derived, not operator-typed: EndpointSpec carries no Name " +
+		"and the column is set from spec.Transport, a name the code registry already validated",
 }
 
 // IdentityShapesJSON renders the declaration for the docs, the same way

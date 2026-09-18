@@ -22,7 +22,7 @@ func pushOwner() storage.TaskOwner {
 // nodeOwner is what ResolveTaskOwner produces: the interface supplies the instance
 // discriminator and the source.
 func nodeOwner() storage.TaskOwner {
-	return storage.TaskOwner{ComponentID: "disp-1", InterfaceName: "api", InterfaceType: "icmp"}
+	return storage.TaskOwner{ComponentID: "disp-1", EndpointName: "api", Transport: "icmp"}
 }
 
 // The trust model in one place: a batch's owner is believed because of the SUBJECT
@@ -70,7 +70,7 @@ func TestAPIBindingOwnsBothLanesOfTheBatch(t *testing.T) {
 	}
 	// A push has no interface, so the interface-derived fallbacks must be empty and
 	// the batch's own source/instance are what land.
-	if bind.SampleOwner.InterfaceName != "" || bind.SampleOwner.InterfaceType != "" {
+	if bind.SampleOwner.EndpointName != "" || bind.SampleOwner.Transport != "" {
 		t.Fatalf("push binding invented interface labels: %+v", bind.SampleOwner)
 	}
 }

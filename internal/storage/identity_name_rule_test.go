@@ -133,7 +133,7 @@ func TestValidateNameAcceptsRealNames(t *testing.T) {
 		"location":      "rm215a",
 		"vendor":        "crestron",
 		"node":          "node-1",
-		"property_type": "interface-reachable",
+		"property_type": "endpoint-reachable",
 		"event_type":    "call-started",
 		"command_type":  "set-input",
 		"tag":           "asset-id",

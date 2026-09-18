@@ -146,9 +146,9 @@ normalizes it to a 256x256 JPEG. An administrator manages **any** principal's pi
 ## Collection commands
 
 The [collection](/architecture/collection/) surface regenerates into three top-level command
-groups, `node`, `interface`, and `task`; the composed reachability read hangs off the component
+groups, `node`, `endpoint`, and `task`; the composed reachability read hangs off the component
 that owns it (`component reachability`). They follow the same derivation as every
-other resource (`POST /interfaces` is `interface create`, `GET /tasks/{id}` is `task get
+other resource (`POST /endpoints` is `endpoint create`, `GET /tasks/{id}` is `task get
 <id>`), so nothing here is special-cased. All examples require the matching permission on
 the running server.
 
@@ -159,7 +159,7 @@ omniglass node list
 omniglass node create --name edge-hq --label "HQ Edge Node" --location hq-west --description "HQ network closet"   # needs node:create (all-scope)
 omniglass node get edge-hq
 omniglass node update edge-hq --label "HQ Edge" --location hq-west   # needs node:update; the name is immutable
-omniglass node delete edge-hq   # needs node:delete; decommissions the node (cascades its interfaces, tasks, and enrollment)
+omniglass node delete edge-hq   # needs node:delete; decommissions the node (cascades its endpoints, tasks, and enrollment)
 ```
 
 Every command above is new in practice, not only in the docs: a hand-written `node` run
@@ -181,31 +181,43 @@ omniglass node claim --name edge-hq --token ogp_...
 `omniglass node enroll <name>` mints (or re-mints) a node's enrollment token and prints it
 once (gated by `node:enroll`), the same action as the console's Enroll / Re-enroll.
 
-Author a reachability check by **creating an interface** (its poll task is derived
+Author a reachability check by **creating an endpoint** (its poll task is derived
 automatically):
 
 ```sh
-# An interface owned by a component, placed on a node, with its probe target in params.
-# It is named by its protocol: --interface-type is the interface_type, there is no --name flag.
-omniglass interface create \
-  --interface-type tcp --component disp-1 --node edge-hq \
-  --params '{"target":"10.0.0.1:22"}'                          # needs interface:create
+# An endpoint owned by a component, placed on a node, with its probe target in params.
+# It is named by its transport: --transport picks from the code registry, there is no --name flag.
+omniglass endpoint create \
+  --transport tcp --component disp-1 --node edge-hq \
+  --params '{"target":"10.0.0.1:22"}'                          # needs endpoint:create
 
-omniglass interface list
-omniglass interface get <id>                                    # interfaces are addressed by id
-omniglass interface update <id> --node edge-hq --params '{"target":"10.0.0.2:22"}'
-omniglass interface delete <id>                                 # refused (409) while its task references it
+# Or ATTACH a driver instead of picking a transport: the driver's spec derives the
+# transport, the target (from the host and port inputs), and the endpoint's tasks
+# (a poll task per poll function, a standing listen task per listener). Secret
+# inputs are references: the NAME of a secret of the declared shape, never a value.
+omniglass endpoint create \
+  --driver snmp-generic --component amp-1 --node edge-hq \
+  --inputs '{"host":"10.0.0.40","community":"lab-community"}'  # needs endpoint:create
 
-# The poll task is derived from the interface, so the task surface is read-only.
+omniglass endpoint list
+omniglass endpoint get <id>                                     # endpoints are addressed by id
+omniglass endpoint update <id> --node edge-hq --params '{"target":"10.0.0.2:22"}'
+omniglass endpoint delete <id>                                  # refused (409) while its task references it
+
+# The poll task is derived from the endpoint, so the task surface is read-only.
 omniglass task list
 omniglass task get <id>
 ```
 
-The four built interface types are `icmp`, `tcp`, `ssh`, and `http`, and an interface is
-**named by its protocol** (the `--interface-type`), unique within its component. An interface `update`
-changes only its node placement and params. A **task** is **derived** when its interface is
-created, so there is no `task create`, `update`, or `delete`; its placement follows the
-interface's. A node purge cascades its interfaces and their derived tasks.
+The transports are a code registry the binary ships (`omniglass transport list` reads it):
+`icmp` and `tcp` probe layers 3 and 4, `ssh` and `http` climb to layer 7 (the probe draws a
+real response, so reached-but-not-responsive and responded-but-not-authenticated are visible
+states), and `udp` and `snmp` carry no standalone probe (`snmp` collects through its driver).
+An endpoint is **named by its transport** (the `--transport`, or the attached driver's spec),
+unique within its component. An endpoint `update` changes only its node placement and
+params. A **task** is **derived** when its endpoint is created, so there is no
+`task create`, `update`, or `delete`; its placement follows the endpoint's. A node purge
+cascades its endpoints and their derived tasks.
 
 Read a component's composed reachability (the verdict, the probe-layer signals, and the
 recent transitions the availability strip draws):
@@ -344,9 +356,11 @@ A **driver** names the implementation that gets, emits, or sets a product's sign
 
 ```sh
 omniglass driver list                                               # the driver registry
-omniglass driver create --name barco-snmp --label "Barco SNMP" --version 1.0.0
+omniglass driver get snmp-generic                                   # includes the spec body, when authored
+omniglass driver create --name barco-snmp --label "Barco SNMP" --version 1.0.0 \
+  --spec '{"version":1,"transport":"snmp", ...}'                    # validated at write: a broken spec is a 422 naming the fault
 omniglass driver update barco-snmp --version 1.1.0
-omniglass driver delete barco-snmp                                  # refused (422) if official
+omniglass driver delete barco-snmp                                  # refused (422) if official, or while an endpoint is attached through it
 ```
 
 An **official** row, for example the `crestron` vendor, is read-only: `update` and `delete` both
@@ -416,7 +430,10 @@ The [command type](/architecture/commands/#the-command_type-registry) commands c
 catalog: what a component can be told, with a target property and a settle window. `command_type:read`
 sits on the viewer floor; create/update/delete are admin-gated, official types read-only. Issuing a
 command (`command:issue`) records the invocation, writes a caused event, and returns the computed
-settlement verdict.
+settlement verdict; the invocation then rides the per-node command queue to the placed node,
+which actuates it through the attached driver's command binding, and the settle loop closes
+against the observed value the driver's polls report back
+([commands](/architecture/commands/#actuation-the-wire-to-the-device)).
 
 ```sh
 omniglass command-type list                                         # the command type catalog

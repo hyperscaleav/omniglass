@@ -543,7 +543,7 @@ func laneInstance(instance string, owner storage.TaskOwner) string {
 	if instance != "" {
 		return instance
 	}
-	return owner.InterfaceName
+	return owner.EndpointName
 }
 
 // laneSource resolves a batch's provenance source: the batch's own wins, else
@@ -553,7 +553,7 @@ func laneSource(ev *ogv1.TelemetryBatch, owner storage.TaskOwner) string {
 	if s := ev.GetSource(); s != "" {
 		return s
 	}
-	return owner.InterfaceType
+	return owner.Transport
 }
 
 // propertyText maps a validated canonical-JSON property value to the text form

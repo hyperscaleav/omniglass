@@ -137,7 +137,7 @@ export const OFF_RAIL: { path: string; label: string; hint: string; resource?: s
   // The re-homed index pages (#798): each renders as a kind tab inside the
   // fleet's list face, and its bare URL redirects there, but the detail routes
   // (/locations/{id} and friends) still resolve identity and gate here.
-  { path: "/components", label: "Components", resource: "component", hint: "The component inventory, with declared config, props, and tags. Device interfaces are a panel on the component." },
+  { path: "/components", label: "Components", resource: "component", hint: "The component inventory, with declared config, props, and tags. Device endpoints are a panel on the component." },
   { path: "/systems", label: "Systems", resource: "system", hint: "Location and system trees, navigable, with health at each level." },
   { path: "/locations", label: "Locations", resource: "location", hint: "The place tree: campuses, buildings, floors, and rooms." },
   { path: "/products", label: "Products", resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the component type it is classified under." },

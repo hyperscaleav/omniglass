@@ -32,7 +32,7 @@ import {
 } from "../lib/nodes";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { TASKS_KEY, listTasks } from "../lib/tasks";
-import { INTERFACES_KEY, listInterfaces } from "../lib/interfaces";
+import { ENDPOINTS_KEY, listEndpoints } from "../lib/endpoints";
 import { useMe, can } from "../lib/auth";
 import { describeError, rel } from "../lib/format";
 import { type BladeDef, useBlades, useBladeEdit } from "../lib/blades";
@@ -154,7 +154,7 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
   const blades = useBlades();
   const nodes = useQuery(() => ({ queryKey: NODES_KEY, queryFn: () => listNodes() }));
   const tasks = useQuery(() => ({ queryKey: TASKS_KEY, queryFn: () => listTasks() }));
-  const interfaces = useQuery(() => ({ queryKey: INTERFACES_KEY, queryFn: () => listInterfaces() }));
+  const interfaces = useQuery(() => ({ queryKey: ENDPOINTS_KEY, queryFn: () => listEndpoints() }));
   const n = createMemo(() => nodes.data?.find((x) => x.name === props.name) ?? null);
   const [err, setErr] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
@@ -167,7 +167,7 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
   async function removeNode() {
     const node = n();
     if (!node) return;
-    if (!confirm(`Delete node "${nodeLabel(node)}"? Its interfaces, tasks, and enrollment are removed. This cannot be undone.`)) return;
+    if (!confirm(`Delete node "${nodeLabel(node)}"? Its endpoints, tasks, and enrollment are removed. This cannot be undone.`)) return;
     setErr(null);
     try {
       await deleteNode(node.name);
@@ -209,14 +209,14 @@ function NodeBladeBody(props: { name: string; onEnrolled: (out: EnrollOutput) =>
 
   // The node's derived tasks. A task has no name: it is a binding, a function running
   // over an interface, so it reads as its interface (the anchor, resolved from the
-  // surrogate interface_id) plus the function it runs, never a redundant label. The
+  // surrogate endpoint_id) plus the function it runs, never a redundant label. The
   // function name arrives with device drivers, so today it reads as the built-in check
   // with a provisional marker. Read-only: a task is derived, never authored here.
   const ifaceName = (id: string) => interfaces.data?.find((i) => i.id === id)?.name ?? id;
   const nodeTasks = createMemo(() =>
     (tasks.data ?? [])
       .filter((t) => t.node === props.name)
-      .map((t) => ({ id: t.id, iface: ifaceName(t.interface_id), enabled: t.enabled })),
+      .map((t) => ({ id: t.id, iface: ifaceName(t.endpoint_id), enabled: t.enabled })),
   );
 
   async function doEnroll() {

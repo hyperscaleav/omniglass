@@ -38,7 +38,7 @@ per-slice detail (136 entries at this update) is on [implementation status](/arc
   that explains which value won and why.
 - **The collection vertical.** The [node](/architecture/nodes/) runtime with enrollment and claim,
   embedded NATS/JetStream with per-node subject isolation, the icmp and tcp probes, the
-  transition-only reachability verdict and its panel, interface and task authoring, and the raw-log
+  transition-only reachability verdict and its panel, endpoint and task authoring, and the raw-log
   lane with node self-logs ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
 - **The telemetry ontology.** The `metric_type` / `property_type` / `event_type` / `command_type`
   registries, the sample lanes (`metric`, `property`, `event`, `log_line`), current values derived
@@ -74,7 +74,7 @@ automation and read tier. The broad order the remaining work follows, each band 
 that describes the target:
 
 1. **Collection at the edge.** Substantially landed: the [node](/architecture/nodes/) runtime, the
-   embedded bus, the icmp/tcp probes, edge parsing, and [interface](/architecture/collection/) and task
+   embedded bus, the icmp/tcp probes, edge parsing, and [endpoint](/architecture/collection/) and task
    authoring all shipped. Still ahead: [templates](/architecture/templates/) (the reusable device
    shape) and the richer transports (real snmp / http / ssh drivers, webhook listeners; today `ssh`
    and `http` probe as tcp-connect only).

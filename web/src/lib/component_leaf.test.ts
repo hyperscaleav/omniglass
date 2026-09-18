@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "./component_leaf";
 import type { FleetView } from "./fleet";
 import type { Node } from "./nodes";
-import type { ReachInterface } from "./reachability";
+import type { ReachEndpoint } from "./reachability";
 import { uuidFor } from "./testids";
 
 // The component leaf's derivations (#637). The collection card's one job is
@@ -13,8 +13,8 @@ import { uuidFor } from "./testids";
 const now = Date.parse("2026-08-15T12:00:00Z");
 const iso = (secondsAgo: number) => new Date(now - secondsAgo * 1000).toISOString();
 
-const iface = (verdict: { value: string; ts: string } | null, node?: string): ReachInterface =>
-  ({ interface: "ssh", interface_type: "ssh", node, verdict, layers: [], history: [] }) as unknown as ReachInterface;
+const iface = (verdict: { value: string; ts: string } | null, node?: string): ReachEndpoint =>
+  ({ endpoint: "ssh", transport: "ssh", node, verdict, layers: [], history: [] }) as unknown as ReachEndpoint;
 
 const node = (heartbeatSecondsAgo: number | null): Node =>
   ({ name: "edge-1", enrolled: true, last_heartbeat_at: heartbeatSecondsAgo === null ? undefined : iso(heartbeatSecondsAgo), tags: {} }) as Node;

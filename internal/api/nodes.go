@@ -184,7 +184,7 @@ func registerNodeRoutes(api huma.API, a *authenticator, gw storage.Gateway, nats
 		Path:          "/nodes/{name}",
 		DefaultStatus: http.StatusNoContent,
 		Summary:       "Delete a node",
-		Description:   "Decommissions a node: a hard delete that cascades its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.",
+		Description:   "Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.",
 	}, "node", "delete"), func(ctx context.Context, in *nodePathInput) (*struct{}, error) {
 		if err := gw.DeleteNode(ctx, actorID(ctx), in.Name, a.scopeFor(ctx, "node", "read"), a.scopeFor(ctx, "node", "delete")); err != nil {
 			return nil, mapNodeErr(err)

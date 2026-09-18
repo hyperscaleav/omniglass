@@ -37,7 +37,7 @@ import { tagFilterKeys } from "../lib/predicate";
 
 
 
-import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
+import { endpointBlade, endpointCreateBlade } from "../components/endpointBlades";
 import { propertyResolutionBlade } from "../components/PropertiesPanel";
 
 
@@ -500,8 +500,8 @@ function ComponentsIndex() {
     bladeOverride: componentBlade,
     extraBlades: {
       "property-resolution": propertyResolutionBlade,
-      interface: interfaceBlade,
-      "interface-create": interfaceCreateBlade,
+      endpoint: endpointBlade,
+      "endpoint-create": endpointCreateBlade,
       system: systemBlade,
       location: locationBlade,
     },

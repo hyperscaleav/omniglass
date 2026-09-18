@@ -32,9 +32,9 @@ deferred. See [implementation status](/architecture/status/) and
 
 The node is the edge process (`omniglass node run`), one per site, or the **server itself** when no site-local edge exists (see *Placement*). Identity is **bound to `node.name`** (a compromised node cannot impersonate another, [identity-access](/architecture/identity-access/)); it holds no config, and its writes are confined to its **placement-derived `visible_set`** (the owners of its assigned tasks): **node mode**, not all-visibility system mode.
 
-A node carries the identity triad with one exception. Its **`id`** is `principal_id`, the immutable primary key every reference stores (a node is the detail row of a principal, and `interface.node_name` holds that uuid whatever its column name suggests). Its **`name`** is the operator-typed identifier and fleet address, the NATS subject token and the enrollment identity, and it is the one name with no `:rename` custom method: moving it would move a live subject, so the PATCH body carries no name at all. Its **`label`** is the operator label (console falls back to the name). Its optional `location` is **descriptive**, **not** a scope: a node stays fleet-wide, `location` clearing if that location is deleted (`ON DELETE SET NULL`). Descriptive does not mean unguarded: the create and the update resolve that reference within the caller's own `location:read` scope, the seam every other placement bind uses, and a location outside it is refused as **absent** rather than as forbidden ([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup), amended by [#705](https://github.com/hyperscaleav/omniglass/issues/705)). The console blade is read-edit-save via `PATCH /nodes/{name}` (Edit primary, gated `node:update`, editing label, description, location; name read-only; enrolling secondary).
+A node carries the identity triad with one exception. Its **`id`** is `principal_id`, the immutable primary key every reference stores (a node is the detail row of a principal, and `endpoint.node_name` holds that uuid whatever its column name suggests). Its **`name`** is the operator-typed identifier and fleet address, the NATS subject token and the enrollment identity, and it is the one name with no `:rename` custom method: moving it would move a live subject, so the PATCH body carries no name at all. Its **`label`** is the operator label (console falls back to the name). Its optional `location` is **descriptive**, **not** a scope: a node stays fleet-wide, `location` clearing if that location is deleted (`ON DELETE SET NULL`). Descriptive does not mean unguarded: the create and the update resolve that reference within the caller's own `location:read` scope, the seam every other placement bind uses, and a location outside it is refused as **absent** rather than as forbidden ([ADR-0089](/architecture/decisions/#adr-0089-a-uuid-is-the-address-a-dotted-path-is-a-positional-lookup), amended by [#705](https://github.com/hyperscaleav/omniglass/issues/705)). The console blade is read-edit-save via `PATCH /nodes/{name}` (Edit primary, gated `node:update`, editing label, description, location; name read-only; enrolling secondary).
 
-A node is a **taggable owner**: governed [tags](/architecture/tags/) whose `applies_to` includes `node` bind to it (fleet-wide, all-scope, `node:update`); effective tags are the `platform` layer plus direct bindings, no cascade (a node is not a scope tree); the blade carries a **Tags** panel, the list a Tags column and per-key facet. **Decommissioning** (`DELETE /nodes/{name}`, `node:delete`) hard-deletes, cascading its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential; collected component telemetry is untouched.
+A node is a **taggable owner**: governed [tags](/architecture/tags/) whose `applies_to` includes `node` bind to it (fleet-wide, all-scope, `node:update`); effective tags are the `platform` layer plus direct bindings, no cascade (a node is not a scope tree); the blade carries a **Tags** panel, the list a Tags column and per-key facet. **Decommissioning** (`DELETE /nodes/{name}`, `node:delete`) hard-deletes, cascading its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential; collected component telemetry is untouched.
 
 ## Getting its instructions
 
@@ -49,16 +49,16 @@ sees a template, only materialized, resolved task and command instances.
 ### Config propagation (declared change to running node)
 
 :::design[Target design: config propagation to a running node (`:apply` and the generation-driven cache), tracked in #489]
-An interface's connection config (endpoint, snmp community, http auth header) is a **projection** of
+An endpoint's connection config (endpoint, snmp community, http auth header) is a **projection** of
 the component's declared config through its template. The node re-pulls the worklist every tick but
-**caches interface config for its process lifetime**, so a changed input must propagate:
+**caches endpoint config for its process lifetime**, so a changed input must propagate:
 **reconcile on the server** (a changed declared input, via `/components/{name}:apply` or a direct
-config write, re-renders the affected interfaces from the *current* declared config and upserts
+config write, re-renders the affected endpoints from the *current* declared config and upserts
 them, preserving placement) and **invalidate on the node** (the worklist reply carries a per-node
-**`config_generation`**, the max `updated_at` across the interfaces the node polls; an advance drops
-the node's interface cache and re-fetches this tick, a steady value serves from cache: a real change
+**`config_generation`**, the max `updated_at` across the endpoints the node polls; an advance drops
+the node's endpoint cache and re-fetches this tick, a steady value serves from cache: a real change
 lands within one tick, no restart). The generation moves at **operator-config pace, not telemetry
-pace**: the sample-write path never touches `interface.updated_at` and a no-op re-apply does not
+pace**: the sample-write path never touches `endpoint.updated_at` and a no-op re-apply does not
 advance it, so nodes are never woken for nothing.
 :::
 
@@ -142,22 +142,22 @@ callback URL resolves to the placed listener's address, never a hardcode.
 ## Running tasks
 
 :::design[Target design: edge normalization (locate + Expr) and the listen mode, tracked in #489]
-Per task the node runs the protocol over the interface's connection, then **normalizes at the
+Per task the node runs the protocol over the endpoint's connection, then **normalizes at the
 edge**: the locate + Expr extraction ([collection](/architecture/collection/)) produces samples and
 stamps labels (cascading union + override), keeping the wire bytes as `raw` only on a parse or
 validation failure (for `collection.failed`) or under dev raw-mode. A task runs in one of the two
 [collection](/architecture/collection/) modes, **poll** (on the resolved `interval`) or **listen**;
-a held-open connection is a **stateful interface transport**, not a third task type. Both modes
+a held-open connection is a **stateful endpoint transport**, not a third task type. Both modes
 assemble the same telemetry payload (below).
 :::
 
-The built interface types, their per-task params, and the fixed samples each emits are the collection **type catalog** ([interface types and their config](/architecture/collection/#interface-types-and-their-config)); this page covers how the node *executes* them: reachability gating, sessions, the task queue, tick scheduling.
+The built endpoint types, their per-task params, and the fixed samples each emits are the collection **type catalog** ([endpoint types and their config](/architecture/collection/#endpoint-types-and-their-config)); this page covers how the node *executes* them: reachability gating, sessions, the task queue, tick scheduling.
 
 ## Sessions
 
 ::::design[Target design: sessions and the session pool, tracked in #489]
-A stateful interface (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one
-connection keyed by `(node, interface)`, shared by every task and command under it, handshake and
+A stateful endpoint (`ssh`, `mqtt`, anything held open) becomes a **session** at runtime: one
+connection keyed by `(node, endpoint)`, shared by every task and command under it, handshake and
 auth paid once. A pool holds it open across ticks (reconnect, backoff, keepalive); a listener
 runtime wakes on its inbound. The socket is ephemeral on the node, which **reports lifecycle
 transitions as `session_log` rows**; the `session` entity is a server-side projection (a
@@ -165,7 +165,7 @@ view over `session_log`; [storage](/architecture/storage/)).
 
 :::caution[Open question]
 The exact `session` lifecycle state enum and pooling parameters (idle timeout, max lifetime, pool
-size per interface, a shared versus dedicated session for a stream).
+size per endpoint, a shared versus dedicated session for a stream).
 :::
 
 Lifecycle: **establish** (connect, authenticate, subscribe if a stream rides the session),
@@ -203,18 +203,18 @@ The node's work is the **component task queue** (distinct from the central **rul
 
 - **discrete tasks** (pollers, commands): request/response, **serialized into per-component lanes**.
   Component, not host, is the contention key: a server with two IPs is one component, and a reboot
-  takes out both interfaces. A shared poller runs once on its parent and fans out at binding.
+  takes out both endpoints. A shared poller runs once on its parent and fans out at binding.
 - **standing receivers** (listen tasks): always-on, event-driven, **not lane-serialized**, sharing a
   held session with pollers (demuxed) or owning their connection.
 
 **Smart-wait gate.** After a disruptive command the lane blocks until reachability reports the host
 back up, read from the node's **local** copy, not the sample store; a fixed timeout backstops.
 
-Tasks within one interface run serially (one probe, then its tasks in order); only distinct
-interfaces run concurrently.
+Tasks within one endpoint run serially (one probe, then its tasks in order); only distinct
+endpoints run concurrently.
 
 :::caution[Open question]
-Whether to add intra-interface concurrency, given that connection and order semantics differ per
+Whether to add intra-endpoint concurrency, given that connection and order semantics differ per
 protocol.
 :::
 
@@ -226,7 +226,7 @@ resumes its durable consumer on the command queue, and replays unacked telemetry
 
 ## Implicit reachability
 
-Any interface with a host address gets reachability for free: the node pings the host and checks the declared port(s), continuously and out of band; a smart default, **bypassable per interface** (for endpoints that drop ICMP or have no port).
+Any endpoint with a host address gets reachability for free: the node pings the host and checks the declared port(s), continuously and out of band; a smart default, **bypassable per endpoint** (for endpoints that drop ICMP or have no port).
 
 :::design[Target design: the layered availability gate, tracked in #489]
 The results come back as `reachable` / `port_open` **samples** usable in rules and dashboards, and
@@ -234,21 +234,21 @@ feed the smart-wait gate from the node's local copy: the connection detector and
 signal are one always-on probe.
 
 **The layered availability gate** is an **OSI-layered** set of cheap checks run as a **concurrent
-pre-pass** (high concurrency, short timeouts) before a connection-interface's poll tasks. All
+pre-pass** (high concurrency, short timeouts) before a connection-endpoint's poll tasks. All
 applicable checks run, each shipping a built-in sample, instanced (the ping by host, the rest by
-interface) and owned by the queried component; the interface's **`interface-reachable`** verdict is
+endpoint) and owned by the queried component; the endpoint's **`endpoint-reachable`** verdict is
 their AND.
 
 | Layer | Check | Sample | Notes |
 |---|---|---|---|
-| L3 network | ICMP ping, **batched once per host** per tick | `icmp-reachable` / `icmp-rtt-avg` | **informational** (see verdict below); shared by every interface on the host |
+| L3 network | ICMP ping, **batched once per host** per tick | `icmp-reachable` / `icmp-rtt-avg` | **informational** (see verdict below); shared by every endpoint on the host |
 | L4 transport | TCP connect (tcp-family) **or** UDP presence (snmp/UDP) | `tcp-open`/`tcp-connect-time` · `udp.open` | a closed UDP port answers ICMP port-unreachable, so absence of that is "present"; this is why SNMP's transport check is L4, not its auth-dependent get |
 | L7 app | protocol handshake: SNMP `sysUpTime` get (**`snmp.reachable`**, default-on) · SSH handshake+auth · telnet login chain | (verdict) | the SNMP get is the **primary, default** SNMP liveness (ICMP-independent); SSH/telnet are **opt-in** (`ssh_check`/`telnet_check="on"`) because their liveness credential can differ from the device's |
 
 **The verdict respects each layer's definitiveness.** A TCP connect and any L7 handshake are
 **definitive**, so the **ping is informational** (an ICMP-filtered host still reads up); a UDP
 "present" is a read timeout (open|filtered), ambiguous, and only the ping disambiguates it, so a
-failed ping fails the verdict ONLY for an SNMP interface opted out of the L7 get (`snmp_check=off`),
+failed ping fails the verdict ONLY for an SNMP endpoint opted out of the L7 get (`snmp_check=off`),
 the UDP probe its only signal (`pingGates`). A definitively down layer (TCP refused, UDP
 ICMP-unreachable, an L7 auth/no-answer) fails the verdict regardless; an inconclusive probe (a
 setup/resolve error, a missing credential) does not gate.
@@ -268,7 +268,7 @@ chain (service-up, not a verified shell). `params.liveness_oid` overrides the pr
 
 **Poller** tasks run only if the verdict is up; **listener** (`mode=listen`) tasks run ungated,
 never pinged; **inline probes** (`icmp`/`tcp` with the host on the task) *are* the check, ungated. A
-down interface's gate samples ship in **one** batched call. L5 (socket), L6 (TLS), and further L7
+down endpoint's gate samples ship in **one** batched call. L5 (socket), L6 (TLS), and further L7
 handshakes extend the stack: one `append` in `ifaceChecks`, gated by its own `_check` param.
 :::
 
@@ -310,7 +310,7 @@ ship.
 ## Tick scheduling, concurrency, and self-observability
 
 ::::design[Target design: the tick scheduler, `node.self`, and the node-down sweep, tracked in #489 and #430; the seeded node rules are the `event_rule` (ADR-0050)]
-A tick groups the worklist **by interface** and runs three phases: the L3 ping pre-pass (batched per
+A tick groups the worklist **by endpoint** and runs three phases: the L3 ping pre-pass (batched per
 host), the gate-verdict pre-pass, the poll phase. The gate pre-passes run at a **high fixed
 concurrency** (`gateConcurrency`), the poll phase across the **bounded poll pool** (default 16,
 `--workers`), so the cheap gate is never throttled by a small `--workers` and a node facing many
@@ -328,7 +328,7 @@ tick exceeding its interval is flagged and the next fires immediately, so fallin
 **surfaces** rather than silently dropping ticks.
 
 Each tick the node publishes a `node.self` envelope: tick duration, task
-attempted/ran/skipped/failed counts, interface probed/up/down counts, the `node.overrun` state. Not
+attempted/ran/skipped/failed counts, endpoint probed/up/down counts, the `node.overrun` state. Not
 special-cased: `node.self` is node-owned samples (the seeded `node.*` types) riding the **same
 raw-ingress -> admission -> trusted** path; the self shape is **built into the binary** (no
 operator-authored template), the admission consumer binds it to the **reporting node**

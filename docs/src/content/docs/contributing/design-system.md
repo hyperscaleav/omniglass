@@ -138,7 +138,7 @@ an unknown verdict) does **not** use `badge-neutral` or `badge-ghost`: against t
 `base-100` (`#080c16`), `badge-neutral` renders near-black and `badge-ghost` renders transparent, so
 both read as invisible. Use a soft grey fill tinted from the text color instead
 (`bg-base-content/10 text-base-content/70 border-transparent`), which reads as a visible pill in both
-themes at the same weight as the soft hues. The same reason keeps `type` values (interface/task
+themes at the same weight as the soft hues. The same reason keeps `type` values (endpoint/task
 `type`) as plain `font-data` text, not a `badge-neutral` chip.
 
 ## Primitives (the reuse target)
@@ -197,7 +197,7 @@ through: a heading must resolve its row (it rendered the raw id), must not snaps
 stale after a rename), and must render through `BladeTitle` or be named in the test's exception
 list with a reason (it resolved and tracked correctly and read the wrong field, the name where
 its list showed the label). The exceptions are the entities that carry no label at
-all, where the name is the only operator-facing string: a secret, a variable, a tag, an interface.
+all, where the name is the only operator-facing string: a secret, a variable, a tag, an endpoint.
 
 **Free text declares itself.** `multiline` reads wrapped with its newlines preserved and edits in a
 `textarea`. It is a prop rather than a second component because a component means every new page
@@ -425,7 +425,7 @@ one"; the drafted NAME travels back with the create as `expected_name`, so a nam
 the preview and the submit, because another create took the number or the type's stem was edited, is
 a refusal rather than a silent difference. The three
 signal registries (`property_type`, `event_type`, `command_type`) do not wire it either, because a
-signal name is chosen to match what an interface reports rather than derived from prose somebody
+signal name is chosen to match what an endpoint reports rather than derived from prose somebody
 typed, and that was as true when those names carried dots as it is now they are single tokens. `tag`, `variable`, and `secret`
 invite an exception because their prose calls them keys; they get none, and take the one rule like
 everything else.

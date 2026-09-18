@@ -27,11 +27,11 @@ type eventBody struct {
 	Key         string          `json:"key" doc:"The event_type name of the occurrence (e.g. call-started)"`
 	EventTypeID string          `json:"event_type_id" doc:"The event_type's uuid, the stable form of key"`
 	Origin      string          `json:"origin" doc:"How the occurrence arrived (caught/caused/derived/scheduled)"`
-	Instance    string          `json:"instance,omitempty" doc:"The series discriminator (e.g. the interface), when set"`
+	Instance    string          `json:"instance,omitempty" doc:"The series discriminator (e.g. the endpoint), when set"`
 	Message     string          `json:"message" doc:"The occurrence message"`
 	Attributes  json.RawMessage `json:"attributes,omitempty" doc:"Structured attributes, when the occurrence carried a JSON payload"`
 	Provenance  string          `json:"provenance" doc:"The lineage of the occurrence (observed for direct collection)"`
-	Source      string          `json:"source,omitempty" doc:"The interface type that produced the occurrence"`
+	Source      string          `json:"source,omitempty" doc:"The transport that produced the occurrence"`
 }
 
 type eventsOutput struct {
@@ -88,11 +88,11 @@ type systemEventBody struct {
 	Key         string          `json:"key" doc:"The event_type name of the occurrence (e.g. call-started)"`
 	EventTypeID string          `json:"event_type_id" doc:"The event_type's uuid, the stable form of key"`
 	Origin      string          `json:"origin" doc:"How the occurrence arrived (caught/caused/derived/scheduled)"`
-	Instance    string          `json:"instance,omitempty" doc:"The series discriminator (e.g. the interface), when set"`
+	Instance    string          `json:"instance,omitempty" doc:"The series discriminator (e.g. the endpoint), when set"`
 	Message     string          `json:"message" doc:"The occurrence message"`
 	Attributes  json.RawMessage `json:"attributes,omitempty" doc:"Structured attributes, when the occurrence carried a JSON payload"`
 	Provenance  string          `json:"provenance" doc:"The lineage of the occurrence (observed for direct collection)"`
-	Source      string          `json:"source,omitempty" doc:"The interface type that produced the occurrence"`
+	Source      string          `json:"source,omitempty" doc:"The transport that produced the occurrence"`
 	OwnerKind   string          `json:"owner_kind" doc:"Which arc raised the occurrence: system or component"`
 	Owner       string          `json:"owner" doc:"The owning row's name (the system's, or the member component's)"`
 }
