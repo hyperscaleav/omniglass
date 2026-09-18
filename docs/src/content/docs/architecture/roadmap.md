@@ -56,20 +56,16 @@ authoritative.
 
 | Epic | Outcome | Lands in |
 |---|---|---|
-| [Identity tier (#27)](https://github.com/hyperscaleav/omniglass/issues/27) | **Shipped.** Password login over an httpOnly cookie session, self-service profile and password change, and admin user / grant management, then well beyond the original scope (lifecycle, impersonation, groups, tokens, lockout). Its exit condition is met: the bearer-only and bootstrap divergences ([ADR-0004](/architecture/decisions/#adr-0004-credentials-ship-bearer-only), [ADR-0005](/architecture/decisions/#adr-0005-the-first-owner-is-omniglass-bootstrap)) are closed. The identity slices on [implementation status](/architecture/status/) carry the detail. | [identity and access](/architecture/identity-access/) |
-| [Deploy spine: PR previews (#41)](https://github.com/hyperscaleav/omniglass/issues/41) | **Live.** Every open PR gets an ephemeral, Access-gated preview of the console, provisioned by Argo CD from the Helm chart (the chart is also the production deploy artifact). See [PR previews](/guides/pr-previews/). | [scaling and deployment](/architecture/scaling/) |
-| [Fleet model: groups + dynamic scope (#10)](https://github.com/hyperscaleav/omniglass/issues/10) | Ahead: entity-groups as scope anchors and dynamic-membership scope, plus the cross-tier cascade (a location scope reaching its systems and components). Principal groups as grant subjects shipped; group-as-scope has not. | [identity and access](/architecture/identity-access/), [groups](/architecture/groups/), [cascade](/architecture/cascade/) |
+| [Release 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825) | Ahead: the first public tag. Three lanes ship first: [drivers, listeners, and the command wire (#603)](https://github.com/hyperscaleav/omniglass/issues/603), [the expression engine (#524)](https://github.com/hyperscaleav/omniglass/issues/524), and [the event rule tier (#819)](https://github.com/hyperscaleav/omniglass/issues/819), with the delivery half of [telemetry integrity (#430)](https://github.com/hyperscaleav/omniglass/issues/430) and the [role staffing bugs (#504)](https://github.com/hyperscaleav/omniglass/issues/504); the epic lists the pre-tag hygiene and the four open calls. | [collection](/architecture/collection/), [expressions](/architecture/expressions/), [alarms and actions](/architecture/alarms-actions/) |
+| [Groups as scope and the cross-tier cascade (#10)](https://github.com/hyperscaleav/omniglass/issues/10) | Ahead: entity-groups as scope anchors and dynamic-membership scope, plus the cross-tier cascade (a location scope reaching its systems and components). Principal groups as grant subjects shipped; group-as-scope has not. | [identity and access](/architecture/identity-access/), [groups](/architecture/groups/), [cascade](/architecture/cascade/) |
 | [Public releases (#57)](https://github.com/hyperscaleav/omniglass/issues/57) | Ahead: signed and notarized binaries for every major OS/arch and one-line installs (Homebrew / Scoop / winget), so a first-time user runs with no security warning. | [scaling and deployment](/architecture/scaling/) |
 | [Embedded Postgres run mode (#19)](https://github.com/hyperscaleav/omniglass/issues/19) | Ahead: an opt-in single-binary mode with a managed embedded Postgres, for edge, demo, and learning installs with zero external database. | [scaling and deployment](/architecture/scaling/) |
 
-The current workstream is the drift-correction program from the 2026-07-30 doc-versus-code audit,
-tracked as epics [#428](https://github.com/hyperscaleav/omniglass/issues/428) (documentation drift
-correction), [#429](https://github.com/hyperscaleav/omniglass/issues/429) (drift prevention tooling),
-[#430](https://github.com/hyperscaleav/omniglass/issues/430) (telemetry integrity),
-[#431](https://github.com/hyperscaleav/omniglass/issues/431) (scope and secrets integrity),
-[#432](https://github.com/hyperscaleav/omniglass/issues/432) (console address honesty and the audit
-diff), [#433](https://github.com/hyperscaleav/omniglass/issues/433) (generated docs facts), and
-[#434](https://github.com/hyperscaleav/omniglass/issues/434) (docs corpus restructure).
+The 2026-07-30 drift-correction program ([#428](https://github.com/hyperscaleav/omniglass/issues/428) through
+[#434](https://github.com/hyperscaleav/omniglass/issues/434)) has closed except for the telemetry-integrity half of
+[#430](https://github.com/hyperscaleav/omniglass/issues/430), which rides the release. The current workstream is
+[release 0.1.0 (#825)](https://github.com/hyperscaleav/omniglass/issues/825). The template layer that follows the
+collection epic is tracked on [#827](https://github.com/hyperscaleav/omniglass/issues/827).
 
 ## The architectural arc ahead
 

@@ -175,6 +175,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0134](#adr-0134-the-entity-an-api-is-reached-through-is-an-endpoint) | 2026-08-28 | Accepted | The entity formerly named `interface` renames to `endpoint` end to end (table, routes, `endpoint:*` permission nouns, console, docs, the `endpoint-reachable` datapoint renamed in place), executing #603's naming ruling as ADR-0073's transports-become-code lands: `service` was disqualified by the existing service-principal table, `api` by the platform's own API vocabulary, and `endpoint` is the word the design already used for this thing's address, which becomes `address` so the schema never reads `endpoint.endpoint` |
 | [ADR-0135](#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it) | 2026-08-28 | Accepted | A driver's body is a versioned declarative spec (jsonb on the driver row, validated against the catalogs at every write): one transport, typed inputs with secret references, and three function families (polls, listeners, command bindings). Attach derives the endpoint and its tasks from the spec, emit lanes baked at attach; a listener's arm conversation is session plumbing, never recorded command rows |
 | [ADR-0136](#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch) | 2026-08-28 | Accepted | The command wire is a per-node pull (`og.v1.command.<node>`, request-reply like the worklist) with the binding's request rendered server-side at dispatch: at-least-once delivery (redeliver after silence, a delivery TTL past which settlement's timed-out covers abandonment), execution idempotent per command id at the node, the report (`og.v1.commandstatus.<node>`) stamping `executed_at` once under placement confinement, and the report never the verdict: settlement stays the judgment of observed against intended |
+| [ADR-0138](#adr-0138-the-autopilot-ships-a-daily-slice-and-pr-review-is-its-approval-gate) | 2026-09-17 | Accepted | A scheduled daily session (the autopilot) ships one thin slice per day: for slices it scopes itself it files the definition in the `/define-work` shape with the `Mode: autopilot (ADR-0138)` marker and proceeds, the Define gate's approval comment moving to the architect's review of the PR (merge accepts, close vetoes). An in-progress loop, an approved definition, and a priority `Bug` outrank self-scoping; invariant surfaces (the authorization layers, the migration rules, the audit contract), breaking API changes and dependency majors stay behind a human approval comment; at most two autopilot PRs stay open; provenance is a marker line, never a new label class; the autopilot never merges |
 
 ## Entries
 
@@ -6252,3 +6253,25 @@ interface create form, since that name is the platform's to mint.
   the execution arc (`dispatched_at`, `executed_at`, `exec_error`) lands beside the settlement
   arc rather than inside it because "the device was told" and "the device did" are different
   facts, and conflating them is how a wire ack gets mistaken for an outcome.
+### ADR-0138: The autopilot ships a daily slice, and PR review is its approval gate
+
+- **Date:** 2026-09-17 | **Status:** Accepted | **Pages:** [autopilot](/contributing/autopilot/),
+  [slice workflow](/contributing/slice-workflow/), [feature loops](/contributing/feature-loops/)
+- **Decision:** A scheduled daily session (the autopilot) selects and ships one thin slice per
+  day. Work is taken in a fixed order: an in-progress loop, an architect-approved definition, an
+  open `Bug` by board priority, and only then a slice the autopilot scopes for itself. For that
+  last rung the Define gate's human approval comment is replaced by the architect's review of
+  the PR: the autopilot files the definition issue in the `/define-work` shape, marks it
+  `Mode: autopilot (ADR-0138)`, and proceeds; approving and merging the PR is the accept,
+  closing it is the veto. Self-scoping is bounded: anything touching an invariant (the two
+  authorization layers, the migration rules, the audit contract), a breaking API change, or a
+  dependency major still waits for a human approval comment. At most two autopilot PRs stay
+  open (past the cap the day is maintenance), provenance is a marker line in the issue and PR
+  body rather than a new label class, and the autopilot never merges to `main`.
+- **Context:** The architect cannot attend daily, and the Define gate assumed presence: with
+  nobody to comment, no branch could ever start, so unattended days shipped nothing. The
+  ship-review already front-loads the veto at the PR (Decisions I need from you; Risk), which
+  makes PR review the natural single touchpoint; the slice gates, `/file-bug` capture, and the
+  `/assess-ui` visual gate are what keep a self-scoped slice honest between wake-up and review.
+  The label taxonomy stayed fixed deliberately: an autopilot marker describes provenance, which
+  is neither a subsystem nor an automation trigger, so it rides the body text instead.

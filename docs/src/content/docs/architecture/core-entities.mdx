@@ -450,7 +450,7 @@ assigned is under-staffed today); health adds whether the assigned components ca
 Shipped content is two kinds, never conflated:
 
 - **Example content** (a `standard`) is created by **forking an in-code template**
-  ([#317](https://github.com/hyperscaleav/omniglass/issues/317); shipped boot seeds stand in today).
+  ([#827](https://github.com/hyperscaleav/omniglass/issues/827); shipped boot seeds stand in today).
   The fork is **one-time, no inheritance**: nothing points back at the template, so it can improve
   per release without touching a tenant. What lands is an **operator-owned** row (`official: false`),
   installed **only if absent** (`ON CONFLICT DO NOTHING`) so re-seeding never reverts an edit; a
