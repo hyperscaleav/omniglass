@@ -80,11 +80,19 @@ Each is a gate; a red one blocks the ship.
    gh image <out.png>` prints the markdown to paste). It works by extracting a logged-in
    browser's session cookie, which exists only on a workstation you browse GitHub from.
 
-   **If the check fails, commit them under `.github/screenshots/`** and embed by **immutable
-   commit SHA** (`https://raw.githubusercontent.com/<owner>/<repo>/<sha>/.github/screenshots/...`),
-   so the link survives the branch being deleted on squash-merge. This is the normal path on
-   any headless or remote machine: an unattended run, a worker VM, a container, CI. Do not
-   treat a failed check as a blocker, and do not skip the screenshots; commit them and carry on.
+   **If the check fails, embed the clean docs render the slice already committed**, by
+   **immutable commit SHA**
+   (`https://raw.githubusercontent.com/<owner>/<repo>/<sha>/docs/public/screenshots/<id>.png`),
+   so the link survives the branch being deleted on squash-merge. This costs the repo
+   nothing: a UI slice re-runs `make docs-shots` and commits both sets anyway, and a re-run
+   rewrites the same filenames rather than adding new ones. This is the normal path on any
+   headless or remote machine: an unattended run, a worker VM, a container, CI. Do not treat
+   a failed check as a blocker and do not skip the screenshots.
+
+   Only where the surface has **no docs shot id** (an interactive state the docs do not
+   capture), commit under `.github/screenshots/` and embed by SHA the same way. Every file
+   there is a new path that stays in git history permanently, so keep that path to what the
+   docs renders genuinely do not cover.
 
    Do not set `GH_SESSION_TOKEN` on an unattended machine to work around this. A
    `user_session` cookie is a full-account credential rather than a scoped token, it rotates
