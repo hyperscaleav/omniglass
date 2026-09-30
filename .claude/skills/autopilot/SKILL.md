@@ -28,7 +28,10 @@ honest while nobody is watching.
   lines are how the next day's session finds its own work.
 - **At most 2 open autopilot PRs.** At the cap, today is a maintenance day (below), never
   a third PR.
-- In a remote session, GitHub goes through the MCP tools (`mcp__github__*`), not `gh`.
+- GitHub goes through whichever surface the session has: the MCP tools
+  (`mcp__github__*`) in a cloud sandbox, an authenticated `gh` on the bridge worker
+  (the Routine's home; see the autopilot page). Neither present is an environment
+  failure for step 1, not a reason to skip the PR.
 
 ## 1. Wake and verify the environment
 
