@@ -73,16 +73,23 @@ Each is a gate; a red one blocks the ship.
    change, include **screenshots driven live** (e.g. against `make dev`). Capture them headless
    with `node web/e2e/shot.mjs <url> <out.png> [--token <og-token>] [--click <sel>]...
    [--select "<sel>||<value>"]...` (bundled chromium, writes to the host FS, drives interactive
-   states like an open menu or a chosen option). Host them with the `gh image` extension
-   (`node web/e2e/shot.mjs ... && gh image <out.png>` prints the markdown to paste). `gh image`
-   **auto-extracts the browser session cookie by default** (no `GH_SESSION_TOKEN`, no setup);
-   `gh image check-token` verifies it is valid. `GH_SESSION_TOKEN` / `--token` are optional
-   overrides for a machine with no logged-in browser. Otherwise commit them
-   under `.github/screenshots/` and embed by **immutable commit SHA**
-   (`https://raw.githubusercontent.com/<owner>/<repo>/<sha>/.github/screenshots/...`), so the
-   link survives the branch being deleted on squash-merge. A headless or remote session (no
-   logged-in browser, e.g. an unattended loop run) defaults to this committed path rather
-   than `gh image`.
+   states like an open menu or a chosen option). **Decide how to host them with a check,
+   not a guess: run `gh image check-token` first.**
+
+   If it passes, host them with the `gh image` extension (`node web/e2e/shot.mjs ... &&
+   gh image <out.png>` prints the markdown to paste). It works by extracting a logged-in
+   browser's session cookie, which exists only on a workstation you browse GitHub from.
+
+   **If the check fails, commit them under `.github/screenshots/`** and embed by **immutable
+   commit SHA** (`https://raw.githubusercontent.com/<owner>/<repo>/<sha>/.github/screenshots/...`),
+   so the link survives the branch being deleted on squash-merge. This is the normal path on
+   any headless or remote machine: an unattended run, a worker VM, a container, CI. Do not
+   treat a failed check as a blocker, and do not skip the screenshots; commit them and carry on.
+
+   Do not set `GH_SESSION_TOKEN` on an unattended machine to work around this. A
+   `user_session` cookie is a full-account credential rather than a scoped token, it rotates
+   and expires, so it fails silently mid-run, and committed screenshots are versioned and
+   reviewable where uploaded attachments are neither.
 
    **Docs screenshots are a generated resource, in two renders.** The images embedded *on
    the docs pages* are declared in each page's `screenshots` frontmatter and captured by
