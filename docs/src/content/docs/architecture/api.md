@@ -693,7 +693,7 @@ Two properties are worth stating because they are easy to lose:
 - **Flat, not nested.** Locations carry a parent id and the client assembles the tree. The server
   says what exists and how it is placed; the client decides how the fleet is **grouped**, which is
   what lets a grouping (by place, by standard, by vendor, by tag) be a mapper rather than a second
-  endpoint. Explore's own cut of the place tree is one such mapper (ADR-0134).
+  endpoint. Explore's own cut of the place tree is one such mapper (ADR-0137).
 - **Scoped per tier.** The three tiers resolve their own read scope, so a principal who may read the
   place tree but not its components gets the shape of their fleet with no contents, and one with no
   fleet scope at all gets an **empty fleet rather than a refusal**: there is simply nothing of

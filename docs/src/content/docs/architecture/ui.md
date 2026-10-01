@@ -20,7 +20,7 @@ is neither: a small library of renderers (cards, bands, mosaic, matrix) over one
 counted from the top, since `allowed_parent_types` makes depth a customer's fact),
 `view_budgets.ts` decides what a view can afford to draw, `explore_view.ts` turns the
 projection plus the controls into what every renderer consumes, and `presets.ts` saves a way
-of looking without ever saving a scope (ADR-0134). The views model, the renderer library, and composable
+of looking without ever saving a scope (ADR-0137). The views model, the renderer library, and composable
 dashboards remain the intended **read side** for the analytical surfaces (alarms, sample
 history, the cascade view, fleet dashboards), not built yet.
 Realized shell: the [design system](/contributing/design-system/); operating it: the
@@ -56,7 +56,7 @@ each marker, ADR-0128, the vitals), Activity (the history, the events, the logs)
 Configure (the one form). Since ADR-0129 these faces ARE the identity routes' default, and
 since #800 they are the ONLY faces: one way to look, one altitude rule (Explore drills the
 place tree, systems open full screen, components open in blades), editing through the one
-`EntityForm` wherever the operator meets the entity (ADR-0134), and the table face behind
+`EntityForm` wherever the operator meets the entity (ADR-0137), and the table face behind
 Explore's toggle for bulk work. The classic detail face is retired; `?view=detail` is
 ignored and `?edit=1` lands Configure already editing.
 
