@@ -601,6 +601,29 @@ describe("properties live on configure (#800)", () => {
 });
 
 describe("the miss face (#800)", () => {
+  // The create handoff lands here while the fleet view in the cache predates
+  // the new row. The page refetches it on mount, and until that read lands
+  // it cannot know the address is a miss: saying "may have been deleted"
+  // about the thing the operator created a second ago is the wrong answer.
+  it("does not call a just-created system missing while the fleet view is still being read", async () => {
+    let answer!: (r: Response) => void;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.includes("/views/fleet")) return new Promise<Response>((res) => { answer = res; });
+      return Promise.resolve(new Response("{}", { status: 404, headers: { "content-type": "application/json" } }));
+    }));
+    const r = mount(`/web/systems/${uuidFor("szp-new")}`);
+    // What a create leaves behind: the list refreshed, the view now stale.
+    void r.qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] });
+    await waitFor(() => expect(answer).toBeTypeOf("function"));
+    expect(screen.queryByText(/No system answers this address/)).toBeNull();
+    const fresh = { ...view, systems: [...(view.systems ?? []), { id: uuidFor("szp-new"), name: "fresh", label: "Fresh Room", location: (view.systems ?? [])[0]?.location, verdict: "incomplete", dots: [] }] };
+    answer(new Response(JSON.stringify(fresh), { status: 200, headers: { "content-type": "application/json" } }));
+    expect(await screen.findByRole("heading", { name: "Fresh Room" })).toBeTruthy();
+    expect(screen.queryByText(/No system answers this address/)).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
   it("an address matching no system renders the explicit miss, not a silent fallback", async () => {
     mount("/web/systems/no-such-room");
     expect(await screen.findByText(/No system answers this address/)).toBeTruthy();

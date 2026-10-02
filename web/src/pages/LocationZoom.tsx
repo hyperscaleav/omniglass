@@ -121,8 +121,11 @@ export default function LocationZoom() {
       title={anchor() ? entityLabel(anchor()!) : "Location"}
       breadcrumb={<Breadcrumb crumbs={crumbs()} />}
     >
+      {/* A miss is judged only once the fleet view is current: the create
+          handoff lands here while the cached view predates the new row, and
+          the refetch on mount is what answers whether the address exists. */}
       <Show
-        when={!(view.data && !anchor() && !(view.data.locations ?? []).some((x) => x.name === id()))}
+        when={!(view.data && !view.isFetching && !anchor() && !(view.data.locations ?? []).some((x) => x.name === id()))}
         fallback={
           <div role="alert" class="alert alert-warning alert-soft text-sm">
             <span>No location answers this address. It may have been deleted, or the link is stale.</span>

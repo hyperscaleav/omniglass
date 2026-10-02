@@ -537,13 +537,13 @@ export function EntityCreateForm(props: {
       let created: { id: string };
       if (isSystem()) {
         created = await createSystem({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, standard_id: standard() || undefined, system_type_id: systemType() || undefined, label: displayPen.value().trim() || undefined, location: location() || undefined, parent: parent() || undefined });
-        await qc.invalidateQueries({ queryKey: [...SYSTEMS_KEY] });
+        await Promise.all([qc.invalidateQueries({ queryKey: [...SYSTEMS_KEY] }), qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] })]);
       } else if (isLocation()) {
         created = await createLocation({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, location_type: locationType().trim(), label: displayPen.value().trim() || undefined, parent: parent() || undefined });
-        await qc.invalidateQueries({ queryKey: [...LOCATIONS_KEY] });
+        await Promise.all([qc.invalidateQueries({ queryKey: [...LOCATIONS_KEY] }), qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] })]);
       } else {
         created = await createComponent({ name: nm || undefined, expected_name: nm ? undefined : labelDraft.data?.name, label: displayPen.value().trim() || undefined, system: system() || undefined, location: location() || undefined, parent: parent() || undefined, product: product() });
-        await qc.invalidateQueries({ queryKey: [...COMPONENTS_KEY] });
+        await Promise.all([qc.invalidateQueries({ queryKey: [...COMPONENTS_KEY] }), qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] })]);
       }
       props.onCreated(created);
     } catch (er) {

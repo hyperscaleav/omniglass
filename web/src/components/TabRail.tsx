@@ -34,7 +34,11 @@ export default function TabRail(props: { tabs: { key: string; label: string }[];
                 "border border-b-0 border-base-300 bg-base-100 font-medium": active() === t.key,
                 "text-base-content/60 hover:text-base-content": active() !== t.key,
               }}
-              onClick={() => setParams({ [name()]: t.key === props.tabs[0].key ? undefined : t.key })}
+              // Choosing a tab also ends an ?edit=1 landing (useEditParam's
+              // intent, consumed once): left in the address it pinned the page
+              // to Configure, so Overview, the bare address, resolved straight
+              // back to it and re-entered edit on every return.
+              onClick={() => setParams({ [name()]: t.key === props.tabs[0].key ? undefined : t.key, edit: undefined })}
             >
               {t.label}
             </button>
