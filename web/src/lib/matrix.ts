@@ -83,14 +83,24 @@ function keep(s: FleetSystem, opts: ExploreOptions): boolean {
 // enough to read, one indented row per cut node under it. Columns are the
 // standards actually present, so a fleet of one standard is one column
 // rather than a catalogue of empties.
+//
+// Given a node, it pivots that node instead: the node is the one head row and
+// its direct children are the rows under it, the same shape the cards take
+// when drilled (explore_view insideOf). The rows are what an operator clicks
+// to drill, so a pivot that ignored the drill moved the breadcrumb and left
+// the table where it was. A node that is not there pivots to nothing rather
+// than quietly back to the fleet.
 export function matrixFor(
   view: FleetView,
   standardOf: (systemId: string) => string | undefined,
   opts: ExploreOptions,
+  nodeId?: string | null,
 ): MatrixModel {
   const children = childrenOf(view);
-  const roots = (view.locations ?? []).filter((l) => !l.parent);
-  const all = (view.systems ?? []).filter((s) => keep(s, opts));
+  const node = nodeId ? (view.locations ?? []).find((l) => l.id === nodeId) : undefined;
+  if (nodeId && !node) return { columns: [], rows: [], dense: false };
+  const roots = node ? [node] : (view.locations ?? []).filter((l) => !l.parent);
+  const all = (node ? systemsUnder(view, node.id, children) : (view.systems ?? [])).filter((s) => keep(s, opts));
   const dense = all.length > DENSE_ABOVE;
 
   const columnSet = new Set<string>();
@@ -117,9 +127,12 @@ export function matrixFor(
     rows.push(head);
     // Only while the table can still be read as a grid rather than a report.
     if (dense) continue;
-    for (const node of cutNodesFor(view, root.id)) {
-      if (node.id === root.id) continue;
-      const sub = rowFor(node, true);
+    const under = node
+      ? [...(children.get(root.id) ?? [])].sort((a, b) => entityLabel(a).localeCompare(entityLabel(b)) || a.id.localeCompare(b.id))
+      : cutNodesFor(view, root.id);
+    for (const child of under) {
+      if (child.id === root.id) continue;
+      const sub = rowFor(child, true);
       if (sub) rows.push(sub);
     }
   }

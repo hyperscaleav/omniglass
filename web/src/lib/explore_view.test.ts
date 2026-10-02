@@ -5,8 +5,10 @@ import {
   countsOf,
   fieldFor,
   insideOf,
+  pluralOf,
   resolveNode,
   roomsInView,
+  sectionLine,
   sectionsFor,
   systemRows,
   unplacedFor,
@@ -122,6 +124,37 @@ describe("sectionsFor", () => {
     const s = sectionsFor(view, attention);
     expect(s.map((x) => x.label)).toEqual(["Headquarters"]);
     expect(s[0].cards.map((c) => c.label)).toEqual(["East Building", "West Building"]);
+  });
+});
+
+describe("sectionLine", () => {
+  it("names the type, the cards at the cut, and the counts", () => {
+    expect(sectionLine(sectionsFor(view, all)[0])).toBe("campus · 2 buildings · 4 systems · 1 in outage · 1 degraded");
+  });
+
+  it("says how many cards the filter left out of how many there are", () => {
+    // Only Media AV survives, so one building of two is drawn. Saying "1
+    // building" there would be a claim about the campus, and it has two.
+    const hq = sectionsFor(view, onlyBad([uuidFor("s-media")]))[0];
+    expect(hq.cards.length).toBe(1);
+    expect(hq.cutTotal).toBe(2);
+    expect(sectionLine(hq)).toContain("1 of 2 buildings");
+  });
+
+  it("carries the drilled node's children as its total", () => {
+    const west = insideOf(view, uuidFor("west"), onlyBad([uuidFor("s-media")]))!;
+    expect(west.cutTotal).toBe(2);
+    expect(sectionLine(west)).toContain("1 of 2 ");
+  });
+
+  it("pluralises a type name the way the word goes, not by appending an s", () => {
+    // Location types are customer data, so the cut can land on any noun.
+    expect(pluralOf("campus", 2)).toBe("campuses");
+    expect(pluralOf("lobby", 2)).toBe("lobbies");
+    expect(pluralOf("bay", 2)).toBe("bays");
+    expect(pluralOf("floor", 2)).toBe("floors");
+    expect(pluralOf("annex", 3)).toBe("annexes");
+    expect(pluralOf("campus", 1)).toBe("campus");
   });
 });
 

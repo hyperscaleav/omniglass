@@ -15,9 +15,12 @@ import type { Verdict } from "../lib/health";
 // listener per dot: at a thousand systems in a real fleet that is the
 // difference between a few handlers and a few thousand.
 
+// Incomplete wears the console's commissioning hue (--og-incomplete, the one
+// its badge wears). It was the neutral for a while, which on this theme is the
+// card's own ground: the one dot on the page asking for somebody was invisible.
 const VERDICT_CLASS: Record<string, string> = {
   healthy: "bg-success",
-  incomplete: "bg-base-300",
+  incomplete: "bg-incomplete",
   degraded: "bg-warning",
   outage: "bg-error",
 };
@@ -62,10 +65,14 @@ function Group(props: {
   density: Density;
   showLabels: boolean;
   showBoxes: boolean;
+  // The caller has already named this node (a card's header), so naming it
+  // again above its own dots would say the same thing twice an inch apart.
+  // Only the root is ever named by its caller; the groups under it are not.
+  named?: boolean;
   onPick?: (item: DotItem) => void;
 }) {
-  const boxed = () => props.showBoxes && props.node.items.length > 1;
-  const named = () => props.showLabels && props.node.label !== "" && props.node.items.length > 0;
+  const boxed = () => props.showBoxes && !props.named && props.node.items.length > 1;
+  const named = () => props.showLabels && !props.named && props.node.label !== "" && props.node.items.length > 0;
   return (
     <div
       class="flex flex-wrap items-start"
@@ -77,7 +84,7 @@ function Group(props: {
           classList={{ "border border-dashed border-base-content/25 px-1.5 pb-1 pt-0.5": boxed(), "min-w-[4.5rem] pr-2": named() }}
         >
           <Show when={named()}>
-            <span class="block max-w-[7rem] truncate font-mono text-[9px] leading-tight text-base-content/50" title={props.node.label}>
+            <span class="block max-w-[7rem] truncate font-data text-[10px] leading-tight text-base-content/60" title={props.node.label}>
               {props.node.label}
               <Show when={props.node.items.length > 1}>{` · ${props.node.items.length}`}</Show>
             </span>
@@ -103,6 +110,7 @@ export default function DotField(props: {
   density: Density;
   showLabels?: boolean;
   showBoxes?: boolean;
+  rootNamed?: boolean;
   onHover?: (item: { id: string; label: string; verdict: string } | null) => void;
   onPick?: (item: DotItem) => void;
 }) {
@@ -119,7 +127,7 @@ export default function DotField(props: {
   };
   return (
     <div onMouseOver={describe} onFocusIn={describe} onMouseLeave={() => props.onHover?.(null)}>
-      <Group node={props.node} density={props.density} showLabels={props.showLabels ?? false} showBoxes={props.showBoxes ?? false} onPick={props.onPick} />
+      <Group node={props.node} named={props.rootNamed} density={props.density} showLabels={props.showLabels ?? false} showBoxes={props.showBoxes ?? false} onPick={props.onPick} />
     </div>
   );
 }

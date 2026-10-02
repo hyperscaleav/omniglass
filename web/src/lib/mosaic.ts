@@ -166,3 +166,11 @@ export function tint(fill: Fill): string {
   const pct = Math.round(20 + fill.share * 80);
   return `color-mix(in srgb, ${hue} ${pct}%, var(--color-success))`;
 }
+
+// The ink a tile's name is written in. Every painted fill is a light, saturated
+// hue that takes the theme's dark on-colour ink; the idle fill is the dark
+// neutral, where that same ink disappears. An empty tile is the one an operator
+// most needs named, so it takes the body ink instead.
+export function inkFor(fill: Fill): string {
+  return fill.severity === "idle" ? "var(--color-base-content)" : "var(--color-success-content)";
+}

@@ -12,10 +12,12 @@ import type { MatrixCell, MatrixModel } from "../lib/matrix";
 // the model's call, not this component's, so the threshold is testable and the
 // renderer only has to draw what it is told.
 
+// The hue is the worst thing in the cell, and a commissioning gap is its own:
+// a cell whose only trouble is unfinished hardware must not read as degraded.
 function cellTone(cell: MatrixCell): string {
-  const bad = attentionOf(cell.counts);
   if (cell.counts.outage > 0) return "text-error";
-  if (bad > 0) return "text-warning";
+  if (cell.counts.degraded > 0) return "text-warning";
+  if (cell.counts.incomplete > 0) return "text-incomplete";
   return "text-base-content/70";
 }
 
@@ -53,7 +55,7 @@ export default function MatrixFace(props: {
                     >
                       {row.label}
                     </button>
-                    <span class="ml-2 font-mono text-[10px] text-base-content/40">{row.type}</span>
+                    <span class="ml-2 font-data text-[10px] text-base-content/50">{row.type}</span>
                   </th>
                   <For each={props.model.columns}>
                     {(col) => {
@@ -63,7 +65,7 @@ export default function MatrixFace(props: {
                           <Show when={cell()} fallback={<span class="text-base-content/20">·</span>}>
                             {(c) => (
                               <span
-                                class={`font-mono text-xs tabular-nums ${cellTone(c())}`}
+                                class={`font-data text-xs tabular-nums ${cellTone(c())}`}
                                 title={`${row.label} · ${col} · ${countsLine(c().counts)}`}
                                 onMouseEnter={() =>
                                   props.onHover({ label: `${row.label} · ${col}`, verdict: countsLine(c().counts) })
@@ -87,7 +89,7 @@ export default function MatrixFace(props: {
         </table>
       </Show>
       <Show when={props.model.dense}>
-        <p class="px-1 pt-2 font-mono text-[11px] text-base-content/50">
+        <p class="px-1 pt-2 font-data text-[11px] text-base-content/50">
           Past a hundred systems the cells are counts, not dots, and the sub-rows are dropped: at this size the
           pivot has stopped being a browse surface and become a report.
         </p>

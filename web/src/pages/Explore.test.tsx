@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route, useSearchParams } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -58,14 +58,14 @@ const view: FleetView = {
   ],
 } as unknown as FleetView;
 
-function mount(path = "/web/explore", me: Me = owner, storedFace?: "table", keepPrefs = false) {
+function mount(path = "/web/explore", me: Me = owner, storedFace?: "table", keepPrefs = false, fleet: FleetView | "unread" = view, systemsCached = true) {
   localStorage.removeItem("explore-face");
   if (!keepPrefs) localStorage.removeItem("explore-prefs");
   if (storedFace) localStorage.setItem("explore-face", storedFace);
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  qc.setQueryData([...FLEET_VIEW_KEY], view);
+  if (fleet !== "unread") qc.setQueryData([...FLEET_VIEW_KEY], fleet);
   qc.setQueryData([...ME_KEY], me);
-  qc.setQueryData([...SYSTEMS_KEY], view.systems!.map((s) => ({ id: s.id, name: s.name, label: s.label, location_id: s.location, standard: "", actions: ["update", "rename"] })));
+  if (systemsCached) qc.setQueryData([...SYSTEMS_KEY], view.systems!.map((s) => ({ id: s.id, name: s.name, label: s.label, location_id: s.location, standard: "", actions: ["update", "rename"] })));
   qc.setQueryData([...LOCATIONS_KEY], view.locations!.map((l) => ({ id: l.id, name: l.name, label: l.label, location_type: l.location_type, parent_id: l.parent || null, actions: ["update", "move", "rename"] })));
   qc.setQueryData([...LOCATION_TYPES_KEY], []);
   qc.setQueryData([...STANDARDS_KEY], []);
@@ -95,7 +95,10 @@ function underParam() {
   return Array.isArray(v) ? (v[0] ?? "") : (v ?? "");
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const section = (id: string) => screen.getByTestId(`explore-section-${uuidFor(id)}`);
 // The counts line's need-attention segment is the quick filter, the same
@@ -231,6 +234,129 @@ describe("the counts line", () => {
   });
 });
 
+describe("the counts line counts where the operator is standing", () => {
+  it("counts the drilled node, not the fleet, beside the node's own name", async () => {
+    // "Headquarters > West Building · 8 systems" reads as West holding eight.
+    mount(`/web/explore?node=${uuidFor("west")}`);
+    const counts = await screen.findByTestId("explore-counts");
+    expect(counts.textContent).toContain("4 systems");
+    expect(counts.textContent).not.toContain("8 systems");
+    expect((await attentionToggle()).textContent).toBe("2 need attention");
+  });
+
+  it("offers no attention filter inside a node that has nothing needing any", async () => {
+    // The fleet's two would filter this node down to nothing.
+    mount(`/web/explore?node=${uuidFor("east")}`);
+    const counts = await screen.findByTestId("explore-counts");
+    expect(counts.textContent).toContain("1 system");
+    expect(within(counts).queryByRole("button", { name: /needs? attention/ })).toBeNull();
+  });
+
+  it("keeps the filter that is already on reachable where nothing matches it", async () => {
+    // Otherwise the control that turned the filter on vanishes with its count.
+    const chips = encodeURIComponent(JSON.stringify([{ key: "verdict", op: "eq", values: ["outage", "degraded", "incomplete"] }]));
+    mount(`/web/explore?node=${uuidFor("east")}&chips=${chips}`);
+    expect((await attentionToggle()).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("says nothing about labels under a renderer that draws none", async () => {
+    mount();
+    await screen.findByTestId("explore-controls");
+    fireEvent.change(screen.getByLabelText("View"), { target: { value: "matrix" } });
+    expect(screen.getByTestId("explore-counts").textContent).not.toContain("rooms in view");
+  });
+});
+
+describe("a control is offered only where it does something", () => {
+  it("drops the dot controls under the mosaic and the matrix, and brings them back", async () => {
+    mount();
+    await screen.findByTestId("explore-controls");
+    expect(screen.getByLabelText("Labels")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("View"), { target: { value: "mosaic" } });
+    expect(screen.queryByLabelText("Labels")).toBeNull();
+    expect(screen.queryByLabelText("Density")).toBeNull();
+    expect(screen.queryByLabelText("Room boxes")).toBeNull();
+    expect(screen.queryByLabelText("Sort")).toBeNull();
+    fireEvent.change(screen.getByLabelText("View"), { target: { value: "matrix" } });
+    expect(screen.queryByLabelText("Density")).toBeNull();
+    // The matrix orders its rows by place and its columns by standard.
+    expect(screen.queryByLabelText("Sort")).toBeNull();
+    fireEvent.change(screen.getByLabelText("View"), { target: { value: "bands" } });
+    expect(screen.getByLabelText("Density")).toBeTruthy();
+    expect(screen.getByLabelText("Room boxes")).toBeTruthy();
+  });
+});
+
+describe("the dots", () => {
+  it("draws a commissioning gap in the commissioning hue, not the page's own ground", async () => {
+    mount();
+    const hq = await screen.findByTestId(`explore-section-${uuidFor("hq")}`);
+    const dot = within(hq).getByLabelText(/Store AV/);
+    expect(dot.className).toContain("bg-incomplete");
+    expect(dot.className).not.toContain("bg-base-300");
+  });
+
+  it("does not repeat a card's own name as a label inside it", async () => {
+    // Media Lab is a room and a card at once here: its header already names it.
+    mount(`/web/explore?node=${uuidFor("west")}`);
+    await screen.findByRole("button", { name: "Open Media Lab" });
+    expect(screen.getAllByText(/^Media Lab/).length).toBe(1);
+    // A room INSIDE a card still wears its name.
+    expect(screen.getByText("Huddle Room")).toBeTruthy();
+  });
+});
+
+describe("the section header under a filter", () => {
+  it("says how many of the place's cards are drawn rather than miscounting the place", async () => {
+    mount();
+    await screen.findByTestId("explore-controls");
+    fireEvent.click(await attentionToggle());
+    await waitFor(() => expect(screen.queryByTestId(`explore-section-${uuidFor("depot")}`)).toBeNull());
+    expect(within(section("hq")).getByTestId("explore-section-head").textContent).toContain("1 of 2 buildings");
+  });
+});
+
+describe("state that arrives from outside the page", () => {
+  it("draws the fleet from a link whose filter is not a filter", async () => {
+    mount(`/web/explore?chips=${encodeURIComponent('[{"key":"verdict"}]')}`);
+    expect(await screen.findByRole("button", { name: "Open West Building" })).toBeTruthy();
+    expect(screen.getByTestId(`explore-section-${uuidFor("depot")}`)).toBeTruthy();
+  });
+
+  it("draws the default renderer when the stored one is no renderer this build has", async () => {
+    localStorage.setItem("explore-prefs", JSON.stringify({ renderer: "columns", density: "roomy" }));
+    mount("/web/explore", owner, undefined, true);
+    expect(await screen.findByRole("button", { name: "Open West Building" })).toBeTruthy();
+    expect((screen.getByLabelText("View") as HTMLSelectElement).value).toBe("cards");
+    expect((screen.getByLabelText("Density") as HTMLSelectElement).value).toBe("roomy");
+  });
+});
+
+describe("the states an operator can land in", () => {
+  it("teaches the empty fleet and offers the first location to somebody who may create one", async () => {
+    mount("/web/explore", owner, undefined, false, { locations: [], systems: [] } as unknown as FleetView);
+    expect(await screen.findByText("No locations yet.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "New location" }));
+    expect(await screen.findByTestId("location-create")).toBeTruthy();
+  });
+
+  it("does not offer the create to somebody who may not", async () => {
+    mount("/web/explore", partial, undefined, false, { locations: [], systems: [] } as unknown as FleetView);
+    expect(await screen.findByText("No locations yet.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "New location" })).toBeNull();
+  });
+
+  it("offers a retry when the fleet cannot be read, and reads again when asked", async () => {
+    const fetcher = vi.fn(() => Promise.reject(new Error("the wire is down")));
+    vi.stubGlobal("fetch", fetcher);
+    mount("/web/explore", owner, undefined, false, "unread");
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    const before = fetcher.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(fetcher.mock.calls.length).toBeGreaterThan(before));
+  });
+});
+
 describe("the table face", () => {
   it("keeps the total but not the controls that only the fleet face can honour", async () => {
     mount("/web/explore?face=table&kind=locations");
@@ -284,6 +410,33 @@ describe("the filter bar narrows what is drawn", () => {
     expect(screen.queryByTestId("explore-unplaced")).toBeNull();
   });
 
+  it("filters by standard under any renderer, not only the one that pivots on it", async () => {
+    // The standard is not on the fleet wire; it is joined from the systems
+    // list. That read used to be made only for the matrix, so on arrival (cards,
+    // nothing cached) `standard:` matched no system at all and offered no
+    // values, while the bar's own placeholder advertised it.
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (!url.endsWith("/systems")) return new Response("{}", { status: 404, headers: { "content-type": "application/json" } });
+      const systems = view.systems!.map((s) => ({ id: s.id, name: s.name, label: s.label, standard: s.name.startsWith("classroom") ? "mr55" : "ds55", member_count: 0 }));
+      return new Response(JSON.stringify({ systems }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    mount("/web/explore", owner, undefined, false, view, false);
+    await screen.findByTestId(`explore-section-${uuidFor("hq")}`);
+    await waitFor(() => expect(fetcher).toHaveBeenCalled());
+    const input = filterInput();
+    fireEvent.input(input, { target: { value: "standard:mr55" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    // The chip lands first and the join after it, so wait for the state the
+    // two produce together: one building left, the other root gone.
+    await waitFor(() => {
+      expect(screen.queryByTestId(`explore-section-${uuidFor("depot")}`)).toBeNull();
+      expect(within(section("hq")).getByRole("button", { name: "Open West Building" })).toBeTruthy();
+    });
+    expect(within(section("hq")).queryByRole("button", { name: "Open East Building" })).toBeNull();
+  });
+
   it("says so rather than showing an empty page when nothing survives", async () => {
     mount();
     await screen.findByTestId(`explore-section-${uuidFor("hq")}`);
@@ -320,6 +473,18 @@ describe("presets", () => {
     fireEvent.change(screen.getByLabelText("View"), { target: { value: "mosaic" } });
     expect(within(bar).getByRole("button", { name: "Shape of the fleet" }).getAttribute("aria-pressed")).toBe("true");
     expect(within(bar).getByRole("button", { name: "Fleet overview" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("leaves a filter the operator typed alone, since a preset never named it", async () => {
+    // A preset owns the attention chip and nothing else in the bar. Applying
+    // one that does not want attention used to clear every chip.
+    const chips = encodeURIComponent(JSON.stringify([{ key: "path", op: "contains", values: ["West"] }]));
+    mount(`/web/explore?chips=${chips}`);
+    const bar = await screen.findByTestId("explore-presets");
+    await waitFor(() => expect(screen.queryByTestId(`explore-section-${uuidFor("depot")}`)).toBeNull());
+    fireEvent.click(within(bar).getByRole("button", { name: "Shape of the fleet" }));
+    expect(await screen.findByTestId("explore-mosaic")).toBeTruthy();
+    expect(within(screen.getByTestId("explore-mosaic")).queryByLabelText(/Service Depot, /)).toBeNull();
   });
 
   it("carries the filter as well as the drawing, since triage is a way of looking", async () => {
@@ -409,6 +574,17 @@ describe("the mosaic and matrix renderers", () => {
     expect(within(matrix).queryByRole("button", { name: "Open Bay 1" })).toBeNull();
   });
 
+  it("follows the drill in the matrix, whose rows are what drill", async () => {
+    mount();
+    await screen.findByTestId("explore-controls");
+    fireEvent.change(screen.getByLabelText("View"), { target: { value: "matrix" } });
+    const matrix = await screen.findByTestId("explore-matrix");
+    fireEvent.click(within(matrix).getByRole("button", { name: "Open West Building" }));
+    // West's children are the rows now, and the other root has left the table.
+    expect(await within(screen.getByTestId("explore-matrix")).findByRole("button", { name: "Open Media Lab" })).toBeTruthy();
+    expect(within(screen.getByTestId("explore-matrix")).queryByRole("button", { name: "Open Service Depot" })).toBeNull();
+  });
+
   it("switches renderer without changing which systems are in scope", async () => {
     mount();
     await screen.findByTestId("explore-controls");
@@ -430,10 +606,20 @@ describe("create where you stand", () => {
     expect(created.textContent).toBe(uuidFor("west"));
   });
 
+  it("opens the location you are standing in at its own address", async () => {
+    // Explore is the fleet's one door, so the door to a location's workspace
+    // (its Activity, its Configure tab) has to be on it, not only on the table.
+    mount(`/web/explore?node=${uuidFor("west")}`, partial);
+    const head = await screen.findByTestId("explore-section-head");
+    fireEvent.click(within(head).getByRole("button", { name: "Open location" }));
+    expect(await screen.findByTestId("location-page")).toBeTruthy();
+  });
+
   it("offers neither at the fleet level, where there is nowhere to stand", async () => {
     mount();
     await screen.findByTestId("explore-controls");
     expect(screen.queryByRole("button", { name: "+ System here" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open location" })).toBeNull();
   });
 
   it("hides a create from a caller without the verb", async () => {
@@ -447,8 +633,33 @@ describe("the faces", () => {
   it("wears today's list face behind ?face=table, and returns to the fleet", async () => {
     mount("/web/explore?face=table");
     expect(await screen.findByRole("tab", { name: "Locations" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "fleet" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fleet view" }));
     expect(await screen.findByTestId("explore-controls")).toBeTruthy();
+  });
+
+  it("says which face and which kind tab are in force, to a reader as well as to the eye", async () => {
+    mount("/web/explore?face=table&kind=systems");
+    expect((await screen.findByRole("tab", { name: "Systems" })).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "Locations" }).getAttribute("aria-selected")).toBe("false");
+    expect(screen.getByRole("button", { name: "Table view" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Fleet view" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("leaves the face alone when t is part of a browser shortcut", async () => {
+    mount();
+    await screen.findByTestId("explore-controls");
+    // Ctrl+T opens a tab. Swapping the face underneath it would change the
+    // page the operator comes back to.
+    // Checked one at a time: two swaps would cancel and pass for the wrong
+    // reason.
+    for (const held of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
+      fireEvent.keyDown(window, { key: "t", ...held });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(screen.queryByRole("tab", { name: "Locations" })).toBeNull();
+      expect(screen.getByTestId("explore-controls")).toBeTruthy();
+    }
+    fireEvent.keyDown(window, { key: "t" });
+    expect(await screen.findByRole("tab", { name: "Locations" })).toBeTruthy();
   });
 
   it("never lets a stored table face override a ?node= address", async () => {

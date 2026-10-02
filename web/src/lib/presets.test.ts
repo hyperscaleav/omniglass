@@ -6,6 +6,7 @@ import {
   matches,
   PRESET_STORE,
   remove,
+  sanitizeState,
   savePresets,
   STOCK_PRESETS,
   upsert,
@@ -142,5 +143,31 @@ describe("editing the saved set", () => {
     let list = upsert([], "A", state());
     list = upsert(list, "B", state());
     expect(remove(list, "A").map((p) => p.name)).toEqual(["B"]);
+  });
+});
+
+describe("stored state is somebody else's until checked", () => {
+  // Preferences and saved views outlive the build that wrote them. A renderer
+  // key from an older build, or a hand-edited value, used to reach the page
+  // unchecked, where no renderer claimed it and the body drew nothing.
+  it("keeps every field that is a value its control can produce", () => {
+    const s = state({ renderer: "matrix", density: "roomy", labelMode: "off", roomBox: false, sort: "name", attentionOnly: true, node: "n-1" });
+    expect(sanitizeState(s)).toEqual(s);
+  });
+
+  it("replaces a value no control can produce with the default for that field alone", () => {
+    const got = sanitizeState({ renderer: "columns", density: "huge", labelMode: 3, roomBox: "yes", sort: "name", attentionOnly: 1, node: 9 });
+    expect(got).toEqual(state({ sort: "name" }));
+  });
+
+  it("reads anything that is not an object as the defaults", () => {
+    expect(sanitizeState(null)).toEqual(DEFAULT_STATE);
+    expect(sanitizeState("cards")).toEqual(DEFAULT_STATE);
+    expect(sanitizeState(undefined)).toEqual(DEFAULT_STATE);
+  });
+
+  it("checks a saved view on the way in, so a stale one still applies as something drawable", () => {
+    window.localStorage.setItem(PRESET_STORE, JSON.stringify([{ name: "Old", why: "", state: { renderer: "columns", sort: "name" } }]));
+    expect(loadPresets()[0].state).toEqual(state({ sort: "name" }));
   });
 });

@@ -45,6 +45,27 @@ export type FilterKey<T> = {
 
 export type Chip = { key: string; op: OpKey; values: string[] };
 
+// parseChips reads chips back out of an address (`?chips=`), where a page keeps
+// its filter so a link carries it. That makes the string somebody else's: a
+// pasted, truncated or hand-edited link has to read as fewer chips, never as a
+// value whose shape the predicate then trips over. A chip that is not a key, a
+// known operator and a list of strings is dropped; the rest stand.
+export function parseChips(raw: string | undefined | null): Chip[] {
+  if (!raw) return [];
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { return []; }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((c): c is Chip => {
+    if (!c || typeof c !== "object") return false;
+    const chip = c as Record<string, unknown>;
+    return (
+      typeof chip.key === "string" &&
+      typeof chip.op === "string" && chip.op in OP &&
+      Array.isArray(chip.values) && chip.values.every((v) => typeof v === "string")
+    );
+  }).map((c) => ({ key: c.key, op: c.op, values: [...c.values] }));
+}
+
 // FilterKeys is a page's facet set: a static array, or an accessor when the set
 // is dynamic (a directory whose tag facets derive from the loaded rows). Resolve
 // it inside a reactive scope so the dynamic facets track their source.

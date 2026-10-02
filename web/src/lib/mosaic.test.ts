@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fillFor, layoutPx, tint } from "./mosaic";
+import { fillFor, inkFor, layoutPx, tint } from "./mosaic";
 import { emptyCounts, type Counts } from "./explore_view";
 
 // The mosaic's pure core (#840). The two claims worth testing are the two the
@@ -151,6 +151,14 @@ describe("aggregate colour is a share, not a rollup", () => {
     expect(gap).not.toContain("--color-base-300");
     expect(gap).toContain("--og-incomplete");
     expect(tint(fillFor(emptyCounts()))).toBe("var(--color-base-300)");
+  });
+
+  it("writes a tile's name in an ink that reads on its fill", () => {
+    // An empty tile is the dark neutral, and dark ink on it is a name nobody
+    // can read: the one tile an operator most needs named is the empty one.
+    expect(inkFor(fillFor(emptyCounts()))).toBe("var(--color-base-content)");
+    expect(inkFor(fillFor({ ...emptyCounts(), healthy: 3 }))).toBe("var(--color-success-content)");
+    expect(inkFor(fillFor({ ...emptyCounts(), healthy: 3, degraded: 1 }))).toBe("var(--color-success-content)");
   });
 
   it("reaches full share when everything is wrong", () => {

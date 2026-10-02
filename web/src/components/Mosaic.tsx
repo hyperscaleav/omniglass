@@ -1,5 +1,5 @@
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import { fillFor, layoutPx, tint } from "../lib/mosaic";
+import { fillFor, inkFor, layoutPx, tint } from "../lib/mosaic";
 import { foldToBudget, frameLayout } from "../lib/view_budgets";
 import { attentionOf, countsLine, totalOf, type CardModel, type SectionModel } from "../lib/explore_view";
 
@@ -181,9 +181,11 @@ function MosaicTile(props: {
       onFocus={describe}
       onClick={() => { if (!props.tile.folded) props.onDrill(props.tile.card.id); }}
     >
-      {/* The label budget again, in pixels: a name is drawn only where it fits. */}
-      <Show when={props.w >= 64 && props.h >= 18}>
-        <span class="block truncate px-1 py-0.5 font-mono text-[9px] leading-tight text-base-100 mix-blend-luminosity">
+      {/* The label budget again, in pixels: a name is drawn only where it
+          fits. Its ink follows the fill (lib/mosaic inkFor), because one ink
+          for every tile is unreadable on whichever fill it matches. */}
+      <Show when={props.w >= 48 && props.h >= 18}>
+        <span class="block truncate px-1.5 py-1 font-data text-[10px] font-medium leading-tight" style={{ color: inkFor(fill()) }}>
           {props.tile.card.label}
         </span>
       </Show>

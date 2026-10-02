@@ -189,6 +189,28 @@ test.describe("operator console", () => {
     });
   }
 
+  // A LAYOUT again, so again only a browser can witness it. The view controls
+  // ride the filter bar's trailing slot, which never shrank: on a narrow window
+  // the row ran past the card's clipped edge and the last controls could be
+  // neither seen nor reached. They wrap now, and the page itself never scrolls
+  // sideways to make room for them.
+  for (const width of [900, 640]) {
+    test(`explore keeps every view control on screen at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto("/web/explore");
+      const controls = page.getByTestId("explore-controls");
+      await expect(controls).toBeVisible();
+      const card = (await controls.locator("xpath=ancestor::div[contains(@class,'card')][1]").boundingBox())!;
+      for (const name of ["View", "Labels", "Density", "Sort", "Room boxes"]) {
+        const box = await page.getByLabel(name, { exact: true }).boundingBox();
+        expect(box, `${name} is not laid out at ${width}px`).not.toBeNull();
+        expect(box!.x + box!.width, `${name} runs past the card at ${width}px`).toBeLessThanOrEqual(card.x + card.width);
+      }
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow, `the page scrolls sideways at ${width}px`).toBeLessThanOrEqual(0);
+    });
+  }
+
   test("explore: the cut cards the tree, create where you stand, a dot opens the system", async ({ page }) => {
     // The e2e database starts with the boot seed only, so the tree under test
     // is created here. Two buildings under one campus on purpose: that is what
@@ -269,6 +291,10 @@ test.describe("operator console", () => {
     await page.goto(`/web/explore?node=${campus}-b`);
     await expect(page.getByTestId("explore-section-head")).toContainText(buildingLabel);
 
+    // The drill's way out: the header opens the location's own workspace.
+    await page.getByTestId("explore-section-head").getByRole("button", { name: "Open location" }).click();
+    await page.waitForURL(new RegExp(`/web/locations/${buildingId}`));
+
     // A dot IS the system: clicking it opens the workspace at its uuid.
     await page.goto(`/web/explore?node=${buildingId}`);
     await page.locator(`[data-dot="${systemId}"]`).click();
@@ -284,7 +310,12 @@ test.describe("operator console", () => {
     // own session.
     page.on("dialog", (d) => d.accept());
     const sysMatch = new RegExp(`${stamp}[- ]sys`, "i");
-    await page.goto("/web/explore?face=table&kind=systems");
+    // Reached the way an operator reaches it: the face toggle, then the kind
+    // tab, each a URL fact.
+    await page.getByRole("button", { name: "Table view" }).click();
+    await page.waitForURL(/face=table/);
+    await page.getByRole("tab", { name: "Systems" }).click();
+    await page.waitForURL(/face=table&kind=systems/);
     await page.getByText(sysMatch).first().click();
     await expect(page.locator("aside[data-blade]")).toBeVisible();
     await page.locator('aside[data-blade] button:text-is("Delete")').click();

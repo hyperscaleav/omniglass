@@ -131,3 +131,30 @@ describe("density", () => {
     expect(m.rows.every((r) => !r.indent)).toBe(true);
   });
 });
+
+describe("the drill", () => {
+  // The rows are buttons that drill, so the pivot has to follow the drill. It
+  // used to ignore it: the breadcrumb moved and the table did not.
+  it("pivots the node the operator is standing in, with its children as the rows under it", () => {
+    const m = matrixFor(view, standardOf, all, uuidFor("hq"));
+    expect(m.rows.map((r) => r.label)).toEqual(["Headquarters", "East Building", "West Building"]);
+    expect(m.rows.map((r) => r.indent)).toEqual([false, true, true]);
+    // Only what is under the node: the depot's standards are not columns here.
+    expect(m.columns).toEqual(["mr65", "mr86"]);
+  });
+
+  it("pivots a leaf as its own single row", () => {
+    const m = matrixFor(view, standardOf, all, uuidFor("bay1"));
+    expect(m.rows.map((r) => r.label)).toEqual(["Bay 1"]);
+    expect(m.columns).toEqual(["ds55"]);
+  });
+
+  it("is empty for a node that is not there, rather than falling back to the fleet", () => {
+    expect(matrixFor(view, standardOf, all, uuidFor("vanished")).rows).toEqual([]);
+  });
+
+  it("still honours the filter inside the node", () => {
+    const m = matrixFor(view, standardOf, attention, uuidFor("hq"));
+    expect(m.rows.find((r) => r.label === "West Building")!.cells["mr65"].count).toBe(1);
+  });
+});

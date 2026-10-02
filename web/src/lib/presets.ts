@@ -78,6 +78,33 @@ export const STOCK_PRESETS: Preset[] = [
   },
 ];
 
+const RENDERERS: readonly RendererKey[] = ["cards", "bands", "mosaic", "matrix"];
+const DENSITIES: readonly Density[] = ["compact", "cozy", "roomy"];
+const LABEL_MODES: readonly LabelMode[] = ["auto", "always", "off"];
+const SORTS: readonly PresetState["sort"][] = ["worst", "name"];
+
+function oneOf<T extends string>(allowed: readonly T[], value: unknown, fallback: T): T {
+  return typeof value === "string" && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+}
+
+// sanitizeState is the door every stored state comes in through: the browser's
+// preferences and its saved views both outlive the build that wrote them. Each
+// field is kept only if it is a value its control can produce today, and falls
+// back to that field's default otherwise, so a renderer key from an older build
+// reads as the default renderer rather than as a page with no renderer at all.
+export function sanitizeState(raw: unknown): PresetState {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    renderer: oneOf(RENDERERS, r.renderer, DEFAULT_STATE.renderer),
+    density: oneOf(DENSITIES, r.density, DEFAULT_STATE.density),
+    labelMode: oneOf(LABEL_MODES, r.labelMode, DEFAULT_STATE.labelMode),
+    roomBox: typeof r.roomBox === "boolean" ? r.roomBox : DEFAULT_STATE.roomBox,
+    sort: oneOf(SORTS, r.sort, DEFAULT_STATE.sort),
+    attentionOnly: typeof r.attentionOnly === "boolean" ? r.attentionOnly : DEFAULT_STATE.attentionOnly,
+    node: typeof r.node === "string" && r.node ? r.node : null,
+  };
+}
+
 export const PRESET_STORE = "explore-presets";
 
 // Storage is a convenience, never a dependency: a private window, blocked site
@@ -91,7 +118,7 @@ export function loadPresets(): Preset[] {
     if (!Array.isArray(parsed)) return [];
     return parsed
       .filter((p): p is Preset => !!p && typeof (p as Preset).name === "string" && !!(p as Preset).state)
-      .map((p) => ({ ...p, stock: false, state: { ...DEFAULT_STATE, ...p.state } }));
+      .map((p) => ({ name: p.name, why: typeof p.why === "string" ? p.why : "", stock: false, state: sanitizeState(p.state) }));
   } catch {
     return [];
   }
@@ -119,7 +146,7 @@ export function matches(state: PresetState, preset: Preset): boolean {
 // falls back to the fleet level, because landing on a blank page is worse than
 // landing somewhere real.
 export function applyTo(preset: Preset, nodeExists: (id: string) => boolean): PresetState {
-  const state = { ...DEFAULT_STATE, ...preset.state };
+  const state = sanitizeState(preset.state);
   if (state.node && !nodeExists(state.node)) return { ...state, node: null };
   return state;
 }

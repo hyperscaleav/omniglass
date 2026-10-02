@@ -44,6 +44,10 @@ export type SectionModel = {
   label: string;
   type: string;
   cutType: string;
+  // How many nodes sit at the cut before any filter runs. `cards` is what
+  // survived, so the two differ exactly when the filter dropped something, and
+  // the header can say "1 of 4" instead of claiming the place has one.
+  cutTotal: number;
   isOwnCut: boolean;
   cards: CardModel[];
   above: DotItem[];
@@ -211,7 +215,8 @@ export function sectionsFor(view: FleetView, opts: ExploreOptions): SectionModel
   for (const root of roots) {
     const cutType = cutTypeFor(view, root.id);
     const cards: CardModel[] = [];
-    for (const node of cutNodesFor(view, root.id)) {
+    const cutNodes = cutNodesFor(view, root.id);
+    for (const node of cutNodes) {
       const card = cardFor(view, node, opts);
       if (card) cards.push(card);
     }
@@ -223,6 +228,7 @@ export function sectionsFor(view: FleetView, opts: ExploreOptions): SectionModel
       label: entityLabel(root),
       type: root.location_type,
       cutType,
+      cutTotal: cutNodes.length,
       isOwnCut: cutType === root.location_type,
       cards,
       above,
@@ -262,6 +268,7 @@ export function insideOf(view: FleetView, nodeId: string, opts: ExploreOptions):
     label: entityLabel(node),
     type: node.location_type,
     cutType: children[0]?.location_type ?? node.location_type,
+    cutTotal: children.length,
     isOwnCut: children.length === 0,
     cards: cards.sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id)),
     above: own,
@@ -353,6 +360,29 @@ export function countsLine(c: Counts): string {
   if (c.degraded) parts.push(`${c.degraded} degraded`);
   if (c.incomplete) parts.push(`${c.incomplete} incomplete`);
   return parts.join(" · ");
+}
+
+// A location type is customer data, so the cut can land on any noun and the
+// header has to count it. Appending an s reads "2 campuss" for the commonest
+// root type there is.
+export function pluralOf(noun: string, n: number): string {
+  if (n === 1 || !noun) return noun;
+  if (/(s|x|z|ch|sh)$/i.test(noun)) return `${noun}es`;
+  if (/[^aeiou]y$/i.test(noun)) return `${noun.slice(0, -1)}ies`;
+  return `${noun}s`;
+}
+
+// sectionLine is a section header's one line of facts: what the place is, how
+// many cards it is drawn as, and what is in it. The counts describe the PLACE
+// and do not move with the filter (the same rule the page's counts line
+// follows), so the card count says "1 of 4" when the filter dropped some
+// rather than passing a filtered number off as a fact about the place.
+export function sectionLine(section: SectionModel): string {
+  const shown = section.cards.length;
+  const total = Math.max(section.cutTotal, shown);
+  const noun = pluralOf(section.cutType, total);
+  const cards = shown < total ? `${shown} of ${total} ${noun}` : `${total} ${noun}`;
+  return `${section.type} · ${cards} · ${countsLine(section.counts)}`;
 }
 
 // resolveNode turns a ?node= address into the location to drill into.
