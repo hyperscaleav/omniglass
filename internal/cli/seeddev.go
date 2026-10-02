@@ -45,19 +45,21 @@ func runSeedDev(ctx context.Context) error {
 	if err := devseed.Run(ctx, gw, ""); err != nil {
 		return err
 	}
-	// Report the fixture's size so the message never drifts from the data. Sites are
-	// the campus-typed roots (a multi-site fleet); users all share the 'dev' password.
+	// Report the fixture's size so the message never drifts from the data. Roots
+	// are the locations with no parent, whatever their type: location types are
+	// customer data, so nothing here counts by a type's name. Users all share the
+	// 'dev' password.
 	doc, err := devseed.Fixtures()
 	if err != nil {
 		return err
 	}
-	sites := 0
+	roots := 0
 	for _, l := range doc.Locations {
-		if l.Type == "campus" {
-			sites++
+		if l.Parent == "" {
+			roots++
 		}
 	}
-	fmt.Printf("dev example data seeded: %d sites, %d locations, %d users (password 'dev').\n",
-		sites, len(doc.Locations), len(doc.Users))
+	fmt.Printf("dev example data seeded: %d top-level locations, %d locations in all, %d users (password 'dev').\n",
+		roots, len(doc.Locations), len(doc.Users))
 	return nil
 }
