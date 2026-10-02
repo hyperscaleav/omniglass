@@ -33,16 +33,16 @@ vi.mock("../lib/locations", async (orig) => {
 const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const updaterOnly: Me = { principal: { id: "u-up", kind: "human" }, human: { username: "up" }, permissions: ["system:read", "system:update", "location:read", "location:update", "tag:read"], grants: [] };
 
-function mount(kind: "system" | "location", id: string, me: Me = owner, systemActions: string[] = ["update", "rename"]) {
+function mount(kind: "system" | "location", id: string, me: Me = owner, systemActions: string[] = ["create", "update", "delete"]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...SYSTEMS_KEY], [
     { id: uuidFor("ef-sys"), name: "huddle", label: "Huddle Room", standard: "huddle-room", system_type: "huddle", location: uuidFor("ef-room"), actions: systemActions },
   ]);
   qc.setQueryData([...LOCATIONS_KEY], [
-    { id: uuidFor("ef-hq"), name: "hq", label: "Headquarters", location_type: "campus", parent_id: null, actions: ["update", "move", "rename"] },
-    { id: uuidFor("ef-west"), name: "west", label: "West Building", location_type: "building", parent_id: uuidFor("ef-hq"), actions: ["update", "move", "rename"] },
-    { id: uuidFor("ef-room"), name: "huddle-room", label: "Huddle Room", location_type: "room", parent_id: uuidFor("ef-west"), actions: ["update", "move", "rename"] },
+    { id: uuidFor("ef-hq"), name: "hq", label: "Headquarters", location_type: "campus", parent_id: null, actions: ["create", "update", "delete"] },
+    { id: uuidFor("ef-west"), name: "west", label: "West Building", location_type: "building", parent_id: uuidFor("ef-hq"), actions: ["create", "update", "delete"] },
+    { id: uuidFor("ef-room"), name: "huddle-room", label: "Huddle Room", location_type: "room", parent_id: uuidFor("ef-west"), actions: ["create", "update", "delete"] },
   ]);
   qc.setQueryData([...LOCATION_TYPES_KEY], [
     { id: uuidFor("t-campus"), name: "campus", label: "Campus", allowed_parent_types: ["root"] },
@@ -105,13 +105,15 @@ describe("the one form, gated by what the server says of this row", () => {
     expect(slot().editable()).toBe(false);
   });
 
-  it("keeps the name read-only on a row the caller's rename does not reach", async () => {
-    const { slot } = mount("system", uuidFor("ef-sys"), owner, ["update"]);
+  // The server annotates a row with create, update and delete only
+  // (internal/api/rowactions.go treeActions). Rename and move are not in that
+  // vocabulary, so their absence from a row says nothing: reading it as "not
+  // allowed" took rename and move away from the owner on every row.
+  it("still offers rename and move, which the row's actions never name, to a caller holding them", async () => {
+    const { slot } = mount("location", uuidFor("ef-room"), owner);
     const form = await screen.findByTestId("entity-form");
-    expect(slot().editable()).toBe(true);
     slot().begin();
-    await waitFor(() => expect(within(form).getByRole("combobox", { name: /standard/i })).toBeTruthy());
-    expect(within(form).queryByRole("button", { name: /check/i })).toBeNull();
+    await waitFor(() => expect(within(form).getByRole("button", { name: /check/i })).toBeTruthy());
   });
 });
 

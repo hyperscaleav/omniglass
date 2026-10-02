@@ -147,12 +147,18 @@ export default function EntityForm(props: {
   // do this to the kind SOMEWHERE; the row's own `actions` are the server's
   // answer for THIS row, computed from the same per-action scope the gateway
   // enforces. Gating on the permission alone offered Edit on a system outside
-  // a scoped operator's update scope, and every Save was then a 403. A row
-  // that carries no actions (an older read) falls back to the permission.
+  // a scoped operator's update scope, and every Save was then a 403.
+  //
+  // Only for the verbs the server annotates (internal/api/rowactions.go
+  // treeActions: create, update, delete). Rename and move are not in that
+  // vocabulary, so a row that does not list them has said nothing about them;
+  // reading the silence as a refusal took both away from the owner. A row
+  // carrying no actions at all (an older read) falls back to the permission.
+  const ROW_ANNOTATED = new Set(["create", "update", "delete"]);
   const allowed = (action: string) => {
     if (!can(me.data, props.kind, action)) return false;
     const actions = row()?.actions;
-    return Array.isArray(actions) ? actions.includes(action) : true;
+    return ROW_ANNOTATED.has(action) && Array.isArray(actions) ? actions.includes(action) : true;
   };
   const canUpdate = () => allowed("update");
   const canRename = () => allowed("rename");
