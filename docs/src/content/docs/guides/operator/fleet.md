@@ -45,7 +45,7 @@ screenshots:
       - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
   - id: fleet-map
     path: /web/systems/huddle
-    alt: "The map inside Overview: the standard's declared room rendered top-down, one marker per role position, solid where staffed and hollow where not."
+    alt: "The map inside Overview: the standard's declared layout rendered top-down, one marker per role position, solid where staffed and hollow where not."
     # The header's since-line ages with the capture, and Overview carries the
     # compact history (its strip and rows move with the seed's own clock), so
     # the fleet-system masks apply here too (baseline only; the docs embed the
@@ -250,8 +250,8 @@ One zoom down, the header repeats the shape the system zoom set: the location's 
 and since when; the counts line beneath it carries this subtree's **need attention**
 count, which applies the worst-first filter on click. Marks are **square components** inside a **system outline** (the outline
 is the system's verdict, quiet when healthy). One band per direct child, whatever its type, plus a **placed here** band for systems
-attached to this location itself. Each system is a card: a status dot and border, the room
-and standard, a **slot strip** (one square per slot the standard wants: filled squares in
+attached to this location itself. Each system is a card: a status dot and border, the location
+it sits in and its standard, a **slot strip** (one square per slot the standard wants: filled squares in
 the occupant's state, empty squares outlined), and a line saying how many required slots
 are empty, how many are down, or that all are filled. Locations in the subtree with no
 system render as **+ System** cards under the child that contains them. The **+ Location**
@@ -269,7 +269,7 @@ last recorded change and its age). Below it, cause before arithmetic:
   series, or the contract default until one lands.
 - **History** is the verdict over the recorded window; the model it teaches is on the
   label's tooltip, like every explainer on these pages.
-- Then the room itself, **components first**: one card per component (name, product, its
+- Then the system itself, **components first**: one card per component (name, product, its
   state) with its role as a **badge**. Click a card to open the leaf.
 
 ::screenshot{#fleet-system}
@@ -277,18 +277,19 @@ last recorded change and its age). Below it, cause before arithmetic:
 - **Role chrome appears only where it says something a badge cannot.** A role that wants
   more than one occupant, is short, or is unstaffed renders as a grouped outline with its
   arithmetic ("1 of 2 + 1 spare") and its occupants inside; empty slots draw dashed. The
-  common room (one role, one healthy occupant) is a flat row of cards.
-- **A deployed room fills every role**, so slot arithmetic appears only while hardware is
+  common case (one role, one healthy occupant) is a flat row of cards.
+- **A deployed system fills every role**, so slot arithmetic appears only while hardware is
   missing. An unstaffed role wears **incomplete** (a commissioning gap); a down occupant
   wears the impact its role declared. Same arithmetic, different cause.
-- The build a room did not choose never renders; choices are the standard editor's
+- The build a system did not choose never renders; choices are the standard editor's
   vocabulary, not an operator's.
 - A shared occupant is badged with the other system it serves; a member filling no role
   is a card with a "no role" badge, and that is a normal state.
 
 ## Overview: the map and the data
 
-A standard may declare the room's layout: where each role position sits, top-down. Every
+A standard may declare the system's physical layout (a room, a stage, a vehicle, whatever
+the system occupies): where each role position sits, top-down. Every
 system built to that standard draws the **map** inside Overview, under the components:
 one marker per declared position, solid in the occupant's state (click it to open the
 leaf), hollow where nobody is staffed. The label is the role, its position number when
@@ -298,7 +299,7 @@ the role wants several, and the component holding it.
 
 Below the map, when the standard declares metrics, the **data** section stacks every one
 of them: a sparkline of the last 24 hours beside the latest value, one row per series, so
-the room's numbers read together. Click a row for the full chart, newest at the right,
+the system's numbers read together. Click a row for the full chart, newest at the right,
 the latest sample's value floating on its dot. Raw samples, capped; a series still on its
 contract default has nothing to chart yet, and says so.
 
@@ -310,12 +311,12 @@ contract default has nothing to chart yet, and says so.
 health KPI over time), the timeline beside it with one marker per alarm raise, then
 **incidents**: one entry per contiguous stretch away from healthy, ongoing first, each
 expanding to the verdict changes inside it and the alarms that explain them. An alarm the
-room absorbed without going unhealthy lists under **other alarms**. A room that flaps
-weekly and a room that failed once look different here, which is the point.
+system absorbed without going unhealthy lists under **other alarms**. A system that flaps
+weekly and a system that failed once look different here, which is the point.
 
 ::screenshot{#fleet-history}
 
-Under the incidents, the **events** are the room's story on the event lane: the system's
+Under the incidents, the **events** are the system's story on the event lane: the system's
 own events and its members', newest first, each row labeled by the owner that raised it;
 and the **logs** are the members' raw lines merged, each naming the component that wrote
 it. Both cover the last 24 hours, capped; both scope to what you can read. A component's
@@ -350,7 +351,7 @@ to a value: model, serial, firmware, the RMA facts) and **where it sits** (the a
 chain, each level a link with its type as the tooltip; the primary system). **Vitals**
 lists the effective metrics that carry a value, the latest sample per series, a dot
 marking the device speaking rather than a contract default standing in. **Slots it
-fills** lists one row per system membership, the room beside it when the room says
+fills** lists one row per system membership, the location beside it when the location says
 something the system's name does not, and the primary marked. When there is more than one
 membership, the location shown follows the primary system.
 

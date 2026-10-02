@@ -41,7 +41,7 @@ since-when and the active alarms that say why, and the rest of the blade is the 
 location's properties, a component's reconciliation, reachability, and alarms), and tags.
 It is the same form the workspace's Configure tab renders, so what you can edit and how
 it saves is identical in both places. **Expand** in the header promotes to the full
-workspace at the entity's own address, where the members, the 30-day strip, and the room
+workspace at the entity's own address, where the members, the 30-day strip, and the system's
 vitals live. Delete sits on the left of the footer behind a confirm, gated by your
 permissions on that row.
 
@@ -80,7 +80,7 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
 
 The mode is part of the address: append `?edit=1` to a fleet entity's URL and it lands on
 the workspace's **Configure** tab, already editing (#800), so a "fix the label on this
-room" handoff is one link, not a link plus instructions. The same permission gates apply: without `<resource>:update` the
+location" handoff is one link, not a link plus instructions. The same permission gates apply: without `<resource>:update` the
 link lands reading, quietly. Leaving edit (Cancel or Save) strips the param, so refreshing
 mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already
 left. The console itself uses these links for its handoffs: creating an entity lands on
@@ -128,7 +128,7 @@ identity pages.
 
   The locked **name** is the name the row will get, number and all: `display-3`, not `display-n`. The
   **stem** comes from the type and the **number** is the lowest one free in that placement right now.
-  Some types carry no number on the first of their kind in a place, so the first boardroom in a room is
+  Some types carry no number on the first of their kind in a place, so the first boardroom in a place is
   `boardroom` and the second is `boardroom-2`; the form shows whichever applies rather than a shape you
   have to read. Under it the form names the **placement the name has to be unique in**, as a path: the
   name itself never carries that path, since a name is unique within its placement rather than across
@@ -151,17 +151,17 @@ identity pages.
   because that is what an operator will actually read on the row. You reach that state by clearing the
   rule at every tier; out of the box each of the three kinds ships one.
 
-  A location's shipped rule reads its **own name as words**: create a room named `north-boardroom` and
+  A location's shipped rule reads its **own name as words**: create a location named `north-boardroom` and
   the locked field shows **North Boardroom**, because the rule splits the name on its hyphens, capitalises
   each word, and applies your [acronym list](/architecture/settings/) (so `hq-west` reads **HQ West** once
-  `HQ` is on it). It only re-cases what you typed, so where the room's real name is not in its machine
+  `HQ` is on it). It only re-cases what you typed, so where the place's real name is not in its machine
   name (a `huddle` that everyone calls the Huddle Room), open the lock and type it.
 
   A system's shipped rule reads its **type and its number**, and the number is the one the name is
-  about to carry: the first boardroom you create in a room shows the name `boardroom` and the label
+  about to carry: the first boardroom you create in a place shows the name `boardroom` and the label
   **Boardroom**, and the second shows `boardroom-2` and **Boardroom 2**. The two fields are one answer,
   so a label with a number in it means a name with the same number in it, and neither is a guess: both
-  are read from the room you have just picked.
+  are read from the placement you have just picked.
 
   A name is **required** only where nothing will generate one, and there the field arrives unlocked
   with no lock to close: a system with no type (or a type whose chain sets no stem), a location whose
@@ -243,28 +243,28 @@ surface over one resolver, so the panel reads the same on all three; the full wa
 ## Roles on a system
 
 A **system** carries one more panel: **Roles**, the slots it needs filled. A role is a slot (a room
-microphone, a main display), not a component, so the room can say what it needs before anything is
-assigned and an **empty slot stays visible**. These are slots in a room, not the
+microphone, a main display), not a component, so the system can say what it needs before anything is
+assigned and an **empty slot stays visible**. These are slots in a system, not the
 [roles that grant people access](/guides/admin/access/); the two share only the word.
 
 Each row is one role with **where it came from**, **who fills it**, and **how many more it wants**:
 
 - **Inherited or declared here.** A role marked as coming from the standard is declared on the
   [standard](/guides/admin/standards/) this system conforms to, and every conforming system has it.
-  A role declared on this system is this room's own. A **one-off system** (conforming to no standard)
+  A role declared on this system is this system's own. A **one-off system** (conforming to no standard)
   has only its own.
 - **Assigned and understaffed.** A role has a **quorum**, how many components should fill it. Two
   assigned against a quorum of two reads as staffed; one reads as short by one. That is true the
   moment you enter it, with nothing collecting: staffing is a fact about your model, not a
   measurement.
-- **Impact.** Each role also says what the room loses when the slot is not being filled properly:
-  **outage**, **degraded**, or **none**. That is what turns a broken component into a room-level verdict
+- **Impact.** Each role also says what the system loses when the slot is not being filled properly:
+  **outage**, **degraded**, or **none**. That is what turns a broken component into a system-level verdict
   further down this page, and it is declared on the
   [standard](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled) or on the system.
 - **Assign** picks a component to fill the role; **unassign** takes it out and the role goes back to
   understaffed. Assigning the same component twice changes nothing.
 - **A component staffing a role cannot be deleted.** Unassign it first. The refusal is deliberate: a
-  delete that silently emptied a slot would leave the room quietly wrong.
+  delete that silently emptied a slot would leave the system quietly wrong.
 
 **An assignment can be refused, and the refusal tells you why.** A role's [accepted types and pinned
 products](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled) are the typed-slot
@@ -287,13 +287,13 @@ Raising one takes two things:
   **component's own** verdict (any active alarm makes the component degraded, a critical one an
   outage). Only an **outage** stops a component occupying a role it fills: an info or warning
   alarm still degrades it, but the component keeps its slot, so a quiet issue does not short-staff
-  a room on its own;
+  a system on its own;
 - a **message**, for whoever reads it later. Write it for the person who finds this at 8am, not for you.
 
 **Clearing keeps the row.** The alarm moves to the history with the time it was cleared, so what was wrong
 and when survives the fix. Clearing one twice is a plain miss rather than a silent success.
 
-Both writes take effect immediately and completely: the room's verdict, the location above it, and the
+Both writes take effect immediately and completely: the system's verdict, the location above it, and the
 recorded history all move in the same transaction as the alarm. There is no wait and no refresh cycle.
 
 ### Acknowledging: saying you have seen it
@@ -327,28 +327,30 @@ From the CLI: `omniglass component alarm list <name> [--include-cleared] [--unac
 
 ## Health on a system or location
 
-A **system** and a **location** each carry a **health verdict**, shown as a badge on the detail and in
+A **system** and a **location** each carry a **health verdict**, shown as a badge on its workspace and in
 the systems list:
 
 | verdict | means |
 |---|---|
-| **healthy** | nothing the room depends on is impaired |
+| **healthy** | nothing it depends on is impaired |
 | **incomplete** | something it needs was never installed |
 | **degraded** | it is working, worse |
 | **outage** | it is not working |
 
 **`incomplete` is not a fault.** It means a role is short because nobody has put the hardware in
-yet, so no alarm will ever fire for it: there is nothing there to alarm. A room mid-installation
+yet, so no alarm will ever fire for it: there is nothing there to alarm. A system mid-installation
 reads incomplete, and it stays that way until somebody fills the slot. That is deliberately a
-different colour from a room that is broken, because during a rollout most of your fleet is in
+different colour from a system that is broken, because during a rollout most of your fleet is in
 the first state and you need to be able to see past it to the second.
 
-A location's verdict is the **worst** of every system placed anywhere beneath it, so a campus reads red
-when one room in one building is out. A system's verdict is the worst contribution among the **roles** it
+A location's verdict is the **worst** of every system placed anywhere beneath it, so a top-level location reads red
+when one system anywhere beneath it is out. A system's verdict is the worst contribution among the **roles** it
 needs filled.
 
-**The Health panel is the answer to "why".** A bare "degraded" gives you nothing to do, so the panel
-names the whole chain instead, role by role:
+**The system's workspace is the answer to "why".** A bare "degraded" gives you nothing to do, so the
+workspace names the chain instead: **Active alarms** lead its Overview, each naming the down component
+and the role it impairs, and the role cards beneath carry the arithmetic. Read together they are this
+chain:
 
 ```text
 alarm on mic-pod-2 (critical, "no audio on channel 1")
@@ -361,7 +363,8 @@ alarm on mic-pod-2 (critical, "no audio on channel 1")
 
 Read it bottom-up when you want the verdict and top-down when you want the fix. A role can also be
 impaired with **no down component named**, which means it is **short-staffed** rather than broken:
-nobody is assigned. Those are two different jobs, and the panel keeps them apart.
+nobody is assigned. Those are two different jobs, and the workspace keeps them apart: a short role
+reads **incomplete** with a dashed empty slot, a down occupant reads the impact its role declared.
 
 **The History strip is the answer to "since when".** It is the same shape as the reachability
 availability strip: one segment per stretch the entity held a verdict, drawn from the **recorded edges**
@@ -373,23 +376,23 @@ From the CLI: `omniglass system health list <name>` and `omniglass location heal
 
 ## The whole loop, end to end
 
-Once, in order, on a real room:
+Once, in order, on a real system:
 
-1. **Declare the roles with their impact.** On the room's
+1. **Declare the roles with their impact.** On the system's
    [standard](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled), give **Main Display**
    impact **outage** and **Room Microphone** impact **degraded** with quorum 2, accepting `video-bar`.
-   Every conforming room inherits both immediately.
+   Every conforming system inherits both immediately.
 2. **Staff the system.** Assign components to each role from the system's **Roles** panel. A component
    of the wrong type is refused by name (`component "panel-1" is a display; role "Room Microphone"
    wants a video-bar`), so a wrong assignment never becomes a wrong verdict.
 3. **Raise an alarm.** On one of the mic pods, raise a `critical` alarm.
-4. **Watch the room move.** The system goes **degraded** (the `room-mic` role now has one occupant
+4. **Watch the system move.** The system goes **degraded** (the `room-mic` role now has one occupant
    against a quorum of 2, and its impact is `degraded`), and the location above it follows. Had
-   the alarm been on the main display instead, the room would be an **outage**, because that role says so.
-5. **Read the Health panel** to find the cause: the impaired role, the component that went down, and the
-   alarm that took it down, with its message and the time it was raised. Walk to the pod.
-6. **Clear the alarm** once it is fixed. The room returns to **healthy** in the same transaction, and the
+   the alarm been on the main display instead, the system would be an **outage**, because that role says so.
+5. **Read the system's Overview** to find the cause: the active alarm, the component it took down and
+   the role that component fills, with the message and the time it was raised. Walk to the pod.
+6. **Clear the alarm** once it is fixed. The system returns to **healthy** in the same transaction, and the
    alarm row stays in the component's history.
-7. **Read the history afterwards.** The transition strip now shows the exact stretch the room was
+7. **Read the history afterwards.** The transition strip now shows the exact stretch the system was
    degraded, with the edge at the moment the alarm went up rather than the moment you opened this page.
    That is the whole point: come back in three weeks and the answer is still exact.

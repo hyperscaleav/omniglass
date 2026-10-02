@@ -67,7 +67,7 @@ sections ([getting around](/guides/operator/#getting-around)).
   now carries the number its name carries, so the two halves of a divisible boardroom read **Boardroom**
   and **Boardroom 2** instead of both reading "Boardroom". A fleet created before the upgrade keeps
   both halves reading alike until you run `omniglass system previewLabels` and then
-  `omniglass system recomputeLabels`. Only the first of a kind in a room is bare: a room with one
+  `omniglass system recomputeLabels`. Only the first of a kind in a place is bare: a place with one
   boardroom in it reads **Boardroom**, exactly as its name is `boardroom` rather than `boardroom-1`.
 - The **columns** menu shows or hides columns and lets you **drag to reorder** them. The
   layout is remembered per browser.
