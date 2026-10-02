@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route, useLocation } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -353,6 +353,19 @@ describe("the name-shaped address (#759's rule)", () => {
 });
 
 describe("the history tab (#792)", () => {
+  // The tab reads a thirty-day window back from the wall clock, and the alarms
+  // below are dated. Left on the real clock these tests pass for a month and
+  // then fail for ever (the cleared alarm ages out of the window), so the clock
+  // is pinned to the day the fixture describes. Only Date is faked: the
+  // testing library's own waits still run on real timers.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-20T16:00:00Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   function seedAlarms(qc: QueryClient) {
     qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-mic"))], [
       { id: "hal-1", component: uuidFor("szp-c-mic"), severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true, acknowledged: false },
