@@ -190,7 +190,7 @@ function systemsUnder(view: FleetView, nodeId: string): FleetSystem[] {
 // being filtered, because an unfinished tree should be visible rather than
 // hidden: a building created a moment ago must not disappear from the fleet.
 // Under a filter it is dropped, since an operator triaging outages is not
-// asking about rooms that hold nothing.
+// asking about places that hold nothing.
 function cardFor(view: FleetView, node: FleetLocation, opts: ExploreOptions): CardModel | null {
   const field = fieldFor(view, node.id, opts);
   if (!field && opts.include) return null;
@@ -327,9 +327,11 @@ export function systemRows(view: FleetView): SystemRow[] {
   });
 }
 
-// roomsInView is what the label budget is spent against: the leaf locations
-// the operator is currently looking at, not the fleet's total.
-export function roomsInView(view: FleetView, nodeIds: string[]): number {
+// placesInView is what the label budget is spent against: the leaf locations
+// the operator is currently looking at, not the fleet's total. A leaf, not a
+// location of some named type: a customer's bottom level may be a room, a bay
+// or a coordinate.
+export function placesInView(view: FleetView, nodeIds: string[]): number {
   const children = childrenIndex(view);
   const seen = new Set<string>();
   let count = 0;
@@ -391,8 +393,8 @@ export function sectionLine(section: SectionModel): string {
 // has to keep both: the operator guide links /web/explore?node=huddle by name,
 // and a shared link landing on an empty page is worse than one that refuses.
 //
-// A room holding one system resolves to the ROOM, never to its parent: the
-// room is a real place to stand, and drilling anywhere else would silently
+// A place holding one system resolves to the PLACE, never to its parent: it
+// is a real place to stand, and drilling anywhere else would silently
 // show the operator somewhere other than the address they followed.
 export function resolveNode(view: FleetView, address: string): string | null {
   if (!address) return null;

@@ -170,7 +170,7 @@ describe("the label budget", () => {
   it("affords labels at this size, and says so in the status line", async () => {
     mount();
     const status = await screen.findByTestId("explore-counts");
-    expect(status.textContent).toContain("rooms in view");
+    expect(status.textContent).toContain("places in view");
     expect(status.textContent).toContain("labels on (auto)");
   });
 
@@ -181,11 +181,48 @@ describe("the label budget", () => {
     expect(screen.getByTestId("explore-counts").textContent).toContain("labels off (forced)");
   });
 
-  it("counts the rooms in front of the operator, not the fleet's total", async () => {
+  it("counts the places in front of the operator, not the fleet's total", async () => {
     mount(`/web/explore?node=${uuidFor("west")}`);
     const status = await screen.findByTestId("explore-counts");
     // west holds Level 2 (with a room), Media Lab and Storage: three leaves
-    expect(status.textContent).toContain("3 rooms in view");
+    expect(status.textContent).toContain("3 places in view");
+  });
+});
+
+describe("a location hierarchy is the customer's, not ours", () => {
+  // Location types are customer data (ADR-0102). A fleet of plots, sectors and
+  // coordinates is drawn by the same rules, and the page must not describe it
+  // in the shipped defaults' words: the label budget counts the places at the
+  // bottom of the tree, whatever they are called.
+  const agri = {
+    locations: [
+      loc("plot-n", "plot-n", "North Plot", "plot", "", "healthy"),
+      loc("sec-1", "sec-1", "Sector One", "sector", "plot-n", "healthy"),
+      loc("sec-2", "sec-2", "Sector Two", "sector", "plot-n", "healthy"),
+      loc("c-11", "c-11", "Grid 1-1", "coordinate", "sec-1", "healthy"),
+      loc("c-21", "c-21", "Grid 2-1", "coordinate", "sec-2", "healthy"),
+    ],
+    systems: [sys("s-probe", "probe", "Soil Probe", "c-11", "healthy"), sys("s-pump", "pump", "Pump", "c-21", "healthy")],
+  } as unknown as FleetView;
+
+  it("cards the customer's own levels and names them in the customer's words", async () => {
+    mount("/web/explore", owner, undefined, false, agri);
+    const plot = await screen.findByTestId(`explore-section-${uuidFor("plot-n")}`);
+    expect(plot.textContent).toContain("2 sectors");
+    expect(within(plot).getByRole("button", { name: "Open Sector One" })).toBeTruthy();
+  });
+
+  it("never calls a place a room", async () => {
+    mount("/web/explore", owner, undefined, false, agri);
+    await screen.findByTestId(`explore-section-${uuidFor("plot-n")}`);
+    expect(screen.getByTestId("explore-counts").textContent).toContain("2 places in view");
+    // The word, not the letters: "Roomy" is a density, not a location type.
+    const ROOM = /\brooms?\b/i;
+    expect(screen.getByTestId("explore-controls").textContent).not.toMatch(ROOM);
+    expect(screen.getByTestId("explore-counts").textContent).not.toMatch(ROOM);
+    for (const b of within(screen.getByTestId("explore-presets")).getAllByRole("button")) {
+      expect(b.getAttribute("title") ?? "").not.toMatch(ROOM);
+    }
   });
 });
 
@@ -263,7 +300,7 @@ describe("the counts line counts where the operator is standing", () => {
     mount();
     await screen.findByTestId("explore-controls");
     fireEvent.change(screen.getByLabelText("View"), { target: { value: "matrix" } });
-    expect(screen.getByTestId("explore-counts").textContent).not.toContain("rooms in view");
+    expect(screen.getByTestId("explore-counts").textContent).not.toContain("places in view");
   });
 });
 
@@ -275,7 +312,7 @@ describe("a control is offered only where it does something", () => {
     fireEvent.change(screen.getByLabelText("View"), { target: { value: "mosaic" } });
     expect(screen.queryByLabelText("Labels")).toBeNull();
     expect(screen.queryByLabelText("Density")).toBeNull();
-    expect(screen.queryByLabelText("Room boxes")).toBeNull();
+    expect(screen.queryByLabelText("Place boxes")).toBeNull();
     expect(screen.queryByLabelText("Sort")).toBeNull();
     fireEvent.change(screen.getByLabelText("View"), { target: { value: "matrix" } });
     expect(screen.queryByLabelText("Density")).toBeNull();
@@ -283,7 +320,7 @@ describe("a control is offered only where it does something", () => {
     expect(screen.queryByLabelText("Sort")).toBeNull();
     fireEvent.change(screen.getByLabelText("View"), { target: { value: "bands" } });
     expect(screen.getByLabelText("Density")).toBeTruthy();
-    expect(screen.getByLabelText("Room boxes")).toBeTruthy();
+    expect(screen.getByLabelText("Place boxes")).toBeTruthy();
   });
 });
 
@@ -362,7 +399,7 @@ describe("the table face", () => {
     mount("/web/explore?face=table&kind=locations");
     const counts = await screen.findByTestId("explore-counts");
     expect(counts.textContent).toContain("8 systems");
-    expect(counts.textContent).not.toContain("rooms in view");
+    expect(counts.textContent).not.toContain("places in view");
     expect(within(counts).queryByRole("button", { name: /needs? attention/ })).toBeNull();
   });
 });

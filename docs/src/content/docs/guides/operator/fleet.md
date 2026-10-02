@@ -131,6 +131,11 @@ at its floors; a small building holding rooms directly is one card of its own. *
 names its own type**, so a fleet that is not uniform reads as not uniform instead of
 being flattened into a shape it does not have.
 
+None of this knows the shipped type names. Campus, building, floor and room are defaults,
+and a fleet of plots, sectors and coordinates, or any hierarchy your
+[location types](/guides/admin/location-types/) allow, is cut, drawn and counted by the same
+rules and described in its own words.
+
 Inside a card, every system beneath it is a dot, coloured by its verdict and grouped the
 way the tree groups it: a wider gap means a level further up. A system whose commissioning
 is unfinished wears the same indigo its **incomplete** badge does, so a gap never reads as a
@@ -139,9 +144,9 @@ cut, a campus paging system that belongs to no building, gets a strip on the sec
 rather than being invented into a card it is not in. Clicking a card opens it; clicking a
 dot opens that system's workspace.
 
-**Names appear when the page can afford them.** Six hundred room names do not fit on a
-screen at any type size, so the page counts what is in front of you: under a couple of
-dozen rooms it names them, above that the card headers carry the identity and the dots
+**Names appear when the page can afford them.** Six hundred place names do not fit on a
+screen at any type size, so the page counts the **places** in front of you (the locations
+at the bottom of your tree, whatever their type): under a couple of dozen it names them, above that the card headers carry the identity and the dots
 carry the shape. Drill into one card and the names come back on their own, with no control
 touched. **Labels: always** overrides it when you want every name for a screenshot or a
 projector, and the counts line says which is in force.
@@ -160,7 +165,7 @@ only view that answers how one standard is doing everywhere at once.
 Switching between them is a control, not a page: the same fleet, the same grouping, the
 same marks, and the same place: drill into a location under any of them and the one you
 switch to draws that location too. The controls beside it follow the renderer: **Labels**,
-**Density**, **Sort** and **Room boxes** shape a dot field, so they appear under cards and
+**Density**, **Sort** and **Place boxes** shape a dot field, so they appear under cards and
 bands and are absent under the mosaic and the matrix rather than sitting there doing
 nothing.
 
@@ -169,7 +174,7 @@ nothing.
 A **preset** is a way of looking, saved under the name of the job it serves. Five ship
 with the console: *Fleet overview* for arriving, *Morning triage* for only what is broken,
 *Shape of the fleet* for the mosaic, *Standards audit* for the pivot, and *Commissioning
-sweep* for going room by room with every name and box on. **Save this view** keeps your own
+sweep* for going place by place with every name and box on. **Save this view** keeps your own
 alongside them, in this browser.
 
 A preset carries how the fleet is drawn and whether it is filtered to what needs
@@ -188,7 +193,8 @@ in, so typing a building name narrows the page to that building. `verdict:`, `ty
 `standard:` and `path:` narrow it precisely. A card whose systems all fall outside the
 filter is dropped rather than drawn empty, which is what makes filtering read as a search,
 and the section header says so: **1 of 4 rooms** means the filter left one of that place's
-four rooms on the page.
+four rooms on the page (the noun is the place's own type, so the same header reads **1 of 4
+sectors** in a fleet built from sectors).
 
 The counts line's **needs attention** count is itself the filter: click it and the page
 keeps only what is in outage, degraded, or incomplete. It is the same control the other

@@ -71,8 +71,12 @@ sections ([getting around](/guides/operator/#getting-around)).
   boardroom in it reads **Boardroom**, exactly as its name is `boardroom` rather than `boardroom-1`.
 - The **columns** menu shows or hides columns and lets you **drag to reorder** them. The
   layout is remembered per browser.
-- On Locations, each row wears its **type's icon** as a leading glyph (a campus, building,
-  floor, and room each read differently at a glance), tinted the same hue as the type badge.
+- On Locations, each row wears its **type's icon** as a leading glyph, tinted by the type's
+  **level** in your hierarchy (the top level one hue, the next another), so one level reads
+  differently from the next at a glance. The level, the Type column's sort, and whether a row
+  offers **Add child** all come from where your [location types](/guides/admin/location-types/)
+  say each type may sit, never from what a type is called: a hierarchy of your own sorts and
+  nests exactly as the shipped campus, building, floor and room do.
 - To see only one kind of place, filter on it: `type:room` keeps the rooms.
 - A **Tags** column shows each row's **effective [tags](/architecture/tags/)**: the `key = value`
   labels that resolve onto it down the cascade, not only the ones set directly on it (so a component

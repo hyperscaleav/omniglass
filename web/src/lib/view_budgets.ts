@@ -3,8 +3,8 @@
 // Each answers the same question about a different resource: can this view
 // afford the thing, given how much of it there is. They exist because the
 // alternative is a setting, and a setting asks an operator to know something
-// the view already knows. At 23 rooms every room can wear its name; at 602 it
-// cannot, at any type size, and no amount of tuning changes that. So the view
+// the view already knows. At 23 places every place can wear its name; at 602
+// it cannot, at any type size, and no amount of tuning changes that. So the view
 // works it out and the manual settings become overrides for a screenshot or a
 // projector rather than the normal way to drive it.
 //
@@ -14,32 +14,35 @@
 
 export type LabelMode = "auto" | "always" | "off";
 
-// Rooms in view past which names stop fitting.
+// Places in view past which names stop fitting. A place here is a leaf of the
+// location tree, whatever the customer's types call it (a room, a bay, a
+// coordinate): location types are customer data, so nothing below counts by
+// type.
 //
-// Twenty-four, measured against the real console rather than guessed. A room
+// Twenty-four, measured against the real console rather than guessed. A place
 // name needs about 7rem and a card is about 16rem, so a card fits two labelled
 // groups per row; at a screen of eight or so cards that is roughly two dozen
 // names before they start running into each other and reading as one string.
 //
 // The number also produces the behaviour the design wants without a second
-// rule: at the fleet level the whole fleet's rooms are in view, so names are
+// rule: at the fleet level the whole fleet's places are in view, so names are
 // off and the card header carries the identity, and drilling into one card
 // drops the count to a handful so the names come back on their own.
 const LABEL_CEILING = 24;
 
 // labelsAffordable: the label budget. Auto is the arithmetic, always and off
 // are the operator overriding it in either direction.
-export function labelsAffordable(roomsInView: number, mode: LabelMode, ceiling: number = LABEL_CEILING): boolean {
+export function labelsAffordable(placesInView: number, mode: LabelMode, ceiling: number = LABEL_CEILING): boolean {
   if (mode === "always") return true;
   if (mode === "off") return false;
-  return ceiling > 0 && roomsInView <= ceiling;
+  return ceiling > 0 && placesInView <= ceiling;
 }
 
-// roomBoxesAffordable: a room box costs more width than the name inside it, so
+// placeBoxesAffordable: a place's box costs more width than the name inside it, so
 // it goes first. It also stays an operator toggle, because at low counts the
 // boxes are a taste question and the names are not.
-export function roomBoxesAffordable(
-  roomsInView: number,
+export function placeBoxesAffordable(
+  placesInView: number,
   mode: LabelMode,
   wanted: boolean,
   ceiling: number = LABEL_CEILING,
@@ -47,7 +50,7 @@ export function roomBoxesAffordable(
   if (!wanted) return false;
   if (mode === "always") return true;
   if (mode === "off") return false;
-  return ceiling > 0 && roomsInView <= ceiling;
+  return ceiling > 0 && placesInView <= ceiling;
 }
 
 // The smallest tile worth drawing, in square pixels, and the shortest side it

@@ -7,7 +7,7 @@ import {
   insideOf,
   pluralOf,
   resolveNode,
-  roomsInView,
+  placesInView,
   sectionLine,
   sectionsFor,
   systemRows,
@@ -224,10 +224,10 @@ describe("counts", () => {
   });
 });
 
-describe("roomsInView", () => {
+describe("placesInView", () => {
   it("counts the leaf locations in front of the operator, not the fleet's total", () => {
-    expect(roomsInView(view, [uuidFor("hq"), uuidFor("depot")])).toBe(5);
-    expect(roomsInView(view, [uuidFor("west")])).toBe(2);
+    expect(placesInView(view, [uuidFor("hq"), uuidFor("depot")])).toBe(5);
+    expect(placesInView(view, [uuidFor("west")])).toBe(2);
   });
 });
 

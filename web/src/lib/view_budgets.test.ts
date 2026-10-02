@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { foldToBudget, frameLayout, labelsAffordable, roomBoxesAffordable, type LabelMode } from "./view_budgets";
+import { foldToBudget, frameLayout, labelsAffordable, placeBoxesAffordable, type LabelMode } from "./view_budgets";
 
 // The three budgets (#838). Each answers "can this view afford it", so an
 // operator does not have to hold the answer in their head. They are pure
@@ -33,15 +33,15 @@ describe("the label budget", () => {
     // At the same count, boxes need the operator to have asked for them AND
     // the budget to allow them; labels only need the budget.
     expect(labelsAffordable(20, "auto")).toBe(true);
-    expect(roomBoxesAffordable(20, "auto", true)).toBe(true);
-    expect(roomBoxesAffordable(20, "auto", false)).toBe(false);
-    expect(roomBoxesAffordable(602, "auto", true)).toBe(false);
+    expect(placeBoxesAffordable(20, "auto", true)).toBe(true);
+    expect(placeBoxesAffordable(20, "auto", false)).toBe(false);
+    expect(placeBoxesAffordable(602, "auto", true)).toBe(false);
   });
 
   it("honours the operator's box toggle even when labels are forced on", () => {
-    expect(roomBoxesAffordable(602, "always", true)).toBe(true);
-    expect(roomBoxesAffordable(602, "always", false)).toBe(false);
-    expect(roomBoxesAffordable(1, "off", true)).toBe(false);
+    expect(placeBoxesAffordable(602, "always", true)).toBe(true);
+    expect(placeBoxesAffordable(602, "always", false)).toBe(false);
+    expect(placeBoxesAffordable(1, "off", true)).toBe(false);
   });
 
   it("treats a ceiling of zero as never affordable, not as always", () => {

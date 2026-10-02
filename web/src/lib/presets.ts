@@ -21,6 +21,9 @@ export type PresetState = {
   renderer: RendererKey;
   density: Density;
   labelMode: LabelMode;
+  // Whether each place at the bottom of the tree is boxed. The key keeps its
+  // first name because it is stored, in this browser's preferences and in
+  // every saved view; renaming it would quietly drop the setting.
   roomBox: boolean;
   sort: "worst" | "name";
   attentionOnly: boolean;
@@ -72,7 +75,7 @@ export const STOCK_PRESETS: Preset[] = [
   },
   {
     name: "Commissioning sweep",
-    why: "room by room, every name and box on",
+    why: "place by place, every name and box on",
     stock: true,
     state: { ...DEFAULT_STATE, density: "roomy", labelMode: "always", roomBox: true, sort: "name" },
   },

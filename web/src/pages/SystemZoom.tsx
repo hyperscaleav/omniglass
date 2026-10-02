@@ -297,7 +297,7 @@ export default function SystemZoom() {
 
                     <div>
                       <Eyebrow label="Incidents" hint="One entry per contiguous stretch away from healthy, however many verdict changes it contained, ongoing first. Expand an entry for the transitions inside it and the alarms that explain them." />
-                      <Show when={incidentList().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window. The room held healthy the whole way.</p>}>
+                      <Show when={incidentList().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window. The system held healthy the whole way.</p>}>
                         <ul data-testid="incident-list" class="mt-2 flex flex-col gap-2">
                           <For each={incidentList()}>
                             {(inc, idx) => {
@@ -377,7 +377,7 @@ export default function SystemZoom() {
 
                     <Show when={otherAlarms().length > 0}>
                       <div>
-                        <Eyebrow label="Other alarms" hint="Alarms in the window that never overlapped an unhealthy stretch: the component complained, and the room absorbed it." />
+                        <Eyebrow label="Other alarms" hint="Alarms in the window that never overlapped an unhealthy stretch: the component complained, and the system absorbed it." />
                         <ul class="mt-2 divide-y divide-base-300 rounded-box border border-base-300 text-sm">
                           <For each={otherAlarms()}>
                             {(r) => (
@@ -396,7 +396,7 @@ export default function SystemZoom() {
                 </Show>
                 <Show when={tab() === "activity"}>
                   <section data-testid="events-tab" class="flex flex-col gap-2 p-4">
-                    <Eyebrow label="Events" hint="The room's story on the event lane: the system's own events and its members', newest first, each row labeled by the owner that raised it. The last 24 hours, capped." />
+                    <Eyebrow label="Events" hint="The system's story on the event lane: the system's own events and its members', newest first, each row labeled by the owner that raised it. The last 24 hours, capped." />
                     <Show when={(eventsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No events in the window.</p>}>
                       <ul class="divide-y divide-base-300 rounded-box border border-base-300 text-sm">
                         <For each={eventsQ.data ?? []}>

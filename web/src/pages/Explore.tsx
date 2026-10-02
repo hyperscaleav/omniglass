@@ -23,7 +23,7 @@ import {
   countsOf,
   insideOf,
   resolveNode,
-  roomsInView,
+  placesInView,
   sectionLine,
   sectionsFor,
   systemRows,
@@ -36,7 +36,7 @@ import {
   type SectionModel,
   type SystemRow,
 } from "../lib/explore_view";
-import { labelsAffordable, roomBoxesAffordable, type LabelMode } from "../lib/view_budgets";
+import { labelsAffordable, placeBoxesAffordable, type LabelMode } from "../lib/view_budgets";
 import { matrixFor } from "../lib/matrix";
 import {
   applyTo,
@@ -295,14 +295,14 @@ export default function Explore() {
 
   // The label budget is spent against what is in front of the operator now,
   // which is why drilling gives the names back with no control touched.
-  const rooms = createMemo(() => {
+  const places = createMemo(() => {
     const v = view.data;
     if (!v) return 0;
     const node = site();
-    return roomsInView(v, node ? [node] : (v.locations ?? []).filter((l) => !l.parent).map((l) => l.id));
+    return placesInView(v, node ? [node] : (v.locations ?? []).filter((l) => !l.parent).map((l) => l.id));
   });
-  const showLabels = createMemo(() => labelsAffordable(rooms(), prefs().labelMode));
-  const showBoxes = createMemo(() => roomBoxesAffordable(rooms(), prefs().labelMode, prefs().roomBox));
+  const showLabels = createMemo(() => labelsAffordable(places(), prefs().labelMode));
+  const showBoxes = createMemo(() => placeBoxesAffordable(places(), prefs().labelMode, prefs().roomBox));
 
   const standardOf = createMemo(() => {
     const byId = new Map((systems.data ?? []).map((s) => [s.id, s.standard]));
@@ -387,7 +387,7 @@ export default function Explore() {
                   </Show>
                   <Show when={drawsDots()}>
                     <span class="text-base-content/30">{"·"}</span>
-                    <span class="text-xs">{rooms()} {rooms() === 1 ? "room" : "rooms"} in view, labels {showLabels() ? "on" : "off"} ({prefs().labelMode === "auto" ? "auto" : "forced"})</span>
+                    <span class="text-xs">{places()} {places() === 1 ? "place" : "places"} in view, labels {showLabels() ? "on" : "off"} ({prefs().labelMode === "auto" ? "auto" : "forced"})</span>
                   </Show>
                   {/* A slot that is always present and takes only what is left
                       of the line. Growing the line on hover reflowed the page
@@ -642,7 +642,7 @@ function Controls(props: {
       <Show when={props.drawsDots}>
         <Field
           label="Labels"
-          hint="Auto names the rooms only while the names fit, which is why they return when you open a card. Always and Off override it."
+          hint="Auto names the places at the bottom of your tree only while the names fit, which is why they return when you open a card. Always and Off override it."
           value={props.prefs.labelMode}
           options={["auto", "always", "off"]}
           onPick={(v) => props.onPrefs({ labelMode: v as LabelMode })}
@@ -651,7 +651,7 @@ function Controls(props: {
         <Field label="Sort" value={props.prefs.sort} options={["worst", "name"]} onPick={(v) => props.onPrefs({ sort: v as "worst" | "name" })} />
         <label class="flex cursor-pointer items-center gap-1.5 text-xs">
           <input type="checkbox" class="checkbox checkbox-xs" checked={props.prefs.roomBox} onChange={(e) => props.onPrefs({ roomBox: e.currentTarget.checked })} />
-          Room boxes
+          Place boxes
         </label>
       </Show>
     </div>
