@@ -699,7 +699,7 @@ function SectionView(props: {
           <Show when={props.drilled}>
             <span class="flex-1" />
             {/* The way from the drill to the location's own workspace (its
-                Activity, its Configure tab), which the table face used to be
+                Overview and Configure tabs), which the table face used to be
                 the only road to. */}
             <Button size="xs" icon={Maximize} onClick={() => props.onOpen(props.section.id)}>Open location</Button>
             <Show when={props.canCreateLocation}>
