@@ -10,7 +10,6 @@ import { aboveCutSystems, cutNodesFor, cutTypeFor, unplacedSystems } from "./pla
 // the cards, bands, mosaic and matrix renderers all consume one model rather
 // than each deriving their own.
 
-export type Grain = "system";
 export type Sort = "worst" | "name";
 
 export type Counts = { healthy: number; incomplete: number; degraded: number; outage: number };
@@ -392,11 +391,9 @@ export function sectionLine(section: SectionModel): string {
 // has to keep both: the operator guide links /web/explore?node=huddle by name,
 // and a shared link landing on an empty page is worse than one that refuses.
 //
-// This deliberately does NOT reuse pathForNode. That resolver carries the
-// Miller-column collapse rule, where a room holding one system is replaced by
-// the system's own row, so it returns the room's PARENT. Cards have no such
-// collapse: the room is a real place to stand, and drilling to its parent would
-// silently show the operator somewhere other than the address they followed.
+// A room holding one system resolves to the ROOM, never to its parent: the
+// room is a real place to stand, and drilling anywhere else would silently
+// show the operator somewhere other than the address they followed.
 export function resolveNode(view: FleetView, address: string): string | null {
   if (!address) return null;
   const index = locationIndex(view);

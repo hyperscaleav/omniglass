@@ -61,20 +61,20 @@ import { describeError } from "../lib/format";
 // Explore (#839): one door into the fleet, with a few renderers over one
 // model.
 //
-// What replaced the Miller columns and why: the columns spent a screen on four
-// levels of tree, and they assumed a uniform depth the location model does not
-// guarantee. This draws a card per CUT NODE instead, where the cut is chosen
-// per root from the types that root actually contains (lib/place_cut.ts), so a
-// campus of buildings and a two-level annex sit side by side with each card
-// naming its own type.
+// It draws a card per CUT NODE, where the cut is chosen per root from the
+// types that root actually contains (lib/place_cut.ts), so a campus of
+// buildings and a two-level annex sit side by side with each card naming its
+// own type. Counting levels from the root would assume a uniform depth the
+// location model does not guarantee.
 //
 // The controls are budgets, not preferences: labels and room boxes appear only
 // while the view can afford them (lib/view_budgets.ts), because 602 room names
 // do not fit on a screen at any type size. Auto is the default and the manual
 // settings are an override for a screenshot.
 //
-// Faces: this renderer face and today's #798 kind-tab list face behind
-// ?face=table, which stays until #828 replaces it with the path-first table.
+// Faces: this renderer face, and the table face behind ?face=table (the three
+// kind tables as tabs), which stays until #828 replaces it with the path-first
+// table.
 
 const FACE_KEY = "explore-face";
 const PREFS_KEY = "explore-prefs";

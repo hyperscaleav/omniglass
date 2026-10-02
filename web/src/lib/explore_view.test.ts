@@ -256,8 +256,8 @@ describe("systemRows", () => {
 
 describe("resolveNode", () => {
   // ADR-0062: the uuid is the address, but a name-shaped one resolves when it
-  // is unique. #831 built that rule in pathForNode and the drill must keep it,
-  // or a documented link like ?node=huddle lands on an empty page.
+  // is unique. The drill has to keep that rule, or a documented link like
+  // ?node=huddle lands on an empty page.
   it("takes a location's uuid", () => {
     expect(resolveNode(view, uuidFor("west"))).toBe(uuidFor("west"));
   });
