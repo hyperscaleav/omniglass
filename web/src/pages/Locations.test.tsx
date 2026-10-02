@@ -44,11 +44,11 @@ const hqProperties: EffectiveProperty[] = [
   { property_type_name: "site.note", property_type_id: "site.note-id", label: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "leased", value: "leased", value_id: "v-note" },
 ];
 
-function mount(path: string, extraLocations: Location[] = [], meOverride: Me = me) {
+function mount(path: string, extraLocations: Location[] = [], meOverride: Me = me, registry: LocationType[] = types, base: Location[] = [hq, lab, hqB1]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  const all = [hq, lab, hqB1, ...extraLocations];
+  const all = [...base, ...extraLocations];
   qc.setQueryData([...LOCATIONS_KEY], all);
-  qc.setQueryData([...LOCATION_TYPES_KEY], types);
+  qc.setQueryData([...LOCATION_TYPES_KEY], registry);
   qc.setQueryData([...ME_KEY], meOverride);
   qc.setQueryData([...TAGS_KEY], []);
   // Keyed by uuid (#627 review finding 1): the detail page's panels now
@@ -555,5 +555,48 @@ describe("the classic face is gone (#800)", () => {
     await waitFor(() => expect(document.querySelector('[data-testid="tab-rail"], .skeleton')).toBeTruthy());
     expect(screen.queryByText("PLACEMENT")).toBeNull();
     expect(screen.queryByRole("button", { name: /^cancel$/i })).toBeNull();
+  });
+});
+
+describe("a location hierarchy is the customer's, not ours", () => {
+  // Location types are customer data (ADR-0102). The table used to decide
+  // Add child by the type's NAME (a "room" could hold nothing) and to rank and
+  // weight rows by a table of the shipped names, so a custom hierarchy sorted
+  // as one undifferentiated bucket. Both now read the registry's own
+  // allowed_parent_types.
+  const lt = (name: string, parents: string[]): LocationType => ({ id: uuidFor(`lt-${name}`), name, label: name[0].toUpperCase() + name.slice(1), icon: "map-pin", official: false, forked: false, allowed_parent_types: parents });
+  const registry = [lt("plot", ["root"]), lt("sector", ["plot"]), lt("coordinate", ["sector"]), lt("room", ["root"]), lt("desk", ["room"])];
+  const at = (h: string, label: string, type: string, parent?: Location): Location => ({ id: uuidFor(h), name: h, label, location_type: type, parent: parent?.name, parent_id: parent?.id, effective_tags: {} });
+  const plot = at("p-1", "North Plot", "plot");
+  const sector = at("s-1", "Sector Nine", "sector", plot);
+  const coord = at("c-1", "Grid 4-7", "coordinate", sector);
+  const room = at("r-1", "Studio", "room");
+  // A row also shows its parent's name (the Parent column, or the path line
+  // when flattened), so a row is identified by the deepest fixture name in it.
+  const DEEPEST_FIRST = ["Grid 4-7", "Sector Nine", "North Plot", "Studio"];
+  const ownName = (tr: Element) => DEEPEST_FIRST.find((n) => tr.textContent?.includes(n));
+  const rowOf = (name: string) => [...document.querySelectorAll("tbody tr")].find((tr) => ownName(tr) === name) as HTMLElement;
+  const order = () => [...document.querySelectorAll("tbody tr")].map(ownName).filter(Boolean);
+
+  it("offers Add child where the registry lets something sit, and not at the bottom of the hierarchy", async () => {
+    localStorage.setItem("og-loc-view", "tree");
+    mount("/locations", [], me, registry, [plot, sector, coord, room]);
+    fireEvent.click(await screen.findByTitle("Expand all"));
+    await screen.findByText("Grid 4-7");
+    expect(within(rowOf("Sector Nine")).queryByTitle("Add child")).toBeTruthy();
+    expect(within(rowOf("Grid 4-7")).queryByTitle("Add child")).toBeNull();
+    // A type called "room" that the registry lets desks sit under holds children.
+    expect(within(rowOf("Studio")).queryByTitle("Add child")).toBeTruthy();
+  });
+
+  it("sorts the Type column by depth in the customer's hierarchy, not by a table of our names", async () => {
+    localStorage.setItem("og-loc-view", "list");
+    mount("/locations", [], me, registry, [coord, sector, plot]);
+    await waitFor(() => expect(order()).toHaveLength(3));
+    // Descending, so the answer cannot be the tree order the list starts in:
+    // with every custom type ranked alike, a sort leaves rows where they were.
+    fireEvent.click(screen.getByRole("columnheader", { name: /Type/ }));
+    fireEvent.click(screen.getByRole("columnheader", { name: /Type/ }));
+    await waitFor(() => expect(order()).toEqual(["Grid 4-7", "Sector Nine", "North Plot"]));
   });
 });

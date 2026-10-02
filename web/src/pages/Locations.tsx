@@ -11,6 +11,7 @@ import { fleetRegistry } from "../lib/fleetBlades";
 import { describeError } from "../lib/format";
 import { type Location, LOCATIONS_KEY, listLocations, deleteLocation } from "../lib/locations";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
+import { canHoldChildren, typeRanks } from "../lib/location_type_graph";
 import { tagFilterKeys } from "../lib/predicate";
 import LocationZoom from "./LocationZoom";
 
@@ -21,15 +22,17 @@ import LocationZoom from "./LocationZoom";
 // comes from parent_id.
 type LocNode = ListNode & { type: string; tags: Record<string, string>; raw: Location };
 
-// A loose visual ranking for the seeded place types; unknown types sort last.
-const TYPE_RANK: Record<string, number> = { campus: 0, site: 0, region: 0, building: 1, floor: 2, room: 3 };
-// Distinct, readable badge hues per place type. daisyUI's neutral token renders its
-// text in the dark neutral color, which is unreadable on the dark theme, so each type
-// maps to a bright daisyUI semantic; unknown types fall back to the readable ghost.
-const TYPE_BADGE: Record<string, string> = { campus: "badge-primary", site: "badge-primary", region: "badge-primary", building: "badge-warning", floor: "badge-success", room: "badge-info" };
-// The same hues as CSS color values, for the tree's leading type glyph.
-const TYPE_COLOR: Record<string, string> = { campus: "var(--color-primary)", site: "var(--color-primary)", region: "var(--color-primary)", building: "var(--color-warning)", floor: "var(--color-success)", room: "var(--color-info)" };
-const typeBadge = (t: string) => `badge badge-soft badge-sm capitalize ${TYPE_BADGE[t] ?? "badge-ghost"}`;
+// A type's hue follows its RANK in the customer's hierarchy (lib/
+// location_type_graph), never its name: location types are customer data, so
+// a plot, sector, coordinate fleet reads as layered as a campus, building,
+// floor, room one does, and the shipped types keep the hues they always wore.
+// daisyUI's neutral token renders unreadable text on the dark theme, so each
+// rank maps to a bright semantic, and an unranked type falls back to the
+// readable ghost.
+const RANK_BADGE = ["badge-primary", "badge-warning", "badge-success", "badge-info"];
+const RANK_COLOR = ["var(--color-primary)", "var(--color-warning)", "var(--color-success)", "var(--color-info)"];
+const atRank = <T,>(list: T[], rank: number | undefined): T | undefined =>
+  rank === undefined ? undefined : list[Math.min(rank, list.length - 1)];
 
 // The static config (matrix-tested in pages/descriptors.test.ts).
 export const locationsDescriptor: PageDescriptor = {
@@ -76,6 +79,12 @@ function LocationsIndex() {
     for (const t of locationTypes.data ?? []) m.set(t.name, t.icon);
     return m;
   });
+  // Where each type sits in this customer's hierarchy, and whether anything
+  // may sit under it: both read off the registry, never off a type's name.
+  const typeRank = createMemo(() => typeRanks(locationTypes.data ?? []));
+  const rankOf = (type: string) => typeRank().get(type);
+  const holdsChildren = (type: string) => !!locationTypes.data && canHoldChildren(locationTypes.data, type);
+  const typeBadge = (type: string) => `badge badge-soft badge-sm capitalize ${atRank(RANK_BADGE, rankOf(type)) ?? "badge-ghost"}`;
 
   // Keyed AND identified by uuid, not the bare name (#627: name uniqueness is
   // scoped to placement, so two locations can legally share a name under
@@ -141,13 +150,15 @@ function LocationsIndex() {
     error: () => locations.error,
     filterPlaceholder: "Filter by name, type…",
     // Each node wears its type's glyph, tinted the same hue as its type badge, so
-    // campus vs building vs floor reads at a glance without opening the row.
+    // one level of the hierarchy reads differently from the next at a glance.
     leadIcon: (n) => {
       const Ico = resolveIcon(typeIcon().get(n.type));
-      return <span class="opacity-80" style={{ color: TYPE_COLOR[n.type] ?? "var(--color-base-content)" }}><Ico size={15} /></span>;
+      return <span class="opacity-80" style={{ color: atRank(RANK_COLOR, rankOf(n.type)) ?? "var(--color-base-content)" }}><Ico size={15} /></span>;
     },
-    nameWeight: (n) => (TYPE_RANK[n.type] === 0 ? 600 : n.type === "room" ? 400 : 500),
-    canAddChild: (n) => n.type !== "room",
+    // The top of the hierarchy reads heaviest, the bottom (a type nothing may
+    // sit under) lightest.
+    nameWeight: (n) => (rankOf(n.type) === 0 ? 600 : !holdsChildren(n.type) ? 400 : 500),
+    canAddChild: (n) => holdsChildren(n.type),
     cellFor: (key, n, ctx) => {
       if (key === "type") return <span class={typeBadge(n.type)}>{n.type}</span>;
       if (key === "parent") { const p = ctx.parentOf(n); return p ? <span class="text-base-content/70">{p.display}</span> : <span class="text-base-content/40">—</span>; }
@@ -161,7 +172,7 @@ function LocationsIndex() {
       ...tagFacets(),
     ],
     sortVal: (n, key) => {
-      if (key === "type") return TYPE_RANK[n.type] ?? 9;
+      if (key === "type") return rankOf(n.type) ?? Number.MAX_SAFE_INTEGER;
       if (key === "parent") return ""; // parent resolved via ctx; name sort is the useful default
       if (key === "tech") return n.raw.name.toLowerCase();
       if (key === "tags") return Object.keys(n.tags).sort().join(",");

@@ -23,6 +23,7 @@ import { COMPONENTS_KEY, listComponents, updateComponent, renameComponent, reset
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { SYSTEM_TYPES_KEY, listSystemTypes } from "../lib/system_types";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
+import { typeRanks } from "../lib/location_type_graph";
 import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { createSystem } from "../lib/systems";
 import { createLocation } from "../lib/locations";
@@ -450,7 +451,6 @@ function placementLine(kind: EntityKind, rec: Record<string, unknown> | undefine
 // placement prefilled (`under`).
 
 const KIND_NOUN: Record<EntityKind, string> = { system: "system", location: "location", component: "component" };
-const TYPE_RANK: Record<string, number> = { campus: 0, site: 0, region: 0, building: 1, floor: 2, room: 3 };
 
 export function EntityCreateForm(props: {
   kind: EntityKind;
@@ -471,12 +471,16 @@ export function EntityCreateForm(props: {
   const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts, enabled: isComponent() }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards, enabled: isSystem() }));
   const systemTypes = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes, enabled: isSystem() }));
-  const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes, enabled: isLocation() }));
+  // Every create reads the registry: a location's type list, and every kind's
+  // placement picker, which orders sibling places by their type's rank in the
+  // customer's hierarchy (never by a table of the shipped type names).
+  const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
+  const typeRank = createMemo(() => typeRanks(locationTypes.data ?? []));
 
   // Keyed AND valued on uuid, not name (#627): two same-named rows would
   // otherwise render as identical options, and posting either would name an
   // ambiguous ref. The API dual-accepts uuid-or-name (ADR-0062).
-  const locationItems = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: TYPE_RANK[l.location_type] ?? 9 })));
+  const locationItems = createMemo<TreeNode[]>(() => (locations.data ?? []).map((l) => ({ id: l.id, value: l.id, label: entityLabel(l), parentId: l.parent_id, rank: typeRank().get(l.location_type) ?? Number.MAX_SAFE_INTEGER })));
   const systemItems = createMemo<TreeNode[]>(() => (systems.data ?? []).map((sy) => ({ id: sy.id, value: sy.id, label: entityLabel(sy), parentId: sy.parent_id })));
   const componentItems = createMemo<TreeNode[]>(() => (components.data ?? []).map((c) => ({ id: c.id, value: c.id, label: entityLabel(c), parentId: c.parent_id })));
   // The systems a component may be bound to on create: those the caller's
