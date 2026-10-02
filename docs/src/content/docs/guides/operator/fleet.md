@@ -107,6 +107,13 @@ screenshots:
   - id: fleet
     path: /web/explore
     alt: "Explore: a card per cut node, each naming its own type, with a dense dot field of the systems beneath it."
+    # The view selects sit at a fractional x (after the eyebrows and their
+    # tips), and the pinned browser rasterizes a select's chevron a pixel
+    # apart on CI's runners and on a workstation: 4px, every run, on one
+    # machine and never the other. Masked in the BASELINE only; the docs embed
+    # the clean render, selects and all.
+    mask:
+      - "[data-testid=explore-controls] select"
 ---
 
 The fleet has one door in the sidebar: **Explore**. It opens on the whole fleet, drawn
