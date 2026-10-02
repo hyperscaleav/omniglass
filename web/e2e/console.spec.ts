@@ -201,7 +201,7 @@ test.describe("operator console", () => {
       const controls = page.getByTestId("explore-controls");
       await expect(controls).toBeVisible();
       const card = (await controls.locator("xpath=ancestor::div[contains(@class,'card')][1]").boundingBox())!;
-      for (const name of ["View", "Labels", "Density", "Sort", "Room boxes"]) {
+      for (const name of ["View", "Labels", "Density", "Sort", "Place boxes"]) {
         const box = await page.getByLabel(name, { exact: true }).boundingBox();
         expect(box, `${name} is not laid out at ${width}px`).not.toBeNull();
         expect(box!.x + box!.width, `${name} runs past the card at ${width}px`).toBeLessThanOrEqual(card.x + card.width);
