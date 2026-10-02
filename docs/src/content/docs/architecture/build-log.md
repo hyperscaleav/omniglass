@@ -5931,3 +5931,32 @@ incomplete is its own hue rather than a shade of degraded or the colour of an em
 the hover readout grew the counts line when a dot was hovered, reflowing the page under the
 pointer and moving the dot out from under the click that was landing on it, which the e2e walk
 caught; its slot is now reserved.
+
+A readiness pass over the whole surface, driven against the console state by state, then found
+what the unit suites could not. Every `xs` button in the console was drawing at 40px, larger
+than an `sm` one: the `Button` primitive assembled its size class at runtime, the stylesheet
+scan never saw `btn-xs`, and the rule was never emitted, so the preset bar and the counts
+line's filter stood taller than the cards they framed. The class names are spelled out now and
+a test pins that every class the primitive emits is one the scan can see. The incomplete dot
+was the neutral, which on this theme is the card's own ground, so the one dot asking for
+somebody was invisible; it wears the commissioning hue its badge wears, and a mosaic tile's
+name takes an ink chosen from its fill, since one ink for every tile vanished on the empty one.
+
+The counts line now counts where the operator is standing. Beside the breadcrumb, "Headquarters,
+41 systems" read as a claim about Headquarters, and the fleet's attention count offered inside
+a node holding none filtered that node to nothing. A section header under a filter says how
+many of the place's cards are drawn ("1 of 4 rooms") instead of passing a filtered count off as
+a fact about the place, and it pluralises a customer's type name as the word goes. A control is
+offered only under a renderer it changes, the matrix follows the drill its own rows trigger,
+`standard:` filters under every renderer rather than only after the matrix had loaded the join,
+and a drilled header opens the location's own workspace, which the table face had been the only
+road to. The face toggle and the kind tabs became the controls the workspaces already wear. A
+link's `?chips=` and the browser's stored view are checked on the way in, so a hand-edited link
+or a renderer key from an older build draws the fleet instead of nothing.
+
+The last of the inventory-era surface went with it. The Locations table still carried a KPI
+chip row (a summary board with a type-mix donut) that ADR-0137 had retired everywhere else, so
+the board, its `TreeList` plumbing and `Donut` are deleted; so are the health and members
+panels the classic faces had left unmounted since #806, the name-address fallback no fleet
+table can reach now that an identity route is a workspace, and the tile and band helpers the
+canvas alone had read. The retired-surfaces guard names each one.

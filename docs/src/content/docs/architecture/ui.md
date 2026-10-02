@@ -36,10 +36,10 @@ operator never queries raw tables. Every view returns a uniform **`ViewResult`**
 rendered through **one renderer per view**: adding a view never adds a bespoke renderer.
 :::
 
-The **dense-ops layout is an architectural pattern**: facet summary over the full set, keyboard chip
-filter, tree/list table, click-row detail blade plus a full detail page, the summary staying whole so
-click-to-filter is stable. The inventory tier realizes it as the config-driven `ListShell` and its
-primitives ([design system](/contributing/design-system/)); the analytical surfaces will reuse it.
+The **dense-ops layout is an architectural pattern**: one counts line over the full set, keyboard
+chip filter, tree/list table, click-row blade plus an addressable page, the counts staying whole
+while the filter narrows the body. The list tier realizes it as the config-driven `ListShell` and
+its primitives ([design system](/contributing/design-system/)); the analytical surfaces will reuse it.
 
 ## Tooltips, not prose
 
@@ -164,9 +164,9 @@ Two layers, deliberately decoupled:
    menu, so deep links stay stable however the menu is reorganized. No taxonomy-nested routes, no
    redirects to maintain.
 2. **The sidebar groups those flat routes into clusters for browsing**: Home, Explore (the one
-   door into the fleet, #826), Dashboards, Alarms,
-   Inventory (locations, systems, components, nodes), Values (variables, secrets, config, files),
-   Catalog (a single entry opening the catalog shell, next), Explore, Learn, Admin (users, roles,
+   door into the fleet, #826: locations, systems and components are the kind tabs of its table
+   face), Dashboards, Alarms, Nodes, Values (variables, secrets, config, files),
+   Catalog (a single entry opening the catalog shell, next), Learn, Admin (users, roles,
    groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
    rearrangeable and user-customizable without touching a route.
 
@@ -202,16 +202,17 @@ a happening (caught from the fleet or caused by the platform), never an outbound
 is why Events sits in Telemetry while Rules, Commands, and the future Notifications sit in
 Actions.
 
-**Values is its own top-level group**, beside Inventory: values set on fleet entities and resolved
+**Values is its own top-level group**: values set on fleet entities and resolved
 down the cascade, a distinct genus from the entities themselves. **Config is the CI store** (desired
 configuration, optionally observed back to detect drift and reconcile), distinct from platform
 Settings (preferences: severity scales, schedules, retention, defaults) and Variables (free
 interpolated values, no observed side); the full split is
 [config, secrets, and variables](/architecture/variables/).
 
-**Inventory holds the fleet entities**: locations, systems, components, and **nodes**, the
-collection daemons, monitored and scope-controlled (live, gated on `node:read` plus ABAC scope), so
-a node sits in Inventory, not Admin. **Interfaces and tasks are not nav items**: an interface is a
+**Explore holds the fleet entities**: locations, systems, and components, reached through its
+renderers or the kind tabs of its table face. **Nodes**, the collection daemons, are monitored and
+scope-controlled (live, gated on `node:read` plus ABAC scope), so a node keeps its own sidebar
+entry rather than sitting in Admin. **Interfaces and tasks are not nav items**: an interface is a
 panel on a component, a task a panel on a node, facets of the owning entity's detail page.
 
 Admin is the renamed Settings group: Users, Roles, Groups, Audit, plus the live Settings leaf, the

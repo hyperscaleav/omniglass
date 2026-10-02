@@ -31,8 +31,8 @@ There are two ways to operate, and they are the same API with the same checks be
 
 ## Getting around
 
-- The **sidebar** is the information architecture: sections grouped into Inventory, Values,
-  Catalog, and Admin. **Catalog is a single entry** opening the catalog area: a subrail on the
+- The **sidebar** is the information architecture: Explore (the one door into the fleet), Nodes,
+  and sections grouped into Values, Catalog, and Admin. **Catalog is a single entry** opening the catalog area: a subrail on the
   left groups the registries by the fleet noun they serve (Telemetry, Actions, Components,
   Systems, Locations, Metadata), and clicking an entry opens that registry's own page beside it,
   at its own URL. A guide path names the group and the entry: **Catalog, under Locations: Types**.

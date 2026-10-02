@@ -110,8 +110,9 @@ screenshots:
 ---
 
 The fleet has one door in the sidebar: **Explore**. It opens on the whole fleet, drawn
-as cards you can read at a glance; the same page wears three other renderers and a table
-face behind the controls in its filter bar. From a system you open its **workspace**, the
+as cards you can read at a glance; the same page wears three other renderers behind the
+**View** control in its filter bar, and a table face behind the toggle at the right of its
+counts line. From a system you open its **workspace**, the
 monitoring page, at the system's own address. The old `/fleet` address lands on Explore.
 
 ## Explore
@@ -131,7 +132,9 @@ names its own type**, so a fleet that is not uniform reads as not uniform instea
 being flattened into a shape it does not have.
 
 Inside a card, every system beneath it is a dot, coloured by its verdict and grouped the
-way the tree groups it: a wider gap means a level further up. A system attached above the
+way the tree groups it: a wider gap means a level further up. A system whose commissioning
+is unfinished wears the same indigo its **incomplete** badge does, so a gap never reads as a
+fault. A system attached above the
 cut, a campus paging system that belongs to no building, gets a strip on the section
 rather than being invented into a card it is not in. Clicking a card opens it; clicking a
 dot opens that system's workspace.
@@ -141,7 +144,7 @@ screen at any type size, so the page counts what is in front of you: under a cou
 dozen rooms it names them, above that the card headers carry the identity and the dots
 carry the shape. Drill into one card and the names come back on their own, with no control
 touched. **Labels: always** overrides it when you want every name for a screenshot or a
-projector, and the counts line always says which is in force.
+projector, and the counts line says which is in force.
 
 ### Four ways of drawing the same fleet
 
@@ -155,7 +158,11 @@ everything contains one outage and a worst-wins colour would paint the whole fle
 only view that answers how one standard is doing everywhere at once.
 
 Switching between them is a control, not a page: the same fleet, the same grouping, the
-same marks.
+same marks, and the same place: drill into a location under any of them and the one you
+switch to draws that location too. The controls beside it follow the renderer: **Labels**,
+**Density**, **Sort** and **Room boxes** shape a dot field, so they appear under cards and
+bands and are absent under the mosaic and the matrix rather than sitting there doing
+nothing.
 
 ### Presets
 
@@ -165,18 +172,23 @@ with the console: *Fleet overview* for arriving, *Morning triage* for only what 
 sweep* for going room by room with every name and box on. **Save this view** keeps your own
 alongside them, in this browser.
 
-A preset carries how the fleet is drawn and what live state is filtered. It never carries
-a scope: nothing in it names a part of your fleet to include or exclude. That is the line
-between this page and a dashboard, and it is deliberate.
+A preset carries how the fleet is drawn and whether it is filtered to what needs
+attention. Anything else you typed into the filter bar stays as it was when you apply one.
+It never carries a scope: nothing in it names a part of your fleet to include or exclude.
+That is the line between this page and a dashboard, and it is deliberate.
 
 ### Finding one thing
 
 Explore wears the same chrome as every other fleet page: a **counts line** across the top
-that says what the whole fleet looks like, and the **filter bar** below it. Typing a bare
+and the **filter bar** below it. The counts line counts where you are standing: the whole
+fleet on arrival, and the location you drilled into once you have, beside the breadcrumb
+that names it. A filter narrows the page and never the counts. Typing a bare
 term (or pressing `/`) matches a system by name or by any fragment of the place it sits
 in, so typing a building name narrows the page to that building. `verdict:`, `type:`,
 `standard:` and `path:` narrow it precisely. A card whose systems all fall outside the
-filter is dropped rather than drawn empty, which is what makes filtering read as a search.
+filter is dropped rather than drawn empty, which is what makes filtering read as a search,
+and the section header says so: **1 of 4 rooms** means the filter left one of that place's
+four rooms on the page.
 
 The counts line's **needs attention** count is itself the filter: click it and the page
 keeps only what is in outage, degraded, or incomplete. It is the same control the other
@@ -192,11 +204,14 @@ too when it names exactly one thing, so `?node=huddle` lands on the huddle room.
 carries the filter, so a link can hand somebody exactly what you were looking at. How you
 were looking, the renderer, the density, the sort, is remembered in your browser instead,
 so a shared link never overrides the other person's preferences. `?face=table` lands on
-the table face, and `t` toggles between the two.
+the table face (locations, systems and components as tabs, each a filterable table), and
+the toggle at the right of the counts line, or `t`, switches between the two.
 
-**Create where you stand.** Drill into a location and, when you hold the create
-permissions, the header offers **+ Location here** and **+ System here**: the same create
-[form](/guides/operator/entities/), empty, with the placement already filled in.
+**Open or create where you stand.** Drill into a location and its header offers **Open
+location**, which opens that location's own [workspace](#every-workspace-the-same-shape),
+and, when you hold the create permissions, **+ Location here** and **+ System here**: the
+same create [form](/guides/operator/entities/), empty, with the placement already filled
+in.
 
 Verdicts on this page are a glance. Monitoring lives on the workspaces and, later, the
 dashboards.
@@ -218,8 +233,9 @@ address (`?view=list`), so a pasted link lands on the same face.
 
 ## Zoom into a location
 
-Opening a card takes you to that location at its own address: the zoom **is** the identity
-route's face, the only one it has. Editing lives on the Configure tab, and an old
+**Open location** on a drilled header, or a row on the table face's Locations tab, takes
+you to that location at its own address: the zoom **is** the identity route's face, the only
+one it has. Editing lives on the Configure tab, and an old
 `?view=detail` link simply lands here.
 
 ::screenshot{#fleet-location}
@@ -311,7 +327,7 @@ permission and its own audit verb; systems and components read where they sit.
 **Tags** edit in place. One save model everywhere: Edit stages drafts, Save commits them
 together (the rename last, so a refusal leaves the rest saved), Cancel reverts. A
 `?edit=1` address lands already editing. The location and component workspaces carry the
-same tab, and the same form renders in the blade and in Explore's glance.
+same tab, and the same form renders in the blade a table row opens.
 
 ::screenshot{#fleet-configure}
 
