@@ -83,9 +83,21 @@ The architect steers without attending:
 ## The Routine
 
 One scheduled trigger, owned by the architect's Claude account: daily at 11:00 UTC
-(early morning Mountain time), each firing a **fresh session** in the repo's remote
-environment, with completion notifications on. The prompt is intentionally thin, so the
-behavior lives in the versioned skill rather than in trigger config:
+(early morning Mountain time), each firing a **fresh session** with completion
+notifications on. The session runs on the architect's own worker machine, reached through
+a Remote Control bridge environment, rather than in a cloud sandbox: the gates (Docker for
+the testcontainers, the pinned protoc pair, the Playwright browser for `/assess-ui`) run
+on a host the architect provisions once, and the session works in the machine's standing
+clone of the repo. The worker has to be up, with the bridge connected, when the Routine
+fires; a day it is not is a day the autopilot does not wake.
+
+The worker needs, beyond Go, Node, and Docker: an authenticated `gh` with the `gh image`
+extension (a bridge session reaches GitHub through `gh`, not the cloud sandbox's MCP
+tools), the `d2` binary for any docs diagram, and the Playwright Chromium
+(`cd web && npx playwright install chromium`).
+
+The prompt is intentionally thin, so the behavior lives in the versioned skill rather
+than in trigger config:
 
 ```text
 Omniglass autopilot: ship today's slice. Work in the hyperscaleav/omniglass clone in
