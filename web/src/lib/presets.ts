@@ -21,10 +21,8 @@ export type PresetState = {
   renderer: RendererKey;
   density: Density;
   labelMode: LabelMode;
-  // Whether each place at the bottom of the tree is boxed. The key keeps its
-  // first name because it is stored, in this browser's preferences and in
-  // every saved view; renaming it would quietly drop the setting.
-  roomBox: boolean;
+  // Whether each place at the bottom of the tree is drawn in a box.
+  placeBox: boolean;
   sort: "worst" | "name";
   attentionOnly: boolean;
   // Where the operator was standing. A node is an address, not a scope: it says
@@ -39,7 +37,7 @@ export const DEFAULT_STATE: PresetState = {
   renderer: "cards",
   density: "compact",
   labelMode: "auto",
-  roomBox: true,
+  placeBox: true,
   sort: "worst",
   attentionOnly: false,
   node: null,
@@ -77,7 +75,7 @@ export const STOCK_PRESETS: Preset[] = [
     name: "Commissioning sweep",
     why: "place by place, every name and box on",
     stock: true,
-    state: { ...DEFAULT_STATE, density: "roomy", labelMode: "always", roomBox: true, sort: "name" },
+    state: { ...DEFAULT_STATE, density: "roomy", labelMode: "always", placeBox: true, sort: "name" },
   },
 ];
 
@@ -101,7 +99,7 @@ export function sanitizeState(raw: unknown): PresetState {
     renderer: oneOf(RENDERERS, r.renderer, DEFAULT_STATE.renderer),
     density: oneOf(DENSITIES, r.density, DEFAULT_STATE.density),
     labelMode: oneOf(LABEL_MODES, r.labelMode, DEFAULT_STATE.labelMode),
-    roomBox: typeof r.roomBox === "boolean" ? r.roomBox : DEFAULT_STATE.roomBox,
+    placeBox: typeof r.placeBox === "boolean" ? r.placeBox : DEFAULT_STATE.placeBox,
     sort: oneOf(SORTS, r.sort, DEFAULT_STATE.sort),
     attentionOnly: typeof r.attentionOnly === "boolean" ? r.attentionOnly : DEFAULT_STATE.attentionOnly,
     node: typeof r.node === "string" && r.node ? r.node : null,
@@ -140,7 +138,7 @@ export function savePresets(list: Preset[]): boolean {
 // NOT compared: a preset describes a way of looking, and an operator who has
 // drilled somewhere is still looking that way.
 export function matches(state: PresetState, preset: Preset): boolean {
-  const keys: Array<keyof PresetState> = ["renderer", "density", "labelMode", "roomBox", "sort", "attentionOnly"];
+  const keys: Array<keyof PresetState> = ["renderer", "density", "labelMode", "placeBox", "sort", "attentionOnly"];
   return keys.every((k) => state[k] === preset.state[k]);
 }
 

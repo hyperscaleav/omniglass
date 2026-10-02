@@ -151,12 +151,12 @@ describe("stored state is somebody else's until checked", () => {
   // key from an older build, or a hand-edited value, used to reach the page
   // unchecked, where no renderer claimed it and the body drew nothing.
   it("keeps every field that is a value its control can produce", () => {
-    const s = state({ renderer: "matrix", density: "roomy", labelMode: "off", roomBox: false, sort: "name", attentionOnly: true, node: "n-1" });
+    const s = state({ renderer: "matrix", density: "roomy", labelMode: "off", placeBox: false, sort: "name", attentionOnly: true, node: "n-1" });
     expect(sanitizeState(s)).toEqual(s);
   });
 
   it("replaces a value no control can produce with the default for that field alone", () => {
-    const got = sanitizeState({ renderer: "columns", density: "huge", labelMode: 3, roomBox: "yes", sort: "name", attentionOnly: 1, node: 9 });
+    const got = sanitizeState({ renderer: "columns", density: "huge", labelMode: 3, placeBox: "yes", sort: "name", attentionOnly: 1, node: 9 });
     expect(got).toEqual(state({ sort: "name" }));
   });
 

@@ -82,13 +82,13 @@ const PREFS_KEY = "explore-prefs";
 // The browser half of a preset. The other half, the drilled node and the
 // filter, rides the URL so a link carries it, which is the split ?face=table
 // already uses.
-type Prefs = Pick<PresetState, "renderer" | "density" | "labelMode" | "roomBox" | "sort">;
+type Prefs = Pick<PresetState, "renderer" | "density" | "labelMode" | "placeBox" | "sort">;
 
 const DEFAULT_PREFS: Prefs = {
   renderer: DEFAULT_STATE.renderer,
   density: DEFAULT_STATE.density,
   labelMode: DEFAULT_STATE.labelMode,
-  roomBox: DEFAULT_STATE.roomBox,
+  placeBox: DEFAULT_STATE.placeBox,
   sort: DEFAULT_STATE.sort,
 };
 
@@ -108,7 +108,7 @@ function readPrefs(): Prefs {
     // Checked on the way in (lib/presets sanitizeState): a renderer key an
     // older build stored must not reach the page as a renderer nothing draws.
     const s = sanitizeState(JSON.parse(raw));
-    return { renderer: s.renderer, density: s.density, labelMode: s.labelMode, roomBox: s.roomBox, sort: s.sort };
+    return { renderer: s.renderer, density: s.density, labelMode: s.labelMode, placeBox: s.placeBox, sort: s.sort };
   } catch { return DEFAULT_PREFS; }
 }
 function storePrefs(p: Prefs) {
@@ -198,7 +198,7 @@ export default function Explore() {
       renderer: next.renderer,
       density: next.density,
       labelMode: next.labelMode,
-      roomBox: next.roomBox,
+      placeBox: next.placeBox,
       sort: next.sort,
     });
     // A preset that wanted the attention filter sets the chip the filter bar
@@ -302,7 +302,7 @@ export default function Explore() {
     return placesInView(v, node ? [node] : (v.locations ?? []).filter((l) => !l.parent).map((l) => l.id));
   });
   const showLabels = createMemo(() => labelsAffordable(places(), prefs().labelMode));
-  const showBoxes = createMemo(() => placeBoxesAffordable(places(), prefs().labelMode, prefs().roomBox));
+  const showBoxes = createMemo(() => placeBoxesAffordable(places(), prefs().labelMode, prefs().placeBox));
 
   const standardOf = createMemo(() => {
     const byId = new Map((systems.data ?? []).map((s) => [s.id, s.standard]));
@@ -650,7 +650,7 @@ function Controls(props: {
         <Field label="Density" value={props.prefs.density} options={["compact", "cozy", "roomy"]} onPick={(v) => props.onPrefs({ density: v as Density })} />
         <Field label="Sort" value={props.prefs.sort} options={["worst", "name"]} onPick={(v) => props.onPrefs({ sort: v as "worst" | "name" })} />
         <label class="flex cursor-pointer items-center gap-1.5 text-xs">
-          <input type="checkbox" class="checkbox checkbox-xs" checked={props.prefs.roomBox} onChange={(e) => props.onPrefs({ roomBox: e.currentTarget.checked })} />
+          <input type="checkbox" class="checkbox checkbox-xs" checked={props.prefs.placeBox} onChange={(e) => props.onPrefs({ placeBox: e.currentTarget.checked })} />
           Place boxes
         </label>
       </Show>
