@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { componentTileSpec, fleetTiles, locationTileSpec, systemTileSpec } from "./fleet_tiles";
+import { componentTileSpec, locationTileSpec, systemTileSpec } from "./fleet_tiles";
 import type { FleetView } from "./fleet";
 import { uuidFor } from "./testids";
 
-// The fleet zoom's summary tiles and its system-grain marks (design option B,
-// ruled 2026-08-18): one round mark per SYSTEM at the fleet zoom, coloured by
-// system verdict, banded per root, worst first; the tiles carry what the rail
-// carried, over SYSTEMS at this zoom. Pure, verdicts never computed.
+// The workspaces' counts: each scope builds its own TileSpec for the one counts
+// line. Pure, verdicts never computed.
 
 const loc = (h: string, name: string, label: string, type: string, parent: string, verdict: string) => ({
   id: uuidFor(h), name, label, location_type: type, location_type_id: uuidFor(`ftt-${type}`), parent: parent ? uuidFor(parent) : "", verdict,
@@ -34,30 +32,8 @@ const view: FleetView = {
   ],
 } as unknown as FleetView;
 
-describe("fleetTiles", () => {
-  const t = fleetTiles(view);
-  it("counts systems and components (a shared component once) and roots", () => {
-    expect(t.systems).toBe(4);
-    expect(t.components).toBe(9);
-    expect(t.roots).toBe(2);
-  });
-  it("counts what needs attention by verdict, over systems", () => {
-    expect(t.attention).toEqual({ outage: 1, degraded: 0, incomplete: 1, total: 2 });
-  });
-  it("counts the gaps", () => {
-    expect(t.gaps).toBe(1);
-  });
-  it("gives the health bar over systems, not components", () => {
-    expect(t.ratio).toEqual({ healthy: 2, incomplete: 1, degraded: 0, outage: 1, total: 4 });
-  });
-  it("states leaf depth as a range", () => {
-    expect(t.depth).toEqual({ min: 2, max: 3 });
-  });
-});
-
-
-// The summary reflects the page it is on (#795 review): each scope builds its
-// own TileSpec, so a system's rail talks about ITS components, never the
+// The counts reflect the page they are on (#795 review): each scope builds its
+// own TileSpec, so a system's line talks about ITS components, never the
 // whole fleet's numbers.
 describe("the scoped tile specs", () => {
 

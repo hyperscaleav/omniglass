@@ -1,43 +1,28 @@
-import { entityLabel } from "../lib/entities";
-import { systemBlade, componentBlade, locationBlade } from "../components/EntityBlade";
-import { EntityCreateForm } from "../components/EntityForm";
 import { Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListNode, type PageDescriptor } from "../components/TreeList";
-
-
-import TagPills from "../components/TagPills";
-
-import { tagFilterKeys } from "../lib/predicate";
-import {
-  type System,
-  SYSTEMS_KEY,
-  listSystems,
-  deleteSystem,
-} from "../lib/systems";
-import { LOCATIONS_KEY, listLocations } from "../lib/locations";
-import { STANDARDS_KEY, listStandards } from "../lib/standards";
-
-import { describeError } from "../lib/format";
-
-import { propertyResolutionBlade } from "../components/PropertiesPanel";
-
-
+import { systemBlade } from "../components/EntityBlade";
+import { EntityCreateForm } from "../components/EntityForm";
 import HealthBadge from "../components/HealthBadge";
-
+import TagPills from "../components/TagPills";
+import { entityLabel } from "../lib/entities";
+import { fleetRegistry } from "../lib/fleetBlades";
+import { describeError } from "../lib/format";
 import { SYSTEM_VERDICTS_KEY, systemVerdicts, verdictOf, verdictRank } from "../lib/health";
+import { LOCATIONS_KEY, listLocations } from "../lib/locations";
+import { tagFilterKeys } from "../lib/predicate";
+import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { hueFor } from "../lib/system_color";
+import { type System, SYSTEMS_KEY, listSystems, deleteSystem } from "../lib/systems";
 import SystemZoom from "./SystemZoom";
 
-// Systems: the system inventory on the generic TreeList, the same shell as
-// Locations and Components. Systems form a tree (parent_id) and are placed at a
-// location; each owns a set of components by primary system. A system optionally
-// conforms to a STANDARD, which declares the property contract the detail's
-// Properties panel resolves. Create and edit both live on the detail accordion
-// (create-as-route): New routes to /systems/create (a draft), Save hands off to
-// /systems/<id> in edit mode; the pencil flips the same surface. View is read-only,
-// edit is the only writer, per the console invariant.
+// Systems: the systems as a config over the generic TreeList, drawn as the
+// Systems tab of Explore's table face. Systems form a tree (parent_id) and are
+// placed at a location; each owns a set of components by primary system, and
+// optionally conforms to a STANDARD. A row opens the system blade; the identity
+// route (/systems/<id>) is the workspace, and /systems/create is the one form,
+// empty.
 type SysNode = ListNode & { standard: string; locationName: string; tags: Record<string, string>; raw: System };
 
 // The static config (matrix-tested in pages/descriptors.test.ts).
@@ -76,7 +61,6 @@ function SystemsIndex() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
@@ -88,8 +72,8 @@ function SystemsIndex() {
   const verdicts = useQuery(() => ({ queryKey: SYSTEM_VERDICTS_KEY, queryFn: systemVerdicts, staleTime: 30_000 }));
 
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
-  // The standard picker's options, and the id -> label lookup the tree and
-  // detail read a conforming system's standard through.
+  // The handle -> label lookup the Standard column reads a conforming system's
+  // standard through.
   const standardLabel = (handle?: string) => {
     if (!handle) return "";
     const row = (standards.data ?? []).find((s) => s.name === handle);
@@ -110,9 +94,8 @@ function SystemsIndex() {
   // one system's node and reparent its children onto the survivor; a
   // name-keyed node.id has the identical collision one layer down, in
   // TreeList's own index, which is what let a click on one duplicate's row
-  // open the other duplicate's blade. addr carries the name for the
-  // navigate sites that still build a name-shaped URL until the URL swap to
-  // uuid addressing lands; TreeList's focus resolution falls back to it.
+  // open the other duplicate's blade. addr carries the name for the row's key
+  // sub-line.
   const nodes = createMemo<SysNode[]>(() => {
     const list = systems.data ?? [];
     const lm = locById();
@@ -154,14 +137,10 @@ function SystemsIndex() {
       // 409 (ErrAmbiguousName) on a bare-name address.
       await deleteSystem(n.raw.id);
       await qc.invalidateQueries({ queryKey: SYSTEMS_KEY });
-      navigate("/systems");
     } catch (e) {
       setErr(describeError(e));
     }
   }
-
-  // The classic detail body retired with the face (#800 slice 3): the blade
-  // is the override, the full page unreachable, so the config renders null.
 
   function SystemCreate(): JSX.Element {
     // The one form, empty (#826): the page only says where to go next; ?under=
@@ -190,12 +169,11 @@ function SystemsIndex() {
       // still in flight would put the per-row request back on first paint, which
       // is the only load an operator actually waits on. Quiet until the map
       // arrives, so the column fills rather than flashing "unknown".
-      // Keyed by uuid, matching where RolesPanel and MembersPanel invalidate
-      // after a role or member write (#627 review finding 1: those panels
-      // address the system by its uuid, since the name is scoped to
-      // placement and not reliably unique fleet-wide). Those sites now
-      // invalidate SYSTEM_VERDICTS_KEY alongside, or this column would go
-      // stale silently exactly as it did in review round 3, regression 3.
+      // Keyed by uuid, matching where RolesPanel invalidates after a role
+      // write (#627 review finding 1: it addresses the system by its uuid,
+      // since the name is scoped to placement and not reliably unique
+      // fleet-wide). That site invalidates SYSTEM_VERDICTS_KEY alongside, or
+      // this column would go stale silently.
       if (key === "health") return <HealthBadge verdict={verdicts.data?.get(n.raw.id)} quiet />;
       if (key === "standard") return n.standard ? <span class="badge badge-ghost badge-sm">{n.standard}</span> : <span class="text-base-content/40">—</span>;
       if (key === "location") return <span class="text-base-content/70">{n.locationName || "—"}</span>;
@@ -233,11 +211,10 @@ function SystemsIndex() {
     onNew: () => navigate("/systems/create"),
     onEdit: (n) => navigate(`/systems/${encodeURIComponent(n.id)}?edit=1`),
     renderCreate: () => <SystemCreate />,
-    renderDetail: () => null,
-    // The condensed fleet blade replaces the inventory-era detail blade (#799);
-    // the other fleet kinds register so its drills nest on this page's stack.
+    // A row opens the fleet's system blade; the whole fleet registry rides
+    // along so anything that blade's form drills into nests on this stack.
     bladeOverride: systemBlade,
-    extraBlades: { "property-resolution": propertyResolutionBlade, component: componentBlade, location: locationBlade },
+    extraBlades: fleetRegistry,
   };
 
   return (

@@ -1,51 +1,29 @@
-import { entityLabel } from "../lib/entities";
-import { componentBlade, systemBlade, locationBlade } from "../components/EntityBlade";
-import { EntityCreateForm } from "../components/EntityForm";
 import { Show, createMemo, createSignal, type JSX } from "solid-js";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import TreeList, { type ListConfig, type ListNode, type PageDescriptor } from "../components/TreeList";
-
-
-import {
-  type Component as Comp,
-    COMPONENTS_KEY,
-  listComponents,
-  
-  
-  deleteComponent,
-} from "../lib/components";
-import { SYSTEMS_KEY, listSystems } from "../lib/systems";
-import { LOCATIONS_KEY, listLocations } from "../lib/locations";
-
-import { useMe, can } from "../lib/auth";
-import { describeError } from "../lib/format";
-
+import { componentBlade } from "../components/EntityBlade";
+import { EntityCreateForm } from "../components/EntityForm";
 import TagPills from "../components/TagPills";
+import { useMe, can } from "../lib/auth";
+import { type Component as Comp, COMPONENTS_KEY, listComponents, deleteComponent } from "../lib/components";
+import { entityLabel } from "../lib/entities";
+import { fleetRegistry } from "../lib/fleetBlades";
+import { describeError } from "../lib/format";
+import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { tagFilterKeys } from "../lib/predicate";
-
-
-
-
-
-import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
-import { propertyResolutionBlade } from "../components/PropertiesPanel";
-
-
 import { hueFor } from "../lib/system_color";
+import { SYSTEMS_KEY, listSystems } from "../lib/systems";
 import ComponentLeaf from "./ComponentLeaf";
 
-// Components: the device inventory, the first page built on the generic TreeList.
-// Components form a tree (parent_id) and each is bound to a primary system and a
-// location. A component's shape comes from the PRODUCT it is an instance of (the
-// catalog SKU), whose contract declares the properties it exposes. The live API
-// carries names/placement/product only (no health or metrics yet, those land with
-// component.state), so the columns and facets are the real fields, not invented
-// health. System and location ids are resolved to readable names from their own
-// lists. Create and edit both live on the detail accordion (create-as-route): New
-// routes to /components/create (a draft), Save hands off to /components/<name> in
-// edit mode; the pencil flips the same surface. View is read-only, edit is the
-// only writer, per the console invariant.
+// Components: the devices as a config over the generic TreeList, drawn as the
+// Components tab of Explore's table face. Components form a tree (parent_id)
+// and each is bound to a primary system and a location; a component's shape
+// comes from the PRODUCT it is an instance of (the catalog SKU). The columns
+// and facets are the fields the list read carries, with system and location
+// ids resolved to labels from their own lists. A row opens the component
+// blade; the identity route (/components/<id>) is the workspace, and
+// /components/create is the one form, empty.
 type CompNode = ListNode & {
   product: string;
   systemName: string;
@@ -74,8 +52,7 @@ export const componentsDescriptor: PageDescriptor = {
 
 export default function Components() {
   // The leaf IS the identity route's face (ADR-0129, ADR-0132); "create" is
-  // the one address that renders a form instead, and a legacy ?zoom=1 deep
-  // link still resolves here.
+  // the one address that renders a form instead.
   const zoomParams = useParams();
   // The branch is a reactive Show, not a one-time return: create's post-save
   // navigate lands on the new row's uuid WITHOUT remounting this route
@@ -91,7 +68,6 @@ export default function Components() {
 
 function ComponentsIndex() {
   const params = useParams();
-  const [search] = useSearchParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const me = useMe();
@@ -99,37 +75,11 @@ function ComponentsIndex() {
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
-  // The product catalog for the create form's required Product picker (#614:
-  // component.product_id is NOT NULL, so every component is an instance of a
-  // product; the generics fit anything not yet modeled more specifically).
   // Keyed on uuid, not name (#627: name uniqueness is scoped to placement, so
   // two systems or two locations can legally share a name; a name-keyed map
   // would silently collapse them to whichever sorted last).
   const sysById = createMemo(() => new Map((systems.data ?? []).map((s) => [s.id, s] as const)));
   const locById = createMemo(() => new Map((locations.data ?? []).map((l) => [l.id, l] as const)));
-
-  // The three placement pickers' option sets, hoisted out of the create form's
-  // JSX so the same lists answer both "what may I choose" and "what is the path
-  // of what I chose" (the placement context beside the name field). Keyed AND
-  // valued on uuid, not name (#627): a name-keyed parentId already mismatched
-  // id's uuid space before this (nothing ever matched, so the picker silently
-  // flattened to depth 0), and a name VALUE is now also potentially ambiguous.
-  // The API dual-accepts uuid-or-name (ADR-0062), so posting the uuid is safe.
-  // The system picker's options are the BINDABLE systems, not every readable one
-  // (#707 review). A create that names a system inserts that system's membership
-  // and resolves the reference in the caller's system:UPDATE scope, so the
-  // systems it may choose from are the ones carrying the update action, not the
-  // ones it can read.
-  //
-  // actions is the server's own per-row answer, computed from the same per-action
-  // scope the gateway enforces (internal/api/rowactions.go), which is why this is
-  // a filter over data rather than a second scope resolver in the browser: the
-  // console cannot resolve a scope and must not try.
-  //
-  // A row whose parent is not itself bindable is promoted to a root here rather
-  // than dropped: its parentId would name a node no longer in the list, and the
-  // tree flattener would lose the row entirely. What the picker shows is the set
-  // of legal choices, not the shape of the fleet.
 
   // One filter facet per tag key present across the components, derived from
   // their effective tags, so the bar can filter by any tag like any other field.
@@ -147,9 +97,7 @@ function ComponentsIndex() {
   // node.id has the identical collision one layer down, in TreeList's own
   // index (buildIndex keys byId on node.id too), which is what let a click on
   // one duplicate's row open the other duplicate's blade. addr carries the
-  // name for the three navigate sites that still build a name-shaped URL
-  // (rename/create hand-off, the edit pencil) until the URL swap to uuid
-  // addressing lands; TreeList's focus resolution falls back to it.
+  // name for the row's key sub-line.
   const nodes = createMemo<CompNode[]>(() => {
     const list = components.data ?? [];
     const byUuid = new Map<string, CompNode>();
@@ -172,9 +120,8 @@ function ComponentsIndex() {
         product: c.product ?? "",
         systemName: c.system_id ? entityLabel(sm.get(c.system_id) ?? { name: c.system ?? "" }) : "",
         // The system facet's own filter value (#627 Task 15c): the uuid, not
-        // the name, so it matches the cross-entity drill from Systems.tsx
-        // (which now emits ?system=<uuid>) and never collides two
-        // same-named systems into one facet value.
+        // the name, so two same-named systems never collide into one facet
+        // value. The facet shows the label (valueLabel below).
         systemAddr: c.system_id ?? "",
         systemId: c.system_id ?? "",
         systemCount: c.system_count ?? 0,
@@ -198,25 +145,15 @@ function ComponentsIndex() {
     if (!confirm(`Delete component "${n.raw.name}"?`)) return;
     setErr(null);
     try {
-      // Addressed by uuid (#627 review finding 1): see the identity accordion's
-      // save() for why a bare name is not a safe address here.
+      // Addressed by uuid (#627 review finding 1): a duplicate-named component
+      // (legal under different placements) is otherwise a 409 on a bare name.
       await deleteComponent(n.raw.id);
       await qc.invalidateQueries({ queryKey: COMPONENTS_KEY });
-      navigate("/components");
     } catch (e) {
       setErr(describeError(e));
     }
   }
 
-  // ComponentDetail: the entity accordion, read-only in view, editable in edit. Own
-  // fields (name, label) are editable; placement and product are
-  // fixed at creation. The Tags section is the shared TagAdder, whose write controls
-  // appear only in edit (canUpdate gates them), so view carries no mutation. The
-  // Properties section is the component's value surface, resolved against its
-  // product's contract. The full page renders its own Save/Cancel/Edit footer from
-  // ctx.edit; a blade gets those from BladeStack.
-  // The classic detail body retired with the face (#800 slice 3): the blade
-  // is the override, the full page unreachable, so the config renders null.
   function ComponentCreate(): JSX.Element {
     // The one form, empty (#826): the page only says where to go next; ?under=
     // prefills placement (the explorer's create-where-you-stand).
@@ -224,17 +161,12 @@ function ComponentsIndex() {
     return <EntityCreateForm kind="component" under={(Array.isArray(createParams.under) ? createParams.under[0] : createParams.under) || undefined} onCreated={(created) => navigate(`/components/${encodeURIComponent(created.id)}?edit=1`)} onCancel={() => navigate("/components")} />;
   }
 
-  // A cross-page deep link from a system seeds a system facet by the system's
-  // unique address (?system=<name>), which the system filter key matches exactly.
-  const initialChips = search.system ? [{ key: "system", op: "eq" as const, values: [String(search.system)] }] : undefined;
-
   const cfg: ListConfig<CompNode> = {
     ...componentsDescriptor,
     nodes,
     focus: () => params.id,
     loading: () => components.isLoading,
     error: () => components.error,
-    initialChips,
     filterPlaceholder: "Filter by name, product, system, location…",
     nameWeight: () => 500,
     cellFor: (key, n) => {
@@ -274,21 +206,12 @@ function ComponentsIndex() {
     onNew: () => navigate("/components/create"),
     onEdit: (n) => navigate(`/components/${encodeURIComponent(n.id)}?edit=1`),
     renderCreate: () => <ComponentCreate />,
-    renderDetail: () => null,
-    // The condensed fleet blade replaces the inventory-era detail blade (#799);
-    // the other fleet kinds register so its drills nest on this page's stack.
+    // A row opens the fleet's component blade; the whole fleet registry rides
+    // along so anything that blade's form drills into nests on this stack.
     bladeOverride: componentBlade,
-    extraBlades: {
-      "property-resolution": propertyResolutionBlade,
-      interface: interfaceBlade,
-      "interface-create": interfaceCreateBlade,
-      system: systemBlade,
-      location: locationBlade,
-    },
+    extraBlades: fleetRegistry,
   };
 
-  // No page H1: inventory pages built on TreeList let the top bar label them, and
-  // the full-page detail renders its own heading (see Page.tsx).
   return (
     <div class="og-stack flex flex-col">
       <Show when={err()}>

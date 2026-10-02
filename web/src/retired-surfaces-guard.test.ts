@@ -22,6 +22,15 @@ const RETIRED = [
   ["explore-column", "the Miller-column strip; a card is a level the cut works out"],
   ["explore-glance", "the columns' rightmost pane; a dot opens the system's workspace"],
   ["columnsFor", "the column builder; sectionsFor and insideOf replaced it"],
+  // The last KPI chip row (ADR-0137 retires them): the Locations table's
+  // summary board, a badge rail over a tile board with a type-mix donut.
+  ["SummaryRail", "the list summary board; a table carries no KPI row above it"],
+  ["defaultWidgets", "the summary board's config; retired with the board"],
+  ["og-loc-widgets", "the summary board's stored preference; retired with the board"],
+  // The inventory-era detail panels, unmounted when the classic faces retired
+  // (#806): the workspace's header, Activity tab and roles surface replaced them.
+  ["HealthPanel", "the classic detail's health panel; the workspace header and Activity tab replaced it"],
+  ["MembersPanel", "the classic detail's members panel; staffing a role is how a member is bound"],
 ] as const;
 
 function walk(dir: string, out: string[] = []): string[] {

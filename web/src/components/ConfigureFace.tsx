@@ -10,7 +10,7 @@ import { can, useMe } from "../lib/auth";
 // ?edit=1 lands here through the same useEditParam hook the classic face used
 // (ADR-0120's rule, ADR-0132's destination), so a deep link opens the form
 // already editing. Everything else, the fields, their gates, and the save
-// order, lives in the form and is shared with the blade and the glance.
+// order, lives in the form and is shared with the blade.
 
 export type ConfigureKind = EntityKind;
 

@@ -186,12 +186,11 @@ describe("Systems list health column (#627 review round 3, regression 3; #653)",
 
   // Keying, unchanged in substance and moved to its new source. The column and
   // its sort read the page's ONE bulk verdict map (#653) instead of a per-row
-  // query, and that map is keyed by UUID, matching where RolesPanel and
-  // MembersPanel invalidate after a role or member write (#627 review finding 1:
-  // the detail panels address by uuid, since a name is scoped to placement, not
-  // the whole fleet). A name-keyed map would render nothing here, which is what
+  // query, and that map is keyed by UUID, matching where RolesPanel
+  // invalidates after a role write (#627 review finding 1: it addresses by
+  // uuid, since a name is scoped to placement, not the whole fleet). A name-keyed map would render nothing here, which is what
   // this asserts: the verdict is seeded ONLY at the uuid.
-  it("reads the health column from the system's uuid, matching where RolesPanel and MembersPanel invalidate", async () => {
+  it("reads the health column from the system's uuid, matching where RolesPanel invalidates", async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
     qc.setQueryData([...SYSTEMS_KEY], [sys]);
     qc.setQueryData([...LOCATIONS_KEY], []);

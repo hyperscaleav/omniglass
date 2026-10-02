@@ -9,7 +9,6 @@ import Eyebrow from "../components/Eyebrow";
 import FleetShell from "../components/FleetShell";
 import { systemTileSpec } from "../lib/fleet_tiles";
 import { createSignal } from "solid-js";
-import type { Chip } from "../lib/predicate";
 import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/fleet";
 import { systemHealth, systemHealthKey } from "../lib/health";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
@@ -22,7 +21,6 @@ import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
 import TabRail from "../components/TabRail";
 import ConfigureFace from "../components/ConfigureFace";
-import { propertyResolutionBlade } from "../components/PropertiesPanel";
 import { alarmRows, componentCards, sinceOf, systemZoomVM, type ComponentCard } from "../lib/system_zoom";
 import { vitalRows } from "../lib/component_leaf";
 import { slotStrip } from "../lib/slot_strip";
@@ -176,7 +174,6 @@ export default function SystemZoom() {
     return pr ? entityLabel(pr) : c?.product ?? undefined;
   };
   const tiles = createMemo(() => (view.data && system() ? systemTileSpec(view.data, health.data, system()!.id) : undefined));
-  const [chips, setChips] = createSignal<Chip[]>([]);
 
   const crumbs = createMemo(() => {
     if (!view.data) return [];
@@ -224,12 +221,7 @@ export default function SystemZoom() {
           }
         >
           <FleetShell
-            storageKey="fleet"
             tiles={tiles()}
-            rows={[]}
-            filterKeys={[]}
-            chips={chips}
-            onChips={setChips}
             header={
               <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                 <HealthBadge verdict={health.data?.verdict} size="sm" />
@@ -567,7 +559,7 @@ export default function SystemZoom() {
       </Show>
       </Show>
     </Page>
-    <BladeStack controller={blades} registry={{ ...fleetRegistry, "property-resolution": propertyResolutionBlade }} />
+    <BladeStack controller={blades} registry={fleetRegistry} />
     </BladesContext.Provider>
   );
 

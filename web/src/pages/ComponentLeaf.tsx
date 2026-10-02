@@ -6,16 +6,12 @@ import Breadcrumb from "../components/Breadcrumb";
 import TabRail from "../components/TabRail";
 import ConfigureFace from "../components/ConfigureFace";
 import BladeStack from "../components/BladeStack";
-import { propertyResolutionBlade } from "../components/PropertiesPanel";
 import EventsPanel from "../components/EventsPanel";
-import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
 import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
 import HealthBadge from "../components/HealthBadge";
 import FleetShell from "../components/FleetShell";
 import { componentTileSpec } from "../lib/fleet_tiles";
-import { createSignal } from "solid-js";
-import type { Chip } from "../lib/predicate";
 import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/fleet";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
 import { componentSystemsKey, componentSystems } from "../lib/members";
@@ -133,7 +129,6 @@ export default function ComponentLeaf() {
       ? componentTileSpec(view.data, component()!.id, activeAlarms().length, (reach.data?.interfaces ?? []).length)
       : undefined,
   );
-  const [filterChips, setFilterChips] = createSignal<Chip[]>([]);
 
   const chain = createMemo(() => (view.data && component()?.location_id ? ancestors(component()!.location_id!, locationIndex(view.data)) : []));
 
@@ -182,14 +177,7 @@ export default function ComponentLeaf() {
             <div data-testid="activity-tab" class="card border border-base-300 bg-base-200 p-4"><EventsPanel name={id()} /></div>
           </Show>
           <Show when={leafTab() === "overview"}>
-<FleetShell
-            storageKey="fleet"
-            tiles={tiles()}
-            rows={[]}
-            filterKeys={[]}
-            chips={filterChips}
-            onChips={setFilterChips}
-          >
+<FleetShell tiles={tiles()}>
           <div class="flex min-w-0 flex-1 flex-col gap-5 p-4">
             {/* State, age, identity: the same header shape every zoom opens
                 with. A component has no transitions read, so since-when is
@@ -383,7 +371,7 @@ export default function ComponentLeaf() {
       </Show>
       </Show>
     </Page>
-    <BladeStack controller={blades} registry={{ ...fleetRegistry, "property-resolution": propertyResolutionBlade, interface: interfaceBlade, "interface-create": interfaceCreateBlade }} />
+    <BladeStack controller={blades} registry={fleetRegistry} />
     </BladesContext.Provider>
   );
 }

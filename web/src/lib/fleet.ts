@@ -26,7 +26,6 @@ import { entityLabel } from "./entities";
 export type FleetView = components["schemas"]["FleetViewOutputBody"];
 export type FleetLocation = NonNullable<FleetView["locations"]>[number];
 export type FleetSystem = NonNullable<FleetView["systems"]>[number];
-export type FleetDot = NonNullable<FleetSystem["dots"]>[number];
 
 export const FLEET_VIEW_KEY = ["fleet-view"] as const;
 
@@ -364,65 +363,4 @@ export function locationsWithoutSystems(view: FleetView): FleetLocation[] {
   // where the systems belong, and drawing a hole at every level above them
   // would bury the real gaps in noise.
   return (view.locations ?? []).filter((l) => !hasChild.has(l.id) && !placed.has(l.id));
-}
-
-// holesByRoot folds the holes under the band that draws them, through the
-// same root walk the bands use. Location-specific by construction: a hole is
-// a place, and only the location grouping has places for keys.
-export function holesByRoot(view: FleetView): Map<string, FleetLocation[]> {
-  const index = locationIndex(view);
-  const out = new Map<string, FleetLocation[]>();
-  for (const hole of locationsWithoutSystems(view)) {
-    const root = rootOf(hole.id, index);
-    if (!root) continue;
-    const list = out.get(root.id);
-    if (list) list.push(hole);
-    else out.set(root.id, [hole]);
-  }
-  return out;
-}
-
-// holeOnlyBands names the roots the system bands cannot: a root whose subtree
-// holds ONLY holes. A site nobody has commissioned yet is exactly the fleet's
-// mid-commissioning story, and a renderer that builds bands from systems alone
-// would leave that site invisible, which is the opposite of naming the gap.
-// Empty clusters; the recorded verdict and depth come from the location like
-// any other band's.
-export function holeOnlyBands(view: FleetView): Band[] {
-  const banded = new Set(
-    (view.systems ?? [])
-      .map((s) => byRootLocation.bandFor(s, view))
-      .filter((k): k is string => k !== null),
-  );
-  const index = locationIndex(view);
-  const children = childrenIndex(view);
-  const out: Band[] = [];
-  for (const key of holesByRoot(view).keys()) {
-    if (banded.has(key)) continue;
-    const root = index.get(key);
-    if (!root) continue;
-    out.push({
-      key,
-      label: entityLabel(root),
-      sublabel: root.location_type ?? "",
-      verdict: null,
-      clusters: [],
-      systemCount: 0,
-      componentCount: 0,
-      recordedVerdict: verdictOf(root.verdict),
-      depth: subtreeDepth(key, children),
-    });
-  }
-  return out.sort((a, b) => a.label.localeCompare(b.label));
-}
-
-// fleetTotals is the inspector's headline, counting a shared component once.
-export function fleetTotals(view: FleetView): { systems: number; components: number; roots: number } {
-  const distinct = new Set<string>();
-  for (const s of view.systems ?? []) for (const d of s.dots ?? []) distinct.add(d.component);
-  return {
-    systems: (view.systems ?? []).length,
-    components: distinct.size,
-    roots: (view.locations ?? []).filter((l) => !l.parent).length,
-  };
 }

@@ -35,16 +35,16 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/", shell: "protected", page: "Home", smoke: "/" },
   // The canvas address retired with #826; it redirects to Explore.
   { path: "/fleet", shell: "protected", page: "FleetRedirect", smoke: "/fleet" },
-  // Explore (#826): the drill-down tree to a system, the sidebar's one door
-  // into the fleet; it replaced the Fleet entry and the reserved Explore stub.
+  // Explore (#826): the sidebar's one door into the fleet, a few renderers
+  // over one model plus the table face; it replaced the Fleet entry and the
+  // reserved Explore stub.
   { path: "/explore", shell: "protected", page: "Explore", smoke: "/explore" },
-  // Inventory pages on the generic TreeList. The :id route opens the same page
-  // focused on one entity (the addressable full-page detail), addressed by uuid
-  // (#627 Task 15c: name uniqueness is scoped to placement, so a name alone is
-  // not a reliable route param); TreeList's focus effect resolves a name-shaped
-  // link through a byAddr fallback, keeping the query string (#759).
-  // The bare index addresses redirect into the fleet list face (#798); the
-  // :id detail routes below still render their pages.
+  // The fleet kinds. A bare index address redirects into Explore's table face
+  // on the matching kind tab (#798, #826). The :id route is the entity's
+  // workspace, addressed by uuid (#627 Task 15c: name uniqueness is scoped to
+  // placement, so a name alone is not a reliable route param); the workspace
+  // resolves a name-shaped link when it is unique, keeping the query string
+  // (#759). /<kind>/create renders the one form, empty.
   { path: "/locations", shell: "protected", page: "FleetRedirect", smoke: "/locations" },
   { path: "/locations/:id", shell: "protected", page: "Locations", smoke: `/locations/${UNKNOWN_UUID}` },
   { path: "/systems", shell: "protected", page: "FleetRedirect", smoke: "/systems" },

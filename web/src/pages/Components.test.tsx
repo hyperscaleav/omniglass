@@ -162,12 +162,10 @@ describe("Components create-as-route", () => {
     expect(dot.style.getPropertyValue("--sys-h")).toBe(String(hueFor(sysId)));
   });
 
-  // #627 Task 15c: the cross-entity drill from Systems.tsx's own "Components"
-  // button now emits ?system=<uuid>, and this facet must match it: a name
-  // would collide (or miss entirely) once two systems can share one under
-  // different placements (#627 Task 10). Asserts the query-string drill-in
-  // yields the same row set a manual system chip would.
-  it("filters to a system's components from a ?system=<uuid> deep link, matching by id not name", async () => {
+  // #627 Task 15c: the system facet's value is the system's uuid, because a
+  // name would collide (or miss entirely) once two systems can share one under
+  // different placements (#627 Task 10). The chip still reads as the label.
+  it("filters to a system's components by the system's id, and shows its label on the chip", async () => {
     const sysId = uuidFor("sys-boardroom");
     const otherSysId = uuidFor("sys-annex");
     const inSystem: Component = { ...comp, id: uuidFor("c-in"), name: "mic-in", label: "In-room Mic", system: "boardroom", system_id: sysId, system_count: 1 };
@@ -183,7 +181,7 @@ describe("Components create-as-route", () => {
     qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
     qc.setQueryData([...ME_KEY], me);
     qc.setQueryData([...TAGS_KEY], []);
-    window.history.pushState({}, "", `/components?system=${sysId}`);
+    window.history.pushState({}, "", "/components");
     render(() => (
       <QueryClientProvider client={qc}>
         <Router>
@@ -191,11 +189,15 @@ describe("Components create-as-route", () => {
         </Router>
       </QueryClientProvider>
     ));
-    await waitFor(() => expect(screen.getByText("In-room Mic")).toBeTruthy());
-    expect(screen.queryByText("Annex Mic")).toBeNull();
+    await waitFor(() => expect(screen.getByText("Annex Mic")).toBeTruthy());
+    const input = screen.getByPlaceholderText(/^Filter by name/) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: `system:${sysId}` } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(screen.queryByText("Annex Mic")).toBeNull());
+    expect(screen.getByText("In-room Mic")).toBeTruthy();
     // Review finding 4 (task-15-review.md #4): the committed chip must show
-    // the system's own readable label, not the raw uuid the query string
-    // and the facet's own value now carry. Scoped to the chip's own value
+    // the system's own readable label, not the raw uuid the facet's own
+    // value carries. Scoped to the chip's own value
     // button (font-data font-medium): "boardroom" also legitimately
     // appears in the row's own System column, so an unscoped query would
     // pass whether or not the chip itself carries the label.

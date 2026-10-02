@@ -40,8 +40,8 @@ export function buildCommands(allow: (tokens: string[]) => boolean): Command[] {
         })),
   );
   // The re-homed index pages (#798): off the rail, still destinations. Each
-  // jumps to its old address, whose redirect lands on the fleet list face's
-  // matching kind tab, gated exactly as its sidebar entry was.
+  // jumps to its old address, whose redirect lands on the matching kind tab of
+  // Explore's table face, gated exactly as its sidebar entry was.
   const fleetKinds: Command[] = (
     [
       { label: "Locations", path: "/locations", resource: "location" },

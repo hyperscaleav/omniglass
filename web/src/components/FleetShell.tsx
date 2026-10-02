@@ -7,36 +7,30 @@ import type { Chip, FilterKey } from "../lib/predicate";
 import { countsLine, type TileSpec } from "../lib/fleet_tiles";
 import type { SystemCluster } from "../lib/fleet";
 
-// The fleet pages' shared frame (#630, ruled 2026-08-18): the same layout at
-// every zoom, taken from the Locations list page. On top, a summary rail of
-// badges that expands to a tile board (a verdict donut with a facet legend,
-// count cards), every badge and legend row a filter toggle; below it the
-// console's ListShell (filter bar + card) around the zoom's own body. The
-// summary is FLEET-WIDE at every zoom: it is the standing "how is my fleet"
-// while the body zooms. Right-side drawers exist only as detail blades.
+// The workspaces' shared frame (#630): the one counts line (#826, what the
+// retired summary rail said with the zeros left out) over a card holding the
+// workspace's own body. A workspace with rows to filter (a location's systems)
+// passes them with its filter keys and gets the console's ListShell filter bar
+// and a need-attention quick filter on the counts line; one with nothing to
+// filter (a system, a component) passes neither and gets the bare card.
+
+const NO_CHIPS: Chip[] = [];
 
 export default function FleetShell(props: {
-  storageKey: string;
   tiles: TileSpec | undefined;
-  rows: SystemCluster[];
-  filterKeys: FilterKey<SystemCluster>[];
-  chips: Accessor<Chip[]>;
-  onChips: (chips: Chip[]) => void;
+  rows?: SystemCluster[];
+  filterKeys?: FilterKey<SystemCluster>[];
+  chips?: Accessor<Chip[]>;
+  onChips?: (chips: Chip[]) => void;
   placeholder?: string;
-  trailing?: JSX.Element;
-  // A zoom's own header line inside the card, above its body (a system's
-  // verdict and slot count, say). Renders where the filter bar would when a
-  // zoom has nothing to filter; above the body when it has both.
+  // A workspace's own header line inside the card, above its body (a system's
+  // verdict and slot count, say). Renders where the filter bar would when
+  // there is nothing to filter; above the body when there is both.
   header?: JSX.Element;
   // The density toggle's list face (#798, ADR-0129: tables survive as a
   // list-density toggle). When set, the shell offers cards/list buttons and
   // `?view=list` swaps the whole body (header, filter bar, cards) for this
-  // face; the view is a URL fact, so the address deep-links. Leaving the list
-  // clears `kind` with it (the fleet root's tab param has no meaning off it).
-  //
-  // The other face is CARDS, not a canvas: the band canvas retired with #826
-  // and this toggle outlived the thing it was named after, which is why the
-  // label said "Canvas view" for a while after there was no canvas.
+  // face; the view is a URL fact, so the address deep-links.
   list?: JSX.Element;
   children: JSX.Element;
 }) {
@@ -44,21 +38,20 @@ export default function FleetShell(props: {
   const listMode = () => props.list != null && search.view === "list";
   const viewToggle = () => (
     <div data-testid="view-toggle" class="join flex-none">
-      <Button square icon={Grid} title="Cards view" label="Cards view" class="join-item" intent={listMode() ? "quiet" : "action"} onClick={() => setSearch({ view: undefined, kind: undefined })} />
+      <Button square icon={Grid} title="Cards view" label="Cards view" class="join-item" intent={listMode() ? "quiet" : "action"} onClick={() => setSearch({ view: undefined })} />
       <Button square icon={Rows} title="List view" label="List view" class="join-item" intent={listMode() ? "action" : "quiet"} onClick={() => setSearch({ view: "list" })} />
     </div>
   );
-  // Facet plumbing over the one verdict chip, the same shape ListCtx gives
-  // widgets on the inventory pages.
-  const facetActive = (v: string) => props.chips().some((c) => c.key === "verdict" && c.values.includes(v));
+  const filterKeys = () => props.filterKeys ?? [];
+  const chips = () => props.chips?.() ?? NO_CHIPS;
+  const facetActive = (v: string) => chips().some((c) => c.key === "verdict" && c.values.includes(v));
 
   const ATTENTION = ["outage", "degraded", "incomplete"];
   const attentionOn = () => ATTENTION.some(facetActive) && !facetActive("healthy");
   const toggleAttention = () => {
-    const rest = props.chips().filter((c) => c.key !== "verdict");
-    props.onChips(attentionOn() ? rest : [...rest, { key: "verdict", op: "eq", values: ATTENTION }]);
+    const rest = chips().filter((c) => c.key !== "verdict");
+    props.onChips?.(attentionOn() ? rest : [...rest, { key: "verdict", op: "eq", values: ATTENTION }]);
   };
-
 
   if (props.list != null) {
     return (
@@ -84,8 +77,8 @@ export default function FleetShell(props: {
             {countsLine(t()).map((part, idx) => (
               <>
                 <Show when={idx > 0}><span class="text-base-content/30">{"\u00b7"}</span></Show>
-                <Show when={/ needs? attention$/.test(part) && props.filterKeys.length > 0} fallback={<span class="tabular-nums">{part}</span>}>
-                  <Button size="xs" intent={attentionOn() ? "action" : "quiet"} onClick={toggleAttention} title="Filter to what needs attention">{part}</Button>
+                <Show when={/ needs? attention$/.test(part) && filterKeys().length > 0} fallback={<span class="tabular-nums">{part}</span>}>
+                  <Button size="xs" intent={attentionOn() ? "action" : "quiet"} pressed={attentionOn()} onClick={toggleAttention} title="Filter to what needs attention">{part}</Button>
                 </Show>
               </>
             ))}
@@ -95,7 +88,7 @@ export default function FleetShell(props: {
         )}
       </Show>
       <Show
-        when={props.filterKeys.length > 0}
+        when={filterKeys().length > 0}
         fallback={
           <div class="og-stack flex flex-col">
             <div class="card overflow-hidden border border-base-300 bg-base-200 p-0">
@@ -107,7 +100,7 @@ export default function FleetShell(props: {
           </div>
         }
       >
-        <ListShell filterKeys={props.filterKeys} rows={props.rows} chips={props.chips} onChips={props.onChips} trailing={props.trailing} placeholder={props.placeholder}>
+        <ListShell filterKeys={filterKeys()} rows={props.rows ?? []} chips={chips} onChips={(c) => props.onChips?.(c)} placeholder={props.placeholder}>
           {() => (
             <>
               <Show when={props.header}>

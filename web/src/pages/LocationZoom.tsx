@@ -10,7 +10,6 @@ import FleetRows from "../components/FleetRows";
 import TabRail from "../components/TabRail";
 import ConfigureFace from "../components/ConfigureFace";
 import BladeStack from "../components/BladeStack";
-import { propertyResolutionBlade } from "../components/PropertiesPanel";
 import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
 import { locationTileSpec } from "../lib/fleet_tiles";
@@ -146,7 +145,6 @@ export default function LocationZoom() {
           </Show>
           <Show when={zoomTab() === "overview"}>
 <FleetShell
-            storageKey="fleet"
             tiles={tiles()}
             list={<div class="card overflow-hidden border border-base-300 bg-base-200 p-0"><FleetRows rows={bands().flatMap((b) => b.clusters)} view={view.data!} onOpen={(sid) => navigate(`/systems/${sid}`)} /></div>}
             rows={bands().flatMap((b) => b.clusters)}
@@ -184,7 +182,7 @@ export default function LocationZoom() {
       </Show>
       </Show>
     </Page>
-    <BladeStack controller={blades} registry={{ ...fleetRegistry, "property-resolution": propertyResolutionBlade }} />
+    <BladeStack controller={blades} registry={fleetRegistry} />
     </BladesContext.Provider>
   );
 
