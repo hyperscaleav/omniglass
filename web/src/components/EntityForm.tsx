@@ -17,6 +17,7 @@ import { can, useMe } from "../lib/auth";
 import { describeError } from "../lib/format";
 import { entityLabel } from "../lib/entities";
 import { SYSTEMS_KEY, listSystems, updateSystem, renameSystem, checkSystemName, type NameCheck } from "../lib/systems";
+import { FLEET_VIEW_KEY } from "../lib/fleet";
 import { LOCATIONS_KEY, listLocations, updateLocation, moveLocation, renameLocation, checkLocationName } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents, updateComponent, renameComponent, resetComponentName, checkComponentName } from "../lib/components";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
@@ -142,9 +143,20 @@ export default function EntityForm(props: {
   });
   const raw = () => row() as { id: string; name: string; label?: string; label_generated?: boolean } | undefined;
 
-  const canUpdate = () => can(me.data, props.kind, "update");
-  const canRename = () => can(me.data, props.kind, "rename");
-  const canMove = () => can(me.data, props.kind, "move");
+  // Two answers, and both have to be yes. The permission says the caller may
+  // do this to the kind SOMEWHERE; the row's own `actions` are the server's
+  // answer for THIS row, computed from the same per-action scope the gateway
+  // enforces. Gating on the permission alone offered Edit on a system outside
+  // a scoped operator's update scope, and every Save was then a 403. A row
+  // that carries no actions (an older read) falls back to the permission.
+  const allowed = (action: string) => {
+    if (!can(me.data, props.kind, action)) return false;
+    const actions = row()?.actions;
+    return Array.isArray(actions) ? actions.includes(action) : true;
+  };
+  const canUpdate = () => allowed("update");
+  const canRename = () => allowed("rename");
+  const canMove = () => allowed("move");
 
   // Drafts, seeded on entering edit through the slot's own seeder.
   const pen = createPen();
@@ -205,8 +217,15 @@ export default function EntityForm(props: {
         setErr(describeError(e));
         throw e; // keep the slot editing so the operator can retry
       } finally {
+        // The kind's list AND the fleet view: Explore's cards, the blade's own
+        // title and the workspace header all read the view, so refreshing the
+        // list alone left the old label, name or placement drawn behind a form
+        // that had just saved the new one.
         const key = props.kind === "system" ? SYSTEMS_KEY : props.kind === "location" ? LOCATIONS_KEY : COMPONENTS_KEY;
-        await qc.invalidateQueries({ queryKey: [...key] });
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: [...key] }),
+          qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] }),
+        ]);
       }
     },
     destructive: props.destructive,

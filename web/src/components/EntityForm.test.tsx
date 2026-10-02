@@ -33,11 +33,11 @@ vi.mock("../lib/locations", async (orig) => {
 const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 const updaterOnly: Me = { principal: { id: "u-up", kind: "human" }, human: { username: "up" }, permissions: ["system:read", "system:update", "location:read", "location:update", "tag:read"], grants: [] };
 
-function mount(kind: "system" | "location", id: string, me: Me = owner) {
+function mount(kind: "system" | "location", id: string, me: Me = owner, systemActions: string[] = ["update", "rename"]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...SYSTEMS_KEY], [
-    { id: uuidFor("ef-sys"), name: "huddle", label: "Huddle Room", standard: "huddle-room", system_type: "huddle", location: uuidFor("ef-room"), actions: ["update", "rename"] },
+    { id: uuidFor("ef-sys"), name: "huddle", label: "Huddle Room", standard: "huddle-room", system_type: "huddle", location: uuidFor("ef-room"), actions: systemActions },
   ]);
   qc.setQueryData([...LOCATIONS_KEY], [
     { id: uuidFor("ef-hq"), name: "hq", label: "Headquarters", location_type: "campus", parent_id: null, actions: ["update", "move", "rename"] },
@@ -74,7 +74,7 @@ function mount(kind: "system" | "location", id: string, me: Me = owner) {
       </Router>
     </QueryClientProvider>
   ));
-  return { slot: () => slot };
+  return { slot: () => slot, qc };
 }
 
 afterEach(() => { cleanup(); calls.length = 0; });
@@ -91,6 +91,47 @@ describe("the one form, read", () => {
     // shows twice: once as the system's own label, once as where it sits.
     expect(within(form).getAllByText("Huddle Room").length).toBe(2);
     expect(within(form).getByText("Where it sits")).toBeTruthy();
+  });
+});
+
+describe("the one form, gated by what the server says of this row", () => {
+  // The permission says the caller may update systems SOMEWHERE; the row's own
+  // actions say whether that reaches this one. A scoped operator reading a
+  // system outside their update scope was offered Edit, and every Save was a
+  // 403. The blade gated on the row before the form took the job over.
+  it("does not offer edit on a row the caller's update does not reach", async () => {
+    const { slot } = mount("system", uuidFor("ef-sys"), updaterOnly, []);
+    await screen.findByTestId("entity-form");
+    expect(slot().editable()).toBe(false);
+  });
+
+  it("keeps the name read-only on a row the caller's rename does not reach", async () => {
+    const { slot } = mount("system", uuidFor("ef-sys"), owner, ["update"]);
+    const form = await screen.findByTestId("entity-form");
+    expect(slot().editable()).toBe(true);
+    slot().begin();
+    await waitFor(() => expect(within(form).getByRole("combobox", { name: /standard/i })).toBeTruthy());
+    expect(within(form).queryByRole("button", { name: /check/i })).toBeNull();
+  });
+});
+
+describe("the one form, saving", () => {
+  // Explore, the blade title and the workspace header all read the fleet view,
+  // not the kind's list. A save that refreshed only the list left every one of
+  // them showing the old label until the window was refocused.
+  it("refreshes the fleet view as well as the list, so what is drawn behind the form follows it", async () => {
+    const { slot, qc } = mount("location", uuidFor("ef-room"));
+    await screen.findByTestId("entity-form");
+    const invalidated: string[] = [];
+    const real = qc.invalidateQueries.bind(qc);
+    qc.invalidateQueries = ((filters: { queryKey?: readonly unknown[] }) => {
+      invalidated.push(String(filters?.queryKey?.[0]));
+      return real(filters as never);
+    }) as typeof qc.invalidateQueries;
+    slot().begin();
+    await slot().save();
+    expect(invalidated).toContain("locations");
+    expect(invalidated).toContain("fleet-view");
   });
 });
 
