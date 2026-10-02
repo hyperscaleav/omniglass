@@ -7,12 +7,38 @@ import { api } from "../api/client";
 // operator reads and types, renameable); official (seed-owned) rows are
 // read-only past creation, refused server-side on update/delete.
 
+// The declarative spec body a driver may carry (#813): data, not code, the
+// menu one generic engine interprets. Shapes follow the wire
+// (internal/driver/spec.go); render-only here, authored via the API.
+export type DriverSpecInput = {
+  name: string;
+  kind: "string" | "number" | "secret";
+  secret_type?: string;
+  required?: boolean;
+  default?: string;
+};
+export type DriverEmit = {
+  name: string;
+  extract: { oid?: string; regex?: string; jsonpath?: string; key?: string };
+  transform?: { cast?: string; scale?: number; map?: Record<string, string> };
+};
+export type DriverSpec = {
+  version: number;
+  transport: string;
+  inputs?: DriverSpecInput[];
+  polls?: { name: string; schedule: { every: string }; request: Record<string, unknown>; emits: DriverEmit[] }[];
+  listeners?: { name: string; arm?: string[]; match: { prefix?: string; regex?: string }; emits: DriverEmit[] }[];
+  commands?: { command_type: string; request: Record<string, unknown> }[];
+};
+
 export type Driver = {
   id: string;
   name: string;
   label: string;
   official: boolean;
   version?: string;
+  // The declarative body; absent on a stub that cannot be attached yet.
+  spec?: DriverSpec;
 };
 
 export const DRIVERS_KEY = ["drivers"] as const;

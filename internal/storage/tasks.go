@@ -14,7 +14,7 @@ import (
 
 // Task-layer sentinel errors. A task is not an operator-authored entity: it is
 // DERIVED plumbing (a node's unit of collection work), read-only over the API. A
-// task hangs off an interface (task.interface_id), which hangs off a component, so
+// task hangs off an endpoint (task.endpoint_id), which hangs off a component, so
 // its read scope cascades through that component. NotFound doubles as the
 // non-disclosing "out of read scope".
 var (
@@ -23,32 +23,32 @@ var (
 )
 
 // Task is a node's content-addressed unit of collection work: Mode is the
-// poll/listen axis, InterfaceID the connection it runs over, Node the placement
-// PROJECTED from its interface (a task carries no node column of its own; the
-// interface's placement is authoritative), Spec the inline probe jsonb, Enabled
-// the worklist toggle. ID is a content hash of the identity fields (interface +
-// mode + spec) so identical work dedupes. A task is DERIVED when an interface is
+// poll/listen axis, EndpointID the connection it runs over, Node the placement
+// PROJECTED from its endpoint (a task carries no node column of its own; the
+// endpoint's placement is authoritative), Spec the inline probe jsonb, Enabled
+// the worklist toggle. ID is a content hash of the identity fields (endpoint +
+// mode + spec) so identical work dedupes. A task is DERIVED when an endpoint is
 // created, never operator-authored.
 type Task struct {
-	ID          string
-	Label       string
-	Mode        string
-	InterfaceID string
-	Node        *string
-	NodeID      *string
-	Spec        []byte
-	Enabled     bool
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID         string
+	Label      string
+	Mode       string
+	EndpointID string
+	Node       *string
+	NodeID     *string
+	Spec       []byte
+	Enabled    bool
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 // taskID is the content-addressed task id: a sha256 over the identity fields
-// (interface, mode, spec) so identical work always maps to the same id and a
+// (endpoint, mode, spec) so identical work always maps to the same id and a
 // re-derive dedupes on the primary key. Label and the enabled toggle are
 // metadata, not identity, so they do not perturb the id.
-func taskID(interfaceID, mode string, spec []byte) string {
+func taskID(endpointID, mode string, spec []byte) string {
 	h := sha256.New()
-	h.Write([]byte(interfaceID))
+	h.Write([]byte(endpointID))
 	h.Write([]byte{0})
 	h.Write([]byte(mode))
 	h.Write([]byte{0})
@@ -57,40 +57,40 @@ func taskID(interfaceID, mode string, spec []byte) string {
 }
 
 // taskSelectJoin is the task columns aliased to `t`, with Node PROJECTED from the
-// joined interface: a task carries no node column, so every read joins interface
-// to resolve placement. The interface arc stores node.principal_id, so the
+// joined endpoint: a task carries no node column, so every read joins endpoint
+// to resolve placement. The endpoint arc stores node.principal_id, so the
 // projection resolves it to the node's name, which is what Task.Node carries.
-// Callers always join `interface i on i.id = t.interface_id`.
-const taskSelectJoin = `t.id, coalesce(t.label, ''), t.mode, t.interface_id,
+// Callers always join `endpoint i on i.id = t.endpoint_id`.
+const taskSelectJoin = `t.id, coalesce(t.label, ''), t.mode, t.endpoint_id,
 	(select n.name from node n where n.principal_id = i.node_name) as node_name, i.node_name,
 	t.spec, t.enabled, t.created_at, t.updated_at`
 
 func scanTask(row pgx.Row) (*Task, error) {
 	var t Task
-	if err := row.Scan(&t.ID, &t.Label, &t.Mode, &t.InterfaceID, &t.Node, &t.NodeID, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt); err != nil {
+	if err := row.Scan(&t.ID, &t.Label, &t.Mode, &t.EndpointID, &t.Node, &t.NodeID, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &t, nil
 }
 
-// deriveReachabilityTask idempotently derives the poll task for an interface: the
+// deriveReachabilityTask idempotently derives the poll task for an endpoint: the
 // node's unit of collection work over that connection. It is called inside
-// CreateInterface's transaction, never by an operator; the content-addressed id
+// CreateEndpoint's transaction, never by an operator; the content-addressed id
 // makes a re-derive a no-op (on conflict do nothing). The task carries no node
-// column: its placement is a projection of the interface's node_name.
-func deriveReachabilityTask(ctx context.Context, tx pgx.Tx, interfaceID string) error {
+// column: its placement is a projection of the endpoint's node_name.
+func deriveReachabilityTask(ctx context.Context, tx pgx.Tx, endpointID string) error {
 	body := []byte("{}")
-	id := taskID(interfaceID, "poll", body)
+	id := taskID(endpointID, "poll", body)
 	if _, err := tx.Exec(ctx, `
-		insert into task (id, mode, interface_id, spec, enabled)
+		insert into task (id, mode, endpoint_id, spec, enabled)
 		values ($1, 'poll', $2, $3, true)
-		on conflict (id) do nothing`, id, interfaceID, body); err != nil {
-		return fmt.Errorf("storage: derive reachability task for interface %q: %w", interfaceID, err)
+		on conflict (id) do nothing`, id, endpointID, body); err != nil {
+		return fmt.Errorf("storage: derive reachability task for endpoint %q: %w", endpointID, err)
 	}
 	return nil
 }
 
-// loadTask reads one task by id plus its interface's owning component id (the
+// loadTask reads one task by id plus its endpoint's owning component id (the
 // scope anchor, componentInScope's own parameter) with no scope check; callers
 // layer the cascade on top. i.component is the raw FK column, not a name
 // derived from it: componentInScope binds it straight into inScopeTree, and a
@@ -103,9 +103,9 @@ func loadTask(ctx context.Context, q querier, id string) (*Task, *string, error)
 	)
 	err := q.QueryRow(ctx, `
 		select `+taskSelectJoin+`, i.component
-		from task t join interface i on i.id = t.interface_id
+		from task t join endpoint i on i.id = t.endpoint_id
 		where t.id = $1`, id).Scan(
-		&t.ID, &t.Label, &t.Mode, &t.InterfaceID, &t.Node, &t.NodeID, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt, &component)
+		&t.ID, &t.Label, &t.Mode, &t.EndpointID, &t.Node, &t.NodeID, &t.Spec, &t.Enabled, &t.CreatedAt, &t.UpdatedAt, &component)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, ErrTaskNotFound
 	} else if err != nil {
@@ -114,9 +114,9 @@ func loadTask(ctx context.Context, q querier, id string) (*Task, *string, error)
 	return &t, component, nil
 }
 
-// ListTasks returns the tasks whose interface's owning component is in the
+// ListTasks returns the tasks whose endpoint's owning component is in the
 // caller's read scope, ordered by id. A component-scoped read (the cascade)
-// expands the component subtree and matches tasks joined through their interface;
+// expands the component subtree and matches tasks joined through their endpoint;
 // an all read returns every task; an empty scope returns none.
 func (p *PG) ListTasks(ctx context.Context, read scope.Set) ([]Task, error) {
 	if read.Empty() {
@@ -127,7 +127,7 @@ func (p *PG) ListTasks(ctx context.Context, read scope.Set) ([]Task, error) {
 		err  error
 	)
 	if read.All {
-		rows, err = p.pool.Query(ctx, `select `+taskSelectJoin+` from task t join interface i on i.id = t.interface_id order by t.id`)
+		rows, err = p.pool.Query(ctx, `select `+taskSelectJoin+` from task t join endpoint i on i.id = t.endpoint_id order by t.id`)
 	} else {
 		roots := uuidRoots(read.IDs)
 		selfIDs := uuidRoots(read.SelfIDs)
@@ -141,7 +141,7 @@ func (p *PG) ListTasks(ctx context.Context, read scope.Set) ([]Task, error) {
 				select c.id from component c join sub on c.parent_id = sub.id
 			) cycle id set is_cycle using path
 			select `+taskSelectJoin+` from task t
-			join interface i on i.id = t.interface_id
+			join endpoint i on i.id = t.endpoint_id
 			join component c on c.id = i.component
 			where c.id in (select id from sub) or c.id = any($2::uuid[])
 			order by t.id`, roots, selfIDs)
@@ -162,7 +162,7 @@ func (p *PG) ListTasks(ctx context.Context, read scope.Set) ([]Task, error) {
 }
 
 // GetTask resolves a task by id within the caller's read scope (through its
-// interface's component); absent or out of scope is the same non-disclosing
+// endpoint's component); absent or out of scope is the same non-disclosing
 // ErrTaskNotFound.
 func (p *PG) GetTask(ctx context.Context, id string, read scope.Set) (*Task, error) {
 	t, component, err := loadTask(ctx, p.pool, id)
@@ -179,32 +179,32 @@ func (p *PG) GetTask(ctx context.Context, id string, read scope.Set) (*Task, err
 	return t, nil
 }
 
-// TaskOwner is a task's resolved ingest binding: the component its interface
-// dedicates its samples to, plus the interface identity the write records as
-// source (type) and instance (name).
+// TaskOwner is a task's resolved ingest binding: the component its endpoint
+// dedicates its samples to, plus the endpoint identity the write records as
+// source (transport) and instance (name).
 //
 // ComponentID is the component's uuid, never its name: it is what
-// ResolveTaskOwner reads directly off the interface's own FK column
+// ResolveTaskOwner reads directly off the endpoint's own FK column
 // (i.component), and every downstream write (deriveMetrics, deriveProperties,
 // deriveEvents, dedupeProperties) stamps it as OwnerID verbatim. #627 scopes
 // component name uniqueness to placement, so a name here would be resolved a
 // second time, ambiguously, by ownerArcValue on the write side; the id needs no
 // second resolution and can never collide.
 type TaskOwner struct {
-	ComponentID   string
-	InterfaceName string
-	InterfaceType string
+	ComponentID  string
+	EndpointName string
+	Transport    string
 }
 
 // ResolveTaskOwner binds the component a node's task collects for and, in the same
 // query, confines the node to its own tasks. Given a task id and the node that
 // published the telemetry (extracted from the NATS subject), it returns the task's
-// interface component id. Confinement is against the INTERFACE's placement
+// endpoint component id. Confinement is against the ENDPOINT's placement
 // (i.node_name), the authoritative node binding, since a task carries no node
 // column. ok is false (the sample is an orphan the ingest consumer drops, never
-// writes) when the task is unknown, its interface belongs to a DIFFERENT node (a
+// writes) when the task is unknown, its endpoint belongs to a DIFFERENT node (a
 // node cannot land a sample for a component it was not placed on), or its
-// interface has no component (a shared interface has no pre-bound owner). err is
+// endpoint has no component (a shared endpoint has no pre-bound owner). err is
 // reserved for a real DB failure, so the caller can leave the message unacked for
 // redelivery.
 func (p *PG) ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error) {
@@ -218,20 +218,20 @@ func (p *PG) ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (Tas
 	// have the write side resolve it a second time is exactly the shape #627
 	// makes ambiguous.
 	err := p.pool.QueryRow(ctx, `
-		select i.component, (select n.name from node n where n.principal_id = i.node_name), i.name, (select it.name from interface_type it where it.id = i.type)
+		select i.component, (select n.name from node n where n.principal_id = i.node_name), i.name, i.transport
 		from task t
-		join interface i on i.id = t.interface_id
-		where t.id = $1`, taskID).Scan(&componentID, &ifaceNode, &owner.InterfaceName, &owner.InterfaceType)
+		join endpoint i on i.id = t.endpoint_id
+		where t.id = $1`, taskID).Scan(&componentID, &ifaceNode, &owner.EndpointName, &owner.Transport)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return TaskOwner{}, false, nil
 	} else if err != nil {
 		return TaskOwner{}, false, fmt.Errorf("storage: resolve task owner %q: %w", taskID, err)
 	}
 	if ifaceNode == nil || *ifaceNode != nodeName {
-		return TaskOwner{}, false, nil // confinement: not this node's interface
+		return TaskOwner{}, false, nil // confinement: not this node's endpoint
 	}
 	if componentID == nil || *componentID == "" {
-		return TaskOwner{}, false, nil // shared interface: no pre-bound owner
+		return TaskOwner{}, false, nil // shared endpoint: no pre-bound owner
 	}
 	owner.ComponentID = *componentID
 	return owner, true, nil

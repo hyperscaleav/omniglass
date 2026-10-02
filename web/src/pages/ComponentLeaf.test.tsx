@@ -50,9 +50,9 @@ const iso = (secondsAgo: number) => new Date(now - secondsAgo * 1000).toISOStrin
 
 const reach: Reachability = {
   component: "videobar-1",
-  interfaces: [
+  endpoints: [
     // A stale sample: last verdict long ago, but the node below is alive.
-    { interface: "ssh", interface_type: "ssh", node: "edge-1", verdict: { value: "up", ts: iso(600) }, layers: [
+    { endpoint: "ssh", transport: "ssh", node: "edge-1", verdict: { value: "up", ts: iso(600) }, layers: [
       { layer: "ping", check: "icmp-reachable", value: 1, ts: iso(600) },
       { layer: "port", check: "tcp-open", value: 1, ts: iso(600) },
     ], history: [] },
@@ -193,7 +193,7 @@ describe("the leaf's dispatch facts (#786)", () => {
     expect(within(card).getByText("6.1")).toBeTruthy();
   });
 
-  it("the collection card shows each interface's layer rungs", () => {
+  it("the collection card shows each endpoint's layer rungs", () => {
     mount();
     const card = screen.getByTestId("leaf-collection");
     expect(within(card).getByText("ping up")).toBeTruthy();
@@ -221,14 +221,14 @@ describe("the component configure tab (#800)", () => {
 // The interfaces surface the classic face carried, re-homed on the leaf's
 // Configure (#800 slice 3): the reachability panel with its add and open
 // affordances wiring the interface blades onto the leaf's own stack.
-describe("interfaces live on the leaf configure (#800)", () => {
-  it("offers Add interface and opens the create blade on this stack", async () => {
+describe("endpoints live on the leaf configure (#800)", () => {
+  it("offers Add endpoint and opens the create blade on this stack", async () => {
     mount(`/web/components/${uuidFor("cf-c-bar")}?tab=configure`);
     const face = await screen.findByTestId("configure-face");
-    const add = await within(face).findByRole("button", { name: /add interface/i });
+    const add = await within(face).findByRole("button", { name: /add endpoint/i });
     fireEvent.click(add);
     const blade = await screen.findByRole("dialog");
-    expect(blade.getAttribute("aria-labelledby")).toContain("interface-create");
+    expect(blade.getAttribute("aria-labelledby")).toContain("endpoint-create");
   });
 });
 

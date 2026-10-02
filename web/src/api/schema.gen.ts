@@ -776,8 +776,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Read a component's per-interface reachability
-         * @description Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+         * Read a component's per-endpoint reachability
+         * @description Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
          */
         get: operations["get-component-reachability"];
         put?: never;
@@ -1060,6 +1060,58 @@ export interface paths {
         patch: operations["update-driver"];
         trace?: never;
     };
+    "/endpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List endpoints in scope
+         * @description Lists the endpoints whose owning component the caller may read (the component cascade). Gated by endpoint:read.
+         */
+        get: operations["list-endpoints"];
+        put?: never;
+        /**
+         * Create an endpoint
+         * @description Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by endpoint:create.
+         */
+        post: operations["create-endpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/endpoints/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an endpoint
+         * @description Fetches an endpoint by id. An endpoint whose component is out of the caller's read scope is a non-disclosing 404. Gated by endpoint:read.
+         */
+        get: operations["get-endpoint"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an endpoint
+         * @description Deletes an endpoint, refused while a task still references it. Gated by endpoint:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
+         */
+        delete: operations["delete-endpoint"];
+        options?: never;
+        head?: never;
+        /**
+         * Update an endpoint
+         * @description Patches an endpoint's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+         */
+        patch: operations["update-endpoint"];
+        trace?: never;
+    };
     "/event-types": {
         parameters: {
             query?: never;
@@ -1198,58 +1250,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/interfaces": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List interfaces in scope
-         * @description Lists the interfaces whose owning component the caller may read (the component cascade). Gated by interface:read.
-         */
-        get: operations["list-interfaces"];
-        put?: never;
-        /**
-         * Create an interface
-         * @description Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by interface:create.
-         */
-        post: operations["create-interface"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/interfaces/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get an interface
-         * @description Fetches an interface by id. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.
-         */
-        get: operations["get-interface"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete an interface
-         * @description Deletes an interface, refused while a task still references it. Gated by interface:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
-         */
-        delete: operations["delete-interface"];
-        options?: never;
-        head?: never;
-        /**
-         * Update an interface
-         * @description Patches an interface's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
-         */
-        patch: operations["update-interface"];
         trace?: never;
     };
     "/location-types": {
@@ -1836,7 +1836,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a node
-         * @description Decommissions a node: a hard delete that cascades its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
+         * @description Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
          */
         delete: operations["delete-node"];
         options?: never;
@@ -3817,7 +3817,7 @@ export interface paths {
         };
         /**
          * List tasks in scope
-         * @description Lists the tasks whose interface's owning component the caller may read (the component cascade). Tasks are derived from interfaces, not authored. Gated by task:read.
+         * @description Lists the tasks whose endpoint's owning component the caller may read (the component cascade). Tasks are derived from endpoints, not authored. Gated by task:read.
          */
         get: operations["list-tasks"];
         put?: never;
@@ -3862,6 +3862,26 @@ export interface paths {
          * @description Accepts per-lane observations (metrics, properties, events) and raw log lines for one owner and publishes them onto the ingest lane. Each lane validates against its own catalog: an unregistered name is rejected and reported in the response rather than silently dropped, and a property or event payload violating its type's schema refuses the batch with a 422. Gated by telemetry:push, and the caller's scope must cover the declared owner; an out-of-scope owner is a non-disclosing 404.
          */
         post: operations["push-telemetry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/transports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the transports the platform speaks
+         * @description Lists the transport registry: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.
+         */
+        get: operations["list-transports"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4410,8 +4430,34 @@ export interface components {
             label: string;
             /** @description The globally unique name; renameable */
             name: string;
+            /** @description The declarative spec body; validated against the catalogs, and a spec that fails validation refuses the write (422) */
+            spec?: unknown;
             /** @description A free-form version string, e.g. 1.0.0 */
             version?: string;
+        };
+        CreateEndpointInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/CreateEndpointInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant) */
+            component?: string;
+            /** @description Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions */
+            driver?: string;
+            /** @description The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest */
+            inputs?: {
+                [key: string]: string;
+            };
+            /** @description What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for */
+            label?: string;
+            /** @description Node placement, by name or id */
+            node?: string;
+            /** @description Address/target settings (jsonb); an attach derives them from the inputs instead */
+            params?: unknown;
+            /** @description A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set */
+            transport?: string;
         };
         CreateEventTypeInputBody: {
             /**
@@ -4502,24 +4548,6 @@ export interface components {
             label?: string;
             /** @description Unique group name (lowercase letters, digits, and hyphens) */
             name: string;
-        };
-        CreateInterfaceInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/CreateInterfaceInputBody.json
-             */
-            readonly $schema?: string;
-            /** @description Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant) */
-            component?: string;
-            /** @description An interface_type name (the protocol); the interface is named by it, unique within the component */
-            interface_type: string;
-            /** @description What an operator reads in lists (Control processor). Settable here because the name is derived from the type, so it says how the device is reached and never what the connection is for */
-            label?: string;
-            /** @description Node placement, by name or id */
-            node?: string;
-            /** @description Endpoint/target settings (jsonb) */
-            params?: unknown;
         };
         CreateLocationInputBody: {
             /**
@@ -4898,6 +4926,8 @@ export interface components {
             /** @description The name an operator reads and types; renameable */
             name: string;
             official: boolean;
+            /** @description The declarative spec body (#813): transports, inputs, poll functions, listeners, command bindings. Absent on a stub that cannot be attached yet */
+            spec?: unknown;
             version?: string;
         };
         EffectiveMetricBody: {
@@ -5010,6 +5040,38 @@ export interface components {
             readonly $schema?: string;
             variables: components["schemas"]["ResolvedVariableBody"][] | null;
         };
+        EndpointBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/EndpointBody.json
+             */
+            readonly $schema?: string;
+            /** @description The owning component name; absent for a server-hosted endpoint */
+            component?: string;
+            /** @description The owning component's id; the stable form of component */
+            component_id?: string;
+            /** @description The driver this endpoint was attached through (#813); absent for a bare probe endpoint */
+            driver?: string;
+            /** @description The attached driver's id; the stable form of driver */
+            driver_id?: string;
+            /** @description The endpoint's surrogate id (the address) */
+            id: string;
+            /** @description The effective inputs supplied at attach, defaults baked; secret inputs are reference names, never values */
+            inputs?: unknown;
+            /** @description The friendly string an operator reads, and the only identity string an operator types here: the name is derived from the transport. Absent when unset, and a surface with none renders the name verbatim */
+            label?: string;
+            /** @description The derived name (its transport), unique within the owning component */
+            name: string;
+            /** @description The node placement name, if assigned */
+            node?: string;
+            /** @description The placed node's id; the stable form of node */
+            node_id?: string;
+            /** @description The address/target settings (jsonb) */
+            params?: unknown;
+            /** @description The transport name (the wire this endpoint speaks over), from the code registry */
+            transport: string;
+        };
         EnrollOutputBody: {
             /**
              * Format: uri
@@ -5104,7 +5166,7 @@ export interface components {
             attributes?: unknown;
             /** @description The event_type's uuid, the stable form of key */
             event_type_id: string;
-            /** @description The series discriminator (e.g. the interface), when set */
+            /** @description The series discriminator (e.g. the endpoint), when set */
             instance?: string;
             /** @description The event_type name of the occurrence (e.g. call-started) */
             key: string;
@@ -5114,7 +5176,7 @@ export interface components {
             origin: string;
             /** @description The lineage of the occurrence (observed for direct collection) */
             provenance: string;
-            /** @description The interface type that produced the occurrence */
+            /** @description The transport that produced the occurrence */
             source?: string;
             /**
              * Format: date-time
@@ -5388,34 +5450,6 @@ export interface components {
             /** @description The bearer token to send while impersonating; shown once */
             token: string;
         };
-        InterfaceBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/InterfaceBody.json
-             */
-            readonly $schema?: string;
-            /** @description The owning component name; absent for a server-hosted interface */
-            component?: string;
-            /** @description The owning component's id; the stable form of component */
-            component_id?: string;
-            /** @description The interface's surrogate id (the address) */
-            id: string;
-            /** @description The interface_type name (the protocol) */
-            interface_type: string;
-            /** @description The interface_type's uuid, the stable form of interface_type */
-            interface_type_id: string;
-            /** @description The friendly string an operator reads, and the only identity string an operator types here: the name is derived from the type. Absent when unset, and a surface with none renders the name verbatim */
-            label?: string;
-            /** @description The derived name (its protocol), unique within the owning component */
-            name: string;
-            /** @description The node placement name, if assigned */
-            node?: string;
-            /** @description The placed node's id; the stable form of node */
-            node_id?: string;
-            /** @description The endpoint/target settings (jsonb) */
-            params?: unknown;
-        };
         IssueCommandInputBody: {
             /**
              * Format: uri
@@ -5425,7 +5459,7 @@ export interface components {
             readonly $schema?: string;
             /** @description The command_type to invoke */
             command_type: string;
-            /** @description The series discriminator (e.g. an interface), when the target is instanced */
+            /** @description The series discriminator (e.g. an endpoint), when the target is instanced */
             instance?: string;
             /** @description The invocation params, stored on the command and the caused event */
             params?: unknown;
@@ -5575,6 +5609,15 @@ export interface components {
             readonly $schema?: string;
             drivers: components["schemas"]["DriverBody"][] | null;
         };
+        ListEndpointsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListEndpointsOutputBody.json
+             */
+            readonly $schema?: string;
+            endpoints: components["schemas"]["EndpointBody"][] | null;
+        };
         ListEventTypesOutputBody: {
             /**
              * Format: uri
@@ -5610,15 +5653,6 @@ export interface components {
              */
             readonly $schema?: string;
             groups: components["schemas"]["GroupBody"][] | null;
-        };
-        ListInterfacesOutputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/ListInterfacesOutputBody.json
-             */
-            readonly $schema?: string;
-            interfaces: components["schemas"]["InterfaceBody"][] | null;
         };
         ListLocationTypeMetricsOutputBody: {
             /**
@@ -5855,6 +5889,15 @@ export interface components {
              */
             readonly $schema?: string;
             tasks: components["schemas"]["TaskBody"][] | null;
+        };
+        ListTransportsOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/ListTransportsOutputBody.json
+             */
+            readonly $schema?: string;
+            transports: components["schemas"]["Transport"][] | null;
         };
         ListVariablesOutputBody: {
             /**
@@ -6475,28 +6518,32 @@ export interface components {
              */
             severity: "info" | "warning" | "critical";
         };
-        ReachHistoryBody: {
-            /** Format: date-time */
-            ts: string;
-            value: string;
-        };
-        ReachInterfaceBody: {
-            /** @description The probed endpoint (target[:port]) from the interface params */
-            endpoint?: string;
+        ReachEndpointBody: {
+            /** @description The probed address (target[:port]) from the endpoint params */
+            address?: string;
+            /** @description The auth rung (the probe's credential was accepted), present only when a credential was tried */
+            authenticated?: components["schemas"]["ReachVerdictBody"];
+            /** @description The endpoint's derived name (its transport) */
+            endpoint: string;
             /** @description The recent verdict transitions, oldest first, for the availability strip */
             history: components["schemas"]["ReachHistoryBody"][] | null;
-            /** @description The interface's derived name (its protocol) */
-            interface: string;
-            /** @description The interface type (icmp, tcp, ...) */
-            interface_type: string;
             /** @description The friendly string an operator reads; absent when unset, and the row then reads the derived name verbatim */
             label?: string;
             /** @description The per-layer probe signals that compose the verdict */
             layers: components["schemas"]["ReachLayerBody"][] | null;
-            /** @description The node that probes this interface */
+            /** @description The node that probes this endpoint */
             node?: string;
+            /** @description The layer-7 responds rung (the protocol itself answered), when a probe has climbed it */
+            responsive?: components["schemas"]["ReachVerdictBody"];
+            /** @description The transport (icmp, tcp, ...) */
+            transport: string;
             /** @description The latest reachability verdict, or null if none yet */
             verdict: components["schemas"]["ReachVerdictBody"];
+        };
+        ReachHistoryBody: {
+            /** Format: date-time */
+            ts: string;
+            value: string;
         };
         ReachLayerBody: {
             /** @description The property_type key of the primary signal */
@@ -6533,7 +6580,7 @@ export interface components {
              */
             readonly $schema?: string;
             component: string;
-            interfaces: components["schemas"]["ReachInterfaceBody"][] | null;
+            endpoints: components["schemas"]["ReachEndpointBody"][] | null;
         };
         ReconPropertyBody: {
             /** @description True when the observed value is present and differs from the declared one */
@@ -7206,7 +7253,7 @@ export interface components {
             attributes?: unknown;
             /** @description The event_type's uuid, the stable form of key */
             event_type_id: string;
-            /** @description The series discriminator (e.g. the interface), when set */
+            /** @description The series discriminator (e.g. the endpoint), when set */
             instance?: string;
             /** @description The event_type name of the occurrence (e.g. call-started) */
             key: string;
@@ -7220,7 +7267,7 @@ export interface components {
             owner_kind: string;
             /** @description The lineage of the occurrence (observed for direct collection) */
             provenance: string;
-            /** @description The interface type that produced the occurrence */
+            /** @description The transport that produced the occurrence */
             source?: string;
             /**
              * Format: date-time
@@ -7463,17 +7510,23 @@ export interface components {
              */
             readonly $schema?: string;
             enabled: boolean;
+            /** @description The endpoint's surrogate id this task runs over */
+            endpoint_id: string;
             id: string;
-            /** @description The interface's surrogate id this task runs over */
-            interface_id: string;
             label?: string;
             mode: string;
-            /** @description The node placement name, projected from the interface */
+            /** @description The node placement name, projected from the endpoint */
             node?: string;
             /** @description The placed node's id; the stable form of node */
             node_id?: string;
             /** @description The inline probe settings (jsonb) */
             spec?: unknown;
+        };
+        Transport: {
+            built: boolean;
+            description: string;
+            held: boolean;
+            name: string;
         };
         UISettings: {
             /**
@@ -7552,8 +7605,24 @@ export interface components {
             readonly $schema?: string;
             /** @description A new operator-facing label */
             label?: string;
+            /** @description A replacement spec body; validated like the create's, refused with a 422 when it cannot be interpreted */
+            spec?: unknown;
             /** @description A new version string, e.g. 1.0.1 */
             version?: string;
+        };
+        UpdateEndpointInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example /api/v1/schemas/UpdateEndpointInputBody.json
+             */
+            readonly $schema?: string;
+            /** @description A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone */
+            label?: string;
+            /** @description Reassign the node placement, by name or id */
+            node?: string;
+            /** @description Replace the address/target settings (jsonb) */
+            params?: unknown;
         };
         UpdateEventTypeInputBody: {
             /**
@@ -7580,20 +7649,6 @@ export interface components {
             description?: string;
             /** @description Label; empty clears it */
             label?: string;
-        };
-        UpdateInterfaceInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example /api/v1/schemas/UpdateInterfaceInputBody.json
-             */
-            readonly $schema?: string;
-            /** @description A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone */
-            label?: string;
-            /** @description Reassign the node placement, by name or id */
-            node?: string;
-            /** @description Replace the endpoint/target settings (jsonb) */
-            params?: unknown;
         };
         UpdateLocationInputBody: {
             /**
@@ -10010,6 +10065,165 @@ export interface operations {
             };
         };
     };
+    "list-endpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListEndpointsOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "create-endpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEndpointInputBody"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-endpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint's surrogate id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-endpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The endpoint's surrogate id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-endpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateEndpointInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-event-type": {
         parameters: {
             query?: never;
@@ -10342,165 +10556,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "list-interfaces": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListInterfacesOutputBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "create-interface": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateInterfaceInputBody"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InterfaceBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "get-interface": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The interface's surrogate id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InterfaceBody"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "delete-interface": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The interface's surrogate id */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "update-interface": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateInterfaceInputBody"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InterfaceBody"];
                 };
             };
             /** @description Error */
@@ -16176,6 +16231,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PushOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-transports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListTransportsOutputBody"];
                 };
             };
             /** @description Error */

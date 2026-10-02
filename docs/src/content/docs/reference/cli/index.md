@@ -493,7 +493,7 @@ Records a command invocation, writes a caused event, and (for a settleable comma
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--command-type` | string | (none) | The command_type to invoke |
-| `--instance` | string | (none) | The series discriminator (e.g. an interface), when the target is instanced |
+| `--instance` | string | (none) | The series discriminator (e.g. an endpoint), when the target is instanced |
 | `--params` | string | (none) | The invocation params, stored on the command and the caused event |
 | `--value` | string | (none) | The intended value for the target property (a settleable command) |
 
@@ -886,13 +886,13 @@ Commands for the reachability resource
 
 #### `omniglass component reachability list`
 
-Read a component's per-interface reachability
+Read a component's per-endpoint reachability
 
 ```
 omniglass component reachability list <name>
 ```
 
-Composes, per interface, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
+Composes, per endpoint, the latest reachability verdict, the probe-layer signals that compose it, and the recent verdict transitions for the availability strip. Gated by component:read; an out-of-scope component is a non-disclosing 404.
 
 Example:
 
@@ -1180,6 +1180,7 @@ Creates a custom (non-official) driver. Gated by driver:create.
 |---|---|---|---|
 | `--label` | string | (none) | What an operator reads in pickers and lists |
 | `--name` | string | (none) | The globally unique name; renameable |
+| `--spec` | string | (none) | The declarative spec body; validated against the catalogs, and a spec that fails validation refuses the write (422) |
 | `--version` | string | (none) | A free-form version string, e.g. 1.0.0 |
 
 Example:
@@ -1249,12 +1250,113 @@ Patches a custom driver's label or version. Official drivers are read-only (422)
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--label` | string | (none) | A new operator-facing label |
+| `--spec` | string | (none) | A replacement spec body; validated like the create's, refused with a 422 when it cannot be interpreted |
 | `--version` | string | (none) | A new version string, e.g. 1.0.1 |
 
 Example:
 
 ```sh
 omniglass driver update <id>
+```
+
+## `omniglass endpoint`
+
+Commands for the endpoint resource
+
+### `omniglass endpoint create`
+
+Create an endpoint
+
+```
+omniglass endpoint create [flags]
+```
+
+Creates an endpoint owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its transport; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by endpoint:create.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--component` | string | (none) | Owning component, by name or id; omit for a server-hosted endpoint (needs an all-scoped grant) |
+| `--driver` | string | (none) | Attach this driver (by name or id): the spec derives the transport and params, and the endpoint's tasks derive from the spec's functions |
+| `--inputs` | string | (none) | The inputs the driver's spec declares (host, port, credentials as secret reference names); required ones must be supplied, defaults fill the rest |
+| `--label` | string | (none) | What an operator reads in lists (Control processor). Settable here because the name is derived from the transport, so it says how the device is reached and never what the connection is for |
+| `--node` | string | (none) | Node placement, by name or id |
+| `--params` | string | (none) | Address/target settings (jsonb); an attach derives them from the inputs instead |
+| `--transport` | string | (none) | A transport name from the code registry (GET /transports); the endpoint is named by it, unique within the component. Exactly one of transport (a bare probe endpoint) or driver (an attach) is set |
+
+Example:
+
+```sh
+omniglass endpoint create
+```
+
+### `omniglass endpoint delete`
+
+Delete an endpoint
+
+```
+omniglass endpoint delete <id>
+```
+
+Deletes an endpoint, refused while a task still references it. Gated by endpoint:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
+
+Example:
+
+```sh
+omniglass endpoint delete <id>
+```
+
+### `omniglass endpoint get`
+
+Get an endpoint
+
+```
+omniglass endpoint get <id>
+```
+
+Fetches an endpoint by id. An endpoint whose component is out of the caller's read scope is a non-disclosing 404. Gated by endpoint:read.
+
+Example:
+
+```sh
+omniglass endpoint get <id>
+```
+
+### `omniglass endpoint list`
+
+List endpoints in scope
+
+```
+omniglass endpoint list
+```
+
+Lists the endpoints whose owning component the caller may read (the component cascade). Gated by endpoint:read.
+
+Example:
+
+```sh
+omniglass endpoint list
+```
+
+### `omniglass endpoint update`
+
+Update an endpoint
+
+```
+omniglass endpoint update <id> [flags]
+```
+
+Patches an endpoint's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by endpoint:update; read and update scopes (through the component) drive the 404 versus 403 split.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone |
+| `--node` | string | (none) | Reassign the node placement, by name or id |
+| `--params` | string | (none) | Replace the address/target settings (jsonb) |
+
+Example:
+
+```sh
+omniglass endpoint update <id>
 ```
 
 ## `omniglass event-type`
@@ -1459,104 +1561,6 @@ Example:
 
 ```sh
 omniglass healthz
-```
-
-## `omniglass interface`
-
-Commands for the interface resource
-
-### `omniglass interface create`
-
-Create an interface
-
-```
-omniglass interface create [flags]
-```
-
-Creates an interface owned by a component (or a server-hosted one, which needs an all-scoped grant), named by its protocol; the optional label is the only identity string an operator types, and is where what the connection is FOR goes. The create scope cascades through the owning component. Gated by interface:create.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--component` | string | (none) | Owning component, by name or id; omit for a server-hosted interface (needs an all-scoped grant) |
-| `--interface-type` | string | (none) | An interface_type name (the protocol); the interface is named by it, unique within the component |
-| `--label` | string | (none) | What an operator reads in lists (Control processor). Settable here because the name is derived from the type, so it says how the device is reached and never what the connection is for |
-| `--node` | string | (none) | Node placement, by name or id |
-| `--params` | string | (none) | Endpoint/target settings (jsonb) |
-
-Example:
-
-```sh
-omniglass interface create --interface-type interface_type
-```
-
-### `omniglass interface delete`
-
-Delete an interface
-
-```
-omniglass interface delete <id>
-```
-
-Deletes an interface, refused while a task still references it. Gated by interface:delete; read and delete scopes (through the component) drive the 404 versus 403 split.
-
-Example:
-
-```sh
-omniglass interface delete <id>
-```
-
-### `omniglass interface get`
-
-Get an interface
-
-```
-omniglass interface get <id>
-```
-
-Fetches an interface by id. An interface whose component is out of the caller's read scope is a non-disclosing 404. Gated by interface:read.
-
-Example:
-
-```sh
-omniglass interface get <id>
-```
-
-### `omniglass interface list`
-
-List interfaces in scope
-
-```
-omniglass interface list
-```
-
-Lists the interfaces whose owning component the caller may read (the component cascade). Gated by interface:read.
-
-Example:
-
-```sh
-omniglass interface list
-```
-
-### `omniglass interface update`
-
-Update an interface
-
-```
-omniglass interface update <id> [flags]
-```
-
-Patches an interface's node placement, params or label; an empty label clears it and the surface falls back to the derived name. Gated by interface:update; read and update scopes (through the component) drive the 404 versus 403 split.
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--label` | string | (none) | A new label; an empty string clears it, and the surface falls back to the derived name. Omit to leave it alone |
-| `--node` | string | (none) | Reassign the node placement, by name or id |
-| `--params` | string | (none) | Replace the endpoint/target settings (jsonb) |
-
-Example:
-
-```sh
-omniglass interface update <id>
 ```
 
 ## `omniglass location`
@@ -2321,7 +2325,7 @@ Delete a node
 omniglass node delete <name>
 ```
 
-Decommissions a node: a hard delete that cascades its interfaces, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
+Decommissions a node: a hard delete that cascades its endpoints, their derived tasks, its node-owned tags and self-telemetry, and its enrollment credential. Component telemetry it collected is unaffected. Requires an all-scope action. Gated by node:delete.
 
 Example:
 
@@ -4924,7 +4928,7 @@ List tasks in scope
 omniglass task list
 ```
 
-Lists the tasks whose interface's owning component the caller may read (the component cascade). Tasks are derived from interfaces, not authored. Gated by task:read.
+Lists the tasks whose endpoint's owning component the caller may read (the component cascade). Tasks are derived from endpoints, not authored. Gated by task:read.
 
 Example:
 
@@ -4976,6 +4980,26 @@ Issues a new bearer credential for an existing principal, addressed by username,
 |---|---|---|---|
 | `--description` | string | (none) | what the token is for (required) |
 | `--ttl` | duration | `2160h0m0s` | how long the token is valid before it expires (max 365 days) |
+
+## `omniglass transport`
+
+Commands for the transport resource
+
+### `omniglass transport list`
+
+List the transports the platform speaks
+
+```
+omniglass transport list
+```
+
+Lists the transport registry: the wires an endpoint can speak over, a build-time fact of the binary (ADR-0073). Gated by endpoint:read, the surface that consumes it.
+
+Example:
+
+```sh
+omniglass transport list
+```
 
 ## `omniglass variable`
 

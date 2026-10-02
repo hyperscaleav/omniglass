@@ -371,7 +371,7 @@ the escape hatch to author your own. **Availability** is health over time, the S
 - **ghost**: occupied vs booked, so booked but nobody showed (the wasted-room signal).
 
 Both inputs are **ordinary components**: an occupancy sensor emitting the `occupancy-*` family, and the booking
-system as a component whose interface is the calendar API, emitting `booking-*`; the KPIs are calcs
+system as a component whose endpoint is the calendar API, emitting `booking-*`; the KPIs are calcs
 over those samples, owned at room / system / location / global (a ghost meeting is
 `occupied < booked`).
 

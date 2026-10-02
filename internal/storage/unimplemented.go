@@ -271,7 +271,7 @@ func (UnimplementedGateway) ListComponents(context.Context, scope.Set) ([]Compon
 func (UnimplementedGateway) GetComponent(context.Context, string, scope.Set) (*Component, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) ListComponentInterfaces(context.Context, string) ([]ComponentInterface, error) {
+func (UnimplementedGateway) ListComponentEndpoints(context.Context, string) ([]ComponentEndpoint, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) CreateComponent(context.Context, string, ComponentSpec, scope.Set, scope.Set, scope.Set, scope.Set) (*Component, error) {
@@ -295,19 +295,19 @@ func (UnimplementedGateway) ComponentNameTaken(context.Context, string, *string,
 func (UnimplementedGateway) DeleteComponent(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
-func (UnimplementedGateway) ListInterfaces(context.Context, scope.Set) ([]Interface, error) {
+func (UnimplementedGateway) ListEndpoints(context.Context, scope.Set) ([]Endpoint, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) GetInterface(context.Context, string, scope.Set) (*Interface, error) {
+func (UnimplementedGateway) GetEndpoint(context.Context, string, scope.Set) (*Endpoint, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) CreateInterface(context.Context, string, InterfaceSpec, scope.Set) (*Interface, error) {
+func (UnimplementedGateway) CreateEndpoint(context.Context, string, EndpointSpec, scope.Set) (*Endpoint, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) UpdateInterface(context.Context, string, string, InterfacePatch, scope.Set, scope.Set) (*Interface, error) {
+func (UnimplementedGateway) UpdateEndpoint(context.Context, string, string, EndpointPatch, scope.Set, scope.Set) (*Endpoint, error) {
 	return nil, nil
 }
-func (UnimplementedGateway) DeleteInterface(context.Context, string, string, scope.Set, scope.Set) error {
+func (UnimplementedGateway) DeleteEndpoint(context.Context, string, string, scope.Set, scope.Set) error {
 	return nil
 }
 func (UnimplementedGateway) ListTasks(context.Context, scope.Set) ([]Task, error) {
@@ -390,12 +390,6 @@ func (UnimplementedGateway) UpdateMetricType(context.Context, string, string, Me
 func (UnimplementedGateway) DeleteMetricType(context.Context, string, string) error {
 	return nil
 }
-func (UnimplementedGateway) UpsertInterfaceType(context.Context, InterfaceType) error {
-	return nil
-}
-func (UnimplementedGateway) ListInterfaceTypes(context.Context) ([]InterfaceType, error) {
-	return nil, nil
-}
 func (UnimplementedGateway) InsertMetricSamples(context.Context, []MetricSampleWrite) error {
 	return nil
 }
@@ -453,6 +447,12 @@ func (UnimplementedGateway) AuthenticateNode(context.Context, string, string) (b
 func (UnimplementedGateway) RecordHeartbeat(context.Context, string) error { return nil }
 func (UnimplementedGateway) NodeWorklist(context.Context, string) (Worklist, error) {
 	return Worklist{}, nil
+}
+func (UnimplementedGateway) PendingNodeCommands(context.Context, string) ([]CommandDelivery, error) {
+	return nil, nil
+}
+func (UnimplementedGateway) RecordCommandExecution(context.Context, string, int64, string) error {
+	return nil
 }
 func (UnimplementedGateway) ResolveTaskOwner(context.Context, string, string) (TaskOwner, bool, error) {
 	return TaskOwner{}, false, nil

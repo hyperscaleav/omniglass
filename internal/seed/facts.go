@@ -7,6 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/hyperscaleav/omniglass/internal/rbac"
+	"github.com/hyperscaleav/omniglass/internal/transport"
 )
 
 // The generated seed-facts artifact: FactsJSON renders every embedded seed YAML
@@ -49,9 +50,14 @@ type factsNamed struct {
 	Description string `json:"description,omitempty"`
 }
 
-type factsInterfaceType struct {
+// factsTransport renders the code registry (internal/transport, ADR-0073) into
+// the same facts artifact the seeded YAMLs feed: the transports are build-time
+// facts of the binary, so the docs table derives from the registry rather than
+// restating it.
+type factsTransport struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
+	Held        bool   `json:"held"`
 	Built       bool   `json:"built"`
 }
 
@@ -122,6 +128,12 @@ type factsDriver struct {
 	ID      string `json:"id"`
 	Label   string `json:"label"`
 	Version string `json:"version,omitempty"`
+	// The spec summary (#813): the transport the spec rides and how many
+	// functions each family declares. All zero on a stub with no spec.
+	Transport string `json:"transport,omitempty"`
+	Polls     int    `json:"polls,omitempty"`
+	Listeners int    `json:"listeners,omitempty"`
+	Commands  int    `json:"commands,omitempty"`
 }
 
 type factsProductProperty struct {
@@ -155,22 +167,22 @@ type factsSecretType struct {
 }
 
 type seedFactsDoc struct {
-	Comment        string               `json:"//"`
-	Roles          []factsRole          `json:"roles"`
-	PropertyTypes  []factsProperty      `json:"property_types"`
-	MetricTypes    []factsMetricType    `json:"metric_types"`
-	EventTypes     []factsNamed         `json:"event_types"`
-	CommandTypes   []factsNamed         `json:"command_types"`
-	SecretTypes    []factsSecretType    `json:"secret_types"`
-	InterfaceTypes []factsInterfaceType `json:"interface_types"`
-	LocationTypes  []factsLocationType  `json:"location_types"`
-	ComponentTypes []factsTypeNode      `json:"component_types"`
-	SystemTypes    []factsTypeNode      `json:"system_types"`
-	Standards      []factsStandard      `json:"standards"`
-	Vendors        []factsVendor        `json:"vendors"`
-	Drivers        []factsDriver        `json:"drivers"`
-	Products       []factsProduct       `json:"products"`
-	LabelRules     []factsLabelRule     `json:"label_rules"`
+	Comment        string              `json:"//"`
+	Roles          []factsRole         `json:"roles"`
+	PropertyTypes  []factsProperty     `json:"property_types"`
+	MetricTypes    []factsMetricType   `json:"metric_types"`
+	EventTypes     []factsNamed        `json:"event_types"`
+	CommandTypes   []factsNamed        `json:"command_types"`
+	SecretTypes    []factsSecretType   `json:"secret_types"`
+	Transports     []factsTransport    `json:"transports"`
+	LocationTypes  []factsLocationType `json:"location_types"`
+	ComponentTypes []factsTypeNode     `json:"component_types"`
+	SystemTypes    []factsTypeNode     `json:"system_types"`
+	Standards      []factsStandard     `json:"standards"`
+	Vendors        []factsVendor       `json:"vendors"`
+	Drivers        []factsDriver       `json:"drivers"`
+	Products       []factsProduct      `json:"products"`
+	LabelRules     []factsLabelRule    `json:"label_rules"`
 }
 
 // eventCommandDoc covers the shared name/display/description shape of the
@@ -270,12 +282,8 @@ func FactsJSON() ([]byte, error) {
 		doc.SecretTypes = append(doc.SecretTypes, st)
 	}
 
-	var ifts interfaceTypesDoc
-	if err := yaml.Unmarshal(interfaceTypesYAML, &ifts); err != nil {
-		return nil, fmt.Errorf("seed facts: interface types: %w", err)
-	}
-	for _, it := range ifts.InterfaceTypes {
-		doc.InterfaceTypes = append(doc.InterfaceTypes, factsInterfaceType{Name: it.Name, Description: it.Description, Built: it.Built})
+	for _, tr := range transport.All() {
+		doc.Transports = append(doc.Transports, factsTransport{Name: tr.Name, Description: tr.Description, Held: tr.Held, Built: tr.Built})
 	}
 
 	var lts locationTypesDoc
@@ -343,7 +351,16 @@ func FactsJSON() ([]byte, error) {
 		return nil, fmt.Errorf("seed facts: drivers: %w", err)
 	}
 	for _, d := range ds.Drivers {
-		doc.Drivers = append(doc.Drivers, factsDriver{ID: d.ID, Label: d.Label, Version: d.Version})
+		fd := factsDriver{ID: d.ID, Label: d.Label, Version: d.Version}
+		if len(d.Spec) > 0 {
+			fd.Transport, _ = d.Spec["transport"].(string)
+			count := func(key string) int {
+				list, _ := d.Spec[key].([]any)
+				return len(list)
+			}
+			fd.Polls, fd.Listeners, fd.Commands = count("polls"), count("listeners"), count("commands")
+		}
+		doc.Drivers = append(doc.Drivers, fd)
 	}
 
 	var ps productsDoc

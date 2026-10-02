@@ -195,6 +195,11 @@
       "nullable": false,
       "default": "uuidv7()",
       "pk": true
+     },
+     {
+      "name": "spec",
+      "type": "jsonb",
+      "nullable": true
      }
     ],
     "uniques": [
@@ -911,11 +916,11 @@
       "nullable": false
      },
      {
-      "name": "interface_id",
+      "name": "endpoint_id",
       "type": "uuid",
       "nullable": false,
       "fk": true,
-      "fk_target": "interface.id"
+      "fk_target": "endpoint.id"
      },
      {
       "name": "spec",
@@ -1723,7 +1728,7 @@
      }
     ]
    },
-   "interface": {
+   "endpoint": {
     "columns": [
      {
       "name": "id",
@@ -1770,68 +1775,33 @@
       "fk_target": "node.principal_id"
      },
      {
-      "name": "type",
-      "type": "uuid",
-      "nullable": false,
-      "fk": true,
-      "fk_target": "interface_type.id"
-     },
-     {
       "name": "label",
       "type": "text",
       "nullable": true
-     }
-    ],
-    "uniques": [
+     },
      {
-      "name": "interface_component_name_key",
-      "definition": "CREATE UNIQUE INDEX interface_component_name_key ON public.interface USING btree (component, name)"
-     }
-    ]
-   },
-   "interface_type": {
-    "columns": [
-     {
-      "name": "name",
+      "name": "transport",
       "type": "text",
       "nullable": false
      },
      {
-      "name": "official",
-      "type": "boolean",
-      "nullable": false,
-      "default": "false"
-     },
-     {
-      "name": "description",
-      "type": "text",
-      "nullable": false,
-      "default": "''::text"
-     },
-     {
-      "name": "built",
-      "type": "boolean",
-      "nullable": false,
-      "default": "false"
-     },
-     {
-      "name": "created_at",
-      "type": "timestamp with time zone",
-      "nullable": false,
-      "default": "now()"
-     },
-     {
-      "name": "id",
+      "name": "driver_id",
       "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "driver.id"
+     },
+     {
+      "name": "inputs",
+      "type": "jsonb",
       "nullable": false,
-      "default": "uuidv7()",
-      "pk": true
+      "default": "'{}'::jsonb"
      }
     ],
     "uniques": [
      {
-      "name": "interface_type_name_key",
-      "definition": "CREATE UNIQUE INDEX interface_type_name_key ON public.interface_type USING btree (name)"
+      "name": "endpoint_component_name_key",
+      "definition": "CREATE UNIQUE INDEX endpoint_component_name_key ON public.endpoint USING btree (component, name)"
      }
     ]
    },
@@ -3177,6 +3147,28 @@
       "name": "settled_at",
       "type": "timestamp with time zone",
       "nullable": true
+     },
+     {
+      "name": "dispatched_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "executed_at",
+      "type": "timestamp with time zone",
+      "nullable": true
+     },
+     {
+      "name": "exec_error",
+      "type": "text",
+      "nullable": true
+     },
+     {
+      "name": "dispatched_endpoint_id",
+      "type": "uuid",
+      "nullable": true,
+      "fk": true,
+      "fk_target": "endpoint.id"
      }
     ],
     "checks": [

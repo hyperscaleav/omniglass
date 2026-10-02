@@ -11,29 +11,29 @@ import (
 )
 
 // The task read surface: DERIVED collection work, viewable but never operator-
-// authored. A task is derived when an interface is created (the node's unit of
+// authored. A task is derived when an endpoint is created (the node's unit of
 // work over that connection) and carries no node column of its own (its placement
-// projects from the interface). Both authz layers apply on every route: a
+// projects from the endpoint). Both authz layers apply on every route: a
 // task:read permission AND scope injected by the gateway, cascading through the
-// task's interface's owning component (an out-of-scope component's task is a
+// task's endpoint's owning component (an out-of-scope component's task is a
 // non-disclosing 404). There is no create/update/delete: authoring lives at the
-// interface (create an interface, its task derives).
+// endpoint (create an endpoint, its task derives).
 
 type taskBody struct {
-	ID          string          `json:"id"`
-	Label       string          `json:"label,omitempty"`
-	Mode        string          `json:"mode"`
-	InterfaceID string          `json:"interface_id" doc:"The interface's surrogate id this task runs over"`
-	Node        *string         `json:"node,omitempty" doc:"The node placement name, projected from the interface"`
-	NodeID      *string         `json:"node_id,omitempty" doc:"The placed node's id; the stable form of node"`
-	Spec        json.RawMessage `json:"spec,omitempty" doc:"The inline probe settings (jsonb)"`
-	Enabled     bool            `json:"enabled"`
+	ID         string          `json:"id"`
+	Label      string          `json:"label,omitempty"`
+	Mode       string          `json:"mode"`
+	EndpointID string          `json:"endpoint_id" doc:"The endpoint's surrogate id this task runs over"`
+	Node       *string         `json:"node,omitempty" doc:"The node placement name, projected from the endpoint"`
+	NodeID     *string         `json:"node_id,omitempty" doc:"The placed node's id; the stable form of node"`
+	Spec       json.RawMessage `json:"spec,omitempty" doc:"The inline probe settings (jsonb)"`
+	Enabled    bool            `json:"enabled"`
 }
 
 func toTaskBody(t *storage.Task) taskBody {
 	b := taskBody{
 		ID: t.ID, Label: t.Label, Mode: t.Mode,
-		InterfaceID: t.InterfaceID, Node: t.Node, NodeID: t.NodeID, Enabled: t.Enabled,
+		EndpointID: t.EndpointID, Node: t.Node, NodeID: t.NodeID, Enabled: t.Enabled,
 	}
 	if len(t.Spec) > 0 {
 		b.Spec = json.RawMessage(t.Spec)
@@ -56,15 +56,15 @@ type taskPathInput struct {
 }
 
 // registerTaskRoutes wires the read-only task surface, gated by task:read and
-// scope-injected through the task's interface's owning component. Tasks are
-// derived (from creating an interface), so there is no write surface here.
+// scope-injected through the task's endpoint's owning component. Tasks are
+// derived (from creating an endpoint), so there is no write surface here.
 func registerTaskRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	huma.Register(api, a.gated(huma.Operation{
 		OperationID: "list-tasks",
 		Method:      http.MethodGet,
 		Path:        "/tasks",
 		Summary:     "List tasks in scope",
-		Description: "Lists the tasks whose interface's owning component the caller may read (the component cascade). Tasks are derived from interfaces, not authored. Gated by task:read.",
+		Description: "Lists the tasks whose endpoint's owning component the caller may read (the component cascade). Tasks are derived from endpoints, not authored. Gated by task:read.",
 	}, "task", "read"), func(ctx context.Context, _ *struct{}) (*listTasksOutput, error) {
 		tasks, err := gw.ListTasks(ctx, a.scopeFor(ctx, "task", "read"))
 		if err != nil {

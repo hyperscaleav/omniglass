@@ -138,6 +138,6 @@ describe("the scoped tile specs", () => {
     expect(spec.ratio.healthy).toBe(1);
     expect(spec.counts.find((c) => c.key === "systems")!.value).toBe(1);
     expect(spec.counts.find((c) => c.key === "alarms")!.value).toBe(2);
-    expect(spec.counts.find((c) => c.key === "interfaces")!.value).toBe(1);
+    expect(spec.counts.find((c) => c.key === "endpoints")!.value).toBe(1);
   });
 });

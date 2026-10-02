@@ -151,7 +151,7 @@ another, and stored as its `{ciphertext, nonce, wrapped_dek, key_id}` envelope (
 plaintext).
 
 **Consumed at the site, by token.** The cascade is the reuse mechanism (define once high, inherit
-below); interpolation is a **`$sec:name.path`** token in an interface input or function arg, never
+below); interpolation is a **`$sec:name.path`** token in an endpoint input or function arg, never
 inside a secret's own fields (the splicing consumer is the deferred collection-driver slice).
 
 **Masked everywhere except an audited decrypt.** A secret's value is masked (`••••••`) in every read.
@@ -214,7 +214,7 @@ consumer and the **secret-flagged** variable. Logged in the [decision log](/arch
 A **variable** is the leftover, and the most familiar: a value spliced into behavior that is
 **not** a device signal and carries no lifecycle (a poll interval, a base URL, an environment
 label). Zabbix-style **macros**, resolved down the same [cascade](/architecture/cascade/) and
-interpolated as `$var:<name>` into functions, interface definitions, and rule scopes.
+interpolated as `$var:<name>` into functions, endpoint definitions, and rule scopes.
 
 - **A name is org-specific, not a canonical signal**, the one place the "operator-defined, not
   curated" namespace applies: no registry, no pre-registration. The ordinary entity name rule still

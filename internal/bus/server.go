@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -128,7 +129,55 @@ func (s *Server) subscribe() error {
 	if err != nil {
 		return fmt.Errorf("bus: subscribe heartbeat: %w", err)
 	}
-	s.subs = append(s.subs, wl, hb)
+
+	// The command queue pull (#815): request-reply like the worklist, same
+	// reply-inbox confinement, the reply the node's rendered pending commands
+	// (the pull itself marks them dispatched).
+	cq, err := nc.Subscribe(collection.CommandWildcard, func(msg *nats.Msg) {
+		node := collection.NodeFromSubject(msg.Subject)
+		if msg.Reply == "" || !strings.HasPrefix(msg.Reply, collection.InboxPrefix(node)+".") {
+			return
+		}
+		pending, err := s.store.PendingNodeCommands(context.Background(), node)
+		if err != nil {
+			return // read failed; drop, the node re-pulls next tick
+		}
+		reply := collection.CommandPullReply{}
+		for _, d := range pending {
+			reply.Commands = append(reply.Commands, collection.CommandDelivery{
+				ID: d.ID, CommandType: d.CommandType, Transport: d.Transport, Target: d.Target, Line: d.Line,
+			})
+		}
+		b, err := json.Marshal(reply)
+		if err != nil {
+			return
+		}
+		_ = msg.Respond(b)
+	})
+	if err != nil {
+		return fmt.Errorf("bus: subscribe command queue: %w", err)
+	}
+
+	// The execution report sink: the subject grant trusts the node name, and
+	// the store re-checks the placement before stamping.
+	cs, err := nc.Subscribe(collection.CommandStatusWildcard, func(msg *nats.Msg) {
+		node := collection.NodeFromSubject(msg.Subject)
+		var st collection.CommandStatus
+		if err := json.Unmarshal(msg.Data, &st); err != nil {
+			return
+		}
+		// A report a node had no standing to make (a command dispatched to a
+		// different node, or already stamped) is logged, never silently
+		// dropped: it is either a race or a misbehaving node, and both want a
+		// trail.
+		if err := s.store.RecordCommandExecution(context.Background(), node, st.ID, st.Error); err != nil {
+			slog.Warn("command execution report rejected", "facility", "command", "node", node, "command", st.ID, "error", err.Error())
+		}
+	})
+	if err != nil {
+		return fmt.Errorf("bus: subscribe command status: %w", err)
+	}
+	s.subs = append(s.subs, wl, hb, cq, cs)
 
 	// The telemetry ingest path: a JetStream stream + durable consumer over the
 	// same internal client. It carries the node -> server sample flow.
@@ -147,12 +196,13 @@ func (s *Server) buildWorklistReply(node string) (collection.WorklistReply, erro
 	reply := collection.WorklistReply{ConfigGeneration: wl.ConfigGeneration}
 	for _, t := range wl.Tasks {
 		reply.Tasks = append(reply.Tasks, collection.TaskSpec{
-			ID:              t.ID,
-			Mode:            t.Mode,
-			InterfaceName:   t.InterfaceName,
-			InterfaceType:   t.InterfaceType,
-			InterfaceParams: t.InterfaceParams,
-			Spec:            t.Spec,
+			ID:             t.ID,
+			Mode:           t.Mode,
+			EndpointName:   t.EndpointName,
+			Transport:      t.Transport,
+			EndpointParams: t.EndpointParams,
+			Spec:           t.Spec,
+			Secrets:        t.Secrets,
 		})
 	}
 	return reply, nil

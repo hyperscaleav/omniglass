@@ -27,10 +27,10 @@ func TestSeedFactsGroundTruth(t *testing.T) {
 		MetricTypes []struct {
 			Name string `json:"name"`
 		} `json:"metric_types"`
-		InterfaceTypes []struct {
+		Transports []struct {
 			Name  string `json:"name"`
 			Built bool   `json:"built"`
-		} `json:"interface_types"`
+		} `json:"transports"`
 		ComponentTypes []factsTypeNode `json:"component_types"`
 		SystemTypes    []factsTypeNode `json:"system_types"`
 	}
@@ -71,13 +71,13 @@ func TestSeedFactsGroundTruth(t *testing.T) {
 	}
 
 	builtICMP := false
-	for _, it := range doc.InterfaceTypes {
-		if it.Name == "icmp" && it.Built {
+	for _, tr := range doc.Transports {
+		if tr.Name == "icmp" && tr.Built {
 			builtICMP = true
 		}
 	}
 	if !builtICMP {
-		t.Error("interface_types: icmp missing or not built")
+		t.Error("transports: icmp missing or not built (the facts doc renders the code registry)")
 	}
 
 	// The two inheriting registries (#678). What the docs used to type out by

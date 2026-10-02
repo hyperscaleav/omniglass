@@ -23,7 +23,7 @@ func TestDeriveMetrics(t *testing.T) {
 		{Name: "tcp-open"},
 		{Name: "tcp-connect-time"},
 	}, []storage.PropertyType{{Name: "video-input", DataType: "string"}}, nil)
-	owner := storage.TaskOwner{ComponentID: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
+	owner := storage.TaskOwner{ComponentID: "disp-1", EndpointName: "disp-1-tcp", Transport: "tcp"}
 	ev := &ogv1.TelemetryBatch{
 		TaskId: "t1",
 		NodeId: "node-a",
@@ -58,16 +58,16 @@ func TestDeriveProperties(t *testing.T) {
 	reg := collection.NewRegistry(
 		[]storage.MetricType{{Name: "tcp-open"}},
 		[]storage.PropertyType{
-			{Name: "interface-reachable", DataType: "string", Validation: []byte(`{"enum":["up","down"]}`)},
+			{Name: "endpoint-reachable", DataType: "string", Validation: []byte(`{"enum":["up","down"]}`)},
 			{Name: "serial-number", DataType: "string"},
 		}, nil)
-	owner := storage.TaskOwner{ComponentID: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
+	owner := storage.TaskOwner{ComponentID: "disp-1", EndpointName: "disp-1-tcp", Transport: "tcp"}
 	ev := &ogv1.TelemetryBatch{Properties: []*ogv1.PropertySample{
-		{Name: "interface-reachable", ValueJson: `"up"`},
-		{Name: "interface-reachable", ValueJson: `"sideways"`}, // violates the enum: dropped
-		{Name: "interface-reachable", ValueJson: `not json`},   // malformed: dropped
-		{Name: "interface-reachable", ValueJson: `3`},          // not a string: dropped
-		{Name: "serial-number", ValueJson: `"SN-1"`},           // no schema: any string lands
+		{Name: "endpoint-reachable", ValueJson: `"up"`},
+		{Name: "endpoint-reachable", ValueJson: `"sideways"`}, // violates the enum: dropped
+		{Name: "endpoint-reachable", ValueJson: `not json`},   // malformed: dropped
+		{Name: "endpoint-reachable", ValueJson: `3`},          // not a string: dropped
+		{Name: "serial-number", ValueJson: `"SN-1"`},          // no schema: any string lands
 		{Name: "not.registered", ValueJson: `"up"`},
 		{Name: "tcp-open", ValueJson: `"up"`}, // a metric name on the property lane: refused by name
 	}}
@@ -76,7 +76,7 @@ func TestDeriveProperties(t *testing.T) {
 		t.Fatalf("states = %+v, want exactly the valid up and SN-1", states)
 	}
 	s := states[0]
-	if s.Key != "interface-reachable" || s.Value != "up" || s.OwnerKind != "component" ||
+	if s.Key != "endpoint-reachable" || s.Value != "up" || s.OwnerKind != "component" ||
 		s.OwnerID != "disp-1" || s.Instance != "disp-1-tcp" || s.Source != "tcp" {
 		t.Fatalf("property owner stamping wrong: %+v", s)
 	}
@@ -97,7 +97,7 @@ func TestDeriveEvents(t *testing.T) {
 			{Name: "call-started", PayloadSchema: []byte(`{"type":"object","properties":{"participants":{"type":"integer"}},"required":["participants"]}`)},
 			{Name: "note"},
 		})
-	owner := storage.TaskOwner{ComponentID: "disp-1", InterfaceName: "disp-1-tcp", InterfaceType: "tcp"}
+	owner := storage.TaskOwner{ComponentID: "disp-1", EndpointName: "disp-1-tcp", Transport: "tcp"}
 	ev := &ogv1.TelemetryBatch{Events: []*ogv1.EventSample{
 		{Name: "call-started", Message: "call started", Payload: []byte(`{"participants":4}`)},
 		{Name: "call-started", Payload: []byte(`{"other":1}`)}, // schema violation: dropped

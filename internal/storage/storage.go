@@ -292,10 +292,10 @@ type Gateway interface {
 	// The component tier: a type registry and scoped CRUD, on the same helpers.
 	ListComponents(ctx context.Context, read scope.Set) ([]Component, error)
 	GetComponent(ctx context.Context, name string, read scope.Set) (*Component, error)
-	// ListComponentInterfaces returns a component's interfaces (the reachability
+	// ListComponentEndpoints returns a component's interfaces (the reachability
 	// panel's rows). Not scope-injected: the caller gates on the component being
 	// in read scope first, then reads its interfaces by the verified name.
-	ListComponentInterfaces(ctx context.Context, componentName string) ([]ComponentInterface, error)
+	ListComponentEndpoints(ctx context.Context, componentName string) ([]ComponentEndpoint, error)
 	// CreateComponent takes the caller's placement scopes alongside its create
 	// scope. They are cross-tier and deliberately not the same action: the label
 	// it stamps reads the location's label, so naming a location is a read of it
@@ -412,15 +412,15 @@ type Gateway interface {
 
 	// The interface tier: operator CRUD over placement-bound connections. An
 	// interface is not a scope-tree entity of its own; it hangs off a component
-	// (interface.component), so every method's scope cascades THROUGH that component
+	// (endpoint.component), so every method's scope cascades THROUGH that component
 	// (a component-tier scope.Set, from applicableKinds). A component-less
-	// (server-hosted) interface is reachable only under an all scope. The read/action
+	// (server-hosted) endpoint is reachable only under an all scope. The read/action
 	// split drives the non-disclosing 404 versus 403.
-	ListInterfaces(ctx context.Context, read scope.Set) ([]Interface, error)
-	GetInterface(ctx context.Context, id string, read scope.Set) (*Interface, error)
-	CreateInterface(ctx context.Context, actorID string, spec InterfaceSpec, create scope.Set) (*Interface, error)
-	UpdateInterface(ctx context.Context, actorID, id string, patch InterfacePatch, read, action scope.Set) (*Interface, error)
-	DeleteInterface(ctx context.Context, actorID, id string, read, action scope.Set) error
+	ListEndpoints(ctx context.Context, read scope.Set) ([]Endpoint, error)
+	GetEndpoint(ctx context.Context, id string, read scope.Set) (*Endpoint, error)
+	CreateEndpoint(ctx context.Context, actorID string, spec EndpointSpec, create scope.Set) (*Endpoint, error)
+	UpdateEndpoint(ctx context.Context, actorID, id string, patch EndpointPatch, read, action scope.Set) (*Endpoint, error)
+	DeleteEndpoint(ctx context.Context, actorID, id string, read, action scope.Set) error
 
 	// The task tier: read-only over DERIVED collection work. A task is not
 	// operator-authored: it is derived when an interface is created (the node's
@@ -447,8 +447,6 @@ type Gateway interface {
 	CreateMetricType(ctx context.Context, actorID string, spec MetricTypeSpec) (*MetricType, error)
 	UpdateMetricType(ctx context.Context, actorID, name string, patch MetricTypePatch) (*MetricType, error)
 	DeleteMetricType(ctx context.Context, actorID, name string) error
-	UpsertInterfaceType(ctx context.Context, it InterfaceType) error
-	ListInterfaceTypes(ctx context.Context) ([]InterfaceType, error)
 
 	// The event_type registry (ADR-0063 #395): the occurrence keyspace, the twin of
 	// property_type. Seeded official and operator-extensible; a registered event_type
@@ -540,6 +538,10 @@ type Gateway interface {
 	AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error)
 	RecordHeartbeat(ctx context.Context, name string) error
 	NodeWorklist(ctx context.Context, name string) (Worklist, error)
+	// The command wire (#815): a node's pending queue, resolved and rendered,
+	// and its execution reports.
+	PendingNodeCommands(ctx context.Context, name string) ([]CommandDelivery, error)
+	RecordCommandExecution(ctx context.Context, name string, commandID int64, execErr string) error
 	// ResolveTaskOwner binds a task's owner component and confines the node to its
 	// own tasks, for the telemetry ingest consumer.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error)

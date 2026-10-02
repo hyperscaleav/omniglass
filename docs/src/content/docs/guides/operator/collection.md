@@ -1,10 +1,10 @@
 ---
 title: Nodes and reachability
-description: "Enrolling a collection node, adding a protocol-named interface to a component, and reading the per-interface reachability and the log events a node reports."
+description: "Enrolling a collection node, adding a transport-named endpoint to a component, and reading the per-endpoint reachability and the log events a node reports."
 ---
 
 Collection is how the fleet learns whether a device is reachable and what it reports. An **edge
-node** runs the probes, a component's **interface** is the API the node reaches for, the component's
+node** runs the probes, a component's **endpoint** is the API the node reaches for, the component's
 **Reachability** panel shows the verdict, and its **Events** and **Logs** panels show recent occurrences
 the node ships back. This page walks the console surfaces; the model behind them is
 [data collection](/architecture/collection/), and every action here has the same
@@ -32,7 +32,7 @@ last-heartbeat time, and its tags. A row opens the node's detail.
 - The detail carries a **Tags** panel: with `node:update`, edit mode adds and removes governed
   [tags](/guides/operator/inventory/) (keys whose vocabulary allows nodes), the same tag editor the
   component and location details use. The node list shows a Tags column and filters by any tag key.
-- With `node:delete`, **Delete** (the destructive action, left of the footer) **decommissions** the node after a confirm: its interfaces, derived tasks, tags, and enrollment are removed. The telemetry it collected for components stays.
+- With `node:delete`, **Delete** (the destructive action, left of the footer) **decommissions** the node after a confirm: its endpoints, derived tasks, tags, and enrollment are removed. The telemetry it collected for components stays.
 - **Enroll** (or **Re-enroll**, if it is already enrolled) is a secondary action in the detail's
   kebab: it re-mints the token, invalidating the previous one.
 - The detail also shows whether the node is enrolled and when it last sent a heartbeat.
@@ -41,65 +41,80 @@ The node detail also carries a read-only **Self-logs** panel (backed by `GET /no
 gated by `node:read`): the node's own recent operational log lines, newest first, over the last
 24 hours, so a node that is up but misbehaving explains itself without a shell on the box.
 
-## Interfaces
+## Endpoints
 
-An interface is an **API on a component** that a node reaches for, and it lives **on the
-component**: there is no standalone Interfaces surface. Open a component from the Fleet
-list's **Components** tab (with `interface:read`) and its interfaces read as a panel on the
+An endpoint is an **API on a component** that a node reaches for, and it lives **on the
+component**: there is no standalone Endpoints surface. Open a component from the Fleet
+list's **Components** tab (with `endpoint:read`) and its endpoints read as a panel on the
 detail, each
-showing the interface's **label** over its protocol name, its reachability, its node placement, and
-its probed target. An interface is **named by its protocol**: you pick a **type** (the transport) and
-the interface takes that protocol as its name, unique within its component, so one component can
-have one `tcp` and one `http`, and a second interface of a protocol it already has is refused.
-Because you never type that name, the **label** is the one string on an interface that is yours:
+showing the endpoint's **label** over its transport name, its reachability, its node placement, and
+its probed target. An endpoint is **named by its transport**: you pick the wire it speaks over and
+the endpoint takes that transport as its name, unique within its component, so one component can
+have one `tcp` and one `http`, and a second endpoint of a transport it already has is refused.
+Because you never type that name, the **label** is the one string on an endpoint that is yours:
 give it one ("Control processor") to say what the connection is FOR, since `ssh` only says how it is
-reached and reads the same on every component in the fleet. It is optional, and an interface
-without one reads its protocol name exactly.
+reached and reads the same on every component in the fleet. It is optional, and an endpoint
+without one reads its transport name exactly.
 
-- With `interface:create`, **Add interface** on the component detail creates one: give it a
-  **label** (optional, and the only name-like string you type here), choose a
-  **type** (the console picker offers `icmp` and `tcp` today; the `ssh` and `http` types exist
-  through the API and CLI, probing as a tcp connect; there is no free-text name),
-  a node placement, and a target (`host:port` for the tcp-family transports, `host` for icmp).
-  The owning component is the one you are on. Creating an interface **derives its poll task**
-  for you, so a fresh interface is a working reachability check with no second step.
-- With `interface:update`, editing an interface changes only its **node placement** and its
-  **target**; the type (and so the protocol name) is fixed at creation.
-- With `interface:delete`, deleting an interface removes it and **cascades its derived task**.
+- With `endpoint:create`, **Add endpoint** on the component detail creates one, in either of
+  two faces:
+  - **Probe**: give it a **label** (optional, and the only name-like string you type here),
+    choose a **transport** (the picker reads the code registry the binary ships,
+    `GET /transports`: `icmp` and `tcp` probe layers 3 and 4, `ssh` and `http` climb to
+    layer 7 (the probe draws a real response, so reached-but-not-responsive and
+    responded-but-not-authenticated are visible states), `udp` and `snmp` have no standalone
+    probe; there is no free-text name), a node placement, and a target (`host:port` for the
+    tcp-family transports, `host` for icmp).
+  - **Attach a driver**: pick a **driver** (only drivers whose declarative spec exists are
+    offered) and fill the **inputs** its spec declares: a host, a port with its default
+    pre-filled, credentials as **secret references** (the name of a secret of the declared
+    shape, never a value). The spec derives the transport, the target, and the endpoint's
+    tasks: a poll task per poll function, a standing listen task per listener. The
+    [Drivers](/guides/admin/drivers/) page shows each spec's menu before you attach it.
 
-Because an interface belongs to a component, it inherits that component's scope: an interface
-on a component outside your scope is not shown. A node **purge cascades** its interfaces and
+  The owning component is the one you are on. Either face **derives the endpoint's tasks**
+  for you, so a fresh endpoint is working collection with no second step.
+- With `endpoint:update`, editing an endpoint changes only its **node placement** and its
+  **target**; the transport (and so the name) is fixed at creation.
+- With `endpoint:delete`, deleting an endpoint removes it and **cascades its derived task**.
+
+Because an endpoint belongs to a component, it inherits that component's scope: an endpoint
+on a component outside your scope is not shown. A node **purge cascades** its endpoints and
 their derived tasks.
 
 ## Tasks
 
 A task is the **collection work** a node runs, and it is **derived**, not authored: creating an
-interface creates its one poll task. A task has **no name**: it is a binding, a **function**
-running over an **interface**, so it reads as its interface (the anchor) plus that function,
+endpoint creates its one poll task. A task has **no name**: it is a binding, a **function**
+running over an **endpoint**, so it reads as its endpoint (the anchor) plus that function,
 never a redundant label. There is no standalone Tasks surface. A node's derived tasks read as a
 **panel on the node's detail** (open a node from **Nodes**, with `task:read`): each
-shows its interface, the function it runs (today the built-in **reachability** check, with a
-provisional marker since named collection functions arrive with device drivers), and an
-**enabled** state; the node it runs on follows its interface's placement. To change what a node
-collects, add or remove the **interface**; there is no task create, edit, or delete.
+shows its endpoint, the function it runs (the built-in **reachability** check, or a driver
+function carried whole in the task's spec: `snmp-generic/scalars`, `newtron-nvp/status`, a
+standing listener), and an **enabled** state; the node it runs on follows its endpoint's
+placement. To change what a node
+collects, add or remove the **endpoint**; there is no task create, edit, or delete.
 
 ## Reachability
 
-Every component's detail carries an **Interfaces** panel showing composed reachability: is each
-of its interfaces reachable, and why. One row per interface shows the interface (its label, or its
-protocol name where it has none) and its endpoint, a **verdict
+Every component's detail carries an **Endpoints** panel showing composed reachability: is each
+of its endpoints reachable, and why. One row per endpoint shows the endpoint (its label, or its
+transport name where it has none) and its address, a **verdict
 pill** (responding, down, stale, or unknown), an **availability strip** drawn from the
-verdict's up/down transitions over time, and an expandable **gate breakdown** (the L3/L4 ping
-and port probes this slice ships) with each probe's signal and timing, then the composed
-verdict (the interface is up only when every applicable probe passed). A down interface also
-shows a plain-language **why** line. Every value is a real reading from the node, and the panel
-is also the authoring surface: its header carries **Add interface** (with `interface:create`)
-and each row that maps to an interface a **Manage** affordance opening that interface's detail.
+verdict's up/down transitions over time, and an expandable **gate breakdown** with each probe's signal and timing, then the composed
+verdict (the endpoint is up only when every applicable probe passed). An `http` or `ssh`
+endpoint also wears its upper rungs as chips once a probe has climbed them: **responds** (the
+API drew a real answer) or **no response** (the port accepted but the service never spoke),
+and for `ssh` **auth ok** / **auth failed** (shown only when a credential was actually
+tried). A down endpoint also shows a plain-language **why** line. Every value is a real reading from the node, and the panel
+is also the authoring surface: its header carries **Add endpoint** (with `endpoint:create`)
+and each row that maps to an endpoint a **Manage** affordance opening that endpoint's detail.
 
-To author a reachability check, add an **interface** to the component (above): a proper
-driver-based authoring flow is a later collection slice, so today a check is an interface plus
-its derived poll task, created from this panel on the component's own detail (there is no
-standalone Interfaces page).
+To author a reachability check, add an **endpoint** to the component (above), from this
+panel's own header: a bare probe endpoint is the reachability check, and **attaching a
+driver** is the authoring flow for real collection (the spec's functions become the
+endpoint's tasks, and their samples land on the component). There is no standalone
+Endpoints page.
 
 ## Events
 

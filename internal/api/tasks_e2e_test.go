@@ -54,11 +54,11 @@ func TestTaskAPI(t *testing.T) {
 		t.Fatalf("create comp-b: %v", err)
 	}
 	// Each interface DERIVES one poll task; that is the only way a task exists.
-	ifA, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "tcp", Component: ptr("comp-a")}, all)
+	ifA, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: ptr("comp-a")}, all)
 	if err != nil {
 		t.Fatalf("create interface on comp-a: %v", err)
 	}
-	ifB, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "tcp", Component: ptr("comp-b")}, all)
+	ifB, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: ptr("comp-b")}, all)
 	if err != nil {
 		t.Fatalf("create interface on comp-b: %v", err)
 	}
@@ -98,10 +98,10 @@ func TestTaskAPI(t *testing.T) {
 }
 
 type taskResp struct {
-	ID          string `json:"id"`
-	Mode        string `json:"mode"`
-	InterfaceID string `json:"interface_id"`
-	Enabled     bool   `json:"enabled"`
+	ID         string `json:"id"`
+	Mode       string `json:"mode"`
+	EndpointID string `json:"endpoint_id"`
+	Enabled    bool   `json:"enabled"`
 }
 
 func listTasks(c *apiClient, tok string) []taskResp {
@@ -119,7 +119,7 @@ func listTasks(c *apiClient, tok string) []taskResp {
 func taskByInterface(c *apiClient, tasks []taskResp, interfaceID string) taskResp {
 	c.t.Helper()
 	for _, tk := range tasks {
-		if tk.InterfaceID == interfaceID {
+		if tk.EndpointID == interfaceID {
 			return tk
 		}
 	}

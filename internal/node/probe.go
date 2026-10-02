@@ -8,20 +8,23 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/driver"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// interfaceParams is the endpoint config a probe reads off a task's interface.
+// endpointParams is the address config a probe reads off a task's endpoint.
 // A tcp probe needs the dial target (host:port) and an optional connect timeout;
 // an icmp probe needs the echo target (host or IP), an optional echo count, and
 // an optional per-run timeout.
-type interfaceParams struct {
-	Target  string `json:"target"`
-	Count   int    `json:"count,omitempty"`
-	Timeout string `json:"timeout,omitempty"`
+type endpointParams struct {
+	Target   string `json:"target"`
+	Count    int    `json:"count,omitempty"`
+	Timeout  string `json:"timeout,omitempty"`
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
 }
 
 // runTasks executes every probe task in the worklist and publishes one telemetry
@@ -32,54 +35,135 @@ type interfaceParams struct {
 // never stalls the rest of the worklist. tcp and icmp are the wired probe types;
 // their samples ride the same pipeline (the ingest consumer does not branch
 // on probe type).
-func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, dialer collection.TCPDialer, pinger collection.Pinger, verdicts map[string]string) error {
-	runner := &collection.Runner{TCP: dialer, Ping: pinger}
+func runTasks(ctx context.Context, nc *nats.Conn, node string, wl collection.WorklistReply, runner *collection.Runner, verdicts map[string]string, faultseen map[string]string) error {
 	for _, task := range wl.Tasks {
+		// A standing listen task is inert until the stateful arc arms
+		// listeners over held sessions (#603 slices 6 and 7): skip without a
+		// collection-failed, since an armed-later task is not a fault.
+		if task.Mode == "listen" {
+			continue
+		}
+		// A driver poll (a baked function, #814) interprets rather than
+		// probes: fetch over the transport, locate and type each emit. Its
+		// faults are per-emit collection-failed stories beside whatever
+		// samples still landed, so a payload missing one value never
+		// silently drops the rest. Faults publish transition-only (like the
+		// reachability verdict): a static misconfiguration that faults every
+		// tick lands one event, not one per tick forever, so a stuck driver
+		// does not flood the event lane.
+		if driver.IsBaked(task.Spec) {
+			dps, faults := collectDriverTask(ctx, runner, task)
+			current := ""
+			for _, f := range faults {
+				current += f.Error() + "\n"
+			}
+			if current != faultseen[task.ID] {
+				faultseen[task.ID] = current
+				for _, f := range faults {
+					slog.Warn("driver poll fault", "facility", "collection", "task", task.ID, "error", f.Error())
+					if pubErr := publishCollectionFailed(nc, node, task.ID, f); pubErr != nil {
+						return pubErr
+					}
+				}
+			}
+			if len(dps) == 0 {
+				continue
+			}
+			if err := publishBatch(nc, node, task.ID, dps); err != nil {
+				return err
+			}
+			continue
+		}
 		dps, err := collectTask(ctx, runner, task)
 		if err != nil {
-			// A skipped task is the node's own operational story, not a component
-			// signal: log it as a self-log rather than a false-down state sample.
-			// The package-level slog is the node-wide emitter (Run installs the
-			// self-log sink as the process default), so nothing is threaded here.
+			// A skipped task is the node's own operational story AND a
+			// collection fact (#812): log it as a self-log, and land a
+			// collection-failed event naming the task, so the failure is
+			// visible on the component's timeline rather than only in the
+			// node's own logs. Never a false-down state sample.
 			slog.Warn("task skipped", "facility", "collection", "task", task.ID, "error", err.Error())
+			if pubErr := publishCollectionFailed(nc, node, task.ID, err); pubErr != nil {
+				return pubErr
+			}
 			continue // unusable config or inconclusive probe: skip, no false down
 		}
 		if dps == nil {
-			continue // an unwired interface type: nothing to publish
+			continue // an unwired transport: nothing to publish
 		}
-		// Compute and, on a transition only, append the interface reachability
+		// Compute and, on a transition only, append the endpoint reachability
 		// verdict as a state sample. The node remembers the last verdict per
-		// task and emits interface-reachable only on a flip or first observation,
+		// task and emits endpoint-reachable only on a flip or first observation,
 		// so the state series is transition-only, not one row per tick. The key is
-		// the task id, not the interface name: interface names are unique only per
-		// component, so a node routinely probes two components' interfaces that
+		// the task id, not the endpoint name: endpoint names are unique only per
+		// component, so a node routinely probes two components' endpoints that
 		// share a friendly name (the default is the protocol), and a name-keyed map
 		// would suppress the second one's verdict. The task id is node-unique (a
-		// content hash over the interface). The ingest-side latest-value guard is
+		// content hash over the endpoint). The ingest-side latest-value guard is
 		// the net for a node restart.
 		dps = appendVerdict(dps, task.ID, verdicts)
-		ev := buildBatch(task.ID, node, dps)
-		b, err := proto.Marshal(ev)
-		if err != nil {
-			return fmt.Errorf("node: marshal telemetry event: %w", err)
-		}
-		if err := nc.Publish(collection.TelemetrySubject(node), b); err != nil {
-			return fmt.Errorf("node: publish telemetry: %w", err)
+		if err := publishBatch(nc, node, task.ID, dps); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-// appendVerdict computes the interface reachability verdict from a probe's
+// publishBatch maps samples to a per-lane TelemetryBatch and publishes it on
+// the node's own telemetry subject.
+func publishBatch(nc *nats.Conn, node, taskID string, dps []collection.Sample) error {
+	ev := buildBatch(taskID, node, dps)
+	b, err := proto.Marshal(ev)
+	if err != nil {
+		return fmt.Errorf("node: marshal telemetry event: %w", err)
+	}
+	if err := nc.Publish(collection.TelemetrySubject(node), b); err != nil {
+		return fmt.Errorf("node: publish telemetry: %w", err)
+	}
+	return nil
+}
+
+// collectDriverTask parses one derived driver poll and runs it: the baked
+// function from the task spec, the target from the endpoint params, the
+// unsealed secret inputs from the worklist. Faults are the collection-failed
+// stories; a parse fault covers the whole task.
+func collectDriverTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec) ([]collection.Sample, []error) {
+	fn, err := driver.ParseBaked(task.Spec)
+	if err != nil {
+		return nil, []error{fmt.Errorf("node: task %s: %w", task.ID, err)}
+	}
+	var p endpointParams
+	if len(task.EndpointParams) > 0 {
+		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
+			return nil, []error{fmt.Errorf("node: bad endpoint params for task %s: %w", task.ID, err)}
+		}
+	}
+	var timeout time.Duration
+	if p.Timeout != "" {
+		d, err := time.ParseDuration(p.Timeout)
+		if err != nil {
+			return nil, []error{fmt.Errorf("node: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)}
+		}
+		timeout = d
+	}
+	return runner.CollectDriverPoll(ctx, collection.DriverPollTask{
+		Fn:        fn,
+		Transport: task.Transport,
+		Target:    p.Target,
+		Secrets:   task.Secrets,
+		Timeout:   timeout,
+	})
+}
+
+// appendVerdict computes the endpoint reachability verdict from a probe's
 // samples and appends it (a state sample carrying up/down) only when it
 // differs from the last verdict remembered for that task, or is the first
 // observation. It records the emitted verdict in verdicts (keyed by the
-// node-unique task id, since interface names collide across components) so the
+// node-unique task id, since endpoint names collide across components) so the
 // next tick can tell a flip from a repeat. When the probe produced no
 // reachability metric (nothing to judge) or the verdict is unchanged, dps is
 // returned untouched.
 func appendVerdict(dps []collection.Sample, taskID string, verdicts map[string]string) []collection.Sample {
-	up, ok := collection.InterfaceVerdict(dps)
+	up, ok := collection.EndpointVerdict(dps)
 	if !ok {
 		return dps
 	}
@@ -92,28 +176,41 @@ func appendVerdict(dps []collection.Sample, taskID string, verdicts map[string]s
 	}
 	verdicts[taskID] = verdict
 	return append(dps, collection.Sample{
-		Name:   collection.SignalInterfaceReachable,
+		Name:   collection.SignalEndpointReachable,
 		Text:   verdict,
 		IsText: true,
 		TS:     time.Now().UTC(),
 	})
 }
 
-// collectTask dispatches a task to its probe by interface type and returns the
-// produced samples. A nil, nil return is an interface type this node does not
+// collectTask dispatches a task to its probe by transport and returns the
+// produced samples. A nil, nil return is a transport this node does not
 // run (skip, nothing to publish); an error is an unusable config or an
-// inconclusive probe (skip, no false down). The transport is the reachability
-// axis: tcp, ssh, and http all reach by opening the tcp port (the driver that
-// speaks the protocol over the transport is a later collection layer), so they
-// share the tcp-connect probe; icmp pings.
+// inconclusive probe (skip, no false down). Since #812 the ladder climbs to
+// layer 7: http issues a real request and ssh runs a real key exchange, each
+// carrying its L4 dial facts along, so reached-but-not-responsive and
+// responded-but-not-authenticated are observable states; tcp stays the plain
+// connect and icmp pings.
 func collectTask(ctx context.Context, runner *collection.Runner, task collection.TaskSpec) ([]collection.Sample, error) {
-	switch task.InterfaceType {
-	case "tcp", "ssh", "http":
+	switch task.Transport {
+	case "tcp":
 		t, err := parseTCPTask(task)
 		if err != nil {
 			return nil, err
 		}
 		return runner.CollectTCP(ctx, t)
+	case "http":
+		t, err := parseHTTPTask(task)
+		if err != nil {
+			return nil, err
+		}
+		return runner.CollectHTTP(ctx, t)
+	case "ssh":
+		t, err := parseSSHTask(task)
+		if err != nil {
+			return nil, err
+		}
+		return runner.CollectSSH(ctx, t)
 	case "icmp":
 		t, err := parseICMPTask(task)
 		if err != nil {
@@ -121,16 +218,16 @@ func collectTask(ctx context.Context, runner *collection.Runner, task collection
 		}
 		return runner.CollectICMP(ctx, t)
 	default:
-		return nil, nil // unwired interface type: nothing to run
+		return nil, nil // unwired transport: nothing to run
 	}
 }
 
-// parseTCPTask reads the dial target and timeout from a task's interface params.
+// parseTCPTask reads the dial target and timeout from a task's endpoint params.
 func parseTCPTask(task collection.TaskSpec) (collection.TCPTask, error) {
-	var p interfaceParams
-	if len(task.InterfaceParams) > 0 {
-		if err := json.Unmarshal(task.InterfaceParams, &p); err != nil {
-			return collection.TCPTask{}, fmt.Errorf("node: bad interface params for task %s: %w", task.ID, err)
+	var p endpointParams
+	if len(task.EndpointParams) > 0 {
+		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
+			return collection.TCPTask{}, fmt.Errorf("node: bad endpoint params for task %s: %w", task.ID, err)
 		}
 	}
 	if p.Target == "" {
@@ -147,13 +244,13 @@ func parseTCPTask(task collection.TaskSpec) (collection.TCPTask, error) {
 	return collection.TCPTask{Target: p.Target, Timeout: timeout}, nil
 }
 
-// parseICMPTask reads the echo target, count, and timeout from a task's interface
+// parseICMPTask reads the echo target, count, and timeout from a task's endpoint
 // params. An empty target is a usage error the caller skips on.
 func parseICMPTask(task collection.TaskSpec) (collection.ICMPTask, error) {
-	var p interfaceParams
-	if len(task.InterfaceParams) > 0 {
-		if err := json.Unmarshal(task.InterfaceParams, &p); err != nil {
-			return collection.ICMPTask{}, fmt.Errorf("node: bad interface params for task %s: %w", task.ID, err)
+	var p endpointParams
+	if len(task.EndpointParams) > 0 {
+		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
+			return collection.ICMPTask{}, fmt.Errorf("node: bad endpoint params for task %s: %w", task.ID, err)
 		}
 	}
 	if p.Target == "" {
@@ -207,4 +304,77 @@ func buildBatch(taskID, node string, dps []collection.Sample) *ogv1.TelemetryBat
 		})
 	}
 	return ev
+}
+
+// publishCollectionFailed lands the collection-failed occurrence for a task
+// whose config or payload could not be used: the event carries the reason as
+// its message and the task identity in its payload, so a failing check is a
+// fact on the component's timeline, never only a line in the node's own logs.
+func publishCollectionFailed(nc *nats.Conn, node, taskID string, cause error) error {
+	payload, _ := json.Marshal(map[string]string{"task": taskID})
+	ev := &ogv1.TelemetryBatch{
+		TaskId: taskID,
+		NodeId: node,
+		Ts:     timestamppb.New(time.Now().UTC()),
+		Events: []*ogv1.EventSample{{
+			Name:    collection.EventCollectionFailed,
+			Message: cause.Error(),
+			Payload: payload,
+		}},
+	}
+	b, err := proto.Marshal(ev)
+	if err != nil {
+		return fmt.Errorf("node: marshal collection-failed event: %w", err)
+	}
+	if err := nc.Publish(collection.TelemetrySubject(node), b); err != nil {
+		return fmt.Errorf("node: publish collection-failed event: %w", err)
+	}
+	return nil
+}
+
+// parseHTTPTask reads the request target and timeout from a task's endpoint
+// params.
+func parseHTTPTask(task collection.TaskSpec) (collection.HTTPTask, error) {
+	var p endpointParams
+	if len(task.EndpointParams) > 0 {
+		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
+			return collection.HTTPTask{}, fmt.Errorf("node: bad endpoint params for task %s: %w", task.ID, err)
+		}
+	}
+	if p.Target == "" {
+		return collection.HTTPTask{}, fmt.Errorf("node: task %s: empty http target", task.ID)
+	}
+	var timeout time.Duration
+	if p.Timeout != "" {
+		d, err := time.ParseDuration(p.Timeout)
+		if err != nil {
+			return collection.HTTPTask{}, fmt.Errorf("node: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
+		}
+		timeout = d
+	}
+	return collection.HTTPTask{Target: p.Target, Timeout: timeout}, nil
+}
+
+// parseSSHTask reads the dial target, the optional credential the auth rung
+// tries (plain params today; secret references arrive with the driver spec,
+// #813), and the timeout from a task's endpoint params.
+func parseSSHTask(task collection.TaskSpec) (collection.SSHTask, error) {
+	var p endpointParams
+	if len(task.EndpointParams) > 0 {
+		if err := json.Unmarshal(task.EndpointParams, &p); err != nil {
+			return collection.SSHTask{}, fmt.Errorf("node: bad endpoint params for task %s: %w", task.ID, err)
+		}
+	}
+	if p.Target == "" {
+		return collection.SSHTask{}, fmt.Errorf("node: task %s: empty ssh target", task.ID)
+	}
+	var timeout time.Duration
+	if p.Timeout != "" {
+		d, err := time.ParseDuration(p.Timeout)
+		if err != nil {
+			return collection.SSHTask{}, fmt.Errorf("node: task %s: bad timeout %q: %w", task.ID, p.Timeout, err)
+		}
+		timeout = d
+	}
+	return collection.SSHTask{Target: p.Target, Username: p.Username, Password: p.Password, Timeout: timeout}, nil
 }

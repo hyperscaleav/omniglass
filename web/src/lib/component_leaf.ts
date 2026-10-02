@@ -10,7 +10,7 @@ import type { components } from "../api/schema.gen";
 import type { Member } from "./members";
 import type { Node } from "./nodes";
 import { nodeStatus } from "./nodes";
-import type { ReachInterface } from "./reachability";
+import type { ReachEndpoint } from "./reachability";
 import { verdictWord } from "./reachability";
 import { entityLabel } from "./entities";
 
@@ -24,7 +24,7 @@ export type CollectionState = {
   node?: string;
 };
 
-export function collectionState(iface: ReachInterface, node: Node | undefined, now: number = Date.now()): CollectionState {
+export function collectionState(iface: ReachEndpoint, node: Node | undefined, now: number = Date.now()): CollectionState {
   const nodeDown = !node || nodeStatus(node, now) !== "up";
   const word = verdictWord(iface.verdict ?? null, now);
   if (word === "unknown") return { kind: nodeDown ? "node-offline" : "unknown", node: iface.node };

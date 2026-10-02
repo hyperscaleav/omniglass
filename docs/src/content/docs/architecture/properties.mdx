@@ -13,14 +13,14 @@ import SchemaTable from '../../../components/SchemaTable.astro';
 Built: both sample lanes end to end. The **metric** path (reachability): the tcp probe produces
 `tcp-open` / `tcp-connect-time`, the icmp (ping) probe `icmp-reachable` / `icmp-rtt-avg`; the ingest
 consumer writes them to `metric` with `provenance=observed`, owner bound server-side from the task's
-interface (`owner_kind=component`), reject-not-project against the `metric_type` catalog. The
-**property** path: the node computes the per-interface verdict `interface-reachable` (the AND of its
+endpoint (`owner_kind=component`), reject-not-project against the `metric_type` catalog. The
+**property** path: the node computes the per-endpoint verdict `endpoint-reachable` (the AND of its
 probe results); the consumer lands it in `property` under the same owner-confinement,
 **transition-only** (one row per flip, guarded at the node and at ingest). Raw lines land on the
 `log_line` / `node_log` lanes, never here
 ([ADR-0066](/architecture/decisions/#adr-0066-logs-are-a-raw-ingest-lane-not-events)).
 **Two ingest lanes**, one write path: the node lane (a node publishes on its own subject; the
-server binds the owner from the task's interface) and the **API push lane** (`POST /telemetry:push`:
+server binds the owner from the task's endpoint) and the **API push lane** (`POST /telemetry:push`:
 a scoped caller declares the owner, the scope check is the fence). A push publishes onto the data
 lane, not Postgres, so pushed samples reach the stream consumers; both lanes call one `land()` and
 share its semantics (reject-not-project per lane, the transition-only property guard). The wire is
@@ -63,7 +63,7 @@ The owner is the **exclusive-arc**: an `owner_kind` enum (`component` / `system`
 
 One owner can hold several values of the *same* name (three fan speeds, per-port counters). The catalog holds **one** row per measurement (`fan-speed`, not `fan-speed-intake`); the discriminator is an `instance text NOT NULL DEFAULT ''` column on both sample tables. Series identity is **`(owner, type, instance, provenance)`**: each instance its own series, the singleton (`instance = ''`) the default; aggregation groups by name and ignores `instance`, so per-instance trends stay distinct.
 
-**Built today, `instance` is stamped server-side**: the ingest consumer sets each node-lane sample's `instance` to the **observing interface's name**, keeping two interfaces reporting one name distinct series; the API push lane sets it directly.
+**Built today, `instance` is stamped server-side**: the ingest consumer sets each node-lane sample's `instance` to the **observing endpoint's name**, keeping two endpoints reporting one name distinct series; the API push lane sets it directly.
 
 :::design[The authored instance form, tracked in #430]
 Pending as an ADR: the instance
@@ -93,7 +93,7 @@ Each lane that carries typed data has its own registry: `metric_type` and `prope
 
 The three ingest registries (`metric_type`, `property_type`, `event_type`) share one resolution namespace: a create is refused when the name exists in a sibling catalog, because a name in two lanes would make per-lane routing ambiguous.
 
-**Naming is owner-agnostic and single-token**: a name is one kebab segment (at most 100 characters, no dots: `icmp-rtt-avg`, `power-state`, `video-input`), naming a **measurement, never its owner** (`temperature`, not `room-temperature`), with the canonical unit in `metric_type.unit` (`fan-speed` + `unit: rpm`, not `fan-rpm`). One canonical name is one comparable signal across vendors, the normalization cross-fleet dashboards and AI hinge on. The official set seeds from `internal/seed/metric_types.yaml` and `internal/seed/property_types.yaml`: today the eleven types the built collection vertical uses (4 metric: `icmp-rtt-avg`, `tcp-open`, `tcp-connect-time`, and `icmp-reachable`; 7 property: `interface-reachable`, `health`, `video-input`, `serial-number`, `mac-address`, `firmware-version`, `model-number`); the OpenTelemetry-semconv-aligned IT leaves and the [OpenAV minimum-device-functionality guidelines](https://github.com/OpenAVCloud/specifications/blob/main/min-device-functionality/OAVC-AV-Device-Minimum-Functionality-Guidelines.md) set are still to come.
+**Naming is owner-agnostic and single-token**: a name is one kebab segment (at most 100 characters, no dots: `icmp-rtt-avg`, `power-state`, `video-input`), naming a **measurement, never its owner** (`temperature`, not `room-temperature`), with the canonical unit in `metric_type.unit` (`fan-speed` + `unit: rpm`, not `fan-rpm`). One canonical name is one comparable signal across vendors, the normalization cross-fleet dashboards and AI hinge on. The official set seeds from `internal/seed/metric_types.yaml` and `internal/seed/property_types.yaml`: today the fifteen types the built collection vertical uses (6 metric: `icmp-rtt-avg`, `tcp-open`, `tcp-connect-time`, `icmp-reachable`, `http-response-time`, and `ssh-handshake-time`; 9 property: `endpoint-reachable`, `endpoint-responsive`, `endpoint-authenticated`, `health`, `video-input`, `serial-number`, `mac-address`, `firmware-version`, `model-number`); the OpenTelemetry-semconv-aligned IT leaves and the [OpenAV minimum-device-functionality guidelines](https://github.com/OpenAVCloud/specifications/blob/main/min-device-functionality/OAVC-AV-Device-Minimum-Functionality-Guidelines.md) set are still to come.
 
 **Validation on insert.** Ingest checks per lane: **(1)** the name resolves in the lane's own catalog; an unresolved name is **reject-not-project**, kept out of the typed series. **(2)** The value conforms: a metric is numeric by wire shape; a property's value must parse as the type's `data_type` and satisfy its `validation` schema when one is declared, and a violating push is refused before anything publishes. The cascade-resolved `validation_policy` modes (bypass / audit / enforce) and the `collection.failed` raw carry are design, tracked in #430.
 

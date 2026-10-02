@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/hyperscaleav/omniglass/internal/storage"
@@ -11,16 +14,18 @@ import (
 // driverBody is the wire shape of a driver registry row. The registry lists
 // alphabetically by label, like vendor.
 type driverBody struct {
-	ID       string `json:"id" doc:"The driver's uuid, the stable handle that survives a rename"`
-	Name     string `json:"name" doc:"The name an operator reads and types; renameable"`
-	Label    string `json:"label"`
-	Version  string `json:"version,omitempty"`
-	Official bool   `json:"official"`
+	ID       string          `json:"id" doc:"The driver's uuid, the stable handle that survives a rename"`
+	Name     string          `json:"name" doc:"The name an operator reads and types; renameable"`
+	Label    string          `json:"label"`
+	Version  string          `json:"version,omitempty"`
+	Official bool            `json:"official"`
+	Spec     json.RawMessage `json:"spec,omitempty" doc:"The declarative spec body (#813): transports, inputs, poll functions, listeners, command bindings. Absent on a stub that cannot be attached yet"`
 }
 
 func toDriverBody(d *storage.Driver) driverBody {
 	return driverBody{
 		ID: d.ID, Name: d.Name, Label: d.Label, Version: d.Version, Official: d.Official,
+		Spec: json.RawMessage(d.Spec),
 	}
 }
 
@@ -36,17 +41,19 @@ type driverPathInput struct {
 
 type createDriverInput struct {
 	Body struct {
-		Name    string `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name; renameable"`
-		Label   string `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
-		Version string `json:"version,omitempty" doc:"A free-form version string, e.g. 1.0.0"`
+		Name    string          `json:"name" minLength:"1" maxLength:"100" pattern:"^[a-z0-9][a-z0-9-]*$" doc:"The globally unique name; renameable"`
+		Label   string          `json:"label" minLength:"1" doc:"What an operator reads in pickers and lists"`
+		Version string          `json:"version,omitempty" doc:"A free-form version string, e.g. 1.0.0"`
+		Spec    json.RawMessage `json:"spec,omitempty" doc:"The declarative spec body; validated against the catalogs, and a spec that fails validation refuses the write (422)"`
 	}
 }
 
 type updateDriverInput struct {
 	ID   string `path:"id"`
 	Body struct {
-		Label   *string `json:"label,omitempty" doc:"A new operator-facing label"`
-		Version *string `json:"version,omitempty" doc:"A new version string, e.g. 1.0.1"`
+		Label   *string         `json:"label,omitempty" doc:"A new operator-facing label"`
+		Version *string         `json:"version,omitempty" doc:"A new version string, e.g. 1.0.1"`
+		Spec    json.RawMessage `json:"spec,omitempty" doc:"A replacement spec body; validated like the create's, refused with a 422 when it cannot be interpreted"`
 	}
 }
 
@@ -88,9 +95,10 @@ func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 	}, "driver", "create"), func(ctx context.Context, in *createDriverInput) (*driverOutput, error) {
 		d, err := gw.CreateDriver(ctx, actorID(ctx), storage.Driver{
 			Name: in.Body.Name, Label: in.Body.Label, Version: in.Body.Version,
+			Spec: []byte(in.Body.Spec),
 		})
 		if err != nil {
-			return nil, mapTypeErr(err, "driver")
+			return nil, mapDriverErr(err)
 		}
 		return &driverOutput{Body: toDriverBody(d)}, nil
 	})
@@ -117,10 +125,10 @@ func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Description: "Patches a custom driver's label or version. Official drivers are read-only (422). Gated by driver:update.",
 	}, "driver", "update"), func(ctx context.Context, in *updateDriverInput) (*driverOutput, error) {
 		d, err := gw.UpdateDriver(ctx, actorID(ctx), in.ID, storage.DriverPatch{
-			Label: in.Body.Label, Version: in.Body.Version,
+			Label: in.Body.Label, Version: in.Body.Version, Spec: []byte(in.Body.Spec),
 		})
 		if err != nil {
-			return nil, mapTypeErr(err, "driver")
+			return nil, mapDriverErr(err)
 		}
 		return &driverOutput{Body: toDriverBody(d)}, nil
 	})
@@ -138,4 +146,14 @@ func registerDriverRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		}
 		return nil, nil
 	})
+}
+
+// mapDriverErr layers the spec write gate over the registry mapper: a spec
+// that fails validation is a 422 carrying the fault by name, so an author
+// fixes the spec rather than reading a generic refusal.
+func mapDriverErr(err error) error {
+	if errors.Is(err, storage.ErrSpecInvalid) {
+		return huma.Error422UnprocessableEntity(strings.TrimPrefix(err.Error(), "storage: "))
+	}
+	return mapTypeErr(err, "driver")
 }

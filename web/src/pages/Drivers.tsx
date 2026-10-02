@@ -6,6 +6,7 @@ import FieldRow from "../components/FieldRow";
 import BladeField from "../components/BladeField";
 import { identityColumn } from "../components/IdentityCell";
 import KVStacked from "../components/KVStacked";
+import DriverSpecMenu from "../components/DriverSpecMenu";
 import { useFormActions } from "../lib/formactions";
 import { Plus } from "../components/icons";
 import {
@@ -177,6 +178,16 @@ function DriverBladeBody(p: { id: string }): JSX.Element {
             draft={version}
             onInput={setVersion}
           />
+          <Show
+            when={r().spec}
+            fallback={<p class="text-xs text-base-content/40">A stub: no spec authored yet, so nothing can attach it. The spec is authored over the API (a driver's body is data, not code).</p>}
+          >
+            {(spec) => (
+              <div class="border-t border-base-300 pt-3">
+                <DriverSpecMenu spec={spec()} />
+              </div>
+            )}
+          </Show>
         </div>
       )}
     </Show>

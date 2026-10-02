@@ -58,7 +58,7 @@ func TestHistoryWindowsAreBoundedByTheDatabaseClock(t *testing.T) {
 			return err
 		}},
 		{"a component's property transitions", func() error {
-			_, err := gw.PropertyTransitions(ctx, comp.ID, "interface-reachable", "eth0", 24*time.Hour)
+			_, err := gw.PropertyTransitions(ctx, comp.ID, "endpoint-reachable", "eth0", 24*time.Hour)
 			return err
 		}},
 		{"a component's events", func() error {

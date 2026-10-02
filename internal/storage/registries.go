@@ -25,15 +25,6 @@ type PropertyType struct {
 	Official     bool
 }
 
-// InterfaceType is a connection kind. Built marks that a node-side adapter
-// exists for it.
-type InterfaceType struct {
-	Name        string
-	Official    bool
-	Description string
-	Built       bool
-}
-
 // UpsertPropertyType installs an official property, authoritative on conflict (the
 // boot-seed bucket): an operator's custom properties (official=false) are keyed by a
 // distinct name and untouched. The validation fragment passes the same schema guard
@@ -71,39 +62,6 @@ func (p *PG) ListPropertyTypes(ctx context.Context) ([]PropertyType, error) {
 			return nil, fmt.Errorf("storage: scan property: %w", err)
 		}
 		out = append(out, prop)
-	}
-	return out, rows.Err()
-}
-
-// UpsertInterfaceType installs an official connection kind, authoritative on
-// conflict.
-func (p *PG) UpsertInterfaceType(ctx context.Context, it InterfaceType) error {
-	_, err := p.pool.Exec(ctx, `
-		insert into interface_type (name, official, description, built)
-		values ($1, $2, $3, $4)
-		on conflict (name) do update set
-			official = excluded.official, description = excluded.description, built = excluded.built`,
-		it.Name, it.Official, it.Description, it.Built)
-	if err != nil {
-		return fmt.Errorf("storage: upsert interface_type %q: %w", it.Name, err)
-	}
-	return nil
-}
-
-// ListInterfaceTypes returns every registered connection kind.
-func (p *PG) ListInterfaceTypes(ctx context.Context) ([]InterfaceType, error) {
-	rows, err := p.pool.Query(ctx, `select name, official, description, built from interface_type`)
-	if err != nil {
-		return nil, fmt.Errorf("storage: list interface_types: %w", err)
-	}
-	defer rows.Close()
-	var out []InterfaceType
-	for rows.Next() {
-		var it InterfaceType
-		if err := rows.Scan(&it.Name, &it.Official, &it.Description, &it.Built); err != nil {
-			return nil, fmt.Errorf("storage: scan interface_type: %w", err)
-		}
-		out = append(out, it)
 	}
 	return out, rows.Err()
 }

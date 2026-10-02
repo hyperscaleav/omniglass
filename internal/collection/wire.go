@@ -17,6 +17,10 @@ const (
 	// (single-token node wildcard), so a node name is always one subject token.
 	WorklistWildcard  = subjectPrefix + "worklist.*"
 	HeartbeatWildcard = subjectPrefix + "heartbeat.*"
+	// CommandWildcard / CommandStatusWildcard are the server-side subscriptions
+	// for the command queue pull and the execution reports (#815).
+	CommandWildcard       = subjectPrefix + "command.*"
+	CommandStatusWildcard = subjectPrefix + "commandstatus.*"
 	// TelemetryWildcard is the server-side JetStream stream subject: every node's
 	// telemetry publish (single-token node wildcard), mirroring WorklistWildcard.
 	TelemetryWildcard = subjectPrefix + "telemetry.*"
@@ -48,6 +52,14 @@ func TelemetrySubject(node string) string { return subjectPrefix + "telemetry." 
 // to re-pull when its config generation advances.
 func WorklistChangedSubject(node string) string { return subjectPrefix + "worklist-changed." + node }
 
+// CommandSubject is where a node pulls its pending command queue (#815), a
+// request-reply mirroring the worklist: the reply is the commands resolved and
+// rendered for this node, marked dispatched by the pull itself.
+func CommandSubject(node string) string { return subjectPrefix + "command." + node }
+
+// CommandStatusSubject is where a node reports a command's execution outcome.
+func CommandStatusSubject(node string) string { return subjectPrefix + "commandstatus." + node }
+
 // InboxPrefix is a node's private request-reply inbox namespace, so a node's
 // subscribe grant covers only its own reply inboxes, never another node's.
 func InboxPrefix(node string) string { return "_INBOX." + node }
@@ -62,15 +74,19 @@ func NodeFromSubject(subject string) string {
 }
 
 // TaskSpec is one enabled task in a worklist reply: the content-addressed task
-// plus the placement-bound interface it runs over. InterfaceParams and Spec are
-// raw jsonb passed through from storage.
+// plus the placement-bound endpoint it runs over. EndpointParams and Spec are
+// raw jsonb passed through from storage. Secrets carries a driver task's
+// unsealed secret inputs (#814), resolved server-side at reply time; the
+// per-node subject grant is the isolation boundary, so a node only ever
+// receives the credentials of endpoints placed on it.
 type TaskSpec struct {
-	ID              string          `json:"id"`
-	Mode            string          `json:"mode"`
-	InterfaceName   string          `json:"interface_name"`
-	InterfaceType   string          `json:"interface_type"`
-	InterfaceParams json.RawMessage `json:"interface_params,omitempty"`
-	Spec            json.RawMessage `json:"spec,omitempty"`
+	ID             string                       `json:"id"`
+	Mode           string                       `json:"mode"`
+	EndpointName   string                       `json:"endpoint_name"`
+	Transport      string                       `json:"transport"`
+	EndpointParams json.RawMessage              `json:"endpoint_params,omitempty"`
+	Spec           json.RawMessage              `json:"spec,omitempty"`
+	Secrets        map[string]map[string]string `json:"secrets,omitempty"`
 }
 
 // WorklistReply is the server's response to a worklist request: the node's
@@ -84,4 +100,27 @@ type WorklistReply struct {
 type Heartbeat struct {
 	Node string    `json:"node"`
 	At   time.Time `json:"at"`
+}
+
+// CommandDelivery is one command rendered for a node's queue (#815): what to
+// send (the rendered line), over which transport, to which target.
+type CommandDelivery struct {
+	ID          int64  `json:"id"`
+	CommandType string `json:"command_type"`
+	Transport   string `json:"transport"`
+	Target      string `json:"target"`
+	Line        string `json:"line,omitempty"`
+}
+
+// CommandPullReply is the server's response to a command queue pull.
+type CommandPullReply struct {
+	Commands []CommandDelivery `json:"commands"`
+}
+
+// CommandStatus is a node's execution report for one command: an empty Error
+// is a successful actuation. Settlement stays the server's separate judgment
+// of observed against intended.
+type CommandStatus struct {
+	ID    int64  `json:"id"`
+	Error string `json:"error,omitempty"`
 }

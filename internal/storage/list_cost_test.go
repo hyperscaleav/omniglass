@@ -273,12 +273,12 @@ func TestListInterfacesCostIsFlatInPageSize(t *testing.T) {
 		t.Helper()
 		name := fmt.Sprintf("dsp-%d", i)
 		mustCreateComponent(t, gw, storage.ComponentSpec{Name: name, LocationName: strptr(roomNames[i%rooms])}, all)
-		if _, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "tcp", Component: strptr(name)}, all); err != nil {
+		if _, err := gw.CreateEndpoint(ctx, "", storage.EndpointSpec{Transport: "tcp", Component: strptr(name)}, all); err != nil {
 			t.Fatalf("create interface on %s: %v", name, err)
 		}
 	}
 	list := func() (int, error) {
-		is, err := gw.ListInterfaces(ctx, all)
+		is, err := gw.ListEndpoints(ctx, all)
 		return len(is), err
 	}
 
