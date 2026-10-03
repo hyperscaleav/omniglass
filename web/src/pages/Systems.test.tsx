@@ -12,11 +12,8 @@ import { ownerPropertiesKey, type EffectiveProperty } from "../lib/owner_propert
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
-import { hueFor } from "../lib/system_color";
-import { SYSTEM_VERDICTS_KEY } from "../lib/health";
-import { NAME_MIN_W } from "../components/TreeList";
 
-// The Systems page on the shared TreeList in the create-as-route model: New routes
+// The Systems route in the create-as-route model (the list is Explore's outline, #861): New routes
 // to /systems/create (a draft accordion), Save hands off to /systems/<id> in edit;
 // the detail is read-only in view (no in-body mutation control) and editable via the
 // pencil. A system conforms to a STANDARD, whose declared-property contract the
@@ -108,184 +105,6 @@ describe("Systems create-as-route", () => {
     expect(labels[3]).toBe("\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0Classroom");
   });
 
-  it("wears a colour dot derived from its uuid on the list row", async () => {
-    mount("/systems");
-    await waitFor(() => expect(screen.getByText("Boardroom")).toBeTruthy());
-    const dot = document.querySelector(".og-system-dot") as HTMLElement;
-    expect(dot).toBeTruthy();
-    expect(dot.style.getPropertyValue("--sys-h")).toBe(String(hueFor(sys.id)));
-  });
-
-});
-
-// #627 scopes name uniqueness to placement, not the whole fleet: two systems
-// under different parents may now legally share a name. The tree builder
-// used to key its construction-time map on the bare name (byId.set(s.name,
-// ...)), so the second same-named row silently overwrote the first and its
-// children reparented onto the survivor. Keying that map on uuid instead
-// (node.id itself stays the name; only the construction key moved) is what
-// keeps both rows in the rendered tree.
-describe("Systems list survives duplicate names across placements (#627)", () => {
-  afterEach(() => window.history.pushState({}, "", "/"));
-
-  it("renders both same-named systems when they sit under different parents, each keeping its own child", async () => {
-    // Each "edge" has its OWN child (leaf-av / leaf-lab): a bare row count
-    // could still look right off a double-push artifact (the surviving node
-    // object gets pushed into both parents' children arrays). The
-    // discriminating symptom the amendment actually describes is the CHILD
-    // reparenting onto whichever same-named node won the map: under the old
-    // bug, both leaves end up merged onto one surviving "edge" object and so
-    // both appear TWICE; under the fix, each leaf renders exactly once,
-    // under its own parent.
-    const av: System = { id: uuidFor("s-av"), name: "av", member_count: 0, effective_tags: {} };
-    const lab: System = { id: uuidFor("s-lab"), name: "lab", member_count: 0, effective_tags: {} };
-    const edgeUnderAV: System = { id: uuidFor("s-edge-av"), name: "edge", parent: "av", parent_id: av.id, member_count: 0, effective_tags: {} };
-    const edgeUnderLab: System = { id: uuidFor("s-edge-lab"), name: "edge", parent: "lab", parent_id: lab.id, member_count: 0, effective_tags: {} };
-    const leafAV: System = { id: uuidFor("s-leaf-av"), name: "leaf-av", parent: "edge", parent_id: edgeUnderAV.id, member_count: 0, effective_tags: {} };
-    const leafLab: System = { id: uuidFor("s-leaf-lab"), name: "leaf-lab", parent: "edge", parent_id: edgeUnderLab.id, member_count: 0, effective_tags: {} };
-
-    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...SYSTEMS_KEY], [av, lab, edgeUnderAV, edgeUnderLab, leafAV, leafLab]);
-    qc.setQueryData([...LOCATIONS_KEY], []);
-    qc.setQueryData([...COMPONENTS_KEY], []);
-    qc.setQueryData([...STANDARDS_KEY], standards);
-    qc.setQueryData([...SYSTEM_TYPES_KEY], systemTypes);
-    qc.setQueryData([...ME_KEY], me);
-    qc.setQueryData([...TAGS_KEY], []);
-    window.history.pushState({}, "", "/systems");
-    render(() => (
-      <QueryClientProvider client={qc}>
-        <Router>
-          <Route path="/systems" component={Systems} />
-        </Router>
-      </QueryClientProvider>
-    ));
-
-    await waitFor(() => expect(screen.getAllByText("av").length).toBeGreaterThan(0));
-    // Tree mode starts fully collapsed, so expand everything.
-    fireEvent.click(screen.getByTitle("Expand all"));
-    await waitFor(() => expect(screen.getAllByText("edge")).toHaveLength(2));
-    expect(screen.getAllByText("leaf-av")).toHaveLength(1);
-    expect(screen.getAllByText("leaf-lab")).toHaveLength(1);
-    // leaf-av sits under the SAME "edge" row as av, leaf-lab under lab's: the
-    // tree renders depth-first, so leaf-av's row falls strictly between av's
-    // and lab's, and leaf-lab's falls after lab's.
-    const rows = Array.from(document.querySelectorAll("tbody tr"));
-    const indexOf = (text: string) => rows.indexOf(screen.getByText(text).closest("tr")!);
-    expect(indexOf("leaf-av")).toBeGreaterThan(indexOf("av"));
-    expect(indexOf("leaf-av")).toBeLessThan(indexOf("lab"));
-    expect(indexOf("leaf-lab")).toBeGreaterThan(indexOf("lab"));
-  });
-});
-
-describe("Systems list health column (#627 review round 3, regression 3; #653)", () => {
-  afterEach(() => {
-    window.history.pushState({}, "", "/");
-    vi.restoreAllMocks();
-  });
-
-  // Keying, unchanged in substance and moved to its new source. The column and
-  // its sort read the page's ONE bulk verdict map (#653) instead of a per-row
-  // query, and that map is keyed by UUID, matching where RolesPanel
-  // invalidates after a role write (#627 review finding 1: it addresses by
-  // uuid, since a name is scoped to placement, not the whole fleet). A name-keyed map would render nothing here, which is what
-  // this asserts: the verdict is seeded ONLY at the uuid.
-  it("reads the health column from the system's uuid, matching where RolesPanel invalidates", async () => {
-    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...SYSTEMS_KEY], [sys]);
-    qc.setQueryData([...LOCATIONS_KEY], []);
-    qc.setQueryData([...COMPONENTS_KEY], []);
-    qc.setQueryData([...STANDARDS_KEY], standards);
-    qc.setQueryData([...SYSTEM_TYPES_KEY], systemTypes);
-    qc.setQueryData([...ME_KEY], me);
-    qc.setQueryData([...TAGS_KEY], []);
-    qc.setQueryData([...SYSTEM_VERDICTS_KEY], new Map([[sys.id, "healthy"]]));
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const req = input as Request;
-      throw new Error(`unexpected fetch in this test: ${req.method} ${req.url}`);
-    });
-    window.history.pushState({}, "", "/systems");
-    render(() => (
-      <QueryClientProvider client={qc}>
-        <Router>
-          <Route path="/systems" component={Systems} />
-        </Router>
-      </QueryClientProvider>
-    ));
-    await waitFor(() => expect(screen.getByText("healthy")).toBeTruthy());
-  });
-
-  // The measurement #653 is actually about, and the reason it is a REQUEST COUNT
-  // rather than a screenshot: the rendered column looks identical either way, so
-  // the only thing that can fail is the number of requests it took to paint it.
-  //
-  // Nothing is seeded. The page loads cold, exactly as an operator's first paint
-  // does, and every request it makes is counted. Before this change the health
-  // column fired one GET /systems/{id}/health per row, each resolving every role,
-  // its occupants, their alarms and thirty days of transitions; a twelve-system
-  // page cost twelve of them. It now costs ONE GET /systems:health for the page.
-  it("paints a page of systems with one health request, not one per row", async () => {
-    const many: System[] = Array.from({ length: 12 }, (_, i) => ({
-      id: uuidFor(`bulk-${i}`),
-      name: `room-${i}`,
-      label: `Room ${i}`,
-      member_count: 0,
-      effective_tags: {},
-    }));
-    const verdicts = many.map((s, i) => ({ system: s.id, verdict: i % 3 === 0 ? "degraded" : "healthy" }));
-
-    const urls: string[] = [];
-    const body = (url: string): unknown => {
-      if (url.includes("/systems:health")) return { verdicts };
-      // The per-row read is served too, and deliberately: if it were not, the
-      // old implementation would fail this test by rendering nothing rather than
-      // by making twelve requests, and the number is the whole point. With both
-      // answers available, the only thing that can distinguish the two is the
-      // count.
-      const perRowMatch = /\/systems\/([^/]+)\/health/.exec(url);
-      if (perRowMatch) {
-        const id = decodeURIComponent(perRowMatch[1]);
-        return {
-          owner: id, owner_kind: "system", roles: [], systems: [], transitions: [],
-          verdict: verdicts.find((v) => v.system === id)?.verdict ?? "healthy",
-        };
-      }
-      if (url.includes("/systems")) return { systems: many };
-      if (url.includes("/locations")) return { locations: [] };
-      if (url.includes("/components")) return { components: [] };
-      if (url.includes("/standards")) return { standards };
-      if (url.includes("/system-types")) return { system_types: systemTypes };
-      if (url.includes("/tags")) return { tags: [] };
-      if (url.includes("/auth/me")) return me;
-      return {};
-    };
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = (input as Request).url;
-      urls.push(url);
-      return new Response(JSON.stringify(body(url)), { status: 200, headers: { "Content-Type": "application/json" } });
-    });
-
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    window.history.pushState({}, "", "/systems");
-    render(() => (
-      <QueryClientProvider client={qc}>
-        <Router>
-          <Route path="/systems" component={Systems} />
-        </Router>
-      </QueryClientProvider>
-    ));
-
-    // Wait for the column to have actually painted, so the count is taken after
-    // the work is done rather than before it started: a request count read too
-    // early is zero for every implementation, which is the shape of a test that
-    // cannot fail.
-    await waitFor(() => expect(screen.getAllByText("degraded").length).toBeGreaterThan(0));
-
-    const perRow = urls.filter((u) => /\/systems\/[^/]+\/health/.test(u));
-    expect(perRow).toEqual([]);
-    const bulk = urls.filter((u) => u.includes("/systems:health"));
-    expect(bulk).toHaveLength(1);
-  });
 });
 
 // The Properties panel on the system detail is the shared owner panel, pointed at
@@ -436,26 +255,6 @@ describe("Systems create identity", () => {
     // The NAME the locked field was showing goes back as the precondition.
     expect(captured!.expected_name).toBe("classroom");
     expect(captured!.label).toBe("Lecture Hall");
-  });
-});
-
-// The Systems half of #690's uniformity clause. Systems declares the widest
-// default set of the three (960px of columns), so it lost the Name column at a
-// wider viewport than Components did: measured 0px at 1280, where the list card
-// offers 973px. Same assertion as Components and Locations, because the whole
-// point of the fix is that one shared rule now produces one behaviour.
-describe("Systems list keeps a floor under the Name column (#690)", () => {
-  it("declares no width on Name and a table floor that leaves it NAME_MIN_W", async () => {
-    localStorage.clear();
-    mount("/systems");
-    await waitFor(() => expect(document.querySelector("table.og-rows")).toBeTruthy());
-
-    const table = document.querySelector("table.og-rows") as HTMLTableElement;
-    const cols = [...table.querySelectorAll("colgroup col")] as HTMLTableColElement[];
-    const declared = cols.slice(1).reduce((sum, c) => sum + parseInt(c.style.width || "0", 10), 0);
-
-    expect(cols[0].style.width).toBe("");
-    expect(parseInt(table.style.minWidth, 10) - declared).toBe(NAME_MIN_W);
   });
 });
 

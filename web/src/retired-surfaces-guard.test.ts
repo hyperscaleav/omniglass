@@ -31,6 +31,24 @@ const RETIRED = [
   // (#806): the workspace's header, Activity tab and roles surface replaced them.
   ["HealthPanel", "the classic detail's health panel; the workspace header and Activity tab replaced it"],
   ["MembersPanel", "the classic detail's members panel; staffing a role is how a member is bound"],
+  // Explore's renderer library and the inventory tables (#861, #868): the
+  // outline of places replaced the cards, bands, mosaic and matrix faces, the
+  // saved views over them, and the table face with its kind tabs.
+  ["sectionsFor", "the cards face's section builder; the outline is one tree of places"],
+  ["cutTypeFor", "the level cut; the outline folds single-child chains instead"],
+  ["foldToBudget", "the renderers' space budget; the outline has no canvas to budget"],
+  ["matrixFor", "the standards matrix; a place's row names its standard"],
+  ["layoutPx", "the mosaic's pixel layout; the outline has no canvas to tile"],
+  ["fillFor", "the mosaic's share fill; a place counts its systems by verdict instead"],
+  ["explore-mosaic", "the mosaic face; retired with the renderer library"],
+  ["explore-matrix", "the matrix face; retired with the renderer library"],
+  ["MatrixFace", "the standards matrix face; retired with the matrix"],
+  ["DotField", "the dot field; a place's health is four counted slots"],
+  ["STOCK_PRESETS", "the saved renderer views; the filter rides the address instead"],
+  ['"explore-face"', "the renderer switch; the outline is the one view"],
+  ["explore-presets", "the saved-view menu; retired with the presets"],
+  ["explore-section-head", "the drilled section header; a row's + creates where you stand"],
+  ["fleet-list-face", "the table face; the outline lists every place, system and component"],
 ] as const;
 
 function walk(dir: string, out: string[] = []): string[] {

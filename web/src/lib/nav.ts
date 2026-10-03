@@ -51,17 +51,17 @@ export type NavItem = {
 export const navItems: NavItem[] = [
   { label: "Home", path: "/", icon: Icons.Home, live: true, hint: "Your environment at a glance, and what needs attention right now." },
   // Explore (#826): the sidebar's one door into the fleet ("fleet" stays the
-  // noun, ADR-0122), a few renderers over one model plus the table face. It
+  // noun, ADR-0122), the outline of places (#861). It
   // replaced the Fleet entry and the Explore stub once reserved for a data
   // explorer, which takes a later name. Gated like the place tree it draws;
   // the projection scopes each tier on its own read underneath.
-  { label: "Explore", path: "/explore", icon: Icons.Compass, live: true, anyResource: ["location", "system", "component"], hint: "The whole fleet at a glance, four ways of drawing it, or all of it at table density." },
+  { label: "Explore", path: "/explore", icon: Icons.Compass, live: true, anyResource: ["location", "system", "component"], hint: "Every place in the fleet, the systems that sit there, and what is in them." },
   { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
   { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering sample." },
   // The fleet has ONE door (#798, the reconciliation ruled on the #795 review):
-  // the Inventory group dissolved into the entry above; the old index pages
-  // live on as the kind tabs of Explore's table face, and their bare URLs
-  // redirect there. Their workspace routes, gates, and top-bar identities
+  // the Inventory group dissolved into the entry above, whose outline lists
+  // every location, system and component, and the old index URLs redirect
+  // there. Their workspace routes, gates, and top-bar identities
   // survive through OFF_RAIL below, the same move the catalog registries made
   // (#608). Nodes is infrastructure, not fleet inventory, so it keeps its own
   // door.
@@ -136,12 +136,12 @@ export function filterNav(items: NavItem[], allow: (tokens: string[]) => boolean
 // not-yet-built page's tracking issue rides here too, shown on its stub
 // through navByPath exactly as a rail entry's would be.
 export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string; issue?: number }[] = [
-  // The re-homed index pages (#798): each renders as a kind tab inside
-  // Explore's table face, and its bare URL redirects there, but the workspace
-  // routes (/locations/{id} and friends) still resolve identity and gate here.
-  { path: "/components", label: "Components", resource: "component", hint: "The component inventory, with declared config, props, and tags. Device interfaces are a panel on the component." },
-  { path: "/systems", label: "Systems", resource: "system", hint: "Location and system trees, navigable, with health at each level." },
-  { path: "/locations", label: "Locations", resource: "location", hint: "The place tree, nested the way your location types allow." },
+  // The fleet kinds (#798, #861): Explore's outline lists them and each bare
+  // URL redirects there, but the workspace routes (/locations/{id} and
+  // friends) still resolve identity and gate here.
+  { path: "/components", label: "Components", resource: "component", hint: "A component's workspace: its declared config, props, and tags. Device interfaces are a panel on the component." },
+  { path: "/systems", label: "Systems", resource: "system", hint: "A system's workspace: its standard, roles, health, and the components that make it up." },
+  { path: "/locations", label: "Locations", resource: "location", hint: "A location's workspace: where it sits, what it holds, and the systems placed there." },
   { path: "/products", label: "Products", resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the component type it is classified under." },
   { path: "/vendors", label: "Vendors", resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },
   { path: "/drivers", label: "Drivers", resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },

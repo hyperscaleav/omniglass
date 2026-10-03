@@ -35,12 +35,11 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/", shell: "protected", page: "Home", smoke: "/" },
   // The canvas address retired with #826; it redirects to Explore.
   { path: "/fleet", shell: "protected", page: "FleetRedirect", smoke: "/fleet" },
-  // Explore (#826): the sidebar's one door into the fleet, a few renderers
-  // over one model plus the table face; it replaced the Fleet entry and the
-  // reserved Explore stub.
+  // Explore (#826, #861): the sidebar's one door into the fleet, the outline
+  // of places; it replaced the Fleet entry and the reserved Explore stub.
   { path: "/explore", shell: "protected", page: "Explore", smoke: "/explore" },
-  // The fleet kinds. A bare index address redirects into Explore's table face
-  // on the matching kind tab (#798, #826). The :id route is the entity's
+  // The fleet kinds. A bare index address redirects to Explore, whose outline
+  // lists every kind (#798, #861). The :id route is the entity's
   // workspace, addressed by uuid (#627 Task 15c: name uniqueness is scoped to
   // placement, so a name alone is not a reliable route param); the workspace
   // resolves a name-shaped link when it is unique, keeping the query string
