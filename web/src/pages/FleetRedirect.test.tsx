@@ -3,10 +3,10 @@ import { render, screen, cleanup } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import FleetRedirect from "./FleetRedirect";
 
-// The old index URLs land somewhere sensible (#798, #826): the bare
-// /locations, /systems, and /components addresses redirect into Explore's
-// table face on the matching kind tab. The :id detail routes are untouched;
-// only the index address moved.
+// The old index addresses land on the outline (#798, #826, #861): the bare
+// /locations, /systems and /components URLs, the retired /fleet canvas, and
+// the list address main once sent every index visit to. Every place,
+// system and component is in the one outline now, so they all land there.
 afterEach(cleanup);
 
 function mountAt(path: string) {
@@ -22,47 +22,11 @@ function mountAt(path: string) {
   ));
 }
 
-describe("the re-homed index addresses", () => {
-  it.each([
-    ["/web/locations", "locations"],
-    ["/web/systems", "systems"],
-    ["/web/components", "components"],
-  ])("%s lands on Explore's table face, %s tab", async (path, kind) => {
+describe("the re-homed addresses", () => {
+  it.each(["/web/locations", "/web/systems", "/web/components", "/web/fleet", "/web/fleet?view=list&kind=systems"])("%s lands on the outline", async (path) => {
     mountAt(path);
-    expect(await screen.findByTestId("explore-page")).toBeTruthy();
-    expect(window.location.pathname).toBe("/web/explore");
-    expect(window.location.search).toContain("face=table");
-    expect(window.location.search).toContain(`kind=${kind}`);
-  });
-});
-
-describe("the retired canvas address", () => {
-  it("/fleet lands on Explore's tree, no face or kind param", async () => {
-    mountAt("/web/fleet");
     expect(await screen.findByTestId("explore-page")).toBeTruthy();
     expect(window.location.pathname).toBe("/web/explore");
     expect(window.location.search).toBe("");
-  });
-});
-
-describe("the shipped list address", () => {
-  // /fleet?view=list&kind=<kind> is where main sent every visit to a bare
-  // index address, so it is in bookmarks and history. It is a table, and has
-  // to land on the table rather than on the fleet's dots.
-  it.each([
-    ["/web/fleet?view=list&kind=systems", "systems"],
-    ["/web/fleet?view=list&kind=components", "components"],
-    ["/web/fleet?view=list", "locations"],
-  ])("%s lands on the table face, %s tab", async (path, kind) => {
-    mountAt(path);
-    expect(await screen.findByTestId("explore-page")).toBeTruthy();
-    expect(window.location.search).toContain("face=table");
-    expect(window.location.search).toContain(`kind=${kind}`);
-  });
-
-  it("does not trust a kind it does not know", async () => {
-    mountAt("/web/fleet?view=list&kind=secrets");
-    expect(await screen.findByTestId("explore-page")).toBeTruthy();
-    expect(window.location.search).toContain("kind=locations");
   });
 });

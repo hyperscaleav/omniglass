@@ -19,13 +19,12 @@ test.describe("operator console", () => {
     await page.waitForURL((url) => !url.pathname.endsWith("/login"));
   });
 
-  test("signs in, lists locations, creates a location, opens it, deletes it", async ({ page }) => {
+  test("signs in, finds the outline, creates a location, opens it, deletes it", async ({ page }) => {
     await page.goto("/web/locations");
 
-    // The bare index address redirects into Explore's table face on the
-    // Locations kind tab (#798, #826).
-    await page.waitForURL(/explore\?face=table&kind=locations/);
-    await expect(page.getByTestId("fleet-list-face")).toBeVisible();
+    // The bare index address lands on the outline (#798, #826, #861).
+    await page.waitForURL(/\/web\/explore$/);
+    await expect(page.getByRole("heading", { name: "Explore" })).toBeVisible();
 
     // Create a throwaway campus through the create-as-route draft. Campus
     // carries no name rule, so the operator types the name: the other half of
@@ -37,7 +36,8 @@ test.describe("operator console", () => {
     // name is on the detail and the label is on the list. Derived from the name
     // here rather than hard-coded, so the two stay one fact.
     const label = name.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-    await page.getByRole("button", { name: /new location/i }).click();
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    await page.getByRole("button", { name: "Location", exact: true }).click();
     await page.getByLabel("Location type").selectOption("campus");
     await page.getByLabel("Name", { exact: true }).fill(name);
     await page.getByRole("button", { name: /create location/i }).click();
@@ -59,22 +59,22 @@ test.describe("operator console", () => {
     await page.getByRole("button", { name: /^cancel$/i }).first().click();
     await expect(page).not.toHaveURL(/edit=1/);
 
-    // It appears as a new root row on the fleet list (the old index address
-    // lands on the Locations kind tab, #798), under the label the rule
-    // rendered from the name typed above.
-    await page.goto("/web/locations");
-    await expect(page.locator("main")).toContainText(label);
+    // It appears as a new top-level place in the outline, under the label the
+    // rule rendered from the name typed above.
+    await page.goto("/web/explore");
+    const row = page.getByRole("treeitem").filter({ has: page.locator("[data-label]", { hasText: label }) });
+    await expect(row).toBeVisible();
 
-    // Confirm-delete it from its blade: a row opens the condensed blade
-    // (#799), whose footer carries Delete behind a confirm.
+    // Confirm-delete it from its blade: a row opens the blade (#799), whose
+    // footer carries Delete behind a confirm.
     page.on("dialog", (d) => d.accept());
-    await page.getByText(label, { exact: true }).first().click();
+    await row.click();
     await expect(page.locator("aside[data-blade]")).toBeVisible();
     await expect(page.locator('aside[data-blade] button:text-is("Delete")')).toBeVisible();
     await page.locator('aside[data-blade] button:text-is("Delete")').click();
 
-    // It is gone from the list.
-    await expect(page.locator("main")).not.toContainText(label);
+    // It is gone from the outline.
+    await expect(row).toHaveCount(0);
   });
 
   // The acceptance of #688, #699 and #702, and the only tier that can witness
@@ -148,82 +148,59 @@ test.describe("operator console", () => {
     await expect(page.getByText(drafted, { exact: true }).first()).toBeVisible();
     await expect(page.locator("main")).toContainText(draftedLabel);
 
-    // Clean up after the run: the row's blade on the fleet list carries the
-    // confirm-delete (#799); the leaf itself has no destructive footer.
+    // Clean up after the run, and prove on the way that a component placed
+    // nowhere is still findable: it sits in the outline's "Placed nowhere you
+    // can see" node, whose row blade carries the confirm-delete (#799).
     page.on("dialog", (d) => d.accept());
-    await page.goto("/web/components");
-    await page.waitForURL(/explore\?face=table&kind=components/);
-    await page.getByText(draftedLabel, { exact: true }).first().click();
+    await page.goto("/web/explore");
+    await page.getByRole("button", { name: "Expand Placed nowhere you can see" }).click();
+    const row = page.getByRole("treeitem").filter({ has: page.locator("[data-label]", { hasText: draftedLabel }) });
+    await row.first().click();
     await expect(page.locator("aside[data-blade]")).toBeVisible();
     await page.locator('aside[data-blade] button:text-is("Delete")').click();
-    await expect(page.locator("main")).not.toContainText(draftedLabel);
+    await expect(row).toHaveCount(0);
   });
 
-  // #690, and the only tier that can witness it: the defect is a LAYOUT, so it
-  // needs a browser doing layout. A page test can assert what the table declares
-  // and jsdom will not measure a column, which is exactly how a Name column
-  // measuring zero pixels sat on main behind a green suite.
-  //
-  // The numbers this replaced were measured on the dev fleet at a 1280 viewport,
-  // where the list card offers 973px: Components' Name column was 0px wide (890px
-  // of declared columns plus 150px of actions, with nothing left), Systems' was
-  // 0px (960 declared), and Locations' was 173px (650 declared), which is why one
-  // of the three looked fine and the acceptance names all three.
-  for (const width of [1280, 1366]) {
-    test(`the Name column survives a ${width}px viewport on every inventory page`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 800 });
-      for (const path of ["/web/components", "/web/systems", "/web/locations"]) {
-        await page.goto(path);
-        const name = page.locator("main table.og-rows thead th").first();
-        await expect(name).toHaveText("Name");
-        const box = await name.boundingBox();
-        // 150 rather than the floor itself (191px as of #693, 260 before the
-        // label pen's chip left the cell and freed a measured 69px): the
-        // assertion is that the identifier column is READABLE, not that it
-        // equals a constant a later slice may tune, and this test has now
-        // survived one such tune without editing. Zero, which is what two of
-        // these three measured before the floor existed, fails it by a mile.
-        expect(box, `${path} at ${width}px has no Name column at all`).not.toBeNull();
-        expect(box!.width, `${path} at ${width}px: Name is ${Math.round(box!.width)}px`).toBeGreaterThan(150);
-      }
-    });
-  }
-
-  // A LAYOUT again, so again only a browser can witness it. The view controls
-  // ride the filter bar's trailing slot, which never shrank: on a narrow window
-  // the row ran past the card's clipped edge and the last controls could be
-  // neither seen nor reached. They wrap now, and the page itself never scrolls
-  // sideways to make room for them.
-  for (const width of [900, 640]) {
-    test(`explore keeps every view control on screen at ${width}px`, async ({ page }) => {
+  // A LAYOUT, so only a browser can witness it (#690, #861). The outline's
+  // Name column is the identifier an operator scans; on a narrow window the
+  // other columns give way (Standard or product, then Type, then Detail) before it
+  // does, and the page itself never scrolls sideways to make room. The
+  // columns follow the outline's own width, which the sidebar shares.
+  for (const width of [640, 900, 1280]) {
+    test(`the outline keeps its Name column readable at ${width}px`, async ({ page }) => {
+      // A place to measure, made through the API and removed after.
+      const made = await page.request.post("/api/v1/locations", { data: { name: `e2e-squeeze-${width}-${Date.now()}`, location_type: "campus" } });
+      expect(made.ok(), `create: ${made.status()}`).toBeTruthy();
+      const { id } = (await made.json()) as { id: string };
       await page.setViewportSize({ width, height: 800 });
       await page.goto("/web/explore");
-      const controls = page.getByTestId("explore-controls");
-      await expect(controls).toBeVisible();
-      const card = (await controls.locator("xpath=ancestor::div[contains(@class,'card')][1]").boundingBox())!;
-      for (const name of ["View", "Labels", "Density", "Sort", "Place boxes"]) {
-        const box = await page.getByLabel(name, { exact: true }).boundingBox();
-        expect(box, `${name} is not laid out at ${width}px`).not.toBeNull();
-        expect(box!.x + box!.width, `${name} runs past the card at ${width}px`).toBeLessThanOrEqual(card.x + card.width);
-      }
+      const first = page.getByRole("treeitem").first();
+      await expect(first).toBeVisible();
+      // The Name cell is the row's first grid cell.
+      const box = await first.locator(":scope > *").first().boundingBox();
+      expect(box, `no Name cell at ${width}px`).not.toBeNull();
+      expect(box!.width, `Name is ${Math.round(box!.width)}px at ${width}px`).toBeGreaterThanOrEqual(100);
+      const tree = (await page.getByRole("tree").boundingBox())!;
+      const health = (await first.getByTestId("health").boundingBox())!;
+      expect(health.x + health.width, `Health runs past the card at ${width}px`).toBeLessThanOrEqual(tree.x + tree.width);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(overflow, `the page scrolls sideways at ${width}px`).toBeLessThanOrEqual(0);
+      expect((await page.request.delete(`/api/v1/locations/${id}`)).ok()).toBeTruthy();
     });
   }
 
-  test("explore: the cut cards the tree, create where you stand, a dot opens the system", async ({ page }) => {
-    // The e2e database starts with the boot seed only, so the tree under test
-    // is created here. Two buildings under one campus on purpose: that is what
-    // makes the campus cut at building rather than fall back to itself, which
-    // is the rule this page is built on.
+  test("explore: create where you stand, the outline shows it, a link reveals it, a row opens it", async ({ page }) => {
+    // The e2e database starts with the boot seed only, so the places under
+    // test are created here: a campus, two buildings under it from the row's
+    // own +, and a system in the first.
     const stamp = Date.now();
     const campus = `e2e-fleet-${stamp}`;
     // A shipped fleet renders a location's label from its name
-    // ({{title (words .Name)}}, ADR-0105), so the walk matches labels derived
-    // here rather than hard-coded.
+    // ({{title (words .Name)}}, ADR-0105).
     const titled = (n: string) => n.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
     const campusLabel = titled(campus);
     const buildingLabel = titled(`${campus}-b`);
+    const rowOf = (label: string) => page.getByRole("treeitem").filter({ has: page.locator("[data-label]", { hasText: new RegExp(`^${label}$`) }) });
 
     await page.goto("/web/locations/create");
     await page.getByLabel("Location type").selectOption("campus");
@@ -233,99 +210,79 @@ test.describe("operator console", () => {
     const campusId = page.url().match(/locations\/([0-9a-f-]{36})/)![1];
     await page.getByRole("button", { name: /^cancel$/i }).first().click();
 
-    // Create where you stand: the drilled node is the placement, so the form
-    // opens already knowing where the new row lands.
-    await page.goto(`/web/explore?node=${campusId}`);
-    const head = page.getByTestId("explore-section-head");
-    await expect(head).toBeVisible();
-    await head.getByRole("button", { name: /location here/i }).click();
-    await page.waitForURL(/\/web\/locations\/create\?under=/);
-    await page.getByLabel("Location type").selectOption("building");
-    await page.getByLabel("Name", { exact: true }).fill(`${campus}-b`);
-    await page.getByRole("button", { name: /create location/i }).click();
-    await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}\?edit=1/);
-    const buildingId = page.url().match(/locations\/([0-9a-f-]{36})/)![1];
+    // Create where you stand: the row's + places the new row under it. Once
+    // the campus holds one building the two fold into one row ("Campus /
+    // Building"), and its + still offers the campus as its own section, which
+    // is how the second building lands beside the first.
+    const buildingIds: string[] = [];
+    for (const suffix of ["b", "c"]) {
+      await page.goto("/web/explore");
+      await page.getByRole("button", { name: new RegExp(`^Add under ${campusLabel}( / |$)`) }).click();
+      await page.getByRole("group", { name: `Under ${campusLabel}`, exact: true }).getByRole("button", { name: "Location", exact: true }).click();
+      await page.waitForURL(/\/web\/locations\/create\?under=/);
+      await page.getByLabel("Location type").selectOption("building");
+      await page.getByLabel("Name", { exact: true }).fill(`${campus}-${suffix}`);
+      await page.getByRole("button", { name: /create location/i }).click();
+      await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}\?edit=1/);
+      buildingIds.push(page.url().match(/locations\/([0-9a-f-]{36})/)![1]);
+    }
+    const [buildingId, secondId] = buildingIds;
 
-    // A second building, so the campus has a level it has two of.
-    await page.goto(`/web/explore?node=${campusId}`);
-    await page.getByTestId("explore-section-head").getByRole("button", { name: /location here/i }).click();
-    await page.waitForURL(/\/web\/locations\/create\?under=/);
-    await page.getByLabel("Location type").selectOption("building");
-    await page.getByLabel("Name", { exact: true }).fill(`${campus}-c`);
-    await page.getByRole("button", { name: /create location/i }).click();
-    await page.waitForURL(/\/web\/locations\/[0-9a-f-]{36}\?edit=1/);
-    const secondId = page.url().match(/locations\/([0-9a-f-]{36})/)![1];
+    // Prove the placement through the API before judging the render: both
+    // buildings must actually sit under the campus, or the outline is being
+    // asked the wrong question.
+    for (const id of buildingIds) {
+      const body = (await (await page.request.get(`/api/v1/locations/${id}`)).json()) as { parent_id?: string; location_type?: string };
+      expect(body.parent_id, `location ${id} parent`).toBe(campusId);
+      expect(body.location_type, `location ${id} type`).toBe("building");
+    }
 
-    // The system goes in the first building, again where we stand.
+    // The system goes in the first building, from that row's +.
     await page.goto(`/web/explore?node=${buildingId}`);
-    await page.getByTestId("explore-section-head").getByRole("button", { name: /system here/i }).click();
+    await rowOf(buildingLabel).getByRole("button", { name: `Add under ${buildingLabel}` }).click();
+    await page.getByRole("button", { name: "System", exact: true }).click();
     await page.waitForURL(/\/web\/systems\/create\?under=/);
     await page.getByLabel("Name", { exact: true }).fill(`${campus}-sys`);
     await page.getByRole("button", { name: /create system/i }).click();
     await page.waitForURL(/\/web\/systems\/[0-9a-f-]{36}\?edit=1/);
     const systemId = page.url().match(/systems\/([0-9a-f-]{36})/)![1];
 
-    // Prove the placement through the API before judging the render: both
-    // buildings must actually sit under the campus, or the cut is being asked
-    // the wrong question.
-    for (const id of [buildingId, secondId]) {
-      const res = await page.request.get(`/api/v1/locations/${id}`);
-      const body = (await res.json()) as { parent_id?: string; location_type?: string };
-      expect(body.parent_id, `location ${id} parent`).toBe(campusId);
-      expect(body.location_type, `location ${id} type`).toBe("building");
-    }
-
-    // The fleet level: this campus is a section, cut at building, and each
-    // card names its own type. The cut is the whole point, so assert it.
+    // The outline: the campus says what it holds in the registry's words, and
+    // expanding it shows both buildings. Expansion persists per browser by
+    // design, and the reveal above opened the campus, so start collapsed.
+    await page.evaluate(() => localStorage.removeItem("explore-open"));
     await page.goto("/web/explore");
-    const section = page.getByTestId(`explore-section-${campusId}`);
-    await expect(section).toBeVisible();
-    await expect(section).toContainText(campusLabel);
-    // Both buildings are cards, the empty one included: an unfinished tree
-    // stays visible rather than vanishing the moment it is created.
-    await expect(section.locator("[data-card]")).toHaveCount(2);
-    await expect(section).toContainText("2 buildings");
-    await expect(section.getByRole("button", { name: `Open ${buildingLabel}` })).toBeVisible();
+    await expect(rowOf(campusLabel)).toContainText("2 buildings");
+    await rowOf(campusLabel).getByRole("button", { name: `Expand ${campusLabel}` }).click();
+    await expect(rowOf(buildingLabel)).toBeVisible();
+    await expect(rowOf(titled(`${campus}-c`))).toBeVisible();
 
-    // A name-shaped address resolves as the operator guide links it.
+    // A name-shaped link reveals the row, expanded down to it and selected.
     await page.goto(`/web/explore?node=${campus}-b`);
-    await expect(page.getByTestId("explore-section-head")).toContainText(buildingLabel);
+    await expect(rowOf(buildingLabel)).toHaveAttribute("aria-selected", "true");
 
-    // The drill's way out: the header opens the location's own workspace.
-    await page.getByTestId("explore-section-head").getByRole("button", { name: "Open location" }).click();
-    await page.waitForURL(new RegExp(`/web/locations/${buildingId}`));
+    // A place holding one system opens as that system.
+    await rowOf(buildingLabel).click();
+    await expect(page.locator("aside[data-blade]")).toHaveAttribute("aria-labelledby", `blade-title-system-${systemId}`);
 
-    // A dot IS the system: clicking it opens the workspace at its uuid.
-    await page.goto(`/web/explore?node=${buildingId}`);
-    await page.locator(`[data-dot="${systemId}"]`).click();
-    await page.waitForURL(new RegExp(`/web/systems/${systemId}`));
-
-    // The retired canvas address still lands on Explore.
+    // The retired canvas address lands on the outline.
     await page.goto("/web/fleet");
     await page.waitForURL(/\/web\/explore$/);
-    await expect(page.getByTestId("explore-controls")).toBeVisible();
+    await expect(page.getByRole("tree", { name: "Places" })).toBeVisible();
 
-    // Clean up: the system through its blade on the flat Systems tab (the blade
-    // delete under test), then the locations through the API on the browser's
-    // own session.
+    // Clean up: the system through its blade (the blade delete under test),
+    // then the locations through the API on the browser's own session.
     page.on("dialog", (d) => d.accept());
-    const sysMatch = new RegExp(`${stamp}[- ]sys`, "i");
-    // Reached the way an operator reaches it: the face toggle, then the kind
-    // tab, each a URL fact.
-    await page.getByRole("button", { name: "Table view" }).click();
-    await page.waitForURL(/face=table/);
-    await page.getByRole("tab", { name: "Systems" }).click();
-    await page.waitForURL(/face=table&kind=systems/);
-    await page.getByText(sysMatch).first().click();
-    await expect(page.locator("aside[data-blade]")).toBeVisible();
+    await page.goto(`/web/explore?node=${buildingId}`);
+    await rowOf(buildingLabel).click();
     await page.locator('aside[data-blade] button:text-is("Delete")').click();
-    await expect(page.locator("main")).not.toContainText(sysMatch);
+    await expect(page.locator("aside[data-blade]")).toHaveCount(0);
+    await expect.poll(async () => (await page.request.get(`/api/v1/systems/${systemId}`)).status()).toBe(404);
     for (const id of [buildingId, secondId, campusId]) {
       const res = await page.request.delete(`/api/v1/locations/${id}`);
       expect(res.ok(), `delete location ${id}: ${res.status()}`).toBeTruthy();
     }
     await page.goto("/web/explore");
-    await expect(page.locator("main")).not.toContainText(campusLabel);
+    await expect(rowOf(campusLabel)).toHaveCount(0);
   });
-
 });

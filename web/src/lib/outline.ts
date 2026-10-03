@@ -26,11 +26,11 @@ export type ComponentRow = {
   name: string;
   label: string;
   product: string;
+  // The component type's icon key (resolved by components/icons.tsx).
+  icon: string;
   health: Verdict | null;
   // The other systems a shared component serves, by label.
   also: string[];
-  // Its active alarm, when the caller has read one.
-  issue?: string;
 };
 
 export type ComponentGroup = { system: SystemRef | null; components: ComponentRow[] };
@@ -70,10 +70,11 @@ export type OutlineInput = {
   types: TypeInfo[];
   standardLabel: (handle: string) => string;
   productLabel: (handle: string) => string;
-  // Active alarm messages by component id, for the rows the caller has read.
-  alarms?: Map<string, string>;
   // Effective tags by place, system or component id, for the tag filter.
   tags?: Map<string, Record<string, string>>;
+  // A component's icon key from its product handle (product to component
+  // type to that type's resolved icon).
+  componentIcon?: (product: string) => string;
 };
 
 const emptyLights = (): Lights => ({ healthy: 0, incomplete: 0, degraded: 0, outage: 0 });
@@ -104,6 +105,7 @@ export function buildOutline(input: OutlineInput): Outline {
   const standardOf = new Map(input.systems.map((s) => [s.id, s.standard ?? ""] as const));
   const componentOf = new Map(input.components.map((c) => [c.id, c] as const));
   const locationIds = new Set(locations.map((l) => l.id));
+  const iconFor = (product: string | undefined) => (product && input.componentIcon ? input.componentIcon(product) : "box");
 
   const systemRef = (s: (typeof fleetSystems)[number]): SystemRef => {
     const std = standardOf.get(s.id);
@@ -128,9 +130,9 @@ export function buildOutline(input: OutlineInput): Outline {
           name: c?.name ?? d.name,
           label,
           product: c?.product ? input.productLabel(c.product) : "",
+          icon: iconFor(c?.product),
           health: verdictOf(d.verdict),
           also: (servedBy.get(d.component) ?? []).filter((l) => l !== entityLabel(s)),
-          issue: input.alarms?.get(d.component),
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
@@ -147,12 +149,17 @@ export function buildOutline(input: OutlineInput): Outline {
     }
   }
 
-  // Components in no system, under the place they sit at.
+  // Components in no system, under the place they sit at; one placed nowhere
+  // the caller can read joins the node of things placed out of sight, so a
+  // component created a moment ago without a placement is never invisible.
   const looseAt = new Map<string, ComponentRow[]>();
+  const looseNowhere: ComponentRow[] = [];
   for (const c of input.components) {
-    if ((c.system_count ?? 0) > 0 || c.system_id || !c.location_id || !locationIds.has(c.location_id)) continue;
+    if ((c.system_count ?? 0) > 0 || c.system_id) continue;
+    const row: ComponentRow = { id: c.id, name: c.name, label: entityLabel({ name: c.name, label: c.label }), product: c.product ? input.productLabel(c.product) : "", icon: iconFor(c.product), health: null, also: [] };
+    if (!c.location_id || !locationIds.has(c.location_id)) { looseNowhere.push(row); continue; }
     const list = looseAt.get(c.location_id) ?? [];
-    list.push({ id: c.id, name: c.name, label: entityLabel({ name: c.name, label: c.label }), product: c.product ? input.productLabel(c.product) : "", health: null, also: [] });
+    list.push(row);
     looseAt.set(c.location_id, list);
   }
 
@@ -213,14 +220,14 @@ export function buildOutline(input: OutlineInput): Outline {
     // Counted by the place each child row starts at: a folded row is a chain,
     // and its parent holds the first place in it.
     for (const c of children) counts.set(c.chain[0].typeName, (counts.get(c.chain[0].typeName) ?? 0) + 1);
-    const parts = [...counts.entries()].map(([t, n]) => countWord(typeOf.get(t)?.label ?? t, n));
+    const parts = [...counts.entries()].map(([t, n]) => countWord(entityLabel(typeOf.get(t) ?? { name: t }), n));
     if (componentCount > 0) parts.push(countWord("component", componentCount));
 
     const info = typeOf.get(loc.location_type);
     return {
       id: loc.id,
       chain: link,
-      type: info?.label ?? loc.location_type,
+      type: entityLabel(info ?? { name: loc.location_type }),
       typeName: loc.location_type,
       icon: info?.icon ?? "",
       systems,
@@ -239,19 +246,23 @@ export function buildOutline(input: OutlineInput): Outline {
     .sort((a, b) => a.chain[0].label.localeCompare(b.chain[0].label) || a.id.localeCompare(b.id));
 
   let unplaced: PlaceNode | null = null;
-  if (unplacedSystems.length > 0) {
+  if (unplacedSystems.length > 0 || looseNowhere.length > 0) {
     const systems = unplacedSystems.map(systemRef).sort(byLabel);
-    const groups = groupsFor(unplacedSystems, []);
+    const groups = groupsFor(unplacedSystems, looseNowhere);
+    const parts = [
+      ...(systems.length > 0 ? [countWord("system", systems.length)] : []),
+      ...(looseNowhere.length > 0 ? [countWord("component", looseNowhere.length)] : []),
+    ];
     unplaced = {
       id: "unplaced",
-      chain: [{ id: "unplaced", label: "Placed where you can't see", typeName: "" }],
+      chain: [{ id: "unplaced", label: "Placed nowhere you can see", typeName: "" }],
       type: "",
       typeName: "",
       icon: "",
       systems,
       groups,
       children: [],
-      contents: countWord("system", systems.length),
+      contents: parts.join(", "),
       lights: lightsOf(systems),
       health: null,
     };
@@ -330,6 +341,9 @@ export function ancestorsOf(outline: Outline, id: string): string[] {
   const walk = (n: PlaceNode, above: string[]): string[] | null => {
     if (n.chain.some((c) => c.id === id)) return above;
     if (n.groups.some((g) => g.components.some((c) => c.id === id))) return [...above, n.id];
+    // A system shows as its place's own row, unless the place heads a row per
+    // system (it holds several, or it is the node of things out of sight).
+    if (n.groups.some((g) => g.system?.id === id)) return n.id === "unplaced" || n.systems.length > 1 ? [...above, n.id] : above;
     for (const k of n.children) {
       const found = walk(k, [...above, n.id]);
       if (found) return found;

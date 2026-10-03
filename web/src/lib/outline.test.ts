@@ -79,7 +79,6 @@ describe("a place wears its system", () => {
       { id: uuidFor("bar-1"), name: "bar-1", label: "Video Bar", product: "Lyra Bar 80", system_count: 1, system_id: uuidFor("s-ba"), location_id: uuidFor("ba") },
       { id: uuidFor("mic-1"), name: "mic-1", label: "", product: "Lyra GN-12", system_count: 1, system_id: uuidFor("s-ba"), location_id: uuidFor("ba") },
     ],
-    alarms: new Map([[uuidFor("mic-1"), "No route to host"]]),
   };
 
   it("puts the system's standard and health on the place's own row", () => {
@@ -88,14 +87,19 @@ describe("a place wears its system", () => {
     expect(ba.health).toBe("degraded");
   });
 
-  it("lists the system's components directly beneath the place, by name, with product, health and alarm", () => {
+  it("lists the system's components directly beneath the place, by name, with product and health", () => {
     const ba = child(child(buildOutline(input(view, extra)).roots[0], "West"), "Boardroom A");
     expect(ba.groups).toHaveLength(1);
-    expect(ba.groups[0].components.map((c) => [c.name, c.label, c.product, c.health, c.issue ?? null])).toEqual([
-      ["bar-1", "Video Bar", "Lyra Bar 80", "healthy", null],
-      ["mic-1", "mic-1", "Lyra GN-12", "outage", "No route to host"],
+    expect(ba.groups[0].components.map((c) => [c.name, c.label, c.product, c.health])).toEqual([
+      ["bar-1", "Video Bar", "Lyra Bar 80", "healthy"],
+      ["mic-1", "mic-1", "Lyra GN-12", "outage"],
     ]);
     expect(ba.contents).toBe("2 components");
+  });
+
+  it("gives each component its type's icon, resolved from its product", () => {
+    const ba = child(child(buildOutline(input(view, { ...extra, componentIcon: (p) => (p === "Lyra Bar 80" ? "video" : "box") })).roots[0], "West"), "Boardroom A");
+    expect(ba.groups[0].components.map((c) => c.icon)).toEqual(["video", "box"]);
   });
 
   it("counts every system beneath a place, inclusively, by health", () => {
@@ -183,6 +187,20 @@ describe("what you can and cannot see", () => {
   });
 });
 
+describe("things placed nowhere", () => {
+  it("collects a component in no system and at no place you can read beside the unplaced systems", () => {
+    const o = buildOutline(input({ locations: [loc("a", "A", "room")] }, {
+      components: [
+        { id: uuidFor("float"), name: "device-1", label: "Device 1", product: "generic", system_count: 0 },
+        { id: uuidFor("lost"), name: "device-2", label: "", product: "generic", system_count: 0, location_id: uuidFor("elsewhere") },
+      ],
+    }));
+    expect(o.unplaced?.chain[0].label).toBe("Placed nowhere you can see");
+    expect(o.unplaced?.groups.flatMap((g) => g.components.map((c) => c.label))).toEqual(["Device 1", "device-2"]);
+    expect(o.unplaced?.contents).toBe("2 components");
+  });
+});
+
 describe("filter entries and reveal", () => {
   const view = {
     locations: [loc("hq", "Headquarters", "campus"), loc("w", "West", "building", "hq"), loc("e", "East", "building", "hq"), loc("ba", "Boardroom A", "room", "w"), loc("bb", "Boardroom B", "room", "w")],
@@ -217,5 +235,7 @@ describe("filter entries and reveal", () => {
     expect(ancestorsOf(o, uuidFor("mic-1"))).toEqual([uuidFor("hq"), uuidFor("w"), uuidFor("ba")]);
     expect(ancestorsOf(o, uuidFor("ba"))).toEqual([uuidFor("hq"), uuidFor("w")]);
     expect(ancestorsOf(o, uuidFor("nope"))).toEqual([]);
+    // A system is its place's own row, so only the places above it open.
+    expect(ancestorsOf(o, uuidFor("s-ba"))).toEqual([uuidFor("hq"), uuidFor("w")]);
   });
 });
