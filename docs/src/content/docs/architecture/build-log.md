@@ -718,7 +718,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   Tags directory's create form ([#192](https://github.com/hyperscaleav/omniglass/issues/192)'s `CreateTagForm`, now
   exported) in a drawer and returns with the minted key selected. Writes are immediate (each is the entity's own
   `:setTag` / `:removeTag` write, gated by its `:update`), so there is no separate Save; the affordances hide without
-  the permission. The resolved cascade (inherited tags) stays in the directory [Tags column](/guides/operator/inventory/),
+  the permission. The resolved cascade (inherited tags) stays in the directory [Tags column](/guides/operator/fleet/#finding-one-thing),
   not the panel. Proven by a `tagdraft` unit suite (applies_to filtering, already-bound exclusion, exact-match and
   coin eligibility, value validity) and a `TagAdder` render test (chips, the update-gated add row and per-chip remove,
   the read-only and empty states). The full winner-plus-shadowed cascade provenance in the blade, the dynamic tag
@@ -974,7 +974,7 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   reads a row's **effective** value (a component matches on a tag it inherits from its system or location,
   not only a direct binding), autocompletes the values already in use for that key, and offers two new
   **value-less** operators, **is set** (`?`) and **is absent** (`!?`), that test only whether the tag is
-  present. These land in the shared [`lib/predicate`](/guides/operator/inventory/#filter) engine (an
+  present. These land in the shared [`lib/predicate`](/guides/operator/fleet/#finding-one-thing) engine (an
   `exists` / `absent` `OpKey` carrying a `valueless` flag, threaded through `opsFor`, `matchOp`,
   `buildPredicate`, and `tokenToChip`) so every FilterBar inherits them, plus a `tagFilterKeys` helper that
   projects one `FilterKey` per tag key present on the loaded rows; the FilterBar keeps those presence facets
@@ -5971,3 +5971,43 @@ the board, its `TreeList` plumbing and `Donut` are deleted; so are the health an
 panels the classic faces had left unmounted since #806, the name-address fallback no fleet
 table can reach now that an identity route is a workspace, and the tile and band helpers the
 canvas alone had read. The retired-surfaces guard names each one.
+
+### Explore becomes an outline of places (#861, slices #866 to #869)
+
+The renderer library did not survive use. Four drawings of one fleet, a cut the operator had to
+reverse-engineer from the cards, and controls that came and went with the renderer made the page
+hard to navigate and opinionated about how to look; the ask was one simple way to see the stack
+at a glance and drill in as needed. Explore is now an outline: the place tree as an ARIA tree,
+each place wearing the system that sits there (standard and verdict on its own row, the
+components directly beneath), single-child chains folded into one row, and a collapsed row that
+says what it holds in the registry's own type labels and counts its systems by verdict in four
+fixed slots. The rules the library had earned carry over (depth is the customer's, counts rather
+than a worst-wins rollup, a predicate over live state rather than a scope); everything that asked
+the operator to choose how to look is gone. ADR-0137 is rewritten in place, since none of it
+shipped.
+
+`lib/outline.ts` is the one pure model, tested with a plot, sector and coordinate fixture beside
+the shipped campus tree, and `components/Outline.tsx` renders it. The cut, the budgets, the
+presets, the mosaic and matrix cores and their renderers are deleted (about 4,000 lines with their
+tests), as are the index halves of the Locations, Systems and Components pages: each route is now
+its workspace or, at `/<kind>s/create`, a shared `CreatePage`, and `TreeList` keeps only the
+options Files uses. Find things in your fleet folded into the Explore guide, and its address
+redirects there.
+
+The e2e rewrite found three things the unit suites could not. A folded row's **+** could only add
+under its innermost place, so a campus of one building could never gain a second from the outline;
+the add menu now offers a section per place the row joins. A fleet with no locations showed "No
+locations yet" while a component created nowhere existed, invisible. And beside an open sidebar
+the Name column measured 16px at a 640px window: the columns followed the window, not the outline,
+so they now answer container queries and give way in order (standard, then type, then detail).
+
+An adversarial review of the view then found nine more, each fixed behind a test proven red
+first. The Detail column's alarm text never rendered, because the health report names an alarm's
+component by uuid and the page looked it up by name. A collapsed place holding one system showed
+only that system's verdict and hid an outage in a child place. Every toggle rebuilt every row and
+dropped keyboard focus (rows now iterate stable string keys). Keys pressed inside the portaled add
+menu bubbled to the row behind it and opened the wrong panel. The add menu had no keyboard path
+(it is `+` now), the unplaced node's filter result opened a panel for a place that does not exist,
+health reads fanned out for every system ever opened (now only those on screen, and none while
+the filter shows results), results had no keyboard way to open a panel (Space), and `?node=`
+missed a folded outer place, a system placed out of sight, and a name shared by two kinds.

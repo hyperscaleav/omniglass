@@ -3,11 +3,13 @@ title: Work with an entity
 description: "Opening an entity's blade, drilling into its children, and creating, editing, or deleting through the footer action bar."
 screenshots:
   - id: entity-blade
-    path: /web/explore?face=table&kind=locations
+    path: /web/explore
     alt: "A location's blade slides in from the right with its details and a footer action bar."
+    # Harbor Point holds two buildings and no system, so its row opens the
+    # location's own blade (a place holding one system opens that system).
     steps:
       - action: click
-        selector: "text=East Campus"
+        selector: "[role=treeitem]:has-text('Harbor Point')"
     # The blade renders one region no clock can pin: the since line's age
     # counts from the capture's own seed-to-shoot latency.
     mask:
@@ -19,7 +21,7 @@ screenshots:
     # clock), and the form renders from the seed deterministically.
 ---
 
-Once you have [found an entity](/guides/operator/inventory/), you open it, read it, and change
+Once you have [found an entity](/guides/operator/fleet/), you open it, read it, and change
 it the same way everywhere in the console.
 
 ## Open an entity
@@ -231,6 +233,27 @@ identity pages.
   disappears before the shell ever sends the request, so `omniglass component get
   'boi.17c.415a.$comp.display-1'` (single quotes), never bare.
 - **Delete** removes it, with a confirm. These actions appear only if your grants allow them.
+
+## Labels the platform writes
+
+- **Who wrote a label is shown where you can change it.** A label the platform rendered from a
+  [label rule](/architecture/core-entities/) opens **locked** in the edit form, with the rule
+  stated under the field; the lock beside it hands you the pen, and the restore arrow hands it
+  back. To see every row a rule edit would rewrite, run `omniglass <entity> previewLabels`: it
+  lists exactly the rows the platform still labels, and nothing you typed yourself.
+- **Upgrading into a new rule does not relabel anything you already have.** Locations shipped
+  with no label rule before, so a fleet created then keeps reading its raw names (`north-wing`)
+  after the upgrade. Applying the new rule is your act, and there is no console button for it
+  yet: run `omniglass location previewLabels` to see which rows would move, then
+  `omniglass location recomputeLabels` to apply it, and the same rows read **North Wing**.
+  Nothing you typed yourself is touched by either.
+- **The same applies to systems, and that upgrade is worth running.** A system's shipped label
+  carries the number its name carries, so the two halves of a divisible boardroom read
+  **Boardroom** and **Boardroom 2** rather than both reading "Boardroom". A fleet created before
+  the upgrade keeps both halves alike until you run `omniglass system previewLabels`, then
+  `omniglass system recomputeLabels`. Only the first of a kind in a place is bare: a place with
+  one boardroom reads **Boardroom**, exactly as its name is `boardroom` rather than
+  `boardroom-1`.
 
 ## Properties on the detail
 

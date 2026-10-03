@@ -172,7 +172,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0131](#adr-0131-the-device-taxonomy-is-oavc-and-the-demo-catalog-is-fictional) | 2026-08-24 | Accepted | The component_type tree mirrors the OpenAVCloud AV Device Taxonomy v1.1 (category roots, subcategory types, form-factor mic subtypes); the seed catalog goes fictional (the omniglass-lab brand universe, AV-iQ as the realism source); standards become integrator-style room chains with size-serialized variants, and the impossible shared bar yields to the divisible pair's shared DSP and amplifier rack |
 | [ADR-0132](#adr-0132-configure-is-the-one-deep-editor) | 2026-08-25 | Accepted | Every fleet workspace carries a Configure tab as the ONE deep editor; the blade stays a quick face whose rows jump into it; `?edit=1` retargets to Configure and the classic detail face retires with an explicit miss face (#800, diverging deliberately from ADR-0129's edit-in-blade target) |
 | [ADR-0133](#adr-0133-a-select-over-a-loaded-collection-binds-through-a-ref-not-a-value-prop) | 2026-08-27 | Accepted | A `<select>` whose options come from a collection the server answers for takes its value from `bindSelectValue(value, ...options)` (`web/src/lib/selectvalue.ts`) used as the element's `ref`, never from a `value=` prop: the control keeps no value it has no option for, and a value binding does not re-run when the OPTIONS are what arrived. Thirteen controls convert, the workspace Configure face's four among them. Two shapes stay on `value=` and the exemption is deliberate: a hard-coded or generated option list has no async gap, and a control whose value starts empty and only moves because the operator moved it has nothing stored to lose |
-| [ADR-0137](#adr-0137-explore-is-the-fleets-door-and-a-card-is-a-level-the-page-works-out) | 2026-08-31 | Accepted | Explore (`/explore`) is the fleet's one door. A renderer never counts levels from a root: it cuts each root at the shallowest container type that root has at least two of, and a card names its own type. Three budgets (label, area, z-order) decide what a view can afford rather than an operator choosing. A system draws at its own location, once; one view never mixes system and component grain. An aggregate's fill is the SHARE needing attention, never worst-wins. Four renderers and presets over one model; a preset carries how the fleet is drawn and never a scope, which is the line to a dashboard. One EntityForm per kind; three tabs and one counts line per workspace; the band canvas, KPI chips and jump anchors retire (#826, superseding ADR-0132's anchors and ADR-0129's canvas landing) |
+| [ADR-0137](#adr-0137-explore-is-the-fleets-door-and-it-is-an-outline-of-places) | 2026-08-31 | Accepted | Explore (`/explore`) is the fleet's one door, and it draws one thing: an outline of places. A place wears the system that sits there, its components beneath; a chain of single-child places folds into one row; a collapsed row says what it holds in the registry's own labels and counts its systems by verdict, never worst-wins. Depth and what may be added come from `allowed_parent_types`, never a type's name. The filter is a predicate over live state, never a scope. One EntityForm per kind; three tabs and one counts line per workspace; the band canvas, KPI chips, jump anchors, the renderer library and the inventory tables retire (#826, #861, superseding ADR-0132's anchors and ADR-0129's canvas landing) |
 | [ADR-0138](#adr-0138-the-autopilot-ships-a-daily-slice-and-pr-review-is-its-approval-gate) | 2026-09-17 | Accepted | A scheduled daily session (the autopilot) ships one thin slice per day: for slices it scopes itself it files the definition in the `/define-work` shape with the `Mode: autopilot (ADR-0138)` marker and proceeds, the Define gate's approval comment moving to the architect's review of the PR (merge accepts, close vetoes). An in-progress loop, an approved definition, and a priority `Bug` outrank self-scoping; invariant surfaces (the authorization layers, the migration rules, the audit contract), breaking API changes and dependency majors stay behind a human approval comment; at most two autopilot PRs stay open; provenance is a marker line, never a new label class; the autopilot never merges |
 
 ## Entries
@@ -4810,7 +4810,7 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
 ### ADR-0105: A rule reads a name as words, and the location tier ships the restatement it once refused
 
 - **Date:** 2026-08-11 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
-  [find things in your estate](/guides/operator/inventory/), [location types](/guides/admin/location-types/)
+  [find things in your estate](/guides/operator/fleet/#finding-one-thing), [location types](/guides/admin/location-types/)
 - **Context:** epic [#657](https://github.com/hyperscaleav/omniglass/issues/657) shipped a label engine
   ([ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)) and an operator-owned
   acronym dictionary ([ADR-0099](#adr-0099-the-acronym-list-is-one-replaceable-setting-not-a-shipped-list-plus-operator-additions))
@@ -6167,65 +6167,67 @@ interface create form, since that name is the platform's to mint.
   ([ADR-0121](#adr-0121-the-console-ships-its-own-typefaces) landed the gate that caught it)
   (#398, #772, #782).
 
-### ADR-0137: Explore is the fleet's door, and a card is a level the page works out
+### ADR-0137: Explore is the fleet's door, and it is an outline of places
 
-- **Date:** 2026-08-31 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/), [views](/architecture/views/)
-- **Decision:** The sidebar has one door into the fleet, **Explore** (`/explore`), and five
-  rules govern what it draws.
+- **Date:** 2026-08-31, rewritten 2026-10-03 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/), [views](/architecture/views/)
+- **Decision:** The sidebar has one door into the fleet, **Explore** (`/explore`), and it
+  draws one thing: an **outline of places**, the location tree as an ARIA tree with five
+  rules.
 
-  **The cut.** A renderer never counts levels from a root. `location_type` and
-  `allowed_parent_types` make depth a customer's fact, so for each root the page takes the
-  shallowest container type that root has at least two of, falling back to the root itself,
-  and each card names its own type. Ties break on the coarser grouping, decided from that
-  root alone. Two is the threshold because one card is not a cut, it is the root again.
+  **A place wears its system.** Operators think of a room as its system; the location is
+  where it sits in the tree. So a place where one system sits carries that system's standard
+  and verdict on its own row, and its components are directly beneath. A place holding
+  several systems heads a row per system. A component two systems share appears under both,
+  marked with the other; a component in no system sits under its place. Systems and
+  components with no place the caller can read gather under one node, **Placed nowhere you
+  can see**, so nothing disappears because its place is out of scope.
 
-  **The three budgets.** Labels, area and z-order are things a view can or cannot afford,
-  not preferences: room names render under a rooms-in-view ceiling, a tile smaller than a
-  clickable target folds into a labelled remainder, and a container's title is reserved
-  space rather than an overlay. Manual settings are an override for a screenshot.
+  **A chain of one folds.** A place whose only content is one child place folds into it,
+  rendered as the path (`Headquarters / West Building`), and its add menu offers each place
+  it joins. Depth is never counted: it is the customer's fact through `location_type` and
+  `allowed_parent_types`, and what may be created under a row is read from the same graph,
+  never from a type's name.
 
-  **Grain.** A system draws at its own location, once. A component draws at its own
-  location, which today resolves to its system's (the override is #836). One view never
-  mixes the two grains, and the counts line names the grain in force.
+  **A collapsed row says what it holds, and counts, never rolls up.** It states its contents
+  in the registry's own type labels (`2 buildings, 1 floor`, `19 components`, `Empty`), and
+  counts the systems beneath it by verdict in four fixed slots, healthy grey and only trouble
+  in colour. Worst-wins is right for one system's verdict and wrong for a place standing in
+  for forty: at any realistic failure rate almost every large place holds one outage, so a
+  rolled-up colour saturates and says nothing.
 
-  **Aggregate colour is a share, not a rollup.** Worst-wins is correct for one system's
-  verdict and wrong as the fill for a tile standing in for forty: at any realistic failure
-  rate almost every aggregate contains one outage, so a rollup saturates and the colour
-  channel says nothing.
+  **The filter is a predicate, never a scope.** Filtering on live state (verdict, standard,
+  type, product, a name or path fragment, a tag) is exploring, and turns the tree into a flat
+  list of matches that reveal into the tree. Naming subjects to include is choosing a scope,
+  which a dashboard widget owns; so there is no location facet and no saved view. The filter
+  rides the address (`?chips=`), as does one revealed row (`?node=`); what is open is the
+  browser's.
 
-  **Renderers are options, and options are presets.** Cards, bands, mosaic and matrix are
-  renderers over one model, one cut and one mark vocabulary, so a fifth costs a chip. A
-  preset is a snapshot of the same object the controls write to, and carries how the fleet
-  is drawn and which live state is filtered, **never a scope**. That last clause is the line
-  between this page and a dashboard, and it is about kind rather than degree: filtering on a
-  **predicate over live state** (verdict, standard, location type, a name or path fragment)
-  is exploring, and it is what the page's filter bar does; **naming subjects** to include is
-  choosing a scope, which is what drilling does and what a dashboard widget owns. So there is
-  no location facet in the filter bar, and no preset carries one.
-
-  Alongside these, one `EntityForm` per kind renders read or edit wherever the operator
-  meets the entity (blade, drilled header, Configure tab; create is the same form empty with
-  `?under=` prefilling placement); every workspace carries three tabs and one counts line
-  with zeros left out; the band canvas (`/fleet`), the KPI chip rows and the blade's jump
-  anchors retire. "Fleet" stays the noun (ADR-0122); the sidebar entry is the verb.
+  **One door, one shape behind it.** One `EntityForm` per kind renders read or edit wherever
+  the operator meets the entity (side panel, Configure tab; create is the same form empty at
+  `/<kind>s/create`, with `?under=` prefilling placement); every workspace carries three tabs
+  and one counts line with zeros left out. The band canvas (`/fleet`), the KPI chip rows, the
+  blade's jump anchors and the per-kind inventory tables retire, and their addresses land on
+  Explore. "Fleet" stays the noun (ADR-0122); the sidebar entry is the verb.
 - **Context:** The #779 canvas conflated exploring with monitoring (a KPI wall as
   navigation), and the #800 anchors patched a blade that had diverged from the page instead
-  of restoring the vision that view and edit are one component. #826 first replaced both
-  with a Miller-column drill, which a design pass then falsified against a generated fleet
-  of a thousand systems across twelve roots of four different tree shapes: the columns spend
-  a screen on four levels, they assume a uniform depth the location model does not
-  guarantee, and they answer one question where operators arrive with several. Nothing had
-  shipped, so this decision replaces that one in place rather than superseding it.
-
-  Each rule above was earned by a render or a test rather than by argument. The cut rule
-  took three forms: excluding childless types broke a campus whose buildings hold systems
-  directly, and breaking ties on a global tier let a fact about one root decide another's
-  cut. The label ceiling was measured, not chosen. The share-not-rollup rule exists because
-  the first mosaic came out uniformly red. This supersedes ADR-0132's
-  blade-as-quick-face-with-anchors (its Configure tab survives as the form's page host) and
-  ADR-0129's canvas landing (its identity-route default stands: the workspaces are the
-  routes' faces). The map renderer and component location override are #836; the path-first
-  table renderer is #828.
+  of restoring the vision that view and edit are one component. #826 replaced both twice
+  before anything shipped. A Miller-column drill fell to a generated fleet of a thousand
+  systems across twelve roots of four tree shapes: it spent a screen on four levels and
+  assumed a uniform depth. A renderer library followed (cards cut at each root's shallowest
+  repeated container type, bands, a mosaic and a standards matrix, with label and area
+  budgets and saved presets), and its rules were each earned by a render: the first mosaic
+  came out uniformly red, which is where the count-not-rollup rule above comes from. Judged
+  in use it was hard to navigate, confusing, and opinionated: four drawings of one fleet, a
+  cut the operator had to reverse-engineer, and controls that came and went with the
+  renderer. The architect asked for one simple way to see the stack at a glance and drill in
+  as needed (#861). The outline keeps the earned rules (depth is the customer's, counts over
+  rollups, predicate over scope) and drops everything that asked the operator to choose how
+  to look. Nothing had shipped, so this rewrites the decision in place rather than
+  superseding it. This supersedes ADR-0132's blade-as-quick-face-with-anchors (its Configure
+  tab survives as the form's page host) and ADR-0129's canvas landing (its identity-route
+  default stands: the workspaces are the routes' faces). The map renderer and component
+  location override are #836; whether a system should be modelled as a facet of its
+  location is #862.
 ### ADR-0138: The autopilot ships a daily slice, and PR review is its approval gate
 
 - **Date:** 2026-09-17 | **Status:** Accepted | **Pages:** [autopilot](/contributing/autopilot/),

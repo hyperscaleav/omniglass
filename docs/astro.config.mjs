@@ -26,6 +26,8 @@ export default defineConfig({
     // The joint Types guide split into one page per registry (#598); the old
     // URL lands on the location half, which inherited most of its content.
     '/guides/admin/types/': '/guides/admin/location-types/',
+    // Find things in your fleet folded into the outline guide (#861).
+    '/guides/operator/inventory/': '/guides/operator/fleet/',
   },
   integrations: [
     // Diagrams are authored in D2 and rendered to inline SVG. ELK layout; dark theme
@@ -159,7 +161,6 @@ export default defineConfig({
             { label: 'Overview', slug: 'guides/operator' },
             { label: 'Sign in and your profile', slug: 'guides/operator/sign-in' },
             { label: 'Explore your fleet', slug: 'guides/operator/fleet' },
-            { label: 'Find things in your fleet', slug: 'guides/operator/inventory' },
             { label: 'Work with an entity', slug: 'guides/operator/entities' },
             { label: 'Nodes and reachability', slug: 'guides/operator/collection' },
             { label: 'The CLI', slug: 'guides/cli' },

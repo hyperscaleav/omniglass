@@ -13,14 +13,14 @@ The console is one renderer over the same views the rest of the platform reads. 
 Roughly 22 live pages (inventory, catalog, values, admin, plus the shell) ship as **config-driven
 `ListShell` pages (with `FlatList` / `TreeList` bodies) over the typed CRUD client**, not as the
 `ViewResult` renderer described next: an inventory page is CRUD over a scoped resource. The
-**Explore** page (`/explore`, #826, which retired the #633 canvas) is the first surface that
-is neither: a small library of renderers (cards, bands, mosaic, matrix) over one projection
-(`GET /views/fleet`) and one pure view model, and the workspaces it opens. Its cores live in
-`web/src/lib/`: `place_cut.ts` decides which level of each root becomes a card (never a depth
-counted from the top, since `allowed_parent_types` makes depth a customer's fact),
-`view_budgets.ts` decides what a view can afford to draw, `explore_view.ts` turns the
-projection plus the controls into what every renderer consumes, and `presets.ts` saves a way
-of looking without ever saving a scope (ADR-0137). The views model, the renderer library, and composable
+**Explore** page (`/explore`, #826 and #861, which retired the #633 canvas) is the first
+surface that is neither: an outline of places over one projection (`GET /views/fleet`) and
+the CRUD lists, and the workspaces it opens. Its core is one pure model,
+`web/src/lib/outline.ts`, which nests the places, puts each system on the place where it
+sits, folds single-child chains, counts what a row holds in the registry's own type labels,
+and counts systems by verdict rather than rolling them up worst-wins; `components/Outline.tsx`
+renders it as an ARIA tree, and `lib/location_type_graph.ts` reads what may sit under a
+place from `allowed_parent_types`, never from a type's name (ADR-0137). The views model, the renderer library, and composable
 dashboards remain the intended **read side** for the analytical surfaces (alarms, sample
 history, the cascade view, fleet dashboards), not built yet.
 Realized shell: the [design system](/contributing/design-system/); operating it: the
@@ -56,8 +56,7 @@ each marker, ADR-0128, the vitals), Activity (the history, the events, the logs)
 Configure (the one form). Since ADR-0129 these faces ARE the identity routes' default, and
 since #800 they are the ONLY faces: one way to look, one altitude rule (Explore drills the
 place tree, systems open full screen, components open in blades), editing through the one
-`EntityForm` wherever the operator meets the entity (ADR-0137), and the table face behind
-Explore's toggle for bulk work. The classic detail face is retired; `?view=detail` is
+`EntityForm` wherever the operator meets the entity (ADR-0137). The classic detail face is retired; `?view=detail` is
 ignored and `?edit=1` lands Configure already editing.
 
 ## One renderer library, two composition modes
@@ -164,8 +163,8 @@ Two layers, deliberately decoupled:
    menu, so deep links stay stable however the menu is reorganized. No taxonomy-nested routes, no
    redirects to maintain.
 2. **The sidebar groups those flat routes into clusters for browsing**: Home, Explore (the one
-   door into the fleet, #826: locations, systems and components are the kind tabs of its table
-   face), Dashboards, Alarms, Nodes, Values (variables, secrets, config, files),
+   door into the fleet, #826: its outline lists every location, system and component, #861),
+   Dashboards, Alarms, Nodes, Values (variables, secrets, config, files),
    Catalog (a single entry opening the catalog shell, next), Learn, Admin (users, roles,
    groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
    rearrangeable and user-customizable without touching a route.
@@ -210,7 +209,7 @@ interpolated values, no observed side); the full split is
 [config, secrets, and variables](/architecture/variables/).
 
 **Explore holds the fleet entities**: locations, systems, and components, reached through its
-renderers or the kind tabs of its table face. **Nodes**, the collection daemons, are monitored and
+outline of places. **Nodes**, the collection daemons, are monitored and
 scope-controlled (live, gated on `node:read` plus ABAC scope), so a node keeps its own sidebar
 entry rather than sitting in Admin. **Interfaces and tasks are not nav items**: an interface is a
 panel on a component, a task a panel on a node, facets of the owning entity's detail page.

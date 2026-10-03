@@ -41,15 +41,20 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
 ## Core UI contracts
 
 - **One list shell: `ListShell` with `FlatList` / `TreeList` bodies.** Every list page
-  (Components, Systems, Locations, which render as the kind tabs of Explore's table face, and the
-  flat registries)
+  (Files and the flat registries; the fleet kinds are listed by Explore's outline instead)
   is a `ListConfig` over the one shell, **never a fork**. The shell owns the faceted filter
   header, the action rail (tree/list toggle, expand/collapse, column visibility + drag reorder,
-  the primary create), the tree and flattened body rendering, and the stacked blades. A fleet
-  kind's row opens the shared entity blade and its identity route is the workspace; a page that
+  the primary create), the tree and flattened body rendering, and the stacked blades. A page that
   opens a row in place (Files) also gets the full-page detail and the create/edit `Drawer`. There
   is no summary row above a table: the KPI chip rows retired (ADR-0137). Adding an entity of
   this class is a data layer + a config + a route (see the `add-inventory-view` skill).
+- **The fleet is an outline, not a list.** Explore renders `components/Outline.tsx`, an ARIA
+  tree (roving tabindex, arrows, `*`, `+`) over the pure model in `lib/outline.ts`. Its rows
+  iterate stable string keys, so a rebuild (a toggle, a health read arriving) keeps each row's
+  element, its focus and an open menu. Its columns answer the outline's own width through
+  container queries rather than the window's, since the sidebar and the blade take their share
+  first. Health is four fixed slots (healthy, incomplete, degraded, outage), glyph and count,
+  where healthy stays grey and only trouble carries a hue (ADR-0137).
 - **The Name column has a floor, and the card scrolls before it gives it up.** A list table is
   `table-layout: fixed`, every column but Name declares a width, and Name takes what is left, which
   is what lets the identifier grow into a wide screen. It also made Name the first column to give up
