@@ -5883,6 +5883,17 @@ capabilities ship, so an early slice can prove a seam without moving any page of
   viewport flag the squeeze check wants) is the discipline's first artifact. Provenance is a
   marker line in the issue and PR body, never a new label class, the taxonomy staying fixed.
 
+- **The shipped seed names no real company, and a guard keeps it so**
+  ([#658](https://github.com/hyperscaleav/omniglass/issues/658)). The boot seed's vendors and
+  products moved to the fictional omniglass-lab catalog in the system workspace slice (#795), but
+  the Vendors and Products guides kept enumerating the eight real manufacturers and four real SKUs
+  by hand, so the docs still claimed an affiliation the binary had already dropped. Both guides now
+  render their shipped set from the generated seed facts (`<SeededSet kind="vendors" />` and
+  `kind="products"`, the products table carrying each declared-property contract), the same
+  generate-first render the other catalog guides use, so the claim cannot drift again. A unit test
+  in `internal/seed` fails the build if any of the eight real names reappears in a shipped seed
+  file; real vendors stay legal as operator data, which the guard does not touch.
+
 ### Explore becomes a renderer library over one cut (#826, slices #837 to #841)
 
 The Miller-column drill that slice 2 built was replaced before it shipped. Tested against a
