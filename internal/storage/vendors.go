@@ -39,7 +39,7 @@ func validVendorKind(s string) bool {
 type Vendor struct {
 	// ID is the uuid primary key and Name the renameable name, the shape
 	// tag has and every fleet entity has after ADR-0056. A vendor is addressable
-	// by either, so `crestron` keeps working and a rename does not break a caller
+	// by either, so `boreal` keeps working and a rename does not break a caller
 	// holding the id.
 	ID           string
 	Name         string
@@ -75,7 +75,7 @@ func scanVendor(row pgx.Row) (*Vendor, error) {
 
 // UpsertVendor installs or updates a vendor by HANDLE, the boot-seed phase's
 // write. The seed ships kebab names, not uuids, so the conflict target is the
-// handle: re-seeding `crestron` updates that row in place and its id never moves.
+// handle: re-seeding `boreal` updates that row in place and its id never moves.
 func (p *PG) UpsertVendor(ctx context.Context, m Vendor) error {
 	_, err := p.pool.Exec(ctx, `
 		insert into vendor (name, official, label, kind, icon, support_phone, website)

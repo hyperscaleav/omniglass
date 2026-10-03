@@ -3,14 +3,16 @@ title: Products
 description: "The Products catalog: a concrete SKU binding a vendor, a driver, and a kind, classified under a component_type; a component points at the product it is; official rows read-only, admin-gated custom ones."
 ---
 
+import SeededSet from '../../../../components/SeededSet.astro';
+
 **Catalog, under Components: Products** (`/products`, with `product:read`, covered by every viewer's `*:read` floor)
 is the directory of **products**: the concrete SKUs the fleet is built from, on the same
 flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/). A product is
-a specific model (a **Cisco Room Bar**, a **Samsung QM55**), not an organization and not an installed
+a specific model (a **Kestrel VRoom**, a **Boreal Edge 55**), not an organization and not an installed
 unit. It is where the two leaf catalogs converge: the [vendor](/guides/admin/vendors/) that makes
 it and the [driver](/guides/admin/drivers/) that speaks to it, classified by a **kind** and a
 **component type**. Each row shows the
-**name** (for example `cisco-room-bar`), the **label**, its
+**name** (for example `kestrel-vroom`), the **label**, its
 **vendor**, **driver**, **kind**, and its **origin** (**official** or **custom**). A
 product also carries an `id`, a uuid minted by the database, the internal address the handle resolves
 to ([ADR-0062](/architecture/decisions/)); the handle is what you type and read.
@@ -53,7 +55,7 @@ model.
   with `parent_product_id` (a trim or regional variant of the same model). A product with no parent is
   a base product.
 - **New product** (with `product:create`, an admin permission) opens a create drawer: give it a
-  **name** (unique tenant-wide, e.g. `cisco-room-bar`) and a **label**, pick
+  **name** (unique tenant-wide, e.g. `kestrel-vroom`) and a **label**, pick
   its **kind** (defaults to device) and its **component type**, and, optionally, its **vendor**,
   **driver**, and **parent product**.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `product:update`) edits the
@@ -63,9 +65,13 @@ model.
   (`Requires product:update`, `Requires product:delete`); the pair never disappears.
 - An **official** row is always read-only: the blade keeps the Edit and Delete pair in place,
   greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
-  Omniglass ships a starter set of official products (Cisco Room Bar, Samsung
-  QM55, Shure MXA920, Crestron TSS-1070), upserted idempotently at boot so the shared set cannot drift
-  install to install; add a custom product for anything else.
+  Omniglass ships a starter set of official products, upserted idempotently at boot so the shared
+  set cannot drift install to install; add a custom product for anything else. Like the
+  [vendors](/guides/admin/vendors/) they come from, the SKUs are **fictional**, each shaped like
+  the real device class it stands for. The shipped set, rendered from the seed itself (its
+  declared-property contract included):
+
+  <SeededSet kind="products" />
 - **Delete** enforces the referential guard the leaf catalogs deferred: a product still referenced by a
   **component** (`component.product_id`) cannot be deleted (409), the same delete-refused-while-referenced
   rule the [Location Types](/guides/admin/location-types/) registry enforces. Remove or repoint the component first. An
@@ -99,8 +105,8 @@ the product **is**, the contract says what it **carries**.
   **keep** any value they set for it; the value simply reads as **off contract** from then on, since
   nothing declares it any more.
 - An **official** product's contract is read-only, like the rest of the row: the shipped
-  Cisco Room Bar and Samsung QM55 declare `serial-number`, `firmware-version`, and
-  `model-number`, and those declarations come with the release.
+  displays and the video bar declare `serial-number`, `firmware-version`, and `model-number` (the
+  table above lists each one), and those declarations come with the release.
 
 From the CLI the contract is `omniglass product property list <id>`,
 `omniglass product property update <id> <property>`, and

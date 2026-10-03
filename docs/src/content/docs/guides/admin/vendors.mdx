@@ -3,11 +3,13 @@ title: Vendors
 description: "The Vendors catalog: the organizations behind products (name, label, kind of manufacturer/integrator/developer, icon, support phone, website), official rows read-only, admin-gated custom ones."
 ---
 
+import SeededSet from '../../../../components/SeededSet.astro';
+
 **Catalog, under Components: Vendors** (`/vendors`, with `vendor:read`, covered by every viewer's `*:read`
 floor) is the directory of **vendors**: the organizations behind the products in the fleet, on
 the same flat-registry pattern as [Location Types](/guides/admin/location-types/) and [Tags](/guides/admin/tags/).
 A vendor is not a device; it is the company a device comes from. Each row shows the **name**
-(for example `crestron`), the **label**, its **kind**
+(for example `boreal`), the **label**, its **kind**
 (**manufacturer**, **integrator**, or **developer**), an optional **icon** glyph key, and its
 **origin** (**official** or **custom**). A vendor also carries an `id`, a uuid
 minted by the database, the internal address the handle resolves to
@@ -24,7 +26,7 @@ model, and [Drivers](/guides/admin/drivers/) for the other leaf catalog beside i
   assembles and installs systems, a **developer** ships software. It defaults to **manufacturer**
   and is a closed set; a value outside it is refused (422).
 - **New vendor** (with `vendor:create`, an admin permission) opens a create drawer: give it a
-  **name** (unique tenant-wide, e.g. `crestron`) and a **label**;
+  **name** (unique tenant-wide, e.g. `boreal`) and a **label**;
   choose its **kind** (defaults to manufacturer); **icon** (a glyph key), **support phone**, and
   **website** are optional.
 - Pick a row to open its **detail blade**. The footer **Edit** pencil (with `vendor:update`) edits
@@ -34,9 +36,14 @@ model, and [Drivers](/guides/admin/drivers/) for the other leaf catalog beside i
   (`Requires vendor:update`, `Requires vendor:delete`); the pair never disappears.
 - An **official** row is always read-only: the blade keeps the Edit and Delete pair in place,
   greyed, with the reason on hover: "Official: ships with Omniglass and updates with it."
-  Omniglass ships eight official vendors (Crestron, Biamp, QSC, Shure,
-  Cisco, Extron, Sony, Samsung), all manufacturers, as a starter baseline, upserted idempotently
-  at boot so the shared set cannot drift install to install; add a custom vendor for anything else.
+  Omniglass ships a starter set of official vendors, upserted idempotently at boot so the shared
+  set cannot drift install to install; add a custom vendor for anything else. The set is
+  **fictional** by design (the [omniglass-lab](https://github.com/hyperscaleav/omniglass-lab) brand
+  universe, websites on reserved `.example` domains): what the platform ships names no real
+  company, so it implies no affiliation, while any real vendor stays yours to add as a custom row.
+  The shipped set, rendered from the seed itself:
+
+  <SeededSet kind="vendors" />
 - **Website** is validated to an `http`/`https` URL, on both the create/edit form and the API: a
   value in another scheme (for example `javascript:`) is refused with a 422 rather than stored. A
   valid website renders as a live link on the blade; a value that fails the check (entered off
