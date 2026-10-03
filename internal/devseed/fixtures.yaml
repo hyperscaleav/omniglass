@@ -448,7 +448,7 @@ files:
     content: '{"preset":"conference","gain":-6,"aec":true}'
   - name: codec-firmware-2.1.4.txt
     content_type: text/plain
-    content: "placeholder firmware notes for the Kestrel codec, release 2.1.4"
+    content: "placeholder firmware notes for the Cisco codec, release 2.1.4"
   - name: integrator-quote-confidential.txt
     content_type: text/plain
     content: "CONFIDENTIAL competitive bid, integrator A"
