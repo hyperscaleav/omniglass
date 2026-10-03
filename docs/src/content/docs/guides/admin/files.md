@@ -36,7 +36,7 @@ It uses the same filter, column, and list controls as the fleet directories, so 
 same. Two things differ:
 
 - The list is **flat**, not a tree, and tenant-wide rather than scoped to a subtree, so there is no
-  parent and no summary board.
+  parent.
 - You **upload** rather than fill a form. **New file** opens a drawer with a file picker; the name and
   content type default from the file you choose. Each file's detail offers **Download** and **Delete**.
 

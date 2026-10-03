@@ -6,11 +6,10 @@ import { useSearchParams } from "@solidjs/router";
 // on the same view; the default facet carries no param at all, keeping the
 // canonical address clean. One facet is no workspace: the rail renders only
 // once there are two.
-// The rail's URL fact defaults to `?tab=`; a caller whose facet is a different
-// noun names it (the fleet list's kind tabs ride `?kind=`, #798).
-export default function TabRail(props: { tabs: { key: string; label: string }[]; param?: string; activeKey?: () => string }) {
+// The rail's URL fact is `?tab=`.
+export default function TabRail(props: { tabs: { key: string; label: string }[]; activeKey?: () => string }) {
   const [params, setParams] = useSearchParams();
-  const name = () => props.param ?? "tab";
+  const name = () => "tab";
   const active = () => {
     // A page whose default facet is DERIVED (the ?edit=1 landing on
     // Configure, #800) passes its own resolver, so the rail and the body
@@ -34,7 +33,11 @@ export default function TabRail(props: { tabs: { key: string; label: string }[];
                 "border border-b-0 border-base-300 bg-base-100 font-medium": active() === t.key,
                 "text-base-content/60 hover:text-base-content": active() !== t.key,
               }}
-              onClick={() => setParams({ [name()]: t.key === props.tabs[0].key ? undefined : t.key })}
+              // Choosing a tab also ends an ?edit=1 landing (useEditParam's
+              // intent, consumed once): left in the address it pinned the page
+              // to Configure, so Overview, the bare address, resolved straight
+              // back to it and re-entered edit on every return.
+              onClick={() => setParams({ [name()]: t.key === props.tabs[0].key ? undefined : t.key, edit: undefined })}
             >
               {t.label}
             </button>

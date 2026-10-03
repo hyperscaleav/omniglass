@@ -50,18 +50,21 @@ export type NavItem = {
 
 export const navItems: NavItem[] = [
   { label: "Home", path: "/", icon: Icons.Home, live: true, hint: "Your environment at a glance, and what needs attention right now." },
-  // The fleet zoom (#633): the whole fleet on one canvas, systems as dot
-  // clusters under their root locations. Gated like the place tree it draws;
+  // Explore (#826): the sidebar's one door into the fleet ("fleet" stays the
+  // noun, ADR-0122), the outline of places (#861). It
+  // replaced the Fleet entry and the Explore stub once reserved for a data
+  // explorer, which takes a later name. Gated like the place tree it draws;
   // the projection scopes each tier on its own read underneath.
-  { label: "Fleet", path: "/fleet", icon: Icons.Grid, live: true, anyResource: ["location", "system", "component"], hint: "Every system as a cluster of dots on one page, grouped by location and coloured by status." },
+  { label: "Explore", path: "/explore", icon: Icons.Compass, live: true, anyResource: ["location", "system", "component"], hint: "Every place in the fleet, the systems that sit there, and what is in them." },
   { label: "Dashboards", path: "/dashboards", icon: Icons.LayoutDashboard, hint: "Official, shared, and your own dashboards." },
   { label: "Alarms", path: "/alarms", icon: Icons.Bell, hint: "What is firing now, with drill-down to the triggering sample." },
   // The fleet has ONE door (#798, the reconciliation ruled on the #795 review):
-  // the Inventory group dissolved into the Fleet entry above; the old index
-  // pages live on as the fleet list face's kind tabs, and their bare URLs
-  // redirect there. Their detail routes, gates, and top-bar identities survive
-  // through OFF_RAIL below, the same move the catalog registries made (#608).
-  // Nodes is infrastructure, not fleet inventory, so it keeps its own door.
+  // the Inventory group dissolved into the entry above, whose outline lists
+  // every location, system and component, and the old index URLs redirect
+  // there. Their workspace routes, gates, and top-bar identities
+  // survive through OFF_RAIL below, the same move the catalog registries made
+  // (#608). Nodes is infrastructure, not fleet inventory, so it keeps its own
+  // door.
   { label: "Nodes", path: "/nodes", icon: Icons.Server, live: true, resource: "node", hint: "Collection daemons: their health, enrollment, and the collection tasks assigned to each." },
   {
     label: "Values", icon: Icons.Sliders, hint: "Operator-set values and content: interpolation variables, encrypted secrets, and reconciled component config, each resolved down the scope cascade, plus the files kept with the fleet.",
@@ -84,7 +87,6 @@ export const navItems: NavItem[] = [
   // route-guard gate. The per-registry pages stay declared off-rail (OFF_RAIL
   // below): that carries their top-bar identity and their route-guard gates.
   { label: "Catalog", path: "/catalog", icon: Icons.Layers, live: true, hint: "Everything the fleet is typed by: every registry, browsable in one place." },
-  { label: "Explore", path: "/explore", icon: Icons.Compass, hint: "Sample history, the event log, and the cascade resolve view." },
   { label: "Learn", path: "/learn", icon: Icons.GraduationCap, hint: "How collection turns a device into owned samples." },
   {
     label: "Admin", icon: Icons.Settings, hint: "Platform administration: users, roles, groups, the audit trail, and platform settings.",
@@ -134,19 +136,19 @@ export function filterNav(items: NavItem[], allow: (tokens: string[]) => boolean
 // not-yet-built page's tracking issue rides here too, shown on its stub
 // through navByPath exactly as a rail entry's would be.
 export const OFF_RAIL: { path: string; label: string; hint: string; resource?: string; perm?: string; issue?: number }[] = [
-  // The re-homed index pages (#798): each renders as a kind tab inside the
-  // fleet's list face, and its bare URL redirects there, but the detail routes
-  // (/locations/{id} and friends) still resolve identity and gate here.
-  { path: "/components", label: "Components", resource: "component", hint: "The component inventory, with declared config, props, and tags. Device interfaces are a panel on the component." },
-  { path: "/systems", label: "Systems", resource: "system", hint: "Location and system trees, navigable, with health at each level." },
-  { path: "/locations", label: "Locations", resource: "location", hint: "The place tree: campuses, buildings, floors, and rooms." },
+  // The fleet kinds (#798, #861): Explore's outline lists them and each bare
+  // URL redirects there, but the workspace routes (/locations/{id} and
+  // friends) still resolve identity and gate here.
+  { path: "/components", label: "Components", resource: "component", hint: "A component's workspace: its declared config, props, and tags. Device interfaces are a panel on the component." },
+  { path: "/systems", label: "Systems", resource: "system", hint: "A system's workspace: its standard, roles, health, and the components that make it up." },
+  { path: "/locations", label: "Locations", resource: "location", hint: "A location's workspace: where it sits, what it holds, and the systems placed there." },
   { path: "/products", label: "Products", resource: "product", hint: "A concrete SKU: a vendor's product, its driver, kind, and the component type it is classified under." },
   { path: "/vendors", label: "Vendors", resource: "vendor", hint: "The organizations behind products: manufacturers, integrators, developers." },
   { path: "/drivers", label: "Drivers", resource: "driver", hint: "The implementations that get, emit, and set a product's signals." },
   { path: "/component-types", label: "Component types", resource: "component_type", hint: "The device-class genus registry: display, projector, mic, and your own, each carrying the icon, stem, and abbreviation its products inherit." },
   { path: "/standards", label: "Standards", resource: "standard", hint: "The blueprints a system conforms to, each declaring the properties every conforming system exposes." },
   { path: "/system-types", label: "System types", resource: "system_type", hint: "The coarse space registry: what kind of space a system is (a boardroom, a classroom, a video wall), each carrying the icon, stem, and abbreviation its systems inherit." },
-  { path: "/location-types", label: "Location types", resource: "location_type", hint: "The place classifier registry: campus, building, floor, room, and your own." },
+  { path: "/location-types", label: "Location types", resource: "location_type", hint: "The place classifier registry: the shipped types and your own, and where each may sit." },
   { path: "/secret-types", label: "Secret types", resource: "secret", hint: "The shapes a secret can take, read-only reference data that ships with Omniglass." },
   { path: "/metrics", label: "Metrics", resource: "metric_type", hint: "The numeric signal catalog: the canonical series a sample measures, each carrying its unit and precision." },
   { path: "/properties", label: "Properties", resource: "property_type", hint: "The categorical signal catalog: the canonical properties a sample observes and a product contract declares." },
@@ -185,7 +187,7 @@ export const navByPath: Record<string, NavMeta> = (() => {
 // so every unlive rail entry resolves to a registered stub rather than NotFound.
 export const STUBS = [
   "/dashboards", "/alarms",
-  "/templates", "/rules", "/explore", "/learn",
+  "/templates", "/rules", "/learn",
   "/config", "/log-types", "/notifications",
 ];
 

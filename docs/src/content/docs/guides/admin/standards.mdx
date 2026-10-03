@@ -8,7 +8,7 @@ import SeededSet from '../../../../components/SeededSet.astro';
 **Catalog, under Systems: Standards** (`/standards`, with `standard:read`, covered by every viewer's `*:read` floor)
 is the directory of **standards**: the blueprints your systems are built against. A **Huddle Room**, a
 **Classroom**, an **Auditorium** are standards; the meeting room on the third floor is a
-[system](/guides/operator/inventory/) that **conforms** to one. Each row shows the **name** (the
+[system](/guides/operator/fleet/) that **conforms** to one. Each row shows the **name** (the
 operator-facing name, for example `huddle-room`), the **label**, its **parent
 standard** if it is a variant, and its **origin**. A standard also carries an `id`, a uuid minted
 by the database, the internal address the handle resolves to
@@ -157,7 +157,7 @@ From the CLI: `omniglass standard role list <id>`,
 ## Staff a system against its standard
 
 Declaring the role is half of it; the other half happens on the system. Open a system from
-[Systems](/guides/operator/inventory/) and its detail carries a **Roles** panel showing **every role it
+[Explore](/guides/operator/fleet/) and its detail carries a **Roles** panel showing **every role it
 needs filled**: the ones inherited from its standard and any declared on the system itself, each marked
 with where it came from.
 

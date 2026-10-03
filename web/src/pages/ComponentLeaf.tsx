@@ -6,20 +6,12 @@ import Breadcrumb from "../components/Breadcrumb";
 import TabRail from "../components/TabRail";
 import ConfigureFace from "../components/ConfigureFace";
 import BladeStack from "../components/BladeStack";
-import PropertiesPanel, { propertyBladeId, propertyResolutionBlade } from "../components/PropertiesPanel";
-import ReachabilityPanel from "../components/ReachabilityPanel";
-import AlarmsPanel from "../components/AlarmsPanel";
 import EventsPanel from "../components/EventsPanel";
-import ReconciliationPanel from "../components/ReconciliationPanel";
-import ResolutionPanel from "../components/ResolutionPanel";
-import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
 import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
 import HealthBadge from "../components/HealthBadge";
 import FleetShell from "../components/FleetShell";
 import { componentTileSpec } from "../lib/fleet_tiles";
-import { createSignal } from "solid-js";
-import type { Chip } from "../lib/predicate";
 import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/fleet";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
 import { componentSystemsKey, componentSystems } from "../lib/members";
@@ -33,7 +25,7 @@ import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
 import { can, useMe } from "../lib/auth";
-import {describeError, fmtTime } from "../lib/format";
+import { describeError, fmtTime } from "../lib/format";
 
 // The component leaf (#637): the end of the walk. What it is (product,
 // vendor, driver), where it sits (the clickable ancestor chain), the
@@ -61,13 +53,17 @@ export default function ComponentLeaf() {
   const me = useMe();
   const blades = createBladeController();
   const [leafSearch] = useSearchParams();
+  // Three tabs on every altitude (#826): Overview, Activity, Configure. A
+  // legacy ?tab=events address lands on Activity, which absorbed it.
   const leafTabs = createMemo(() => [
     { key: "overview", label: "Overview" },
-    { key: "events", label: "Events" },
+    { key: "activity", label: "Activity" },
     ...(can(me.data, "component", "update") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
+  const LEGACY_TAB: Record<string, string> = { events: "activity" };
   const leafTab = () => {
-    const t = Array.isArray(leafSearch.tab) ? leafSearch.tab[0] : leafSearch.tab;
+    const raw = Array.isArray(leafSearch.tab) ? leafSearch.tab[0] : leafSearch.tab;
+    const t = raw ? (LEGACY_TAB[raw] ?? raw) : raw;
     if (t && leafTabs().some((x) => x.key === t)) return t;
     const editing = (Array.isArray(leafSearch.edit) ? leafSearch.edit[0] : leafSearch.edit) === "1";
     if (editing && leafTabs().some((x) => x.key === "configure")) return "configure";
@@ -133,7 +129,6 @@ export default function ComponentLeaf() {
       ? componentTileSpec(view.data, component()!.id, activeAlarms().length, (reach.data?.interfaces ?? []).length)
       : undefined,
   );
-  const [filterChips, setFilterChips] = createSignal<Chip[]>([]);
 
   const chain = createMemo(() => (view.data && component()?.location_id ? ancestors(component()!.location_id!, locationIndex(view.data)) : []));
 
@@ -144,7 +139,7 @@ export default function ComponentLeaf() {
     // The leaf itself is the page title, so it is not the last crumb.
     const primary = rows().find((r) => r.primary);
     return [
-      { key: "fleet", label: "Fleet", onClick: () => navigate("/fleet") },
+      { key: "explore", label: "Explore", onClick: () => navigate("/explore") },
       ...chainList.map((l) => ({ key: l.id, label: entityLabel(l), onClick: () => navigate(`/locations/${l.id}`) })),
       ...(primary && primary.systemId ? [{ key: primary.systemId, label: primary.label, onClick: () => navigate(`/systems/${primary.systemId}`) }] : []),
     ];
@@ -176,40 +171,13 @@ export default function ComponentLeaf() {
           <div class="flex flex-col gap-3">
           <TabRail tabs={leafTabs()} activeKey={leafTab} />
           <Show when={leafTab() === "configure"}>
-            <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace
-              kind="component"
-              id={id()}
-              panels={(slot) => (
-                <>
-                  <ReconciliationPanel name={id()} />
-                  <ResolutionPanel component={id()} />
-                  <PropertiesPanel
-                    component={id()}
-                    edit={slot}
-                    onOpen={(property) => blades.push({ kind: "property-resolution", id: propertyBladeId(id(), property) })}
-                  />
-                  <ReachabilityPanel
-                    name={id()}
-                    onAdd={can(me.data, "interface", "create") ? () => blades.push({ kind: "interface-create", id: id() }) : undefined}
-                    onOpenInterface={can(me.data, "interface", "read") ? (ifid) => blades.push({ kind: "interface", id: ifid }) : undefined}
-                  />
-                  <AlarmsPanel component={id()} canUpdate={slot.editing() && can(me.data, "component", "update")} canAcknowledge={can(me.data, "alarm", "acknowledge")} />
-                </>
-              )}
-            /></div>
+            <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace kind="component" id={id()} /></div>
           </Show>
-          <Show when={leafTab() === "events"}>
-            <div class="card border border-base-300 bg-base-200 p-4"><EventsPanel name={id()} /></div>
+          <Show when={leafTab() === "activity"}>
+            <div data-testid="activity-tab" class="card border border-base-300 bg-base-200 p-4"><EventsPanel name={id()} /></div>
           </Show>
           <Show when={leafTab() === "overview"}>
-<FleetShell
-            storageKey="fleet"
-            tiles={tiles()}
-            rows={[]}
-            filterKeys={[]}
-            chips={filterChips}
-            onChips={setFilterChips}
-          >
+<FleetShell tiles={tiles()}>
           <div class="flex min-w-0 flex-1 flex-col gap-5 p-4">
             {/* State, age, identity: the same header shape every zoom opens
                 with. A component has no transitions read, so since-when is
@@ -403,7 +371,7 @@ export default function ComponentLeaf() {
       </Show>
       </Show>
     </Page>
-    <BladeStack controller={blades} registry={{ ...fleetRegistry, "property-resolution": propertyResolutionBlade, interface: interfaceBlade, "interface-create": interfaceCreateBlade }} />
+    <BladeStack controller={blades} registry={fleetRegistry} />
     </BladesContext.Provider>
   );
 }

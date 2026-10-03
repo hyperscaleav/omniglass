@@ -4,7 +4,7 @@ import { entityLabel, type Labelled } from "../lib/entities";
 import type { FleetView, SystemCluster } from "../lib/fleet";
 
 // FleetRows: the subtree at list density (#798). One row per system, verdict
-// first, the same data the canvas draws, so the toggle changes density and
+// first, the same data the cards draw, so the toggle changes density and
 // nothing else. A row is a button that opens its system full screen (the
 // altitude rule, ADR-0129).
 export default function FleetRows(props: { rows: SystemCluster[]; view: FleetView; onOpen: (systemId: string) => void }) {

@@ -1,9 +1,8 @@
 import { type Accessor, type Component, type JSX, For, Show, createEffect, createMemo, createSignal, untrack } from "solid-js";
 import { Dynamic } from "solid-js/web";
-import { useLocation, useNavigate } from "@solidjs/router";
 import { useMe, can } from "../lib/auth";
 import { describeError } from "../lib/format";
-import { facetActive as facetActiveFn, toggleFacet as toggleFacetFn, resolveFilterKeys, type Chip, type FilterKeys } from "../lib/predicate";
+import { resolveFilterKeys, type Chip, type FilterKeys } from "../lib/predicate";
 import {
   buildIndex, pathOf as pathOfModel, flattenRows, treeRows, parsePref, toggleItem, moveItem, allExpanded as allExpandedModel,
   type Crumb, type Row, type SortState,
@@ -13,21 +12,22 @@ import Drawer from "./Drawer";
 import { hasLabel, labelIsName, type Labelled } from "../lib/entities";
 import ColumnMenu from "./ColumnMenu";
 import {
-  ChevronDown, ChevronLeft, ChevronsDownUp, ChevronsUpDown, Columns, Check, ListTree, Rows, Maximize, Plus, Pencil, Trash,
+  ChevronDown, ChevronsDownUp, ChevronsUpDown, ListTree, Rows, Maximize, Plus, Pencil, Trash,
 } from "./icons";
 import BladeStack from "./BladeStack";
 import Button from "./Button";
-import { type BladeDef, type BladeEdit, type BladeRef, BladesContext, createBladeController, createEditSlot, useBladeEdit } from "../lib/blades";
+import { type BladeDef, type BladeEdit, BladesContext, createBladeController, createEditSlot, useBladeEdit } from "../lib/blades";
 
-// TreeList: the one config-driven tree-list body (composing ListShell), the inventory shell. Every entity page (Components,
-// Systems, Locations) is a config over this, never a fork. It owns the filter
-// header (the faceted chip search), the action rail (view toggle, expand/collapse,
-// column visibility, the primary create), the table in both tree and flattened
-// modes, the stacked detail blades, the full-page detail shell, and the
-// create/edit form Drawer. Filtering or list mode flattens the tree (with each
-// row's ancestor path shown); sort is active only when flattened. Authorization is
-// read off the caller's grants by the entity's resource name, a UI hint over the
-// server's authority.
+// TreeList: the one config-driven tree-list body (composing ListShell), which
+// Files is a config over. It owns the filter header (the faceted chip search),
+// the action rail (view toggle, expand/collapse, column visibility, the primary
+// create), the table in both tree and flattened modes, and the stacked blades.
+// The fleet kinds wore it as Explore's table face until the outline replaced
+// them (#861).
+// Filtering or list mode flattens the tree (with each row's ancestor path
+// shown); sort is active only when flattened. Authorization is read off the
+// caller's grants by the entity's resource name, a UI hint over the server's
+// authority.
 //
 // The blade stack is the Azure model: a row opens an ephemeral right-hand blade,
 // drilling into a child pushes another blade offset behind it, and Maximize
@@ -35,17 +35,15 @@ import { type BladeDef, type BladeEdit, type BladeRef, BladesContext, createBlad
 // their own (the full page is the shareable deep link); they stay live across a
 // refetch by re-resolving their node id against the fresh index.
 //
-// Deferred to later phases on this branch: drag reorder of columns and sibling
-// rows (Phase 6), and the summary widget board (Phase 7, where a health/alarm
-// backend feeds it).
+// The full-page detail and the form Drawer below serve Files, which opens a
+// row in place.
 
 export interface ListNode {
   id: string;
-  // addr is a second address for a page whose id is a uuid but whose route
-  // still carries the entity's bare name (#627, until the URL swap to uuid
-  // addressing lands): the focus-by-URL resolution falls back to it when id
-  // does not match. Not guaranteed unique the way id is; omit it entirely on
-  // a page where id already IS the addressable value.
+  // addr is the entity's name where id is a uuid: the row's key sub-line and
+  // the identity pairing below read it. Not guaranteed unique the way id is
+  // (#627), which is why nothing is ever looked up by it; omit it on a page
+  // where id already IS the name.
   addr?: string;
   // The server's own dash render of this node's dotted path (#627 Task 15:
   // component/system/location renders.dash), fed straight onto the row
@@ -82,15 +80,6 @@ export const identityOf = (n: ListNode): Labelled => ({
 
 export type FormState<N> = { mode: "create"; parent: N | null } | { mode: "edit"; node: N };
 
-// A summary widget: a compact badge (collapsed rail) and a full tile (expanded
-// board). Both receive the context so a widget can drive the filter (facet
-// toggles) or expand the rail.
-export type Widget<N extends ListNode> = {
-  title: string;
-  badge: (ctx: ListCtx<N>) => JSX.Element;
-  tile: (ctx: ListCtx<N>) => JSX.Element;
-};
-
 export type ListCtx<N extends ListNode> = {
   // true in the full-page detail, false in a blade: lets a shared detail body show
   // its breadcrumb only in a blade and drill via blade vs URL navigation.
@@ -103,12 +92,9 @@ export type ListCtx<N extends ListNode> = {
   // through ctx, never via useBladeEdit, since renderDetail is shared by the blade
   // (inside a provider) and the full page (outside one).
   edit?: BladeEdit;
-  facetActive: (key: string, val: string) => boolean;
-  toggleFacet: (key: string, val: string) => void;
   openEdit: (n: N) => void;
   openCreate: (parent: N | null) => void;
   openNode: (n: N) => void;
-  setSummaryOpen: (open: boolean) => void;
   // context-aware open: in a blade it pushes a child blade, on the full page it
   // navigates to that node's full-page URL.
   go: (n: N) => void;
@@ -116,15 +102,10 @@ export type ListCtx<N extends ListNode> = {
   parentOf: (n: N) => N | undefined;
   byId: (id: string) => N | undefined;
   pushBlade: (n: N) => void;
-  // Push an arbitrary blade (a kind registered via ListConfig.extraBlades) onto
-  // the shared stack, so a detail body can open a non-node blade that nests in
-  // the same stack rather than a separate overlay (which a higher-z blade hides).
-  openBlade: (ref: BladeRef) => void;
   popBlade: () => void;
   closeBlades: () => void;
   setFullPage: (n: N | null) => void;
   pathOf: (n: N) => { id: string; display: string }[];
-  nav?: (page: string, params?: unknown) => void;
 };
 
 export interface ListConfig<N extends ListNode> {
@@ -137,56 +118,19 @@ export interface ListConfig<N extends ListNode> {
   loading?: Accessor<boolean>;
   error?: Accessor<unknown>;
   filterPlaceholder?: string;
-  initialChips?: Chip[];
   columns: Record<string, { label: string; width: number }>;
   columnKeys: string[];
   defaultCols: string[];
   cellFor: (key: string, n: N, ctx: ListCtx<N>) => JSX.Element;
   filterKeys: FilterKeys<N>;
   sortVal: (n: N, key: string) => string | number;
-  nameWeight?: (n: N) => number;
-  // Optional leading glyph rendered immediately before a node's name in the tree,
-  // always visible (not a toggleable column). Used by Locations to wear each
-  // location's type icon so a campus reads differently from a building at a glance.
-  leadIcon?: (n: N) => JSX.Element;
-  canAddChild?: (n: N) => boolean;
-  renderDetail: (n: N, ctx: ListCtx<N>) => JSX.Element;
-  // Extra blade kinds this page's detail body can open on the shared stack (via
-  // ctx.openBlade), keyed by kind, alongside the page's own entity blade. Used by
-  // Components to open a secret's cascade as a nested blade.
-  extraBlades?: Record<string, BladeDef>;
-  // Replace the page's own entity blade with a shared cross-page def (#799: the
-  // fleet kinds retire the inventory-era renderDetail blade for the condensed
-  // EntityBlade). The row click, drill, and stack mechanics stay TreeList's;
-  // only what the blade shows (and how it edits) comes from the override.
-  bladeOverride?: BladeDef;
-  // The create/edit Drawer body. Optional: a page on the create-as-route model omits
-  // it (create is renderCreate at /<entity>/create, edit is inline on the detail
-  // accordion), so the Drawer never opens. Pages still on the drawer model provide it.
+  // The detail body a row opens in place (the blade and the full page).
+  renderDetail?: (n: N, ctx: ListCtx<N>) => JSX.Element;
+  // The create/edit Drawer body; without one the Drawer never opens.
   FormBody?: Component<{ form: FormState<N>; close: () => void; ctx: ListCtx<N> }>;
-  // The draft-create surface, rendered full-page when the focus id is the reserved
-  // "create" (from /<entity>/create). It owns the draft fields and, on Save, navigates
-  // to /<entity>/<newId>. When set, `New` should route here via onNew.
-  renderCreate?: (ctx: ListCtx<N>) => JSX.Element;
-  // What the `New <entity>` button (and a row's Add-child) does. Defaults to opening
-  // the create Drawer; a create-as-route page overrides it to navigate to
-  // /<entity>/create.
-  onNew?: () => void;
-  // What a row's Edit pencil does. Defaults to opening the edit Drawer; a
-  // create-as-route page overrides it to open the node's detail in edit (navigate +
-  // a pending-edit handoff). The blade / full-page pencils drive the edit slot
-  // directly, so this is only the list-row affordance.
-  onEdit?: (n: N) => void;
   onOpenNode?: (n: N) => void;
   onBack?: () => void;
   onDelete?: (n: N, ctx: ListCtx<N>) => void;
-  nav?: (page: string, params?: unknown) => void;
-  // Optional summary board: a collapsible rail of widgets above the table, with a
-  // personal show/hide preference. allWidgets is the catalog, defaultWidgets the
-  // initial board.
-  widgets?: Record<string, Widget<N>>;
-  allWidgets?: string[];
-  defaultWidgets?: string[];
 }
 
 // The static, page-agnostic part of an inventory page's config: the parts a matrix
@@ -283,7 +227,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   const initialView = (): "tree" | "list" =>
     cfg.flat ? "list" : localStorage.getItem(`${cfg.storageKey}-view`) === "list" ? "list" : "tree";
 
-  const [chips, setChips] = createSignal<Chip[]>(cfg.initialChips ?? []);
+  const [chips, setChips] = createSignal<Chip[]>([]);
   const [expanded, setExpanded] = createSignal<Set<string>>(new Set());
   const [cols, setCols] = createSignal<string[]>(readCols());
   const [viewMode, setViewMode] = createSignal<"tree" | "list">(initialView());
@@ -302,40 +246,16 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   // The signal setter treats a function arg as an updater; N is an object but TS
   // cannot prove it is not callable, so set the focused node through a thunk.
   const showFull = (n: N | null) => setFullPage(() => n);
-  const routerNavigate = useNavigate();
-  const location = useLocation();
 
   // The flattened index (id -> node, child -> parent, the in-order node list, the
   // container ids) and the ancestor path: both are pure, in lib/listmodel.
   const index = createMemo(() => buildIndex(cfg.nodes()));
   const pathOf = (n: N): Crumb[] => pathOfModel(index(), n);
 
-  // focusMiss holds the two states a route's focus id can land in once it is
-  // known NOT to be a live uuid (#627 Task 15c): "miss" when no row's addr
-  // matches either, "ambiguous" when more than one does (addr is not
-  // guaranteed unique the way id is, see listmodel.ts). null the rest of the
-  // time, including while resolved (fullPage is set) or the reserved
-  // "create" literal.
-  type FocusMiss = { kind: "miss" } | { kind: "ambiguous"; matches: N[] };
-  const [focusMiss, setFocusMiss] = createSignal<FocusMiss | null>(null);
-
-  // redirectToId swaps the route's trailing segment for id via history
-  // replace: the operator's back button still lands where they came from,
-  // not on the just-resolved old-address URL. location.pathname is the
-  // FULL browser path, base included ("/web/components/mic-2" in the real
-  // app, which mounts <Router base="/web">), so the reconstructed target is
-  // base-inclusive too. { resolve: false } is required: solid-router's
-  // default resolve treats a leading-"/" `to` as relative to the router's
-  // OWN base and prepends it again, which double-prefixes to
-  // "/web/web/components/<id>" and 404s. resolve:false takes `to` as the
-  // literal path to set, matching what it already is.
-  const redirectToId = (id: string) => {
-    const parts = location.pathname.split("/");
-    parts[parts.length - 1] = encodeURIComponent(id);
-    // The query string rides along (#759): a name-shaped deep link can carry
-    // ?edit=1, and dropping it here would land the resolved uuid read-only.
-    routerNavigate(parts.join("/") + location.search, { replace: true, resolve: false });
-  };
+  // focusMiss is true when the route's focus id names no row here: an honest
+  // "no such row", never a silent fall-through to the unfiltered list. False
+  // the rest of the time, including while resolved (fullPage is set).
+  const [focusMiss, setFocusMiss] = createSignal(false);
 
   // After a refetch, drop any open blade whose node no longer exists (e.g. it was
   // deleted), and re-resolve the full-page node by id so it shows fresh data. The
@@ -352,55 +272,28 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   });
 
   // Deep link: when the route carries a focus id, open that node full-page and
-  // close any ephemeral blades (the full page is the addressable surface).
-  // Routes take :id now (#627 Task 15c), so the common case is a straight
-  // byId hit. A miss falls back to a name lookup (byAddr): an old bookmark
-  // from before the URL swap, or one of the cross-entity drill sites that
-  // still navigate by name because the panel they read from (health,
-  // membership) carries no id to hand them. A unique name hit replaces the
-  // URL with the resolved id (an old address earns a corrected bookmark, not
-  // a silent read); more than one hit is a genuine ambiguity (addr is not
-  // unique the way id is, #627 Task 10 legalized a shared name across
-  // placements) and gets a disambiguation list instead of picking one
-  // arbitrarily; zero hits is an honest "no such row," never the old
-  // behavior of silently falling through to the unfiltered list.
+  // close any ephemeral blades (the full page is the addressable surface). A
+  // focus that matches no id is a miss, judged only once the first fetch has
+  // settled.
   createEffect(() => {
     const f = cfg.focus?.();
-    if (!f || f === "create") {
-      // "create" is the reserved literal from /<entity>/create (isCreate()
-      // below renders the draft surface regardless of fullPage/focusMiss);
-      // it must never be looked up as a name; TreeList.tsx's own uuid-shape
-      // guard has no other call site, but this is where a "create"-named
-      // real row would otherwise collide with the route.
+    if (!f) {
       showFull(null);
-      setFocusMiss(null);
+      setFocusMiss(false);
       return;
     }
     const byId = index().byId.get(f);
     if (byId) {
       showFull(byId);
-      setFocusMiss(null);
+      setFocusMiss(false);
       blades.close();
       return;
     }
     // Not a live id. Wait for the list's first fetch to settle before
     // judging a miss, so a fresh page load never flashes "not found" while
     // the query is still in flight.
-    if (cfg.loading?.()) {
-      showFull(null);
-      setFocusMiss(null);
-      return;
-    }
     showFull(null);
-    const matches = index().all.filter((n) => n.addr === f);
-    if (matches.length === 1) {
-      setFocusMiss(null);
-      redirectToId(matches[0].id);
-    } else if (matches.length > 1) {
-      setFocusMiss({ kind: "ambiguous", matches });
-    } else {
-      setFocusMiss({ kind: "miss" });
-    }
+    setFocusMiss(!cfg.loading?.());
   });
 
   const filtering = createMemo(() => chips().length > 0);
@@ -431,21 +324,6 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   // Reorder a visible column from one position to another (drag in the menu).
   const moveCol = (from: number, to: number) => setCols((c) => moveItem(c, from, to));
 
-  // Summary board: which widgets are on the personal board, and whether the rail is
-  // expanded. Both persist as client preferences (same future home as columns).
-  const readBoard = (): string[] => {
-    if (!cfg.widgets) return [];
-    const parsed = parsePref(localStorage.getItem(`${cfg.storageKey}-widgets`), Object.keys(cfg.widgets));
-    return parsed ?? cfg.defaultWidgets ?? cfg.allWidgets ?? Object.keys(cfg.widgets);
-  };
-  const [board, setBoard] = createSignal<string[]>(readBoard());
-  const [summaryOpen, setSummaryOpen] = createSignal(localStorage.getItem(`${cfg.storageKey}-sumopen`) === "1");
-  const toggleWidget = (id: string) => setBoard((b) => toggleItem(b, id));
-  if (cfg.widgets) {
-    createEffect(() => localStorage.setItem(`${cfg.storageKey}-widgets`, JSON.stringify(board())));
-    createEffect(() => localStorage.setItem(`${cfg.storageKey}-sumopen`, summaryOpen() ? "1" : "0"));
-  }
-
   // Blade ops delegate to the shared controller; a node maps to a { kind, id } ref
   // under this page's entity kind. push truncates-to-existing (breadcrumb collapse).
   const pushBlade = (n: N) => blades.push({ kind: cfg.entity.name, id: n.id });
@@ -458,24 +336,19 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
   const back = () => (cfg.onBack ? cfg.onBack() : showFull(null));
 
   const baseCtx = {
-    facetActive: (key: string, val: string) => facetActiveFn(chips(), key, val),
-    toggleFacet: (key: string, val: string) => setChips(toggleFacetFn(chips(), key, val)),
     // Close any open blade before the form Drawer opens (the Drawer would
     // otherwise render behind the higher-z blade and be unreachable).
     openEdit: (n: N) => { closeBlades(); setForm({ mode: "edit", node: n }); },
     openCreate: (parent: N | null) => { closeBlades(); setForm({ mode: "create", parent }); },
     openNode,
-    setSummaryOpen,
     openFull,
     parentOf: (n: N) => index().parentOf.get(n.id),
     byId: (id: string) => index().byId.get(id),
     pushBlade,
-    openBlade: (ref: BladeRef) => blades.push(ref),
     popBlade,
     closeBlades,
     setFullPage: (n: N | null) => showFull(n),
     pathOf,
-    nav: cfg.nav,
   };
   // Two views over the shared context: the full page navigates by URL, a blade
   // drills by pushing another blade.
@@ -505,15 +378,14 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
           : undefined;
       },
     });
-    return <Show when={node()}>{(n) => cfg.renderDetail(n(), { ...ctxBlade, edit })}</Show>;
+    return <Show when={node()}>{(n) => cfg.renderDetail?.(n(), { ...ctxBlade, edit })}</Show>;
   };
 
   // Single-kind registry for the shared BladeStack: this page's own entity. The
   // title is the node display; the body is renderDetail in blade context (drills by
   // pushing a child blade); Maximize promotes the blade to the addressable full page.
   const bladeRegistry: Record<string, BladeDef> = {
-    ...(cfg.extraBlades ?? {}),
-    [cfg.entity.name]: cfg.bladeOverride ?? {
+    [cfg.entity.name]: {
       Title: (p) => <>{index().byId.get(p.id)?.display}</>,
       Body: (p) => <EntityBladeBody id={p.id} />,
       headerExtra: (p) => (
@@ -525,10 +397,6 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
       ),
     },
   };
-
-  const colBox = (on: boolean) =>
-    "flex h-4 w-4 flex-none items-center justify-center rounded border " +
-    (on ? "border-primary bg-primary text-primary-content" : "border-base-300");
 
   const actions = (
     <>
@@ -546,7 +414,7 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
       <ColumnMenu columns={cfg.columns} columnKeys={cfg.columnKeys} cols={cols} onToggle={toggleCol} onMove={moveCol} />
       <span class="mx-1 h-5 w-px flex-none bg-base-300" />
       <Show when={allow("create")}>
-        <Button intent="action" icon={Plus} onClick={() => (cfg.onNew ? cfg.onNew() : ctxFull.openCreate(null))}>New {cfg.entity.name}</Button>
+        <Button intent="action" icon={Plus} onClick={() => ctxFull.openCreate(null)}>New {cfg.entity.name}</Button>
       </Show>
     </>
   );
@@ -608,9 +476,6 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                 </Show>
               </span>
             </Show>
-            <Show when={cfg.leadIcon}>
-              <span class="inline-flex flex-none items-center">{cfg.leadIcon!(n)}</span>
-            </Show>
             <span class="flex min-w-0 flex-col gap-0.5 py-0.5">
               {/* The list-mode ancestor sub-line. pathRender (the server's own
                   dotted-path dash render, #627 Task 15) wins when present: pathOf's
@@ -654,9 +519,8 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
                   still reads the pen, which is the half that stayed. */}
               <span class="flex min-w-0 items-baseline">
                 <span
-                  class="truncate"
+                  class="truncate font-medium"
                   classList={{ "font-data text-[13px]": labelIsName(identityOf(n)) }}
-                  style={{ "font-weight": cfg.nameWeight ? cfg.nameWeight(n) : 500 }}
                 >
                   {n.display}
                 </span>
@@ -673,11 +537,8 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
         <td>
           <div class="flex justify-end gap-0.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
             <Button square size="xs" icon={Maximize} title="Open full page" onClick={(e) => { e.stopPropagation(); openFull(n); }} />
-            <Show when={cfg.canAddChild?.(n) && rowAllow(n, "create")}>
-              <Button square size="xs" icon={Plus} title="Add child" onClick={(e) => { e.stopPropagation(); if (cfg.onNew) cfg.onNew(); else ctxFull.openCreate(n); }} />
-            </Show>
             <Show when={rowAllow(n, "update")}>
-              <Button square size="xs" icon={Pencil} title="Edit" onClick={(e) => { e.stopPropagation(); if (cfg.onEdit) cfg.onEdit(n); else ctxFull.openEdit(n); }} />
+              <Button square size="xs" icon={Pencil} title="Edit" onClick={(e) => { e.stopPropagation(); ctxFull.openEdit(n); }} />
             </Show>
             <Show when={rowAllow(n, "delete") && cfg.onDelete}>
               <Button square size="xs" intent="danger" icon={Trash} title="Delete" onClick={(e) => { e.stopPropagation(); cfg.onDelete!(n, ctxFull); }} />
@@ -688,61 +549,8 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
     );
   };
 
-  // Summary board: a collapsed badge rail or an expanded tile grid, with a personal
-  // show/hide preference. Rendered above the table only when the config supplies
-  // widgets.
-  const SummaryRail = () => {
-    const W = cfg.widgets!;
-    const catalog = cfg.allWidgets ?? Object.keys(W);
-    return (
-      <div class="flex flex-col gap-3">
-        <Show
-          when={summaryOpen()}
-          fallback={
-            <div class="flex flex-wrap items-center gap-2">
-              <div class="flex min-w-0 flex-1 flex-wrap gap-2">
-                <For each={board().filter((id) => W[id])}>{(id) => W[id].badge(ctxFull)}</For>
-              </div>
-              <Button square icon={ChevronLeft} title="Expand summary" label="Expand summary" class="flex-none" onClick={() => setSummaryOpen(true)} />
-            </div>
-          }
-        >
-          <div class="flex items-center gap-2">
-            <span class="eyebrow">Summary</span>
-            <span class="flex-1" />
-            <details class="dropdown dropdown-end">
-              <summary class="btn btn-quiet btn-sm gap-1.5"><Columns size={14} /> Customize</summary>
-              <ul class="dropdown-content menu z-40 mt-1.5 w-56 rounded-box border border-base-300 bg-base-100 p-1.5 shadow-2xl">
-                <li class="menu-title px-2 pb-1.5 text-[10.5px]">Show widgets · personal</li>
-                <For each={catalog}>
-                  {(id) => (
-                    <li>
-                      <button class="flex items-center gap-2.5 px-2 py-1.5" onClick={() => toggleWidget(id)}>
-                        <span class={colBox(board().includes(id))}><Show when={board().includes(id)}><Check size={11} /></Show></span>
-                        {W[id].title}
-                      </button>
-                    </li>
-                  )}
-                </For>
-              </ul>
-            </details>
-            <Button icon={ChevronDown} iconTrailing onClick={() => setSummaryOpen(false)}>Collapse</Button>
-          </div>
-          <div class="flex flex-wrap items-stretch gap-3">
-            <For each={board().filter((id) => W[id])}>
-              {(id) => <div class="min-w-50 max-w-sm flex-[1_1_220px]">{W[id].tile(ctxFull)}</div>}
-            </For>
-          </div>
-        </Show>
-      </div>
-    );
-  };
-
   const ListBody = () => (
     <section class="fade-in flex flex-col gap-3.5">
-      <Show when={cfg.widgets}>
-        <SummaryRail />
-      </Show>
       {/* The chrome (FilterBar, card, action rail) is the shared ListShell; the
           tree body owns its own chips (controlled), since it filters tree-aware
           via flattenRows rather than the shell's flat predicate. */}
@@ -829,55 +637,20 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
             background list refetch swaps props2.node for a fresh object; Show dedupes on
             truthiness, so the callback runs once while the node stays present. The detail
             re-reads live data through ctx.byId. Mirrors the blade path (EntityBladeBody). */}
-        <Show when={props2.node}>{(node) => cfg.renderDetail(node(), { ...ctxFull, edit })}</Show>
+        <Show when={props2.node}>{(node) => cfg.renderDetail?.(node(), { ...ctxFull, edit })}</Show>
       </div>
     </section>
     );
   };
 
-  // The reserved focus id "create" (from /<entity>/create) shows the draft-create
-  // surface full-page instead of the list. renderDetail resolves a real id; renderCreate
-  // owns a not-yet-saved draft and, on Save, navigates to /<entity>/<newId>.
-  const isCreate = () => cfg.focus?.() === "create" && !!cfg.renderCreate;
-
-  // FocusMissView is what a route focus id that resolves to neither a live
-  // uuid nor a unique name renders (#627 Task 15c): a genuine miss ("no such
-  // row", replacing the old silent fall-through to the unfiltered list) or a
-  // disambiguation list when more than one row shares the addressed name.
-  // Each candidate shows its server-rendered path (or, absent that, its
-  // addr/id) beside its label, since the label alone is exactly what made
-  // the two rows ambiguous in the first place.
-  const FocusMissView = (p: { miss: FocusMiss }) => (
+  // What a route focus id that names no row renders: "no such row", in place
+  // of the list it does not belong to.
+  const FocusMissView = () => (
     <section class="fade-in flex max-w-3xl flex-col gap-4">
       <Button class="flex-none self-start" onClick={back}>{"←"} {cfg.entity.plural}</Button>
-      <Show
-        when={p.miss.kind === "ambiguous"}
-        fallback={
-          <div role="alert" class="alert alert-error alert-soft text-sm">
-            <span>No such {cfg.entity.name}. This link may use an old address.</span>
-          </div>
-        }
-      >
-        <div class="flex flex-col gap-3">
-          <div role="alert" class="alert alert-warning alert-soft text-sm">
-            <span>More than one {cfg.entity.name} matches this address. Choose one:</span>
-          </div>
-          <div class="overflow-hidden rounded-box border border-base-300">
-            <For each={p.miss.kind === "ambiguous" ? p.miss.matches : []}>
-              {(n, i) => (
-                <button
-                  class="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-base-content/5"
-                  classList={{ "border-t border-base-300": i() > 0 }}
-                  onClick={() => openFull(n)}
-                >
-                  <span class="flex-1 truncate text-sm">{n.display}</span>
-                  <span class="truncate font-data text-[11px] text-base-content/40">{n.pathRender ?? n.addr ?? n.id}</span>
-                </button>
-              )}
-            </For>
-          </div>
-        </div>
-      </Show>
+      <div role="alert" class="alert alert-error alert-soft text-sm">
+        <span>No such {cfg.entity.name}. This link may use an old address.</span>
+      </div>
     </section>
   );
 
@@ -893,22 +666,10 @@ export default function TreeList<N extends ListNode>(props: { config: ListConfig
           <span>Could not load {cfg.entity.plural.toLowerCase()}: {describeError(cfg.error?.())}</span>
         </div>
       </Show>
-      <Show
-        when={isCreate()}
-        fallback={
-          <Show when={focusMiss()} fallback={
-            <Show when={fullPage()} fallback={<ListBody />}>
-              {(n) => <FullPage node={n()} />}
-            </Show>
-          }>
-            {(miss) => <FocusMissView miss={miss()} />}
-          </Show>
-        }
-      >
-        <section class="fade-in flex max-w-3xl flex-col gap-4">
-          <Button class="flex-none self-start" onClick={back}>{"←"} {cfg.entity.plural}</Button>
-          <div class="card border border-base-300 bg-base-200 og-pad">{cfg.renderCreate!(ctxFull)}</div>
-        </section>
+      <Show when={!focusMiss()} fallback={<FocusMissView />}>
+        <Show when={fullPage()} fallback={<ListBody />}>
+          {(n) => <FullPage node={n()} />}
+        </Show>
       </Show>
       <BladeStack controller={blades} registry={bladeRegistry} />
       <Show when={form() && cfg.FormBody}>
