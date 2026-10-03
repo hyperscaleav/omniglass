@@ -173,7 +173,9 @@ Nothing disappears because its place is out of view.
   `+` opens the row's add menu.
 - What you have opened is remembered in this browser, so coming back lands where you left off.
 - On a narrow window the columns give way in order, **Standard or product**, then **Type**,
-  then **Detail**, so the name and its health always fit.
+  then **Detail**, so the name and its health always fit. A folded row's outer path shortens
+  before the place's own name does, and at the narrowest it steps aside (hover the name for
+  the whole path).
 
 ### Finding one thing
 

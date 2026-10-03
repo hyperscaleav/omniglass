@@ -168,24 +168,37 @@ test.describe("operator console", () => {
   // columns follow the outline's own width, which the sidebar shares.
   for (const width of [640, 900, 1280]) {
     test(`the outline keeps its Name column readable at ${width}px`, async ({ page }) => {
-      // A place to measure, made through the API and removed after.
+      // A place to measure, made through the API and removed after: a campus
+      // of one building, so the row is a folded chain with a long outer name
+      // and a short place of its own.
       const made = await page.request.post("/api/v1/locations", { data: { name: `e2e-squeeze-${width}-${Date.now()}`, location_type: "campus" } });
       expect(made.ok(), `create: ${made.status()}`).toBeTruthy();
       const { id } = (await made.json()) as { id: string };
-      await page.setViewportSize({ width, height: 800 });
-      await page.goto("/web/explore");
-      const first = page.getByRole("treeitem").first();
-      await expect(first).toBeVisible();
-      // The Name cell is the row's first grid cell.
-      const box = await first.locator(":scope > *").first().boundingBox();
-      expect(box, `no Name cell at ${width}px`).not.toBeNull();
-      expect(box!.width, `Name is ${Math.round(box!.width)}px at ${width}px`).toBeGreaterThanOrEqual(100);
-      const tree = (await page.getByRole("tree").boundingBox())!;
-      const health = (await first.getByTestId("health").boundingBox())!;
-      expect(health.x + health.width, `Health runs past the card at ${width}px`).toBeLessThanOrEqual(tree.x + tree.width);
-      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-      expect(overflow, `the page scrolls sideways at ${width}px`).toBeLessThanOrEqual(0);
-      expect((await page.request.delete(`/api/v1/locations/${id}`)).ok()).toBeTruthy();
+      const inner = await page.request.post("/api/v1/locations", { data: { name: `wing-${width}`, location_type: "building", parent: id } });
+      expect(inner.ok(), `create: ${inner.status()}`).toBeTruthy();
+      const { id: innerId } = (await inner.json()) as { id: string };
+      try {
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto("/web/explore");
+        const row = page.getByRole("treeitem").filter({ has: page.locator("[data-label]", { hasText: new RegExp(`^Wing ${width}$`) }) });
+        await expect(row).toBeVisible();
+        // The place's own name is what a folded row exists to show: the outer
+        // path gives way before it does.
+        const clipped = await row.locator("[data-label]").evaluate((el) => el.scrollWidth > el.clientWidth);
+        expect(clipped, `the row's own name is cut short at ${width}px`).toBe(false);
+        // The Name cell is the row's first grid cell.
+        const box = await row.locator(":scope > *").first().boundingBox();
+        expect(box, `no Name cell at ${width}px`).not.toBeNull();
+        expect(box!.width, `Name is ${Math.round(box!.width)}px at ${width}px`).toBeGreaterThanOrEqual(100);
+        const tree = (await page.getByRole("tree").boundingBox())!;
+        const health = (await row.getByTestId("health").boundingBox())!;
+        expect(health.x + health.width, `Health runs past the card at ${width}px`).toBeLessThanOrEqual(tree.x + tree.width);
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+        expect(overflow, `the page scrolls sideways at ${width}px`).toBeLessThanOrEqual(0);
+      } finally {
+        await page.request.delete(`/api/v1/locations/${innerId}`);
+        await page.request.delete(`/api/v1/locations/${id}`);
+      }
     });
   }
 

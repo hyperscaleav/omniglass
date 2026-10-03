@@ -5999,7 +5999,12 @@ under its innermost place, so a campus of one building could never gain a second
 the add menu now offers a section per place the row joins. A fleet with no locations showed "No
 locations yet" while a component created nowhere existed, invisible. And beside an open sidebar
 the Name column measured 16px at a 640px window: the columns followed the window, not the outline,
-so they now answer container queries and give way in order (standard, then type, then detail).
+so they now answer container queries and give way in order (standard, then type, then detail). The
+rollup's own live capture at 640px then showed that passing a width check is not reading: a folded
+row cut its outer path and its own name equally ("Air... A."), and a room two levels down kept one
+letter. The outer path now gives way first and steps aside at the narrowest, the indent halves,
+and Health drops its empty slots there; the e2e asserts the row's own name is not clipped. The
+sidebar that keeps a third of a 640px window is the shell's, filed as #871.
 
 An adversarial review of the view then found nine more, each fixed behind a test proven red
 first. The Detail column's alarm text never rendered, because the health report names an alarm's

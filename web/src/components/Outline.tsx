@@ -23,16 +23,19 @@ export type OpenTarget = { kind: "location" | "system" | "component"; id: string
 // detail, health, action. The columns answer the width of the outline itself
 // (a container query), not the window, since the sidebar and the blade take
 // their share first: as it narrows, Standard or product goes, then Type
-// (Detail slims), then Detail; Name keeps what is left, and Health stays. OUTLINE_FRAME marks the container.
+// (Detail slims), then Detail, and at the narrowest Health drops its empty
+// slots; Name keeps what is left. OUTLINE_FRAME marks the container.
 export const OUTLINE_FRAME = "@container";
 export const OUTLINE_COLS =
-  "grid-cols-[minmax(0,1fr)_7rem_12rem_10rem_9.5rem_2rem] @max-[56rem]:grid-cols-[minmax(0,1fr)_7rem_10rem_9.5rem_2rem] @max-[40rem]:grid-cols-[minmax(0,1fr)_7rem_9.5rem_2rem] @max-[28rem]:grid-cols-[minmax(0,1fr)_9.5rem_2rem]";
+  "grid-cols-[minmax(0,1fr)_7rem_12rem_10rem_9.5rem_2rem] @max-[56rem]:grid-cols-[minmax(0,1fr)_7rem_10rem_9.5rem_2rem] @max-[40rem]:grid-cols-[minmax(0,1fr)_7rem_9.5rem_2rem] @max-[28rem]:grid-cols-[minmax(0,1fr)_6rem_2rem]";
 export const WIDE_ONLY = "@max-[56rem]:hidden";
 export const ROOMY_ONLY = "@max-[40rem]:hidden";
 export const NARROW_HIDDEN = "@max-[28rem]:hidden";
 const PADX = 16;
 const CHEV = 16;
-const INDENT = 22;
+// One level of nesting, as a custom property the narrowest tier halves, so a
+// deep row keeps room for its name beside an open sidebar.
+const INDENT_VARS = "[--og-indent:22px] @max-[28rem]:[--og-indent:12px]";
 
 type Row =
   | { kind: "place"; key: string; depth: number; node: PlaceNode; parent: string | null }
@@ -61,13 +64,13 @@ export function HealthSlots(props: { lights?: Lights; single?: Verdict | null })
     return VERDICTS.filter((v) => (counts()[v] ?? 0) > 0).map((v) => `${counts()[v]} ${WORDS[v]}`).join(", ");
   };
   return (
-    <span data-testid="health" class="grid grid-cols-[repeat(4,2.375rem)] font-data text-[12.5px] font-medium" aria-label={words() || undefined} title={words() || undefined}>
+    <span data-testid="health" class="grid grid-cols-[repeat(4,2.375rem)] font-data text-[12.5px] font-medium @max-[28rem]:flex @max-[28rem]:gap-2" aria-label={words() || undefined} title={words() || undefined}>
       <For each={VERDICTS}>
         {(v) => {
           const shown = () => (props.single ? props.single === v : (counts()[v] ?? 0) > 0);
           const Glyph = GLYPH[v];
           return (
-            <span data-slot={v} class={`inline-flex items-center gap-1.5 ${HUE[v]}`} aria-hidden="true">
+            <span data-slot={v} class={`inline-flex items-center gap-1.5 ${HUE[v]} @max-[28rem]:empty:hidden`} aria-hidden="true">
               <Show when={shown()}>
                 <Glyph size={14} />
                 <Show when={!props.single}>{counts()[v]}</Show>
@@ -180,8 +183,8 @@ export default function Outline(props: {
   };
 
   const guides = (depth: number): JSX.CSSProperties => ({
-    "background-image": `repeating-linear-gradient(to right, color-mix(in oklch, var(--color-base-content) 9%, transparent) 0 1px, transparent 1px ${INDENT}px)`,
-    "background-size": `${depth * INDENT}px 100%`,
+    "background-image": `repeating-linear-gradient(to right, color-mix(in oklch, var(--color-base-content) 9%, transparent) 0 1px, transparent 1px var(--og-indent))`,
+    "background-size": `calc(${depth} * var(--og-indent)) 100%`,
     "background-repeat": "no-repeat",
     "background-position": `${PADX + CHEV / 2}px 0`,
   });
@@ -217,7 +220,7 @@ export default function Outline(props: {
               aria-expanded={expandable(r()) ? (isOpen() ? "true" : "false") : undefined}
               aria-selected={isSel() ? "true" : "false"}
               tabindex={tabKey() === key ? 0 : -1}
-              class={`group/row relative grid ${OUTLINE_COLS} h-9 cursor-pointer items-center px-4 outline-none hover:bg-base-content/[0.03] focus-visible:bg-base-content/[0.05] focus-visible:shadow-[inset_0_0_0_1px_var(--color-primary)]`}
+              class={`group/row relative grid ${OUTLINE_COLS} ${INDENT_VARS} h-9 cursor-pointer items-center px-4 outline-none hover:bg-base-content/[0.03] focus-visible:bg-base-content/[0.05] focus-visible:shadow-[inset_0_0_0_1px_var(--color-primary)]`}
               classList={{ "bg-primary/[0.07] shadow-[inset_2px_0_0_var(--color-primary)]": isSel() }}
               style={guides(r().depth)}
               onFocus={() => setFocusKey(key)}
@@ -229,7 +232,7 @@ export default function Outline(props: {
                 else if (expandable(r())) props.onToggle((r() as { node: PlaceNode }).node, false);
               }}
             >
-              <span class="flex min-w-0 items-center gap-2 pr-4" style={{ "padding-left": `${r().depth * INDENT}px` }}>
+              <span class="flex min-w-0 items-center gap-2 pr-4" style={{ "padding-left": `calc(${r().depth} * var(--og-indent))` }}>
                 <Show
                   when={r().kind === "place" && expandable(r())}
                   fallback={<span class="w-4 flex-none" aria-hidden="true" />}
@@ -250,11 +253,21 @@ export default function Outline(props: {
                     return (
                       <>
                         <span class="flex-none text-base-content/50"><Dynamic component={resolveIcon(n().icon || "map-pin")} size={16} /></span>
-                        <span class="flex min-w-0 items-baseline truncate">
-                          <For each={n().chain.slice(0, -1)}>
-                            {(c) => <span class="truncate font-medium text-base-content/55">{c.label}<span class="mx-1.5 text-base-content/30">/</span></span>}
-                          </For>
-                          <span data-label class="truncate font-semibold">{n().chain[n().chain.length - 1].label}</span>
+                        {/* A folded row's outer path gives way first: the place's own
+                            name is what the row is, so it keeps its width (capped at
+                            the cell) and truncates only once the path is down to its
+                            ellipsis. At the narrowest the path steps aside entirely,
+                            and the whole of it stays on hover. */}
+                        <span class="flex min-w-0 items-baseline" title={n().chain.map((c) => c.label).join(" / ")}>
+                          <Show when={n().chain.length > 1}>
+                            <span class="min-w-[1.25em] shrink-[999] truncate font-medium text-base-content/55 @max-[28rem]:hidden">
+                              <For each={n().chain.slice(0, -1)}>
+                                {(c, i) => <>{i() > 0 && <span class="mx-1.5 text-base-content/30">/</span>}{c.label}</>}
+                              </For>
+                            </span>
+                            <span class="mx-1.5 shrink-0 text-base-content/30 @max-[28rem]:hidden">/</span>
+                          </Show>
+                          <span data-label class="min-w-0 max-w-full shrink-0 truncate font-semibold">{n().chain[n().chain.length - 1].label}</span>
                         </span>
                       </>
                     );
