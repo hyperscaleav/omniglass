@@ -47,7 +47,7 @@ func TestRealBrandMatcher(t *testing.T) {
 		}
 	}
 	// Word-bounded: a fictional name that merely contains a brand's letters passes.
-	for _, s := range []string{"Boreal Edge 55", "kestrel-vroom", "francisco", "sonya"} {
+	for _, s := range []string{"Boreal", "a Kestrel codec", "francisco", "sonya"} {
 		if realBrand.MatchString(s) {
 			t.Errorf("realBrand flags %q", s)
 		}
