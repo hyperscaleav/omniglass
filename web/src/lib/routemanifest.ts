@@ -33,14 +33,17 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/login", shell: "public", page: "Login", auth: false, smoke: "/login" },
 
   { path: "/", shell: "protected", page: "Home", smoke: "/" },
-  { path: "/fleet", shell: "protected", page: "Fleet", smoke: "/fleet" },
-  // Inventory pages on the generic TreeList. The :id route opens the same page
-  // focused on one entity (the addressable full-page detail), addressed by uuid
-  // (#627 Task 15c: name uniqueness is scoped to placement, so a name alone is
-  // not a reliable route param); TreeList's focus effect resolves a name-shaped
-  // link through a byAddr fallback, keeping the query string (#759).
-  // The bare index addresses redirect into the fleet list face (#798); the
-  // :id detail routes below still render their pages.
+  // The canvas address retired with #826; it redirects to Explore.
+  { path: "/fleet", shell: "protected", page: "FleetRedirect", smoke: "/fleet" },
+  // Explore (#826, #861): the sidebar's one door into the fleet, the outline
+  // of places; it replaced the Fleet entry and the reserved Explore stub.
+  { path: "/explore", shell: "protected", page: "Explore", smoke: "/explore" },
+  // The fleet kinds. A bare index address redirects to Explore, whose outline
+  // lists every kind (#798, #861). The :id route is the entity's
+  // workspace, addressed by uuid (#627 Task 15c: name uniqueness is scoped to
+  // placement, so a name alone is not a reliable route param); the workspace
+  // resolves a name-shaped link when it is unique, keeping the query string
+  // (#759). /<kind>/create renders the one form, empty.
   { path: "/locations", shell: "protected", page: "FleetRedirect", smoke: "/locations" },
   { path: "/locations/:id", shell: "protected", page: "Locations", smoke: `/locations/${UNKNOWN_UUID}` },
   { path: "/systems", shell: "protected", page: "FleetRedirect", smoke: "/systems" },
@@ -64,7 +67,6 @@ export const ROUTE_MANIFEST: RouteEntry[] = [
   { path: "/dashboards", shell: "protected", page: "SectionStub", smoke: "/dashboards" },
   { path: "/alarms", shell: "protected", page: "SectionStub", smoke: "/alarms" },
   { path: "/templates", shell: "protected", page: "SectionStub", smoke: "/templates" },
-  { path: "/explore", shell: "protected", page: "SectionStub", smoke: "/explore" },
   { path: "/learn", shell: "protected", page: "SectionStub", smoke: "/learn" },
   { path: "/config", shell: "protected", page: "SectionStub", smoke: "/config" },
   { path: "/log-types", shell: "protected", page: "SectionStub", smoke: "/log-types" },

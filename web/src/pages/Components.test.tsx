@@ -11,11 +11,8 @@ import { COMPONENT_TYPES_KEY, type ComponentType } from "../lib/component_types"
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
-import { hueFor } from "../lib/system_color";
 
-import { NAME_MIN_W } from "../components/TreeList";
-
-// The Components page on the shared TreeList in the create-as-route model: New routes
+// The Components route in the create-as-route model (the list is Explore's outline, #861): New routes
 // to /components/create (a draft accordion), Save hands off to /components/<name> in
 // edit; the detail is read-only in view (no in-body mutation control) and editable via
 // the pencil. Data is seeded into the query cache so no server is needed; `>` grants
@@ -137,109 +134,6 @@ function stubFetch(rest?: (req: Request) => Promise<Response> | Response) {
 describe("Components create-as-route", () => {
   afterEach(() => window.history.pushState({}, "", "/"));
 
-  it("wears its system's colour dot on the list row's system column", async () => {
-    const sysId = uuidFor("sys-boardroom");
-    const withSystem: Component = { ...comp, system: "boardroom", system_id: sysId, system_count: 1 };
-    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...COMPONENTS_KEY], [withSystem]);
-    qc.setQueryData([...SYSTEMS_KEY], [{ id: sysId, name: "boardroom", member_count: 1 }]);
-    qc.setQueryData([...LOCATIONS_KEY], []);
-    qc.setQueryData([...PRODUCTS_KEY], products);
-    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
-    qc.setQueryData([...ME_KEY], me);
-    qc.setQueryData([...TAGS_KEY], []);
-    window.history.pushState({}, "", "/components");
-    render(() => (
-      <QueryClientProvider client={qc}>
-        <Router>
-          <Route path="/components" component={Components} />
-        </Router>
-      </QueryClientProvider>
-    ));
-    await waitFor(() => expect(screen.getByText("Ceiling Mic 2")).toBeTruthy());
-    const dot = document.querySelector(".og-system-dot") as HTMLElement;
-    expect(dot).toBeTruthy();
-    expect(dot.style.getPropertyValue("--sys-h")).toBe(String(hueFor(sysId)));
-  });
-
-  // #627 Task 15c: the cross-entity drill from Systems.tsx's own "Components"
-  // button now emits ?system=<uuid>, and this facet must match it: a name
-  // would collide (or miss entirely) once two systems can share one under
-  // different placements (#627 Task 10). Asserts the query-string drill-in
-  // yields the same row set a manual system chip would.
-  it("filters to a system's components from a ?system=<uuid> deep link, matching by id not name", async () => {
-    const sysId = uuidFor("sys-boardroom");
-    const otherSysId = uuidFor("sys-annex");
-    const inSystem: Component = { ...comp, id: uuidFor("c-in"), name: "mic-in", label: "In-room Mic", system: "boardroom", system_id: sysId, system_count: 1 };
-    const outOfSystem: Component = { ...comp, id: uuidFor("c-out"), name: "mic-out", label: "Annex Mic", system: "annex-room", system_id: otherSysId, system_count: 1 };
-    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...COMPONENTS_KEY], [inSystem, outOfSystem]);
-    qc.setQueryData([...SYSTEMS_KEY], [
-      { id: sysId, name: "boardroom", member_count: 1 },
-      { id: otherSysId, name: "annex-room", member_count: 1 },
-    ]);
-    qc.setQueryData([...LOCATIONS_KEY], []);
-    qc.setQueryData([...PRODUCTS_KEY], products);
-    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
-    qc.setQueryData([...ME_KEY], me);
-    qc.setQueryData([...TAGS_KEY], []);
-    window.history.pushState({}, "", `/components?system=${sysId}`);
-    render(() => (
-      <QueryClientProvider client={qc}>
-        <Router>
-          <Route path="/components" component={Components} />
-        </Router>
-      </QueryClientProvider>
-    ));
-    await waitFor(() => expect(screen.getByText("In-room Mic")).toBeTruthy());
-    expect(screen.queryByText("Annex Mic")).toBeNull();
-    // Review finding 4 (task-15-review.md #4): the committed chip must show
-    // the system's own readable label, not the raw uuid the query string
-    // and the facet's own value now carry. Scoped to the chip's own value
-    // button (font-data font-medium): "boardroom" also legitimately
-    // appears in the row's own System column, so an unscoped query would
-    // pass whether or not the chip itself carries the label.
-    const chipValue = document.querySelector(".font-data.font-medium");
-    expect(chipValue?.textContent).toBe("boardroom");
-    expect(screen.queryByText(sysId)).toBeNull();
-  });
-
-  // A root component (no component parent) sitting at a location has no
-  // ancestor in the PAGE'S OWN tree (the component forest), so the list's
-  // client-side pathOf walk finds nothing to show, even though the
-  // component plainly sits under that location's rooms (#627 Task 10 is
-  // exactly what makes that placement legal). The server's own dash render
-  // (renders.dash, #627 Task 15) is what fills that gap; this asserts the
-  // row actually shows it in list mode, not just that the data layer
-  // carries it (a mocked-fetch test asserting only the request body would
-  // pass on a page that fetched the field and never rendered it anywhere).
-  it("shows a root component's server-rendered path in list mode, where the local tree walk has none", async () => {
-    const placed: Component = { ...comp, renders: { dash: "boi-17c-216b-display-1", bare: "boi17c216bdsp1" } };
-    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...COMPONENTS_KEY], [placed]);
-    qc.setQueryData([...SYSTEMS_KEY], []);
-    qc.setQueryData([...LOCATIONS_KEY], []);
-    qc.setQueryData([...PRODUCTS_KEY], products);
-    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
-    qc.setQueryData([...ME_KEY], me);
-    qc.setQueryData([...TAGS_KEY], []);
-    // Force list (flattened) mode: the tree-local ancestor path (Row.path)
-    // renders only in flattened mode, and a root's tree-local path is empty
-    // regardless, so this isolates pathRender as the only possible source.
-    localStorage.setItem("og-cmp-view", "list");
-    window.history.pushState({}, "", "/components");
-    render(() => (
-      <QueryClientProvider client={qc}>
-        <Router>
-          <Route path="/components" component={Components} />
-        </Router>
-      </QueryClientProvider>
-    ));
-    await waitFor(() => expect(screen.getByText("Ceiling Mic 2")).toBeTruthy());
-    expect(screen.getByText("boi-17c-216b-display-1")).toBeTruthy();
-    localStorage.removeItem("og-cmp-view");
-  });
-
   it("renders the draft-create accordion at /components/create", async () => {
     mount("/components/create");
     await waitFor(() => expect(screen.getByText("New component")).toBeTruthy());
@@ -310,134 +204,6 @@ describe("Components create-as-route", () => {
     expect(body.label).toBe("Ceiling Mic 9");
   });
 
-});
-
-// #627 scopes name uniqueness to placement, not the whole fleet: two
-// components under different parents may now legally share a name. The tree
-// builder used to key its construction-time map on the bare name
-// (byId.set(c.name, ...)), so the second same-named row silently overwrote
-// the first and its children reparented onto the survivor. Keying that map
-// on uuid instead (node.id itself stays the name; only the construction key
-// moved) is what keeps both rows in the rendered tree.
-describe("Components list survives duplicate names across placements (#627)", () => {
-  afterEach(() => window.history.pushState({}, "", "/"));
-
-  it("renders both same-named components when they sit under different parents, each keeping its own child", async () => {
-    // Each "port-1" has its OWN child (sub-a / sub-b): a name-keyed
-    // construction map does not just drop a row, a bare row count could
-    // still look right off a double-push artifact (the surviving node
-    // object gets pushed into both parents' children arrays). The
-    // discriminating symptom the amendment actually describes is the
-    // CHILD reparenting onto whichever same-named node won the map: under
-    // the old bug, both sub-a and sub-b end up merged onto one surviving
-    // "port-1" object and so both appear TWICE (once under each rack, since
-    // that one surviving object is what got pushed into both racks'
-    // children); under the fix, each sub renders exactly once, under its
-    // own parent.
-    const rackA: Component = { id: uuidFor("c-rack-a"), name: "rack-a", system_count: 0, effective_tags: {} };
-    const rackB: Component = { id: uuidFor("c-rack-b"), name: "rack-b", system_count: 0, effective_tags: {} };
-    const portInA: Component = { id: uuidFor("c-port-a"), name: "port-1", parent: "rack-a", parent_id: rackA.id, system_count: 0, effective_tags: {} };
-    const portInB: Component = { id: uuidFor("c-port-b"), name: "port-1", parent: "rack-b", parent_id: rackB.id, system_count: 0, effective_tags: {} };
-    const subA: Component = { id: uuidFor("c-sub-a"), name: "sub-a", parent: "port-1", parent_id: portInA.id, system_count: 0, effective_tags: {} };
-    const subB: Component = { id: uuidFor("c-sub-b"), name: "sub-b", parent: "port-1", parent_id: portInB.id, system_count: 0, effective_tags: {} };
-
-    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...COMPONENTS_KEY], [rackA, rackB, portInA, portInB, subA, subB]);
-    qc.setQueryData([...SYSTEMS_KEY], []);
-    qc.setQueryData([...LOCATIONS_KEY], []);
-    qc.setQueryData([...PRODUCTS_KEY], products);
-    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
-    qc.setQueryData([...ME_KEY], me);
-    qc.setQueryData([...TAGS_KEY], []);
-    window.history.pushState({}, "", "/components");
-    render(() => (
-      <QueryClientProvider client={qc}>
-        <Router>
-          <Route path="/components" component={Components} />
-        </Router>
-      </QueryClientProvider>
-    ));
-
-    await waitFor(() => expect(screen.getAllByText("rack-a").length).toBeGreaterThan(0));
-    // Tree mode starts fully collapsed, so expand everything.
-    fireEvent.click(screen.getByTitle("Expand all"));
-    await waitFor(() => expect(screen.getAllByText("port-1")).toHaveLength(2));
-    // Each own child renders exactly once, not twice (merged onto a single
-    // surviving "port-1" and pushed out under both racks).
-    expect(screen.getAllByText("sub-a")).toHaveLength(1);
-    expect(screen.getAllByText("sub-b")).toHaveLength(1);
-    // sub-a sits under the SAME "port-1" row as rack-a, sub-b under rack-b's:
-    // the tree renders depth-first, so sub-a's row falls strictly between
-    // rack-a's and rack-b's, and sub-b's falls after rack-b's.
-    const rows = Array.from(document.querySelectorAll("tbody tr"));
-    const indexOf = (text: string) => rows.indexOf(screen.getByText(text).closest("tr")!);
-    expect(indexOf("sub-a")).toBeGreaterThan(indexOf("rack-a"));
-    expect(indexOf("sub-a")).toBeLessThan(indexOf("rack-b"));
-    expect(indexOf("sub-b")).toBeGreaterThan(indexOf("rack-b"));
-  });
-
-  // A review caught that the earlier fix only moved the tree Map's
-  // construction key to uuid; TreeList's own second index (byId, built off
-  // node.id) and the row rendering both still keyed on the bare name, so the
-  // collapse this task set out to remove simply moved one layer down: opening
-  // either duplicate's row rendered whichever one the Map happened to keep,
-  // silent wrong data (the wrong uuid, the wrong placement), not just an
-  // ambiguous URL. This test is the one that discriminates: it clicks
-  // rack-a's port-1 row specifically and asserts the blade that opens shows
-  // rack-a as the Parent, never rack-b, which only holds once node.id is the
-  // true uuid end to end (the tree index, the blade lookup, and the detail
-  // body's own re-resolve all key on the same id).
-  it("opens the blade for the duplicate that was actually clicked, not whichever one a name-keyed index kept (#627)", async () => {
-    const rackA: Component = { id: uuidFor("c-rack-a"), name: "rack-a", system_count: 0, effective_tags: {} };
-    const rackB: Component = { id: uuidFor("c-rack-b"), name: "rack-b", system_count: 0, effective_tags: {} };
-    const portInA: Component = { id: uuidFor("c-port-a"), name: "port-1", parent: "rack-a", parent_id: rackA.id, system_count: 0, effective_tags: {} };
-    const portInB: Component = { id: uuidFor("c-port-b"), name: "port-1", parent: "rack-b", parent_id: rackB.id, system_count: 0, effective_tags: {} };
-
-    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...COMPONENTS_KEY], [rackA, rackB, portInA, portInB]);
-    qc.setQueryData([...SYSTEMS_KEY], []);
-    qc.setQueryData([...LOCATIONS_KEY], []);
-    qc.setQueryData([...PRODUCTS_KEY], products);
-    qc.setQueryData([...COMPONENT_TYPES_KEY], componentTypes);
-    qc.setQueryData([...ME_KEY], me);
-    qc.setQueryData([...TAGS_KEY], []);
-    window.history.pushState({}, "", "/components");
-    render(() => (
-      <QueryClientProvider client={qc}>
-        <Router>
-          <Route path="/components" component={Components} />
-        </Router>
-      </QueryClientProvider>
-    ));
-
-    await waitFor(() => expect(screen.getAllByText("rack-a").length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByTitle("Expand all"));
-    await waitFor(() => expect(screen.getAllByText("port-1")).toHaveLength(2));
-
-    // rack-a's port-1 row is the one strictly between rack-a's own row and
-    // rack-b's, per the depth-first tree order the test above already pins.
-    const rows = Array.from(document.querySelectorAll("tbody tr"));
-    const rackARowIndex = rows.indexOf(screen.getByText("rack-a").closest("tr")!);
-    const rackBRowIndex = rows.indexOf(screen.getByText("rack-b").closest("tr")!);
-    const portRows = screen.getAllByText("port-1").map((el) => el.closest("tr")!);
-    const portInARow = portRows.find((r) => {
-      const idx = rows.indexOf(r);
-      return idx > rackARowIndex && idx < rackBRowIndex;
-    });
-    expect(portInARow).toBeTruthy();
-    fireEvent.click(portInARow!);
-
-    // The blade is the condensed fleet blade now (#799), so the discriminator
-    // is its identity: the aside is labelled by the CLICKED duplicate's uuid,
-    // which only holds when the tree index, blade lookup, and body all key on
-    // the true id end to end.
-    const blade = await waitFor(() => {
-      const el = document.querySelector("aside[data-blade]") as HTMLElement | null;
-      if (!el) throw new Error("blade not open yet");
-      return el;
-    });
-    expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-component-${uuidFor("c-port-a")}`);
-  });
 });
 
 // #614: component.product_id is NOT NULL. A component cannot exist without a
@@ -749,32 +515,6 @@ describe("Components create offers a system only to a principal who may bind one
     expect(sent).not.toHaveProperty("system");
     expect(drafted.length).toBeGreaterThan(0);
     for (const body of drafted) expect(body).not.toHaveProperty("system");
-  });
-});
-
-// #690: the Name column measured 0px at a 1280 viewport, because under
-// `table-fixed` a widthless column takes what the declared ones leave, and
-// Components declares more than a 1280 screen has to give. The identifier an
-// operator scans was the first thing to vanish, and Tags kept every pixel.
-//
-// The assertion is on the DOM rather than on the descriptor, and it is both
-// halves of the fix at once: Name still declares NO width (so it absorbs a wide
-// screen, which is the behaviour worth keeping), and the table asks for a floor
-// under it, so a narrow screen scrolls the card sideways instead of squeezing
-// the column out. The same test rides on Systems and Locations, which is where
-// "all three behave the same way" is actually asserted: today they do not.
-describe("Components list keeps a floor under the Name column (#690)", () => {
-  it("declares no width on Name and a table floor that leaves it NAME_MIN_W", async () => {
-    localStorage.clear();
-    mount("/components");
-    await waitFor(() => expect(document.querySelector("table.og-rows")).toBeTruthy());
-
-    const table = document.querySelector("table.og-rows") as HTMLTableElement;
-    const cols = [...table.querySelectorAll("colgroup col")] as HTMLTableColElement[];
-    const declared = cols.slice(1).reduce((sum, c) => sum + parseInt(c.style.width || "0", 10), 0);
-
-    expect(cols[0].style.width).toBe("");
-    expect(parseInt(table.style.minWidth, 10) - declared).toBe(NAME_MIN_W);
   });
 });
 

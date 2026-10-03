@@ -26,8 +26,15 @@ describe("command palette source", () => {
 
   it("keeps grouped entries' group tags unchanged", () => {
     const commands = buildCommands(allowAll);
-    expect(commands).toContainEqual(expect.objectContaining({ label: "Components", path: "/components", group: "Fleet" }));
     expect(commands).toContainEqual(expect.objectContaining({ label: "Users", path: "/users", group: "Admin" }));
+  });
+
+  // Every fleet kind is listed in Explore's outline (#861), so a Locations,
+  // Systems or Components command would be three names for one destination.
+  it("offers Explore for the fleet, not a command per kind", () => {
+    const commands = buildCommands(allowAll);
+    expect(commands).toContainEqual(expect.objectContaining({ label: "Explore", path: "/explore" }));
+    expect(commands.filter((c) => ["/locations", "/systems", "/components"].includes(c.path))).toEqual([]);
   });
 
   it("lists a routed soon registry, and no pathless slot", () => {
@@ -58,11 +65,9 @@ describe("command palette source", () => {
     expect(commands.find((c) => c.group === "Catalog · Metadata")).toBeUndefined();
   });
 
-  it("matches on label and group: 'fleet' finds the re-homed kind pages (#798)", () => {
-    const hits = buildCommands(allowAll).filter((c) => matches(c, "fleet"));
-    expect(hits.map((c) => c.path)).toContain("/components");
-    expect(hits.map((c) => c.path)).toContain("/locations");
-    expect(hits.map((c) => c.path)).toContain("/systems");
+  it("matches on group: 'telemetry' finds the pages filed under it", () => {
+    const hits = buildCommands(allowAll).filter((c) => matches(c, "telemetry"));
+    expect(hits.map((c) => c.path)).toContain("/metrics");
   });
 
   it("matches a registry by its own name: 'products' finds the registry page", () => {

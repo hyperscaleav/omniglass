@@ -40,12 +40,15 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
 
 ## Core UI contracts
 
-- **One inventory shell: `ListShell` with `FlatList` / `TreeList` bodies.** Every inventory page
-  (Components, Systems, Locations)
+- **One list shell: `ListShell` with `FlatList` / `TreeList` bodies.** Every list page
+  (Components, Systems, Locations, which render as the kind tabs of Explore's table face, and the
+  flat registries)
   is a `ListConfig` over the one shell, **never a fork**. The shell owns the faceted filter
   header, the action rail (tree/list toggle, expand/collapse, column visibility + drag reorder,
-  the primary create), the tree and flattened body rendering, the stacked detail blades, the full-page
-  detail, the create/edit `Drawer`, and an optional summary widget board. Adding an entity of
+  the primary create), the tree and flattened body rendering, and the stacked blades. A fleet
+  kind's row opens the shared entity blade and its identity route is the workspace; a page that
+  opens a row in place (Files) also gets the full-page detail and the create/edit `Drawer`. There
+  is no summary row above a table: the KPI chip rows retired (ADR-0137). Adding an entity of
   this class is a data layer + a config + a route (see the `add-inventory-view` skill).
 - **The Name column has a floor, and the card scrolls before it gives it up.** A list table is
   `table-layout: fixed`, every column but Name declares a width, and Name takes what is left, which
@@ -75,7 +78,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   gates create/update/delete by the entity's resource name. The server is the authority; this is
   a hint only.
 - **Blades are ephemeral, the full page is addressable.** A row opens a stacked blade (the Azure
-  model); Maximize promotes it to the `/<entity>/:name` URL. The blade stack holds node ids, so a
+  model); Maximize promotes it to the `/<entity>/:id` URL. The blade stack holds node ids, so a
   blade survives a refetch.
 - **The shell owns the action rail; the body registers, never draws.** A panel's buttons are
   declared, not laid out: a blade body binds through `lib/blades` (`destructive`, `secondary`,
@@ -88,8 +91,8 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   the helper was copied into six new pages around them. A convention can be forgotten; a slot
   cannot. Full-page create forms still draw their own inline rail and converge when the CRUD form
   primitive lands.
-- **Client preferences in localStorage, for now.** Column order/visibility and the widget board
-  persist per browser; the eventual home is a per-principal user-preferences endpoint (a
+- **Client preferences in localStorage, for now.** Column order/visibility
+  persists per browser; the eventual home is a per-principal user-preferences endpoint (a
   read/write swap), not the cascade.
 - **Learning surfaces ride the real engine.** A concept page renders the actual pipeline against
   real or lab-simulated data, not a static diagram. The flow/graph library for these lands with
@@ -144,7 +147,7 @@ themes at the same weight as the soft hues. The same reason keeps `type` values 
 ## Primitives (the reuse target)
 
 `ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `PanelFooter`,
-`Donut`, `Badge`, `Page`, `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` / `BladeField`,
+`Badge`, `Page`, `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` / `BladeField`,
 `CommandPalette`, plus the `Sidebar` / `TopBar` shell. New inventory pages consume these; new
 surface *classes* (dashboards, alarms, explore, learn) add their own primitive rather than
 bending `ListShell`.

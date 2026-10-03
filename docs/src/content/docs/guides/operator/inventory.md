@@ -3,13 +3,13 @@ title: Find things in your fleet
 description: "The inventory pages, the chip filter, and the tree, list, and column controls for locating a location, system, or component."
 screenshots:
   - id: inventory
-    path: /web/fleet?view=list
+    path: /web/explore?face=table&kind=locations
     alt: "The fleet's list view: kind tabs for Locations, Systems, and Components over the chip filter and the tree of campuses."
 ---
 
-The fleet has one door. The [Fleet page](/guides/operator/fleet/) opens on the canvas; the
-**list view** (the toggle at the top right, or `?view=list` in the address) swaps it for
-the index tables, one kind tab each for Locations, Systems, and Components. Nodes keeps
+The fleet has one door. [Explore](/guides/operator/fleet/) opens on the place tree; its
+**table** face (the toggle at the right of the counts line, or `?face=table` in the address)
+swaps it for the index tables, one kind tab each for Locations, Systems, and Components. Nodes keeps
 its own sidebar entry: collection infrastructure, not fleet inventory. The tabs share one shape,
 so once you know one you know them all. This page is how you **find** something in that
 inventory; [working with an entity](/guides/operator/entities/) is what you do once you
@@ -26,8 +26,6 @@ then a value; each commit becomes a chip:
 - Within one chip, multiple values are **OR** (match any). Across chips, the filters are
   **AND** (match all).
 - Click a chip's operator to cycle it; click its value to re-edit; the **x** removes it.
-  Clicking an active summary facet (below) toggles the same chip.
-- A summary widget or a count card is just a one-click shortcut to a filter chip.
 - Filter by a [tag](/architecture/tags/) through the **tag** field: choose `tag`, then the tag
   key, then a value, to match its **effective** value (a component matches on a tag it inherits
   from its system or location, not only one set on it directly). Two operators, **is set** and
@@ -69,14 +67,17 @@ sections ([getting around](/guides/operator/#getting-around)).
   now carries the number its name carries, so the two halves of a divisible boardroom read **Boardroom**
   and **Boardroom 2** instead of both reading "Boardroom". A fleet created before the upgrade keeps
   both halves reading alike until you run `omniglass system previewLabels` and then
-  `omniglass system recomputeLabels`. Only the first of a kind in a room is bare: a room with one
+  `omniglass system recomputeLabels`. Only the first of a kind in a place is bare: a place with one
   boardroom in it reads **Boardroom**, exactly as its name is `boardroom` rather than `boardroom-1`.
 - The **columns** menu shows or hides columns and lets you **drag to reorder** them. The
   layout is remembered per browser.
-- On Locations, each row wears its **type's icon** as a leading glyph (a campus, building,
-  floor, and room each read differently at a glance), tinted the same hue as the type badge.
-- On Locations, a **summary board** at the top breaks the fleet down by place type (a donut
-  plus count cards); click any segment or card to filter to it.
+- On Locations, each row wears its **type's icon** as a leading glyph, tinted by the type's
+  **level** in your hierarchy (the top level one hue, the next another), so one level reads
+  differently from the next at a glance. The level, the Type column's sort, and whether a row
+  offers **Add child** all come from where your [location types](/guides/admin/location-types/)
+  say each type may sit, never from what a type is called: a hierarchy of your own sorts and
+  nests exactly as the shipped campus, building, floor and room do.
+- To see only one kind of place, filter on it: `type:room` keeps the rooms.
 - A **Tags** column shows each row's **effective [tags](/architecture/tags/)**: the `key = value`
   labels that resolve onto it down the cascade, not only the ones set directly on it (so a component
   wears the tags of its location and system too). Each key gets its own consistent color, so the same
