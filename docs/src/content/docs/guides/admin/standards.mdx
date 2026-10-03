@@ -114,7 +114,7 @@ The standard's blade carries a **Roles** panel beside its contract. Each role ha
   a filling component's product may be classified under (self or a descendant); empty accepts any
   type. Optionally **pinned products**, narrowing further to specific products within an accepted
   type; empty accepts any product of an accepted type. This is the **typed-slot guard**: a role
-  wanting `video-bar` accepts the shipped Cisco Room Bar and any other product classified under it,
+  wanting `video-bar` accepts the shipped Kestrel VRoom and any other product classified under it,
   but not a display;
 - an **impact**, what the room loses when this slot is not being filled properly.
 
@@ -185,7 +185,7 @@ component "panel-1" is a display; role "Table microphone" wants a video-bar
 Pinning products narrows further: a right-type, wrong-product component is refused by name too:
 
 ```
-component "panel-3" is product "other-display"; role "Main Display" wants product samsung-qm55
+component "panel-3" is product "other-display"; role "Main Display" wants product boreal-edge-55
 ```
 
 That is the whole point of the typed-slot guard. Your next move is in the message: either you

@@ -104,9 +104,8 @@ the product **is**, the contract says what it **carries**.
 - **Withdraw** (with `product:delete`, from the blade's edit mode, so the pencil's `product:update` is also in the path; behind a confirm) removes a line from the contract. Components
   **keep** any value they set for it; the value simply reads as **off contract** from then on, since
   nothing declares it any more.
-- An **official** product's contract is read-only, like the rest of the row: the shipped
-  displays and the video bar declare `serial-number`, `firmware-version`, and `model-number` (the
-  table above lists each one), and those declarations come with the release.
+- An **official** product's contract is read-only, like the rest of the row: each shipped
+  product's declarations are the ones the table above lists, and they come with the release.
 
 From the CLI the contract is `omniglass product property list <id>`,
 `omniglass product property update <id> <property>`, and
