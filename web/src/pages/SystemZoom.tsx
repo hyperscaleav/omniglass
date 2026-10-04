@@ -9,7 +9,6 @@ import Eyebrow from "../components/Eyebrow";
 import FleetShell from "../components/FleetShell";
 import { systemTileSpec } from "../lib/fleet_tiles";
 import { createSignal } from "solid-js";
-import type { Chip } from "../lib/predicate";
 import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/fleet";
 import { systemHealth, systemHealthKey } from "../lib/health";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
@@ -22,8 +21,6 @@ import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
 import TabRail from "../components/TabRail";
 import ConfigureFace from "../components/ConfigureFace";
-import RolesPanel from "../components/RolesPanel";
-import PropertiesPanel, { ownerPropertyBladeId, propertyResolutionBlade } from "../components/PropertiesPanel";
 import { alarmRows, componentCards, sinceOf, systemZoomVM, type ComponentCard } from "../lib/system_zoom";
 import { vitalRows } from "../lib/component_leaf";
 import { slotStrip } from "../lib/slot_strip";
@@ -96,19 +93,19 @@ export default function SystemZoom() {
   const [seriesPick, setSeriesPick] = createSignal<string | undefined>(undefined);
 
   const [search] = useSearchParams();
+  // Three tabs on every altitude (#826): Overview (the room, its map when the
+  // standard draws one, its vitals), Activity (the history, the events, the
+  // logs), Configure (the one form). The retired tab addresses map onto the
+  // tab that absorbed them, so an old link still lands on its content.
   const tabs = createMemo(() => [
     { key: "overview", label: "Overview" },
-    ...(mapDecl() ? [{ key: "map", label: "Map" }] : []),
-    { key: "history", label: "History" },
-    { key: "events", label: "Events" },
-    { key: "logs", label: "Logs" },
-    ...(kpiMetrics().length > 0 ? [{ key: "data", label: "Data" }] : []),
-    // Editing is a facet of the workspace (#800): the tab renders only for a
-    // caller holding an edit verb; the sections inside gate per verb again.
+    { key: "activity", label: "Activity" },
     ...(can(me.data, "system", "update") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
+  const LEGACY_TAB: Record<string, string> = { map: "overview", data: "overview", history: "activity", events: "activity", logs: "activity" };
   const tab = () => {
-    const t = Array.isArray(search.tab) ? search.tab[0] : search.tab;
+    const raw = Array.isArray(search.tab) ? search.tab[0] : search.tab;
+    const t = raw ? (LEGACY_TAB[raw] ?? raw) : raw;
     if (t && tabs().some((x) => x.key === t)) return t;
     // ?edit=1 means the one editor (#800): a bare edit intent lands on
     // Configure, whose own hook then begins the edit.
@@ -139,12 +136,12 @@ export default function SystemZoom() {
     queries: kpiMetrics().map((m) => ({
       queryKey: metricSeriesKey("systems", id(), m.metric_type_name, 24),
       queryFn: () => metricSeries("systems", id(), m.metric_type_name, 24),
-      enabled: tab() === "data",
+      enabled: tab() === "overview",
     })),
   }));
   const metricSeriesData = () => kpiMetrics().map((_, i) => seriesQueries[i]?.data);
-  const eventsQ = useQuery(() => ({ queryKey: systemEventsKey(id()), queryFn: () => systemEvents(id()), enabled: tab() === "events" }));
-  const logsQ = useQuery(() => ({ queryKey: systemLogsKey(id()), queryFn: () => systemLogs(id()), enabled: tab() === "logs" }));
+  const eventsQ = useQuery(() => ({ queryKey: systemEventsKey(id()), queryFn: () => systemEvents(id()), enabled: tab() === "activity" }));
+  const logsQ = useQuery(() => ({ queryKey: systemLogsKey(id()), queryFn: () => systemLogs(id()), enabled: tab() === "activity" }));
   const verdictSpans = createMemo(() =>
     timelineSpans((health.data?.transitions ?? []).map((t) => ({ ts: t.ts, value: t.verdict })), health.data?.verdict ?? null, pageNow),
   );
@@ -177,13 +174,12 @@ export default function SystemZoom() {
     return pr ? entityLabel(pr) : c?.product ?? undefined;
   };
   const tiles = createMemo(() => (view.data && system() ? systemTileSpec(view.data, health.data, system()!.id) : undefined));
-  const [chips, setChips] = createSignal<Chip[]>([]);
 
   const crumbs = createMemo(() => {
     if (!view.data) return [];
     const chain = system()?.location ? ancestors(system()!.location!, locationIndex(view.data)) : [];
     return [
-      { key: "fleet", label: "Fleet", onClick: () => navigate("/fleet") },
+      { key: "explore", label: "Explore", onClick: () => navigate("/explore") },
       ...chain.map((l) => ({
         key: l.id,
         label: entityLabel(l),
@@ -207,8 +203,11 @@ export default function SystemZoom() {
       title={system() ? entityLabel(system()!) : "System"}
       breadcrumb={<Breadcrumb crumbs={crumbs()} />}
     >
+      {/* A miss is judged only once the fleet view is current: the create
+          handoff lands here while the cached view predates the new row, and
+          the refetch on mount is what answers whether the address exists. */}
       <Show
-        when={!(view.data && !system() && !(view.data.systems ?? []).some((x) => x.name === id()))}
+        when={!(view.data && !view.isFetching && !system() && !(view.data.systems ?? []).some((x) => x.name === id()))}
         fallback={
           <div role="alert" class="alert alert-warning alert-soft text-sm">
             <span>No system answers this address. It may have been deleted, or the link is stale.</span>
@@ -225,12 +224,7 @@ export default function SystemZoom() {
           }
         >
           <FleetShell
-            storageKey="fleet"
             tiles={tiles()}
-            rows={[]}
-            filterKeys={[]}
-            chips={chips}
-            onChips={setChips}
             header={
               <div data-testid="system-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                 <HealthBadge verdict={health.data?.verdict} size="sm" />
@@ -263,105 +257,10 @@ export default function SystemZoom() {
             {(z) => (
               <div class="flex min-w-0 flex-1 flex-col">
                 <TabRail tabs={tabs()} activeKey={tab} />
-                <Show when={tab() === "map" && mapDecl()}>
-                  {(decl) => <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} onOpen={openComponent} />}
-                </Show>
                 <Show when={tab() === "configure"}>
-                  <ConfigureFace
-                    kind="system"
-                    id={id()}
-                    panels={(slot) => (
-                      <>
-                        <RolesPanel system={id()} canUpdate={slot.editing() && can(me.data, "system", "update")} />
-                        <PropertiesPanel
-                          system={id()}
-                          edit={slot}
-                          onOpen={(property) => blades.push({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "system", name: id() }, property) })}
-                        />
-                      </>
-                    )}
-                  />
+                  <ConfigureFace kind="system" id={id()} />
                 </Show>
-                <Show when={tab() === "events"}>
-                  <section data-testid="events-tab" class="flex flex-col gap-2 p-4">
-                    <Eyebrow label="Events" hint="The room's story on the event lane: the system's own events and its members', newest first, each row labeled by the owner that raised it. The last 24 hours, capped." />
-                    <Show when={(eventsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No events in the window.</p>}>
-                      <ul class="divide-y divide-base-300 rounded-box border border-base-300 text-sm">
-                        <For each={eventsQ.data ?? []}>
-                          {(e) => (
-                            <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-2">
-                              <span class="text-xs tabular-nums text-base-content/50">{fmtTime(e.ts)}</span>
-                              <span class="font-mono text-xs text-base-content/70">{e.owner}</span>
-                              <span class="font-mono text-xs">{e.key}</span>
-                              <span class="min-w-0 flex-1 truncate text-base-content/80">{e.message}</span>
-                            </li>
-                          )}
-                        </For>
-                      </ul>
-                    </Show>
-                  </section>
-                </Show>
-                <Show when={tab() === "logs"}>
-                  <section data-testid="logs-tab" class="flex flex-col gap-2 p-4">
-                    <Eyebrow label="Logs" hint="The members' raw log lines merged newest first, each naming the component that wrote it. The last 24 hours, capped; a node's own logs live on the node." />
-                    <Show when={(logsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No lines in the window.</p>}>
-                      <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100 p-2 font-mono text-[11.5px] leading-relaxed">
-                        <For each={logsQ.data ?? []}>
-                          {(l) => (
-                            <div class="whitespace-pre" classList={{ "text-error": l.severity === "error" || l.severity === "critical", "text-warning": l.severity === "warning", "text-base-content/70": !l.severity || l.severity === "info" }}>
-                              {`${fmtTime(l.ts)}  ${(l.component ?? "").padEnd(12)} ${(l.severity ?? "").padEnd(7)} ${l.message}`}
-                            </div>
-                          )}
-                        </For>
-                      </div>
-                    </Show>
-                  </section>
-                </Show>
-                <Show when={tab() === "data"}>
-                  <section data-testid="data-tab" class="flex flex-col gap-3 p-4">
-                    <Eyebrow label="Data" hint="Every metric the standard declares, stacked: the last 24 hours as a sparkline beside the latest value. Click a row for the full chart. Raw samples, capped; a series still on its contract default has nothing to chart yet." />
-                    <div class="overflow-x-auto rounded-box border border-base-300">
-                      <table class="table table-sm">
-                        <thead>
-                          <tr>
-                            <th>Metric</th>
-                            <th>Last 24h</th>
-                            <th class="text-right">Latest</th>
-                            <th></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <For each={kpiMetrics()}>
-                            {(m, i) => (
-                              <>
-                                <tr
-                                  data-testid={`metric-row-${m.metric_type_name}`}
-                                  class="cursor-pointer hover:bg-base-content/5"
-                                  onClick={() => setSeriesPick(seriesPick() === m.metric_type_name ? undefined : m.metric_type_name)}
-                                >
-                                  <td>{entityLabel({ name: m.metric_type_name, label: m.label })}</td>
-                                  <td>
-                                    <TimeseriesChart spark samples={metricSeriesData()[i()] ?? []} now={pageNow} windowMs={24 * 3600_000} />
-                                  </td>
-                                  <td class="text-right font-mono tabular-nums">{m.value === null || m.value === undefined ? "" : String(m.value)}</td>
-                                  <td class="text-right text-[10px] text-base-content/45">{m.is_sampled ? "sampled" : "contract default"}</td>
-                                </tr>
-                                <Show when={seriesPick() === m.metric_type_name}>
-                                  <tr>
-                                    <td colspan="4" class="bg-base-200/40">
-                                      <TimeseriesChart samples={metricSeriesData()[i()] ?? []} now={pageNow} windowMs={24 * 3600_000} />
-                                    </td>
-                                  </tr>
-                                </Show>
-                              </>
-                            )}
-                          </For>
-                        </tbody>
-                      </table>
-                    </div>
-                  </section>
-                </Show>
-                <Show when={tab() === "history"}>
+                <Show when={tab() === "activity"}>
                   <section data-testid="history-tab" class="flex flex-col gap-4 p-4">
                     <div class="flex flex-wrap items-stretch gap-3">
                       <div data-testid="uptime-kpi" class="flex min-w-36 flex-col justify-between gap-1 rounded-box border border-base-300 bg-base-100 p-3.5">
@@ -398,7 +297,7 @@ export default function SystemZoom() {
 
                     <div>
                       <Eyebrow label="Incidents" hint="One entry per contiguous stretch away from healthy, however many verdict changes it contained, ongoing first. Expand an entry for the transitions inside it and the alarms that explain them." />
-                      <Show when={incidentList().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window. The room held healthy the whole way.</p>}>
+                      <Show when={incidentList().length > 0} fallback={<p class="mt-2 text-sm text-base-content/50">Nothing in this window. The system held healthy the whole way.</p>}>
                         <ul data-testid="incident-list" class="mt-2 flex flex-col gap-2">
                           <For each={incidentList()}>
                             {(inc, idx) => {
@@ -478,7 +377,7 @@ export default function SystemZoom() {
 
                     <Show when={otherAlarms().length > 0}>
                       <div>
-                        <Eyebrow label="Other alarms" hint="Alarms in the window that never overlapped an unhealthy stretch: the component complained, and the room absorbed it." />
+                        <Eyebrow label="Other alarms" hint="Alarms in the window that never overlapped an unhealthy stretch: the component complained, and the system absorbed it." />
                         <ul class="mt-2 divide-y divide-base-300 rounded-box border border-base-300 text-sm">
                           <For each={otherAlarms()}>
                             {(r) => (
@@ -491,6 +390,41 @@ export default function SystemZoom() {
                             )}
                           </For>
                         </ul>
+                      </div>
+                    </Show>
+                  </section>
+                </Show>
+                <Show when={tab() === "activity"}>
+                  <section data-testid="events-tab" class="flex flex-col gap-2 p-4">
+                    <Eyebrow label="Events" hint="The system's story on the event lane: the system's own events and its members', newest first, each row labeled by the owner that raised it. The last 24 hours, capped." />
+                    <Show when={(eventsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No events in the window.</p>}>
+                      <ul class="divide-y divide-base-300 rounded-box border border-base-300 text-sm">
+                        <For each={eventsQ.data ?? []}>
+                          {(e) => (
+                            <li class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-2">
+                              <span class="text-xs tabular-nums text-base-content/50">{fmtTime(e.ts)}</span>
+                              <span class="font-mono text-xs text-base-content/70">{e.owner}</span>
+                              <span class="font-mono text-xs">{e.key}</span>
+                              <span class="min-w-0 flex-1 truncate text-base-content/80">{e.message}</span>
+                            </li>
+                          )}
+                        </For>
+                      </ul>
+                    </Show>
+                  </section>
+                </Show>
+                <Show when={tab() === "activity"}>
+                  <section data-testid="logs-tab" class="flex flex-col gap-2 p-4">
+                    <Eyebrow label="Logs" hint="The members' raw log lines merged newest first, each naming the component that wrote it. The last 24 hours, capped; a node's own logs live on the node." />
+                    <Show when={(logsQ.data ?? []).length > 0} fallback={<p class="text-sm text-base-content/50">No lines in the window.</p>}>
+                      <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100 p-2 font-mono text-[11.5px] leading-relaxed">
+                        <For each={logsQ.data ?? []}>
+                          {(l) => (
+                            <div class="whitespace-pre" classList={{ "text-error": l.severity === "error" || l.severity === "critical", "text-warning": l.severity === "warning", "text-base-content/70": !l.severity || l.severity === "info" }}>
+                              {`${fmtTime(l.ts)}  ${(l.component ?? "").padEnd(12)} ${(l.severity ?? "").padEnd(7)} ${l.message}`}
+                            </div>
+                          )}
+                        </For>
                       </div>
                     </Show>
                   </section>
@@ -573,6 +507,53 @@ export default function SystemZoom() {
                     )}
                   </For>
                 </div>
+                <Show when={tab() === "overview" && mapDecl()}>
+                  {(decl) => <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} onOpen={openComponent} />}
+                </Show>
+                <Show when={tab() === "overview" && kpiMetrics().length > 0}>
+                  <section data-testid="data-tab" class="flex flex-col gap-3 p-4">
+                    <Eyebrow label="Data" hint="Every metric the standard declares, stacked: the last 24 hours as a sparkline beside the latest value. Click a row for the full chart. Raw samples, capped; a series still on its contract default has nothing to chart yet." />
+                    <div class="overflow-x-auto rounded-box border border-base-300">
+                      <table class="table table-sm">
+                        <thead>
+                          <tr>
+                            <th>Metric</th>
+                            <th>Last 24h</th>
+                            <th class="text-right">Latest</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <For each={kpiMetrics()}>
+                            {(m, i) => (
+                              <>
+                                <tr
+                                  data-testid={`metric-row-${m.metric_type_name}`}
+                                  class="cursor-pointer hover:bg-base-content/5"
+                                  onClick={() => setSeriesPick(seriesPick() === m.metric_type_name ? undefined : m.metric_type_name)}
+                                >
+                                  <td>{entityLabel({ name: m.metric_type_name, label: m.label })}</td>
+                                  <td>
+                                    <TimeseriesChart spark samples={metricSeriesData()[i()] ?? []} now={pageNow} windowMs={24 * 3600_000} />
+                                  </td>
+                                  <td class="text-right font-mono tabular-nums">{m.value === null || m.value === undefined ? "" : String(m.value)}</td>
+                                  <td class="text-right text-[10px] text-base-content/45">{m.is_sampled ? "sampled" : "contract default"}</td>
+                                </tr>
+                                <Show when={seriesPick() === m.metric_type_name}>
+                                  <tr>
+                                    <td colspan="4" class="bg-base-200/40">
+                                      <TimeseriesChart samples={metricSeriesData()[i()] ?? []} now={pageNow} windowMs={24 * 3600_000} />
+                                    </td>
+                                  </tr>
+                                </Show>
+                              </>
+                            )}
+                          </For>
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                </Show>
               </div>
             )}
           </Show>
@@ -581,7 +562,7 @@ export default function SystemZoom() {
       </Show>
       </Show>
     </Page>
-    <BladeStack controller={blades} registry={{ ...fleetRegistry, "property-resolution": propertyResolutionBlade }} />
+    <BladeStack controller={blades} registry={fleetRegistry} />
     </BladesContext.Provider>
   );
 

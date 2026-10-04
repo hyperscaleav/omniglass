@@ -10,7 +10,6 @@ import FleetRows from "../components/FleetRows";
 import TabRail from "../components/TabRail";
 import ConfigureFace from "../components/ConfigureFace";
 import BladeStack from "../components/BladeStack";
-import PropertiesPanel, { ownerPropertyBladeId, propertyResolutionBlade } from "../components/PropertiesPanel";
 import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
 import { locationTileSpec } from "../lib/fleet_tiles";
@@ -35,7 +34,7 @@ import { sinceOf } from "../lib/system_zoom";
 import { describeError, fmtTime } from "../lib/format";
 import { locationHealth, locationHealthKey } from "../lib/health";
 
-// The location zoom (#635): the same canvas one level down, at the identity
+// The location zoom (#635): the same cards one level down, at the identity
 // route, the DEFAULT face since ADR-0129. One band per direct child whatever its
 // type, the placed-here band first with this location's own systems as cards,
 // the subtree's holes dashed under the child that contains them, and the
@@ -93,25 +92,11 @@ export default function LocationZoom() {
   const holes = createMemo(() => (view.data ? holesUnder(id(), view.data) : new Map()));
   // This subtree's own attention count, unfiltered: what the header chip
   // reports and the chip's click narrows the cards to.
-  const ATTENTION = ["outage", "degraded", "incomplete"];
-  const attention = createMemo(() => {
-    if (!view.data) return 0;
-    return bandsOf(view.data, byChildOfLocation(id())).reduce(
-      (n, b) => n + b.clusters.filter((c) => c.verdict !== null && c.verdict !== "healthy").length,
-      0,
-    );
-  });
-  const attentionOn = () => chips().some((c) => c.key === "verdict" && c.values.some((v) => ATTENTION.includes(v)));
-  const toggleAttention = () => {
-    const rest = chips().filter((c) => c.key !== "verdict");
-    setChips(attentionOn() ? rest : [...rest, { key: "verdict", op: "eq", values: ATTENTION }]);
-  };
-
   const crumbs = createMemo(() => {
     if (!view.data) return [];
     const chain = ancestors(id(), locationIndex(view.data));
     return [
-      { key: "fleet", label: "Fleet", onClick: () => navigate("/fleet") },
+      { key: "explore", label: "Explore", onClick: () => navigate("/explore") },
       // The trail ends at the parent: the current location is the page title,
       // and repeating it as the last crumb would say it twice.
       ...chain.slice(0, -1).map((l) => ({
@@ -136,8 +121,11 @@ export default function LocationZoom() {
       title={anchor() ? entityLabel(anchor()!) : "Location"}
       breadcrumb={<Breadcrumb crumbs={crumbs()} />}
     >
+      {/* A miss is judged only once the fleet view is current: the create
+          handoff lands here while the cached view predates the new row, and
+          the refetch on mount is what answers whether the address exists. */}
       <Show
-        when={!(view.data && !anchor() && !(view.data.locations ?? []).some((x) => x.name === id()))}
+        when={!(view.data && !view.isFetching && !anchor() && !(view.data.locations ?? []).some((x) => x.name === id()))}
         fallback={
           <div role="alert" class="alert alert-warning alert-soft text-sm">
             <span>No location answers this address. It may have been deleted, or the link is stale.</span>
@@ -156,21 +144,10 @@ export default function LocationZoom() {
           <div class="flex flex-col gap-3">
           <TabRail tabs={zoomTabs()} activeKey={zoomTab} />
           <Show when={zoomTab() === "configure"}>
-            <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace
-              kind="location"
-              id={id()}
-              panels={(slot) => (
-                <PropertiesPanel
-                  location={id()}
-                  edit={slot}
-                  onOpen={(property) => blades.push({ kind: "property-resolution", id: ownerPropertyBladeId({ kind: "location", name: id() }, property) })}
-                />
-              )}
-            /></div>
+            <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace kind="location" id={id()} /></div>
           </Show>
           <Show when={zoomTab() === "overview"}>
 <FleetShell
-            storageKey="fleet"
             tiles={tiles()}
             list={<div class="card overflow-hidden border border-base-300 bg-base-200 p-0"><FleetRows rows={bands().flatMap((b) => b.clusters)} view={view.data!} onOpen={(sid) => navigate(`/systems/${sid}`)} /></div>}
             rows={bands().flatMap((b) => b.clusters)}
@@ -183,17 +160,6 @@ export default function LocationZoom() {
                 <HealthBadge verdict={anchor()?.verdict ?? undefined} size="sm" />
                 <Show when={locHealth.data && sinceOf(locHealth.data, pageNow)}>
                   {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
-                </Show>
-                <Show when={attention() > 0}>
-                  <button
-                    type="button"
-                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-field border px-2 py-0.5 text-xs"
-                    classList={{ "border-primary bg-primary/10": attentionOn(), "border-base-300": !attentionOn() }}
-                    onClick={toggleAttention}
-                  >
-                    <span class="h-1.5 w-1.5 flex-none rounded-full bg-warning" />
-                    {attention()} need attention
-                  </button>
                 </Show>
               </div>
             }
@@ -219,7 +185,7 @@ export default function LocationZoom() {
       </Show>
       </Show>
     </Page>
-    <BladeStack controller={blades} registry={{ ...fleetRegistry, "property-resolution": propertyResolutionBlade }} />
+    <BladeStack controller={blades} registry={fleetRegistry} />
     </BladesContext.Provider>
   );
 

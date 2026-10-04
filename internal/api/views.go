@@ -13,7 +13,7 @@ import (
 //
 // Every other read here answers "what is this row"; a view answers "what does
 // this screen need", and it exists precisely when composing the entity reads in
-// the browser would be the wrong shape. The fleet canvas is the first case. It
+// the browser would be the wrong shape. The fleet renderers are the first case. It
 // paints one square per component across the whole fleet, and fetching an
 // fleet-sized component list to do that is a page that never finishes loading,
 // so the projection carries a dot (an id, a verdict, two flags) and nothing an
@@ -22,10 +22,10 @@ import (
 // A view is a READ and only a read. It composes the Storage Gateway's scoped
 // reads and adds no write path, no cache, and no judgement of its own: the
 // verdicts it serves are the ones the health rollup already recorded, so the
-// canvas and the detail page cannot land on different answers about a room.
+// a renderer and the detail page cannot land on different answers about a room.
 
 type fleetDotBody struct {
-	Component string `json:"component" doc:"The component's uuid: what the canvas navigates to when a dot is clicked"`
+	Component string `json:"component" doc:"The component's uuid: what a renderer navigates to when a dot is clicked"`
 	Name      string `json:"name" doc:"The component's name, for the dot's hover title"`
 	Verdict   string `json:"verdict" doc:"healthy, incomplete, degraded, or outage: the component's own verdict, which is the only thing that colours the dot"`
 	Primary   bool   `json:"primary" doc:"True in the component's primary system, the one cluster that draws it solid. A shared component is a ghost outline everywhere else, so the fleet never counts one physical device twice"`
@@ -33,7 +33,7 @@ type fleetDotBody struct {
 }
 
 type fleetSystemBody struct {
-	ID       string         `json:"id" doc:"The system's uuid, the address the canvas navigates by"`
+	ID       string         `json:"id" doc:"The system's uuid, the address a renderer navigates by"`
 	Name     string         `json:"name"`
 	Label    string         `json:"label"`
 	Location string         `json:"location,omitempty" doc:"The uuid of the location this system is placed at; absent when it is placed nowhere"`
@@ -42,7 +42,7 @@ type fleetSystemBody struct {
 }
 
 type fleetLocationBody struct {
-	ID             string `json:"id" doc:"The location's uuid, the address the canvas navigates by"`
+	ID             string `json:"id" doc:"The location's uuid, the address a renderer navigates by"`
 	Name           string `json:"name"`
 	Label          string `json:"label"`
 	LocationType   string `json:"location_type" doc:"The type's name, which the band renders as its type chip"`
@@ -103,7 +103,7 @@ func registerViewRoutes(api huma.API, a *authenticator, gw storage.Gateway) {
 		Description: "Returns every in-scope location (flat, with parent and verdict), every in-scope system (with location and verdict), and one dot per component in each system. A dot carries the component id, its verdict, and the primary/shared flags, not a full component row. Each tier is scoped on its own read permission: a caller who can read locations but not components gets locations with empty systems, and a caller with no scope gets an empty result, not an error. Gated by location:read.",
 	}, "location", "read"), func(ctx context.Context, _ *struct{}) (*fleetViewOutput, error) {
 		// Three scopes, three permissions. Resolving them separately is what
-		// makes the tiers independent: the canvas is a location-rooted surface,
+		// makes the tiers independent: Explore is a location-rooted surface,
 		// so location:read is the door, but a caller's reach into systems and
 		// components is their own and is injected into each query rather than
 		// inherited from the door they came through.

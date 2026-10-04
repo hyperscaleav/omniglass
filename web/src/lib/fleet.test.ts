@@ -5,8 +5,6 @@ import {
   byChildOfLocation,
   byRootLocation,
   childrenIndex,
-  fleetTotals,
-  holesByRoot,
   holesUnder,
   locationIndex,
   locationsWithoutSystems,
@@ -189,12 +187,6 @@ describe("locationsWithoutSystems", () => {
   });
 });
 
-describe("fleetTotals", () => {
-  it("counts a shared component once across the whole fleet", () => {
-    expect(fleetTotals(view)).toEqual({ systems: 2, components: 2, roots: 2 });
-  });
-});
-
 describe("byRootLocation", () => {
   it("names itself, so a future picker has something to show", () => {
     expect(byRootLocation.name).toBe("location");
@@ -236,19 +228,6 @@ describe("childrenIndex and subtreeDepth", () => {
       systems: [],
     } as unknown as FleetView;
     expect(() => subtreeDepth(uuidFor("cyd-a"), childrenIndex(cyclic))).not.toThrow();
-  });
-});
-
-describe("holesByRoot", () => {
-  it("groups the holes under their root band", () => {
-    const holes = holesByRoot(view);
-    expect(holes.get(uuidFor("l-hq"))?.map((l) => l.name)).toEqual(["hq-r2"]);
-    expect(holes.get(uuidFor("l-depot"))).toBeUndefined();
-  });
-
-  it("claims nothing when the systems tier is out of scope, like its source", () => {
-    const noSystems = { ...view, systems: [] } as unknown as FleetView;
-    expect(holesByRoot(noSystems).size).toBe(0);
   });
 });
 

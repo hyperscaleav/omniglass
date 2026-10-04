@@ -20,10 +20,9 @@ There are two ways to operate, and they are the same API with the same checks be
 
 - **[Sign in and your profile](/guides/operator/sign-in/)**: getting in with a password or a
   bearer token, and managing your own label, picture, and password.
-- **[Explore your fleet](/guides/operator/fleet/)**: every system as a cluster of dots on
-  one page, grouped by location, with zoom pages down to a single component.
-- **[Find things in your fleet](/guides/operator/inventory/)**: the inventory pages, the chip
-  filter, and the tree, list, and column controls.
+- **[Explore your fleet](/guides/operator/fleet/)**: the outline of every place, the systems
+  that sit there and what is in them; finding one thing with the chip filter; and the
+  workspace each one opens.
 - **[Work with an entity](/guides/operator/entities/)**: opening a blade, drilling into
   children, and creating, editing, or deleting.
 - **[Nodes and reachability](/guides/operator/collection/)**: enrolling a collection node,
@@ -31,8 +30,8 @@ There are two ways to operate, and they are the same API with the same checks be
 
 ## Getting around
 
-- The **sidebar** is the information architecture: sections grouped into Inventory, Values,
-  Catalog, and Admin. **Catalog is a single entry** opening the catalog area: a subrail on the
+- The **sidebar** is the information architecture: Explore (the one door into the fleet), Nodes,
+  and sections grouped into Values, Catalog, and Admin. **Catalog is a single entry** opening the catalog area: a subrail on the
   left groups the registries by the fleet noun they serve (Telemetry, Actions, Components,
   Systems, Locations, Metadata), and clicking an entry opens that registry's own page beside it,
   at its own URL. A guide path names the group and the entry: **Catalog, under Locations: Types**.
@@ -46,7 +45,7 @@ There are two ways to operate, and they are the same API with the same checks be
   settings engine, not a per-session toggle.
 - Press **⌘K** (or Ctrl-K) to open the command palette and jump to any section by name. Arrow
   keys move the selection, Enter navigates, Esc closes. This is a global jump, distinct from a
-  page's own [filter](/guides/operator/inventory/#filter). It searches every destination you can
+  page's own [filter](/guides/operator/fleet/#finding-one-thing). It searches every destination you can
   reach: the sidebar's own sections and, though the sidebar shows Catalog as one entry, each
   catalog registry by its own name, tagged with its group (typing `products` jumps straight to
   **Catalog, under Components: Products**). Typing a group name finds everything under it, so

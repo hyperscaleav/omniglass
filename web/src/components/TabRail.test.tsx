@@ -20,6 +20,7 @@ function mount(tabs: { key: string; label: string }[], path = "/x") {
             <div>
               <TabRail tabs={tabs} />
               <div data-testid="active">{(Array.isArray(params.tab) ? params.tab[0] : params.tab) ?? "(none)"}</div>
+              <div data-testid="edit">{(Array.isArray(params.edit) ? params.edit[0] : params.edit) ?? "(none)"}</div>
             </div>
           );
         }}
@@ -54,5 +55,19 @@ describe("TabRail", () => {
   it("a deep link lands on its tab", () => {
     mount(TABS, "/x?tab=history");
     expect(screen.getByRole("tab", { name: "History" }).getAttribute("aria-selected")).toBe("true");
+  });
+});
+
+describe("choosing a tab ends the edit landing", () => {
+  // ?edit=1 is a landing instruction (the create handoff and the row pencil
+  // both send it): open Configure, already editing. Left in the address after
+  // the operator chose another tab, it pinned the page to Configure (Overview,
+  // the bare address, resolved straight back to it) and re-entered edit on
+  // every return.
+  it("drops ?edit= when a tab is chosen", async () => {
+    mount(TABS, "/x?tab=history&edit=1");
+    fireEvent.click(screen.getByRole("tab", { name: "Overview" }));
+    await waitFor(() => expect(screen.getByTestId("edit").textContent).toBe("(none)"));
+    expect(screen.getByTestId("active").textContent).toBe("(none)");
   });
 });

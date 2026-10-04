@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPredicate, toggleFacet, facetActive, matchOp, tokenToChip, type FilterKey, type Chip } from "./predicate";
+import { buildPredicate, toggleFacet, facetActive, matchOp, tokenToChip, type FilterKey, type Chip, parseChips } from "./predicate";
 
 type Row = { name: string; type: string; ports: number };
 const rows: Row[] = [
@@ -152,5 +152,40 @@ describe("tag facets", () => {
     // "name:?" on the non-presence name key parses "?" as a literal value, not exists.
     const c = tokenToChip("name:?", withStatic, "name");
     expect(c).toEqual({ key: "name", op: "contains", values: ["?"] });
+  });
+});
+
+describe("parseChips", () => {
+  // Chips ride the address so a link carries a filter, which makes the param
+  // input from somebody else: a pasted, truncated or hand-edited link must
+  // yield no filter, never a page that throws while reading it.
+  it("round-trips what the bar wrote", () => {
+    const chips = [{ key: "verdict", op: "eq", values: ["outage", "degraded"] }];
+    expect(parseChips(JSON.stringify(chips))).toEqual(chips);
+  });
+
+  it("reads an absent or empty param as no filter", () => {
+    expect(parseChips(undefined)).toEqual([]);
+    expect(parseChips("")).toEqual([]);
+  });
+
+  it("reads anything that is not a list of chips as no filter", () => {
+    expect(parseChips("{not json")).toEqual([]);
+    expect(parseChips("5")).toEqual([]);
+    expect(parseChips("null")).toEqual([]);
+    expect(parseChips('{"key":"verdict"}')).toEqual([]);
+  });
+
+  it("drops a malformed chip and keeps the well-formed ones beside it", () => {
+    const raw = JSON.stringify([
+      { key: "path", op: "contains", values: ["West"] },
+      { key: "verdict" },
+      { key: 7, op: "eq", values: ["x"] },
+      { key: "verdict", op: "no-such-op", values: ["outage"] },
+      { key: "verdict", op: "eq", values: "outage" },
+      { key: "verdict", op: "eq", values: [1, "outage"] },
+      null,
+    ]);
+    expect(parseChips(raw)).toEqual([{ key: "path", op: "contains", values: ["West"] }]);
   });
 });

@@ -3,14 +3,14 @@ import type { components } from "../api/schema.gen";
 import { verdictOf, verdictRank, worstVerdict, type Verdict } from "./health";
 import { entityLabel } from "./entities";
 
-// The fleet view model: the shapes the canvas renders, and the pure functions
+// The fleet view model: the shapes the renderers draw, and the pure functions
 // that derive them from the projection.
 //
 // This module is the seam the whole fleet surface is built on. Every renderer
 // consumes the types below and NOTHING else: no role, no assignment, no quorum
 // arithmetic, no API body. That is deliberate and it is load-bearing. The model
 // underneath is still moving (typed slots landed in #647, plans and positions
-// have not), and a canvas wired straight to the wire would be rewritten every
+// have not), and a renderer wired straight to the wire would be rewritten every
 // time it shifts. Wired to these shapes, the mapper changes and the pixels do
 // not.
 //
@@ -26,7 +26,6 @@ import { entityLabel } from "./entities";
 export type FleetView = components["schemas"]["FleetViewOutputBody"];
 export type FleetLocation = NonNullable<FleetView["locations"]>[number];
 export type FleetSystem = NonNullable<FleetView["systems"]>[number];
-export type FleetDot = NonNullable<FleetSystem["dots"]>[number];
 
 export const FLEET_VIEW_KEY = ["fleet-view"] as const;
 
@@ -38,20 +37,20 @@ export async function fleetView(): Promise<FleetView> {
 
 // A Dot is one square. It carries the verdict that colours it, the two flags
 // that decide whether it is drawn solid, ringed, or as a ghost outline, and the
-// id the canvas navigates to.
+// id a renderer navigates to.
 export type Dot = {
   componentId: string;
   name: string;
   verdict: Verdict | null;
   // owned is the single cluster that draws this component solid. A shared
   // component is owned in exactly one place (its primary system) and a ghost
-  // everywhere else, which is how the canvas shows every system depending on a
+  // everywhere else, which is how a renderer shows every system depending on a
   // box without the fleet appearing to contain several of it.
   owned: boolean;
   shared: boolean;
 };
 
-// A SystemCluster is one system's dots, the unit the canvas wraps and the unit
+// A SystemCluster is one system's dots, the unit a renderer wraps and the unit
 // a click resolves to.
 export type SystemCluster = {
   systemId: string;
@@ -62,7 +61,7 @@ export type SystemCluster = {
   dots: Dot[];
 };
 
-// A Band is one row of the canvas: a label column and the clusters gathered
+// A Band is one row of a band renderer: a label column and the clusters gathered
 // under it. What "gathered under it" MEANS is the grouping function's business,
 // not the band's, which is the point of the seam.
 export type Band = {
@@ -91,7 +90,7 @@ export type Band = {
 
 // A Grouping decides which band a system belongs to and how that band is
 // labelled. Location ships; the seam is what lets standard, vendor or tag
-// follow as a mapper rather than a second endpoint and a second canvas.
+// follow as a mapper rather than a second endpoint and a second renderer.
 export type Grouping = {
   name: string;
   // bandFor returns the band key a system belongs to, or null to drop it.
@@ -110,7 +109,7 @@ export type Grouping = {
 
 // The index is memoized per view object: bandsOf and every grouping method
 // read it, and rebuilding a Map of the whole place tree once per system per
-// band turns a canvas repaint into O(systems x locations) for no reason. A
+// band turns a repaint into O(systems x locations) for no reason. A
 // WeakMap keyed on the view keeps the memo exactly as long as the data it
 // derives from.
 const indexCache = new WeakMap<FleetView, Map<string, FleetLocation>>();
@@ -137,9 +136,9 @@ export function childrenIndex(view: FleetView): Map<string, FleetLocation[]> {
 }
 
 // subtreeDepth measures how deep a root's tree goes, in levels including the
-// root itself: the variable-depth fact the canvas exists to teach, rendered in
+// root itself: the variable-depth fact the band subtitle exists to teach, rendered in
 // the band's subtitle. Bounded like rootOf: a cycle in the data must not hang
-// the canvas.
+// the band.
 export function subtreeDepth(rootId: string, children: Map<string, FleetLocation[]>): number {
   let depth = 0;
   let frontier = [rootId];
@@ -159,7 +158,7 @@ export function subtreeDepth(rootId: string, children: Map<string, FleetLocation
 
 // rootOf walks a location to its root. The walk is bounded by the number of
 // locations, not by trust: a parent cycle in the data would otherwise hang the
-// canvas, and the tree is arbitrary-depth by design so no fixed ladder can
+// renderer, and the tree is arbitrary-depth by design so no fixed ladder can
 // stand in for the walk.
 export function rootOf(id: string | null | undefined, index: Map<string, FleetLocation>): FleetLocation | null {
   let current = id ? index.get(id) : undefined;
@@ -216,7 +215,7 @@ export const byRootLocation: Grouping = {
 // placed-here band (keyed by the anchor itself) for systems attached
 // directly, ordered first. A factory rather than a constant because the
 // anchor parameterizes it; the same bandsOf renders it, which is the seam
-// the epic promised (grouping is a mapper, never a second canvas).
+// the epic promised (grouping is a mapper, never a second renderer).
 export function byChildOfLocation(locationId: string): Grouping {
   return {
     name: "children",
@@ -288,7 +287,7 @@ export function toCluster(system: FleetSystem): SystemCluster {
     locationId: system.location || null,
     verdict: verdictOf(system.verdict),
     // The wire is a set (the scoped tree query carries no ORDER BY), so the
-    // drawing order is decided here, deterministically: a canvas that
+    // drawing order is decided here, deterministically: a renderer that
     // reshuffles its dots between refreshes reads as change where none
     // happened.
     dots: (system.dots ?? [])
@@ -303,7 +302,7 @@ export function toCluster(system: FleetSystem): SystemCluster {
   };
 }
 
-// bandsOf is the whole gathering step, and the only place the canvas learns how
+// bandsOf is the whole gathering step, and the only place a band renderer learns how
 // the fleet is arranged. Swap the grouping and the same dots land in different
 // rows with no renderer touched.
 export function bandsOf(view: FleetView, grouping: Grouping = byRootLocation): Band[] {
@@ -320,7 +319,7 @@ export function bandsOf(view: FleetView, grouping: Grouping = byRootLocation): B
     const systems = groups.get(key) ?? [];
     // Clusters draw worst-first, then by label: the operator's eye lands on
     // what needs attention first, and the tie order is stable (the wire is a
-    // set, and the canvas must not reshuffle between reads).
+    // set, and a renderer must not reshuffle between reads).
     const rank = (v: Verdict | null) => (v ? verdictRank(v) : -1);
     const clusters = systems
       .map(toCluster)
@@ -344,8 +343,8 @@ export function bandsOf(view: FleetView, grouping: Grouping = byRootLocation): B
 }
 
 // locationsWithoutSystems names the rooms that exist and hold nothing: the
-// dashed holes the canvas draws. A hole is the half of the fleet a list view
-// cannot show, and naming it is most of what the canvas is for.
+// dashed holes a renderer draws. A hole is the half of the fleet a list view
+// cannot show, and naming it is most of what the band face is for.
 //
 // It answers ONLY from what the view contains, which matters because the system
 // tier is scoped independently of the place tree. A caller who may read
@@ -364,65 +363,4 @@ export function locationsWithoutSystems(view: FleetView): FleetLocation[] {
   // where the systems belong, and drawing a hole at every level above them
   // would bury the real gaps in noise.
   return (view.locations ?? []).filter((l) => !hasChild.has(l.id) && !placed.has(l.id));
-}
-
-// holesByRoot folds the holes under the band that draws them, through the
-// same root walk the bands use. Location-specific by construction: a hole is
-// a place, and only the location grouping has places for keys.
-export function holesByRoot(view: FleetView): Map<string, FleetLocation[]> {
-  const index = locationIndex(view);
-  const out = new Map<string, FleetLocation[]>();
-  for (const hole of locationsWithoutSystems(view)) {
-    const root = rootOf(hole.id, index);
-    if (!root) continue;
-    const list = out.get(root.id);
-    if (list) list.push(hole);
-    else out.set(root.id, [hole]);
-  }
-  return out;
-}
-
-// holeOnlyBands names the roots the system bands cannot: a root whose subtree
-// holds ONLY holes. A site nobody has commissioned yet is exactly the fleet's
-// mid-commissioning story, and a canvas that renders bands from systems alone
-// would leave that site invisible, which is the opposite of naming the gap.
-// Empty clusters; the recorded verdict and depth come from the location like
-// any other band's.
-export function holeOnlyBands(view: FleetView): Band[] {
-  const banded = new Set(
-    (view.systems ?? [])
-      .map((s) => byRootLocation.bandFor(s, view))
-      .filter((k): k is string => k !== null),
-  );
-  const index = locationIndex(view);
-  const children = childrenIndex(view);
-  const out: Band[] = [];
-  for (const key of holesByRoot(view).keys()) {
-    if (banded.has(key)) continue;
-    const root = index.get(key);
-    if (!root) continue;
-    out.push({
-      key,
-      label: entityLabel(root),
-      sublabel: root.location_type ?? "",
-      verdict: null,
-      clusters: [],
-      systemCount: 0,
-      componentCount: 0,
-      recordedVerdict: verdictOf(root.verdict),
-      depth: subtreeDepth(key, children),
-    });
-  }
-  return out.sort((a, b) => a.label.localeCompare(b.label));
-}
-
-// fleetTotals is the inspector's headline, counting a shared component once.
-export function fleetTotals(view: FleetView): { systems: number; components: number; roots: number } {
-  const distinct = new Set<string>();
-  for (const s of view.systems ?? []) for (const d of s.dots ?? []) distinct.add(d.component);
-  return {
-    systems: (view.systems ?? []).length,
-    components: distinct.size,
-    roots: (view.locations ?? []).filter((l) => !l.parent).length,
-  };
 }

@@ -17,11 +17,11 @@ import { componentSystemsKey } from "../lib/members";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
-// The fleet EntityBlade (#799): a condensed render of the workspace's cores.
-// Verdict and since lead, the alarms say why, the members drill into the
-// component blade in the same stack, Expand promotes to the identity route,
-// and the label edits in place when the row allows update. Every body
-// self-fetches by id, so the registry serves any page.
+// The fleet EntityBlade (#799, refit in #826): verdict and since lead, the
+// alarms say why, and the rest of the blade IS the one EntityForm, read or
+// edit through the blade's own footer. Expand promotes to the workspace,
+// where the members, the strip, and the vitals live. Every body self-fetches
+// by id, so the registry serves any page.
 
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 
@@ -117,14 +117,16 @@ function mountBlade(ref: { kind: string; id: string }) {
 afterEach(cleanup);
 
 describe("the system blade", () => {
-  it("leads with verdict and since, says why, and lists the members", () => {
+  it("leads with verdict and since, says why, and renders the form's sections", async () => {
     mountBlade({ kind: "system", id: uuidFor("eb-sys") });
     expect(screen.getAllByText("Boardroom").length).toBeGreaterThan(0);
-    expect(screen.getByText("degraded")).toBeTruthy();
+    expect(screen.getAllByText("degraded").length).toBeGreaterThan(0);
     expect(screen.getByText(/since /)).toBeTruthy();
-    expect(screen.getByText("No route to host")).toBeTruthy();
-    expect(screen.getByText("videobar-1")).toBeTruthy();
-    expect(screen.getByText(/Room temperature/i)).toBeTruthy();
+    expect(screen.getAllByText("No route to host").length).toBeGreaterThan(0);
+    const form = await screen.findByTestId("entity-form");
+    expect(within(form).getByText("Identity")).toBeTruthy();
+    expect(within(form).getByText("huddle-room")).toBeTruthy();
+    expect(screen.queryByTestId("quick-name")).toBeNull();
   });
 
   it("expands to the identity route and closes the stack", async () => {
@@ -134,27 +136,33 @@ describe("the system blade", () => {
     expect(window.location.pathname).toBe(`/web/systems/${uuidFor("eb-sys")}`);
   });
 
-  it("drills a member into the component blade on the same stack", async () => {
-    const { controller } = mountBlade({ kind: "system", id: uuidFor("eb-sys") });
-    const members = screen.getByText("Components").parentElement!;
-    fireEvent.click(within(members).getByRole("button", { name: /mic-1/ }));
-    expect(controller().stack().length).toBe(2);
-    expect(controller().stack()[1]).toEqual({ kind: "component", id: uuidFor("eb-c-mic") });
+  it("edits the whole form in place through the blade's footer", async () => {
+    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
+    const blade = await screen.findByRole("dialog");
+    await within(blade).findByTestId("entity-form");
+    fireEvent.click(within(blade).getByRole("button", { name: "Edit" }));
+    expect(await within(blade).findByRole("combobox", { name: /standard/i })).toBeTruthy();
+    // The rename precheck sits beside the name because the row allows rename.
+    expect(within(blade).getByRole("button", { name: /check/i })).toBeTruthy();
+    expect(within(blade).getByRole("button", { name: "Save" })).toBeTruthy();
   });
 
-  it("offers the in-blade edit pencil when the row allows update", () => {
+  it("keeps tags editable in place on the blade", async () => {
     mountBlade({ kind: "system", id: uuidFor("eb-sys") });
-    expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
+    const blade = await screen.findByRole("dialog");
+    const form = await within(blade).findByTestId("entity-form");
+    expect(within(form).getByText("Tags")).toBeTruthy();
   });
 });
 
 describe("the component blade", () => {
-  it("leads with verdict, says why, and names the system it serves", () => {
+  it("leads with verdict, says why, and renders the form with the fixed product", async () => {
     mountBlade({ kind: "component", id: uuidFor("eb-c-mic") });
     expect(screen.getAllByText("mic-1").length).toBeGreaterThan(0);
-    expect(screen.getByText("outage")).toBeTruthy();
-    expect(screen.getByText("No route to host")).toBeTruthy();
-    expect(screen.getByText("Boardroom")).toBeTruthy();
+    expect(screen.getAllByText("outage").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("No route to host").length).toBeGreaterThan(0);
+    const form = await screen.findByTestId("entity-form");
+    expect(within(form).getAllByText(/Fixed at creation/).length).toBeGreaterThan(0);
   });
 
   it("expands to the leaf route", async () => {
@@ -166,34 +174,11 @@ describe("the component blade", () => {
 });
 
 describe("the location blade", () => {
-  it("summarises the subtree and lists what needs attention", () => {
+  it("leads with the verdict and renders the form with the parent", async () => {
     mountBlade({ kind: "location", id: uuidFor("eb-room") });
     expect(screen.getAllByText("Boardroom A").length).toBeGreaterThan(0);
-    expect(screen.getByText(/1 system/)).toBeTruthy();
-    const rows = screen.getByText("Needs attention").parentElement!;
-    expect(within(rows).getByText("Boardroom")).toBeTruthy();
-  });
-});
-
-
-// Slice 2 of #800: the blade is the quick face of the ONE editor. Label (and
-// tags) edit in place; the deep facts read with a jump that opens Configure
-// anchored and already editing.
-describe("the blade points at the configure face (#800)", () => {
-  it("renders the deep facts as rows with jumps to the anchored editor", async () => {
-    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
-    const blade = await screen.findByRole("dialog");
-    const nameRow = within(blade).getByTestId("quick-name");
-    expect(within(nameRow).getByText("boardroom")).toBeTruthy();
-    const jump = within(nameRow).getByRole("link", { name: /rename/i });
-    expect(jump.getAttribute("href")).toBe(`/systems/${uuidFor("eb-sys")}?tab=configure&edit=1#identity`);
-    const stdRow = within(blade).getByTestId("quick-classification");
-    expect(within(stdRow).getByRole("link", { name: /change/i })).toBeTruthy();
-  });
-
-  it("keeps tags editable in place on the blade", async () => {
-    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
-    const blade = await screen.findByRole("dialog");
-    expect(within(blade).getByTestId("quick-tags")).toBeTruthy();
+    const form = await screen.findByTestId("entity-form");
+    expect(within(form).getByText("Parent")).toBeTruthy();
+    expect(within(form).getByText("Root")).toBeTruthy();
   });
 });

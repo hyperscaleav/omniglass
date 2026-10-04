@@ -2,34 +2,29 @@ import { For, Show, createMemo, createSignal } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { useQuery, useQueryClient } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
-import HealthHistory from "./HealthHistory";
 import Button from "./Button";
-import BladeField from "./BladeField";
-import TagAdder from "./TagAdder";
+import EntityForm from "./EntityForm";
 import { Maximize } from "./icons";
-import { useBlades, useBladeEdit, type BladeDef } from "../lib/blades";
-import { FLEET_VIEW_KEY, fleetView, byChildOfLocation, bandsOf } from "../lib/fleet";
+import { useBlades, useBladeEdit, type BladeDef, type BladeDestructive } from "../lib/blades";
+import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { entityLabel } from "../lib/entities";
-import { systemHealth, systemHealthKey, locationHealth, locationHealthKey, transitions } from "../lib/health";
-import { systemRoles, systemRolesKey } from "../lib/system_roles";
-import { alarmRows, sinceOf, systemZoomVM, componentCards } from "../lib/system_zoom";
-import { systemMetrics, systemMetricsKey } from "../lib/system_metrics";
-import { dotVerdict, leafAlarmSince, membershipRows, vitalRows } from "../lib/component_leaf";
-import { SYSTEMS_KEY, listSystems, updateSystem, deleteSystem } from "../lib/systems";
-import { LOCATIONS_KEY, listLocations, updateLocation, deleteLocation } from "../lib/locations";
-import { COMPONENTS_KEY, listComponents, updateComponent, deleteComponent } from "../lib/components";
+import { systemHealth, systemHealthKey, locationHealth, locationHealthKey } from "../lib/health";
+import { alarmRows, sinceOf } from "../lib/system_zoom";
+import { dotVerdict, leafAlarmSince } from "../lib/component_leaf";
+import { SYSTEMS_KEY, listSystems, deleteSystem } from "../lib/systems";
+import { LOCATIONS_KEY, listLocations, deleteLocation } from "../lib/locations";
+import { COMPONENTS_KEY, listComponents, deleteComponent } from "../lib/components";
 import { componentAlarms, componentAlarmsKey, splitAlarms } from "../lib/alarms";
-import { componentSystemsKey, componentSystems } from "../lib/members";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
 
-// EntityBlade (#799, stage 3 of the ADR-0129 reconciliation): ONE blade per
-// fleet kind, a condensed render of the workspace's pure cores. Verdict and
-// since lead, then the alarms saying why, the 30-day strip, the members or
-// children, and the KPI chips; Expand promotes to the identity route, and the
-// label edits in place through the existing gated mutation. Every body
-// self-fetches by id, so any page can push any kind; the inventory-era panel
-// blades retire from these paths.
+// EntityBlade (#799, refit in #826): ONE blade per fleet kind. Verdict and
+// since-when lead and the active alarms say why (the monitoring header), and
+// the rest of the blade IS the one EntityForm, read or edit through the
+// blade's own footer: the original blade vision, where view and edit are one
+// component and the blade is just where the operator clicked. The members,
+// the 30-day strip, and the vitals live on the workspace, one Expand away.
+// Every body self-fetches by id, so any page can push any kind.
 
 const section = "flex flex-col gap-1.5";
 const eyebrow = "eyebrow";
@@ -39,35 +34,6 @@ function SinceLine(props: { since: { ts: string; ms: number } | null | undefined
     <Show when={props.since}>
       {(s) => <span data-testid="blade-since" class="tabular-nums text-xs text-base-content/60">since {fmtTime(s().ts)} · {durationText(s().ms)}</span>}
     </Show>
-  );
-}
-
-// A deep fact on the blade reads, and its jump opens the ONE editor anchored
-// and already editing (#800 slice 2): the blade closes, the workspace's
-// Configure tab receives the intent through ?edit=1.
-function QuickRow(props: { id: string; label: string; value: string; mono?: boolean; jump?: { label: string; to: string } }) {
-  const navigate = useNavigate();
-  const blades = useBlades();
-  return (
-    <div data-testid={props.id} class="flex items-center gap-2 rounded-field border border-base-300 px-3 py-2 text-sm">
-      <span class="w-24 flex-none text-xs text-base-content/60">{props.label}</span>
-      <span class="min-w-0 truncate" classList={{ "font-mono text-[12.5px]": props.mono }}>{props.value}</span>
-      <Show when={props.jump}>
-        {(j) => (
-          <a
-            class="ml-auto flex-none text-xs text-primary hover:underline"
-            href={j().to}
-            onClick={(e) => {
-              e.preventDefault();
-              blades.close();
-              navigate(j().to);
-            }}
-          >
-            {j().label} ↗
-          </a>
-        )}
-      </Show>
-    </div>
   );
 }
 
@@ -88,94 +54,62 @@ function ExpandButton(props: { to: string }) {
   );
 }
 
-// One label editor plus the delete, each wired to its existing gated mutation:
-// the shared edit half of all three bodies. Binding happens only when the row
-// allows the action, so a blade without the permission never grows the pencil
-// or the Delete. Delete addresses by uuid (a duplicate name under another
-// parent is legal) and confirms first, matching the retired inventory blade.
-function useEntityEdit(opts: {
+// The blade's destructive action, folded into the form's bind: Delete
+// addresses by uuid (a duplicate name under another parent is legal) and
+// confirms first. A failed delete (a 409 on a still-referenced row) keeps the
+// blade open and says so; the blade only closes on success.
+function useDelete(opts: {
   kindLabel: string;
   id: string;
   name: () => string | undefined;
-  label: () => string;
   actions: () => string[];
-  save: (name: string, label: string) => Promise<unknown>;
   remove: (id: string) => Promise<unknown>;
   invalidate: () => unknown;
 }) {
-  const edit = useBladeEdit();
   const blades = useBlades();
-  const [draft, setDraft] = createSignal("");
   const [err, setErr] = createSignal<string | null>(null);
-  edit.bind({
-    editable: () => opts.actions().includes("update") && !!opts.name(),
-    seed: () => setDraft(opts.label()),
-    save: async () => {
-      // Addressed by uuid, like the delete: a duplicate name under another
-      // parent is legal, and a bare-name address would 409 on it.
-      if (draft().trim() !== opts.label()) await opts.save(opts.id, draft().trim());
-      await opts.invalidate();
-    },
-    destructive: () =>
-      opts.actions().includes("delete")
-        ? {
-            label: "Delete",
-            tone: "danger" as const,
-            onClick: () => {
-              const name = opts.name();
-              if (!name || !confirm(`Delete ${opts.kindLabel} "${name}"?`)) return;
-              // A failed delete (a 409 on a still-referenced row) keeps the
-              // blade open and says so; the blade only closes on success.
-              void opts.remove(opts.id).then(
-                async () => {
-                  blades.close();
-                  await opts.invalidate();
-                },
-                (e: unknown) => setErr(describeError(e)),
-              );
-            },
-          }
-        : undefined,
-  });
-  return { draft, setDraft, err };
+  const destructive = (): BladeDestructive | undefined =>
+    opts.actions().includes("delete")
+      ? {
+          label: "Delete",
+          tone: "danger" as const,
+          onClick: () => {
+            const name = opts.name();
+            if (!name || !confirm(`Delete ${opts.kindLabel} "${name}"?`)) return;
+            void opts.remove(opts.id).then(
+              async () => {
+                blades.close();
+                await opts.invalidate();
+              },
+              (e: unknown) => setErr(describeError(e)),
+            );
+          },
+        }
+      : undefined;
+  return { destructive, err };
 }
 
 function SystemBody(props: { id: string }) {
   const qc = useQueryClient();
   const blades = useBlades();
+  const edit = useBladeEdit();
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const health = useQuery(() => ({ queryKey: systemHealthKey(props.id), queryFn: () => systemHealth(props.id) }));
-  const declared = useQuery(() => ({ queryKey: systemRolesKey(props.id), queryFn: () => systemRoles(props.id) }));
-  const metricsQ = useQuery(() => ({ queryKey: systemMetricsKey(props.id), queryFn: () => systemMetrics(props.id) }));
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
 
   const now = Date.now();
   const cluster = () => view.data?.systems?.find((s) => s.id === props.id);
   const row = () => (systems.data ?? []).find((s) => s.id === props.id);
   const alarms = createMemo(() => (health.data && view.data ? alarmRows(health.data, view.data, props.id) : []));
-  const body = createMemo(() => {
-    if (!health.data || !declared.data || !view.data) return undefined;
-    return componentCards(systemZoomVM(health.data, declared.data, view.data, props.id));
-  });
-  const kpis = createMemo(() => vitalRows(metricsQ.data ?? []));
 
-  const { draft, setDraft, err } = useEntityEdit({
+  const { destructive, err } = useDelete({
     kindLabel: "system",
     id: props.id,
     name: () => row()?.name,
-    label: () => (cluster() ? entityLabel(cluster()!) : ""),
     actions: () => row()?.actions ?? [],
-    save: (name, label) => updateSystem(name, { label }),
     remove: (id) => deleteSystem(id),
     invalidate: () => Promise.all([qc.invalidateQueries({ queryKey: [...SYSTEMS_KEY] }), qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] })]),
   });
-
-  const cards = () => {
-    const b = body();
-    if (!b) return [];
-    const grouped = b.groups.flatMap((g) => g.memberCards);
-    return [...grouped, ...b.cards];
-  };
 
   return (
     <div class="flex flex-col gap-4 text-sm">
@@ -186,10 +120,6 @@ function SystemBody(props: { id: string }) {
         <HealthBadge verdict={cluster()?.verdict ?? undefined} size="sm" />
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
       </div>
-      <BladeField bind="label" value={() => (cluster() ? entityLabel(cluster()!) : "")} draft={draft} onInput={setDraft} placeholder="Operator label" />
-      <QuickRow id="quick-name" label="Name" mono value={row()?.name ?? ""} jump={(row()?.actions ?? []).includes("rename") ? { label: "rename", to: `/systems/${props.id}?tab=configure&edit=1#identity` } : undefined} />
-      <QuickRow id="quick-classification" label="Standard" value={(row()?.standard as string) || "None (a one-off system)"} jump={(row()?.actions ?? []).includes("update") ? { label: "change", to: `/systems/${props.id}?tab=configure&edit=1#classification` } : undefined} />
-      <div data-testid="quick-tags"><TagAdder kind="system" name={props.id} canUpdate={(row()?.actions ?? []).includes("update")} canCreateKey={false} /></div>
       <Show when={alarms().length > 0}>
         <div class={section}>
           <span class={eyebrow}>Why</span>
@@ -205,66 +135,28 @@ function SystemBody(props: { id: string }) {
           </For>
         </div>
       </Show>
-      <Show when={health.data}>
-        <HealthHistory transitions={transitions(health.data)} verdict={cluster()?.verdict ?? undefined} compact />
-      </Show>
-      <Show when={cards().length > 0}>
-        <div class={section}>
-          <span class={eyebrow}>Components</span>
-          <For each={cards()}>
-            {(c) => (
-              <button type="button" class="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-base-content/5" onClick={() => blades.push({ kind: "component", id: c.componentId })}>
-                <span class="h-2 w-2 flex-none rounded-full" classList={{ "bg-error": c.down, "bg-success": !c.down }} />
-                <span class="min-w-0 truncate font-mono text-xs">{c.name}</span>
-                <span class="ml-auto flex flex-none gap-1">
-                  <For each={c.roles}>{(r) => <span class="badge badge-ghost badge-xs">{r.label}</span>}</For>
-                </span>
-              </button>
-            )}
-          </For>
-        </div>
-      </Show>
-      <Show when={kpis().length > 0}>
-        <div class={section}>
-          <span class={eyebrow}>Vitals</span>
-          <div class="flex flex-wrap gap-2">
-            <For each={kpis()}>
-              {(k) => (
-                <span class="inline-flex items-baseline gap-1.5 rounded-field border border-base-300 px-2 py-0.5">
-                  <span class="text-[10.5px] text-base-content/60">{k.label}</span>
-                  <span class="tnum text-xs font-semibold">{String(k.value)}</span>
-                </span>
-              )}
-            </For>
-          </div>
-        </div>
-      </Show>
+      <EntityForm kind="system" id={props.id} slot={edit} host="blade" destructive={destructive} />
     </div>
   );
 }
 
 function ComponentBody(props: { id: string }) {
   const qc = useQueryClient();
-  const navigate = useNavigate();
-  const blades = useBlades();
+  const edit = useBladeEdit();
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const alarmsQ = useQuery(() => ({ queryKey: componentAlarmsKey(props.id), queryFn: () => componentAlarms(props.id) }));
-  const memberships = useQuery(() => ({ queryKey: componentSystemsKey(props.id), queryFn: () => componentSystems(props.id) }));
 
   const now = Date.now();
   const row = () => (components.data ?? []).find((c) => c.id === props.id);
   const verdict = () => (view.data ? dotVerdict(view.data, props.id) : null);
   const active = createMemo(() => splitAlarms(alarmsQ.data ?? []).active);
-  const systems = createMemo(() => (view.data && memberships.data ? membershipRows(memberships.data, view.data) : []));
 
-  const { draft, setDraft, err } = useEntityEdit({
+  const { destructive, err } = useDelete({
     kindLabel: "component",
     id: props.id,
     name: () => row()?.name,
-    label: () => (row() ? entityLabel(row()!) : ""),
     actions: () => row()?.actions ?? [],
-    save: (name, label) => updateComponent(name, { label }),
     remove: (id) => deleteComponent(id),
     invalidate: () => Promise.all([qc.invalidateQueries({ queryKey: [...COMPONENTS_KEY] }), qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] })]),
   });
@@ -278,9 +170,6 @@ function ComponentBody(props: { id: string }) {
         <HealthBadge verdict={verdict() ?? undefined} size="sm" />
         <SinceLine since={leafAlarmSince(alarmsQ.data ?? [], now)} />
       </div>
-      <BladeField bind="label" value={() => (row() ? entityLabel(row()!) : "")} draft={draft} onInput={setDraft} placeholder="Operator label" />
-      <QuickRow id="quick-name" label="Name" mono value={row()?.name ?? ""} jump={(row()?.actions ?? []).includes("rename") ? { label: "rename", to: `/components/${props.id}?tab=configure&edit=1#identity` } : undefined} />
-      <div data-testid="quick-tags"><TagAdder kind="component" name={props.id} canUpdate={(row()?.actions ?? []).includes("update")} canCreateKey={false} /></div>
       <Show when={active().length > 0}>
         <div class={section}>
           <span class={eyebrow}>Why</span>
@@ -289,26 +178,14 @@ function ComponentBody(props: { id: string }) {
           </For>
         </div>
       </Show>
-      <Show when={systems().length > 0}>
-        <div class={section}>
-          <span class={eyebrow}>Serves</span>
-          <For each={systems()}>
-            {(r) => (
-              <button type="button" class="cursor-pointer rounded px-1 py-0.5 text-left text-xs hover:bg-base-content/5" onClick={() => { blades.close(); navigate(`/systems/${r.systemId}`); }}>
-                {r.label}
-              </button>
-            )}
-          </For>
-        </div>
-      </Show>
+      <EntityForm kind="component" id={props.id} slot={edit} host="blade" destructive={destructive} />
     </div>
   );
 }
 
 function LocationBody(props: { id: string }) {
   const qc = useQueryClient();
-  const navigate = useNavigate();
-  const blades = useBlades();
+  const edit = useBladeEdit();
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const health = useQuery(() => ({ queryKey: locationHealthKey(props.id), queryFn: () => locationHealth(props.id) }));
@@ -316,21 +193,12 @@ function LocationBody(props: { id: string }) {
   const now = Date.now();
   const row = () => (locations.data ?? []).find((l) => l.id === props.id);
   const anchor = () => view.data?.locations?.find((l) => l.id === props.id);
-  const clusters = createMemo(() => (view.data ? bandsOf(view.data, byChildOfLocation(props.id)).flatMap((b) => b.clusters) : []));
-  const worst = createMemo(() => clusters().filter((c) => c.verdict !== null && c.verdict !== "healthy"));
-  const parentLabel = () => {
-    const pid = (row() as { parent_id?: string | null } | undefined)?.parent_id;
-    const parent = pid ? (locations.data ?? []).find((l) => l.id === pid) : undefined;
-    return parent ? entityLabel(parent) : "Root";
-  };
 
-  const { draft, setDraft, err } = useEntityEdit({
+  const { destructive, err } = useDelete({
     kindLabel: "location",
     id: props.id,
     name: () => row()?.name,
-    label: () => (row() ? entityLabel(row()!) : ""),
     actions: () => row()?.actions ?? [],
-    save: (name, label) => updateLocation(name, { label }),
     remove: (id) => deleteLocation(id),
     invalidate: () => Promise.all([qc.invalidateQueries({ queryKey: [...LOCATIONS_KEY] }), qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] })]),
   });
@@ -344,32 +212,7 @@ function LocationBody(props: { id: string }) {
         <HealthBadge verdict={anchor()?.verdict ?? undefined} size="sm" />
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
       </div>
-      <BladeField bind="label" value={() => (row() ? entityLabel(row()!) : "")} draft={draft} onInput={setDraft} placeholder="Operator label" />
-      <QuickRow id="quick-name" label="Name" mono value={row()?.name ?? ""} jump={(row()?.actions ?? []).includes("rename") ? { label: "rename", to: `/locations/${props.id}?tab=configure&edit=1#identity` } : undefined} />
-      <QuickRow id="quick-placement" label="Parent" value={parentLabel()} jump={(row()?.actions ?? []).includes("move") ? { label: "move", to: `/locations/${props.id}?tab=configure&edit=1#placement` } : undefined} />
-      <div data-testid="quick-tags"><TagAdder kind="location" name={props.id} canUpdate={(row()?.actions ?? []).includes("update")} canCreateKey={false} /></div>
-      <div class={section}>
-        <span class={eyebrow}>Beneath</span>
-        <span class="text-xs text-base-content/60">
-          {clusters().length === 1 ? "1 system" : `${clusters().length} systems`}, {worst().length} need attention
-        </span>
-      </div>
-      <Show when={worst().length > 0}>
-        <div class={section}>
-          <span class={eyebrow}>Needs attention</span>
-          <For each={worst()}>
-            {(c) => (
-              <button type="button" class="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-base-content/5" onClick={() => { blades.close(); navigate(`/systems/${c.systemId}`); }}>
-                <HealthBadge verdict={c.verdict ?? undefined} size="xs" />
-                <span class="min-w-0 truncate text-xs">{c.label}</span>
-              </button>
-            )}
-          </For>
-        </div>
-      </Show>
-      <Show when={health.data}>
-        <HealthHistory transitions={transitions(health.data)} verdict={anchor()?.verdict ?? undefined} compact />
-      </Show>
+      <EntityForm kind="location" id={props.id} slot={edit} host="blade" destructive={destructive} />
     </div>
   );
 }

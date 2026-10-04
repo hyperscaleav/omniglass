@@ -79,7 +79,7 @@ export type BladeDestructive = { label: string; tone?: "danger" | "warn" | "ok";
 // archive or purge sitting among neutral secondary actions).
 export type BladeSecondary = { label: string; icon?: JSX.Element; tone?: "danger"; onClick: () => void };
 // The one prominent right-side footer action for a blade whose edit is NOT the
-// inline pencil model but a separate flow (an inventory row edits in a Drawer, a
+// inline pencil model but a separate flow (a Files row edits in a Drawer, a
 // create blade submits a form): a filled button (e.g. Edit, Create interface).
 // Shown only when not in inline edit. `disabled` and `busy` let a create blade
 // gate its own submit on validity and spin while it is in flight, so a form

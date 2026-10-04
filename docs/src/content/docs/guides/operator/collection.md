@@ -8,7 +8,7 @@ node** runs the probes, a component's **interface** is the API the node reaches 
 **Reachability** panel shows the verdict, and its **Events** and **Logs** panels show recent occurrences
 the node ships back. This page walks the console surfaces; the model behind them is
 [data collection](/architecture/collection/), and every action here has the same
-[scope](/guides/operator/inventory/) and permission checks as the rest of the console.
+[scope](/guides/operator/#what-you-see-is-your-scope) and permission checks as the rest of the console.
 
 ## Nodes
 
@@ -30,7 +30,7 @@ last-heartbeat time, and its tags. A row opens the node's detail.
   placement picked from the fleet's locations, not a scope); the **name is immutable** (it is
   the fleet address and enrollment identity). The location clears if that location is deleted.
 - The detail carries a **Tags** panel: with `node:update`, edit mode adds and removes governed
-  [tags](/guides/operator/inventory/) (keys whose vocabulary allows nodes), the same tag editor the
+  [tags](/guides/admin/tags/) (keys whose vocabulary allows nodes), the same tag editor the
   component and location details use. The node list shows a Tags column and filters by any tag key.
 - With `node:delete`, **Delete** (the destructive action, left of the footer) **decommissions** the node after a confirm: its interfaces, derived tasks, tags, and enrollment are removed. The telemetry it collected for components stays.
 - **Enroll** (or **Re-enroll**, if it is already enrolled) is a secondary action in the detail's
@@ -115,6 +115,6 @@ log lines never become events.
 
 Where a reachability verdict is a sampled state, an event or a log line is a past occurrence, so the
 panels are read differently: the verdict answers "is it reachable *now*", the logs and events answer
-"what did it *say*, and when". Both land under the same [scope](/guides/operator/inventory/) and owner
+"what did it *say*, and when". Both land under the same [scope](/guides/operator/#what-you-see-is-your-scope) and owner
 checks as every other reading, so an out-of-scope component's events and logs are a non-disclosing 404,
 exactly like its reachability. Every value is a real occurrence from the node.
