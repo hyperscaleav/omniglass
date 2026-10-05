@@ -231,7 +231,10 @@ describe("a folder place (#872)", () => {
     expect(rows).toEqual(["The Shed", "The Yard", "Boardroom A"]);
     expect(rows).toContain("The Yard");
     expect(rows).toContain("The Shed");
-    expect(within(beneath).getByTestId("explore-counts").textContent).toMatch(/^4\s*systems/);
+    // Counted over what the list shows: the places beneath, not hq's own two
+    // systems, which have their cards above (a count the filter could not
+    // narrow to was the review's finding).
+    expect(within(beneath).getByTestId("explore-counts").textContent).toMatch(/^2\s*systems/);
   });
 
   it("offers the create path under an empty folder", () => {

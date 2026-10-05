@@ -136,15 +136,22 @@ export default function OutlineWorkspace(props: { rootId?: string }) {
     const rest = chips().filter((c) => c.key !== "verdict");
     setChips(attentionOn() ? rest : [...rest, { key: "verdict", op: "eq", values: ATTENTION }]);
   };
+  // Rooted, the counts cover what the list shows: the places beneath the
+  // root, never the root's own systems (their cards sit above the outline,
+  // and a count the filter cannot narrow to is a broken promise).
+  const rootedLights = () => roots().reduce((a, n) => ({
+    healthy: a.healthy + n.lights.healthy, incomplete: a.incomplete + n.lights.incomplete,
+    degraded: a.degraded + n.lights.degraded, outage: a.outage + n.lights.outage,
+  }), { healthy: 0, incomplete: 0, degraded: 0, outage: 0 });
   const needing = () => {
     if (!props.rootId) return (view.data?.systems ?? []).filter((s) => ATTENTION.includes(s.verdict)).length;
-    const l = root()?.lights;
-    return l ? l.incomplete + l.degraded + l.outage : 0;
+    const l = rootedLights();
+    return l.incomplete + l.degraded + l.outage;
   };
   const systemCount = () => {
     if (!props.rootId) return outline().systemCount;
-    const l = root()?.lights;
-    return l ? l.healthy + l.incomplete + l.degraded + l.outage : 0;
+    const l = rootedLights();
+    return l.healthy + l.incomplete + l.degraded + l.outage;
   };
 
   const filterKeys = createMemo<FilterKey<OutlineEntry>[]>(() => {

@@ -61,10 +61,14 @@ describe("the path names each place once", () => {
     expect(crumbs[2]).toMatchObject({ kind: "system", id: uuidFor("s-aud") });
   });
 
-  it("walks a component placed apart from its system to its own place, then names the system", () => {
+  // A system reads as its place, so appending it after a different place
+  // read "Hall / Rack Room / Auditorium", as if the auditorium were inside
+  // the rack room. The path is where the component sits; the systems it
+  // serves are listed on its view.
+  it("walks a component placed apart from its system to its own place, and stops there", () => {
     const crumbs = componentCrumbs(view, uuidFor("rack"), uuidFor("s-aud"));
     expect(crumbs.map((c) => `${c.kind}:${c.label}`)).toEqual([
-      "location:East Campus", "location:Innovation Hall", "location:Rack Room", "system:Auditorium",
+      "location:East Campus", "location:Innovation Hall", "location:Rack Room",
     ]);
   });
 });

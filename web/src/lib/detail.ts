@@ -44,17 +44,20 @@ export function systemCrumbs(view: FleetView, systemId: string): Crumb[] {
   return systemsAtPlace(view, s.location).length === 1 ? chain.slice(0, -1) : chain;
 }
 
-// A component's path: the places down to where it sits, then its primary
-// system. Where that system is the only one at the component's own place, the
-// place and the system are one crumb (the system, whose view is the room's),
-// so the room is never named twice.
+// A component's path: the places down to where it sits. Where its primary
+// system is the only one at that place, the place and the system are one
+// crumb (the system, whose view is the room's), so the room is never named
+// twice. A system elsewhere is not appended: it reads as its own place, and
+// "Rack Room / Auditorium" would say the auditorium is inside the rack room.
+// The systems a component serves are listed on its view.
 export function componentCrumbs(view: FleetView, locationId: string | null | undefined, primarySystemId: string | null | undefined): Crumb[] {
   const chain = locationId ? placeCrumbs(view, locationId) : [];
   const s = primarySystemId ? (view.systems ?? []).find((x) => x.id === primarySystemId) : undefined;
   if (!s) return chain;
   const crumb: Crumb = { kind: "system", id: s.id, label: entityLabel(s) };
   if (s.location && s.location === locationId && systemsAtPlace(view, s.location).length === 1) return [...chain.slice(0, -1), crumb];
-  return [...chain, crumb];
+  if (!locationId) return [crumb];
+  return chain;
 }
 
 // The roles a component staffs in one system, by label: read from the

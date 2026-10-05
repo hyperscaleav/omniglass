@@ -191,9 +191,12 @@ function ComponentBody(props: { id: string }) {
   const row = () => (components.data ?? []).find((c) => c.id === props.id);
   const verdict = () => (view.data ? dotVerdict(view.data, props.id) : null);
   const active = createMemo(() => splitAlarms(alarmsQ.data ?? []).active);
-  // The systems it serves, by uuid, each with the role it fills there.
+  // The systems it serves, by uuid, each with the role it fills there, the
+  // primary first (the read orders by name, and the primary is the one whose
+  // place stands in for a component with none of its own).
   const served = createMemo(() =>
-    (members.data ?? [])
+    [...(members.data ?? [])]
+      .sort((a, b) => Number(!!b.primary) - Number(!!a.primary))
       .map((m) => (view.data?.systems ?? []).find((s) => s.id === m.system_id || (!m.system_id && s.name === m.system)))
       .filter((s): s is NonNullable<typeof s> => !!s),
   );

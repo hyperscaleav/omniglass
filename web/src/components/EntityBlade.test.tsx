@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, fireEvent, within, cleanup } from "@solidjs/testing-library";
+import { render, screen, fireEvent, within, cleanup, waitFor } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import BladeStack from "./BladeStack";
@@ -119,7 +119,7 @@ function mountBlade(ref: { kind: string; id: string }) {
       </Router>
     </QueryClientProvider>
   ));
-  return { ...result, controller: () => controller };
+  return { ...result, controller: () => controller, qc };
 }
 
 afterEach(cleanup);
@@ -197,6 +197,27 @@ describe("the component blade", () => {
     fireEvent.click(screen.getByRole("button", { name: "Expand" }));
     expect(await screen.findByTestId("component-page")).toBeTruthy();
     expect(window.location.pathname).toBe(`/web/components/${uuidFor("eb-c-mic")}`);
+  });
+});
+
+describe("the component blade's place, by its primary system", () => {
+  // Memberships come back by system name, not primary first: a component with
+  // no place of its own must show its PRIMARY system's place, as its page does.
+  it("shows the primary system's place for a component placed nowhere of its own", async () => {
+    const r = mountBlade({ kind: "component", id: uuidFor("eb-c-mic") });
+    r.qc.setQueryData([...COMPONENTS_KEY], [{ id: uuidFor("eb-c-mic"), name: "mic-1", label: "", actions: [] }]);
+    r.qc.setQueryData([...FLEET_VIEW_KEY], {
+      ...view,
+      locations: [...(view.locations ?? []), { id: uuidFor("eb-other"), name: "annex", label: "Annex", location_type: "room", parent: "", verdict: "healthy" }],
+      systems: [...(view.systems ?? []), { id: uuidFor("eb-a-sys"), name: "aaa", label: "Annex", location: uuidFor("eb-other"), verdict: "healthy", dots: [] }],
+    });
+    r.qc.setQueryData([...componentSystemsKey(uuidFor("eb-c-mic"))], [
+      { system_id: uuidFor("eb-a-sys"), system: "aaa", primary: false },
+      { system_id: uuidFor("eb-sys"), system: "boardroom", primary: true },
+    ]);
+    const blade = await screen.findByRole("dialog");
+    await waitFor(() => expect(within(blade).getByTestId("place-provenance").textContent).toBe("from its system"));
+    expect(within(within(blade).getByTestId("place-card")).getByText("Boardroom A")).toBeTruthy();
   });
 });
 
