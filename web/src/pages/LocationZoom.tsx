@@ -51,7 +51,11 @@ export default function LocationZoom() {
   const place = createMemo(() => (view.data ? locationIndex(view.data).get(id()) : undefined));
   const type = createMemo(() => (types.data ?? []).find((t) => t.name === place()?.location_type));
   const tags = () => (locations.data ?? []).find((l) => l.id === id())?.effective_tags ?? {};
-  const systemsHere = createMemo(() => (view.data && place() ? systemsAtPlace(view.data, id()) : []));
+  // By id, compared by value: the cards key on these strings, so a fresh
+  // fleet read updates a card in place rather than rebuilding it.
+  const systemsHere = createMemo(() => (view.data && place() ? systemsAtPlace(view.data, id()).map((s) => s.id) : []), undefined, {
+    equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
+  });
   const hasBeneath = createMemo(() => (view.data ? (childrenIndex(view.data).get(id()) ?? []).length > 0 : false));
 
   const tabs = createMemo(() => [
@@ -125,7 +129,7 @@ export default function LocationZoom() {
                   <section class="flex flex-col gap-2">
                     <Eyebrow label={systemsHere().length === 1 ? "System here" : "Systems here"} hint="Each system bound to this place, in brief. Open one for its components, map, data and history." />
                     <div class="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-3">
-                      <For each={systemsHere()}>{(s) => <SystemSummary system={s} />}</For>
+                      <For each={systemsHere()}>{(sid) => <SystemSummary systemId={sid} />}</For>
                     </div>
                   </section>
                 </Show>

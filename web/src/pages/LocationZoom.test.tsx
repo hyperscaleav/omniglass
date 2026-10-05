@@ -207,6 +207,21 @@ describe("a folder place (#872)", () => {
     expect(window.location.pathname).toBe(`/web/systems/${uuidFor("lz-s-lobby")}`);
   });
 
+  // A fresh fleet read can hand back a new object for the same system.
+  // Iterating the objects re-created each brief card, whose queries refetched
+  // on mount, whose answers were new objects again: a request storm the live
+  // console found (hundreds of /views/fleet reads a second). The cards key on
+  // ids, so a system's card is updated in place, never rebuilt.
+  it("keeps each system's card, updated in place, through a fresh fleet read", async () => {
+    const r = mount();
+    const before = screen.getByTestId(`system-summary-${uuidFor("lz-s-lobby")}`);
+    const next = structuredClone(view);
+    next.systems!.find((x) => x.id === uuidFor("lz-s-lobby"))!.verdict = "degraded";
+    r.qc.setQueryData([...FLEET_VIEW_KEY], next);
+    await waitFor(() => expect(within(screen.getByTestId(`system-summary-${uuidFor("lz-s-lobby")}`)).getByText("degraded")).toBeTruthy());
+    expect(screen.getByTestId(`system-summary-${uuidFor("lz-s-lobby")}`)).toBe(before);
+  });
+
   it("lists what is beneath it as the outline rooted here, counted by systems", () => {
     mount();
     const beneath = screen.getByTestId("beneath");

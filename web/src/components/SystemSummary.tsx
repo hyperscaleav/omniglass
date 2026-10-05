@@ -2,7 +2,7 @@ import { For, Show, createMemo } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
-import { FLEET_VIEW_KEY, fleetView, type FleetSystem } from "../lib/fleet";
+import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { systemHealth, systemHealthKey } from "../lib/health";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { SYSTEMS_KEY, listSystems } from "../lib/systems";
@@ -17,31 +17,37 @@ import { durationText } from "../lib/timeline";
 // the why), its slot arithmetic only while something is missing, and how
 // many components it holds. Choosing it opens the system's own view, where
 // its place is the card of context.
-export default function SystemSummary(props: { system: FleetSystem }) {
+//
+// It takes the system's id, not its object, and reads the object itself: a
+// fresh fleet read can hand back a new object for the same system, and a
+// list iterating objects would rebuild the card (and refetch its reads) on
+// every one, which is a request storm.
+export default function SystemSummary(props: { systemId: string }) {
   const navigate = useNavigate();
   const now = Date.now();
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
-  const health = useQuery(() => ({ queryKey: systemHealthKey(props.system.id), queryFn: () => systemHealth(props.system.id), staleTime: 30_000 }));
+  const system = () => (view.data?.systems ?? []).find((x) => x.id === props.systemId);
+  const health = useQuery(() => ({ queryKey: systemHealthKey(props.systemId), queryFn: () => systemHealth(props.systemId), staleTime: 30_000 }));
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
   const standard = createMemo(() => {
-    const h = (systems.data ?? []).find((s) => s.id === props.system.id)?.standard;
+    const h = (systems.data ?? []).find((s) => s.id === props.systemId)?.standard;
     const row = h ? (standards.data ?? []).find((s) => s.name === h) : undefined;
     return row ? entityLabel(row) : h ?? "";
   });
-  const why = createMemo(() => (health.data && view.data ? alarmRows(health.data, view.data, props.system.id) : []));
+  const why = createMemo(() => (health.data && view.data ? alarmRows(health.data, view.data, props.systemId) : []));
   const strip = createMemo(() => (health.data ? slotStrip(health.data) : undefined));
-  const count = () => (props.system.dots ?? []).length;
+  const count = () => (system()?.dots ?? []).length;
   return (
     <button
       type="button"
-      data-testid={`system-summary-${props.system.id}`}
+      data-testid={`system-summary-${props.systemId}`}
       class="card flex cursor-pointer flex-col gap-2 border border-base-300 bg-base-200 p-4 text-left text-sm hover:border-primary/50"
-      onClick={() => navigate(`/systems/${props.system.id}`)}
+      onClick={() => navigate(`/systems/${props.systemId}`)}
     >
       <span class="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span class="font-semibold">{entityLabel(props.system)}</span>
-        <HealthBadge verdict={props.system.verdict ?? undefined} size="sm" />
+        <span class="font-semibold">{system() ? entityLabel(system()!) : ""}</span>
+        <HealthBadge verdict={system()?.verdict ?? undefined} size="sm" />
         <Show when={health.data && sinceOf(health.data, now)}>
           {(sc) => <span class="tabular-nums text-base-content/60">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
         </Show>
