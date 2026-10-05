@@ -293,7 +293,7 @@ const worst = (vs: (Verdict | null)[]): Verdict | null => {
   return w;
 };
 
-export function entriesOf(outline: Outline): OutlineEntry[] {
+export function entriesOf(outline: Outline, roots?: PlaceNode[]): OutlineEntry[] {
   const out: OutlineEntry[] = [];
   const visit = (n: PlaceNode, above: string[]) => {
     const own = n.chain[n.chain.length - 1].label;
@@ -330,9 +330,35 @@ export function entriesOf(outline: Outline): OutlineEntry[] {
     }
     for (const k of n.children) visit(k, below);
   };
-  for (const r of outline.roots) visit(r, []);
-  if (outline.unplaced) visit(outline.unplaced, []);
+  if (roots) for (const r of roots) visit(r, []);
+  else {
+    for (const r of outline.roots) visit(r, []);
+    if (outline.unplaced) visit(outline.unplaced, []);
+  }
   return out;
+}
+
+// One place's own node, unfolded (#872): what a place's detail view lists
+// beneath its card. A fold may have swallowed the place into a chain
+// ("Headquarters / West"); rooted at Headquarters, the rest of the chain is
+// its one child, and rooted at West the row is West alone. Null when the
+// outline holds no such place.
+export function rootAt(outline: Outline, id: string): PlaceNode | null {
+  const find = (ns: PlaceNode[]): PlaceNode | null => {
+    for (const n of ns) {
+      const idx = n.chain.findIndex((c) => c.id === id);
+      if (idx === n.chain.length - 1) return { ...n, chain: [n.chain[idx]] };
+      if (idx >= 0) {
+        const rest: PlaceNode = { ...n, chain: n.chain.slice(idx + 1) };
+        const own = n.chain[idx];
+        return { ...n, id: own.id, chain: [own], systems: [], groups: [], health: null, children: [rest], contents: n.contents, lights: n.lights };
+      }
+      const hit = find(n.children);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  return find(outline.roots);
 }
 
 // The rows to expand, top first, so the row with this id shows: a place's

@@ -11,6 +11,7 @@ import { STANDARDS_KEY } from "../lib/standards";
 import { PRODUCTS_KEY } from "../lib/products";
 import { SYSTEM_TYPES_KEY } from "../lib/system_types";
 import { TAGS_KEY } from "../lib/tags";
+import { systemRolesKey } from "../lib/system_roles";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
 
@@ -34,6 +35,10 @@ const owner: Me = { principal: { id: "u-root", kind: "human" }, human: { usernam
 const updaterOnly: Me = { principal: { id: "u-up", kind: "human" }, human: { username: "up" }, permissions: ["system:read", "system:update", "location:read", "location:update", "tag:read"], grants: [] };
 
 function mount(kind: "system" | "location", id: string, me: Me = owner, systemActions: string[] = ["create", "update", "delete"]) {
+  return mountHost(kind, id, "page", me, systemActions);
+}
+
+function mountHost(kind: "system" | "location", id: string, host: "page" | "blade", me: Me = owner, systemActions: string[] = ["create", "update", "delete"]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...ME_KEY], me);
   qc.setQueryData([...SYSTEMS_KEY], [
@@ -49,9 +54,10 @@ function mount(kind: "system" | "location", id: string, me: Me = owner, systemAc
     { id: uuidFor("t-building"), name: "building", label: "Building", allowed_parent_types: ["root", "campus"] },
     { id: uuidFor("t-room"), name: "room", label: "Room", allowed_parent_types: ["building", "campus"] },
   ]);
-  qc.setQueryData([...STANDARDS_KEY], [{ id: uuidFor("std"), name: "huddle-room", label: "Huddle Room" }]);
+  qc.setQueryData([...STANDARDS_KEY], [{ id: uuidFor("std"), name: "huddle-room", label: "Huddle Room Standard" }]);
   qc.setQueryData([...SYSTEM_TYPES_KEY], [{ id: uuidFor("st"), name: "huddle", label: "Huddle" }]);
   qc.setQueryData([...TAGS_KEY], []);
+  qc.setQueryData([...systemRolesKey(uuidFor("ef-sys"))], []);
   qc.setQueryData(["system-properties", uuidFor("ef-sys")], []);
   qc.setQueryData(["location-properties", uuidFor("ef-room")], []);
   window.history.pushState({}, "", "/web/x");
@@ -66,7 +72,7 @@ function mount(kind: "system" | "location", id: string, me: Me = owner, systemAc
             slot = createEditSlot();
             return (
               <BladesContext.Provider value={blades}>
-                <EntityForm kind={kind} id={id} slot={slot} host="page" />
+                <EntityForm kind={kind} id={id} slot={slot} host={host} />
               </BladesContext.Provider>
             );
           }}
@@ -85,12 +91,42 @@ describe("the one form, read", () => {
     const form = await screen.findByTestId("entity-form");
     const eyebrows = within(form).getAllByText(/^(Identity|Classification|Placement|Tags)$/).map((e) => e.textContent);
     expect(eyebrows).toEqual(["Identity", "Classification", "Placement", "Tags"]);
-    expect(within(form).getAllByText("huddle").length).toBeGreaterThan(0);
-    expect(within(form).getByText("huddle-room")).toBeTruthy();
+    // The registry's labels, never the handles (#870): the type and the
+    // standard read as an operator names them.
+    expect(within(form).getByText("Huddle")).toBeTruthy();
+    expect(within(form).getByText("Huddle Room Standard")).toBeTruthy();
+    expect(within(form).queryByText("huddle-room")).toBeNull();
     // Placement reads the location's label, resolved by id, so the label
     // shows twice: once as the system's own label, once as where it sits.
     expect(within(form).getAllByText("Huddle Room").length).toBe(2);
     expect(within(form).getByText("Where it sits")).toBeTruthy();
+  });
+});
+
+describe("the one form reads labels, not handles (#870)", () => {
+  it("names a location's type by its registry label", async () => {
+    mount("location", uuidFor("ef-room"));
+    const form = await screen.findByTestId("entity-form");
+    expect(within(form).getByText("Room")).toBeTruthy();
+    expect(within(form).queryByText("room")).toBeNull();
+  });
+});
+
+describe("the one form in a blade is the glance (#872)", () => {
+  // Configuration (roles, properties and their cascade) lives on the
+  // workspace's Configure tab; the blade keeps what an operator who landed
+  // from a row needs: identity, classification, placement, tags.
+  it("renders identity, classification, placement and tags, and none of the configuration panels", async () => {
+    mountHost("system", uuidFor("ef-sys"), "blade");
+    const form = await screen.findByTestId("entity-form");
+    const eyebrows = within(form).getAllByText(/^(Identity|Classification|Placement|Tags|Roles|Properties)$/).map((e) => e.textContent);
+    expect(eyebrows).toEqual(["Identity", "Classification", "Placement", "Tags"]);
+  });
+
+  it("keeps the configuration panels on the page host", async () => {
+    mountHost("system", uuidFor("ef-sys"), "page");
+    const form = await screen.findByTestId("entity-form");
+    expect(within(form).getByText("Roles")).toBeTruthy();
   });
 });
 

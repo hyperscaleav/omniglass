@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ancestorsOf, buildOutline, entriesOf, type OutlineInput, type PlaceNode } from "./outline";
+import { ancestorsOf, buildOutline, entriesOf, rootAt, type OutlineInput, type PlaceNode } from "./outline";
 import { type FleetView } from "./fleet";
 import { uuidFor } from "./testids";
 
@@ -237,5 +237,46 @@ describe("filter entries and reveal", () => {
     expect(ancestorsOf(o, uuidFor("nope"))).toEqual([]);
     // A system is its place's own row, so only the places above it open.
     expect(ancestorsOf(o, uuidFor("s-ba"))).toEqual([uuidFor("hq"), uuidFor("w")]);
+  });
+});
+
+describe("an outline rooted at one place (#872)", () => {
+  const view = {
+    locations: [
+      loc("hq", "Headquarters", "campus"), loc("w", "West", "building", "hq"),
+      loc("l2", "Level 2", "floor", "w"), loc("l3", "Level 3", "floor", "w"),
+      loc("ba", "Boardroom A", "room", "l2"), loc("lob", "Lobby", "room", "w"),
+    ],
+    systems: [sys("s-ba", "Boardroom A", "ba", "degraded"), sys("s-lob", "Lobby", "lob", "healthy")],
+  };
+
+  it("lists a place's own children, unfolded, so the place itself heads nothing", () => {
+    const o = buildOutline(input(view));
+    const at = rootAt(o, uuidFor("w"))!;
+    expect(at.chain.map((c) => c.label)).toEqual(["West"]);
+    expect(at.children.map((c) => c.chain.map((x) => x.label).join(" / "))).toEqual(["Level 2 / Boardroom A", "Level 3", "Lobby"]);
+    expect(at.lights).toEqual({ healthy: 1, incomplete: 0, degraded: 1, outage: 0 });
+  });
+
+  it("roots at a place a fold swallowed, keeping the rest of the chain as its child", () => {
+    // Headquarters holds only West, so the tree folds them into one row; the
+    // campus's own view still shows West beneath it.
+    const o = buildOutline(input(view));
+    expect(o.roots[0].chain.map((c) => c.label)).toEqual(["Headquarters", "West"]);
+    const at = rootAt(o, uuidFor("hq"))!;
+    expect(at.chain.map((c) => c.label)).toEqual(["Headquarters"]);
+    expect(at.children.map((c) => c.chain.map((x) => x.label).join(" / "))).toEqual(["West"]);
+    expect(at.children[0].children.length).toBe(3);
+  });
+
+  it("answers nothing for a place the outline does not hold", () => {
+    expect(rootAt(buildOutline(input(view)), uuidFor("nowhere"))).toBeNull();
+  });
+
+  it("builds filter entries under a rooted subtree, paths starting below the root", () => {
+    const o = buildOutline(input(view));
+    const es = entriesOf(o, rootAt(o, uuidFor("w"))!.children);
+    expect(es.find((e) => e.label === "Boardroom A")!.path).toEqual(["Level 2"]);
+    expect(es.some((e) => e.label === "West")).toBe(false);
   });
 });

@@ -137,6 +137,13 @@ export default function EntityForm(props: {
   const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards, enabled: props.kind === "system" }));
   const systemTypes = useQuery(() => ({ queryKey: SYSTEM_TYPES_KEY, queryFn: listSystemTypes, enabled: props.kind === "system" }));
   const locationTypes = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes, enabled: props.kind === "location" }));
+  const products = useQuery(() => ({ queryKey: PRODUCTS_KEY, queryFn: listProducts, enabled: props.kind === "component" }));
+  // A handle reads as its registry row's label (#870): the operator's word for
+  // a type, a standard or a product, never the machine identifier behind it.
+  const labelIn = (list: { name: string; label?: string }[] | undefined, handle: string) => {
+    const hit = (list ?? []).find((x) => x.name === handle);
+    return hit ? entityLabel(hit) : handle;
+  };
 
   const row = createMemo<Record<string, unknown> | undefined>(() => {
     const list = props.kind === "system" ? systems.data : props.kind === "location" ? locations.data : components.data;
@@ -348,7 +355,7 @@ export default function EntityForm(props: {
         <div class={SECTION}>
           <span class={EYEBROW}>Classification</span>
           <Show when={props.kind === "system"}>
-            <BladeField label="System type" edit={slot} value={() => (row()?.system_type as string) || "Unclassified"}
+            <BladeField label="System type" edit={slot} value={() => (row()?.system_type ? labelIn(systemTypes.data, row()!.system_type as string) : "Unclassified")}
               children={slot.editing() ? (
                 // The catalogs answer after ?edit=1 opened the editor on a deep
                 // link, and a <select> keeps no value it has no option for, so
@@ -360,7 +367,7 @@ export default function EntityForm(props: {
                 </select>
               ) : undefined}
             />
-            <BladeField label="Standard" edit={slot} value={() => (row()?.standard as string) || "None (a one-off system)"}
+            <BladeField label="Standard" edit={slot} value={() => (row()?.standard ? labelIn(standards.data, row()!.standard as string) : "None (a one-off system)")}
               info="The blueprint this system is built to. Clearing it makes the system a one-off."
               children={slot.editing() ? (
                 <select ref={bindSelectValue(standard, () => standards.data)} class="select select-bordered w-full" onChange={(e) => setStandard(e.currentTarget.value)}>
@@ -371,7 +378,7 @@ export default function EntityForm(props: {
             />
           </Show>
           <Show when={props.kind === "location"}>
-            <BladeField label="Location type" edit={slot} value={() => (row()?.location_type as string) ?? ""}
+            <BladeField label="Location type" edit={slot} value={() => labelIn(locationTypes.data, (row()?.location_type as string) ?? "")}
               children={slot.editing() ? (
                 <select ref={bindSelectValue(locationType, () => locationTypes.data)} class="select select-bordered w-full" onChange={(e) => setLocationType(e.currentTarget.value)}>
                   <For each={locationTypes.data ?? []}>{(t) => <option value={t.name}>{entityLabel(t)}</option>}</For>
@@ -380,14 +387,8 @@ export default function EntityForm(props: {
             />
           </Show>
           <Show when={props.kind === "component"}>
-            <BladeField label="Product" edit={slot} value={() => (row()?.product as string) || "generic-device"} mono
-              read={
-                <span class="flex flex-col gap-0.5">
-                  <span class="font-data text-sm">{(row()?.product as string) || "generic-device"}</span>
-                  <span class="text-xs text-base-content/50">Fixed at creation: a component is the product it is. Replacing hardware is a new component.</span>
-                </span>
-              }
-              hint="Fixed at creation: a component is the product it is. Replacing hardware is a new component."
+            <BladeField label="Product" edit={slot} value={() => labelIn(products.data, (row()?.product as string) || "generic-device")}
+              info="Fixed at creation: a component is the product it is. Replacing hardware is a new component."
             />
           </Show>
         </div>
@@ -420,7 +421,13 @@ export default function EntityForm(props: {
           </Show>
         </div>
 
-        <div class={SECTION}>{panels()}</div>
+        {/* The kind's panels are configuration (roles, properties and their
+            cascade, reconciliation, interfaces): the page host's Configure tab
+            carries them, and the blade stays the glance an operator landed on
+            from a row (#872). */}
+        <Show when={props.host !== "blade"}>
+          <div class={SECTION}>{panels()}</div>
+        </Show>
 
         <div class={SECTION}>
           <TagAdder kind={props.kind} name={props.id} canUpdate={slot.editing() && canUpdate()} canCreateKey={can(me.data, "tag", "create")} />
