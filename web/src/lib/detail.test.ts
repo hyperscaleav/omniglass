@@ -114,6 +114,19 @@ describe("a system's components as rows", () => {
     expect(m.rows[1].noRole).toBe(true);
   });
 
+  // A staffed seat whose occupant is down is a failure the alarms explain,
+  // not an empty slot: the live console drew "empty slot" under a role whose
+  // one device had dropped off the network.
+  it("draws an empty slot only for a seat nobody staffs, never for a down occupant", () => {
+    const m = memberModel({ cards: [], groups: [
+      { name: "dsp", label: "DSP", quorum: 1, satisfying: 0, short: 1, spare: 0, impact: "degraded", members: ["dsp-1"], memberCards: [
+        { componentId: "c-dsp", name: "dsp-1", down: true, shared: [], roles: [{ label: "DSP" }], noRole: false },
+      ] },
+    ] }, ctx);
+    expect(m.groups[0].empty).toBe(0);
+    expect(m.groups[0].tone).toBe("degraded");
+  });
+
   it("groups a role only where it says something a column cannot, with its arithmetic and its gap", () => {
     const m = memberModel(body, ctx);
     expect(m.groups.map((g) => [g.label, g.arithmetic, g.tone, g.empty])).toEqual([

@@ -117,7 +117,7 @@ export default function LocationZoom() {
                 <span class="flex-none text-base-content/50"><Dynamic component={resolveIcon(type()?.icon || "map-pin")} size={16} /></span>
                 <span data-testid="place-type" class="text-base-content/70">{type() ? entityLabel(type()!) : place()?.location_type}</span>
               </span>
-              <TagPills tags={tags()} />
+              <Show when={Object.keys(tags()).length > 0}><TagPills tags={tags()} wrap /></Show>
             </div>
             <TabRail tabs={tabs()} activeKey={tab} />
             <Show when={tab() === "configure"}>

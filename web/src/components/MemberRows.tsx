@@ -1,6 +1,6 @@
 import { For, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
-import { HealthSlots, NARROW_HIDDEN, OUTLINE_COLS, OUTLINE_FRAME, ROOMY_ONLY, WIDE_ONLY } from "./Outline";
+import { HealthGlyph, NARROW_HIDDEN, OUTLINE_FRAME, ROOMY_ONLY, WIDE_ONLY } from "./Outline";
 import { LayoutDashboard, resolveIcon } from "./icons";
 import type { MemberGroup, MemberRow } from "../lib/detail";
 
@@ -9,6 +9,13 @@ import type { MemberGroup, MemberRow } from "../lib/detail";
 // name, role, product, the alarm behind a red light, health. A role earns a
 // header only where it says something a column cannot (lib/detail's
 // memberModel); its gap is drawn as empty slots beneath it.
+
+// The outline's grid, re-measured for members: a role reads in words a
+// type label rarely needs ("Confidence Display"), and a member's health is one
+// glyph, never four counted slots. The same container tiers give way in the
+// same order: product, then role, then detail.
+const MEMBER_COLS =
+  "grid-cols-[minmax(0,1fr)_12rem_11rem_12rem_3rem] @max-[56rem]:grid-cols-[minmax(0,1fr)_12rem_10rem_3rem] @max-[40rem]:grid-cols-[minmax(0,1fr)_9rem_3rem] @max-[28rem]:grid-cols-[minmax(0,1fr)_3rem]";
 
 const TONE: Record<NonNullable<MemberGroup["tone"]>, string> = {
   incomplete: "text-incomplete",
@@ -22,7 +29,7 @@ function Row(props: { row: MemberRow; depth: number; onOpen: (id: string) => voi
     <button
       type="button"
       data-testid={`member-${r().id}`}
-      class={`grid w-full ${OUTLINE_COLS} h-9 cursor-pointer items-center px-4 text-left outline-none hover:bg-base-content/[0.03] focus-visible:shadow-[inset_0_0_0_1px_var(--color-primary)]`}
+      class={`grid w-full ${MEMBER_COLS} h-9 cursor-pointer items-center px-4 text-left outline-none hover:bg-base-content/[0.03] focus-visible:shadow-[inset_0_0_0_1px_var(--color-primary)]`}
       onClick={() => props.onOpen(r().id)}
     >
       <span class="flex min-w-0 items-center gap-2 pr-4" style={{ "padding-left": `${props.depth * 22}px` }}>
@@ -35,8 +42,7 @@ function Row(props: { row: MemberRow; depth: number; onOpen: (id: string) => voi
       <span class={`truncate pr-4 text-base-content/55 ${ROOMY_ONLY}`}>{r().noRole ? "no role" : r().role}</span>
       <span class={`truncate pr-4 text-base-content/75 ${WIDE_ONLY}`}>{r().product}</span>
       <span class={`truncate pr-4 ${NARROW_HIDDEN}`} classList={{ "text-error": !!r().alarm, "text-base-content/55": !r().alarm }} title={r().alarm}>{r().alarm ?? ""}</span>
-      <span><HealthSlots single={r().health} /></span>
-      <span />
+      <span><HealthGlyph verdict={r().health} /></span>
     </button>
   );
 }
@@ -44,19 +50,18 @@ function Row(props: { row: MemberRow; depth: number; onOpen: (id: string) => voi
 export default function MemberRows(props: { rows: MemberRow[]; groups: MemberGroup[]; onOpen: (id: string) => void }) {
   return (
     <div data-testid="member-rows" class={`${OUTLINE_FRAME} rounded-box border border-base-300 bg-base-100`}>
-      <div class={`grid ${OUTLINE_COLS} h-8 items-center border-b border-base-300 px-4 text-xs font-medium text-base-content/40`} aria-hidden="true">
+      <div class={`grid ${MEMBER_COLS} h-8 items-center border-b border-base-300 px-4 text-xs font-medium text-base-content/40`} aria-hidden="true">
         <span style={{ "padding-left": "24px" }}>Component</span>
         <span class={ROOMY_ONLY}>Role</span>
         <span class={WIDE_ONLY}>Product</span>
         <span class={NARROW_HIDDEN}>Detail</span>
         <span>Health</span>
-        <span />
       </div>
       <For each={props.rows}>{(r) => <Row row={r} depth={0} onOpen={props.onOpen} />}</For>
       <For each={props.groups}>
         {(g) => (
           <div data-testid={`rolegroup-${g.key}`} role="group" aria-label={g.label}>
-            <div class={`grid ${OUTLINE_COLS} h-9 items-center px-4`}>
+            <div class={`grid ${MEMBER_COLS} h-9 items-center px-4`}>
               <span class="flex min-w-0 items-center gap-2 pr-4">
                 <span class="flex-none text-base-content/35"><LayoutDashboard size={16} /></span>
                 <span class="truncate text-[13px] font-medium text-base-content/70">{g.label}</span>
@@ -66,12 +71,11 @@ export default function MemberRows(props: { rows: MemberRow[]; groups: MemberGro
               <span class={WIDE_ONLY} />
               <span class={NARROW_HIDDEN} />
               <span />
-              <span />
             </div>
             <For each={g.members}>{(r) => <Row row={r} depth={1} onOpen={props.onOpen} />}</For>
             <For each={Array.from({ length: g.empty })}>
               {() => (
-                <div data-testid="empty-slot" class={`grid ${OUTLINE_COLS} h-9 items-center px-4`}>
+                <div data-testid="empty-slot" class={`grid ${MEMBER_COLS} h-9 items-center px-4`}>
                   <span class="flex items-center gap-2 pr-4" style={{ "padding-left": "22px" }}>
                     <span class="h-4 w-4 flex-none rounded border border-dashed border-base-content/30" aria-hidden="true" />
                     <span class="text-[13px] italic" classList={{ [TONE[g.tone ?? "incomplete"]]: true }}>empty slot</span>
@@ -79,7 +83,6 @@ export default function MemberRows(props: { rows: MemberRow[]; groups: MemberGro
                   <span class={ROOMY_ONLY} />
                   <span class={WIDE_ONLY} />
                   <span class={NARROW_HIDDEN} />
-                  <span />
                   <span />
                 </div>
               )}

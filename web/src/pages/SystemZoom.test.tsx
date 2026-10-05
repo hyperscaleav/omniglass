@@ -273,7 +273,9 @@ describe("the components-first body (#790)", () => {
     const g = screen.getByTestId("rolegroup-room-mic");
     expect(within(g).getByText(/1 of 2/)).toBeTruthy();
     expect(within(g).getByTestId(`member-${uuidFor("szp-c-mic")}`)).toBeTruthy();
-    expect(within(g).getAllByTestId("empty-slot").length).toBe(1);
+    // Both seats are staffed; the down mic still holds its seat, so the gap
+    // is the arithmetic's to name, and no slot is drawn empty.
+    expect(within(g).queryAllByTestId("empty-slot").length).toBe(0);
   });
 
   it("a no-role member is a row saying so, not a strip of chips", () => {

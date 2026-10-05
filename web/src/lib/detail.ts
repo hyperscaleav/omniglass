@@ -126,7 +126,9 @@ export function memberModel(body: SystemBody, ctx: MemberContext): { rows: Membe
         c.roles.find((r) => r.label === g.label)?.position ?? "",
         ...c.roles.filter((r) => r.label !== g.label).map((r) => (r.position ? `${r.label} (${r.position})` : r.label)),
       ].filter(Boolean).join(", "))),
-      empty: g.short,
+      // Seats nobody staffs: a down occupant still holds its seat, and its
+      // failure is the alarms' to explain, not a gap.
+      empty: Math.max(0, g.quorum - g.members.length),
     };
   });
   return { rows, groups };

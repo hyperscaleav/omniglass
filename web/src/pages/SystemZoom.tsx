@@ -466,9 +466,11 @@ export default function SystemZoom() {
                   </section>
                   <Show when={mapDecl()}>
                     {(decl) => (
-                      <section class="flex flex-col gap-2">
+                      // SystemMap pads itself; the negative margin lines its
+                      // eyebrow up with the sections around it.
+                      <div class="-m-4">
                         <SystemMap decl={decl()} markers={mapMarkers(decl(), z())} onOpen={openComponent} />
-                      </section>
+                      </div>
                     )}
                   </Show>
         <Show when={kpiMetrics().length > 0}>

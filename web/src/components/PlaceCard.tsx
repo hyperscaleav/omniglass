@@ -38,7 +38,7 @@ export default function PlaceCard(props: {
   return (
     <Show when={place()}>
       {(p) => (
-        <section data-testid="place-card" class="card flex-row flex-wrap items-center gap-x-3 gap-y-1.5 border border-base-300 bg-base-200 px-4 py-2.5 text-sm">
+        <section data-testid="place-card" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-box border border-base-300 bg-base-200 px-4 py-2.5 text-sm">
           <Eyebrow label="Place" hint="Where this sits. A place is a folder and its facts; the system in it is what Omniglass monitors." />
           <span class="flex min-w-0 items-center gap-2">
             <span class="flex-none text-base-content/50"><Dynamic component={resolveIcon(type()?.icon || "map-pin")} size={16} /></span>
@@ -54,7 +54,7 @@ export default function PlaceCard(props: {
           <Show when={props.provenance}>
             <span data-testid="place-provenance" class="rounded border border-base-content/15 px-1.5 text-[11px] leading-4 text-base-content/55">{props.provenance}</span>
           </Show>
-          <TagPills tags={tags()} />
+          <Show when={Object.keys(tags()).length > 0}><TagPills tags={tags()} wrap /></Show>
           <span class="flex-1" />
           <Button size="sm" intent="quiet" onClick={() => blades.push({ kind: "location", id: p().id })}>Place details</Button>
         </section>
