@@ -10,13 +10,16 @@ import { LOCATIONS_KEY } from "../lib/locations";
 import { SYSTEMS_KEY } from "../lib/systems";
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY } from "../lib/tags";
+import { COMPONENTS_KEY } from "../lib/components";
+import { STANDARDS_KEY } from "../lib/standards";
+import { PRODUCTS_KEY } from "../lib/products";
+import { COMPONENT_TYPES_KEY } from "../lib/component_types";
 import { uuidFor } from "../lib/testids";
 
-// The location zoom (#635), the identity route's default face (ADR-0129)
-// (ADR-0126): the inventory detail stays the route's default face, and the
-// param renders the canvas one level down. Child bands for every direct
-// child whatever its type, the placed-here band first, system cards with the
-// server's own arithmetic, holes dashed and inert.
+// A place's detail view (#872): systems are the unit, places are folders. A
+// place holding one system lands on that system; a folder (no system, or a
+// place shared by several) shows its own card with its tabs: a brief card per
+// system it holds, then what is beneath it as the outline rooted here.
 
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 
@@ -49,7 +52,17 @@ const view: FleetView = {
       verdict: "incomplete",
       dots: [{ component: uuidFor("lz-c-sign"), name: "display-1", verdict: "incomplete", primary: true, shared: false }],
     },
-    // Deep under west: west's band.
+    // A second system at hq, so hq is a place shared by two and keeps its
+    // own view.
+    {
+      id: uuidFor("lz-s-sign"),
+      name: "lobby-signage",
+      label: "Lobby Signage",
+      location: uuidFor("lz-hq"),
+      verdict: "healthy",
+      dots: [],
+    },
+    // Deep under west, alone in its room: that room lands on it.
     {
       id: uuidFor("lz-s-board"),
       name: "boardroom",
@@ -119,6 +132,11 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`, lateTypes = false) {
   ]);
   qc.setQueryData([...SYSTEMS_KEY], []);
   qc.setQueryData([...TAGS_KEY], []);
+  qc.setQueryData([...COMPONENTS_KEY], []);
+  qc.setQueryData([...STANDARDS_KEY], []);
+  qc.setQueryData([...PRODUCTS_KEY], []);
+  qc.setQueryData([...COMPONENT_TYPES_KEY], []);
+  qc.setQueryData([...systemHealthKey(uuidFor("lz-s-sign"))], { verdict: "healthy", roles: [], systems: [], transitions: [] } as unknown as FleetHealth);
   qc.setQueryData([...systemHealthKey(uuidFor("lz-s-lobby"))], lobbyHealth);
   qc.setQueryData([...locationHealthKey(uuidFor("lz-hq"))], {
     verdict: "degraded",
@@ -136,6 +154,7 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`, lateTypes = false) {
         <Route path="/locations/:id" component={Locations} />
         <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
         <Route path="/systems/:id" component={() => <div data-testid="system-page" />} />
+        <Route path="/locations/create" component={() => <div data-testid="create-page" />} />
       </Router>
     </QueryClientProvider>
   ));
@@ -144,172 +163,76 @@ function mount(path = `/web/locations/${uuidFor("lz-hq")}`, lateTypes = false) {
 
 afterEach(cleanup);
 
-describe("the location zoom", () => {
-  it("bands every direct child whatever its type, the placed-here band first", () => {
-    mount();
-    const bands = screen.getAllByTestId(/^zoomband-/);
-    expect(bands[0].getAttribute("data-testid")).toBe(`zoomband-${uuidFor("lz-hq")}`);
-    expect(within(bands[0]).getByText("Placed here")).toBeTruthy();
-    // The area-typed child bands like any other: no fixed ladder.
-    const yard = screen.getByTestId(`zoomband-${uuidFor("lz-yard")}`);
-    // The band's label button carries the name and the type chip; the card
-    // beneath repeats the room name on its where-line, so scope to the button.
-    const label = within(yard).getAllByRole("button").find((b) => b.textContent?.includes("area"))!;
-    expect(within(label).getByText("The Yard")).toBeTruthy();
-    expect(within(label).getByText("area")).toBeTruthy();
+describe("where a place lands (#872)", () => {
+  it("lands a place holding one system on that system, query kept", async () => {
+    mount(`/web/locations/${uuidFor("lz-room")}?chips=x`);
+    expect(await screen.findByTestId("system-page")).toBeTruthy();
+    expect(window.location.pathname).toBe(`/web/systems/${uuidFor("lz-s-board")}`);
+    expect(window.location.search).toBe("?chips=x");
   });
 
-  it("a system attached to the location itself appears in the placed-here band, not among the children", () => {
-    mount();
-    const here = screen.getByTestId(`zoomband-${uuidFor("lz-hq")}`);
-    expect(within(here).getByText("Lobby AV")).toBeTruthy();
-    const west = screen.getByTestId(`zoomband-${uuidFor("lz-b1")}`);
-    expect(within(west).queryByText("Lobby AV")).toBeNull();
-    expect(within(west).getByText("Boardroom")).toBeTruthy();
+  it("stays on the place when the address asks to configure the place itself", async () => {
+    mount(`/web/locations/${uuidFor("lz-room")}?edit=1`);
+    expect(await screen.findByTestId("configure-face")).toBeTruthy();
+    expect(screen.queryByTestId("system-page")).toBeNull();
   });
 
-  it("a system card draws the slot strip and the gap line in the server's own terms; unstaffed is an empty slot, never outage", () => {
-    mount();
-    const card = screen.getByTestId(`syscard-${uuidFor("lz-s-lobby")}`);
-    // signage wants 2, has 1 (healthy): one filled square, one empty.
-    const strip = within(card).getByTestId("slot-strip");
-    expect(strip.children).toHaveLength(2);
-    expect(within(card).getByText("1 required slot empty")).toBeTruthy();
-    // Nothing on the card says outage: the role's impact describes failure
-    // only, and nothing has failed.
-    expect(within(card).queryByText("outage")).toBeNull();
-  });
-
-  it("wears the same shell as every workspace: one counts line on top, and its need-attention count filters this zoom's cards", () => {
-    mount();
-    const line = screen.getByTestId("counts-line");
-    expect(screen.queryByTestId("zoom-rail")).toBeNull();
-    expect(screen.queryByTestId("fleet-summary")).toBeNull();
-    // Two systems need attention here (Boardroom degraded, Lobby AV incomplete).
-    const attention = within(line).getByRole("button", { name: /2 need attention/ });
-    fireEvent.click(attention);
-    // The healthy Yard AV card is filtered out of this zoom; the others stay.
-    expect(screen.queryByTestId(`syscard-${uuidFor("lz-s-yard")}`)).toBeNull();
-    expect(screen.getByTestId(`syscard-${uuidFor("lz-s-lobby")}`)).toBeTruthy();
-  });
-
-  // #787: the location header matches the system zoom's shape.
-  it("the header wears the location's verdict and the since-line; the counts line carries this subtree's needs-attention count", () => {
-    mount();
-    const header = screen.getByTestId("location-header");
-    expect(within(header).getByText("degraded")).toBeTruthy();
-    expect(within(header).getByText(/since/)).toBeTruthy();
-    expect(within(header).queryByText(/need attention/)).toBeNull();
-    // Fixture: signage incomplete + boardroom degraded + horn healthy = 2.
-    expect(within(screen.getByTestId("counts-line")).getByText(/2 need attention/)).toBeTruthy();
-  });
-
-  it("clicking the counts line's need-attention applies the worst-first verdict filter to this zoom's cards", () => {
-    mount();
-    expect(screen.getByTestId(`syscard-${uuidFor("lz-s-yard")}`)).toBeTruthy();
-    fireEvent.click(within(screen.getByTestId("counts-line")).getByRole("button", { name: /need attention/ }));
-    expect(screen.queryByTestId(`syscard-${uuidFor("lz-s-yard")}`)).toBeNull();
-    expect(screen.getByTestId(`syscard-${uuidFor("lz-s-board")}`)).toBeTruthy();
-  });
-
-  it("clicking a child band drills deeper, at its canonical address", async () => {
-    mount();
-    const west = screen.getByTestId(`zoomband-${uuidFor("lz-b1")}`);
-    fireEvent.click(within(west).getByRole("button", { name: /West Building/ }));
-    await waitFor(() => expect(window.location.pathname).toBe(`/web/locations/${uuidFor("lz-b1")}`));
-    expect(window.location.search).toBe("");
-  });
-
-  it("clicking a system card walks inward to the system zoom", async () => {
-    mount();
-    // The whole card is the button now.
-    fireEvent.click(screen.getByTestId(`syscard-${uuidFor("lz-s-lobby")}`));
-    await waitFor(() => expect(window.location.pathname).toBe(`/web/systems/${uuidFor("lz-s-lobby")}`));
-    expect(window.location.search).toBe("");
-  });
-
-  it("a systemless leaf in the subtree renders as an inert + System hole naming it", () => {
-    mount();
-    const hole = screen.getByText(/The Shed has none/);
-    fireEvent.click(hole);
-    expect(window.location.pathname).toBe(`/web/locations/${uuidFor("lz-hq")}`);
-  });
-
-  it("names the allowed child types on the inert + Location hole", () => {
-    mount();
-    const hole = screen.getByTestId("allowed-child-types");
-    // building allows campus parents; area allows anything; room does not
-    // allow campus. The hole names what THIS location may contain.
-    expect(hole.textContent).toContain("building");
-    expect(hole.textContent).toContain("area");
-    expect(hole.textContent).not.toContain("room");
-    fireEvent.click(screen.getByTestId("add-location-hole"));
-    expect(window.location.pathname).toBe(`/web/locations/${uuidFor("lz-hq")}`);
-  });
-
-  it("the breadcrumb walks the ancestor chain to the parent; the page itself is the title, not a crumb", () => {
-    mount(`/web/locations/${uuidFor("lz-room")}`);
-    const trail = screen.getByTestId("breadcrumb");
-    expect(within(trail).getByText("Explore")).toBeTruthy();
-    expect(within(trail).getByText("Headquarters")).toBeTruthy();
-    expect(within(trail).getByText("West Building")).toBeTruthy();
-    // Boardroom A is the page: in the heading, not repeated in the trail.
-    expect(within(trail).queryByText("Boardroom A")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Boardroom A" })).toBeTruthy();
-    expect(screen.queryByTestId("zoom-ladder")).toBeNull();
-  });
-
-  it("a name-shaped zoom link resolves to the uuid, keeping the param (#759's rule)", async () => {
+  it("a name-shaped address resolves to the uuid, keeping the param (#759's rule)", async () => {
     mount(`/web/locations/west`);
     await waitFor(() => expect(window.location.pathname).toBe(`/web/locations/${uuidFor("lz-b1")}`));
     expect(window.location.search).toBe("");
-    expect(screen.getByTestId(`zoomband-${uuidFor("lz-room")}`)).toBeTruthy();
-  });
-
-  it("without the zoom param the route renders the inventory detail, untouched", () => {
-    mount(`/web/locations/${uuidFor("lz-hq")}`);
-    expect(screen.queryByTestId("zoom-ladder")).toBeNull();
+    expect(screen.getByTestId("place-subject")).toBeTruthy();
   });
 });
 
-// The summary reflects the page (#795 review): this location's subtree, never
-// the fleet's numbers.
-describe("the one counts line", () => {
-  it("counts this subtree: hq holds all three systems here, and the mix subject stays systems", () => {
+describe("a folder place (#872)", () => {
+  it("is titled by the place, names its type in the registry's words, and ends the path at its parent", () => {
+    mount(`/web/locations/${uuidFor("lz-b1")}`);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("West Building");
+    expect(within(screen.getByTestId("place-header")).getByTestId("place-type").textContent).toBe("Building");
+    const crumbs = within(screen.getByTestId("breadcrumb"));
+    expect(crumbs.getByText("Headquarters")).toBeTruthy();
+    expect(crumbs.queryByText("West Building")).toBeNull();
+  });
+
+  it("gives each system it holds a brief card, with its verdict and its gap, opening the system", async () => {
     mount();
-    const line = screen.getByTestId("counts-line");
-    expect(line.textContent).toContain("3 systems");
-    expect(line.textContent).toContain("children");
-  });
-});
-
-// Inside a location, the density toggle lists the subtree as rows (#798): one
-// row per system, verdict first, click opens the system full screen (the
-// altitude rule). The view is a URL fact, so ?view=list deep-links.
-describe("the location list density", () => {
-  it("?view=list renders the subtree as rows and a row opens its system", async () => {
-    mount(`/web/locations/${uuidFor("lz-hq")}?view=list`);
-    const rows = await screen.findByTestId("fleet-rows");
-    expect(within(rows).getByText("Lobby AV")).toBeTruthy();
-    expect(within(rows).getByText("Boardroom")).toBeTruthy();
-    expect(within(rows).getByText("Yard AV")).toBeTruthy();
-    fireEvent.click(within(rows).getByRole("button", { name: /Boardroom/ }));
+    const lobby = screen.getByTestId(`system-summary-${uuidFor("lz-s-lobby")}`);
+    expect(within(lobby).getByText("Lobby AV")).toBeTruthy();
+    expect(within(lobby).getByText("incomplete")).toBeTruthy();
+    expect(within(lobby).getByText(/1 of 2 slots filled/)).toBeTruthy();
+    expect(screen.getByTestId(`system-summary-${uuidFor("lz-s-sign")}`)).toBeTruthy();
+    fireEvent.click(lobby);
     expect(await screen.findByTestId("system-page")).toBeTruthy();
-    expect(window.location.pathname).toBe(`/web/systems/${uuidFor("lz-s-board")}`);
+    expect(window.location.pathname).toBe(`/web/systems/${uuidFor("lz-s-lobby")}`);
   });
 
-  it("offers the toggle on the canvas face and points it at the list", async () => {
+  it("lists what is beneath it as the outline rooted here, counted by systems", () => {
     mount();
-    const toggle = screen.getByTestId("view-toggle");
-    fireEvent.click(within(toggle).getByRole("button", { name: /list/i }));
-    await waitFor(() => expect(window.location.search).toContain("view=list"));
+    const beneath = screen.getByTestId("beneath");
+    const rows = within(beneath).getAllByRole("treeitem").map((r) => r.querySelector("[data-label]")?.textContent);
+    // Sorted by name; West Building folds with Boardroom A (it holds only that
+    // room), so that row sorts as West and names its deepest place.
+    expect(rows).toEqual(["The Shed", "The Yard", "Boardroom A"]);
+    expect(rows).toContain("The Yard");
+    expect(rows).toContain("The Shed");
+    expect(within(beneath).getByTestId("explore-counts").textContent).toMatch(/^4\s*systems/);
+  });
+
+  it("offers the create path under an empty folder", () => {
+    mount(`/web/locations/${uuidFor("lz-shed")}`);
+    const beneath = screen.getByTestId("beneath");
+    expect(within(beneath).getByText("Nothing here yet.")).toBeTruthy();
+    expect(within(beneath).getAllByRole("button", { name: /^New / }).length).toBeGreaterThan(0);
+  });
+
+  it("offers Retry when the fleet read fails", async () => {
+    const r = mount();
+    r.qc.getQueryCache().find({ queryKey: [...FLEET_VIEW_KEY] })?.setState({ status: "error", error: new Error("boom"), data: undefined });
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy();
   });
 });
 
-
-// The location zoom grows the same Configure facet (#800 slice 1): a
-// two-tab rail (Overview, Configure), the parent mover with its consequence
-// copy living where the room to explain it exists.
 describe("the location configure tab (#800)", () => {
   it("offers Configure and renders identity, the parent mover, and tags", async () => {
     mount(`/web/locations/${uuidFor("lz-hq")}?tab=configure`);
@@ -325,7 +248,7 @@ describe("the location configure tab (#800)", () => {
     const rail = await screen.findByTestId("tab-rail");
     expect(within(rail).getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe("true");
     expect(within(rail).getByRole("tab", { name: "Configure" })).toBeTruthy();
-    expect(screen.getByTestId("location-header")).toBeTruthy();
+    expect(screen.getByTestId("place-header")).toBeTruthy();
   });
 });
 
