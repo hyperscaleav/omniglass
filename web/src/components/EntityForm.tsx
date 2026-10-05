@@ -393,6 +393,10 @@ export default function EntityForm(props: {
           </Show>
         </div>
 
+        {/* A system's or component's place is the blade's own place card
+            (#872); only a location's parent, which is the place's own to
+            move, stays in the blade's form. */}
+        <Show when={props.host !== "blade" || props.kind === "location"}>
         <div class={SECTION}>
           <span class={EYEBROW}>Placement</span>
           <Show when={props.kind === "location"} fallback={
@@ -420,6 +424,7 @@ export default function EntityForm(props: {
             />
           </Show>
         </div>
+        </Show>
 
         {/* The kind's panels are configuration (roles, properties and their
             cascade, reconciliation, interfaces): the page host's Configure tab

@@ -115,12 +115,19 @@ describe("the one form reads labels, not handles (#870)", () => {
 describe("the one form in a blade is the glance (#872)", () => {
   // Configuration (roles, properties and their cascade) lives on the
   // workspace's Configure tab; the blade keeps what an operator who landed
-  // from a row needs: identity, classification, placement, tags.
-  it("renders identity, classification, placement and tags, and none of the configuration panels", async () => {
+  // from a row needs. A system's or component's place is the blade's own
+  // place card, so the form does not say it a second time.
+  it("renders identity, classification and tags, and none of the configuration panels", async () => {
     mountHost("system", uuidFor("ef-sys"), "blade");
     const form = await screen.findByTestId("entity-form");
     const eyebrows = within(form).getAllByText(/^(Identity|Classification|Placement|Tags|Roles|Properties)$/).map((e) => e.textContent);
-    expect(eyebrows).toEqual(["Identity", "Classification", "Placement", "Tags"]);
+    expect(eyebrows).toEqual(["Identity", "Classification", "Tags"]);
+  });
+
+  it("keeps a location's parent in the blade, where it is the place's own placement to move", async () => {
+    mountHost("location", uuidFor("ef-room"), "blade");
+    const form = await screen.findByTestId("entity-form");
+    expect(within(form).getByText("Parent")).toBeTruthy();
   });
 
   it("keeps the configuration panels on the page host", async () => {
