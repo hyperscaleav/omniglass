@@ -15,13 +15,18 @@ import { LOCATIONS_KEY } from "../lib/locations";
 import { componentAlarmsKey } from "../lib/alarms";
 import { componentSystemsKey } from "../lib/members";
 import { ME_KEY, type Me } from "../lib/auth";
+import { LOCATION_TYPES_KEY } from "../lib/location_types";
+import { STANDARDS_KEY } from "../lib/standards";
+import { PRODUCTS_KEY } from "../lib/products";
 import { uuidFor } from "../lib/testids";
 
-// The fleet EntityBlade (#799, refit in #826): verdict and since lead, the
-// alarms say why, and the rest of the blade IS the one EntityForm, read or
-// edit through the blade's own footer. Expand promotes to the workspace,
-// where the members, the strip, and the vitals live. Every body self-fetches
-// by id, so the registry serves any page.
+// The fleet EntityBlade (#799, refit in #826, the glance since #872): verdict
+// and since lead, the alarms say why with their severity, the context the
+// operator came for follows (a system's place, a component's systems and
+// roles, a place's systems), then the form's identity, placement and tags,
+// read or edit through the blade's own footer. Configuration (roles,
+// properties, their cascade) is the detail view's Configure tab, one Expand
+// away. Every body self-fetches by id, so the registry serves any page.
 
 const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: "root" }, permissions: [">"], grants: [] };
 
@@ -80,14 +85,17 @@ function mountBlade(ref: { kind: string; id: string }) {
   qc.setQueryData([...LOCATIONS_KEY], [
     { id: uuidFor("eb-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", actions: ["update"] },
   ]);
+  qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("ebt-room"), name: "room", label: "Room", allowed_parent_types: [] }]);
+  qc.setQueryData([...STANDARDS_KEY], [{ id: uuidFor("eb-std"), name: "huddle-room", label: "Huddle Room Standard" }]);
+  qc.setQueryData([...PRODUCTS_KEY], []);
   qc.setQueryData([...COMPONENTS_KEY], [
-    { id: uuidFor("eb-c-mic"), name: "mic-1", label: "", component_type: "ceiling-mic", actions: ["update"] },
+    { id: uuidFor("eb-c-mic"), name: "mic-1", label: "", component_type: "ceiling-mic", location_id: uuidFor("eb-room"), actions: ["update"] },
     { id: uuidFor("eb-c-bar"), name: "videobar-1", label: "", component_type: "video-bar", actions: [] },
   ]);
   qc.setQueryData([...componentAlarmsKey(uuidFor("eb-c-mic"))], [
     { id: "al-1", severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true },
   ]);
-  qc.setQueryData([...componentSystemsKey(uuidFor("eb-c-mic"))], [{ system_id: uuidFor("eb-sys"), role: "room-mic" }]);
+  qc.setQueryData([...componentSystemsKey(uuidFor("eb-c-mic"))], [{ system_id: uuidFor("eb-sys"), system: "boardroom", primary: true }]);
 
   window.history.pushState({}, "", "/web/fleet");
   let controller!: BladeController;
@@ -117,16 +125,32 @@ function mountBlade(ref: { kind: string; id: string }) {
 afterEach(cleanup);
 
 describe("the system blade", () => {
-  it("leads with verdict and since, says why, and renders the form's sections", async () => {
+  it("leads with verdict and since, and says why with the severity and the component", async () => {
     mountBlade({ kind: "system", id: uuidFor("eb-sys") });
-    expect(screen.getAllByText("Boardroom").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("degraded").length).toBeGreaterThan(0);
-    expect(screen.getByText(/since /)).toBeTruthy();
-    expect(screen.getAllByText("No route to host").length).toBeGreaterThan(0);
+    const blade = await screen.findByRole("dialog");
+    expect(within(blade).getAllByText("degraded").length).toBeGreaterThan(0);
+    expect(within(blade).getByText(/since /)).toBeTruthy();
+    const why = within(blade).getByTestId("blade-why");
+    expect(within(why).getByText("critical")).toBeTruthy();
+    expect(within(why).getByText("No route to host")).toBeTruthy();
+    expect(within(why).getByRole("button", { name: "mic-1" })).toBeTruthy();
+  });
+
+  it("names its place as context and its standard and size in brief", async () => {
+    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
+    const blade = await screen.findByRole("dialog");
+    expect(within(within(blade).getByTestId("place-card")).getByText("Boardroom A")).toBeTruthy();
+    const brief = within(blade).getByTestId("blade-brief");
+    expect(within(brief).getByText("Huddle Room Standard")).toBeTruthy();
+    expect(within(brief).getByText("2 components")).toBeTruthy();
+  });
+
+  it("renders the form's identity, placement and tags, and leaves the roles to Configure", async () => {
+    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
     const form = await screen.findByTestId("entity-form");
     expect(within(form).getByText("Identity")).toBeTruthy();
-    expect(within(form).getByText("huddle-room")).toBeTruthy();
-    expect(screen.queryByTestId("quick-name")).toBeNull();
+    expect(within(form).getByText("Tags")).toBeTruthy();
+    expect(within(form).queryByText("Roles")).toBeNull();
   });
 
   it("expands to the identity route and closes the stack", async () => {
@@ -136,33 +160,36 @@ describe("the system blade", () => {
     expect(window.location.pathname).toBe(`/web/systems/${uuidFor("eb-sys")}`);
   });
 
-  it("edits the whole form in place through the blade's footer", async () => {
+  it("edits identity in place through the blade's footer", async () => {
     mountBlade({ kind: "system", id: uuidFor("eb-sys") });
     const blade = await screen.findByRole("dialog");
     await within(blade).findByTestId("entity-form");
     fireEvent.click(within(blade).getByRole("button", { name: "Edit" }));
     expect(await within(blade).findByRole("combobox", { name: /standard/i })).toBeTruthy();
-    // The rename precheck sits beside the name because the row allows rename.
     expect(within(blade).getByRole("button", { name: /check/i })).toBeTruthy();
     expect(within(blade).getByRole("button", { name: "Save" })).toBeTruthy();
-  });
-
-  it("keeps tags editable in place on the blade", async () => {
-    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
-    const blade = await screen.findByRole("dialog");
-    const form = await within(blade).findByTestId("entity-form");
-    expect(within(form).getByText("Tags")).toBeTruthy();
   });
 });
 
 describe("the component blade", () => {
-  it("leads with verdict, says why, and renders the form with the fixed product", async () => {
+  it("leads with verdict, says why with severity, and names the systems it serves", async () => {
     mountBlade({ kind: "component", id: uuidFor("eb-c-mic") });
-    expect(screen.getAllByText("mic-1").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("outage").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("No route to host").length).toBeGreaterThan(0);
-    const form = await screen.findByTestId("entity-form");
-    expect(within(form).getAllByText(/Fixed at creation/).length).toBeGreaterThan(0);
+    const blade = await screen.findByRole("dialog");
+    expect(within(blade).getAllByText("outage").length).toBeGreaterThan(0);
+    const why = within(blade).getByTestId("blade-why");
+    expect(within(why).getByText("critical")).toBeTruthy();
+    expect(within(why).getByText("No route to host")).toBeTruthy();
+    const serves = within(blade).getByTestId("blade-serves");
+    expect(within(serves).getByText("Boardroom")).toBeTruthy();
+    expect(await within(serves).findByText("Room Microphone")).toBeTruthy();
+  });
+
+  it("shows its place as context and keeps the product's note in a tooltip", async () => {
+    mountBlade({ kind: "component", id: uuidFor("eb-c-mic") });
+    const blade = await screen.findByRole("dialog");
+    expect(within(blade).getByTestId("place-provenance").textContent).toBe("set here");
+    await within(blade).findByTestId("entity-form");
+    expect(within(blade).queryByText(/Fixed at creation/)).toBeNull();
   });
 
   it("expands to the leaf route", async () => {
@@ -174,11 +201,21 @@ describe("the component blade", () => {
 });
 
 describe("the location blade", () => {
-  it("leads with the verdict and renders the form with the parent", async () => {
+  it("says what the place holds: its systems, each with its verdict, opening the system", async () => {
     mountBlade({ kind: "location", id: uuidFor("eb-room") });
-    expect(screen.getAllByText("Boardroom A").length).toBeGreaterThan(0);
+    const blade = await screen.findByRole("dialog");
+    const here = within(blade).getByTestId("blade-systems");
+    expect(within(here).getByText("Boardroom")).toBeTruthy();
+    expect(within(here).getByText("degraded")).toBeTruthy();
+    fireEvent.click(within(here).getByRole("button", { name: /Boardroom/ }));
+    expect(await screen.findByRole("dialog", { name: "Boardroom" })).toBeTruthy();
+  });
+
+  it("renders the form with the parent", async () => {
+    mountBlade({ kind: "location", id: uuidFor("eb-room") });
     const form = await screen.findByTestId("entity-form");
     expect(within(form).getByText("Parent")).toBeTruthy();
     expect(within(form).getByText("Root")).toBeTruthy();
+    expect(within(form).queryByText("Properties")).toBeNull();
   });
 });
