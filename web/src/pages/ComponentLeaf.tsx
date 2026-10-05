@@ -13,6 +13,7 @@ import HealthBadge from "../components/HealthBadge";
 import Eyebrow from "../components/Eyebrow";
 import DetailGate from "../components/DetailGate";
 import PlaceCard from "../components/PlaceCard";
+import AcknowledgeButton from "../components/AcknowledgeButton";
 import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { COMPONENTS_KEY, listComponents, type Component as FleetComponent } from "../lib/components";
 import { componentSystemsKey, componentSystems } from "../lib/members";
@@ -217,6 +218,7 @@ export default function ComponentLeaf() {
                           <span class="text-xs text-base-content/50">
                             {durationText(pageNow - Date.parse(a.raised_at))} · {a.acknowledged ? "acknowledged" : "unacknowledged"}
                           </span>
+                          <AcknowledgeButton component={component()?.id ?? id()} alarm={a} />
                         </div>
                       )}
                     </For>

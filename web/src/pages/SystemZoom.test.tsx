@@ -547,6 +547,16 @@ describe("the place is context, the system the subject (#872)", () => {
     expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-location-${uuidFor("szp-room")}`);
   });
 
+  // The place's own configuration (its properties and their cascade) lives on
+  // its Configure tab; a sole system's place lands on the system otherwise,
+  // so the card links straight to it (#872 review).
+  it("links to the place's own Configure from its card", async () => {
+    mount();
+    fireEvent.click(within(screen.getByTestId("place-card")).getByRole("link", { name: "Configure place" }));
+    expect(await screen.findByTestId("location-page")).toBeTruthy();
+    expect(window.location.pathname + window.location.search).toBe(`/web/locations/${uuidFor("szp-room")}?tab=configure`);
+  });
+
   it("gives an unplaced system its own title and no place card", () => {
     mount(`/web/systems/${uuidFor("szp-other")}`);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Overflow Room");

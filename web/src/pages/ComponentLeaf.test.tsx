@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@solidjs/testing-library";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Components from "./Components";
@@ -18,6 +18,12 @@ import { TAGS_KEY } from "../lib/tags";
 import { systemRolesKey } from "../lib/system_roles";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+
+const acked: string[] = [];
+vi.mock("../lib/alarms", async (orig) => {
+  const real = await orig<typeof import("../lib/alarms")>();
+  return { ...real, acknowledgeAlarm: vi.fn(async (name: string, id: string) => { acked.push(`${name}:${id}`); return {}; }) };
+});
 
 // The component leaf (#637): direct arrival renders the breadcrumb from the
 // ancestor chain, memberships list with the primary marked, and the
@@ -62,7 +68,7 @@ const reach: Reachability = {
 
 const nodes: Node[] = [{ name: "edge-1", enrolled: true, last_heartbeat_at: iso(5), tags: {} } as Node];
 
-function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar) {
+function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...COMPONENTS_KEY], [component]);
@@ -73,7 +79,7 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
   qc.setQueryData([...systemRolesKey(uuidFor("cf-s-a"))], [{ name: "conf-bar", label: "Conferencing Bar", assigned_to: ["videobar-1"] }]);
   qc.setQueryData([...systemRolesKey(uuidFor("cf-s-b"))], []);
   qc.setQueryData([...TAGS_KEY], []);
-  qc.setQueryData([...ME_KEY], me);
+  qc.setQueryData([...ME_KEY], meOverride);
   qc.setQueryData([...componentSystemsKey(uuidFor("cf-c-bar"))], memberships ?? [
     { component: "videobar-1", system: "boardroom", primary: true, system_count: 2 },
     { component: "videobar-1", system: "overflow", primary: false, system_count: 2 },
@@ -248,5 +254,28 @@ describe("the miss face (#800)", () => {
     mount("/web/components/no-such-widget");
     expect(await screen.findByText(/No component answers this address/)).toBeTruthy();
     expect(screen.queryByText("Reachability")).toBeNull();
+  });
+});
+
+// Acknowledging is outside the update gate (ADR-0109): it records that the
+// reader looked and writes none of the component's data. With the alarms
+// panel on Configure only, a caller holding alarm:acknowledge without
+// component:update had no way left to acknowledge (#872 review). Why carries
+// it, on its own permission.
+describe("acknowledging from Why (#872)", () => {
+  const ackOnly: Me = { principal: { id: "u-ack", kind: "human" }, human: { username: "ack" }, permissions: ["component:read", "system:read", "location:read", "alarm:read", "alarm:acknowledge"], grants: [] };
+
+  it("offers Acknowledge on an unacknowledged alarm to a caller holding only the acknowledge permission", async () => {
+    acked.length = 0;
+    mount(undefined, undefined, bar, ackOnly);
+    const why = screen.getByTestId("leaf-alarms");
+    fireEvent.click(within(why).getByRole("button", { name: "Acknowledge" }));
+    await waitFor(() => expect(acked).toEqual([`${uuidFor("cf-c-bar")}:al-1`]));
+  });
+
+  it("offers nothing to a caller without the acknowledge permission", () => {
+    const readOnly: Me = { ...ackOnly, permissions: ["component:read", "system:read", "location:read"] };
+    mount(undefined, undefined, bar, readOnly);
+    expect(within(screen.getByTestId("leaf-alarms")).queryByRole("button", { name: "Acknowledge" })).toBeNull();
   });
 });

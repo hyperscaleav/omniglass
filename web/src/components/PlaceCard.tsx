@@ -1,6 +1,7 @@
 import { Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import { A } from "@solidjs/router";
+import { can, useMe } from "../lib/auth";
 import { useQuery } from "@tanstack/solid-query";
 import Button from "./Button";
 import Eyebrow from "./Eyebrow";
@@ -29,6 +30,7 @@ export default function PlaceCard(props: {
   provenance?: string;
 }) {
   const blades = useBlades();
+  const me = useMe();
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
   const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
@@ -56,6 +58,12 @@ export default function PlaceCard(props: {
           </Show>
           <Show when={Object.keys(tags()).length > 0}><TagPills tags={tags()} wrap /></Show>
           <span class="flex-1" />
+          {/* The place's own configuration (its properties and their cascade)
+              is its Configure tab; a sole system's place would otherwise land
+              on the system, so the card links there directly. */}
+          <Show when={can(me.data, "location", "update")}>
+            <A href={`/locations/${p().id}?tab=configure`} class="text-sm text-base-content/70 hover:underline">Configure place</A>
+          </Show>
           <Button size="sm" intent="quiet" onClick={() => blades.push({ kind: "location", id: p().id })}>Place details</Button>
         </section>
       )}

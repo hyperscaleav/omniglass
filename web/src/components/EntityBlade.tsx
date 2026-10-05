@@ -1,5 +1,6 @@
-import { For, Show, createMemo, createSignal } from "solid-js";
+import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import PlaceCard from "./PlaceCard";
+import AcknowledgeButton from "./AcknowledgeButton";
 import { useNavigate } from "@solidjs/router";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
@@ -101,7 +102,7 @@ function useDelete(opts: {
 
 // Why, with the severity first: the reason beside the red light, each
 // naming the component when there is one to open.
-function Why(props: { rows: { severity: string; message: string; component?: string; onOpen?: () => void }[] }) {
+function Why(props: { rows: { severity: string; message: string; component?: string; onOpen?: () => void; ack?: JSX.Element }[] }) {
   return (
     <Show when={props.rows.length > 0}>
       <div data-testid="blade-why" class={section}>
@@ -116,6 +117,7 @@ function Why(props: { rows: { severity: string; message: string; component?: str
                 </Show>
               </Show>
               <span class="min-w-0 flex-1 text-xs text-base-content/70">{a.message}</span>
+              {a.ack}
             </div>
           )}
         </For>
@@ -224,7 +226,7 @@ function ComponentBody(props: { id: string }) {
         <HealthBadge verdict={verdict() ?? undefined} size="sm" />
         <SinceLine since={leafAlarmSince(alarmsQ.data ?? [], now)} />
       </div>
-      <Why rows={active().map((a) => ({ severity: a.severity, message: a.message }))} />
+      <Why rows={active().map((a) => ({ severity: a.severity, message: a.message, ack: <AcknowledgeButton component={props.id} alarm={a} /> }))} />
       <Show when={placeId()}>
         {(pid) => <PlaceCard placeId={pid()} showName provenance={row()?.location_id ? "set here" : "from its system"} />}
       </Show>
