@@ -15,7 +15,7 @@ Roughly 22 live pages (inventory, catalog, values, admin, plus the shell) ship a
 `ViewResult` renderer described next: an inventory page is CRUD over a scoped resource. The
 **Explore** page (`/explore`, #826 and #861, which retired the #633 canvas) is the first
 surface that is neither: an outline of places over one projection (`GET /views/fleet`) and
-the CRUD lists, and the workspaces it opens. Its core is one pure model,
+the CRUD lists, and the detail views it opens. Its core is one pure model,
 `web/src/lib/outline.ts`, which nests the places, puts each system on the place where it
 sits, folds single-child chains, counts what a row holds in the registry's own type labels,
 and counts systems by verdict rather than rolling them up worst-wins; `components/Outline.tsx`
@@ -182,7 +182,7 @@ Two layers, deliberately decoupled:
 **The mode rides the URL too**
 ([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact) established the rule;
 [ADR-0132](/architecture/decisions/#adr-0132-configure-is-the-one-deep-editor) retargets it):
-`?edit=1` beside a fleet address lands the workspace's Configure tab already editing, and beside
+`?edit=1` beside a fleet address lands the detail view's Configure tab already editing, and beside
 an identity blade's id param (`?u=<id>&edit=1`) opens that blade editing, both behind the same
 `<resource>:update` permission the Edit button is behind; without it the link lands read-only.
 Leaving edit (Cancel or Save) strips the param via history replace, so a refresh mid-edit keeps the
