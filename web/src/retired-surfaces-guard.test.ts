@@ -49,6 +49,22 @@ const RETIRED = [
   ["explore-presets", "the saved-view menu; retired with the presets"],
   ["explore-section-head", "the drilled section header; a row's + creates where you stand"],
   ["fleet-list-face", "the table face; the outline lists every place, system and component"],
+  // The workspaces the audit found speaking those retired idioms (#872): a
+  // place's band canvas and its cards, a counts line over each detail, the KPI
+  // tiles, and the component cards. A detail view is one view per system, its
+  // place as context, its components in the outline's row idiom.
+  ["SystemCard", "the system card grid; a system's brief card is SystemSummary, its components are rows"],
+  ["FleetShell", "the workspaces' counts-line frame; the subject card's header says each fact once"],
+  ["FleetRows", "the location page's list face; a folder lists what is beneath it as the outline"],
+  ["fleet_tiles", "the detail views' counts lines; the subject card's header carries them"],
+  ["bandsOf", "the band builder; a folder renders the outline rooted at it"],
+  ["holesUnder", "the inert + System holes; the outline's + creates where you stand"],
+  ["zoomband-", "the location page's bands; retired with the band builder"],
+  ["add-location-hole", "the inert + Location box; the outline's + and New create"],
+  ["view-toggle", "the cards/list toggle; a folder has one face"],
+  ["kpi-tiles", "the KPI tiles; the Data section says each metric once"],
+  ["compcard-", "the component cards; a system's components are rows"],
+  ["Location follows the primary system", "copy the model does not back: a component's place is its own (#862)"],
 ] as const;
 
 function walk(dir: string, out: string[] = []): string[] {
