@@ -894,15 +894,16 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		{table: "component", place: "boardroom-a", name: "dsp", label: "Boardroom DSP", platform: false},
 		// The two halves of the divisible room are two ROOMS now, so each half
 		// is the first `board` system in its own bucket and both mint plain
-		// `boardroom` (ADR-0101): same name, two rooms.
-		{table: "system", place: "boardroom-a", name: "boardroom", label: "Boardroom", platform: true},
-		{table: "system", place: "boardroom-b", name: "boardroom", label: "Boardroom", platform: true},
-		// The same-BUCKET same-type siblings live in the media lab: the shipped
-		// rule reads the type AND the ordinal (#693), so the first pod reads
-		// "Classroom" beside its `classroom` name and the second "Classroom 2"
-		// beside `classroom-2`.
-		{table: "system", place: "media-lab", name: "classroom", label: "Classroom", platform: true},
-		{table: "system", place: "media-lab", name: "classroom-2", label: "Classroom 2", platform: true},
+		// `boardroom` (ADR-0101): same name, two rooms. A system reads as its
+		// place (#872), so each half reads its own room.
+		{table: "system", place: "boardroom-a", name: "boardroom", label: "Boardroom A", platform: true},
+		{table: "system", place: "boardroom-b", name: "boardroom", label: "Boardroom B", platform: true},
+		// The same-BUCKET same-type siblings live in the media lab: the first
+		// reads the place alone beside its `classroom` name, and the second,
+		// which the place cannot tell apart from it, reads the place, its kind
+		// and its ordinal beside `classroom-2` (#693, #872).
+		{table: "system", place: "media-lab", name: "classroom", label: "Media Lab", platform: true},
+		{table: "system", place: "media-lab", name: "classroom-2", label: "Media Lab Classroom 2", platform: true},
 		// The two floors, which used to be here as PINS over a generated name
 		// (`1` labelled Level 2). They are named for their designations now, so
 		// the rule renders those designations and the platform holds the pen.

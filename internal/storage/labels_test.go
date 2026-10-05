@@ -615,21 +615,22 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 		t.Fatalf("location label = %q generated = %v, want %q true", pod.Label, pod.LabelGenerated, "Pod POD-7")
 	}
 
-	// A system's shipped rule is its type's label, so an unclassified
-	// system renders nothing and a classified one renders its kind of space.
+	// A system's shipped rule leads with its place (#872): a system is the
+	// logical group monitoring a place, so a placed one reads as the place
+	// does, classified or not.
 	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
-	if sys.Label != "" {
-		t.Fatalf("unclassified system label = %q, want none", sys.Label)
+	if sys.Label != "Room A" || !sys.LabelGenerated {
+		t.Fatalf("placed system label = %q generated = %v, want its place's %q", sys.Label, sys.LabelGenerated, "Room A")
 	}
 	classified, err := gw.UpdateSystem(ctx, "", sys.ID, storage.SystemPatch{SystemTypeID: strptr("board")}, all, all)
 	if err != nil {
 		t.Fatalf("classify system: %v", err)
 	}
-	if classified.Label == "" || !classified.LabelGenerated {
-		t.Fatalf("classified system label = %q generated = %v, want the type's label", classified.Label, classified.LabelGenerated)
+	if classified.Label != "Room A" || !classified.LabelGenerated {
+		t.Fatalf("classified system label = %q generated = %v, want its place's %q", classified.Label, classified.LabelGenerated, "Room A")
 	}
 }
 
@@ -639,10 +640,10 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 // could tell them apart (`boardroom` and `boardroom-2`) and the operator
 // reading the console could not.
 //
-// The rule now reads the ordinal under the same {{if}} the component's has
-// always used, and the suppression follows the NAME rather than the stored
-// number: the first of its stem carries no digits in its name, so it carries
-// none in its label either, and the second reads "Boardroom 2". Both halves are
+// The rule reads the ordinal under the same {{if}} the component's has always
+// used, and the suppression follows the NAME rather than the stored number:
+// the first of its stem carries no digits in its name, so it reads its place
+// alone, and the second reads its place, its kind and its ordinal (#872). Both halves are
 // asserted, and so is the fact that they DIFFER, because two labels that agree
 // would satisfy an assertion of either string on its own.
 func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
@@ -664,11 +665,13 @@ func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
 	if first.Name != "boardroom" || second.Name != "boardroom-2" {
 		t.Fatalf("names = %q and %q, want %q and %q", first.Name, second.Name, "boardroom", "boardroom-2")
 	}
-	if first.Label != "Boardroom" {
-		t.Errorf("the first half's label = %q, want %q: its name carries no ordinal, so neither does its label", first.Label, "Boardroom")
+	// Both read their place first (#872); the second names its kind and
+	// ordinal after it, since the place alone cannot tell them apart.
+	if first.Label != "Room A" {
+		t.Errorf("the first half's label = %q, want %q: its name carries no ordinal, so its label is the place's", first.Label, "Room A")
 	}
-	if second.Label != "Boardroom 2" {
-		t.Errorf("the second half's label = %q, want %q", second.Label, "Boardroom 2")
+	if second.Label != "Room A Boardroom 2" {
+		t.Errorf("the second half's label = %q, want %q", second.Label, "Room A Boardroom 2")
 	}
 	if first.Label == second.Label {
 		t.Errorf("both halves read %q, so the console cannot tell them apart", first.Label)
@@ -677,6 +680,28 @@ func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
 	// the platform's to keep current through a later move or reclassify.
 	if !first.LabelGenerated || !second.LabelGenerated {
 		t.Errorf("generated = %v and %v, want both platform-owned", first.LabelGenerated, second.LabelGenerated)
+	}
+}
+
+// TestAnUnplacedSystemReadsItsKind is the other half of #872's rule: a
+// system with no place has nothing to lead with, so it reads its kind of
+// space and ordinal, as every system did before, and an unclassified one
+// reads nothing (the read ladder falls back to its name).
+func TestAnUnplacedSystemReadsItsKind(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	typed, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strptr("board")}, all, all)
+	if err != nil {
+		t.Fatalf("create typed: %v", err)
+	}
+	if typed.Label != "Boardroom" {
+		t.Errorf("unplaced classified label = %q, want %q", typed.Label, "Boardroom")
+	}
+	bare, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "loose"}, all, all)
+	if err != nil {
+		t.Fatalf("create bare: %v", err)
+	}
+	if bare.Label != "" {
+		t.Errorf("unplaced unclassified label = %q, want none", bare.Label)
 	}
 }
 

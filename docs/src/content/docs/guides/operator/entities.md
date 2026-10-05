@@ -159,11 +159,12 @@ identity pages.
   `HQ` is on it). It only re-cases what you typed, so where the place's real name is not in its machine
   name (a `huddle` that everyone calls the Huddle Room), open the lock and type it.
 
-  A system's shipped rule reads its **type and its number**, and the number is the one the name is
-  about to carry: the first boardroom you create in a place shows the name `boardroom` and the label
-  **Boardroom**, and the second shows `boardroom-2` and **Boardroom 2**. The two fields are one answer,
-  so a label with a number in it means a name with the same number in it, and neither is a guess: both
-  are read from the placement you have just picked.
+  A system's shipped rule reads its **place**, because a system is what makes that place work: a
+  system you create in Boardroom 204B shows the label **Boardroom 204B**. A second system of the same
+  kind in the same place adds its **type and its number**, the number its name is about to carry: it
+  shows `boardroom-2` and **Boardroom 204B Boardroom 2**. The two fields are one answer, so a label
+  with a number in it means a name with the same number in it, and neither is a guess: both are read
+  from the placement you have just picked. A system with no place reads its type.
 
   A name is **required** only where nothing will generate one, and there the field arrives unlocked
   with no lock to close: a system with no type (or a type whose chain sets no stem), a location whose
@@ -248,12 +249,11 @@ identity pages.
   `omniglass location recomputeLabels` to apply it, and the same rows read **North Wing**.
   Nothing you typed yourself is touched by either.
 - **The same applies to systems, and that upgrade is worth running.** A system's shipped label
-  carries the number its name carries, so the two halves of a divisible boardroom read
-  **Boardroom** and **Boardroom 2** rather than both reading "Boardroom". A fleet created before
-  the upgrade keeps both halves alike until you run `omniglass system previewLabels`, then
-  `omniglass system recomputeLabels`. Only the first of a kind in a place is bare: a place with
-  one boardroom reads **Boardroom**, exactly as its name is `boardroom` rather than
-  `boardroom-1`.
+  reads its place, so a room and its system read as one name instead of the room's name above the
+  system's kind ("Meeting Room" under Briefing Room). A fleet created before the upgrade keeps its
+  old labels until you run `omniglass system previewLabels`, then `omniglass system
+  recomputeLabels`. Only the second of a kind in a place adds its type and number: a place with one
+  boardroom reads as the place, exactly as its name is `boardroom` rather than `boardroom-1`.
 
 ## Properties on the detail
 

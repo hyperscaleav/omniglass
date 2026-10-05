@@ -218,9 +218,9 @@ func TestTheDraftedNameIsWhatTheAllocatorWouldMint(t *testing.T) {
 
 // TestTheDraftSystemLabelCarriesTheOrdinalItWillLandWith is the generated-name
 // case on the system tier, and since #693 there is a number in it: the shipped
-// rule is "{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}", so a form drafting
-// the SECOND boardroom in a room has to show "Boardroom 2" and not the
-// "Boardroom" the first one gets.
+// rule leads with the place and, for the second of a stem, adds the kind and
+// the ordinal (#872), so a form drafting the SECOND boardroom in a room has to
+// show "204B Boardroom 2" and not the "204B" the first one gets.
 //
 // Both halves are asserted against the string as well as against each other,
 // because a draft and a create that were both wrong in the same way would agree
@@ -230,7 +230,7 @@ func TestTheDraftSystemLabelCarriesTheOrdinalItWillLandWith(t *testing.T) {
 	gw, ctx := seededGateway(t)
 	room := makeRoomWithLabel(t, gw, ctx, "room-204b", "204B")
 
-	for _, want := range []string{"Boardroom", "Boardroom 2"} {
+	for _, want := range []string{"204B", "204B Boardroom 2"} {
 		drafted, err := gw.RenderSystemDraftLabel(ctx, storage.SystemLabelDraft{
 			SystemTypeRef: "board", LocationName: room.Name,
 		}, all, all)
