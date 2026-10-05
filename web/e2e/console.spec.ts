@@ -278,6 +278,24 @@ test.describe("operator console", () => {
     await rowOf(buildingLabel).click();
     await expect(page.locator("aside[data-blade]")).toHaveAttribute("aria-labelledby", `blade-title-system-${systemId}`);
 
+    // Its address lands on that system's view (#872): one view per system,
+    // titled by the place, the place a card of context.
+    await page.goto(`/web/locations/${buildingId}`);
+    await page.waitForURL(new RegExp(`/web/systems/${systemId}$`));
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(buildingLabel);
+    await expect(page.getByTestId("place-card")).toBeVisible();
+
+    // The campus holds two buildings and no system: a folder, its own card
+    // and the outline beneath it. And it settles: the live console once
+    // re-read the fleet view hundreds of times a second on a place's view.
+    let fleetReads = 0;
+    page.on("request", (r) => { if (r.url().includes("/api/v1/views/fleet")) fleetReads++; });
+    await page.goto(`/web/locations/${campusId}`);
+    await expect(page.getByTestId("place-subject")).toBeVisible();
+    await expect(page.getByTestId("beneath").getByRole("treeitem")).toHaveCount(2);
+    await page.waitForTimeout(1500);
+    expect(fleetReads, "fleet view reads while the folder sat open").toBeLessThan(5);
+
     // The retired canvas address lands on the outline.
     await page.goto("/web/fleet");
     await page.waitForURL(/\/web\/explore$/);
