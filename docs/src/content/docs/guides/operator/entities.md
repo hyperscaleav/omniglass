@@ -16,7 +16,7 @@ screenshots:
       - "[data-testid=blade-since]"
   - id: entity-edit-face
     path: /web/locations/east?edit=1
-    alt: "An ?edit=1 deep link lands the workspace on its Configure tab, already editing."
+    alt: "An ?edit=1 deep link lands a place's view on its Configure tab, already editing."
     # No mask: the Configure tab replaces the overview (and its since-line
     # clock), and the form renders from the seed deterministically.
 ---
@@ -29,7 +29,7 @@ it the same way everywhere in the console.
 Click a row to open its **blade**, a panel that slides in from the right with the entity's
 details. From a blade you can drill into a child (it stacks another blade behind the first),
 step back with the breadcrumb, or **Expand** to the entity's own page: a fleet entity opens
-its workspace, an identity entity its full detail. The page has its own URL, so it is
+its [detail view](/guides/operator/fleet/#one-view-per-system), an identity entity its full detail. The page has its own URL, so it is
 shareable and bookmarkable; a blade opened by a click is a quick look that does not change
 the URL, though a blade can be addressed by one (a user's `?u=<id>` deep link, which the
 create flow uses for its own handoff). Rows are keyboard-operable: Tab to a row and press
@@ -37,14 +37,16 @@ Enter to open it.
 
 ::screenshot{#entity-blade}
 
-A fleet entity's blade (a location, a system, a component) leads with the verdict and
-since-when and the active alarms that say why, and the rest of the blade is the entity's
-**form**: identity, classification, placement, the kind's own panels (a system's roles, a
-location's properties, a component's reconciliation, reachability, and alarms), and tags.
-It is the same form the workspace's Configure tab renders, so what you can edit and how
-it saves is identical in both places. **Expand** in the header promotes to the full
-workspace at the entity's own address, where the members, the 30-day strip, and the system's
-vitals live. Delete sits on the left of the footer behind a confirm, gated by your
+A fleet entity's blade (a location, a system, a component) is the glance an operator lands on
+from a row. It leads with the verdict and since-when and the active alarms that say why, each
+with its severity, then the context you came for: a system's place (as a card, with its own
+**Place details**), its standard and size; a component's place (its own, or its system's
+standing in) and the systems it serves, with the role it fills in each; a place's systems,
+each with its verdict, one click from its own blade. Then the entity's **form**: identity,
+classification, a location's parent, and tags, read or edited in place. Configuration (a
+system's roles, the properties and their cascade, a component's reconciliation and
+interfaces) is the detail view's **Configure** tab, one **Expand** away, along with the
+components, the history and the vitals. Delete sits on the left of the footer behind a confirm, gated by your
 permissions on that row.
 
 The identity pages (Users, Groups, and Roles) use the same blade, and there drilling crosses entities: from a
@@ -57,8 +59,8 @@ read-only reference.
 
 A blade opens **read-only**, and its actions live in the **footer action bar**; the header is
 chrome only (back, full-page, close). **Edit** turns the whole blade live in place, fleet
-and identity blades alike: a fleet blade's form (the same one the workspace's
-[Configure tab](/guides/operator/fleet/) renders) and an identity blade's profile, members,
+and identity blades alike: a fleet blade's form (the identity, classification and tags of the
+same form the detail view's [Configure tab](/guides/operator/fleet/) renders) and an identity blade's profile, members,
 and grants.
 On an identity blade, **Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
 cluster swaps to **Cancel** and **Save**. Changes stage locally so you can check your work first; **Save**
@@ -81,7 +83,7 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
 ## Deep-link the edit
 
 The mode is part of the address: append `?edit=1` to a fleet entity's URL and it lands on
-the workspace's **Configure** tab, already editing (#800), so a "fix the label on this
+the detail view's **Configure** tab, already editing (#800), so a "fix the label on this
 location" handoff is one link, not a link plus instructions. The same permission gates apply: without `<resource>:update` the
 link lands reading, quietly. Leaving edit (Cancel or Save) strips the param, so refreshing
 mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already
@@ -350,8 +352,8 @@ From the CLI: `omniglass component alarm list <name> [--include-cleared] [--unac
 
 ## Health on a system or location
 
-A **system** and a **location** each carry a **health verdict**, shown as a badge on its workspace and in
-the systems list:
+A **system** and a **location** each carry a **health verdict**, shown as a badge on its detail view and in
+the outline:
 
 | verdict | means |
 |---|---|
@@ -370,9 +372,9 @@ A location's verdict is the **worst** of every system placed anywhere beneath it
 when one system anywhere beneath it is out. A system's verdict is the worst contribution among the **roles** it
 needs filled.
 
-**The system's workspace is the answer to "why".** A bare "degraded" gives you nothing to do, so the
-workspace names the chain instead: **Active alarms** lead its Overview, each naming the down component
-and the role it impairs, and the role cards beneath carry the arithmetic. Read together they are this
+**The system's view is the answer to "why".** A bare "degraded" gives you nothing to do, so the
+view names the chain instead: **Why** leads its Overview, each alarm naming the down component
+and the role it impairs, and the component rows beneath carry the arithmetic. Read together they are this
 chain:
 
 ```text
@@ -386,8 +388,9 @@ alarm on mic-pod-2 (critical, "no audio on channel 1")
 
 Read it bottom-up when you want the verdict and top-down when you want the fix. A role can also be
 impaired with **no down component named**, which means it is **short-staffed** rather than broken:
-nobody is assigned. Those are two different jobs, and the workspace keeps them apart: a short role
-reads **incomplete** with a dashed empty slot, a down occupant reads the impact its role declared.
+nobody is assigned. Those are two different jobs, and the view keeps them apart: an unstaffed seat
+reads **incomplete** as an empty slot, a down occupant keeps its seat and reads the impact its role
+declared.
 
 **The History strip is the answer to "since when".** It is the same shape as the reachability
 availability strip: one segment per stretch the entity held a verdict, drawn from the **recorded edges**

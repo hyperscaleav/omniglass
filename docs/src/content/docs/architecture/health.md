@@ -20,7 +20,8 @@ transition history**. Three reads serve it: the two explanations
 (`GET /systems/{name}/health` and `GET /locations/{name}/health`) and the bulk verdict read
 (`GET /systems:health`, #653), alongside the alarm write surface on a component. The console
 ships **HealthBadge**, **HealthHistory**, and **AlarmsPanel** on the component, system, and
-location workspaces. See [implementation status](/architecture/status/).
+place detail views; healthy reads grey there and in the outline, and only trouble carries a
+hue (#872). See [implementation status](/architecture/status/).
 :::
 
 ## Two shapes of read: the explanation and the verdict

@@ -22,7 +22,7 @@ There are two ways to operate, and they are the same API with the same checks be
   bearer token, and managing your own label, picture, and password.
 - **[Explore your fleet](/guides/operator/fleet/)**: the outline of every place, the systems
   that sit there and what is in them; finding one thing with the chip filter; and the
-  workspace each one opens.
+  detail view each system opens, with its place as context.
 - **[Work with an entity](/guides/operator/entities/)**: opening a blade, drilling into
   children, and creating, editing, or deleting.
 - **[Nodes and reachability](/guides/operator/collection/)**: enrolling a collection node,

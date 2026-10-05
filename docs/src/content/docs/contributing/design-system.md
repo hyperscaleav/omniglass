@@ -55,6 +55,25 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   container queries rather than the window's, since the sidebar and the blade take their share
   first. Health is four fixed slots (healthy, incomplete, degraded, outage), glyph and count,
   where healthy stays grey and only trouble carries a hue (ADR-0137).
+- **A detail view is one per system, its place as context.** Systems are the unit; places are
+  folders and metadata; components are pieces of systems (#872). A system's view
+  (`pages/SystemZoom.tsx`) is a `PlaceCard` (the place's type, tags and its own panel, never its
+  name when the view is already titled by it) above the subject card (an eyebrow, the verdict, the
+  facts said once) with its `TabRail` inside. A place holding exactly one system lands on it
+  (`lib/detail.ts` `landingFor`); a place holding none or several renders its own subject card,
+  with a `SystemSummary` per system and `OutlineWorkspace` rooted at it. A component's view wears
+  the `PlaceCard` too, with its provenance. `DetailGate` owns the miss, pending and error-with-Retry
+  states for all three. A system's components render as `MemberRows`, the outline's row idiom on
+  its own grid, a role grouped only where it says something a column cannot. There is no counts
+  line above a detail view: the subject card's header carries its facts. A list whose items hold
+  their own queries iterates stable ids, never the objects a fresh read hands back: iterating
+  objects rebuilt each card on every read, and each rebuilt card refetched, a request storm.
+- **The side panel is the glance.** A fleet panel (`EntityBlade`) leads with verdict, since and
+  why (severity first), then the context the operator came for, then the form's identity,
+  classification, a location's parent, and tags. `EntityForm` with `host="blade"` leaves out the
+  kind's configuration panels (roles, properties, reconciliation, interfaces), which the detail
+  view's Configure tab carries, and a system's or component's placement, which the panel's
+  place card already says.
 - **The Name column has a floor, and the card scrolls before it gives it up.** A list table is
   `table-layout: fixed`, every column but Name declares a width, and Name takes what is left, which
   is what lets the identifier grow into a wide screen. It also made Name the first column to give up
@@ -142,11 +161,13 @@ with dark ink; that rule is inert while the console is dark-only.
 Status badges use `badge badge-sm` with a **soft hue** for a signalled state (`badge-soft
 badge-success` for up/enabled/responding, `badge-soft badge-error` for down, `badge-soft
 badge-warning` for stale). A **neutral** state (a node that has never checked in, a disabled task,
-an unknown verdict) does **not** use `badge-neutral` or `badge-ghost`: against this theme's dark
-`base-100` (`#080c16`), `badge-neutral` renders near-black and `badge-ghost` renders transparent, so
-both read as invisible. Use a soft grey fill tinted from the text color instead
-(`bg-base-content/10 text-base-content/70 border-transparent`), which reads as a visible pill in both
-themes at the same weight as the soft hues. The same reason keeps `type` values (interface/task
+an unknown verdict) does **not** use `badge-neutral`: against this theme's dark `base-100`
+(`#080c16`) it renders near-black, and `theme-badges.test.ts` bans it. The app's neutral chip is
+`badge-ghost`, which `app.css` restyles from daisyUI's transparent default into a soft grey fill
+tinted from the text color, so it reads as a visible pill at the same weight as the soft hues. A
+**healthy** verdict wears `badge-healthy`, the same grey with its own name (#872): only trouble
+carries a hue, on every health pill, strip and marker, and a known healthy verdict stays
+distinguishable from an unknown one in markup. The same reason keeps `type` values (interface/task
 `type`) as plain `font-data` text, not a `badge-neutral` chip.
 
 ## Primitives (the reuse target)
