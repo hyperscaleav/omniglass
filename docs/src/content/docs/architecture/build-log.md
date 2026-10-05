@@ -6051,3 +6051,9 @@ One claim did not survive the audit: the component page said a component's place
 primary system", and the schema carries no such inheritance (a component's place is only what
 was set). The view now says which it is showing, the component's own place or its system's
 standing in, and the storage question stays with #862.
+
+The label rule's first cut read the place alone, so two systems of different kinds in one room
+(a classroom and its signage) both read "Media Lab". The architect's ruling: a shared place names
+each system's kind ("Media Lab Meeting Room", "Media Lab Signage"). That is a fact the rule could
+not see, so the system's data map gained `SharesLocation`, and a create, a move or a delete restamps
+the systems at the places whose count it changed, in the same transaction.

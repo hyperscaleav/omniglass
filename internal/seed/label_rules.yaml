@@ -24,10 +24,12 @@ label_rules:
     # breadcrumb that already says Briefing Room. The kind and the standard
     # stay attributes beside the label.
     #
-    # The ordinal still follows the NAME (#693): the first system of its stem
-    # in a place carries no digits and reads the place alone; a second one
-    # (`boardroom-2` beside `boardroom`) reads the place, its kind and its
-    # ordinal, since the place alone cannot tell the two apart.
+    # A place holding several systems names each one's kind after the place
+    # ("Media Lab Meeting Room", "Media Lab Signage"), and the siblings restamp
+    # as the count changes. An unclassified system has no kind to name, so it
+    # names itself ("Media Lab Lobby Wall"). The ordinal still follows the NAME
+    # (#693): the first of a stem is bare and the second carries its 2
+    # ("Room A Boardroom", "Room A Boardroom 2").
     #
     # A system with no place has nothing to lead with, so it reads its kind and
     # ordinal as before.
@@ -35,7 +37,7 @@ label_rules:
     # A shipped rule change restamps nothing by itself (ADR-0100, ADR-0102). A
     # new fleet gets this at create; an existing one keeps its labels until an
     # operator runs /systems:recomputeLabels.
-    template: "{{if .LocationLabel}}{{.LocationLabel}}{{if .Ordinal}} {{.TypeName}} {{.Ordinal}}{{end}}{{else}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{end}}"
+    template: "{{if .LocationLabel}}{{.LocationLabel}}{{if .SharesLocation}} {{if .TypeName}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{else}}{{title (words .Name)}}{{end}}{{end}}{{else}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{end}}"
 
   - entity_kind: location
     # The location's own name, read as words and title-cased.

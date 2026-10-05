@@ -6268,7 +6268,9 @@ interface create form, since that name is the platform's to mint.
   classification, a location's parent and tags; the configuration panels (roles, properties and
   their cascade, reconciliation, interfaces) stay on Configure, which revises ADR-0137's "the
   blade is the one form". The shipped system label rule leads with the place, so a room and its
-  system read as one name. Healthy is grey on every health pill, strip and marker, the
+  system read as one name; a place holding several systems names each one's kind after the place
+  (a new `SharesLocation` fact, its siblings restamped by the create, move or delete that changes
+  the count). Healthy is grey on every health pill, strip and marker, the
   outline's rule carried to its edge. There is no counts line above a detail view.
 - **Context:** The audit for #872 found the workspaces still speaking the idioms the outline
   retired: a location page that was a band canvas, a room and its system as two views under two

@@ -898,11 +898,11 @@ func TestSeededLabelsRenderFromTheirRules(t *testing.T) {
 		// place (#872), so each half reads its own room.
 		{table: "system", place: "boardroom-a", name: "boardroom", label: "Boardroom A", platform: true},
 		{table: "system", place: "boardroom-b", name: "boardroom", label: "Boardroom B", platform: true},
-		// The same-BUCKET same-type siblings live in the media lab: the first
-		// reads the place alone beside its `classroom` name, and the second,
-		// which the place cannot tell apart from it, reads the place, its kind
-		// and its ordinal beside `classroom-2` (#693, #872).
-		{table: "system", place: "media-lab", name: "classroom", label: "Media Lab", platform: true},
+		// The same-BUCKET same-type siblings live in the media lab: a place
+		// holding several systems names each one's kind after it, and the
+		// ordinal follows the name, so `classroom` reads "Media Lab Classroom"
+		// and `classroom-2` "Media Lab Classroom 2" (#693, #872).
+		{table: "system", place: "media-lab", name: "classroom", label: "Media Lab Classroom", platform: true},
 		{table: "system", place: "media-lab", name: "classroom-2", label: "Media Lab Classroom 2", platform: true},
 		// The two floors, which used to be here as PINS over a generated name
 		// (`1` labelled Level 2). They are named for their designations now, so

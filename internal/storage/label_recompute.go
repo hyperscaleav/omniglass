@@ -650,6 +650,23 @@ func (p *PG) cascadeLocationLabelsWith(ctx context.Context, tx pgx.Tx, eng *labe
 	return out, nil
 }
 
+// cascadeSiblingSystemLabels restamps the systems placed AT these locations,
+// for an act that changed how many systems sit there: a create, a move (the
+// place left and the place joined), a delete. A system's label reads whether
+// it shares its location (#872), so its siblings' labels are the rest of that
+// write.
+func (p *PG) cascadeSiblingSystemLabels(ctx context.Context, tx pgx.Tx, locationIDs ...string) error {
+	if len(locationIDs) == 0 {
+		return nil
+	}
+	eng, err := p.labelEngine(ctx, tx)
+	if err != nil {
+		return err
+	}
+	_, err = p.lockedRecompute(ctx, tx, eng, systemTable, "system", labelNarrow{locationIDs: locationIDs}, scope.Set{All: true}, scope.Set{All: true})
+	return err
+}
+
 // cascadeSystemMemberLabels restamps the components whose PRIMARY system is
 // this one, for a system whose type just changed.
 func (p *PG) cascadeSystemMemberLabels(ctx context.Context, tx pgx.Tx, systemID string) error {

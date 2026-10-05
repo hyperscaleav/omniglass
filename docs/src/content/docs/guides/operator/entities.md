@@ -162,9 +162,11 @@ identity pages.
   name (a `huddle` that everyone calls the Huddle Room), open the lock and type it.
 
   A system's shipped rule reads its **place**, because a system is what makes that place work: a
-  system you create in Boardroom 204B shows the label **Boardroom 204B**. A second system of the same
-  kind in the same place adds its **type and its number**, the number its name is about to carry: it
-  shows `boardroom-2` and **Boardroom 204B Boardroom 2**. The two fields are one answer, so a label
+  system you create in Boardroom 204B shows the label **Boardroom 204B**. Once a place holds several
+  systems, each adds its **type**: **Media Lab Meeting Room** beside **Media Lab Signage**, and the
+  first one restamps when the second arrives (and back when it leaves). Two of the same type add
+  the number their names carry: `boardroom-2` shows **Boardroom 204B Boardroom 2**. A system with
+  no type names itself instead ("Media Lab Lobby Wall"). The two fields are one answer, so a label
   with a number in it means a name with the same number in it, and neither is a guess: both are read
   from the placement you have just picked. A system with no place reads its type.
 

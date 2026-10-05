@@ -1007,15 +1007,18 @@ how many of a thing there are. The cost is that a rule cannot render "Boardroom 
 `boardroom`; the [decision log](/architecture/decisions/#adr-0101-the-first-of-its-stem-in-a-bucket-carries-no-ordinal-and-the-mint-that-says-so-is-the-one-allocation-tests)
 records why that is a feature.
 
-That key is what the **shipped global rule for systems** reads, after the place:
-`{{if .LocationLabel}}{{.LocationLabel}}{{if .Ordinal}} {{.TypeName}} {{.Ordinal}}{{end}}{{else}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{end}}`.
+That key is what the **shipped global rule for systems** reads, after the place and whether the
+place is shared:
+`{{if .LocationLabel}}{{.LocationLabel}}{{if .SharesLocation}} {{if .TypeName}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{else}}{{title (words .Name)}}{{end}}{{end}}{{else}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{end}}`.
 A system is the logical group of components that makes a place work, and nearly every room holds
 exactly one, so it reads as the place it monitors: "Briefing Room", not its kind of space read back
 under a breadcrumb that already says Briefing Room ([ADR-0139](/architecture/decisions/#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context)). The kind and the standard are attributes
-beside the label. The ordinal is what tells two systems in one place apart, the case AV fleets are
-full of: two `board` systems in one room are `boardroom` and `boardroom-2`, and they read "Room A"
-and "Room A Boardroom 2". A system with no place reads its kind and ordinal, as every system did
-before. The same restamps-nothing rule applies as for locations: a fleet that already exists keeps
+beside the label. A place holding **several** systems names each one's kind after the place
+(`SharesLocation`): "Media Lab Meeting Room" beside "Media Lab Signage", an unclassified one naming
+itself ("Media Lab Lobby Wall"), and two of one kind told apart by the ordinal their names carry
+("Room A Boardroom", "Room A Boardroom 2"). The siblings restamp in the write that changes the
+count: a create, a move (both places), a delete. A system with no place reads its kind and ordinal,
+as every system did before. The same restamps-nothing rule applies as for locations: a fleet that already exists keeps
 its labels until an operator runs `:previewLabels` and `:recomputeLabels` on systems.
 
 **`title` reads an acronym dictionary an operator owns.** Title-casing a word by upper-casing its

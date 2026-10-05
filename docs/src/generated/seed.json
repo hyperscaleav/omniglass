@@ -1908,7 +1908,7 @@
   },
   {
    "entity_kind": "system",
-   "template": "{{if .LocationLabel}}{{.LocationLabel}}{{if .Ordinal}} {{.TypeName}} {{.Ordinal}}{{end}}{{else}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{end}}"
+   "template": "{{if .LocationLabel}}{{.LocationLabel}}{{if .SharesLocation}} {{if .TypeName}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{else}}{{title (words .Name)}}{{end}}{{end}}{{else}}{{.TypeName}}{{if .Ordinal}} {{.Ordinal}}{{end}}{{end}}"
   },
   {
    "entity_kind": "location",

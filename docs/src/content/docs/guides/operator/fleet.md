@@ -220,9 +220,9 @@ The view reads top-down:
 A place holding a system and places beneath it lists those places under the system, as the
 outline rooted there.
 
-A system's label is its place's by default, so a room and its system read as one name. A
-second system of the same kind in the same place adds its kind and number ("Media Lab
-Classroom 2"), and a system with no place reads its kind.
+A system's label is its place's by default, so a room and its system read as one name. A place
+holding several systems names each one's kind ("Media Lab Meeting Room", "Media Lab Signage"),
+and a system with no place reads its kind. Type your own label and it stays yours.
 
 ## A place's own view
 
