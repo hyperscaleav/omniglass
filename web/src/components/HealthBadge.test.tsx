@@ -32,16 +32,28 @@ describe("HealthBadge", () => {
     }
   });
 
-  it("gives each verdict its own semantic hue, so the four read as distinct states", () => {
+  it("gives each trouble verdict its own semantic hue, so the three read as distinct states", () => {
     const seen = new Set<string>();
-    for (const v of ["healthy", "incomplete", "degraded", "outage"]) {
+    for (const v of ["incomplete", "degraded", "outage"]) {
       const { getByText, unmount } = mount(() => <HealthBadge verdict={v} />);
       const cls = getByText(v).className;
-      expect(cls).toMatch(/badge-(success|incomplete|warning|error)/);
-      seen.add(cls.match(/badge-(success|incomplete|warning|error)/)![0]);
+      expect(cls).toMatch(/badge-(incomplete|warning|error)/);
+      seen.add(cls.match(/badge-(incomplete|warning|error)/)![0]);
       unmount();
     }
-    expect(seen.size).toBe(4); // never one accent for "not fine"
+    expect(seen.size).toBe(3); // never one accent for "not fine"
+  });
+
+  // Healthy stays grey (#872, the outline's rule carried to every fleet
+  // surface): a hue means "look here", so a healthy fleet reads calm and the
+  // one troubled system is the only colour on the page. The word and the
+  // glyph still carry the state.
+  it("draws healthy in the neutral chip, with no hue", () => {
+    const { getByText } = mount(() => <HealthBadge verdict="healthy" />);
+    const cls = getByText("healthy").className;
+    expect(cls).toContain("badge-healthy");
+    expect(cls).not.toMatch(/badge-(success|warning|error|incomplete|ghost)/);
+    expect(getByText("healthy").querySelector("svg")).toBeTruthy();
   });
 
   // incomplete is a commissioning gap, not a fault, and its glyph has to say so
