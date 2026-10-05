@@ -20,7 +20,14 @@ import { entityLabel } from "../lib/entities";
 //
 // `showName` is off where the view is already titled by the place (a sole
 // system's view), so the room is never named twice.
-export default function PlaceCard(props: { placeId: string; showName: boolean; contents?: string }) {
+export default function PlaceCard(props: {
+  placeId: string;
+  showName: boolean;
+  contents?: string;
+  // Where the place comes from, when that is worth saying: a component's own
+  // placement, or its system's place standing in for one it does not have.
+  provenance?: string;
+}) {
   const blades = useBlades();
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
@@ -43,6 +50,9 @@ export default function PlaceCard(props: { placeId: string; showName: boolean; c
           <Show when={props.contents}>
             <span class="text-base-content/30">{"·"}</span>
             <span class="text-base-content/60">{props.contents}</span>
+          </Show>
+          <Show when={props.provenance}>
+            <span data-testid="place-provenance" class="rounded border border-base-content/15 px-1.5 text-[11px] leading-4 text-base-content/55">{props.provenance}</span>
           </Show>
           <TagPills tags={tags()} />
           <span class="flex-1" />
