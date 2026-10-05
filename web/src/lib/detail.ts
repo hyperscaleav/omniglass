@@ -1,4 +1,5 @@
-import { ancestors, locationIndex, type FleetSystem, type FleetView } from "./fleet";
+import { ancestors, childrenIndex, locationIndex, type FleetSystem, type FleetView } from "./fleet";
+import { countWord } from "./outline";
 import { entityLabel } from "./entities";
 import type { Verdict } from "./health";
 import type { SystemBody, ComponentCard } from "./system_zoom";
@@ -132,4 +133,14 @@ export function memberModel(body: SystemBody, ctx: MemberContext): { rows: Membe
     };
   });
   return { rows, groups };
+}
+
+// What a place holds, in the outline's words: the places directly beneath it
+// counted by their type's registry label ("2 buildings, 1 floor"), or Empty.
+export function contentsOf(view: FleetView, placeId: string, types: { name: string; label?: string }[]): string {
+  const counts = new Map<string, number>();
+  for (const c of childrenIndex(view).get(placeId) ?? []) counts.set(c.location_type, (counts.get(c.location_type) ?? 0) + 1);
+  const label = (t: string) => entityLabel(types.find((x) => x.name === t) ?? { name: t });
+  const parts = [...counts.entries()].map(([t, n]) => countWord(label(t), n));
+  return parts.length > 0 ? parts.join(", ") : "Empty";
 }

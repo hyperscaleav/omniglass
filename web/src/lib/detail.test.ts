@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { componentCrumbs, landingFor, memberModel, rolesOf, systemCrumbs, systemsAtPlace } from "./detail";
+import { componentCrumbs, contentsOf, landingFor, memberModel, rolesOf, systemCrumbs, systemsAtPlace } from "./detail";
 import { type FleetView } from "./fleet";
 import { uuidFor } from "./testids";
 
@@ -137,5 +137,15 @@ describe("a system's components as rows", () => {
     // A grouped member keeps the other roles it fills: its one home is the
     // group, so the column names what the group's header does not.
     expect(m.groups[0].members[1].role).toBe("Conferencing Bar");
+  });
+});
+
+describe("what a place holds", () => {
+  const types = [{ name: "room", label: "Room" }, { name: "floor", label: "Floor" }];
+  it("counts the places directly beneath it by their type's label, as the outline does", () => {
+    expect(contentsOf(view, uuidFor("hall"), types)).toBe("3 rooms");
+  });
+  it("says Empty for a place holding nothing beneath it", () => {
+    expect(contentsOf(view, uuidFor("aud"), types)).toBe("Empty");
   });
 });

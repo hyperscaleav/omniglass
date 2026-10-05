@@ -211,6 +211,12 @@ describe("the location blade", () => {
     expect(await screen.findByRole("dialog", { name: "Boardroom" })).toBeTruthy();
   });
 
+  it("says what the place holds beneath it, in the registry's words", async () => {
+    mountBlade({ kind: "location", id: uuidFor("eb-room") });
+    const blade = await screen.findByRole("dialog");
+    expect(within(blade).getByTestId("blade-contents").textContent).toContain("Empty");
+  });
+
   it("renders the form with the parent", async () => {
     mountBlade({ kind: "location", id: uuidFor("eb-room") });
     const form = await screen.findByTestId("entity-form");

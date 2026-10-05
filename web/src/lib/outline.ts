@@ -90,7 +90,7 @@ const byLabel = <T extends { label: string; id: string }>(a: T, b: T) => a.label
 
 // A type label in a count reads as the word does in a sentence ("3 rooms"),
 // except an acronym, which keeps its capitals ("2 HVAC Zones").
-function countWord(label: string, n: number): string {
+export function countWord(label: string, n: number): string {
   const word = /^[A-Z][a-z]/.test(label) ? label[0].toLowerCase() + label.slice(1) : label;
   if (n === 1) return `${n} ${word}`;
   if (/(s|x|z|ch|sh)$/i.test(word)) return `${n} ${word}es`;

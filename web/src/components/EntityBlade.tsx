@@ -20,7 +20,8 @@ import { componentSystems, componentSystemsKey } from "../lib/members";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
 import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { slotStrip } from "../lib/slot_strip";
-import { rolesOf, systemsAtPlace } from "../lib/detail";
+import { contentsOf, rolesOf, systemsAtPlace } from "../lib/detail";
+import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
 
@@ -256,6 +257,8 @@ function LocationBody(props: { id: string }) {
   const row = () => (locations.data ?? []).find((l) => l.id === props.id);
   const anchor = () => view.data?.locations?.find((l) => l.id === props.id);
   const here = createMemo(() => (view.data ? systemsAtPlace(view.data, props.id) : []));
+  const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
+  const contents = () => (view.data ? contentsOf(view.data, props.id, types.data ?? []) : "");
 
   const { destructive, err } = useDelete({
     kindLabel: "location",
@@ -274,6 +277,10 @@ function LocationBody(props: { id: string }) {
       <div class="flex flex-wrap items-center gap-2">
         <HealthBadge verdict={anchor()?.verdict ?? undefined} size="sm" />
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
+      </div>
+      <div data-testid="blade-contents" class={section}>
+        <span class={eyebrow}>Holds</span>
+        <span class="text-base-content/70">{contents()}</span>
       </div>
       <Show when={here().length > 0}>
         <div data-testid="blade-systems" class={section}>

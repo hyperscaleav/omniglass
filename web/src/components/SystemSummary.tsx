@@ -49,7 +49,7 @@ export default function SystemSummary(props: { systemId: string }) {
         <span class="font-semibold">{system() ? entityLabel(system()!) : ""}</span>
         <HealthBadge verdict={system()?.verdict ?? undefined} size="sm" />
         <Show when={health.data && sinceOf(health.data, now)}>
-          {(sc) => <span class="tabular-nums text-base-content/60">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
+          {(sc) => <span data-testid="summary-since" class="tabular-nums text-base-content/60">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
         </Show>
       </span>
       <span class="flex flex-wrap items-center gap-x-2 text-base-content/60">
