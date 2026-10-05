@@ -29,31 +29,16 @@ screenshots:
   - id: fleet-system
     path: /web/systems/huddle
     alt: "A system's view: the place as a card of context, the system's header (verdict, since, standard, size), then Overview: its components as rows naming each one's role, roles grouped only where they say something."
-    # The since-line and the history rows age with the capture (edge stamps
-    # are seed-run times, the relative ages count from the capture's own
-    # clock), so they mask: the header line whole, and each history row via
-    # its own moving text, the entity blade's exact selectors. The strip
-    # masks too: its span weights divide seed-time gaps by the capture's own
-    # age, the breathing #780 measured as a 40px flap on the blade.
+    # The since-line ages with the capture; the history strip is Activity's
+    # now (#872), so nothing else on Overview moves.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
-      - ".og-statestrip"
-      - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
-      - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
-      - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
   - id: fleet-map
     path: /web/systems/huddle
     alt: "The map inside Overview: the standard's declared layout rendered top-down, one marker per role position, solid where staffed and hollow where not."
-    # The header's since-line ages with the capture, and Overview carries the
-    # compact history (its strip and rows move with the seed's own clock), so
-    # the fleet-system masks apply here too (baseline only; the docs embed the
-    # clean render).
+    # The header's since-line ages with the capture.
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
-      - ".og-statestrip"
-      - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
-      - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
-      - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
   # The auditorium carries the fleet's live critical alarm, so the history
   # tab has something real to say. Its room holds that one system, so the
   # room's address lands on it.
@@ -71,9 +56,6 @@ screenshots:
       - "text=/ongoing/ >> xpath=ancestor::li[1]"
       - "text=/\\u2192/ >> xpath=ancestor::li[1]"
       - ".og-statestrip"
-      - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
-      - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
-      - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
       # The logs under the incidents render seed-run stamps.
       - "[data-testid=logs-tab]"
   - id: fleet-data
@@ -90,24 +72,17 @@ screenshots:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
       - "[data-testid=timeseries-chart]"
       - "[data-testid=sparkline]"
-      # Overview's compact history, as on fleet-system.
-      - ".og-statestrip"
-      - "text=/\\(\\d+[smh] ago\\)/ >> xpath=ancestor::div[1]"
-      - "text=/\\d+[smh] and counting/ >> xpath=ancestor::div[1]"
-      - "text=/held \\d+[smh]/ >> xpath=ancestor::div[1]"
   - id: fleet-location
     path: /web/locations/east
     alt: "A place holding no system of its own: its card with its type and tags, its tabs, and the outline of what is beneath it, counted by systems."
-    # The since-line ages with the capture.
-    mask:
-      - "[data-testid=since-line] >> xpath=ancestor::div[1]"
+    # Nothing on a folder's view moves with the clock: no mask.
   # A room holding two systems keeps a view of its own: a brief card per
   # system.
   - id: fleet-place-systems
     path: /web/locations/media-lab
     alt: "A room holding two systems: its card, then a brief card per system with its verdict, standard and size, each opening that system's view."
     mask:
-      - "text=/^since / >> xpath=ancestor::span[1]"
+      - "[data-testid=summary-since]"
   # Opened down to one room so the shot shows every rule at once: folded
   # chains, contents lines, health counts, and a place wearing its system
   # with the components beneath it.
