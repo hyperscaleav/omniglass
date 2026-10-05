@@ -1,5 +1,7 @@
 import { ancestors, locationIndex, type FleetSystem, type FleetView } from "./fleet";
 import { entityLabel } from "./entities";
+import type { Verdict } from "./health";
+import type { SystemBody, ComponentCard } from "./system_zoom";
 
 // The detail view's model (#872). Systems are the unit Omniglass monitors;
 // places are folders and metadata about where; components are the pieces of
@@ -59,4 +61,73 @@ export function componentCrumbs(view: FleetView, locationId: string | null | und
 // and the role says what it does there.
 export function rolesOf(componentName: string, declared: { name: string; label?: string; assigned_to?: string[] | null }[]): string[] {
   return declared.filter((r) => (r.assigned_to ?? []).includes(componentName)).map((r) => entityLabel({ name: r.name, label: r.label }));
+}
+
+// A system's components as rows (#872), the outline's row idiom rather than a
+// grid of cards. A member reads its role in a column; a role earns a group
+// (a header with its arithmetic, its occupants beneath, its gap as empty
+// slots) only where it says something a column cannot: a quorum beyond one,
+// a shortfall, or nobody staffing it. An unstaffed role is a commissioning
+// gap and reads incomplete; a short staffed one reads its impact.
+
+export type MemberRow = {
+  id: string;
+  name: string;
+  label: string;
+  role: string;
+  product: string;
+  icon: string;
+  health: Verdict | null;
+  alarm?: string;
+  also: string[];
+  noRole: boolean;
+};
+export type MemberGroup = {
+  key: string;
+  label: string;
+  arithmetic: string;
+  tone: "incomplete" | "degraded" | "outage" | null;
+  members: MemberRow[];
+  empty: number;
+};
+export type MemberContext = {
+  verdict: (id: string) => Verdict | null;
+  alarm: (id: string) => string | undefined;
+  product: (id: string) => string;
+  label: (id: string, name: string) => string;
+  icon: (id: string) => string;
+};
+
+export function memberModel(body: SystemBody, ctx: MemberContext): { rows: MemberRow[]; groups: MemberGroup[] } {
+  const row = (c: ComponentCard, role: string): MemberRow => ({
+    id: c.componentId,
+    name: c.name,
+    label: ctx.label(c.componentId, c.name),
+    role,
+    product: ctx.product(c.componentId),
+    icon: ctx.icon(c.componentId),
+    health: ctx.verdict(c.componentId),
+    alarm: ctx.alarm(c.componentId),
+    also: c.shared,
+    noRole: c.noRole && c.roles.length === 0,
+  });
+  const rows = body.cards.map((c) => row(c, c.roles.map((r) => (r.position ? `${r.label} (${r.position})` : r.label)).join(", ")));
+  const groups = body.groups.map((g) => {
+    const tone: MemberGroup["tone"] = g.short === 0 ? null : g.members.length === 0 ? "incomplete" : g.impact === "outage" ? "outage" : "degraded";
+    return {
+      key: g.name,
+      label: g.label,
+      arithmetic: `${g.satisfying} of ${g.quorum}${g.spare > 0 ? `, ${g.spare} spare` : ""}`,
+      tone,
+      // Inside its group a member's role is the group; the column names its
+      // position, if any (what tells it from its siblings),
+      // and the other roles it fills, since its one home is this group.
+      members: g.memberCards.map((c) => row(c, [
+        c.roles.find((r) => r.label === g.label)?.position ?? "",
+        ...c.roles.filter((r) => r.label !== g.label).map((r) => (r.position ? `${r.label} (${r.position})` : r.label)),
+      ].filter(Boolean).join(", "))),
+      empty: g.short,
+    };
+  });
+  return { rows, groups };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { componentCrumbs, landingFor, rolesOf, systemCrumbs, systemsAtPlace } from "./detail";
+import { componentCrumbs, landingFor, memberModel, rolesOf, systemCrumbs, systemsAtPlace } from "./detail";
 import { type FleetView } from "./fleet";
 import { uuidFor } from "./testids";
 
@@ -80,5 +80,49 @@ describe("the roles a component fills", () => {
   });
   it("says nothing for a member filling no role", () => {
     expect(rolesOf("panel-1", declared)).toEqual([]);
+  });
+});
+
+describe("a system's components as rows", () => {
+  const body = {
+    cards: [
+      { componentId: "c-bar", name: "videobar-1", down: false, shared: ["Overflow Room"], roles: [{ label: "Conferencing Bar" }], noRole: false },
+      { componentId: "c-pow", name: "device-1", down: false, shared: [], roles: [], noRole: true },
+    ],
+    groups: [
+      { name: "mic", label: "Room Microphone", quorum: 2, satisfying: 1, short: 1, spare: 1, impact: "degraded", members: ["mic-1"], memberCards: [
+        { componentId: "c-mic", name: "mic-1", down: true, shared: [], roles: [{ label: "Room Microphone", position: "Left" }], noRole: false },
+        { componentId: "c-bar2", name: "bar-2", down: false, shared: [], roles: [{ label: "Room Microphone" }, { label: "Conferencing Bar" }], noRole: false },
+      ] },
+      { name: "disp", label: "Main Display", quorum: 1, satisfying: 0, short: 1, spare: 0, impact: "outage", members: [], memberCards: [] },
+    ],
+  };
+  const ctx = {
+    verdict: (id: string) => (id === "c-mic" ? "outage" as const : "healthy" as const),
+    alarm: (id: string) => (id === "c-mic" ? "No route to host" : undefined),
+    product: (id: string) => ({ "c-bar": "Lyra Bar 80" } as Record<string, string>)[id] ?? "",
+    label: (id: string, name: string) => (id === "c-bar" ? "Video Bar" : name),
+    icon: () => "box",
+  };
+
+  it("names each ungrouped member's role, product and the systems it also serves", () => {
+    const m = memberModel(body, ctx);
+    expect(m.rows.map((r) => [r.label, r.role, r.product, r.also.join(",")])).toEqual([
+      ["Video Bar", "Conferencing Bar", "Lyra Bar 80", "Overflow Room"],
+      ["device-1", "", "", ""],
+    ]);
+    expect(m.rows[1].noRole).toBe(true);
+  });
+
+  it("groups a role only where it says something a column cannot, with its arithmetic and its gap", () => {
+    const m = memberModel(body, ctx);
+    expect(m.groups.map((g) => [g.label, g.arithmetic, g.tone, g.empty])).toEqual([
+      ["Room Microphone", "1 of 2, 1 spare", "degraded", 1],
+      ["Main Display", "0 of 1", "incomplete", 1],
+    ]);
+    expect(m.groups[0].members[0]).toMatchObject({ label: "mic-1", role: "Left", health: "outage", alarm: "No route to host" });
+    // A grouped member keeps the other roles it fills: its one home is the
+    // group, so the column names what the group's header does not.
+    expect(m.groups[0].members[1].role).toBe("Conferencing Bar");
   });
 });

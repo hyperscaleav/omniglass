@@ -119,8 +119,8 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], meOverride);
   qc.setQueryData([...SYSTEMS_KEY], [{ id: uuidFor("szp-sys"), name: "boardroom", label: "Boardroom", standard: "huddle-room" }]);
-  qc.setQueryData([...LOCATIONS_KEY], []);
-  qc.setQueryData([...LOCATION_TYPES_KEY], []);
+  qc.setQueryData([...LOCATIONS_KEY], [{ id: uuidFor("szp-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", actions: ["update"] }]);
+  qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("szpt-room"), name: "room", label: "Room", allowed_parent_types: [] }]);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], healthOverride);
   qc.setQueryData([...systemRolesKey(uuidFor("szp-sys"))], declared);
@@ -160,14 +160,14 @@ describe("the system zoom", () => {
   it("arithmetic renders only where a role earned a group; the 1:1 case carries none", () => {
     mount();
     expect(within(screen.getByTestId("rolegroup-room-mic")).getByText(/1 of 2/)).toBeTruthy();
-    expect(within(screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`)).queryByText(/of \d/)).toBeNull();
+    expect(within(screen.getByTestId(`member-${uuidFor("szp-c-bar")}`)).queryByText(/of \d/)).toBeNull();
   });
 
   it("an unstaffed role and a down occupant stay visually distinct: commissioning wears incomplete, failure wears the impact", () => {
     mount();
-    expect(screen.getByTestId("rolegroup-main-display").className).toContain("border-incomplete");
-    expect(screen.getByTestId("rolegroup-room-mic").className).toContain("border-warning");
-    expect(within(screen.getByTestId(`compcard-${uuidFor("szp-c-mic")}`)).getByText("mic-1")).toBeTruthy();
+    expect(within(screen.getByTestId("rolegroup-main-display")).getByText("0 of 1").className).toContain("text-incomplete");
+    expect(within(screen.getByTestId("rolegroup-room-mic")).getByText(/1 of 2/).className).toContain("text-warning");
+    expect(within(screen.getByTestId(`member-${uuidFor("szp-c-mic")}`)).getByText("mic-1")).toBeTruthy();
   });
 
   it("the build not in use never renders", () => {
@@ -177,20 +177,20 @@ describe("the system zoom", () => {
 
   it("an occupant serving another system carries a badge naming it", () => {
     mount();
-    const card = screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`);
-    expect(within(card).getByText(/also Overflow Room/)).toBeTruthy();
+    const row = screen.getByTestId(`member-${uuidFor("szp-c-bar")}`);
+    expect(within(row).getByText(/also in Overflow Room/)).toBeTruthy();
   });
 
   it("a no-role member's card opens its component blade too (#799)", async () => {
     mount();
-    fireEvent.click(screen.getByTestId(`compcard-${uuidFor("szp-c-power")}`));
+    fireEvent.click(screen.getByTestId(`member-${uuidFor("szp-c-power")}`));
     const blade = await screen.findByRole("dialog");
     expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-component-${uuidFor("szp-c-power")}`);
   });
 
   it("a spare beyond quorum reads on the group header", () => {
     mount();
-    expect(within(screen.getByTestId("rolegroup-room-mic")).getByText(/\+ 1 spare/)).toBeTruthy();
+    expect(within(screen.getByTestId("rolegroup-room-mic")).getByText(/1 spare/)).toBeTruthy();
   });
 
 
@@ -228,9 +228,14 @@ describe("the system zoom", () => {
     expect(within(strip).getByRole("button", { name: /mic-1/ })).toBeTruthy();
   });
 
-  it("renders the verdict history strip from the transitions", () => {
+  // The history strip is Activity's (#872): Overview's header already says
+  // since when, and saying it twice was the audit's finding.
+  it("draws the verdict history on Activity, not on Overview", () => {
     mount();
-    expect(screen.getByTestId("health-history")).toBeTruthy();
+    expect(screen.queryByTestId("health-history-full")).toBeNull();
+    cleanup();
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=activity`);
+    expect(screen.getByTestId("health-history-full")).toBeTruthy();
   });
 
   it("a legacy ?zoom=1 deep link still lands on the workspace: old links never break", () => {
@@ -241,12 +246,12 @@ describe("the system zoom", () => {
 });
 
 describe("the components-first body (#790)", () => {
-  it("a 1:1 occupant is one card with a role badge, no box and no arithmetic", () => {
+  it("a 1:1 occupant is one row naming its role, no group and no arithmetic", () => {
     mount();
-    const card = screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`);
-    expect(within(card).getByText("videobar-1")).toBeTruthy();
-    expect(within(card).getByText("Conferencing Bar")).toBeTruthy();
-    expect(within(card).queryByText(/satisfying/)).toBeNull();
+    const row = screen.getByTestId(`member-${uuidFor("szp-c-bar")}`);
+    expect(within(row).getByText("videobar-1")).toBeTruthy();
+    expect(within(row).getByText("Conferencing Bar")).toBeTruthy();
+    expect(within(row).queryByText(/satisfying/)).toBeNull();
   });
 
   it("the choice jargon never renders: no 'built as', no choice eyebrow", () => {
@@ -260,25 +265,27 @@ describe("the components-first body (#790)", () => {
     const g = screen.getByTestId("rolegroup-main-display");
     expect(within(g).getByText("Main Display")).toBeTruthy();
     expect(within(g).getByText(/0 of 1/)).toBeTruthy();
+    expect(within(g).getAllByTestId("empty-slot").length).toBe(1);
   });
 
   it("a short role renders as a group with its occupants inside and the gap named", () => {
     mount();
     const g = screen.getByTestId("rolegroup-room-mic");
     expect(within(g).getByText(/1 of 2/)).toBeTruthy();
-    expect(within(g).getByTestId(`compcard-${uuidFor("szp-c-mic")}`)).toBeTruthy();
+    expect(within(g).getByTestId(`member-${uuidFor("szp-c-mic")}`)).toBeTruthy();
+    expect(within(g).getAllByTestId("empty-slot").length).toBe(1);
   });
 
-  it("a no-role member is a card with the no-role badge, not a strip of chips", () => {
+  it("a no-role member is a row saying so, not a strip of chips", () => {
     mount();
-    const card = screen.getByTestId(`compcard-${uuidFor("szp-c-power")}`);
-    expect(within(card).getByText("no role")).toBeTruthy();
+    const row = screen.getByTestId(`member-${uuidFor("szp-c-power")}`);
+    expect(within(row).getByText("no role")).toBeTruthy();
     expect(screen.queryByTestId("no-role-strip")).toBeNull();
   });
 
-  it("clicking a card opens the component blade; Expand promotes to the leaf (#799)", async () => {
+  it("clicking a row opens the component blade; Expand promotes to the leaf (#799)", async () => {
     mount();
-    fireEvent.click(screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`));
+    fireEvent.click(screen.getByTestId(`member-${uuidFor("szp-c-bar")}`));
     const blade = await screen.findByRole("dialog");
     fireEvent.click(within(blade).getByRole("button", { name: "Expand" }));
     const page = await screen.findByTestId("component-page");
@@ -286,21 +293,18 @@ describe("the components-first body (#790)", () => {
   });
 });
 
-describe("the KPI tiles (#790)", () => {
-  it("renders one tile per contract metric with the effective value, sampled or default", () => {
+describe("the metrics are said once (#872)", () => {
+  // The KPI tiles retired into Data: two renderings of the same values was
+  // the audit's finding. Data stacks every declared metric with its latest.
+  it("draws no tile row; the data section carries each metric's latest value", () => {
     mount(undefined, health, [
       { metric_type_name: "room-temperature", label: "Room Temperature", data_type: "float", value: 23.5, is_sampled: true, from_contract: true, required: false },
-      { metric_type_name: "occupancy-count", label: "Occupancy Count", data_type: "int", value: 0, is_sampled: false, from_contract: true, required: false },
     ]);
-    const tiles = screen.getByTestId("kpi-tiles");
-    expect(within(tiles).getByText("Room Temperature")).toBeTruthy();
-    expect(within(tiles).getByText("23.5")).toBeTruthy();
-    expect(within(tiles).getByText(/default/)).toBeTruthy();
-  });
-
-  it("renders no tile row at all when the standard declares nothing", () => {
-    mount();
     expect(screen.queryByTestId("kpi-tiles")).toBeNull();
+    const data = screen.getByTestId("data-tab");
+    expect(within(data).getByText("Room Temperature")).toBeTruthy();
+    expect(within(data).getByText("23.5")).toBeTruthy();
+    expect(screen.getAllByText("23.5").length).toBe(1);
   });
 });
 
@@ -420,8 +424,7 @@ describe("the history tab (#792)", () => {
   it("marks each raise on the strip's axis", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);
-    await screen.findByText("No route to host");
-    expect(screen.getAllByTestId(/^incident-marker-/)).toHaveLength(2);
+    await waitFor(() => expect(screen.getAllByTestId(/^incident-marker-/)).toHaveLength(2));
   });
 });
 
@@ -508,15 +511,51 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
   });
 });
 
-describe("the one counts line (#826)", () => {
-  it("talks about THIS system's components in one line, zeros left out", () => {
+describe("the system card's header says each thing once (#872)", () => {
+  // A counts line above the card repeated what its header said (slots, the
+  // verdict's count); the header alone now carries the system's facts.
+  it("carries the verdict, the standard's label, the component count and the gap, with no counts line", () => {
+    mount(undefined, health, [], [{ id: uuidFor("std"), name: "huddle-room", label: "Huddle Room Standard" }]);
+    const header = screen.getByTestId("system-header");
+    expect(within(header).getByText("Huddle Room Standard")).toBeTruthy();
+    expect(within(header).getByTestId("component-count").textContent).toBe("3 components");
+    expect(within(header).getAllByText(/slots filled/).length).toBe(1);
+    expect(screen.queryByTestId("counts-line")).toBeNull();
+  });
+});
+
+describe("the place is context, the system the subject (#872)", () => {
+  it("titles a sole system's view by its place and ends the path at the place's parent", () => {
     mount();
-    const line = screen.getByTestId("counts-line");
-    expect(line.textContent).toContain("components");
-    expect(line.textContent).not.toContain("roots");
-    expect(line.textContent).toContain("slots filled");
-    expect(line.textContent).toMatch(/active alarms?/);
-    expect(screen.queryByTestId("fleet-summary")).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Boardroom A");
+    expect(within(screen.getByTestId("breadcrumb")).queryByText("Boardroom A")).toBeNull();
+  });
+
+  it("shows the place as a card naming its type, without repeating its name", () => {
+    mount();
+    const card = screen.getByTestId("place-card");
+    expect(within(card).getByTestId("place-type").textContent).toBe("Room");
+    expect(within(card).queryByText("Boardroom A")).toBeNull();
+  });
+
+  it("opens the place's own panel from its card", async () => {
+    mount();
+    fireEvent.click(within(screen.getByTestId("place-card")).getByRole("button", { name: "Place details" }));
+    const blade = await screen.findByRole("dialog");
+    expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-location-${uuidFor("szp-room")}`);
+  });
+
+  it("gives an unplaced system its own title and no place card", () => {
+    mount(`/web/systems/${uuidFor("szp-other")}`);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Overflow Room");
+    expect(screen.queryByTestId("place-card")).toBeNull();
+  });
+
+  it("offers Retry when a read fails, instead of a blank", async () => {
+    const r = mount();
+    r.qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], undefined);
+    r.qc.getQueryCache().find({ queryKey: [...systemHealthKey(uuidFor("szp-sys"))] })?.setState({ status: "error", error: new Error("boom"), data: undefined });
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy();
   });
 });
 
