@@ -638,6 +638,9 @@ describe("the place configures beside its system (#872)", () => {
     expect(await screen.findByTestId("configure-face")).toBeTruthy();
     const place = await screen.findByTestId("configure-face-place");
     expect(within(place).getByText("Parent")).toBeTruthy();
+    // Place first, as the page reads: its card sits above the system's.
+    const system = screen.getByTestId("configure-face");
+    expect(place.compareDocumentPosition(system) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("?edit=place begins editing the place's form only", async () => {
