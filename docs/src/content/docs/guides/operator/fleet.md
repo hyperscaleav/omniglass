@@ -23,7 +23,7 @@ screenshots:
       - "text=/acknowledged/ >> xpath=ancestor::div[1]"
   - id: fleet-configure
     path: /web/systems/huddle?tab=configure
-    alt: "The Configure tab: Identity with the label pen and the name precheck, Classification, Placement, roles, properties and Tags, edited in place on the system's view."
+    alt: "A sole system's Configure tab: the room's own form first (identity, type, parent, properties, tags, its own Edit), then the system's (identity with the label pen and the name precheck, classification, roles, properties, tags)."
     mask:
       - "[data-testid=since-line] >> xpath=ancestor::div[1]"
   - id: fleet-system
