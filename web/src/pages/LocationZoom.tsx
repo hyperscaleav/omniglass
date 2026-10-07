@@ -32,9 +32,10 @@ import { describeError } from "../lib/format";
 // Overview (a brief card per system it holds, then what is beneath it as the
 // outline rooted here) and Configure (the one form).
 //
-// An address that asks to configure the place itself (?tab=configure, or
-// ?edit=1, the create handoff) stays here even when the place holds one
-// system, since that edit is the place's, not the system's.
+// A place holding one system configures on that system's Configure tab, in a
+// Place section of its own (#872), so even an address asking to configure
+// the place lands there: ?tab=configure opens the tab, and ?edit=1 carries
+// over as edit=place, the place form's own intent.
 export default function LocationZoom() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -68,7 +69,6 @@ export default function LocationZoom() {
     if (param("edit") === "1" && tabs().some((x) => x.key === "configure")) return "configure";
     return "overview";
   };
-  const configuring = () => param("tab") === "configure" || param("edit") === "1";
 
   // A name-shaped address resolves to the uuid, query kept (#759's rule).
   // Only an unambiguous name resolves: names scope to placement, so a bare
@@ -78,11 +78,20 @@ export default function LocationZoom() {
     const matches = (view.data.locations ?? []).filter((l) => l.name === id());
     if (matches.length === 1) navigate(`/locations/${matches[0].id}${window.location.search}`, { replace: true });
   });
-  // A place holding one system lands on it, query kept.
+  // A place holding one system lands on it, query kept; a configure intent
+  // becomes the system's Configure tab and the place's own edit.
   createEffect(() => {
-    if (!view.data || !place() || configuring()) return;
+    if (!view.data || !place()) return;
     const landing = landingFor(view.data, id());
-    if (landing.kind === "system") navigate(`/systems/${landing.id}${window.location.search}`, { replace: true });
+    if (landing.kind !== "system") return;
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("edit") === "1") {
+      q.delete("edit");
+      q.set("tab", "configure");
+      q.set("edit", "place");
+    }
+    const qs = q.toString();
+    navigate(`/systems/${landing.id}${qs ? `?${qs}` : ""}`, { replace: true });
   });
 
   const crumbs = createMemo(() => {

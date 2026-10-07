@@ -35,15 +35,23 @@ function Footer(props: { slot: BladeEdit; onEdit: () => void }) {
   );
 }
 
-export default function ConfigureFace(props: { kind: ConfigureKind; id: string }) {
+export default function ConfigureFace(props: {
+  kind: ConfigureKind;
+  id: string;
+  // Which edit intent this face answers, where a page holds two (#872): the
+  // system's own form takes `edit=1`, its sole place's `edit=place`.
+  editValue?: string;
+  testid?: string;
+}) {
   const me = useMe();
   const slot = createEditSlot();
   const canUpdate = () => can(me.data, props.kind, "update");
+  const value = props.editValue;
   // Ready once the form has bound the slot against a loaded row: editable()
   // is false until then, and false for good without the update verb.
-  const editUrl = useEditParam(slot, { ready: () => slot.editable(), canUpdate });
+  const editUrl = useEditParam(slot, { ready: () => slot.editable(), canUpdate, value });
   return (
-    <section data-testid="configure-face" class="flex flex-col">
+    <section data-testid={props.testid ?? "configure-face"} class="flex flex-col">
       <EntityForm kind={props.kind} id={props.id} slot={slot} host="page" />
       <Footer slot={slot} onEdit={() => editUrl.request()} />
     </section>

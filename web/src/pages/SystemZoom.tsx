@@ -269,6 +269,18 @@ export default function SystemZoom() {
             <TabRail tabs={tabs()} activeKey={tab} />
             <Show when={tab() === "configure"}>
               <ConfigureFace kind="system" id={id()} />
+              {/* A sole system's place has no page of its own: it configures
+                  here, in its own section with its own Edit (#872). A place
+                  shared by several systems keeps its own view and is
+                  configured there. */}
+              <Show when={sole() && placeId()}>
+                {(pid) => (
+                  <section class="border-t border-base-300">
+                    <div class="px-4 pt-4"><Eyebrow label="Place" hint="Where this system sits: the place's own name, type, parent, properties and tags. Its edit is its own, beside the system's." /></div>
+                    <ConfigureFace kind="location" id={pid()} editValue="place" testid="configure-face-place" />
+                  </section>
+                )}
+              </Show>
             </Show>
         <Show when={tab() === "activity"}>
           <section data-testid="history-tab" class="flex flex-col gap-4 p-4">

@@ -6260,7 +6260,8 @@ interface create form, since that name is the platform's to mint.
   a card of context (its type, tags and its own panel), then the system card (verdict, since,
   standard, size, slot arithmetic only while short) with its Overview, Activity and Configure.
   A place holding exactly one system has no view of its own: its address lands on the system,
-  query kept, unless it asks to configure the place (`?tab=configure`, `?edit=1`). A place
+  query kept, and its place is configured there, in a Place section of the system's Configure
+  tab with its own Edit (`?edit=1` on the place becomes `edit=place`). A place
   holding no system, or several, keeps its own subject card with a brief card per system and
   the outline rooted there. A component's view carries its place card, marked as its own or as
   its system's standing in. The side panel is the glance an operator lands on from a row:

@@ -171,10 +171,13 @@ describe("where a place lands (#872)", () => {
     expect(window.location.search).toBe("?chips=x");
   });
 
-  it("stays on the place when the address asks to configure the place itself", async () => {
+  // A one-system room has one page (#872): its place configures on the
+  // system's Configure tab, so even a configure address lands there, the
+  // place's own edit intent carried as edit=place.
+  it("lands a configure address on the system's Configure, the place's edit intent kept", async () => {
     mount(`/web/locations/${uuidFor("lz-room")}?edit=1`);
-    expect(await screen.findByTestId("configure-face")).toBeTruthy();
-    expect(screen.queryByTestId("system-page")).toBeNull();
+    expect(await screen.findByTestId("system-page")).toBeTruthy();
+    expect(window.location.pathname + window.location.search).toBe(`/web/systems/${uuidFor("lz-s-board")}?tab=configure&edit=place`);
   });
 
   it("a name-shaped address resolves to the uuid, keeping the param (#759's rule)", async () => {

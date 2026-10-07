@@ -87,7 +87,9 @@ the detail view's **Configure** tab, already editing (#800), so a "fix the label
 location" handoff is one link, not a link plus instructions. The same permission gates apply: without `<resource>:update` the
 link lands reading, quietly. Leaving edit (Cancel or Save) strips the param, so refreshing
 mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already
-left. The console itself uses these links for its handoffs: creating an entity lands on
+left. A room holding one system is configured on its system's view, so `?edit=1` on that
+room's address lands on the system's Configure with the room's own form editing
+(`?edit=place`). The console itself uses these links for its handoffs: creating an entity lands on
 `/…/<id>?edit=1`, and a user's `?u=<id>&edit=1` deep link keeps the same contract on the
 identity pages.
 

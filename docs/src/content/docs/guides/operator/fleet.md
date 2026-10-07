@@ -238,9 +238,10 @@ over this subtree. A place holding two or more systems shows a brief card per sy
 
 ::screenshot{#fleet-place-systems}
 
-An address that asks to configure the place itself (`?tab=configure`, or `?edit=1`, the
-handoff from creating one) stays on the place's view even when it holds one system, since
-that edit is the place's.
+A place holding one system has no view of its own even to be configured: its place is
+configured on the system's **Configure** tab, in a **Place** section with its own Edit, so the
+room is one page. An address asking to configure such a place lands there (`?edit=1` on the
+place becomes `?tab=configure&edit=place` on its system).
 
 ## Overview: why, then the components
 
@@ -311,8 +312,9 @@ product is fixed at creation). **Placement** moves a location under a new parent
 permission and its own audit verb; systems and components read where they sit.
 **Tags** edit in place. One save model everywhere: Edit stages drafts, Save commits them
 together (the rename last, so a refusal leaves the rest saved), Cancel reverts. A
-`?edit=1` address lands already editing. A place's and a component's views carry the same
-tab. The side panel carries the same form's identity, classification and tags; roles,
+`?edit=1` address lands already editing. A sole system's Configure also carries its place's
+form, in its own section with its own Edit (`?edit=place` opens that one). A place's and a
+component's views carry the same tab. The side panel carries the same form's identity, classification and tags; roles,
 properties and their cascade are configuration, and live here.
 
 ::screenshot{#fleet-configure}

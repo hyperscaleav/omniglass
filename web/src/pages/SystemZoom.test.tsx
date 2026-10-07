@@ -629,6 +629,34 @@ describe("the configure tab (#800)", () => {
 
 // Slice 2 of #800: ?edit=1 means the one editor, wherever it is typed. The
 // bare param lands the workspace on Configure, already editing.
+// A sole system's place has no page of its own (#872): it configures on the
+// system's Configure tab, in its own section with its own Edit, so the room
+// is one page even when its place's properties need changing.
+describe("the place configures beside its system (#872)", () => {
+  it("carries a System section and a Place section, each its own form", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure`);
+    expect(await screen.findByTestId("configure-face")).toBeTruthy();
+    const place = await screen.findByTestId("configure-face-place");
+    expect(within(place).getByText("Parent")).toBeTruthy();
+  });
+
+  it("?edit=place begins editing the place's form only", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure&edit=place`);
+    const place = await screen.findByTestId("configure-face-place");
+    expect(await within(place).findByRole("button", { name: /save changes/i })).toBeTruthy();
+    expect(within(screen.getByTestId("configure-face")).queryByRole("button", { name: /save changes/i })).toBeNull();
+  });
+
+  it("gives an unplaced system no Place section", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-other")}?tab=configure`);
+    r.qc.setQueryData([...systemHealthKey(uuidFor("szp-other"))], { ...health, roles: [], transitions: [] });
+    r.qc.setQueryData([...systemRolesKey(uuidFor("szp-other"))], []);
+    r.qc.setQueryData([...systemMetricsKey(uuidFor("szp-other"))], []);
+    expect(await screen.findByTestId("configure-face")).toBeTruthy();
+    expect(screen.queryByTestId("configure-face-place")).toBeNull();
+  });
+});
+
 describe("?edit=1 lands on configure (#800)", () => {
   it("opens the configure tab editing from a bare ?edit=1 address", async () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?edit=1`);

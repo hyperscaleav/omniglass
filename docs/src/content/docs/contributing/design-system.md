@@ -60,7 +60,9 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   (`pages/SystemZoom.tsx`) is a `PlaceCard` (the place's type, tags and its own panel, never its
   name when the view is already titled by it) above the subject card (an eyebrow, the verdict, the
   facts said once) with its `TabRail` inside. A place holding exactly one system lands on it
-  (`lib/detail.ts` `landingFor`); a place holding none or several renders its own subject card,
+  (`lib/detail.ts` `landingFor`), and its place configures in a second `ConfigureFace` on the
+system's Configure tab, answering its own edit intent (`useEditParam`'s `value`, `edit=place`);
+a place holding none or several renders its own subject card,
   with a `SystemSummary` per system and `OutlineWorkspace` rooted at it. A component's view wears
   the `PlaceCard` too, with its provenance. `DetailGate` owns the miss, pending and error-with-Retry
   states for all three. A system's components render as `MemberRows`, the outline's row idiom on
