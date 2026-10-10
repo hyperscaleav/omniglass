@@ -39,7 +39,8 @@ Enter to open it.
 
 A fleet entity's blade (a location, a system, a component) is the glance an operator lands on
 from a row. It leads with the verdict and since-when and the active alarms that say why, each
-with its severity, then the context you came for: a system's place (as a card) and its size;
+with its severity, then the context you came for: a system's place (as a card saying where it
+sits, the path above it, since a blade has no breadcrumb) and its size;
 the systems a component serves, with the role it fills in each, and its place when that is
 somewhere else; a place's systems, each with its verdict, one click from its own blade. Then
 the entity's **form**: its name, classification, a location's parent, and tags, read or edited

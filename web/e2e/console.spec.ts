@@ -284,6 +284,11 @@ test.describe("operator console", () => {
     await page.waitForURL(new RegExp(`/web/systems/${systemId}$`));
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(buildingLabel);
     await expect(page.getByTestId("place-card")).toBeVisible();
+    // The Explore crumb goes back up to where you were: the outline opened
+    // down to this row and selected.
+    await page.getByTestId("breadcrumb").getByRole("button", { name: "Explore" }).click();
+    await page.waitForURL(new RegExp(`/web/explore\\?node=${systemId}$`));
+    await expect(rowOf(buildingLabel)).toHaveAttribute("aria-selected", "true");
 
     // The campus holds two buildings and no system: a folder, its own card
     // and the outline beneath it. And it settles: the live console once

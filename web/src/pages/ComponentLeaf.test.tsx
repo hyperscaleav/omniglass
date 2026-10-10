@@ -124,6 +124,13 @@ describe("the component leaf", () => {
     expect(screen.getByRole("heading", { name: "Video Bar 1" })).toBeTruthy();
   });
 
+  it("links Explore back to this component's row in the outline", async () => {
+    mount();
+    fireEvent.click(within(screen.getByTestId("breadcrumb")).getByRole("button", { name: "Explore" }));
+    expect(await screen.findByTestId("fleet-page")).toBeTruthy();
+    expect(window.location.pathname + window.location.search).toBe(`/web/explore?node=${uuidFor("cf-c-bar")}`);
+  });
+
   it("says what it is: product (label with its handle), vendor, driver, once each", () => {
     mount();
     const card = screen.getByTestId("leaf-identity");

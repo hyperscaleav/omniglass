@@ -75,7 +75,8 @@ a place holding none or several renders its own subject card,
   form's name, classification, a location's parent, and tags. Reading in a blade, the label is the
   title and the form drops its Label row; a room holding one system is that system
   (`lib/detail.ts` `isRoomOf`), so its `PlaceCard` names no place and offers no second panel, and a
-  component in such a room shows no place card beside the system it serves. `EntityForm` with `host="blade"` leaves out the
+  component in such a room shows no place card beside the system it serves. A blade has no
+  breadcrumb, so its `PlaceCard` takes `path` and says where the place sits. `EntityForm` with `host="blade"` leaves out the
   kind's configuration panels (roles, properties, reconciliation, interfaces), which the detail
   view's Configure tab carries, and a system's or component's placement, which the panel's
   place card already says.

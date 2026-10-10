@@ -212,7 +212,8 @@ export default function SystemZoom() {
   const crumbs = createMemo(() => {
     const trail = view.data ? systemCrumbs(view.data, id()) : [];
     return [
-      { key: "explore", label: "Explore", onClick: () => navigate("/explore") },
+      // Back up lands where you were: the outline opened down to this row.
+      { key: "explore", label: "Explore", onClick: () => navigate(`/explore?node=${encodeURIComponent(id())}`) },
       ...trail.map((c) => ({ key: c.id, label: c.label, onClick: () => navigate(`/locations/${c.id}`) })),
     ];
   });

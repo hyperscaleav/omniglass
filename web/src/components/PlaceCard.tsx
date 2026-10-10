@@ -8,7 +8,7 @@ import Eyebrow from "./Eyebrow";
 import TagPills from "./TagPills";
 import { resolveIcon } from "./icons";
 import { useBlades } from "../lib/blades";
-import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
+import { FLEET_VIEW_KEY, ancestors, fleetView, locationIndex } from "../lib/fleet";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { entityLabel } from "../lib/entities";
@@ -29,6 +29,9 @@ export default function PlaceCard(props: {
   // Where the place comes from, when that is worth saying: a component's own
   // placement, or its system's place standing in for one it does not have.
   provenance?: string;
+  // The places above it, for a host with no breadcrumb of its own (a drawer):
+  // where it sits, the one fact the title does not already say.
+  path?: boolean;
 }) {
   const blades = useBlades();
   const me = useMe();
@@ -41,6 +44,7 @@ export default function PlaceCard(props: {
   // A room holding one system IS that system: its own panel would only point
   // back at the system, and its form is Configure place, so no second panel
   // is offered for it (#872).
+  const above = () => (view.data ? ancestors(props.placeId, locationIndex(view.data)).slice(0, -1).map((l) => entityLabel(l)) : []);
   const sole = () => (view.data ? systemsAtPlace(view.data, props.placeId).length === 1 : false);
   return (
     <Show when={place()}>
@@ -54,6 +58,9 @@ export default function PlaceCard(props: {
             </Show>
             <span data-testid="place-type" class="text-base-content/60">{type() ? entityLabel(type()!) : p().location_type}</span>
           </span>
+          <Show when={props.path && above().length > 0}>
+            <span data-testid="place-path" class="min-w-0 truncate text-base-content/50" title={above().join(" / ")}>{above().join(" / ")}</span>
+          </Show>
           <Show when={props.contents}>
             <span class="text-base-content/30">{"·"}</span>
             <span class="text-base-content/60">{props.contents}</span>

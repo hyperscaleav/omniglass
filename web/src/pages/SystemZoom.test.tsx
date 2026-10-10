@@ -558,6 +558,15 @@ describe("the place is context, the system the subject (#872)", () => {
     expect(window.location.pathname + window.location.search).toBe(`/web/locations/${uuidFor("szp-room")}?tab=configure`);
   });
 
+  // Going back up lands where you were (#872): the Explore crumb opens the
+  // outline down to this system's row, not at the top of the fleet.
+  it("links Explore back to this system's row in the outline", async () => {
+    mount();
+    fireEvent.click(within(screen.getByTestId("breadcrumb")).getByRole("button", { name: "Explore" }));
+    expect(await screen.findByTestId("fleet-page")).toBeTruthy();
+    expect(window.location.pathname + window.location.search).toBe(`/web/explore?node=${uuidFor("szp-sys")}`);
+  });
+
   it("gives an unplaced system its own title and no place card", () => {
     mount(`/web/systems/${uuidFor("szp-other")}`);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Overflow Room");

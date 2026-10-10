@@ -159,7 +159,7 @@ function SystemBody(props: { id: string }) {
       </div>
       <Why rows={alarms().map((a) => ({ severity: a.severity, message: a.message, component: a.component, onOpen: a.componentId ? () => blades.push({ kind: "component", id: a.componentId! }) : undefined }))} />
       {/* The room's only system is the room: the title already names it. */}
-      <Show when={cluster()?.location}>{(pid) => <PlaceCard placeId={pid()} showName={!(view.data && isRoomOf(view.data, pid(), [props.id]))} />}</Show>
+      <Show when={cluster()?.location}>{(pid) => <PlaceCard placeId={pid()} path showName={!(view.data && isRoomOf(view.data, pid(), [props.id]))} />}</Show>
       {/* Size only: the standard is the form's Classification, said there. */}
       <div data-testid="blade-brief" class="flex flex-wrap items-center gap-x-2 text-base-content/70">
         <span class="tabular-nums">{count()} {count() === 1 ? "component" : "components"}</span>
@@ -223,7 +223,7 @@ function ComponentBody(props: { id: string }) {
       {/* Where its place is the room a system it serves makes, Serves names
           that room already, so no place card says it again. */}
       <Show when={placeId() && !(view.data && isRoomOf(view.data, placeId(), served().map((s) => s.id)))}>
-        <PlaceCard placeId={placeId()!} showName provenance={row()?.location_id ? "set here" : "from its system"} />
+        <PlaceCard placeId={placeId()!} path showName provenance={row()?.location_id ? "set here" : "from its system"} />
       </Show>
       <Show when={served().length > 0}>
         <div data-testid="blade-serves" class={section}>

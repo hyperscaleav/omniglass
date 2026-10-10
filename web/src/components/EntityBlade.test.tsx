@@ -32,7 +32,8 @@ const me: Me = { principal: { id: "u-root", kind: "human" }, human: { username: 
 
 const view: FleetView = {
   locations: [
-    { id: uuidFor("eb-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", location_type_id: uuidFor("ebt-room"), parent: "", verdict: "degraded" },
+    { id: uuidFor("eb-floor"), name: "level-2", label: "Level 2", location_type: "floor", location_type_id: uuidFor("ebt-floor"), parent: "", verdict: "degraded" },
+    { id: uuidFor("eb-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", location_type_id: uuidFor("ebt-room"), parent: uuidFor("eb-floor"), verdict: "degraded" },
   ],
   systems: [
     {
@@ -154,6 +155,15 @@ describe("the system blade", () => {
     const form = await within(blade).findByTestId("entity-form");
     expect(within(form).queryByText("Label")).toBeNull();
     expect(within(form).getAllByText("Huddle Room Standard").length).toBe(1);
+  });
+
+  // A drawer has no breadcrumb, so its place card says where the place sits
+  // (#872): the path above it, the one fact the title does not already say.
+  it("says where the room sits: the path above it, not its name", async () => {
+    mountBlade({ kind: "system", id: uuidFor("eb-sys") });
+    const blade = await screen.findByRole("dialog");
+    const card = within(blade).getByTestId("place-card");
+    expect(within(card).getByTestId("place-path").textContent).toBe("Level 2");
   });
 
   it("renders the form's identity, placement and tags, and leaves the roles to Configure", async () => {

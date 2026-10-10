@@ -210,7 +210,8 @@ The view reads top-down:
   registry's words and its tags, and **Place details** opens the place's own panel (its
   form, its Edit) without leaving the view. The view is titled by the place, so the card
   does not name it again, and the breadcrumb ends at the place's parent: the room is named
-  once.
+  once. The breadcrumb's **Explore** goes back up to where you were: the outline, opened down
+  to this row and selected.
 - **The system card**: the verdict and **since when** (the last recorded change and its
   age), the standard it is built to, how many components it holds, and slot arithmetic only
   while hardware is missing. Each fact is said once; there is no counts line above it.

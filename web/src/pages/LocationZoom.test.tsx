@@ -198,6 +198,13 @@ describe("a folder place (#872)", () => {
     expect(crumbs.queryByText("West Building")).toBeNull();
   });
 
+  it("links Explore back to this place's row in the outline", async () => {
+    mount(`/web/locations/${uuidFor("lz-b1")}`);
+    fireEvent.click(within(screen.getByTestId("breadcrumb")).getByRole("button", { name: "Explore" }));
+    expect(await screen.findByTestId("fleet-page")).toBeTruthy();
+    expect(window.location.pathname + window.location.search).toBe(`/web/explore?node=${uuidFor("lz-b1")}`);
+  });
+
   it("gives each system it holds a brief card, with its verdict and its gap, opening the system", async () => {
     mount();
     const lobby = screen.getByTestId(`system-summary-${uuidFor("lz-s-lobby")}`);
