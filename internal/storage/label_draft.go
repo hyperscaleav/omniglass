@@ -267,6 +267,11 @@ func (p *PG) RenderSystemDraftLabel(ctx context.Context, d SystemLabelDraft, cre
 		}
 		pl.locationLabel = locationReadLabel(loc)
 		locationID = &loc.ID
+		// The drafted system would join whatever already sits there, so any
+		// system at the location makes the place shared for it.
+		if err := p.pool.QueryRow(ctx, `select exists (select 1 from system where location_id = $1)`, loc.ID).Scan(&pl.sharesLocation); err != nil {
+			return DraftLabel{}, fmt.Errorf("storage: draft placement facts: %w", err)
+		}
 	}
 	s := System{Name: d.Name}
 	if d.Name == "" {

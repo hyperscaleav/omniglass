@@ -16,7 +16,7 @@ screenshots:
       - "[data-testid=blade-since]"
   - id: entity-edit-face
     path: /web/locations/east?edit=1
-    alt: "An ?edit=1 deep link lands the workspace on its Configure tab, already editing."
+    alt: "An ?edit=1 deep link lands a place's view on its Configure tab, already editing."
     # No mask: the Configure tab replaces the overview (and its since-line
     # clock), and the form renders from the seed deterministically.
 ---
@@ -29,7 +29,7 @@ it the same way everywhere in the console.
 Click a row to open its **blade**, a panel that slides in from the right with the entity's
 details. From a blade you can drill into a child (it stacks another blade behind the first),
 step back with the breadcrumb, or **Expand** to the entity's own page: a fleet entity opens
-its workspace, an identity entity its full detail. The page has its own URL, so it is
+its [detail view](/guides/operator/fleet/#one-view-per-system), an identity entity its full detail. The page has its own URL, so it is
 shareable and bookmarkable; a blade opened by a click is a quick look that does not change
 the URL, though a blade can be addressed by one (a user's `?u=<id>` deep link, which the
 create flow uses for its own handoff). Rows are keyboard-operable: Tab to a row and press
@@ -37,14 +37,20 @@ Enter to open it.
 
 ::screenshot{#entity-blade}
 
-A fleet entity's blade (a location, a system, a component) leads with the verdict and
-since-when and the active alarms that say why, and the rest of the blade is the entity's
-**form**: identity, classification, placement, the kind's own panels (a system's roles, a
-location's properties, a component's reconciliation, reachability, and alarms), and tags.
-It is the same form the workspace's Configure tab renders, so what you can edit and how
-it saves is identical in both places. **Expand** in the header promotes to the full
-workspace at the entity's own address, where the members, the 30-day strip, and the system's
-vitals live. Delete sits on the left of the footer behind a confirm, gated by your
+A fleet entity's blade (a location, a system, a component) is the glance an operator lands on
+from a row. It leads with the verdict and since-when and the active alarms that say why, each
+with its severity, then the context you came for: a system's place (as a card saying where it
+sits, the path above it, since a blade has no breadcrumb) and its size;
+the systems a component serves, with the role it fills in each, and its place when that is
+somewhere else; a place's systems, each with its verdict, one click from its own blade. Then
+the entity's **form**: its name, classification, a location's parent, and tags, read or edited
+in place. Each fact is said once: the blade's title is the label (the Label field appears only
+while editing), a room's only system is the room (its card names no place and offers no second
+blade for it, only **Configure place**), and the standard is in Classification, not repeated
+above it. Configuration (a
+system's roles, the properties and their cascade, a component's reconciliation and
+interfaces) is the detail view's **Configure** tab, one **Expand** away, along with the
+components, the history and the vitals. Delete sits on the left of the footer behind a confirm, gated by your
 permissions on that row.
 
 The identity pages (Users, Groups, and Roles) use the same blade, and there drilling crosses entities: from a
@@ -57,8 +63,8 @@ read-only reference.
 
 A blade opens **read-only**, and its actions live in the **footer action bar**; the header is
 chrome only (back, full-page, close). **Edit** turns the whole blade live in place, fleet
-and identity blades alike: a fleet blade's form (the same one the workspace's
-[Configure tab](/guides/operator/fleet/) renders) and an identity blade's profile, members,
+and identity blades alike: a fleet blade's form (the identity, classification and tags of the
+same form the detail view's [Configure tab](/guides/operator/fleet/) renders) and an identity blade's profile, members,
 and grants.
 On an identity blade, **Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
 cluster swaps to **Cancel** and **Save**. Changes stage locally so you can check your work first; **Save**
@@ -81,11 +87,13 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
 ## Deep-link the edit
 
 The mode is part of the address: append `?edit=1` to a fleet entity's URL and it lands on
-the workspace's **Configure** tab, already editing (#800), so a "fix the label on this
+the detail view's **Configure** tab, already editing (#800), so a "fix the label on this
 location" handoff is one link, not a link plus instructions. The same permission gates apply: without `<resource>:update` the
 link lands reading, quietly. Leaving edit (Cancel or Save) strips the param, so refreshing
 mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already
-left. The console itself uses these links for its handoffs: creating an entity lands on
+left. A room holding one system is configured on its system's view, so `?edit=1` on that
+room's address lands on the system's Configure with the room's own form editing
+(`?edit=place`). The console itself uses these links for its handoffs: creating an entity lands on
 `/…/<id>?edit=1`, and a user's `?u=<id>&edit=1` deep link keeps the same contract on the
 identity pages.
 
@@ -159,11 +167,14 @@ identity pages.
   `HQ` is on it). It only re-cases what you typed, so where the place's real name is not in its machine
   name (a `huddle` that everyone calls the Huddle Room), open the lock and type it.
 
-  A system's shipped rule reads its **type and its number**, and the number is the one the name is
-  about to carry: the first boardroom you create in a place shows the name `boardroom` and the label
-  **Boardroom**, and the second shows `boardroom-2` and **Boardroom 2**. The two fields are one answer,
-  so a label with a number in it means a name with the same number in it, and neither is a guess: both
-  are read from the placement you have just picked.
+  A system's shipped rule reads its **place**, because a system is what makes that place work: a
+  system you create in Boardroom 204B shows the label **Boardroom 204B**. Once a place holds several
+  systems, each adds its **type**: **Media Lab Meeting Room** beside **Media Lab Signage**, and the
+  first one restamps when the second arrives (and back when it leaves). Two of the same type add
+  the number their names carry: `boardroom-2` shows **Boardroom 204B Boardroom 2**. A system with
+  no type names itself instead ("Media Lab Lobby Wall"). The two fields are one answer, so a label
+  with a number in it means a name with the same number in it, and neither is a guess: both are read
+  from the placement you have just picked. A system with no place reads its type.
 
   A name is **required** only where nothing will generate one, and there the field arrives unlocked
   with no lock to close: a system with no type (or a type whose chain sets no stem), a location whose
@@ -248,12 +259,11 @@ identity pages.
   `omniglass location recomputeLabels` to apply it, and the same rows read **North Wing**.
   Nothing you typed yourself is touched by either.
 - **The same applies to systems, and that upgrade is worth running.** A system's shipped label
-  carries the number its name carries, so the two halves of a divisible boardroom read
-  **Boardroom** and **Boardroom 2** rather than both reading "Boardroom". A fleet created before
-  the upgrade keeps both halves alike until you run `omniglass system previewLabels`, then
-  `omniglass system recomputeLabels`. Only the first of a kind in a place is bare: a place with
-  one boardroom reads **Boardroom**, exactly as its name is `boardroom` rather than
-  `boardroom-1`.
+  reads its place, so a room and its system read as one name instead of the room's name above the
+  system's kind ("Meeting Room" under Briefing Room). A fleet created before the upgrade keeps its
+  old labels until you run `omniglass system previewLabels`, then `omniglass system
+  recomputeLabels`. Only the second of a kind in a place adds its type and number: a place with one
+  boardroom reads as the place, exactly as its name is `boardroom` rather than `boardroom-1`.
 
 ## Properties on the detail
 
@@ -350,8 +360,8 @@ From the CLI: `omniglass component alarm list <name> [--include-cleared] [--unac
 
 ## Health on a system or location
 
-A **system** and a **location** each carry a **health verdict**, shown as a badge on its workspace and in
-the systems list:
+A **system** and a **location** each carry a **health verdict**, shown as a badge on its detail view and in
+the outline:
 
 | verdict | means |
 |---|---|
@@ -370,9 +380,9 @@ A location's verdict is the **worst** of every system placed anywhere beneath it
 when one system anywhere beneath it is out. A system's verdict is the worst contribution among the **roles** it
 needs filled.
 
-**The system's workspace is the answer to "why".** A bare "degraded" gives you nothing to do, so the
-workspace names the chain instead: **Active alarms** lead its Overview, each naming the down component
-and the role it impairs, and the role cards beneath carry the arithmetic. Read together they are this
+**The system's view is the answer to "why".** A bare "degraded" gives you nothing to do, so the
+view names the chain instead: **Why** leads its Overview, each alarm naming the down component
+and the role it impairs, and the component rows beneath carry the arithmetic. Read together they are this
 chain:
 
 ```text
@@ -386,8 +396,9 @@ alarm on mic-pod-2 (critical, "no audio on channel 1")
 
 Read it bottom-up when you want the verdict and top-down when you want the fix. A role can also be
 impaired with **no down component named**, which means it is **short-staffed** rather than broken:
-nobody is assigned. Those are two different jobs, and the workspace keeps them apart: a short role
-reads **incomplete** with a dashed empty slot, a down occupant reads the impact its role declared.
+nobody is assigned. Those are two different jobs, and the view keeps them apart: an unstaffed seat
+reads **incomplete** as an empty slot, a down occupant keeps its seat and reads the impact its role
+declared.
 
 **The History strip is the answer to "since when".** It is the same shape as the reachability
 availability strip: one segment per stretch the entity held a verdict, drawn from the **recorded edges**

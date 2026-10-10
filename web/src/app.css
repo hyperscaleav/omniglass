@@ -114,6 +114,11 @@
 .badge-unknown  { color: var(--og-unknown);  background: color-mix(in oklch, var(--og-unknown) 15%, transparent);  border-color: color-mix(in oklch, var(--og-unknown) 45%, transparent); }
 .badge-snoozed  { color: var(--og-snoozed);  background: color-mix(in oklch, var(--og-snoozed) 15%, transparent);  border-color: color-mix(in oklch, var(--og-snoozed) 45%, transparent); }
 .badge-incomplete { color: var(--og-incomplete); background: color-mix(in oklch, var(--og-incomplete) 15%, transparent); border-color: color-mix(in oklch, var(--og-incomplete) 45%, transparent); }
+/* Healthy is grey (#872): the outline's rule carried to every health pill. A
+   hue means "look here", so healthy wears the neutral chip's fill; the word and
+   the glyph still carry the state. Its own class, not badge-ghost, so a known
+   healthy verdict stays distinguishable from an unknown one in markup. */
+.badge-healthy { color: color-mix(in oklch, var(--color-base-content) 70%, transparent); background: color-mix(in oklch, var(--color-base-content) 10%, transparent); border-color: color-mix(in oklch, var(--color-base-content) 18%, transparent); }
 /* solid fill for a timeline segment, the StateStrip counterpart to bg-success /
    bg-warning / bg-error. daisyUI ships no semantic for this hue, so the strip
    needs its own utility or an incomplete stretch falls back to the no-data grey. */

@@ -1,245 +1,162 @@
-import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
+import { For, Show, createEffect, createMemo } from "solid-js";
+import { Dynamic } from "solid-js/web";
 import { useNavigate, useParams, useSearchParams } from "@solidjs/router";
 import { useQuery } from "@tanstack/solid-query";
 import Page from "../components/Page";
 import Breadcrumb from "../components/Breadcrumb";
-import HealthBadge from "../components/HealthBadge";
-import SystemCard from "../components/SystemCard";
-import FleetShell from "../components/FleetShell";
-import FleetRows from "../components/FleetRows";
+import Eyebrow from "../components/Eyebrow";
+import TagPills from "../components/TagPills";
 import TabRail from "../components/TabRail";
 import ConfigureFace from "../components/ConfigureFace";
+import DetailGate from "../components/DetailGate";
+import OutlineWorkspace from "../components/OutlineWorkspace";
+import SystemSummary from "../components/SystemSummary";
 import BladeStack from "../components/BladeStack";
+import { resolveIcon } from "../components/icons";
 import { BladesContext, createBladeController } from "../lib/blades";
 import { fleetRegistry } from "../lib/fleetBlades";
-import { locationTileSpec } from "../lib/fleet_tiles";
-import { buildPredicate, type Chip, type FilterKey } from "../lib/predicate";
-import {
-  FLEET_VIEW_KEY,
-  ancestors,
-  bandsOf,
-  byChildOfLocation,
-  fleetView,
-  holesUnder,
-  locationIndex,
-  type Band,
-  type FleetView,
-  type SystemCluster,
-} from "../lib/fleet";
+import { FLEET_VIEW_KEY, ancestors, childrenIndex, fleetView, locationIndex } from "../lib/fleet";
+import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
+import { landingFor, systemsAtPlace } from "../lib/detail";
 import { entityLabel } from "../lib/entities";
 import { can, useMe } from "../lib/auth";
-import { durationText } from "../lib/timeline";
-import { sinceOf } from "../lib/system_zoom";
-import { describeError, fmtTime } from "../lib/format";
-import { locationHealth, locationHealthKey } from "../lib/health";
+import { describeError } from "../lib/format";
 
-// The location zoom (#635): the same cards one level down, at the identity
-// route, the DEFAULT face since ADR-0129. One band per direct child whatever its
-// type, the placed-here band first with this location's own systems as cards,
-// the subtree's holes dashed under the child that contains them, and the
-// allowed child types named beneath: a child can be any type this one allows,
-// which is the no-fixed-ladder fact this zoom teaches.
+// A place's detail view (#635, reoriented in #872). Systems are the unit
+// Omniglass monitors and places are folders and metadata, so a place holding
+// exactly one system has no view of its own: its address lands on that
+// system, whose view shows the place as a card of context. What remains here
+// is the folder: a place holding no system (a campus, a building, a floor),
+// or one shared by several. Its card is the subject, with its own tabs:
+// Overview (a brief card per system it holds, then what is beneath it as the
+// outline rooted here) and Configure (the one form).
+//
+// A place holding one system configures on that system's Configure tab, in a
+// Place section of its own (#872), so even an address asking to configure
+// the place lands there: ?tab=configure opens the tab, and ?edit=1 carries
+// over as edit=place, the place form's own intent.
 export default function LocationZoom() {
   const params = useParams<{ id: string }>();
   const navigate = useNavigate();
   const id = () => params.id;
   const me = useMe();
   const blades = createBladeController();
-  // The zoom grows the Configure facet (#800): two tabs, Overview the default.
-  const [zoomSearch] = useSearchParams();
-  const zoomTabs = createMemo(() => [
+  const [search] = useSearchParams();
+  const param = (k: string) => { const v = search[k]; return Array.isArray(v) ? v[0] : v; };
+
+  const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
+  const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
+  const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
+
+  const place = createMemo(() => (view.data ? locationIndex(view.data).get(id()) : undefined));
+  const type = createMemo(() => (types.data ?? []).find((t) => t.name === place()?.location_type));
+  const tags = () => (locations.data ?? []).find((l) => l.id === id())?.effective_tags ?? {};
+  // By id, compared by value: the cards key on these strings, so a fresh
+  // fleet read updates a card in place rather than rebuilding it.
+  const systemsHere = createMemo(() => (view.data && place() ? systemsAtPlace(view.data, id()).map((s) => s.id) : []), undefined, {
+    equals: (a, b) => a.length === b.length && a.every((x, i) => x === b[i]),
+  });
+  const hasBeneath = createMemo(() => (view.data ? (childrenIndex(view.data).get(id()) ?? []).length > 0 : false));
+
+  const tabs = createMemo(() => [
     { key: "overview", label: "Overview" },
     ...(can(me.data, "location", "update") ? [{ key: "configure", label: "Configure" }] : []),
   ]);
-  const zoomTab = () => {
-    const t = Array.isArray(zoomSearch.tab) ? zoomSearch.tab[0] : zoomSearch.tab;
-    if (t && zoomTabs().some((x) => x.key === t)) return t;
-    const editing = (Array.isArray(zoomSearch.edit) ? zoomSearch.edit[0] : zoomSearch.edit) === "1";
-    if (editing && zoomTabs().some((x) => x.key === "configure")) return "configure";
+  const tab = () => {
+    const t = param("tab");
+    if (t && tabs().some((x) => x.key === t)) return t;
+    if (param("edit") === "1" && tabs().some((x) => x.key === "configure")) return "configure";
     return "overview";
   };
-  const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
-  const locHealth = useQuery(() => ({ queryKey: locationHealthKey(id()), queryFn: () => locationHealth(id()) }));
-  // Pinned at setup, like the system zoom's: a moving now re-ages the line.
-  const pageNow = Date.now();
-  const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
 
-  const anchor = createMemo(() => (view.data ? locationIndex(view.data).get(id()) : undefined));
-  const tiles = createMemo(() => (view.data && anchor() ? locationTileSpec(view.data, anchor()!.id) : undefined));
-  const [chips, setChips] = createSignal<Chip[]>([]);
-  const filterKeys: FilterKey<SystemCluster>[] = [
-    { key: "verdict", type: "string", hint: "exact", get: (c) => c.verdict ?? "unknown", values: () => ["outage", "degraded", "incomplete", "healthy"] },
-    { key: "system", type: "string", hint: "substring", get: (c) => c.label },
-  ];
-
-  // A name-shaped address resolves to the uuid and the URL is rewritten to
-  // keep saying what it means, query string included (#759's rule, applied
-  // here because the zoom branch runs before the inventory detail's own
-  // fallback ever could). Only an unambiguous name resolves: names scope to
-  // placement, so a bare name can legally be two rows, and guessing between
-  // them would open the wrong building.
+  // A name-shaped address resolves to the uuid, query kept (#759's rule).
+  // Only an unambiguous name resolves: names scope to placement, so a bare
+  // name can legally be two rows.
   createEffect(() => {
-    if (!view.data || anchor()) return;
+    if (!view.data || place()) return;
     const matches = (view.data.locations ?? []).filter((l) => l.name === id());
     if (matches.length === 1) navigate(`/locations/${matches[0].id}${window.location.search}`, { replace: true });
   });
-  const bands = createMemo<Band[]>(() => {
-    if (!view.data) return [];
-    const pred = buildPredicate(filterKeys, chips());
-    return bandsOf(view.data, byChildOfLocation(id())).map((b) => ({ ...b, clusters: b.clusters.filter(pred) }));
+  // A place holding one system lands on it, query kept; a configure intent
+  // becomes the system's Configure tab and the place's own edit.
+  createEffect(() => {
+    if (!view.data || !place()) return;
+    const landing = landingFor(view.data, id());
+    if (landing.kind !== "system") return;
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("edit") === "1") {
+      q.delete("edit");
+      q.set("tab", "configure");
+      q.set("edit", "place");
+    }
+    const qs = q.toString();
+    navigate(`/systems/${landing.id}${qs ? `?${qs}` : ""}`, { replace: true });
   });
-  const holes = createMemo(() => (view.data ? holesUnder(id(), view.data) : new Map()));
-  // This subtree's own attention count, unfiltered: what the header chip
-  // reports and the chip's click narrows the cards to.
+
   const crumbs = createMemo(() => {
     if (!view.data) return [];
     const chain = ancestors(id(), locationIndex(view.data));
     return [
-      { key: "explore", label: "Explore", onClick: () => navigate("/explore") },
-      // The trail ends at the parent: the current location is the page title,
-      // and repeating it as the last crumb would say it twice.
-      ...chain.slice(0, -1).map((l) => ({
-        key: l.id,
-        label: entityLabel(l),
-        onClick: () => navigate(`/locations/${l.id}`),
-      })),
+      // Back up lands where you were: the outline opened down to this row.
+      { key: "explore", label: "Explore", onClick: () => navigate(`/explore?node=${encodeURIComponent(id())}`) },
+      // The trail ends at the parent: the place itself is the page title.
+      ...chain.slice(0, -1).map((l) => ({ key: l.id, label: entityLabel(l), onClick: () => navigate(`/locations/${l.id}`) })),
     ];
   });
 
-  // The types this location may contain: those whose allowed parents name
-  // this location's type, or that constrain nothing at all.
-  const childTypes = createMemo(() => {
-    const t = anchor()?.location_type;
-    if (!t) return [];
-    return (types.data ?? []).filter((x) => (x.allowed_parent_types ?? []).length === 0 || x.allowed_parent_types!.includes(t));
-  });
+  // A miss is judged only once the fleet view is current: the create
+  // handoff lands here while the cached view predates the new row.
+  const missing = () => !!view.data && !view.isFetching && !place() && !(view.data.locations ?? []).some((x) => x.name === id());
 
   return (
     <BladesContext.Provider value={blades}>
-    <Page
-      title={anchor() ? entityLabel(anchor()!) : "Location"}
-      breadcrumb={<Breadcrumb crumbs={crumbs()} />}
-    >
-      {/* A miss is judged only once the fleet view is current: the create
-          handoff lands here while the cached view predates the new row, and
-          the refetch on mount is what answers whether the address exists. */}
-      <Show
-        when={!(view.data && !view.isFetching && !anchor() && !(view.data.locations ?? []).some((x) => x.name === id()))}
-        fallback={
-          <div role="alert" class="alert alert-warning alert-soft text-sm">
-            <span>No location answers this address. It may have been deleted, or the link is stale.</span>
-          </div>
-        }
-      >
-      <Show when={!view.isPending} fallback={<div class="skeleton h-32 w-full" />}>
-        <Show
-          when={!view.isError}
-          fallback={
-            <div role="alert" class="alert alert-error alert-soft text-sm">
-              {describeError(view.error)}
-            </div>
-          }
+      <Page title={place() ? entityLabel(place()!) : "Location"} breadcrumb={<Breadcrumb crumbs={crumbs()} />}>
+        <DetailGate
+          noun="location"
+          missing={missing()}
+          pending={view.isPending}
+          error={view.isError ? describeError(view.error) : null}
+          retrying={view.isFetching}
+          onRetry={() => void view.refetch()}
         >
-          <div class="flex flex-col gap-3">
-          <TabRail tabs={zoomTabs()} activeKey={zoomTab} />
-          <Show when={zoomTab() === "configure"}>
-            <div class="card border border-base-300 bg-base-200 p-0"><ConfigureFace kind="location" id={id()} /></div>
-          </Show>
-          <Show when={zoomTab() === "overview"}>
-<FleetShell
-            tiles={tiles()}
-            list={<div class="card overflow-hidden border border-base-300 bg-base-200 p-0"><FleetRows rows={bands().flatMap((b) => b.clusters)} view={view.data!} onOpen={(sid) => navigate(`/systems/${sid}`)} /></div>}
-            rows={bands().flatMap((b) => b.clusters)}
-            filterKeys={filterKeys}
-            chips={chips}
-            onChips={setChips}
-            placeholder="Filter by verdict or system…"
-            header={
-              <div data-testid="location-header" class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                <HealthBadge verdict={anchor()?.verdict ?? undefined} size="sm" />
-                <Show when={locHealth.data && sinceOf(locHealth.data, pageNow)}>
-                  {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
+          <section data-testid="place-subject" class="card overflow-hidden border border-base-300 bg-base-200 p-0">
+            <div data-testid="place-header" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-base-300 px-4 py-3 text-sm">
+              <Eyebrow label="Place" hint="A place is a folder and its facts. The systems in it, and in the places beneath it, are what Omniglass monitors." />
+              <span class="flex items-center gap-2">
+                <span class="flex-none text-base-content/50"><Dynamic component={resolveIcon(type()?.icon || "map-pin")} size={16} /></span>
+                <span data-testid="place-type" class="text-base-content/70">{type() ? entityLabel(type()!) : place()?.location_type}</span>
+              </span>
+              <Show when={Object.keys(tags()).length > 0}><TagPills tags={tags()} wrap /></Show>
+            </div>
+            <TabRail tabs={tabs()} activeKey={tab} />
+            <Show when={tab() === "configure"}>
+              <ConfigureFace kind="location" id={id()} />
+            </Show>
+            <Show when={tab() === "overview"}>
+              <div data-testid="place-overview" class="flex flex-col gap-4 p-4">
+                <Show when={systemsHere().length > 0}>
+                  <section class="flex flex-col gap-2">
+                    <Eyebrow label={systemsHere().length === 1 ? "System here" : "Systems here"} hint="Each system bound to this place, in brief. Open one for its components, map, data and history." />
+                    <div class="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-3">
+                      <For each={systemsHere()}>{(sid) => <SystemSummary systemId={sid} />}</For>
+                    </div>
+                  </section>
+                </Show>
+                <Show when={hasBeneath() || systemsHere().length === 0}>
+                  <section data-testid="beneath" class="flex flex-col gap-2">
+                    <Show when={systemsHere().length > 0}>
+                      <Eyebrow label="Beneath" hint="The places inside this one, as Explore draws them, counted by the systems they hold." />
+                    </Show>
+                    <OutlineWorkspace rootId={id()} />
+                  </section>
                 </Show>
               </div>
-            }
-          >
-            <div class="flex flex-col divide-y divide-base-300">
-              <For each={bands()}>{(band) => <ZoomBand band={band} view={view.data!} />}</For>
-              <Show when={bands().length === 0 && holes().size === 0}>
-                <p class="px-4 py-6 text-sm text-base-content/60">Nothing under this location yet.</p>
-              </Show>
-              <div data-testid="add-location-hole" class="flex flex-wrap items-center gap-3 px-4 py-3">
-                <div class="inline-flex flex-col rounded-field border border-dashed border-base-content/25 px-3 py-1.5 text-xs text-base-content/50">
-                  <span class="font-medium text-base-content/70">+ Location</span>
-                  <Show when={childTypes().length > 0}>
-                    <span data-testid="allowed-child-types" class="truncate">{childTypes().map((t) => entityLabel(t).toLowerCase()).join(", ")}</span>
-                  </Show>
-                </div>
-              </div>
-            </div>
-          </FleetShell>
-          </Show>
-          </div>
-        </Show>
-      </Show>
-      </Show>
-    </Page>
-    <BladeStack controller={blades} registry={fleetRegistry} />
+            </Show>
+          </section>
+        </DetailGate>
+      </Page>
+      <BladeStack controller={blades} registry={fleetRegistry} />
     </BladesContext.Provider>
   );
-
-  function ZoomBand(props: { band: Band; view: FleetView }) {
-    const isHere = () => props.band.key === id();
-    const bandHoles = () => holes().get(props.band.key) ?? [];
-    const counts = () => {
-      const b = props.band;
-      return b.systemCount === 1 ? "1 system" : `${b.systemCount} systems`;
-    };
-    return (
-      <section data-testid={`zoomband-${props.band.key}`} class="flex gap-4 px-4 py-3">
-        <div class="w-60 flex-none">
-          <Show
-            when={!isHere()}
-            fallback={
-              <div class="p-1">
-                <span class="font-medium">Placed here</span>
-                <div class="mt-1 text-xs text-base-content/60">{counts()}</div>
-              </div>
-            }
-          >
-            <button
-              type="button"
-              class="block w-full cursor-pointer rounded-lg p-1 text-left hover:bg-base-content/5"
-              onClick={() => navigate(`/locations/${props.band.key}`)}
-            >
-              <div class="flex items-center gap-2">
-                <HealthBadge verdict={props.band.recordedVerdict ?? undefined} size="xs" />
-                <span class="min-w-0 truncate font-medium" title={props.band.label}>{props.band.label}</span>
-              </div>
-              <div class="mt-0.5 flex items-baseline gap-2 truncate text-xs text-base-content/60">
-                <Show when={props.band.sublabel}>
-                  <span class="text-[10px] uppercase tracking-wider text-base-content/50">{props.band.sublabel}</span>
-                </Show>
-                <span>{counts()}</span>
-              </div>
-            </button>
-          </Show>
-        </div>
-        <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap gap-2">
-            <For each={props.band.clusters}>{(cluster) => <SystemCard cluster={cluster} view={props.view} onOpen={(sid) => navigate(`/systems/${sid}`)} />}</For>
-            <For each={bandHoles()}>
-              {(hole) => (
-                <div class="flex w-40 flex-none flex-col justify-center gap-0.5 rounded-md border border-dashed border-primary/40 px-2 py-2 text-xs text-base-content/50">
-                  <div class="font-medium text-primary/80">+ System</div>
-                  <div class="truncate">{entityLabel(hole)} has none</div>
-                </div>
-              )}
-            </For>
-          </div>
-        </div>
-      </section>
-    );
-  }
 }

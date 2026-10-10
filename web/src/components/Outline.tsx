@@ -53,6 +53,20 @@ const HUE: Record<Verdict, string> = {
 };
 const GLYPH: Record<Verdict, typeof CircleCheck> = { healthy: CircleCheck, incomplete: CircleDashed, degraded: TriangleAlert, outage: OctagonX };
 
+// One verdict as its glyph alone, in the slot vocabulary's hue (healthy
+// grey), named for a screen reader: where a row is one thing, not a count.
+export function HealthGlyph(props: { verdict: Verdict | null }) {
+  return (
+    <Show when={props.verdict}>
+      {(v) => (
+        <span data-testid="health" class={`inline-flex ${HUE[v()]}`} role="img" aria-label={WORDS[v()]} title={WORDS[v()]}>
+          <Dynamic component={GLYPH[v()]} size={14} />
+        </span>
+      )}
+    </Show>
+  );
+}
+
 export function HealthSlots(props: { lights?: Lights; single?: Verdict | null }) {
   const counts = (): Partial<Record<Verdict, number>> => {
     if (props.single) return { [props.single]: 0 };

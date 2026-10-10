@@ -480,7 +480,9 @@ func TestTheSystemAndLocationDataMapsAreClosedToo(t *testing.T) {
 	// comment named as the reason it was absent. This assertion is the tripwire
 	// that forces a key to be ADDED deliberately rather than to appear: widening
 	// it is the one edit a slice may make to it, and only alongside the map.
-	wantSys := []string{"LocationLabel", "Name", "Ordinal", "StandardName", "Stem", "TypeAbbrev", "TypeName"}
+	// SharesLocation joined with #872: a room's sole system reads as the room,
+	// and a place holding several names each one's kind.
+	wantSys := []string{"LocationLabel", "Name", "Ordinal", "SharesLocation", "StandardName", "Stem", "TypeAbbrev", "TypeName"}
 	if got := sortedKeys(sysData); !equalStrings(got, wantSys) {
 		t.Fatalf("the system data map carries %v, want exactly %v", got, wantSys)
 	}
@@ -615,21 +617,22 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 		t.Fatalf("location label = %q generated = %v, want %q true", pod.Label, pod.LabelGenerated, "Pod POD-7")
 	}
 
-	// A system's shipped rule is its type's label, so an unclassified
-	// system renders nothing and a classified one renders its kind of space.
+	// A system's shipped rule leads with its place (#872): a system is the
+	// logical group monitoring a place, so a placed one reads as the place
+	// does, classified or not.
 	sys, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "sys-a", LocationName: &room}, all, all)
 	if err != nil {
 		t.Fatalf("create system: %v", err)
 	}
-	if sys.Label != "" {
-		t.Fatalf("unclassified system label = %q, want none", sys.Label)
+	if sys.Label != "Room A" || !sys.LabelGenerated {
+		t.Fatalf("placed system label = %q generated = %v, want its place's %q", sys.Label, sys.LabelGenerated, "Room A")
 	}
 	classified, err := gw.UpdateSystem(ctx, "", sys.ID, storage.SystemPatch{SystemTypeID: strptr("board")}, all, all)
 	if err != nil {
 		t.Fatalf("classify system: %v", err)
 	}
-	if classified.Label == "" || !classified.LabelGenerated {
-		t.Fatalf("classified system label = %q generated = %v, want the type's label", classified.Label, classified.LabelGenerated)
+	if classified.Label != "Room A" || !classified.LabelGenerated {
+		t.Fatalf("classified system label = %q generated = %v, want its place's %q", classified.Label, classified.LabelGenerated, "Room A")
 	}
 }
 
@@ -639,10 +642,10 @@ func TestASystemAndALocationGetLabelsToo(t *testing.T) {
 // could tell them apart (`boardroom` and `boardroom-2`) and the operator
 // reading the console could not.
 //
-// The rule now reads the ordinal under the same {{if}} the component's has
-// always used, and the suppression follows the NAME rather than the stored
-// number: the first of its stem carries no digits in its name, so it carries
-// none in its label either, and the second reads "Boardroom 2". Both halves are
+// The rule reads the ordinal under the same {{if}} the component's has always
+// used, and the suppression follows the NAME rather than the stored number:
+// the first of its stem carries no digits in its name, so it reads its place
+// alone, and the second reads its place, its kind and its ordinal (#872). Both halves are
 // asserted, and so is the fact that they DIFFER, because two labels that agree
 // would satisfy an assertion of either string on its own.
 func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
@@ -664,11 +667,17 @@ func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
 	if first.Name != "boardroom" || second.Name != "boardroom-2" {
 		t.Fatalf("names = %q and %q, want %q and %q", first.Name, second.Name, "boardroom", "boardroom-2")
 	}
-	if first.Label != "Boardroom" {
-		t.Errorf("the first half's label = %q, want %q: its name carries no ordinal, so neither does its label", first.Label, "Boardroom")
+	// Both read their place first (#872), and a place holding several
+	// systems names each one's kind after it; the ordinal follows the name,
+	// so the first is bare and the second carries its 2. The first half was
+	// alone when it was created and read "Room A"; the second arriving
+	// restamped it, so it is re-read here.
+	first = *mustGetSystemByID(t, gw, ctx, first.ID)
+	if first.Label != "Room A Boardroom" {
+		t.Errorf("the first half's label = %q, want %q", first.Label, "Room A Boardroom")
 	}
-	if second.Label != "Boardroom 2" {
-		t.Errorf("the second half's label = %q, want %q", second.Label, "Boardroom 2")
+	if second.Label != "Room A Boardroom 2" {
+		t.Errorf("the second half's label = %q, want %q", second.Label, "Room A Boardroom 2")
 	}
 	if first.Label == second.Label {
 		t.Errorf("both halves read %q, so the console cannot tell them apart", first.Label)
@@ -677,6 +686,107 @@ func TestTwoSameTypeSystemsInOneRoomReadDifferently(t *testing.T) {
 	// the platform's to keep current through a later move or reclassify.
 	if !first.LabelGenerated || !second.LabelGenerated {
 		t.Errorf("generated = %v and %v, want both platform-owned", first.LabelGenerated, second.LabelGenerated)
+	}
+}
+
+// TestAPlaceHoldingSeveralSystemsNamesEachKind is #872's rule for the case
+// the architect named: a room's sole system reads as the room ("Media Lab"),
+// and once the room holds several, each reads as the room and its kind
+// ("Media Lab Meeting Room", "Media Lab Signage"). The siblings restamp as the
+// count changes, in the write that changed it: a second arriving, one
+// leaving by delete, one moving out.
+func TestAPlaceHoldingSeveralSystemsNamesEachKind(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	room := makeRoom(t, gw, ctx, "room-a")
+	other := makeRoom(t, gw, ctx, "room-b")
+
+	board, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strptr("board"), LocationName: &room}, all, all)
+	if err != nil {
+		t.Fatalf("create board: %v", err)
+	}
+	if board.Label != "Room A" {
+		t.Fatalf("a sole system reads %q, want its place %q", board.Label, "Room A")
+	}
+	sign, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strptr("sign"), LocationName: &room}, all, all)
+	if err != nil {
+		t.Fatalf("create signage: %v", err)
+	}
+	if sign.Label != "Room A Signage" {
+		t.Errorf("the second system reads %q, want %q", sign.Label, "Room A Signage")
+	}
+	if got := mustGetSystemByID(t, gw, ctx, board.ID).Label; got != "Room A Boardroom" {
+		t.Errorf("the first system, once its room holds two, reads %q, want %q", got, "Room A Boardroom")
+	}
+
+	// One moves out: each place recounts, the one it left and the one it
+	// joined.
+	if _, err := gw.MoveSystem(ctx, "", sign.ID, storage.SystemMove{LocationName: &other}, all, all, all); err != nil {
+		t.Fatalf("move signage: %v", err)
+	}
+	if got := mustGetSystemByID(t, gw, ctx, board.ID).Label; got != "Room A" {
+		t.Errorf("the system left alone reads %q, want %q", got, "Room A")
+	}
+	if got := mustGetSystemByID(t, gw, ctx, sign.ID).Label; got != "Room B" {
+		t.Errorf("the moved system, alone in its new room, reads %q, want %q", got, "Room B")
+	}
+
+	// One leaves by delete.
+	sign2, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strptr("sign"), LocationName: &room}, all, all)
+	if err != nil {
+		t.Fatalf("create signage again: %v", err)
+	}
+	if got := mustGetSystemByID(t, gw, ctx, board.ID).Label; got != "Room A Boardroom" {
+		t.Fatalf("board beside a second signage reads %q, want %q", got, "Room A Boardroom")
+	}
+	if err := gw.DeleteSystem(ctx, "", sign2.ID, all, all); err != nil {
+		t.Fatalf("delete signage: %v", err)
+	}
+	if got := mustGetSystemByID(t, gw, ctx, board.ID).Label; got != "Room A" {
+		t.Errorf("the system left alone after a delete reads %q, want %q", got, "Room A")
+	}
+}
+
+// An unclassified system has no kind to name, so beside a sibling it names
+// itself: its own name, read as words. And an operator's own label is never
+// restamped by a sibling arriving.
+func TestASharedPlaceNamesAnUnclassifiedSystemByItselfAndKeepsAnOperatorLabel(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	room := makeRoom(t, gw, ctx, "room-a")
+	typed, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "front-of-house", Label: "FOH Rack", LocationName: &room}, all, all)
+	if err != nil {
+		t.Fatalf("create typed-label system: %v", err)
+	}
+	custom, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "lobby-wall", LocationName: &room}, all, all)
+	if err != nil {
+		t.Fatalf("create unclassified: %v", err)
+	}
+	if custom.Label != "Room A Lobby Wall" {
+		t.Errorf("an unclassified system beside another reads %q, want %q", custom.Label, "Room A Lobby Wall")
+	}
+	if got := mustGetSystemByID(t, gw, ctx, typed.ID); got.Label != "FOH Rack" || got.LabelGenerated {
+		t.Errorf("the operator's label became %q (generated %v), want %q kept", got.Label, got.LabelGenerated, "FOH Rack")
+	}
+}
+
+// TestAnUnplacedSystemReadsItsKind is the other half of #872's rule: a
+// system with no place has nothing to lead with, so it reads its kind of
+// space and ordinal, as every system did before, and an unclassified one
+// reads nothing (the read ladder falls back to its name).
+func TestAnUnplacedSystemReadsItsKind(t *testing.T) {
+	gw, ctx := seededGateway(t)
+	typed, err := gw.CreateSystem(ctx, "", storage.SystemSpec{SystemTypeID: strptr("board")}, all, all)
+	if err != nil {
+		t.Fatalf("create typed: %v", err)
+	}
+	if typed.Label != "Boardroom" {
+		t.Errorf("unplaced classified label = %q, want %q", typed.Label, "Boardroom")
+	}
+	bare, err := gw.CreateSystem(ctx, "", storage.SystemSpec{Name: "loose"}, all, all)
+	if err != nil {
+		t.Fatalf("create bare: %v", err)
+	}
+	if bare.Label != "" {
+		t.Errorf("unplaced unclassified label = %q, want none", bare.Label)
 	}
 }
 
@@ -1206,6 +1316,15 @@ func seededGatewayDSN(t *testing.T) (*storage.PG, context.Context, string) {
 // makeRoom creates a room under a shared building (the seeded placement rules
 // refuse a room at the root) and returns its name, the placement bucket most of
 // these tests need two of.
+func mustGetSystemByID(t *testing.T, gw *storage.PG, ctx context.Context, id string) *storage.System {
+	t.Helper()
+	s, err := gw.GetSystem(ctx, id, all)
+	if err != nil {
+		t.Fatalf("get system %s: %v", id, err)
+	}
+	return s
+}
+
 func makeRoom(t *testing.T, gw *storage.PG, ctx context.Context, name string) string {
 	t.Helper()
 	if _, err := gw.GetLocation(ctx, "hq", all); err != nil {

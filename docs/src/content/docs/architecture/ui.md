@@ -15,7 +15,7 @@ Roughly 22 live pages (inventory, catalog, values, admin, plus the shell) ship a
 `ViewResult` renderer described next: an inventory page is CRUD over a scoped resource. The
 **Explore** page (`/explore`, #826 and #861, which retired the #633 canvas) is the first
 surface that is neither: an outline of places over one projection (`GET /views/fleet`) and
-the CRUD lists, and the workspaces it opens. Its core is one pure model,
+the CRUD lists, and the detail views it opens. Its core is one pure model,
 `web/src/lib/outline.ts`, which nests the places, puts each system on the place where it
 sits, folds single-child chains, counts what a row holds in the registry's own type labels,
 and counts systems by verdict rather than rolling them up worst-wins; `components/Outline.tsx`
@@ -47,16 +47,26 @@ An operator surface carries no inline explanatory text (ADR-0127): every explain
 label's `(i)` tooltip (`InfoTip`; `Eyebrow` for section labels), so the pedagogy doctrine is
 satisfied by hover and the page itself stays scannable. The standard-editor's vocabulary
 (choices, alternates, accepted types) never leads an operator view, and a system's body
-renders components-first: one card per component with its role as a badge, role-level chrome
-only where it says something a badge cannot (a quorum beyond one, a shortfall, an unstaffed
-role). The platform-wide sweep of the older pages is tracked in #784. The system zoom grew into
-the workspace #788 defines, and #826 settled its shape: three tabs as `?tab=` URL facts
-(`TabRail`), Overview (the room, the standard's declared map with live occupant state on
-each marker, ADR-0128, the vitals), Activity (the history, the events, the logs), and
-Configure (the one form). Since ADR-0129 these faces ARE the identity routes' default, and
-since #800 they are the ONLY faces: one way to look, one altitude rule (Explore drills the
-place tree, systems open full screen, components open in blades), editing through the one
-`EntityForm` wherever the operator meets the entity (ADR-0137). The classic detail face is retired; `?view=detail` is
+renders components-first: one row per component with its role in a column, role-level
+chrome only where it says something a column cannot (a quorum beyond one, a shortfall, an
+unstaffed role). The platform-wide sweep of the older pages is tracked in #784.
+
+**A detail view is one per system, its place a card of context** (ADR-0139). Systems are the
+unit Omniglass monitors; places are folders and metadata; components are pieces of systems.
+A system's view is its place card (type, tags, the place's own panel) above the system card
+(verdict, since, standard, size, slot arithmetic only while short) with three tabs as `?tab=`
+URL facts (`TabRail`): Overview (why, the components, the standard's declared map with live
+occupant state on each marker, ADR-0128, the data), Activity (the history, the events, the
+logs), and Configure (the one form). A place holding exactly one system lands on it; a place
+holding none or several keeps its own view, a brief card per system and the outline rooted
+there; a component's view carries its place card, marked as its own or its system's. The
+model behind it is pure, in `lib/detail.ts` (where a place lands, the path that names each
+place once, the roles a component fills) and `lib/outline.ts` (`rootAt`). Since ADR-0129
+these faces ARE the identity routes' default, and since #800 the ONLY faces: one way to
+look, one altitude rule (Explore drills the place tree, systems open full screen,
+components open in blades), editing through the one `EntityForm` (ADR-0137). The side
+panel is the glance (verdict, why, context, identity and tags) and the configuration
+panels stay on Configure (ADR-0139). The classic detail face is retired; `?view=detail` is
 ignored and `?edit=1` lands Configure already editing.
 
 ## One renderer library, two composition modes
@@ -172,7 +182,7 @@ Two layers, deliberately decoupled:
 **The mode rides the URL too**
 ([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact) established the rule;
 [ADR-0132](/architecture/decisions/#adr-0132-configure-is-the-one-deep-editor) retargets it):
-`?edit=1` beside a fleet address lands the workspace's Configure tab already editing, and beside
+`?edit=1` beside a fleet address lands the detail view's Configure tab already editing, and beside
 an identity blade's id param (`?u=<id>&edit=1`) opens that blade editing, both behind the same
 `<resource>:update` permission the Edit button is behind; without it the link lands read-only.
 Leaving edit (Cancel or Save) strips the param via history replace, so a refresh mid-edit keeps the

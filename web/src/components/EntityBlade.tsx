@@ -1,6 +1,8 @@
-import { For, Show, createMemo, createSignal } from "solid-js";
+import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
+import PlaceCard from "./PlaceCard";
+import AcknowledgeButton from "./AcknowledgeButton";
 import { useNavigate } from "@solidjs/router";
-import { useQuery, useQueryClient } from "@tanstack/solid-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/solid-query";
 import HealthBadge from "./HealthBadge";
 import Button from "./Button";
 import EntityForm from "./EntityForm";
@@ -15,16 +17,24 @@ import { SYSTEMS_KEY, listSystems, deleteSystem } from "../lib/systems";
 import { LOCATIONS_KEY, listLocations, deleteLocation } from "../lib/locations";
 import { COMPONENTS_KEY, listComponents, deleteComponent } from "../lib/components";
 import { componentAlarms, componentAlarmsKey, splitAlarms } from "../lib/alarms";
+import { componentSystems, componentSystemsKey } from "../lib/members";
+import { systemRoles, systemRolesKey } from "../lib/system_roles";
+import { slotStrip } from "../lib/slot_strip";
+import { contentsOf, isRoomOf, rolesOf, systemsAtPlace } from "../lib/detail";
+import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
 
-// EntityBlade (#799, refit in #826): ONE blade per fleet kind. Verdict and
-// since-when lead and the active alarms say why (the monitoring header), and
-// the rest of the blade IS the one EntityForm, read or edit through the
-// blade's own footer: the original blade vision, where view and edit are one
-// component and the blade is just where the operator clicked. The members,
-// the 30-day strip, and the vitals live on the workspace, one Expand away.
-// Every body self-fetches by id, so any page can push any kind.
+// EntityBlade (#799, refit in #826, the glance since #872): ONE blade per
+// fleet kind, and it is where an operator lands from a row. Verdict and
+// since-when lead, the active alarms say why with their severity, and the
+// context the operator came for follows: a system's place and its standard
+// and size, a component's place and the systems it serves with its role in
+// each, a place's systems with their verdicts. Then the form's identity,
+// placement and tags, read or edit through the blade's own footer.
+// Configuration (roles, properties, their cascade) and the depth (members,
+// history, vitals) are the detail view's, one Expand away. Every body
+// self-fetches by id, so any page can push any kind.
 
 const section = "flex flex-col gap-1.5";
 const eyebrow = "eyebrow";
@@ -89,6 +99,32 @@ function useDelete(opts: {
   return { destructive, err };
 }
 
+// Why, with the severity first: the reason beside the red light, each
+// naming the component when there is one to open.
+function Why(props: { rows: { severity: string; message: string; component?: string; onOpen?: () => void; ack?: JSX.Element }[] }) {
+  return (
+    <Show when={props.rows.length > 0}>
+      <div data-testid="blade-why" class={section}>
+        <span class={eyebrow}>Why</span>
+        <For each={props.rows}>
+          {(a) => (
+            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span class="badge badge-xs" classList={{ "badge-error badge-soft": a.severity === "critical", "badge-warning badge-soft": a.severity !== "critical" }}>{a.severity}</span>
+              <Show when={a.component}>
+                <Show when={a.onOpen} fallback={<span class="font-data text-xs text-base-content/80">{a.component}</span>}>
+                  <button type="button" class="cursor-pointer font-data text-xs text-base-content/80 hover:underline" onClick={() => a.onOpen!()}>{a.component}</button>
+                </Show>
+              </Show>
+              <span class="min-w-0 flex-1 text-xs text-base-content/70">{a.message}</span>
+              {a.ack}
+            </div>
+          )}
+        </For>
+      </div>
+    </Show>
+  );
+}
+
 function SystemBody(props: { id: string }) {
   const qc = useQueryClient();
   const blades = useBlades();
@@ -96,11 +132,12 @@ function SystemBody(props: { id: string }) {
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const health = useQuery(() => ({ queryKey: systemHealthKey(props.id), queryFn: () => systemHealth(props.id) }));
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
-
   const now = Date.now();
   const cluster = () => view.data?.systems?.find((s) => s.id === props.id);
   const row = () => (systems.data ?? []).find((s) => s.id === props.id);
   const alarms = createMemo(() => (health.data && view.data ? alarmRows(health.data, view.data, props.id) : []));
+  const strip = createMemo(() => (health.data ? slotStrip(health.data) : undefined));
+  const count = () => (cluster()?.dots ?? []).length;
 
   const { destructive, err } = useDelete({
     kindLabel: "system",
@@ -120,21 +157,17 @@ function SystemBody(props: { id: string }) {
         <HealthBadge verdict={cluster()?.verdict ?? undefined} size="sm" />
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
       </div>
-      <Show when={alarms().length > 0}>
-        <div class={section}>
-          <span class={eyebrow}>Why</span>
-          <For each={alarms()}>
-            {(a) => (
-              <div class="flex items-baseline gap-2">
-                <Show when={a.componentId} fallback={<span class="font-mono text-xs text-base-content/80">{a.component}</span>}>
-                  {(cid) => <button type="button" class="cursor-pointer font-mono text-xs text-base-content/80 hover:underline" onClick={() => blades.push({ kind: "component", id: cid() })}>{a.component}</button>}
-                </Show>
-                <span class="min-w-0 flex-1 truncate text-xs text-base-content/60">{a.message}</span>
-              </div>
-            )}
-          </For>
-        </div>
-      </Show>
+      <Why rows={alarms().map((a) => ({ severity: a.severity, message: a.message, component: a.component, onOpen: a.componentId ? () => blades.push({ kind: "component", id: a.componentId! }) : undefined }))} />
+      {/* The room's only system is the room: the title already names it. */}
+      <Show when={cluster()?.location}>{(pid) => <PlaceCard placeId={pid()} path showName={!(view.data && isRoomOf(view.data, pid(), [props.id]))} />}</Show>
+      {/* Size only: the standard is the form's Classification, said there. */}
+      <div data-testid="blade-brief" class="flex flex-wrap items-center gap-x-2 text-base-content/70">
+        <span class="tabular-nums">{count()} {count() === 1 ? "component" : "components"}</span>
+        <Show when={strip() && strip()!.empty > 0}>
+          <span class="text-base-content/30">·</span>
+          <span class="tabular-nums text-incomplete">{strip()!.filled} of {strip()!.total} slots filled</span>
+        </Show>
+      </div>
       <EntityForm kind="system" id={props.id} slot={edit} host="blade" destructive={destructive} />
     </div>
   );
@@ -142,15 +175,31 @@ function SystemBody(props: { id: string }) {
 
 function ComponentBody(props: { id: string }) {
   const qc = useQueryClient();
+  const blades = useBlades();
   const edit = useBladeEdit();
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const components = useQuery(() => ({ queryKey: COMPONENTS_KEY, queryFn: listComponents }));
   const alarmsQ = useQuery(() => ({ queryKey: componentAlarmsKey(props.id), queryFn: () => componentAlarms(props.id) }));
+  const members = useQuery(() => ({ queryKey: componentSystemsKey(props.id), queryFn: () => componentSystems(props.id) }));
 
   const now = Date.now();
   const row = () => (components.data ?? []).find((c) => c.id === props.id);
   const verdict = () => (view.data ? dotVerdict(view.data, props.id) : null);
   const active = createMemo(() => splitAlarms(alarmsQ.data ?? []).active);
+  // The systems it serves, by uuid, each with the role it fills there, the
+  // primary first (the read orders by name, and the primary is the one whose
+  // place stands in for a component with none of its own).
+  const served = createMemo(() =>
+    [...(members.data ?? [])]
+      .sort((a, b) => Number(!!b.primary) - Number(!!a.primary))
+      .map((m) => (view.data?.systems ?? []).find((s) => s.id === m.system_id || (!m.system_id && s.name === m.system)))
+      .filter((s): s is NonNullable<typeof s> => !!s),
+  );
+  const roleReads = useQueries(() => ({
+    queries: served().map((s) => ({ queryKey: systemRolesKey(s.id), queryFn: () => systemRoles(s.id), staleTime: 30_000 })),
+  }));
+  const primarySystem = () => served()[0];
+  const placeId = () => row()?.location_id ?? primarySystem()?.location ?? null;
 
   const { destructive, err } = useDelete({
     kindLabel: "component",
@@ -170,11 +219,24 @@ function ComponentBody(props: { id: string }) {
         <HealthBadge verdict={verdict() ?? undefined} size="sm" />
         <SinceLine since={leafAlarmSince(alarmsQ.data ?? [], now)} />
       </div>
-      <Show when={active().length > 0}>
-        <div class={section}>
-          <span class={eyebrow}>Why</span>
-          <For each={active()}>
-            {(a) => <span class="truncate text-xs text-base-content/70">{a.message}</span>}
+      <Why rows={active().map((a) => ({ severity: a.severity, message: a.message, ack: <AcknowledgeButton component={props.id} alarm={a} /> }))} />
+      {/* Where its place is the room a system it serves makes, Serves names
+          that room already, so no place card says it again. */}
+      <Show when={placeId() && !(view.data && isRoomOf(view.data, placeId(), served().map((s) => s.id)))}>
+        <PlaceCard placeId={placeId()!} path showName provenance={row()?.location_id ? "set here" : "from its system"} />
+      </Show>
+      <Show when={served().length > 0}>
+        <div data-testid="blade-serves" class={section}>
+          <span class={eyebrow}>Serves</span>
+          <For each={served()}>
+            {(s, i) => (
+              <div class="flex flex-wrap items-center gap-2">
+                <button type="button" class="cursor-pointer hover:underline" onClick={() => blades.push({ kind: "system", id: s.id })}>{entityLabel(s)}</button>
+                <For each={roleReads[i()]?.data ? rolesOf(row()?.name ?? "", roleReads[i()]!.data!) : []}>
+                  {(r) => <span class="badge badge-ghost badge-sm">{r}</span>}
+                </For>
+              </div>
+            )}
           </For>
         </div>
       </Show>
@@ -185,6 +247,7 @@ function ComponentBody(props: { id: string }) {
 
 function LocationBody(props: { id: string }) {
   const qc = useQueryClient();
+  const blades = useBlades();
   const edit = useBladeEdit();
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const locations = useQuery(() => ({ queryKey: LOCATIONS_KEY, queryFn: listLocations }));
@@ -193,6 +256,9 @@ function LocationBody(props: { id: string }) {
   const now = Date.now();
   const row = () => (locations.data ?? []).find((l) => l.id === props.id);
   const anchor = () => view.data?.locations?.find((l) => l.id === props.id);
+  const here = createMemo(() => (view.data ? systemsAtPlace(view.data, props.id) : []));
+  const types = useQuery(() => ({ queryKey: LOCATION_TYPES_KEY, queryFn: listLocationTypes }));
+  const contents = () => (view.data ? contentsOf(view.data, props.id, types.data ?? []) : "");
 
   const { destructive, err } = useDelete({
     kindLabel: "location",
@@ -212,6 +278,27 @@ function LocationBody(props: { id: string }) {
         <HealthBadge verdict={anchor()?.verdict ?? undefined} size="sm" />
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
       </div>
+      {/* The places beneath it; a room holding systems and no places says
+          nothing about places (its systems are listed below). */}
+      <Show when={contents() !== "Empty" || here().length === 0}>
+        <div data-testid="blade-contents" class={section}>
+          <span class={eyebrow}>Holds</span>
+          <span class="text-base-content/70">{contents()}</span>
+        </div>
+      </Show>
+      <Show when={here().length > 0}>
+        <div data-testid="blade-systems" class={section}>
+          <span class={eyebrow}>{here().length === 1 ? "System here" : "Systems here"}</span>
+          <For each={here()}>
+            {(s) => (
+              <button type="button" class="flex cursor-pointer items-center gap-2 text-left hover:underline" onClick={() => blades.push({ kind: "system", id: s.id })}>
+                <span>{entityLabel(s)}</span>
+                <HealthBadge verdict={s.verdict ?? undefined} size="xs" />
+              </button>
+            )}
+          </For>
+        </div>
+      </Show>
       <EntityForm kind="location" id={props.id} slot={edit} host="blade" destructive={destructive} />
     </div>
   );

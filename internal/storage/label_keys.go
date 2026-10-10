@@ -168,6 +168,17 @@ var systemLabelKeys = []labelKey[systemFacts]{
 			"rendered, else that location's own name.",
 		value: func(f systemFacts) string { return f.pl.locationLabel },
 	},
+	{
+		Name: "SharesLocation",
+		Summary: "Set when another system sits at the same location, empty when this one is alone there: a " +
+			"room's sole system reads as the room, and once it holds several each names its kind.",
+		value: func(f systemFacts) string {
+			if f.pl.sharesLocation {
+				return "yes"
+			}
+			return ""
+		},
+	},
 }
 
 // locationLabelKeys is two keys, and the absences are the design. No product and

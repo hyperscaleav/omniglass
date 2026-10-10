@@ -471,6 +471,10 @@ type componentPlacement struct {
 // spellings is a trap for a rule author rather than a convenience.
 type systemPlacement struct {
 	locationLabel string
+	// sharesLocation is whether another system sits at the same location: a
+	// room's sole system reads as the room, and once it holds several each
+	// names its kind (#872).
+	sharesLocation bool
 }
 
 // locationReadLadder is the SQL for "what does this location READ as", the
@@ -542,7 +546,10 @@ func systemPlacements(ctx context.Context, q querier, ids []string) (map[string]
 		return out, nil
 	}
 	rows, err := q.Query(ctx, `
-		select s.id, `+locationReadLadder+`
+		select s.id, `+locationReadLadder+`,
+			s.location_id is not null and exists (
+				select 1 from system o where o.location_id = s.location_id and o.id <> s.id
+			)
 		from system s
 		left join location l on l.id = s.location_id
 		where s.id = any($1::uuid[])`, seeds)
@@ -553,7 +560,7 @@ func systemPlacements(ctx context.Context, q querier, ids []string) (map[string]
 	for rows.Next() {
 		var id string
 		var pl systemPlacement
-		if err := rows.Scan(&id, &pl.locationLabel); err != nil {
+		if err := rows.Scan(&id, &pl.locationLabel, &pl.sharesLocation); err != nil {
 			return nil, fmt.Errorf("storage: scan system placement facts: %w", err)
 		}
 		out[id] = pl

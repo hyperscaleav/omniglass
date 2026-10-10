@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@solidjs/testing-library";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Components from "./Components";
@@ -15,8 +15,15 @@ import { PRODUCTS_KEY } from "../lib/products";
 import { LOCATIONS_KEY } from "../lib/locations";
 import { LOCATION_TYPES_KEY } from "../lib/location_types";
 import { TAGS_KEY } from "../lib/tags";
+import { systemRolesKey } from "../lib/system_roles";
 import { ME_KEY, type Me } from "../lib/auth";
 import { uuidFor } from "../lib/testids";
+
+const acked: string[] = [];
+vi.mock("../lib/alarms", async (orig) => {
+  const real = await orig<typeof import("../lib/alarms")>();
+  return { ...real, acknowledgeAlarm: vi.fn(async (name: string, id: string) => { acked.push(`${name}:${id}`); return {}; }) };
+});
 
 // The component leaf (#637): direct arrival renders the breadcrumb from the
 // ancestor chain, memberships list with the primary marked, and the
@@ -61,16 +68,18 @@ const reach: Reachability = {
 
 const nodes: Node[] = [{ name: "edge-1", enrolled: true, last_heartbeat_at: iso(5), tags: {} } as Node];
 
-function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[]) {
+function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: unknown[], component: Component = bar, meOverride: Me = me) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   qc.setQueryData([...FLEET_VIEW_KEY], view);
-  qc.setQueryData([...COMPONENTS_KEY], [bar]);
+  qc.setQueryData([...COMPONENTS_KEY], [component]);
   qc.setQueryData([...PRODUCTS_KEY], [{ id: uuidFor("cf-p"), name: "kestrel-vroom", label: "Kestrel VRoom", vendor: "kestrel", driver: "kestrel-http" }]);
   qc.setQueryData([...NODES_KEY], nodes);
   qc.setQueryData([...LOCATIONS_KEY], []);
-  qc.setQueryData([...LOCATION_TYPES_KEY], []);
+  qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("cft-room"), name: "room", label: "Room", allowed_parent_types: [] }]);
+  qc.setQueryData([...systemRolesKey(uuidFor("cf-s-a"))], [{ name: "conf-bar", label: "Conferencing Bar", assigned_to: ["videobar-1"] }]);
+  qc.setQueryData([...systemRolesKey(uuidFor("cf-s-b"))], []);
   qc.setQueryData([...TAGS_KEY], []);
-  qc.setQueryData([...ME_KEY], me);
+  qc.setQueryData([...ME_KEY], meOverride);
   qc.setQueryData([...componentSystemsKey(uuidFor("cf-c-bar"))], memberships ?? [
     { component: "videobar-1", system: "boardroom", primary: true, system_count: 2 },
     { component: "videobar-1", system: "overflow", primary: false, system_count: 2 },
@@ -102,16 +111,24 @@ function mount(path = `/web/components/${uuidFor("cf-c-bar")}`, memberships?: un
 afterEach(cleanup);
 
 describe("the component leaf", () => {
-  it("arriving directly renders the breadcrumb from the ancestor chain through the primary system, no prior navigation", () => {
+  // The path names the room once (#872): the room holds one system, so the
+  // room's crumb IS the system's, whose view is the room's.
+  it("arriving directly walks the places to its one-system room, named once, as the system", () => {
     mount();
     const trail = screen.getByTestId("breadcrumb");
     expect(within(trail).getByText("Explore")).toBeTruthy();
     expect(within(trail).getByText("Headquarters")).toBeTruthy();
-    expect(within(trail).getByText("Boardroom A")).toBeTruthy();
-    // The primary system is the last crumb; the leaf itself is the title.
     expect(within(trail).getByText("Boardroom System")).toBeTruthy();
+    expect(within(trail).queryByText("Boardroom A")).toBeNull();
     expect(within(trail).queryByText("Video Bar 1")).toBeNull();
     expect(screen.getByRole("heading", { name: "Video Bar 1" })).toBeTruthy();
+  });
+
+  it("links Explore back to this component's row in the outline", async () => {
+    mount();
+    fireEvent.click(within(screen.getByTestId("breadcrumb")).getByRole("button", { name: "Explore" }));
+    expect(await screen.findByTestId("fleet-page")).toBeTruthy();
+    expect(window.location.pathname + window.location.search).toBe(`/web/explore?node=${uuidFor("cf-c-bar")}`);
   });
 
   it("says what it is: product (label with its handle), vendor, driver, once each", () => {
@@ -120,33 +137,45 @@ describe("the component leaf", () => {
     expect(within(card).getByText("kestrel-vroom")).toBeTruthy();
     expect(within(card).getByText("kestrel")).toBeTruthy();
     expect(within(card).getByText("kestrel-http")).toBeTruthy();
-    // No slug sentence restating the rows above it.
     expect(within(card).queryByText(/driven by/)).toBeNull();
   });
 
-  it("says where it sits: the clickable chain (each crumb's type as its tooltip) and the primary system", () => {
+  // Each fact once (#872 audit): in the room its one system makes, the place
+  // and the system are one thing, already named by "Systems it serves" (and
+  // the path), so no place card says it again.
+  it("shows no place card where its place is the room of a system it serves", () => {
     mount();
-    const card = screen.getByTestId("leaf-placement");
-    const room = within(card).getByRole("button", { name: "Boardroom A" });
-    expect(room.getAttribute("title")).toBe("room");
-    expect(within(card).queryByTestId("leaf-type-path")).toBeNull();
-    expect(within(card).getByRole("button", { name: "Boardroom System" })).toBeTruthy();
+    expect(screen.queryByTestId("place-card")).toBeNull();
+    expect(within(screen.getByTestId("leaf-memberships")).getByText("Boardroom System")).toBeTruthy();
   });
 
-  it("wears the same shell as every workspace: one counts line on top, no rail", () => {
+  it("shows a place card, marked as its own, where it sits apart from the systems it serves", () => {
+    mount(undefined, undefined, { ...bar, location: "hq", location_id: uuidFor("cf-hq") } as unknown as Component);
+    const card = screen.getByTestId("place-card");
+    expect(within(card).getByText("Headquarters")).toBeTruthy();
+    expect(within(card).getByTestId("place-provenance").textContent).toBe("set here");
+  });
+
+  it("names its product once, under what it is, not in the header too", () => {
     mount();
-    expect(screen.getByTestId("counts-line")).toBeTruthy();
+    expect(within(screen.getByTestId("leaf-header")).queryByText("Kestrel VRoom")).toBeNull();
+    expect(within(screen.getByTestId("leaf-identity")).getByText("Kestrel VRoom")).toBeTruthy();
+  });
+
+  it("carries no counts line counting itself (#872)", () => {
+    mount();
+    expect(screen.queryByTestId("counts-line")).toBeNull();
     expect(screen.queryByTestId("fleet-summary")).toBeNull();
-    expect(screen.queryByTestId("zoom-rail")).toBeNull();
   });
 
-  it("lists one row per membership with the primary marked, and says the location comes from the primary", () => {
+  it("names the role it fills in each system it serves, the primary marked, in no inline prose", async () => {
     mount();
     const card = screen.getByTestId("leaf-memberships");
     expect(within(card).getByText("Boardroom System")).toBeTruthy();
     expect(within(card).getByText("Overflow")).toBeTruthy();
+    expect(await within(card).findByText("Conferencing Bar")).toBeTruthy();
     expect(within(card).getByText("primary")).toBeTruthy();
-    expect(within(card).getByText(/Location follows the primary system/)).toBeTruthy();
+    expect(within(card).queryByText(/Location follows/)).toBeNull();
   });
 
   it("distinguishes a stale sample under a healthy node from an offline node", () => {
@@ -214,7 +243,8 @@ describe("the component configure tab (#800)", () => {
     expect(within(face).getByText("Identity")).toBeTruthy();
     expect(within(face).getByText("Classification")).toBeTruthy();
     expect(within(face).getAllByText("Tags").length).toBeGreaterThan(0);
-    expect(within(face).getByText(/fixed at creation/i)).toBeTruthy();
+    // The product reads as its label (#870); fixed-at-creation is its tooltip.
+    expect(within(face).getByText("Kestrel VRoom")).toBeTruthy();
   });
 });
 
@@ -238,5 +268,28 @@ describe("the miss face (#800)", () => {
     mount("/web/components/no-such-widget");
     expect(await screen.findByText(/No component answers this address/)).toBeTruthy();
     expect(screen.queryByText("Reachability")).toBeNull();
+  });
+});
+
+// Acknowledging is outside the update gate (ADR-0109): it records that the
+// reader looked and writes none of the component's data. With the alarms
+// panel on Configure only, a caller holding alarm:acknowledge without
+// component:update had no way left to acknowledge (#872 review). Why carries
+// it, on its own permission.
+describe("acknowledging from Why (#872)", () => {
+  const ackOnly: Me = { principal: { id: "u-ack", kind: "human" }, human: { username: "ack" }, permissions: ["component:read", "system:read", "location:read", "alarm:read", "alarm:acknowledge"], grants: [] };
+
+  it("offers Acknowledge on an unacknowledged alarm to a caller holding only the acknowledge permission", async () => {
+    acked.length = 0;
+    mount(undefined, undefined, bar, ackOnly);
+    const why = screen.getByTestId("leaf-alarms");
+    fireEvent.click(within(why).getByRole("button", { name: "Acknowledge" }));
+    await waitFor(() => expect(acked).toEqual([`${uuidFor("cf-c-bar")}:al-1`]));
+  });
+
+  it("offers nothing to a caller without the acknowledge permission", () => {
+    const readOnly: Me = { ...ackOnly, permissions: ["component:read", "system:read", "location:read"] };
+    mount(undefined, undefined, bar, readOnly);
+    expect(within(screen.getByTestId("leaf-alarms")).queryByRole("button", { name: "Acknowledge" })).toBeNull();
   });
 });
