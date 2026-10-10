@@ -136,13 +136,24 @@ describe("the system blade", () => {
     expect(within(why).getByRole("button", { name: "mic-1" })).toBeTruthy();
   });
 
-  it("names its place as context and its standard and size in brief", async () => {
+  // Each fact once (#872 drawer audit). The room's only system IS the room,
+  // so its place card names no place (the title does), and offers no second
+  // drawer for the room (its form is Configure place); the brief says the
+  // size, not the standard the form's Classification already says; the
+  // read-only form drops the Label row the title already says.
+  it("says each fact once: no place name, no place drawer, no standard twice, no label row", async () => {
     mountBlade({ kind: "system", id: uuidFor("eb-sys") });
     const blade = await screen.findByRole("dialog");
-    expect(within(within(blade).getByTestId("place-card")).getByText("Boardroom A")).toBeTruthy();
+    const card = within(blade).getByTestId("place-card");
+    expect(within(card).queryByText("Boardroom A")).toBeNull();
+    expect(within(card).queryByRole("button", { name: "Place details" })).toBeNull();
+    expect(within(card).getByRole("link", { name: "Configure place" })).toBeTruthy();
     const brief = within(blade).getByTestId("blade-brief");
-    expect(within(brief).getByText("Huddle Room Standard")).toBeTruthy();
     expect(within(brief).getByText("2 components")).toBeTruthy();
+    expect(within(brief).queryByText("Huddle Room Standard")).toBeNull();
+    const form = await within(blade).findByTestId("entity-form");
+    expect(within(form).queryByText("Label")).toBeNull();
+    expect(within(form).getAllByText("Huddle Room Standard").length).toBe(1);
   });
 
   it("renders the form's identity, placement and tags, and leaves the roles to Configure", async () => {
@@ -184,10 +195,13 @@ describe("the component blade", () => {
     expect(await within(serves).findByText("Room Microphone")).toBeTruthy();
   });
 
-  it("shows its place as context and keeps the product's note in a tooltip", async () => {
+  // The component sits in the room its one system makes: "Serves Boardroom"
+  // already names that room, so a place card would name it twice.
+  it("shows no place card where its place is the room of the system it serves, and keeps the product's note in a tooltip", async () => {
     mountBlade({ kind: "component", id: uuidFor("eb-c-mic") });
     const blade = await screen.findByRole("dialog");
-    expect(within(blade).getByTestId("place-provenance").textContent).toBe("set here");
+    await within(blade).findByTestId("blade-serves");
+    expect(within(blade).queryByTestId("place-card")).toBeNull();
     await within(blade).findByTestId("entity-form");
     expect(within(blade).queryByText(/Fixed at creation/)).toBeNull();
   });
@@ -216,8 +230,8 @@ describe("the component blade's place, by its primary system", () => {
       { system_id: uuidFor("eb-sys"), system: "boardroom", primary: true },
     ]);
     const blade = await screen.findByRole("dialog");
-    await waitFor(() => expect(within(blade).getByTestId("place-provenance").textContent).toBe("from its system"));
-    expect(within(within(blade).getByTestId("place-card")).getByText("Boardroom A")).toBeTruthy();
+    // Primary first among the systems it serves.
+    await waitFor(() => expect(within(blade).getByTestId("blade-serves").querySelector("button")?.textContent).toBe("Boardroom"));
   });
 });
 
@@ -232,10 +246,14 @@ describe("the location blade", () => {
     expect(await screen.findByRole("dialog", { name: "Boardroom" })).toBeTruthy();
   });
 
-  it("says what the place holds beneath it, in the registry's words", async () => {
+  // "Holds: Empty" beside a list of the room's systems was wrong: it counts
+  // only the places beneath. A place holding systems and no places says
+  // nothing about places at all.
+  it("says nothing about places beneath a room that holds systems and no places", async () => {
     mountBlade({ kind: "location", id: uuidFor("eb-room") });
     const blade = await screen.findByRole("dialog");
-    expect(within(blade).getByTestId("blade-contents").textContent).toContain("Empty");
+    await within(blade).findByTestId("blade-systems");
+    expect(within(blade).queryByTestId("blade-contents")).toBeNull();
   });
 
   it("renders the form with the parent", async () => {

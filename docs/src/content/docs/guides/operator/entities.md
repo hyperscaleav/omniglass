@@ -39,11 +39,14 @@ Enter to open it.
 
 A fleet entity's blade (a location, a system, a component) is the glance an operator lands on
 from a row. It leads with the verdict and since-when and the active alarms that say why, each
-with its severity, then the context you came for: a system's place (as a card, with its own
-**Place details**), its standard and size; a component's place (its own, or its system's
-standing in) and the systems it serves, with the role it fills in each; a place's systems,
-each with its verdict, one click from its own blade. Then the entity's **form**: identity,
-classification, a location's parent, and tags, read or edited in place. Configuration (a
+with its severity, then the context you came for: a system's place (as a card) and its size;
+the systems a component serves, with the role it fills in each, and its place when that is
+somewhere else; a place's systems, each with its verdict, one click from its own blade. Then
+the entity's **form**: its name, classification, a location's parent, and tags, read or edited
+in place. Each fact is said once: the blade's title is the label (the Label field appears only
+while editing), a room's only system is the room (its card names no place and offers no second
+blade for it, only **Configure place**), and the standard is in Classification, not repeated
+above it. Configuration (a
 system's roles, the properties and their cascade, a component's reconciliation and
 interfaces) is the detail view's **Configure** tab, one **Expand** away, along with the
 components, the history and the vitals. Delete sits on the left of the footer behind a confirm, gated by your

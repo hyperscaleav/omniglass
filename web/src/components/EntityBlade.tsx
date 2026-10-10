@@ -19,9 +19,8 @@ import { COMPONENTS_KEY, listComponents, deleteComponent } from "../lib/componen
 import { componentAlarms, componentAlarmsKey, splitAlarms } from "../lib/alarms";
 import { componentSystems, componentSystemsKey } from "../lib/members";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
-import { STANDARDS_KEY, listStandards } from "../lib/standards";
 import { slotStrip } from "../lib/slot_strip";
-import { contentsOf, rolesOf, systemsAtPlace } from "../lib/detail";
+import { contentsOf, isRoomOf, rolesOf, systemsAtPlace } from "../lib/detail";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { describeError, fmtTime } from "../lib/format";
 import { durationText } from "../lib/timeline";
@@ -133,17 +132,10 @@ function SystemBody(props: { id: string }) {
   const view = useQuery(() => ({ queryKey: FLEET_VIEW_KEY, queryFn: fleetView }));
   const health = useQuery(() => ({ queryKey: systemHealthKey(props.id), queryFn: () => systemHealth(props.id) }));
   const systems = useQuery(() => ({ queryKey: SYSTEMS_KEY, queryFn: listSystems }));
-  const standards = useQuery(() => ({ queryKey: STANDARDS_KEY, queryFn: listStandards }));
-
   const now = Date.now();
   const cluster = () => view.data?.systems?.find((s) => s.id === props.id);
   const row = () => (systems.data ?? []).find((s) => s.id === props.id);
   const alarms = createMemo(() => (health.data && view.data ? alarmRows(health.data, view.data, props.id) : []));
-  const standard = () => {
-    const h = row()?.standard;
-    const st = h ? (standards.data ?? []).find((x) => x.name === h) : undefined;
-    return st ? entityLabel(st) : h ?? "";
-  };
   const strip = createMemo(() => (health.data ? slotStrip(health.data) : undefined));
   const count = () => (cluster()?.dots ?? []).length;
 
@@ -166,9 +158,10 @@ function SystemBody(props: { id: string }) {
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
       </div>
       <Why rows={alarms().map((a) => ({ severity: a.severity, message: a.message, component: a.component, onOpen: a.componentId ? () => blades.push({ kind: "component", id: a.componentId! }) : undefined }))} />
-      <Show when={cluster()?.location}>{(pid) => <PlaceCard placeId={pid()} showName />}</Show>
+      {/* The room's only system is the room: the title already names it. */}
+      <Show when={cluster()?.location}>{(pid) => <PlaceCard placeId={pid()} showName={!(view.data && isRoomOf(view.data, pid(), [props.id]))} />}</Show>
+      {/* Size only: the standard is the form's Classification, said there. */}
       <div data-testid="blade-brief" class="flex flex-wrap items-center gap-x-2 text-base-content/70">
-        <Show when={standard()}><span>{standard()}</span><span class="text-base-content/30">·</span></Show>
         <span class="tabular-nums">{count()} {count() === 1 ? "component" : "components"}</span>
         <Show when={strip() && strip()!.empty > 0}>
           <span class="text-base-content/30">·</span>
@@ -227,8 +220,10 @@ function ComponentBody(props: { id: string }) {
         <SinceLine since={leafAlarmSince(alarmsQ.data ?? [], now)} />
       </div>
       <Why rows={active().map((a) => ({ severity: a.severity, message: a.message, ack: <AcknowledgeButton component={props.id} alarm={a} /> }))} />
-      <Show when={placeId()}>
-        {(pid) => <PlaceCard placeId={pid()} showName provenance={row()?.location_id ? "set here" : "from its system"} />}
+      {/* Where its place is the room a system it serves makes, Serves names
+          that room already, so no place card says it again. */}
+      <Show when={placeId() && !(view.data && isRoomOf(view.data, placeId(), served().map((s) => s.id)))}>
+        <PlaceCard placeId={placeId()!} showName provenance={row()?.location_id ? "set here" : "from its system"} />
       </Show>
       <Show when={served().length > 0}>
         <div data-testid="blade-serves" class={section}>
@@ -283,10 +278,14 @@ function LocationBody(props: { id: string }) {
         <HealthBadge verdict={anchor()?.verdict ?? undefined} size="sm" />
         <SinceLine since={health.data ? sinceOf(health.data, now) : undefined} />
       </div>
-      <div data-testid="blade-contents" class={section}>
-        <span class={eyebrow}>Holds</span>
-        <span class="text-base-content/70">{contents()}</span>
-      </div>
+      {/* The places beneath it; a room holding systems and no places says
+          nothing about places (its systems are listed below). */}
+      <Show when={contents() !== "Empty" || here().length === 0}>
+        <div data-testid="blade-contents" class={section}>
+          <span class={eyebrow}>Holds</span>
+          <span class="text-base-content/70">{contents()}</span>
+        </div>
+      </Show>
       <Show when={here().length > 0}>
         <div data-testid="blade-systems" class={section}>
           <span class={eyebrow}>{here().length === 1 ? "System here" : "Systems here"}</span>

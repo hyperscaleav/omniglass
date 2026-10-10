@@ -540,11 +540,12 @@ describe("the place is context, the system the subject (#872)", () => {
     expect(within(card).queryByText("Boardroom A")).toBeNull();
   });
 
-  it("opens the place's own panel from its card", async () => {
+  // A room holding one system IS the system: its own panel would only point
+  // back here, so the card offers none (#872 drawer audit); Configure place
+  // is where its form lives.
+  it("offers no second panel for a sole system's room", () => {
     mount();
-    fireEvent.click(within(screen.getByTestId("place-card")).getByRole("button", { name: "Place details" }));
-    const blade = await screen.findByRole("dialog");
-    expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-location-${uuidFor("szp-room")}`);
+    expect(within(screen.getByTestId("place-card")).queryByRole("button", { name: "Place details" })).toBeNull();
   });
 
   // The place's own configuration (its properties and their cascade) lives on

@@ -60,6 +60,15 @@ export function componentCrumbs(view: FleetView, locationId: string | null | und
   return chain;
 }
 
+// Whether a place is the room one of these systems makes: a system that is
+// the only one at that place. There the place and the system are one thing,
+// so a view that names the system has already named the place (#872).
+export function isRoomOf(view: FleetView, placeId: string | null | undefined, systemIds: (string | null | undefined)[]): boolean {
+  if (!placeId) return false;
+  const here = systemsAtPlace(view, placeId);
+  return here.length === 1 && systemIds.includes(here[0].id);
+}
+
 // The roles a component staffs in one system, by label: read from the
 // system's declared roles, since a membership says THAT a component belongs,
 // and the role says what it does there.

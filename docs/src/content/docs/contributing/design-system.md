@@ -70,9 +70,12 @@ a place holding none or several renders its own subject card,
   line above a detail view: the subject card's header carries its facts. A list whose items hold
   their own queries iterates stable ids, never the objects a fresh read hands back: iterating
   objects rebuilt each card on every read, and each rebuilt card refetched, a request storm.
-- **The side panel is the glance.** A fleet panel (`EntityBlade`) leads with verdict, since and
-  why (severity first), then the context the operator came for, then the form's identity,
-  classification, a location's parent, and tags. `EntityForm` with `host="blade"` leaves out the
+- **The side panel is the glance, and says each fact once.** A fleet panel (`EntityBlade`) leads
+  with verdict, since and why (severity first), then the context the operator came for, then the
+  form's name, classification, a location's parent, and tags. Reading in a blade, the label is the
+  title and the form drops its Label row; a room holding one system is that system
+  (`lib/detail.ts` `isRoomOf`), so its `PlaceCard` names no place and offers no second panel, and a
+  component in such a room shows no place card beside the system it serves. `EntityForm` with `host="blade"` leaves out the
   kind's configuration panels (roles, properties, reconciliation, interfaces), which the detail
   view's Configure tab carries, and a system's or component's placement, which the panel's
   place card already says.

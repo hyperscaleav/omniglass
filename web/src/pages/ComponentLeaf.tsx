@@ -27,7 +27,7 @@ import { PRODUCTS_KEY, listProducts } from "../lib/products";
 import { collectionState, dotVerdict, identityRows, leafAlarmSince, membershipRows, vitalRows } from "../lib/component_leaf";
 import { entityLabel } from "../lib/entities";
 import { systemRoles, systemRolesKey } from "../lib/system_roles";
-import { componentCrumbs, rolesOf } from "../lib/detail";
+import { componentCrumbs, isRoomOf, rolesOf } from "../lib/detail";
 import { can, useMe } from "../lib/auth";
 import { describeError, fmtTime } from "../lib/format";
 
@@ -178,8 +178,10 @@ export default function ComponentLeaf() {
         onRetry={() => { void view.refetch(); void components.refetch(); }}
       >
         <div class="flex flex-col gap-3">
-          <Show when={placeId()}>
-            {(pid) => <PlaceCard placeId={pid()} showName provenance={provenance()} />}
+          {/* In the room a system it serves makes, the place and the system
+              are one thing, named under Systems it serves and in the path. */}
+          <Show when={placeId() && !(view.data && isRoomOf(view.data, placeId(), rows().map((r) => r.systemId)))}>
+            <PlaceCard placeId={placeId()!} showName provenance={provenance()} />
           </Show>
           <section data-testid="component-card" class="card overflow-hidden border border-base-300 bg-base-200 p-0">
             {/* State, age, identity: the header every detail view opens with.
@@ -190,10 +192,6 @@ export default function ComponentLeaf() {
               <HealthBadge verdict={verdict() ?? undefined} size="sm" />
               <Show when={since()}>
                 {(sc) => <span data-testid="since-line" class="tabular-nums text-base-content/70">since {fmtTime(sc().ts)} · {durationText(sc().ms)}</span>}
-              </Show>
-              <Show when={product()}>
-                <span class="text-base-content/30">·</span>
-                <span class="text-base-content/70">{entityLabel(product()!)}</span>
               </Show>
               <span class="text-base-content/30">·</span>
               <span class="font-data text-xs text-base-content/60">{component()?.name}</span>

@@ -12,6 +12,7 @@ import { FLEET_VIEW_KEY, fleetView } from "../lib/fleet";
 import { LOCATIONS_KEY, listLocations } from "../lib/locations";
 import { LOCATION_TYPES_KEY, listLocationTypes } from "../lib/location_types";
 import { entityLabel } from "../lib/entities";
+import { systemsAtPlace } from "../lib/detail";
 
 // PlaceCard (#872): a place as context. Systems are what Omniglass monitors;
 // places are folders and metadata about where, so a detail view shows its
@@ -37,6 +38,10 @@ export default function PlaceCard(props: {
   const place = () => (view.data?.locations ?? []).find((l) => l.id === props.placeId);
   const type = () => (types.data ?? []).find((t) => t.name === place()?.location_type);
   const tags = () => (locations.data ?? []).find((l) => l.id === props.placeId)?.effective_tags ?? {};
+  // A room holding one system IS that system: its own panel would only point
+  // back at the system, and its form is Configure place, so no second panel
+  // is offered for it (#872).
+  const sole = () => (view.data ? systemsAtPlace(view.data, props.placeId).length === 1 : false);
   return (
     <Show when={place()}>
       {(p) => (
@@ -64,7 +69,9 @@ export default function PlaceCard(props: {
           <Show when={can(me.data, "location", "update")}>
             <A href={`/locations/${p().id}?tab=configure`} class="text-sm text-base-content/70 hover:underline">Configure place</A>
           </Show>
-          <Button size="sm" intent="quiet" onClick={() => blades.push({ kind: "location", id: p().id })}>Place details</Button>
+          <Show when={!sole()}>
+            <Button size="sm" intent="quiet" onClick={() => blades.push({ kind: "location", id: p().id })}>Place details</Button>
+          </Show>
         </section>
       )}
     </Show>

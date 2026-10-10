@@ -133,19 +133,26 @@ describe("the component leaf", () => {
     expect(within(card).queryByText(/driven by/)).toBeNull();
   });
 
-  it("shows where it sits as a place card, saying the place is its own", () => {
+  // Each fact once (#872 audit): in the room its one system makes, the place
+  // and the system are one thing, already named by "Systems it serves" (and
+  // the path), so no place card says it again.
+  it("shows no place card where its place is the room of a system it serves", () => {
     mount();
+    expect(screen.queryByTestId("place-card")).toBeNull();
+    expect(within(screen.getByTestId("leaf-memberships")).getByText("Boardroom System")).toBeTruthy();
+  });
+
+  it("shows a place card, marked as its own, where it sits apart from the systems it serves", () => {
+    mount(undefined, undefined, { ...bar, location: "hq", location_id: uuidFor("cf-hq") } as unknown as Component);
     const card = screen.getByTestId("place-card");
-    expect(within(card).getByText("Boardroom A")).toBeTruthy();
-    expect(within(card).getByTestId("place-type").textContent).toBe("Room");
+    expect(within(card).getByText("Headquarters")).toBeTruthy();
     expect(within(card).getByTestId("place-provenance").textContent).toBe("set here");
   });
 
-  it("shows its system's place for a component with none of its own, saying so", () => {
-    mount(undefined, undefined, { ...bar, location: undefined, location_id: undefined } as unknown as Component);
-    const card = screen.getByTestId("place-card");
-    expect(within(card).getByText("Boardroom A")).toBeTruthy();
-    expect(within(card).getByTestId("place-provenance").textContent).toBe("from its system");
+  it("names its product once, under what it is, not in the header too", () => {
+    mount();
+    expect(within(screen.getByTestId("leaf-header")).queryByText("Kestrel VRoom")).toBeNull();
+    expect(within(screen.getByTestId("leaf-identity")).getByText("Kestrel VRoom")).toBeTruthy();
   });
 
   it("carries no counts line counting itself (#872)", () => {
