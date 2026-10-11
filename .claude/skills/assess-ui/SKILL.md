@@ -30,7 +30,8 @@ and `kobalte` cover the reactivity and primitive mechanics.
    Buttons carry an intent class (`btn-action`, `btn-quiet`, `btn-danger`, `btn-warn`,
    `btn-ok`) and never a raw daisyUI color class (the style-guard test fails the build).
    Status pills are soft hues; a neutral state uses the grey-fill recipe, never
-   `badge-neutral` or `badge-ghost` (invisible on this theme). Data renders in
+   `badge-neutral` (invisible on this theme; `badge-ghost` is restyled in `app.css` as the
+   legible neutral chip, and healthy wears `badge-healthy`). Data renders in
    `font-data`.
 4. **Write the state list before the code.** Minimum: loading, empty (it must teach and
    offer the create path), error (an alert with a retry, not a blank), populated with

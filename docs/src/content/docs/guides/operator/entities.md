@@ -3,25 +3,25 @@ title: Work with an entity
 description: "Opening an entity's blade, drilling into its children, and creating, editing, or deleting through the footer action bar."
 screenshots:
   - id: entity-blade
-    path: /web/fleet?view=list
+    path: /web/explore
     alt: "A location's blade slides in from the right with its details and a footer action bar."
+    # Harbor Point holds two buildings and no system, so its row opens the
+    # location's own blade (a place holding one system opens that system).
     steps:
       - action: click
-        selector: "text=East Campus"
-    # The condensed blade (#799) renders two regions no clock can pin: the
-    # since line's age counts from the capture's own seed-to-shoot latency,
-    # and the 30-day strip weights its spans by that same moving now.
+        selector: "[role=treeitem]:has-text('Harbor Point')"
+    # The blade renders one region no clock can pin: the since line's age
+    # counts from the capture's own seed-to-shoot latency.
     mask:
       - "[data-testid=blade-since]"
-      - ".og-statestrip"
   - id: entity-edit-face
     path: /web/locations/east?edit=1
-    alt: "An ?edit=1 deep link lands the workspace on its Configure tab, already editing."
+    alt: "An ?edit=1 deep link lands a place's view on its Configure tab, already editing."
     # No mask: the Configure tab replaces the overview (and its since-line
     # clock), and the form renders from the seed deterministically.
 ---
 
-Once you have [found an entity](/guides/operator/inventory/), you open it, read it, and change
+Once you have [found an entity](/guides/operator/fleet/), you open it, read it, and change
 it the same way everywhere in the console.
 
 ## Open an entity
@@ -29,7 +29,7 @@ it the same way everywhere in the console.
 Click a row to open its **blade**, a panel that slides in from the right with the entity's
 details. From a blade you can drill into a child (it stacks another blade behind the first),
 step back with the breadcrumb, or **Expand** to the entity's own page: a fleet entity opens
-its workspace, an identity entity its full detail. The page has its own URL, so it is
+its [detail view](/guides/operator/fleet/#one-view-per-system), an identity entity its full detail. The page has its own URL, so it is
 shareable and bookmarkable; a blade opened by a click is a quick look that does not change
 the URL, though a blade can be addressed by one (a user's `?u=<id>` deep link, which the
 create flow uses for its own handoff). Rows are keyboard-operable: Tab to a row and press
@@ -37,13 +37,21 @@ Enter to open it.
 
 ::screenshot{#entity-blade}
 
-A fleet entity's blade (a location, a system, a component) is a condensed read of its
-workspace: the verdict and since-when lead, the active alarms say why, the 30-day strip
-shows the shape of its history, and a system lists its members (each opening its own
-component blade on the same stack) with the room vitals as chips. **Expand** in the header
-promotes to the full workspace at the entity's own address. The label edits in place
-through the footer's pencil, and Delete sits on the left behind a confirm, both gated by
-your permissions on that row.
+A fleet entity's blade (a location, a system, a component) is the glance an operator lands on
+from a row. It leads with the verdict and since-when and the active alarms that say why, each
+with its severity, then the context you came for: a system's place (as a card saying where it
+sits, the path above it, since a blade has no breadcrumb) and its size;
+the systems a component serves, with the role it fills in each, and its place when that is
+somewhere else; a place's systems, each with its verdict, one click from its own blade. Then
+the entity's **form**: its name, classification, a location's parent, and tags, read or edited
+in place. Each fact is said once: the blade's title is the label (the Label field appears only
+while editing), a room's only system is the room (its card names no place and offers no second
+blade for it, only **Configure place**), and the standard is in Classification, not repeated
+above it. Configuration (a
+system's roles, the properties and their cascade, a component's reconciliation and
+endpoints) is the detail view's **Configure** tab, one **Expand** away, along with the
+components, the history and the vitals. Delete sits on the left of the footer behind a confirm, gated by your
+permissions on that row.
 
 The identity pages (Users, Groups, and Roles) use the same blade, and there drilling crosses entities: from a
 user you open a group's blade over it, and from a group you open a member's user blade, each stacking so you can
@@ -54,9 +62,10 @@ read-only reference.
 ## Edit through the footer action bar
 
 A blade opens **read-only**, and its actions live in the **footer action bar**; the header is
-chrome only (back, full-page, close). What Edit opens depends on the kind: a **fleet** blade edits
-its label and tags in place and jumps into the workspace's [Configure tab](/guides/operator/fleet/)
-for everything deeper, while an **identity** blade (a user, a group) edits whole-face, in place.
+chrome only (back, full-page, close). **Edit** turns the whole blade live in place, fleet
+and identity blades alike: a fleet blade's form (the identity, classification and tags of the
+same form the detail view's [Configure tab](/guides/operator/fleet/) renders) and an identity blade's profile, members,
+and grants.
 On an identity blade, **Edit** (right) opens edit mode: the profile becomes inputs, the members and grants go live, and the right
 cluster swaps to **Cancel** and **Save**. Changes stage locally so you can check your work first; **Save**
 commits them together, **Cancel** discards them. The **destructive** action sits on the **left** and is always
@@ -78,13 +87,13 @@ sits beside it on the forms that offer one; where it does not, the header **x** 
 ## Deep-link the edit
 
 The mode is part of the address: append `?edit=1` to a fleet entity's URL and it lands on
-the workspace's **Configure** tab, already editing (#800), so a "fix the label on this
-room" handoff is one link, not a link plus instructions. The blade's own jump affordances
-(rename, change, move beside its read-only facts) produce exactly these addresses, anchored
-to the section they name. The same permission gates apply: without `<resource>:update` the
+the detail view's **Configure** tab, already editing (#800), so a "fix the label on this
+location" handoff is one link, not a link plus instructions. The same permission gates apply: without `<resource>:update` the
 link lands reading, quietly. Leaving edit (Cancel or Save) strips the param, so refreshing
 mid-edit keeps your place, while Back and a re-shared URL never reopen an edit you already
-left. The console itself uses these links for its handoffs: creating an entity lands on
+left. A room holding one system is configured on its system's view, so `?edit=1` on that
+room's address lands on the system's Configure with the room's own form editing
+(`?edit=place`). The console itself uses these links for its handoffs: creating an entity lands on
 `/…/<id>?edit=1`, and a user's `?u=<id>&edit=1` deep link keeps the same contract on the
 identity pages.
 
@@ -129,7 +138,7 @@ identity pages.
 
   The locked **name** is the name the row will get, number and all: `display-3`, not `display-n`. The
   **stem** comes from the type and the **number** is the lowest one free in that placement right now.
-  Some types carry no number on the first of their kind in a place, so the first boardroom in a room is
+  Some types carry no number on the first of their kind in a place, so the first boardroom in a place is
   `boardroom` and the second is `boardroom-2`; the form shows whichever applies rather than a shape you
   have to read. Under it the form names the **placement the name has to be unique in**, as a path: the
   name itself never carries that path, since a name is unique within its placement rather than across
@@ -152,17 +161,20 @@ identity pages.
   because that is what an operator will actually read on the row. You reach that state by clearing the
   rule at every tier; out of the box each of the three kinds ships one.
 
-  A location's shipped rule reads its **own name as words**: create a room named `north-boardroom` and
+  A location's shipped rule reads its **own name as words**: create a location named `north-boardroom` and
   the locked field shows **North Boardroom**, because the rule splits the name on its hyphens, capitalises
   each word, and applies your [acronym list](/architecture/settings/) (so `hq-west` reads **HQ West** once
-  `HQ` is on it). It only re-cases what you typed, so where the room's real name is not in its machine
+  `HQ` is on it). It only re-cases what you typed, so where the place's real name is not in its machine
   name (a `huddle` that everyone calls the Huddle Room), open the lock and type it.
 
-  A system's shipped rule reads its **type and its number**, and the number is the one the name is
-  about to carry: the first boardroom you create in a room shows the name `boardroom` and the label
-  **Boardroom**, and the second shows `boardroom-2` and **Boardroom 2**. The two fields are one answer,
-  so a label with a number in it means a name with the same number in it, and neither is a guess: both
-  are read from the room you have just picked.
+  A system's shipped rule reads its **place**, because a system is what makes that place work: a
+  system you create in Boardroom 204B shows the label **Boardroom 204B**. Once a place holds several
+  systems, each adds its **type**: **Media Lab Meeting Room** beside **Media Lab Signage**, and the
+  first one restamps when the second arrives (and back when it leaves). Two of the same type add
+  the number their names carry: `boardroom-2` shows **Boardroom 204B Boardroom 2**. A system with
+  no type names itself instead ("Media Lab Lobby Wall"). The two fields are one answer, so a label
+  with a number in it means a name with the same number in it, and neither is a guess: both are read
+  from the placement you have just picked. A system with no place reads its type.
 
   A name is **required** only where nothing will generate one, and there the field arrives unlocked
   with no lock to close: a system with no type (or a type whose chain sets no stem), a location whose
@@ -233,6 +245,26 @@ identity pages.
   'boi.17c.415a.$comp.display-1'` (single quotes), never bare.
 - **Delete** removes it, with a confirm. These actions appear only if your grants allow them.
 
+## Labels the platform writes
+
+- **Who wrote a label is shown where you can change it.** A label the platform rendered from a
+  [label rule](/architecture/core-entities/) opens **locked** in the edit form, with the rule
+  stated under the field; the lock beside it hands you the pen, and the restore arrow hands it
+  back. To see every row a rule edit would rewrite, run `omniglass <entity> previewLabels`: it
+  lists exactly the rows the platform still labels, and nothing you typed yourself.
+- **Upgrading into a new rule does not relabel anything you already have.** Locations shipped
+  with no label rule before, so a fleet created then keeps reading its raw names (`north-wing`)
+  after the upgrade. Applying the new rule is your act, and there is no console button for it
+  yet: run `omniglass location previewLabels` to see which rows would move, then
+  `omniglass location recomputeLabels` to apply it, and the same rows read **North Wing**.
+  Nothing you typed yourself is touched by either.
+- **The same applies to systems, and that upgrade is worth running.** A system's shipped label
+  reads its place, so a room and its system read as one name instead of the room's name above the
+  system's kind ("Meeting Room" under Briefing Room). A fleet created before the upgrade keeps its
+  old labels until you run `omniglass system previewLabels`, then `omniglass system
+  recomputeLabels`. Only the second of a kind in a place adds its type and number: a place with one
+  boardroom reads as the place, exactly as its name is `boardroom` rather than `boardroom-1`.
+
 ## Properties on the detail
 
 A component, a system, and a location each carry a **Properties** panel on their detail: one row per
@@ -244,28 +276,28 @@ surface over one resolver, so the panel reads the same on all three; the full wa
 ## Roles on a system
 
 A **system** carries one more panel: **Roles**, the slots it needs filled. A role is a slot (a room
-microphone, a main display), not a component, so the room can say what it needs before anything is
-assigned and an **empty slot stays visible**. These are slots in a room, not the
+microphone, a main display), not a component, so the system can say what it needs before anything is
+assigned and an **empty slot stays visible**. These are slots in a system, not the
 [roles that grant people access](/guides/admin/access/); the two share only the word.
 
 Each row is one role with **where it came from**, **who fills it**, and **how many more it wants**:
 
 - **Inherited or declared here.** A role marked as coming from the standard is declared on the
   [standard](/guides/admin/standards/) this system conforms to, and every conforming system has it.
-  A role declared on this system is this room's own. A **one-off system** (conforming to no standard)
+  A role declared on this system is this system's own. A **one-off system** (conforming to no standard)
   has only its own.
 - **Assigned and understaffed.** A role has a **quorum**, how many components should fill it. Two
   assigned against a quorum of two reads as staffed; one reads as short by one. That is true the
   moment you enter it, with nothing collecting: staffing is a fact about your model, not a
   measurement.
-- **Impact.** Each role also says what the room loses when the slot is not being filled properly:
-  **outage**, **degraded**, or **none**. That is what turns a broken component into a room-level verdict
+- **Impact.** Each role also says what the system loses when the slot is not being filled properly:
+  **outage**, **degraded**, or **none**. That is what turns a broken component into a system-level verdict
   further down this page, and it is declared on the
   [standard](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled) or on the system.
 - **Assign** picks a component to fill the role; **unassign** takes it out and the role goes back to
   understaffed. Assigning the same component twice changes nothing.
 - **A component staffing a role cannot be deleted.** Unassign it first. The refusal is deliberate: a
-  delete that silently emptied a slot would leave the room quietly wrong.
+  delete that silently emptied a slot would leave the system quietly wrong.
 
 **An assignment can be refused, and the refusal tells you why.** A role's [accepted types and pinned
 products](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled) are the typed-slot
@@ -288,13 +320,13 @@ Raising one takes two things:
   **component's own** verdict (any active alarm makes the component degraded, a critical one an
   outage). Only an **outage** stops a component occupying a role it fills: an info or warning
   alarm still degrades it, but the component keeps its slot, so a quiet issue does not short-staff
-  a room on its own;
+  a system on its own;
 - a **message**, for whoever reads it later. Write it for the person who finds this at 8am, not for you.
 
 **Clearing keeps the row.** The alarm moves to the history with the time it was cleared, so what was wrong
 and when survives the fix. Clearing one twice is a plain miss rather than a silent success.
 
-Both writes take effect immediately and completely: the room's verdict, the location above it, and the
+Both writes take effect immediately and completely: the system's verdict, the location above it, and the
 recorded history all move in the same transaction as the alarm. There is no wait and no refresh cycle.
 
 ### Acknowledging: saying you have seen it
@@ -328,28 +360,30 @@ From the CLI: `omniglass component alarm list <name> [--include-cleared] [--unac
 
 ## Health on a system or location
 
-A **system** and a **location** each carry a **health verdict**, shown as a badge on the detail and in
-the systems list:
+A **system** and a **location** each carry a **health verdict**, shown as a badge on its detail view and in
+the outline:
 
 | verdict | means |
 |---|---|
-| **healthy** | nothing the room depends on is impaired |
+| **healthy** | nothing it depends on is impaired |
 | **incomplete** | something it needs was never installed |
 | **degraded** | it is working, worse |
 | **outage** | it is not working |
 
 **`incomplete` is not a fault.** It means a role is short because nobody has put the hardware in
-yet, so no alarm will ever fire for it: there is nothing there to alarm. A room mid-installation
+yet, so no alarm will ever fire for it: there is nothing there to alarm. A system mid-installation
 reads incomplete, and it stays that way until somebody fills the slot. That is deliberately a
-different colour from a room that is broken, because during a rollout most of your fleet is in
+different colour from a system that is broken, because during a rollout most of your fleet is in
 the first state and you need to be able to see past it to the second.
 
-A location's verdict is the **worst** of every system placed anywhere beneath it, so a campus reads red
-when one room in one building is out. A system's verdict is the worst contribution among the **roles** it
+A location's verdict is the **worst** of every system placed anywhere beneath it, so a top-level location reads red
+when one system anywhere beneath it is out. A system's verdict is the worst contribution among the **roles** it
 needs filled.
 
-**The Health panel is the answer to "why".** A bare "degraded" gives you nothing to do, so the panel
-names the whole chain instead, role by role:
+**The system's view is the answer to "why".** A bare "degraded" gives you nothing to do, so the
+view names the chain instead: **Why** leads its Overview, each alarm naming the down component
+and the role it impairs, and the component rows beneath carry the arithmetic. Read together they are this
+chain:
 
 ```text
 alarm on mic-pod-2 (critical, "no audio on channel 1")
@@ -362,7 +396,9 @@ alarm on mic-pod-2 (critical, "no audio on channel 1")
 
 Read it bottom-up when you want the verdict and top-down when you want the fix. A role can also be
 impaired with **no down component named**, which means it is **short-staffed** rather than broken:
-nobody is assigned. Those are two different jobs, and the panel keeps them apart.
+nobody is assigned. Those are two different jobs, and the view keeps them apart: an unstaffed seat
+reads **incomplete** as an empty slot, a down occupant keeps its seat and reads the impact its role
+declared.
 
 **The History strip is the answer to "since when".** It is the same shape as the reachability
 availability strip: one segment per stretch the entity held a verdict, drawn from the **recorded edges**
@@ -374,23 +410,23 @@ From the CLI: `omniglass system health list <name>` and `omniglass location heal
 
 ## The whole loop, end to end
 
-Once, in order, on a real room:
+Once, in order, on a real system:
 
-1. **Declare the roles with their impact.** On the room's
+1. **Declare the roles with their impact.** On the system's
    [standard](/guides/admin/standards/#roles-what-a-conforming-system-needs-filled), give **Main Display**
    impact **outage** and **Room Microphone** impact **degraded** with quorum 2, accepting `video-bar`.
-   Every conforming room inherits both immediately.
+   Every conforming system inherits both immediately.
 2. **Staff the system.** Assign components to each role from the system's **Roles** panel. A component
    of the wrong type is refused by name (`component "panel-1" is a display; role "Room Microphone"
    wants a video-bar`), so a wrong assignment never becomes a wrong verdict.
 3. **Raise an alarm.** On one of the mic pods, raise a `critical` alarm.
-4. **Watch the room move.** The system goes **degraded** (the `room-mic` role now has one occupant
+4. **Watch the system move.** The system goes **degraded** (the `room-mic` role now has one occupant
    against a quorum of 2, and its impact is `degraded`), and the location above it follows. Had
-   the alarm been on the main display instead, the room would be an **outage**, because that role says so.
-5. **Read the Health panel** to find the cause: the impaired role, the component that went down, and the
-   alarm that took it down, with its message and the time it was raised. Walk to the pod.
-6. **Clear the alarm** once it is fixed. The room returns to **healthy** in the same transaction, and the
+   the alarm been on the main display instead, the system would be an **outage**, because that role says so.
+5. **Read the system's Overview** to find the cause: the active alarm, the component it took down and
+   the role that component fills, with the message and the time it was raised. Walk to the pod.
+6. **Clear the alarm** once it is fixed. The system returns to **healthy** in the same transaction, and the
    alarm row stays in the component's history.
-7. **Read the history afterwards.** The transition strip now shows the exact stretch the room was
+7. **Read the history afterwards.** The transition strip now shows the exact stretch the system was
    degraded, with the edge at the moment the alarm went up rather than the moment you opened this page.
    That is the whole point: come back in three weeks and the answer is still exact.

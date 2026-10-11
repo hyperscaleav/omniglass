@@ -51,7 +51,7 @@ export default function SystemMap(props: { decl: StandardMapDecl; markers: MapMa
                     style={{ left: `${m.x * 100}%`, top: `${m.y * 100}%` }}
                     onClick={() => (props.onOpen ? props.onOpen(occ().componentId) : navigate(`/components/${occ().componentId}`))}
                   >
-                    <span class="h-2.5 w-2.5 flex-none rounded-full" classList={{ "bg-error": occ().down, "bg-success": !occ().down }} />
+                    <span class="h-2.5 w-2.5 flex-none rounded-full" classList={{ "bg-error": occ().down, "bg-base-content/35": !occ().down }} />
                     <span class="whitespace-nowrap text-[11px]" classList={{ "text-error": occ().down }}>{label()}</span>
                   </button>
                 )}

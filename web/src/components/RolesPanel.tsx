@@ -93,9 +93,9 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
   // Split active from inactive (#626 choices): a role whose alternate LOST
   // its choice can still read impaired on its own terms, but its own figures
   // did not move the verdict, so it must never render through the same
-  // short/spare/impact path as an active role (the exact contradiction fixed
-  // one panel over, commit 5472723 on HealthPanel; task 9 review, finding
-  // C5, caught it reintroduced here).
+  // short/spare/impact path as an active role (the exact contradiction commit
+  // 5472723 fixed on the health panel of the day; task 9 review, finding C5,
+  // caught it reintroduced here).
   const activeByName = createMemo(() => new Map<string, HealthRole>(activeRolesOf(healthQ.data).map((h) => [h.name, h])));
   const inactiveByName = createMemo(() => new Map<string, HealthRole>(inactiveRolesOf(healthQ.data).map((h) => [h.name, h])));
 
@@ -230,7 +230,7 @@ export default function RolesPanel(props: { system: string; canUpdate: boolean }
             INACTIVE role (its choice was answered by a different alternate)
             gets neither: its own short/spare/impact never counted toward the
             verdict, so showing them would be the exact contradiction commit
-            5472723 fixed on HealthPanel, one panel over. */}
+            5472723 fixed. */}
         <Show
           when={h()}
           fallback={

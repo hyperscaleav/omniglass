@@ -398,7 +398,6 @@ var operatorStrings = []string{
 	// screenshot pass caught them.
 	filepath.Join("..", "..", "web", "src", "components", "ReachabilityPanel.tsx"),
 	filepath.Join("..", "..", "web", "src", "components", "endpointBlades.tsx"),
-	filepath.Join("..", "..", "web", "src", "lib", "fleet_tiles.ts"),
 	filepath.Join("..", "..", "web", "src", "pages", "ComponentLeaf.tsx"),
 	filepath.Join("..", "..", "README.md"),
 	// The generated OpenAPI document carries every Huma operation and field

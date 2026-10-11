@@ -7,8 +7,8 @@ import { describeError } from "../lib/format";
 // (it owns the chip state and applies the client-side predicate), the outer card,
 // and the error banner. It hands the body its filtered rows and the chip state,
 // and takes a `trailing` slot for the body's action rail (create, view controls).
-// The body (FlatList, and TreeList once the tree pages migrate) renders the table
-// and owns its own detail idiom, so the tree/flat difference never leaks in here.
+// The body (FlatList or TreeList) renders the table and owns its own detail
+// idiom, so the tree/flat difference never leaks in here.
 //
 // `rows` feeds both the FilterBar's value autocomplete and the predicate; the body
 // receives the filtered subset. Filtering is client-side over what is loaded, the

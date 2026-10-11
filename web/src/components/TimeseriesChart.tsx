@@ -27,7 +27,7 @@ export default function TimeseriesChart(props: { samples: ChartSample[]; now: nu
   // The crosshair: the sample nearest the pointer, an exact time and value
   // where a sample exists, never an interpolation (#795 review).
   const [hover, setHover] = createSignal<ChartPoint | null>(null);
-  // The handler reads the svg off the event it is attached to (the BandCanvas
+  // The handler reads the svg off the event it is attached to (the retired band canvas
   // pattern): no ref, no initialization-order question for a reader or an
   // analyzer to puzzle over.
   const onMove = (e: MouseEvent & { currentTarget: SVGSVGElement }) => {

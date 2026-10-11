@@ -1,14 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
-  causes,
-  chainSentence,
-  holdingRoles,
+  activeRoles,
   impactPhrase,
-  impairedRoles,
+  inactiveRoles,
   quorumLabel,
   verdictOf,
   verdictRank,
-  worstAlarm,
   worstVerdict,
   type FleetHealth,
   type HealthRole,
@@ -65,27 +62,10 @@ describe("worstVerdict", () => {
   });
 });
 
-describe("impairedRoles", () => {
-  const h = {
-    verdict: "outage",
-    roles: [
-      role({ name: "mic", label: "Table mic", impaired: true, impact: "degraded" }),
-      role({ name: "display", label: "Main display", impaired: true, impact: "outage" }),
-      role({ name: "panel", label: "Touch panel", impaired: false, impact: "none" }),
-    ],
-  } as unknown as FleetHealth;
-
-  it("keeps only the impaired ones, worst impact first", () => {
-    expect(impairedRoles(h).map((r) => r.name)).toEqual(["display", "mic"]);
-  });
-
-  it("names what is holding, which is the other half of the answer", () => {
-    expect(holdingRoles(h).map((r) => r.name)).toEqual(["panel"]);
-  });
-
+describe("activeRoles and inactiveRoles", () => {
   it("reads an absent health as no roles at all rather than throwing", () => {
-    expect(impairedRoles(undefined)).toEqual([]);
-    expect(holdingRoles(undefined)).toEqual([]);
+    expect(activeRoles(undefined)).toEqual([]);
+    expect(inactiveRoles(undefined)).toEqual([]);
   });
 
   // A role belonging to a choice's LOSING alternate can still read impaired
@@ -104,12 +84,12 @@ describe("impairedRoles", () => {
     ],
   } as unknown as FleetHealth;
 
-  it("excludes an impaired role whose alternate lost the choice: it did not move the verdict", () => {
-    expect(impairedRoles(withInactiveChoice)).toEqual([]);
+  it("counts only the roles whose alternate answered the choice as in play", () => {
+    expect(activeRoles(withInactiveChoice).map((r) => r.name)).toEqual(["video-bar"]);
   });
 
-  it("does not count an inactive role as holding either: it is not in play, not fine", () => {
-    expect(holdingRoles(withInactiveChoice).map((r) => r.name)).toEqual(["video-bar"]);
+  it("keeps the losing alternate's roles apart rather than dropping them", () => {
+    expect(inactiveRoles(withInactiveChoice).map((r) => r.name)).toEqual(["codec", "camera"]);
   });
 });
 
@@ -121,66 +101,5 @@ describe("quorumLabel and impactPhrase", () => {
     expect(impactPhrase("outage")).toBe("outage");
     expect(impactPhrase("degraded")).toBe("degraded");
     expect(impactPhrase("none")).toBe("no change");
-  });
-});
-
-// The join the API does not hand over: which alarm took which down component
-// down. It is the middle link of the chain the panel renders.
-describe("causes", () => {
-  const r = role({
-    down: ["disp-1", "disp-2"],
-    alarms: [
-      { id: "a1", severity: "warning", message: "Lamp hours exceeded", component: "disp-1", raised_at: "2026-07-20T09:00:00Z" },
-      { id: "a2", severity: "critical", message: "HDMI board failed", component: "disp-2", raised_at: "2026-07-20T10:00:00Z" },
-    ],
-  });
-
-  it("pairs each down component with the alarms on it, worst first", () => {
-    const out = causes(r);
-    expect(out.map((c) => c.component)).toEqual(["disp-1", "disp-2"]);
-    expect(out[0].alarms.map((a) => a.id)).toEqual(["a1"]);
-    expect(out[1].alarms.map((a) => a.id)).toEqual(["a2"]);
-  });
-
-  it("is empty when no component is down, so short-staffed reads differently", () => {
-    expect(causes(role({ down: [], alarms: [] }))).toEqual([]);
-    expect(worstAlarm(role({ alarms: [] }))).toBeNull();
-  });
-
-  it("picks the worst, most recent alarm as the one that explains the role", () => {
-    expect(worstAlarm(r)?.id).toBe("a2");
-  });
-});
-
-// The claim the slice makes, in one line. Every link is named: the alarm, the
-// component it is on, the component it took down, the role that fell below
-// quorum, and what that contributes to the verdict on screen.
-describe("chainSentence", () => {
-  it("names the alarm, the component, the role, and the verdict", () => {
-    const s = chainSentence(
-      role({
-        down: ["disp-2"],
-        alarms: [{ id: "a2", severity: "critical", message: "HDMI board failed", component: "disp-2", raised_at: "2026-07-20T10:00:00Z" }],
-      }),
-      "outage",
-    );
-    expect(s).toBe(
-      "A critical alarm on disp-2 takes it out of the role, so Main display satisfies 1 of 2 and contributes outage, which is why this system reads outage.",
-    );
-  });
-
-  it("refuses to credit a role for a verdict a worse role set", () => {
-    const s = chainSentence(
-      role({ impact: "degraded", down: ["disp-1"], alarms: [{ id: "a1", severity: "warning", message: "Lamp hours", component: "disp-1", raised_at: "2026-07-20T09:00:00Z" }] }),
-      "outage",
-    );
-    expect(s).toContain("contributes degraded, though this system reads outage on a worse role");
-  });
-
-  it("says short-staffed plainly when no component is down", () => {
-    const s = chainSentence(role({ satisfying: 0, impact: "degraded", alarms: [], down: [] }), "degraded");
-    expect(s).toContain("No component assigned to Main display is down");
-    expect(s).toContain("too few are assigned");
-    expect(s).toContain("this system reads degraded");
   });
 });

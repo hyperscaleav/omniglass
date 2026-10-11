@@ -43,7 +43,7 @@ func validProductKind(s string) bool {
 }
 
 // Product is a registry row naming a concrete SKU in the fleet model (e.g.
-// "Cisco Room Bar"): a stable id, the official flag, a label, a kind
+// "Kestrel VRoom"): a stable id, the official flag, a label, a kind
 // (device/app/service), the component_type it is classified under (the
 // taxonomy above product; mic, camera, wireless-mic...), an optional icon
 // override, and optional pointers at a vendor (who makes it), a driver (what
@@ -226,7 +226,7 @@ func mapProductWriteErr(err error) error {
 
 // UpsertProduct installs or updates a product by HANDLE, the boot-seed
 // phase's write. The seed ships name, not uuids, so the conflict target is
-// the handle: re-seeding `cisco-room-bar` updates that row in place, and its
+// the handle: re-seeding `kestrel-vroom` updates that row in place, and its
 // id never moves.
 func (p *PG) UpsertProduct(ctx context.Context, m Product) error {
 	if m.Kind == "" {

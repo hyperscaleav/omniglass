@@ -17,6 +17,20 @@ import { Dynamic } from "solid-js/web";
 type Intent = "action" | "quiet" | "danger" | "warn" | "ok";
 type Size = "md" | "sm" | "xs";
 
+// Whole class names, written out. Tailwind and daisyUI emit only the classes
+// they can find in the source, so a name assembled at runtime never reaches the
+// stylesheet: `btn-${size}` shipped every "xs" button at the default 40px,
+// larger than an "sm" one, until these were spelled in full. md is daisyUI's
+// default and takes no size class.
+const INTENT_CLASS: Record<Intent, string> = {
+  action: "btn-action",
+  quiet: "btn-quiet",
+  danger: "btn-danger",
+  warn: "btn-warn",
+  ok: "btn-ok",
+};
+const SIZE_CLASS: Record<Size, string | null> = { md: null, sm: "btn-sm", xs: "btn-xs" };
+
 export default function Button(props: {
   intent?: Intent;
   size?: Size;
@@ -31,6 +45,11 @@ export default function Button(props: {
   // Accessible name. For a square (icon-only) button it is the only name, so set
   // it. For a labelled button it overrides the text name (rarely needed).
   label?: string;
+  // A toggle's state. Set it and the button announces itself as pressed, which
+  // is what a chip in a control group is: not a link that was clicked, but a
+  // setting that is on. Left undefined the button is a plain action and carries
+  // no aria-pressed at all.
+  pressed?: boolean;
   tabindex?: number;
   class?: string;
   children?: JSX.Element;
@@ -39,8 +58,7 @@ export default function Button(props: {
   const size = () => props.size ?? "sm";
   const iconPx = () => (size() === "xs" ? 14 : size() === "md" ? 16 : 15);
   const cls = () =>
-    // md is daisyUI's default (no size class); sm / xs are explicit.
-    ["btn", `btn-${intent()}`, size() === "md" ? null : `btn-${size()}`, props.square ? "btn-square" : "gap-1.5", props.class]
+    ["btn", INTENT_CLASS[intent()], SIZE_CLASS[size()], props.square ? "btn-square" : "gap-1.5", props.class]
       .filter(Boolean)
       .join(" ");
   const Icon = () => props.icon;
@@ -58,6 +76,7 @@ export default function Button(props: {
       title={props.title}
       tabindex={props.tabindex}
       aria-label={props.label ?? (props.square ? props.title : undefined)}
+      aria-pressed={props.pressed === undefined ? undefined : props.pressed}
     >
       <Show when={!props.iconTrailing}>{iconEl}</Show>
       <Show when={!props.square}>{props.children}</Show>

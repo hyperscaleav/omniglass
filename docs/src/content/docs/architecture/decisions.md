@@ -175,7 +175,10 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0134](#adr-0134-the-entity-an-api-is-reached-through-is-an-endpoint) | 2026-08-28 | Accepted | The entity formerly named `interface` renames to `endpoint` end to end (table, routes, `endpoint:*` permission nouns, console, docs, the `endpoint-reachable` datapoint renamed in place), executing #603's naming ruling as ADR-0073's transports-become-code lands: `service` was disqualified by the existing service-principal table, `api` by the platform's own API vocabulary, and `endpoint` is the word the design already used for this thing's address, which becomes `address` so the schema never reads `endpoint.endpoint` |
 | [ADR-0135](#adr-0135-a-drivers-spec-is-data-one-engine-interprets-it) | 2026-08-28 | Accepted | A driver's body is a versioned declarative spec (jsonb on the driver row, validated against the catalogs at every write): one transport, typed inputs with secret references, and three function families (polls, listeners, command bindings). Attach derives the endpoint and its tasks from the spec, emit lanes baked at attach; a listener's arm conversation is session plumbing, never recorded command rows |
 | [ADR-0136](#adr-0136-actuation-is-a-per-node-pull-rendered-at-dispatch) | 2026-08-28 | Accepted | The command wire is a per-node pull (`og.v1.command.<node>`, request-reply like the worklist) with the binding's request rendered server-side at dispatch: at-least-once delivery (redeliver after silence, a delivery TTL past which settlement's timed-out covers abandonment), execution idempotent per command id at the node, the report (`og.v1.commandstatus.<node>`) stamping `executed_at` once under placement confinement, and the report never the verdict: settlement stays the judgment of observed against intended |
+| [ADR-0137](#adr-0137-explore-is-the-fleets-door-and-it-is-an-outline-of-places) | 2026-08-31 | Accepted | Explore (`/explore`) is the fleet's one door, and it draws one thing: an outline of places. A place wears the system that sits there, its components beneath; a chain of single-child places folds into one row; a collapsed row says what it holds in the registry's own labels and counts its systems by verdict, never worst-wins. Depth and what may be added come from `allowed_parent_types`, never a type's name. The filter is a predicate over live state, never a scope. One EntityForm per kind; three tabs and one counts line per workspace; the band canvas, KPI chips, jump anchors, the renderer library and the inventory tables retire (#826, #861, superseding ADR-0132's anchors and ADR-0129's canvas landing) |
 | [ADR-0138](#adr-0138-the-autopilot-ships-a-daily-slice-and-pr-review-is-its-approval-gate) | 2026-09-17 | Accepted | A scheduled daily session (the autopilot) ships one thin slice per day: for slices it scopes itself it files the definition in the `/define-work` shape with the `Mode: autopilot (ADR-0138)` marker and proceeds, the Define gate's approval comment moving to the architect's review of the PR (merge accepts, close vetoes). An in-progress loop, an approved definition, and a priority `Bug` outrank self-scoping; invariant surfaces (the authorization layers, the migration rules, the audit contract), breaking API changes and dependency majors stay behind a human approval comment; at most two autopilot PRs stay open; provenance is a marker line, never a new label class; the autopilot never merges |
+| [ADR-0139](#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context) | 2026-10-05 | Accepted | Systems are the unit Omniglass monitors; places are folders and metadata; components are pieces of systems. A detail view is one per system, its place a card of context above the system card and its tabs; a place holding exactly one system lands on it, and a place holding none or several keeps its own view (a brief card per system, then the outline rooted there). The side panel is the glance (verdict, why, context, identity and tags), configuration staying on Configure, revising #826's one-form panel. The shipped system label rule leads with the place, and healthy is grey on every health pill (#872) |
+| [ADR-0140](#adr-0140-a-system-is-what-the-business-groups-a-location-is-where-things-sit-and-a-room-is-one-thing) | 2026-10-11 | Accepted | A system is the logical grouping the business cares about and support troubleshoots through; a location is the physical grouping that finds the box on site; operators add components to a system. Every system has a place, which bounds its components (checked against the primary system only) and its subsystems; a component's place is inherited from its primary system unless set, derived at read time; systems group into systems (a divisible hall and its rooms); a place holding one system is one thing with it. The cross-tier scope expansion is decided separately (#10) |
 
 ## Entries
 
@@ -4812,7 +4815,7 @@ is built. This ADR records the target so the booking slice ([#412](https://githu
 ### ADR-0105: A rule reads a name as words, and the location tier ships the restatement it once refused
 
 - **Date:** 2026-08-11 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/),
-  [find things in your estate](/guides/operator/inventory/), [location types](/guides/admin/location-types/)
+  [find things in your estate](/guides/operator/fleet/#finding-one-thing), [location types](/guides/admin/location-types/)
 - **Context:** epic [#657](https://github.com/hyperscaleav/omniglass/issues/657) shipped a label engine
   ([ADR-0098](#adr-0098-a-label-rule-reads-what-an-entity-is-never-where-it-sits)) and an operator-owned
   acronym dictionary ([ADR-0099](#adr-0099-the-acronym-list-is-one-replaceable-setting-not-a-shipped-list-plus-operator-additions))
@@ -6253,6 +6256,67 @@ interface create form, since that name is the platform's to mint.
   the execution arc (`dispatched_at`, `executed_at`, `exec_error`) lands beside the settlement
   arc rather than inside it because "the device was told" and "the device did" are different
   facts, and conflating them is how a wire ack gets mistaken for an outcome.
+### ADR-0137: Explore is the fleet's door, and it is an outline of places
+
+- **Date:** 2026-08-31, rewritten 2026-10-03 | **Status:** Accepted | **Pages:** [ui](/architecture/ui/), [views](/architecture/views/)
+- **Decision:** The sidebar has one door into the fleet, **Explore** (`/explore`), and it
+  draws one thing: an **outline of places**, the location tree as an ARIA tree with five
+  rules.
+
+  **A place wears its system.** Operators think of a room as its system; the location is
+  where it sits in the tree. So a place where one system sits carries that system's standard
+  and verdict on its own row, and its components are directly beneath. A place holding
+  several systems heads a row per system. A component two systems share appears under both,
+  marked with the other; a component in no system sits under its place. Systems and
+  components with no place the caller can read gather under one node, **Placed nowhere you
+  can see**, so nothing disappears because its place is out of scope.
+
+  **A chain of one folds.** A place whose only content is one child place folds into it,
+  rendered as the path (`Headquarters / West Building`), and its add menu offers each place
+  it joins. Depth is never counted: it is the customer's fact through `location_type` and
+  `allowed_parent_types`, and what may be created under a row is read from the same graph,
+  never from a type's name.
+
+  **A collapsed row says what it holds, and counts, never rolls up.** It states its contents
+  in the registry's own type labels (`2 buildings, 1 floor`, `19 components`, `Empty`), and
+  counts the systems beneath it by verdict in four fixed slots, healthy grey and only trouble
+  in colour. Worst-wins is right for one system's verdict and wrong for a place standing in
+  for forty: at any realistic failure rate almost every large place holds one outage, so a
+  rolled-up colour saturates and says nothing.
+
+  **The filter is a predicate, never a scope.** Filtering on live state (verdict, standard,
+  type, product, a name or path fragment, a tag) is exploring, and turns the tree into a flat
+  list of matches that reveal into the tree. Naming subjects to include is choosing a scope,
+  which a dashboard widget owns; so there is no location facet and no saved view. The filter
+  rides the address (`?chips=`), as does one revealed row (`?node=`); what is open is the
+  browser's.
+
+  **One door, one shape behind it.** One `EntityForm` per kind renders read or edit wherever
+  the operator meets the entity (side panel, Configure tab; create is the same form empty at
+  `/<kind>s/create`, with `?under=` prefilling placement); every workspace carries three tabs
+  and one counts line with zeros left out. The band canvas (`/fleet`), the KPI chip rows, the
+  blade's jump anchors and the per-kind inventory tables retire, and their addresses land on
+  Explore. "Fleet" stays the noun (ADR-0122); the sidebar entry is the verb.
+- **Context:** The #779 canvas conflated exploring with monitoring (a KPI wall as
+  navigation), and the #800 anchors patched a blade that had diverged from the page instead
+  of restoring the vision that view and edit are one component. #826 replaced both twice
+  before anything shipped. A Miller-column drill fell to a generated fleet of a thousand
+  systems across twelve roots of four tree shapes: it spent a screen on four levels and
+  assumed a uniform depth. A renderer library followed (cards cut at each root's shallowest
+  repeated container type, bands, a mosaic and a standards matrix, with label and area
+  budgets and saved presets), and its rules were each earned by a render: the first mosaic
+  came out uniformly red, which is where the count-not-rollup rule above comes from. Judged
+  in use it was hard to navigate, confusing, and opinionated: four drawings of one fleet, a
+  cut the operator had to reverse-engineer, and controls that came and went with the
+  renderer. The architect asked for one simple way to see the stack at a glance and drill in
+  as needed (#861). The outline keeps the earned rules (depth is the customer's, counts over
+  rollups, predicate over scope) and drops everything that asked the operator to choose how
+  to look. Nothing had shipped, so this rewrites the decision in place rather than
+  superseding it. This supersedes ADR-0132's blade-as-quick-face-with-anchors (its Configure
+  tab survives as the form's page host) and ADR-0129's canvas landing (its identity-route
+  default stands: the workspaces are the routes' faces). The map renderer and component
+  location override are #836; whether a system should be modelled as a facet of its
+  location is #862.
 ### ADR-0138: The autopilot ships a daily slice, and PR review is its approval gate
 
 - **Date:** 2026-09-17 | **Status:** Accepted | **Pages:** [autopilot](/contributing/autopilot/),
@@ -6275,3 +6339,74 @@ interface create form, since that name is the platform's to mint.
   `/assess-ui` visual gate are what keep a self-scoped slice honest between wake-up and review.
   The label taxonomy stayed fixed deliberately: an autopilot marker describes provenance, which
   is neither a subsystem nor an automation trigger, so it rides the body text instead.
+
+### ADR-0139: A detail view is one per system, its place a card of context
+
+- **Date:** 2026-10-05 | **Status:** Accepted | **Pages:** [UI](/architecture/ui/), [design system](/contributing/design-system/), [core entities](/architecture/core-entities/), [glossary](/architecture/glossary/), [health](/architecture/health/)
+- **Decision:** Systems are the unit Omniglass monitors; places are folders and metadata about
+  where; components are the pieces of systems. So a detail view is one per system: the place as
+  a card of context (its type, tags and its own panel), then the system card (verdict, since,
+  standard, size, slot arithmetic only while short) with its Overview, Activity and Configure.
+  A place holding exactly one system has no view of its own: its address lands on the system,
+  query kept, and its place is configured there, in a Place section of the system's Configure
+  tab with its own Edit (`?edit=1` on the place becomes `edit=place`). A place
+  holding no system, or several, keeps its own subject card with a brief card per system and
+  the outline rooted there. A component's view carries its place card, marked as its own or as
+  its system's standing in. The side panel is the glance an operator lands on from a row:
+  verdict, since, why with its severity, the context they came for, then the form's identity,
+  classification, a location's parent and tags; the configuration panels (roles, properties and
+  their cascade, reconciliation, interfaces) stay on Configure, which revises ADR-0137's "the
+  blade is the one form". The shipped system label rule leads with the place, so a room and its
+  system read as one name; a place holding several systems names each one's kind after the place
+  (a new `SharesLocation` fact, its siblings restamped by the create, move or delete that changes
+  the count). Healthy is grey on every health pill, strip and marker, the
+  outline's rule carried to its edge. There is no counts line above a detail view.
+- **Context:** The audit for #872 found the workspaces still speaking the idioms the outline
+  retired: a location page that was a band canvas, a room and its system as two views under two
+  names ("Meeting Room" titled under a "Briefing Room" crumb), three frames for one idea, facts
+  said twice (the slots in the counts line and the header, the metrics as tiles and as a table,
+  the history on two tabs), and a panel that was a configuration form. The architect's ruling
+  on the model was that it is right (locations, systems, components; systems a logical group
+  usually bound to one place) and the orientation was wrong: people care about their systems.
+  This changes presentation and one shipped label default only; whether a system's place
+  should be stored or derived, and the inheritance of a component's place from its system
+  (which the UI's old "location follows the primary system" claimed and the schema does not
+  carry), stay with #862.
+
+### ADR-0140: A system is what the business groups, a location is where things sit, and a room is one thing
+
+- **Date:** 2026-10-11 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [health](/architecture/health/), [identity and access](/architecture/identity-access/)
+- **Decision:** Three entities, two groupings, both in daily use. A **system** is the logical
+  grouping the business cares about: the components that make a thing work, the unit Omniglass
+  monitors, and what support troubleshoots through (its health, usually remotely). A **location** is
+  the physical grouping: where things sit, and how support and inventory go and find a box on site.
+  Operators add components **to a system**; membership is how a component belongs. Then:
+  1. **Every system has a place**, the deepest place that spans everything it needs; existing
+     placeless systems backfill to the deepest place containing their members, else the root (#876).
+  2. **A system's place bounds its components and subsystems**: a component's own place must be at
+     or below its **primary** system's place, secondary memberships not constraining it (a shared
+     head-end sits beside the rooms it serves); a subsystem's place must be at or below its parent's;
+     a system move that would strand an explicitly placed primary member is refused, naming it (#877).
+  3. **A component's place is inherited from its primary system unless set**: its effective place is
+     derived at read time, never copied into the column, and every reader that means "where is this
+     component" reads it (the label, the tag and variable cascade, the fleet view, the console) (#878).
+  4. **Systems group into systems**: a divisible hall is one system holding the shared head-end, with
+     a subsystem per room it splits into (#879).
+  5. **Where a place and its system coincide, they are one thing** (ADR-0139): a place holding exactly
+     one system is shown, addressed and configured as that system, its components a drill-down inside
+     it; for a divisible hall that holds at both levels.
+- **Context:** Operators think in two hierarchies at once, and #872 made the console honour both.
+  The model underneath contradicted it in three places: a component's location was only what was
+  explicitly set (so a component added to a room's system had no place, and moving the system left
+  it behind; the old console copy "location follows the primary system" claimed an inheritance the
+  schema never had), a system's location was optional, and system nesting existed in storage with
+  no seeded data, no console surface and no health rollup, so the divisible hall it is for could not
+  be expressed. Considered and rejected: retiring system nesting (the divisible hall needs it);
+  making a system a facet of its location (a place can hold several systems, and a system's
+  components span places); checking containment against every system a component belongs to (it
+  would forbid the divisible hall's own shared head-end); copying the system's place into the
+  component on join (stale on every system move). The scope consequence (a location grant reaching
+  the systems and components placed there) is the cross-tier expansion, decided separately (#10).
+  The `core-entities` claim that system nesting feeds the health rollup is corrected with this entry;
+  the parent-verdict rule is decided with the grouping slice.
+

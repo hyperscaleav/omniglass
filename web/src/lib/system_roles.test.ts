@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { roleByComponent, staffingLabel, standardRolesKey, swapPath, systemRolesKey, type EffectiveRole } from "./system_roles";
+import { staffingLabel, standardRolesKey, swapPath, systemRolesKey } from "./system_roles";
 
 // The staffing line every roles surface reads a quorum through. It is pure, so it
 // is tested without a server.
@@ -24,33 +24,6 @@ describe("staffingLabel", () => {
 describe("role cache keys", () => {
   it("keeps the system arc and the standard arc apart", () => {
     expect([...systemRolesKey("meeting-room")]).not.toEqual([...standardRolesKey("meeting-room")]);
-  });
-});
-
-// roleByComponent pivots the by-role read into the by-device read: which role
-// (if any) each component fills, the shape MembersPanel needs to annotate its
-// member list. Pure, so it is tested without a server.
-describe("roleByComponent", () => {
-  const roles: EffectiveRole[] = [
-    { name: "table-mic", label: "Table microphone", quorum: 2, impact: "degraded", accepted_types: [], pinned_products: [], position_labels: [], from_standard: true, assigned_to: ["mic-1", "mic-2"], positions: [1, 2], assigned: 2, understaffed: 0 },
-    { name: "main-display", label: "Main display", quorum: 1, impact: "outage", accepted_types: [], pinned_products: [], position_labels: [], from_standard: true, assigned_to: ["disp-1"], positions: [1], assigned: 1, understaffed: 0 },
-  ];
-
-  it("maps each occupant to the role it fills", () => {
-    const m = roleByComponent(roles);
-    expect(m.get("mic-1")?.name).toBe("table-mic");
-    expect(m.get("mic-2")?.name).toBe("table-mic");
-    expect(m.get("disp-1")?.name).toBe("main-display");
-  });
-
-  it("leaves a component that fills no role absent from the map, not erroring", () => {
-    const m = roleByComponent(roles);
-    expect(m.has("power-conditioner-1")).toBe(false);
-    expect(m.get("power-conditioner-1")).toBeUndefined();
-  });
-
-  it("returns an empty map for a system with no roles", () => {
-    expect(roleByComponent([]).size).toBe(0);
   });
 });
 

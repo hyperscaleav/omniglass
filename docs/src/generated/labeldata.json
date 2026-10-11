@@ -72,6 +72,10 @@
     {
      "name": "LocationLabel",
      "summary": "How the location this system sits at reads: the label an operator typed or the platform rendered, else that location's own name."
+    },
+    {
+     "name": "SharesLocation",
+     "summary": "Set when another system sits at the same location, empty when this one is alone there: a room's sole system reads as the room, and once it holds several each names its kind."
     }
    ]
   },

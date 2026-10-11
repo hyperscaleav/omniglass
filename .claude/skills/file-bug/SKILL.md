@@ -34,8 +34,9 @@ issue ("harden input handling on X") if tracking is needed.
    nouns) before creating. A hit means a comment adding your new evidence on the
    existing issue, not a duplicate.
 2. **File it** with the shape below. In a remote session this is the GitHub MCP
-   `issue_write` (Type via its `type` field); set the Priority field where the tooling
-   allows, otherwise state the suggested priority in the body.
+   `issue_write` (Type via its `type` field); on the bridge worker it is `gh api
+   repos/hyperscaleav/omniglass/issues -f type=Bug ...` (the REST create takes the Type
+   directly). Set the Priority field where the tooling allows, otherwise state the suggested priority in the body.
 3. **Return to the slice.** The finding is captured; fixing it is a different day's
    scope decision.
 

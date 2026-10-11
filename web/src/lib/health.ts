@@ -1,7 +1,5 @@
 import { api } from "../api/client";
 import type { components } from "../api/schema.gen";
-import { sortAlarms } from "./alarms";
-import { entityLabel } from "./entities";
 
 // The health data layer: thin typed wrappers over the generated client plus the
 // pure read-time derivations the console renders.
@@ -32,8 +30,6 @@ import { entityLabel } from "./entities";
 
 export type Verdict = "healthy" | "incomplete" | "degraded" | "outage";
 export type HealthRole = components["schemas"]["HealthRoleBody"];
-export type HealthAlarm = components["schemas"]["HealthAlarmBody"];
-export type HealthSystem = components["schemas"]["HealthSystemBody"];
 export type HealthTransition = components["schemas"]["HealthTransitionBody"];
 export type FleetHealth = components["schemas"]["FleetHealthOutputBody"];
 
@@ -98,9 +94,7 @@ export function worstVerdict(list: (string | null | undefined)[]): Verdict | nul
   return worst;
 }
 
-export const roles = (h: FleetHealth | undefined): HealthRole[] => h?.roles ?? [];
-export const systems = (h: FleetHealth | undefined): HealthSystem[] => h?.systems ?? [];
-export const transitions = (h: FleetHealth | undefined): HealthTransition[] => h?.transitions ?? [];
+const roles = (h: FleetHealth | undefined): HealthRole[] => h?.roles ?? [];
 
 // activeRoles is every role whose own figures actually counted toward the
 // verdict: unconditional roles (no choice) plus the role of whichever
@@ -121,51 +115,10 @@ export function inactiveRoles(h: FleetHealth | undefined): HealthRole[] {
   return roles(h).filter((r) => !r.active);
 }
 
-// The roles that explain the verdict, worst impact first, so the reconciliation
-// panel leads with the role that took the system down rather than the one that
-// merely dented it.
-export function impairedRoles(h: FleetHealth | undefined): HealthRole[] {
-  return activeRoles(h)
-    .filter((r) => r.impaired)
-    .sort((a, b) => impactRank(a.impact) - impactRank(b.impact) || entityLabel(a).localeCompare(entityLabel(b)));
-}
-
-// The roles that are holding: named too, because "which roles are fine" is half of
-// why a system is only degraded and not out. An inactive role is neither
-// impaired nor holding here: it is not in play, so it belongs to neither list.
-export function holdingRoles(h: FleetHealth | undefined): HealthRole[] {
-  return activeRoles(h).filter((r) => !r.impaired);
-}
-
-function impactRank(impact: string): number {
-  return impact === "outage" ? 0 : impact === "degraded" ? 1 : 2;
-}
-
 // quorumLabel reads the role's fill against what it wants, in the API's own terms:
 // how many assigned components can still satisfy it, and how many it needs.
 export function quorumLabel(r: Pick<HealthRole, "satisfying" | "quorum">): string {
   return `${r.satisfying} of ${r.quorum} satisfying`;
-}
-
-// A CAUSE is one assigned component that is down, with the alarms that took it
-// down. This is the middle link of the chain, and the only one the API does not
-// hand over pre-joined (HealthRole.alarms is the flat union across every down
-// component in the role).
-export type Cause = { component: string; alarms: HealthAlarm[] };
-
-export function causes(r: HealthRole): Cause[] {
-  const alarms = r.alarms ?? [];
-  return (r.down ?? []).map((component) => ({
-    component,
-    alarms: sortAlarms(alarms.filter((a) => a.component === component)),
-  }));
-}
-
-// The alarm that best explains the role: the worst, most recent one. Null when the
-// role is impaired with no alarm reaching it, which means it is simply short of
-// components rather than broken.
-export function worstAlarm(r: HealthRole): HealthAlarm | null {
-  return sortAlarms(r.alarms ?? [])[0] ?? null;
 }
 
 // What an impaired role means for its system, in words rather than an enum.
@@ -173,31 +126,4 @@ export function impactPhrase(impact: string): string {
   if (impact === "outage") return "outage";
   if (impact === "degraded") return "degraded";
   return "no change";
-}
-
-// chainSentence is the claim this whole slice makes, in one line: which alarm
-// took which component down, which role that pushed below quorum, and what
-// that contributes to the verdict the operator is looking at. It names every
-// link, because a badge that says "degraded" and nothing else is the thing
-// operators already have and do not trust.
-export function chainSentence(r: HealthRole, verdict: string): string {
-  const role = entityLabel(r);
-  const alarm = worstAlarm(r);
-  const down = (r.down ?? []).join(", ");
-  if (!alarm) {
-    return `No component assigned to ${role} is down: it satisfies ${r.satisfying} of ${r.quorum} because too few are assigned, and ${contribution(r, verdict)}.`;
-  }
-  const took = down ? " takes it out of the role" : "";
-  return `A ${alarm.severity} alarm on ${alarm.component}${took}, so ${role} satisfies ${r.satisfying} of ${r.quorum} and ${contribution(r, verdict)}.`;
-}
-
-// What this role's impact means for the verdict on screen. A role only EXPLAINS the
-// verdict when its impact IS the verdict; a degraded role sitting under an outage
-// set by a worse role must not claim credit for it, or the panel teaches the
-// operator a false rule.
-function contribution(r: HealthRole, verdict: string): string {
-  const phrase = impactPhrase(r.impact);
-  if (r.impact === "none") return "contributes nothing to the verdict";
-  if (phrase === verdict) return `contributes ${phrase}, which is why this system reads ${verdict}`;
-  return `contributes ${phrase}, though this system reads ${verdict} on a worse role`;
 }

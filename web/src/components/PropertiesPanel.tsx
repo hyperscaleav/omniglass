@@ -35,7 +35,7 @@ import { Check } from "./icons";
 // FieldControl primitive, so the language matches the rest of the console: read mode
 // is a slim value scan (an override reads with an accent dot and colour), edit mode
 // is a stacked cell with an explicit Override switch, and a row drills in to its
-// resolution blade (kind "property-resolution", via ctx.openBlade). Editing is
+// resolution blade (kind "property-resolution", through its onOpen). Editing is
 // BATCHED: the panel registers one saver with the blade edit slot, so the blade's
 // Save flushes every staged property alongside the owner's core facts. The switch on
 // sets, the switch off clears; required properties are validated on that Save, not

@@ -277,7 +277,10 @@ export default function FilterBar<T>(props: {
           <Button class="flex-none text-xs" onClick={() => props.onChips([])}>Clear</Button>
         </Show>
         <Show when={props.trailing}>
-          <div class="ml-auto flex flex-none items-center gap-1.5">{props.trailing}</div>
+          {/* Never wider than the row: a trailing rail that can wrap (a row of
+              view controls) wraps inside the bar instead of running past the
+              card's clipped edge on a narrow window. */}
+          <div class="ml-auto flex max-w-full flex-none items-center gap-1.5">{props.trailing}</div>
         </Show>
       </div>
     </div>

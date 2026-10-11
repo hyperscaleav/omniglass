@@ -40,13 +40,46 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
 
 ## Core UI contracts
 
-- **One inventory shell: `ListShell` with `FlatList` / `TreeList` bodies.** Every inventory page
-  (Components, Systems, Locations)
+- **One list shell: `ListShell` with `FlatList` / `TreeList` bodies.** Every list page
+  (Files and the flat registries; the fleet kinds are listed by Explore's outline instead)
   is a `ListConfig` over the one shell, **never a fork**. The shell owns the faceted filter
   header, the action rail (tree/list toggle, expand/collapse, column visibility + drag reorder,
-  the primary create), the tree and flattened body rendering, the stacked detail blades, the full-page
-  detail, the create/edit `Drawer`, and an optional summary widget board. Adding an entity of
+  the primary create), the tree and flattened body rendering, and the stacked blades. A page that
+  opens a row in place (Files) also gets the full-page detail and the create/edit `Drawer`. There
+  is no summary row above a table: the KPI chip rows retired (ADR-0137). Adding an entity of
   this class is a data layer + a config + a route (see the `add-inventory-view` skill).
+- **The fleet is an outline, not a list.** Explore renders `components/Outline.tsx`, an ARIA
+  tree (roving tabindex, arrows, `*`, `+`) over the pure model in `lib/outline.ts`. Its rows
+  iterate stable string keys, so a rebuild (a toggle, a health read arriving) keeps each row's
+  element, its focus and an open menu. Its columns answer the outline's own width through
+  container queries rather than the window's, since the sidebar and the blade take their share
+  first. Health is four fixed slots (healthy, incomplete, degraded, outage), glyph and count,
+  where healthy stays grey and only trouble carries a hue (ADR-0137).
+- **A detail view is one per system, its place as context.** Systems are the unit; places are
+  folders and metadata; components are pieces of systems (#872). A system's view
+  (`pages/SystemZoom.tsx`) is a `PlaceCard` (the place's type, tags and its own panel, never its
+  name when the view is already titled by it) above the subject card (an eyebrow, the verdict, the
+  facts said once) with its `TabRail` inside. A place holding exactly one system lands on it
+  (`lib/detail.ts` `landingFor`), and its place configures in a second `ConfigureFace` on the
+system's Configure tab, answering its own edit intent (`useEditParam`'s `value`, `edit=place`);
+a place holding none or several renders its own subject card,
+  with a `SystemSummary` per system and `OutlineWorkspace` rooted at it. A component's view wears
+  the `PlaceCard` too, with its provenance. `DetailGate` owns the miss, pending and error-with-Retry
+  states for all three. A system's components render as `MemberRows`, the outline's row idiom on
+  its own grid, a role grouped only where it says something a column cannot. There is no counts
+  line above a detail view: the subject card's header carries its facts. A list whose items hold
+  their own queries iterates stable ids, never the objects a fresh read hands back: iterating
+  objects rebuilt each card on every read, and each rebuilt card refetched, a request storm.
+- **The side panel is the glance, and says each fact once.** A fleet panel (`EntityBlade`) leads
+  with verdict, since and why (severity first), then the context the operator came for, then the
+  form's name, classification, a location's parent, and tags. Reading in a blade, the label is the
+  title and the form drops its Label row; a room holding one system is that system
+  (`lib/detail.ts` `isRoomOf`), so its `PlaceCard` names no place and offers no second panel, and a
+  component in such a room shows no place card beside the system it serves. A blade has no
+  breadcrumb, so its `PlaceCard` takes `path` and says where the place sits. `EntityForm` with `host="blade"` leaves out the
+  kind's configuration panels (roles, properties, reconciliation, endpoints), which the detail
+  view's Configure tab carries, and a system's or component's placement, which the panel's
+  place card already says.
 - **The Name column has a floor, and the card scrolls before it gives it up.** A list table is
   `table-layout: fixed`, every column but Name declares a width, and Name takes what is left, which
   is what lets the identifier grow into a wide screen. It also made Name the first column to give up
@@ -75,7 +108,7 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   gates create/update/delete by the entity's resource name. The server is the authority; this is
   a hint only.
 - **Blades are ephemeral, the full page is addressable.** A row opens a stacked blade (the Azure
-  model); Maximize promotes it to the `/<entity>/:name` URL. The blade stack holds node ids, so a
+  model); Maximize promotes it to the `/<entity>/:id` URL. The blade stack holds node ids, so a
   blade survives a refetch.
 - **The shell owns the action rail; the body registers, never draws.** A panel's buttons are
   declared, not laid out: a blade body binds through `lib/blades` (`destructive`, `secondary`,
@@ -88,8 +121,8 @@ CLI is generated the same way. `make gen` regenerates all of it; a non-empty dif
   the helper was copied into six new pages around them. A convention can be forgotten; a slot
   cannot. Full-page create forms still draw their own inline rail and converge when the CRUD form
   primitive lands.
-- **Client preferences in localStorage, for now.** Column order/visibility and the widget board
-  persist per browser; the eventual home is a per-principal user-preferences endpoint (a
+- **Client preferences in localStorage, for now.** Column order/visibility
+  persists per browser; the eventual home is a per-principal user-preferences endpoint (a
   read/write swap), not the cascade.
 - **Learning surfaces ride the real engine.** A concept page renders the actual pipeline against
   real or lab-simulated data, not a static diagram. The flow/graph library for these lands with
@@ -134,17 +167,19 @@ with dark ink; that rule is inert while the console is dark-only.
 Status badges use `badge badge-sm` with a **soft hue** for a signalled state (`badge-soft
 badge-success` for up/enabled/responding, `badge-soft badge-error` for down, `badge-soft
 badge-warning` for stale). A **neutral** state (a node that has never checked in, a disabled task,
-an unknown verdict) does **not** use `badge-neutral` or `badge-ghost`: against this theme's dark
-`base-100` (`#080c16`), `badge-neutral` renders near-black and `badge-ghost` renders transparent, so
-both read as invisible. Use a soft grey fill tinted from the text color instead
-(`bg-base-content/10 text-base-content/70 border-transparent`), which reads as a visible pill in both
-themes at the same weight as the soft hues. The same reason keeps `type` values (endpoint/task
+an unknown verdict) does **not** use `badge-neutral`: against this theme's dark `base-100`
+(`#080c16`) it renders near-black, and `theme-badges.test.ts` bans it. The app's neutral chip is
+`badge-ghost`, which `app.css` restyles from daisyUI's transparent default into a soft grey fill
+tinted from the text color, so it reads as a visible pill at the same weight as the soft hues. A
+**healthy** verdict wears `badge-healthy`, the same grey with its own name (#872): only trouble
+carries a hue, on every health pill, strip and marker, and a known healthy verdict stays
+distinguishable from an unknown one in markup. The same reason keeps `type` values (endpoint/task
 `type`) as plain `font-data` text, not a `badge-neutral` chip.
 
 ## Primitives (the reuse target)
 
 `ListShell` (with its `FlatList` / `TreeList` bodies), `FilterBar`, `Drawer`, `PanelFooter`,
-`Donut`, `Badge`, `Page`, `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` / `BladeField`,
+`Badge`, `Page`, `DataTable`, `IdentityCell`, `KVStacked` / `KVRow` / `FieldRow` / `BladeField`,
 `CommandPalette`, plus the `Sidebar` / `TopBar` shell. New inventory pages consume these; new
 surface *classes* (dashboards, alarms, explore, learn) add their own primitive rather than
 bending `ListShell`.

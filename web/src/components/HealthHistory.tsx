@@ -24,7 +24,7 @@ import type { HealthTransition } from "../lib/health";
 // a verdict missing from this map renders as though it were never measured
 // (#631, found in review when incomplete first became recordable).
 const TONE: Record<string, string> = {
-  healthy: "bg-success",
+  healthy: "bg-base-content/25",
   incomplete: "bg-incomplete",
   degraded: "bg-warning",
   outage: "bg-error",
@@ -32,7 +32,7 @@ const TONE: Record<string, string> = {
 const tone = (v: string) => TONE[v] ?? "bg-base-300";
 
 const PILL: Record<string, string> = {
-  healthy: "badge-success",
+  healthy: "badge-healthy",
   incomplete: "badge-incomplete",
   degraded: "badge-warning",
   outage: "badge-error",

@@ -13,9 +13,14 @@ The console is one renderer over the same views the rest of the platform reads. 
 Roughly 22 live pages (inventory, catalog, values, admin, plus the shell) ship as **config-driven
 `ListShell` pages (with `FlatList` / `TreeList` bodies) over the typed CRUD client**, not as the
 `ViewResult` renderer described next: an inventory page is CRUD over a scoped resource. The
-**fleet zoom** (`/fleet`, #633) is the first surface that is neither: a canvas over its own
-views projection (`GET /views/fleet`), with the pure view model in `web/src/lib/fleet.ts` and
-the dot field painted per band. The views model, the renderer library, and composable
+**Explore** page (`/explore`, #826 and #861, which retired the #633 canvas) is the first
+surface that is neither: an outline of places over one projection (`GET /views/fleet`) and
+the CRUD lists, and the detail views it opens. Its core is one pure model,
+`web/src/lib/outline.ts`, which nests the places, puts each system on the place where it
+sits, folds single-child chains, counts what a row holds in the registry's own type labels,
+and counts systems by verdict rather than rolling them up worst-wins; `components/Outline.tsx`
+renders it as an ARIA tree, and `lib/location_type_graph.ts` reads what may sit under a
+place from `allowed_parent_types`, never from a type's name (ADR-0137). The views model, the renderer library, and composable
 dashboards remain the intended **read side** for the analytical surfaces (alarms, sample
 history, the cascade view, fleet dashboards), not built yet.
 Realized shell: the [design system](/contributing/design-system/); operating it: the
@@ -31,10 +36,10 @@ operator never queries raw tables. Every view returns a uniform **`ViewResult`**
 rendered through **one renderer per view**: adding a view never adds a bespoke renderer.
 :::
 
-The **dense-ops layout is an architectural pattern**: facet summary over the full set, keyboard chip
-filter, tree/list table, click-row detail blade plus a full detail page, the summary staying whole so
-click-to-filter is stable. The inventory tier realizes it as the config-driven `ListShell` and its
-primitives ([design system](/contributing/design-system/)); the analytical surfaces will reuse it.
+The **dense-ops layout is an architectural pattern**: one counts line over the full set, keyboard
+chip filter, tree/list table, click-row blade plus an addressable page, the counts staying whole
+while the filter narrows the body. The list tier realizes it as the config-driven `ListShell` and
+its primitives ([design system](/contributing/design-system/)); the analytical surfaces will reuse it.
 
 ## Tooltips, not prose
 
@@ -42,16 +47,27 @@ An operator surface carries no inline explanatory text (ADR-0127): every explain
 label's `(i)` tooltip (`InfoTip`; `Eyebrow` for section labels), so the pedagogy doctrine is
 satisfied by hover and the page itself stays scannable. The standard-editor's vocabulary
 (choices, alternates, accepted types) never leads an operator view, and a system's body
-renders components-first: one card per component with its role as a badge, role-level chrome
-only where it says something a badge cannot (a quorum beyond one, a shortfall, an unstaffed
-role). The platform-wide sweep of the older pages is tracked in #784. The system zoom is growing
-into the workspace #788 defines: facets as `?tab=` URL facts (`TabRail`), the Map tab
-rendering the standard's declared room (ADR-0128) with live occupant state on each marker.
-Since ADR-0129 these faces ARE the identity routes' default, and since #800 they are the
-ONLY faces: one way to look, one altitude rule (locations drill, systems open full screen,
-components open in blades), editing on each workspace's Configure tab, and flat tables
-surviving as a list-density toggle for bulk work. The classic detail face is retired;
-`?view=detail` is ignored and `?edit=1` lands Configure already editing.
+renders components-first: one row per component with its role in a column, role-level
+chrome only where it says something a column cannot (a quorum beyond one, a shortfall, an
+unstaffed role). The platform-wide sweep of the older pages is tracked in #784.
+
+**A detail view is one per system, its place a card of context** (ADR-0139). Systems are the
+unit Omniglass monitors; places are folders and metadata; components are pieces of systems.
+A system's view is its place card (type, tags, the place's own panel) above the system card
+(verdict, since, standard, size, slot arithmetic only while short) with three tabs as `?tab=`
+URL facts (`TabRail`): Overview (why, the components, the standard's declared map with live
+occupant state on each marker, ADR-0128, the data), Activity (the history, the events, the
+logs), and Configure (the one form). A place holding exactly one system lands on it; a place
+holding none or several keeps its own view, a brief card per system and the outline rooted
+there; a component's view carries its place card, marked as its own or its system's. The
+model behind it is pure, in `lib/detail.ts` (where a place lands, the path that names each
+place once, the roles a component fills) and `lib/outline.ts` (`rootAt`). Since ADR-0129
+these faces ARE the identity routes' default, and since #800 the ONLY faces: one way to
+look, one altitude rule (Explore drills the place tree, systems open full screen,
+components open in blades), editing through the one `EntityForm` (ADR-0137). The side
+panel is the glance (verdict, why, context, identity and tags) and the configuration
+panels stay on Configure (ADR-0139). The classic detail face is retired; `?view=detail` is
+ignored and `?edit=1` lands Configure already editing.
 
 ## One renderer library, two composition modes
 
@@ -156,17 +172,17 @@ Two layers, deliberately decoupled:
    `/components`, `/templates`, `/config`); a URL addresses the *entity*, never its place in the
    menu, so deep links stay stable however the menu is reorganized. No taxonomy-nested routes, no
    redirects to maintain.
-2. **The sidebar groups those flat routes into clusters for browsing**: Home, Fleet (the one
-   canvas, #633), Dashboards, Alarms,
-   Inventory (locations, systems, components, nodes), Values (variables, secrets, config, files),
-   Catalog (a single entry opening the catalog shell, next), Explore, Learn, Admin (users, roles,
+2. **The sidebar groups those flat routes into clusters for browsing**: Home, Explore (the one
+   door into the fleet, #826: its outline lists every location, system and component, #861),
+   Dashboards, Alarms, Nodes, Values (variables, secrets, config, files),
+   Catalog (a single entry opening the catalog shell, next), Learn, Admin (users, roles,
    groups, audit, and the Settings leaf). A cluster is pure presentation, not a destination:
    rearrangeable and user-customizable without touching a route.
 
 **The mode rides the URL too**
 ([ADR-0120](/architecture/decisions/#adr-0120-the-edit-face-is-a-url-fact) established the rule;
 [ADR-0132](/architecture/decisions/#adr-0132-configure-is-the-one-deep-editor) retargets it):
-`?edit=1` beside a fleet address lands the workspace's Configure tab already editing, and beside
+`?edit=1` beside a fleet address lands the detail view's Configure tab already editing, and beside
 an identity blade's id param (`?u=<id>&edit=1`) opens that blade editing, both behind the same
 `<resource>:update` permission the Edit button is behind; without it the link lands read-only.
 Leaving edit (Cancel or Save) strips the param via history replace, so a refresh mid-edit keeps the
@@ -195,16 +211,17 @@ a happening (caught from the fleet or caused by the platform), never an outbound
 is why Events sits in Telemetry while Rules, Commands, and the future Notifications sit in
 Actions.
 
-**Values is its own top-level group**, beside Inventory: values set on fleet entities and resolved
+**Values is its own top-level group**: values set on fleet entities and resolved
 down the cascade, a distinct genus from the entities themselves. **Config is the CI store** (desired
 configuration, optionally observed back to detect drift and reconcile), distinct from platform
 Settings (preferences: severity scales, schedules, retention, defaults) and Variables (free
 interpolated values, no observed side); the full split is
 [config, secrets, and variables](/architecture/variables/).
 
-**Inventory holds the fleet entities**: locations, systems, components, and **nodes**, the
-collection daemons, monitored and scope-controlled (live, gated on `node:read` plus ABAC scope), so
-a node sits in Inventory, not Admin. **Endpoints and tasks are not nav items**: an endpoint is a
+**Explore holds the fleet entities**: locations, systems, and components, reached through its
+outline of places. **Nodes**, the collection daemons, are monitored and
+scope-controlled (live, gated on `node:read` plus ABAC scope), so a node keeps its own sidebar
+entry rather than sitting in Admin. **Endpoints and tasks are not nav items**: an endpoint is a
 panel on a component, a task a panel on a node, facets of the owning entity's detail page.
 
 Admin is the renamed Settings group: Users, Roles, Groups, Audit, plus the live Settings leaf, the

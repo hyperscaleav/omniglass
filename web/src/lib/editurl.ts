@@ -9,9 +9,14 @@ import type { BladeEdit } from "./blades";
 // strips the param in place, so the history entry the operator is on no longer
 // requests an edit they already left. This replaces the one-shot in-memory
 // handoffs (pendingedit, openPrincipalInEdit), which no URL could express.
-export function useEditParam(edit: BladeEdit | undefined, opts: { ready: () => boolean; canUpdate: () => boolean }): { request: () => void } {
+//
+// `value` names which editor the intent is for, where a page carries more than
+// one: a system's Configure holds its own form (`edit=1`) and its sole place's
+// (`edit=place`, #872), and each begins only on its own intent.
+export function useEditParam(edit: BladeEdit | undefined, opts: { ready: () => boolean; canUpdate: () => boolean; value?: string }): { request: () => void } {
   const [params, setParams] = useSearchParams();
-  const requested = () => (Array.isArray(params.edit) ? params.edit[0] : params.edit) === "1";
+  const value = () => opts.value ?? "1";
+  const requested = () => (Array.isArray(params.edit) ? params.edit[0] : params.edit) === value();
 
   // The param is an intent consumed ONCE per appearance, not a state the mode is
   // derived from: begin() fires when the param shows up (or is present on mount)
@@ -47,7 +52,7 @@ export function useEditParam(edit: BladeEdit | undefined, opts: { ready: () => b
   // roundtrip later.
   return {
     request: () => {
-      setParams({ edit: "1" });
+      setParams({ edit: value() });
       if (edit && !edit.editing() && opts.ready() && opts.canUpdate()) edit.begin();
     },
   };

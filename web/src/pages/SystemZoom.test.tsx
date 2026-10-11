@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@solidjs/testing-library";
 import { Router, Route, useLocation } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
@@ -119,8 +119,8 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
   qc.setQueryData([...FLEET_VIEW_KEY], view);
   qc.setQueryData([...ME_KEY], meOverride);
   qc.setQueryData([...SYSTEMS_KEY], [{ id: uuidFor("szp-sys"), name: "boardroom", label: "Boardroom", standard: "huddle-room" }]);
-  qc.setQueryData([...LOCATIONS_KEY], []);
-  qc.setQueryData([...LOCATION_TYPES_KEY], []);
+  qc.setQueryData([...LOCATIONS_KEY], [{ id: uuidFor("szp-room"), name: "boardroom-a", label: "Boardroom A", location_type: "room", actions: ["update"] }]);
+  qc.setQueryData([...LOCATION_TYPES_KEY], [{ id: uuidFor("szpt-room"), name: "room", label: "Room", allowed_parent_types: [] }]);
   qc.setQueryData([...TAGS_KEY], []);
   qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], healthOverride);
   qc.setQueryData([...systemRolesKey(uuidFor("szp-sys"))], declared);
@@ -138,7 +138,7 @@ function mount(path = `/web/systems/${uuidFor("szp-sys")}`, healthOverride: Flee
       <Router base="/web">
         <Route path="/systems/:id" component={Systems} />
         <Route path="/locations/:id" component={() => <div data-testid="location-page" />} />
-        <Route path="/fleet" component={() => <div data-testid="fleet-page" />} />
+        <Route path="/explore" component={() => <div data-testid="fleet-page" />} />
         <Route
           path="/components/:id"
           component={() => {
@@ -160,14 +160,14 @@ describe("the system zoom", () => {
   it("arithmetic renders only where a role earned a group; the 1:1 case carries none", () => {
     mount();
     expect(within(screen.getByTestId("rolegroup-room-mic")).getByText(/1 of 2/)).toBeTruthy();
-    expect(within(screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`)).queryByText(/of \d/)).toBeNull();
+    expect(within(screen.getByTestId(`member-${uuidFor("szp-c-bar")}`)).queryByText(/of \d/)).toBeNull();
   });
 
   it("an unstaffed role and a down occupant stay visually distinct: commissioning wears incomplete, failure wears the impact", () => {
     mount();
-    expect(screen.getByTestId("rolegroup-main-display").className).toContain("border-incomplete");
-    expect(screen.getByTestId("rolegroup-room-mic").className).toContain("border-warning");
-    expect(within(screen.getByTestId(`compcard-${uuidFor("szp-c-mic")}`)).getByText("mic-1")).toBeTruthy();
+    expect(within(screen.getByTestId("rolegroup-main-display")).getByText("0 of 1").className).toContain("text-incomplete");
+    expect(within(screen.getByTestId("rolegroup-room-mic")).getByText(/1 of 2/).className).toContain("text-warning");
+    expect(within(screen.getByTestId(`member-${uuidFor("szp-c-mic")}`)).getByText("mic-1")).toBeTruthy();
   });
 
   it("the build not in use never renders", () => {
@@ -177,20 +177,20 @@ describe("the system zoom", () => {
 
   it("an occupant serving another system carries a badge naming it", () => {
     mount();
-    const card = screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`);
-    expect(within(card).getByText(/also Overflow Room/)).toBeTruthy();
+    const row = screen.getByTestId(`member-${uuidFor("szp-c-bar")}`);
+    expect(within(row).getByText(/also in Overflow Room/)).toBeTruthy();
   });
 
   it("a no-role member's card opens its component blade too (#799)", async () => {
     mount();
-    fireEvent.click(screen.getByTestId(`compcard-${uuidFor("szp-c-power")}`));
+    fireEvent.click(screen.getByTestId(`member-${uuidFor("szp-c-power")}`));
     const blade = await screen.findByRole("dialog");
     expect(blade.getAttribute("aria-labelledby")).toBe(`blade-title-component-${uuidFor("szp-c-power")}`);
   });
 
   it("a spare beyond quorum reads on the group header", () => {
     mount();
-    expect(within(screen.getByTestId("rolegroup-room-mic")).getByText(/\+ 1 spare/)).toBeTruthy();
+    expect(within(screen.getByTestId("rolegroup-room-mic")).getByText(/1 spare/)).toBeTruthy();
   });
 
 
@@ -228,9 +228,14 @@ describe("the system zoom", () => {
     expect(within(strip).getByRole("button", { name: /mic-1/ })).toBeTruthy();
   });
 
-  it("renders the verdict history strip from the transitions", () => {
+  // The history strip is Activity's (#872): Overview's header already says
+  // since when, and saying it twice was the audit's finding.
+  it("draws the verdict history on Activity, not on Overview", () => {
     mount();
-    expect(screen.getByTestId("health-history")).toBeTruthy();
+    expect(screen.queryByTestId("health-history-full")).toBeNull();
+    cleanup();
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=activity`);
+    expect(screen.getByTestId("health-history-full")).toBeTruthy();
   });
 
   it("a legacy ?zoom=1 deep link still lands on the workspace: old links never break", () => {
@@ -241,12 +246,12 @@ describe("the system zoom", () => {
 });
 
 describe("the components-first body (#790)", () => {
-  it("a 1:1 occupant is one card with a role badge, no box and no arithmetic", () => {
+  it("a 1:1 occupant is one row naming its role, no group and no arithmetic", () => {
     mount();
-    const card = screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`);
-    expect(within(card).getByText("videobar-1")).toBeTruthy();
-    expect(within(card).getByText("Conferencing Bar")).toBeTruthy();
-    expect(within(card).queryByText(/satisfying/)).toBeNull();
+    const row = screen.getByTestId(`member-${uuidFor("szp-c-bar")}`);
+    expect(within(row).getByText("videobar-1")).toBeTruthy();
+    expect(within(row).getByText("Conferencing Bar")).toBeTruthy();
+    expect(within(row).queryByText(/satisfying/)).toBeNull();
   });
 
   it("the choice jargon never renders: no 'built as', no choice eyebrow", () => {
@@ -260,25 +265,29 @@ describe("the components-first body (#790)", () => {
     const g = screen.getByTestId("rolegroup-main-display");
     expect(within(g).getByText("Main Display")).toBeTruthy();
     expect(within(g).getByText(/0 of 1/)).toBeTruthy();
+    expect(within(g).getAllByTestId("empty-slot").length).toBe(1);
   });
 
   it("a short role renders as a group with its occupants inside and the gap named", () => {
     mount();
     const g = screen.getByTestId("rolegroup-room-mic");
     expect(within(g).getByText(/1 of 2/)).toBeTruthy();
-    expect(within(g).getByTestId(`compcard-${uuidFor("szp-c-mic")}`)).toBeTruthy();
+    expect(within(g).getByTestId(`member-${uuidFor("szp-c-mic")}`)).toBeTruthy();
+    // Both seats are staffed; the down mic still holds its seat, so the gap
+    // is the arithmetic's to name, and no slot is drawn empty.
+    expect(within(g).queryAllByTestId("empty-slot").length).toBe(0);
   });
 
-  it("a no-role member is a card with the no-role badge, not a strip of chips", () => {
+  it("a no-role member is a row saying so, not a strip of chips", () => {
     mount();
-    const card = screen.getByTestId(`compcard-${uuidFor("szp-c-power")}`);
-    expect(within(card).getByText("no role")).toBeTruthy();
+    const row = screen.getByTestId(`member-${uuidFor("szp-c-power")}`);
+    expect(within(row).getByText("no role")).toBeTruthy();
     expect(screen.queryByTestId("no-role-strip")).toBeNull();
   });
 
-  it("clicking a card opens the component blade; Expand promotes to the leaf (#799)", async () => {
+  it("clicking a row opens the component blade; Expand promotes to the leaf (#799)", async () => {
     mount();
-    fireEvent.click(screen.getByTestId(`compcard-${uuidFor("szp-c-bar")}`));
+    fireEvent.click(screen.getByTestId(`member-${uuidFor("szp-c-bar")}`));
     const blade = await screen.findByRole("dialog");
     fireEvent.click(within(blade).getByRole("button", { name: "Expand" }));
     const page = await screen.findByTestId("component-page");
@@ -286,21 +295,18 @@ describe("the components-first body (#790)", () => {
   });
 });
 
-describe("the KPI tiles (#790)", () => {
-  it("renders one tile per contract metric with the effective value, sampled or default", () => {
+describe("the metrics are said once (#872)", () => {
+  // The KPI tiles retired into Data: two renderings of the same values was
+  // the audit's finding. Data stacks every declared metric with its latest.
+  it("draws no tile row; the data section carries each metric's latest value", () => {
     mount(undefined, health, [
       { metric_type_name: "room-temperature", label: "Room Temperature", data_type: "float", value: 23.5, is_sampled: true, from_contract: true, required: false },
-      { metric_type_name: "occupancy-count", label: "Occupancy Count", data_type: "int", value: 0, is_sampled: false, from_contract: true, required: false },
     ]);
-    const tiles = screen.getByTestId("kpi-tiles");
-    expect(within(tiles).getByText("Room Temperature")).toBeTruthy();
-    expect(within(tiles).getByText("23.5")).toBeTruthy();
-    expect(within(tiles).getByText(/default/)).toBeTruthy();
-  });
-
-  it("renders no tile row at all when the standard declares nothing", () => {
-    mount();
     expect(screen.queryByTestId("kpi-tiles")).toBeNull();
+    const data = screen.getByTestId("data-tab");
+    expect(within(data).getByText("Room Temperature")).toBeTruthy();
+    expect(within(data).getByText("23.5")).toBeTruthy();
+    expect(screen.getAllByText("23.5").length).toBe(1);
   });
 });
 
@@ -314,13 +320,15 @@ describe("the map tab (#791)", () => {
     ] },
   }];
 
-  it("a standard with a map yields the Map tab; without one the tab is absent (History keeps the rail)", () => {
+  it("a standard with a map draws it inside Overview; without one there is no map, and the rail stays three tabs", () => {
     mount(undefined, health, [], MAPPED);
-    expect(screen.getByRole("tab", { name: "Map" })).toBeTruthy();
+    expect(screen.getByTestId("system-map")).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "Map" })).toBeNull();
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Activity", "Configure"]);
     cleanup();
     mount();
     expect(screen.getByTestId("tab-rail")).toBeTruthy();
-    expect(screen.queryByRole("tab", { name: "Map" })).toBeNull();
+    expect(screen.queryByTestId("system-map")).toBeNull();
   });
 
   it("the map tab renders one marker per declared position of the build in use, occupants solid and gaps hollow", () => {
@@ -353,6 +361,19 @@ describe("the name-shaped address (#759's rule)", () => {
 });
 
 describe("the history tab (#792)", () => {
+  // The tab reads a thirty-day window back from the wall clock, and the alarms
+  // below are dated. Left on the real clock these tests pass for a month and
+  // then fail for ever (the cleared alarm ages out of the window), so the clock
+  // is pinned to the day the fixture describes. Only Date is faked: the
+  // testing library's own waits still run on real timers.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-20T16:00:00Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   function seedAlarms(qc: QueryClient) {
     qc.setQueryData([...componentAlarmsKey(uuidFor("szp-c-mic"))], [
       { id: "hal-1", component: uuidFor("szp-c-mic"), severity: "critical", message: "No route to host", raised_at: "2026-08-15T14:20:00Z", active: true, acknowledged: false },
@@ -393,10 +414,11 @@ describe("the history tab (#792)", () => {
     expect(await within(tab).findByText("Fan speed high")).toBeTruthy();
   });
 
-  it("is always on the rail, with the timeline and raise markers", async () => {
+  it("Activity is always on the rail, with the timeline and raise markers", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);
-    expect(screen.getByRole("tab", { name: "History" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Activity" })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: "History" })).toBeNull();
     expect(screen.getByTestId("health-history-full")).toBeTruthy();
     await screen.findByText("Fan speed high");
   });
@@ -404,8 +426,19 @@ describe("the history tab (#792)", () => {
   it("marks each raise on the strip's axis", async () => {
     const r = mount(`/web/systems/${uuidFor("szp-sys")}?tab=history`);
     seedAlarms(r.qc);
-    await screen.findByText("No route to host");
-    expect(screen.getAllByTestId(/^incident-marker-/)).toHaveLength(2);
+    await waitFor(() => expect(screen.getAllByTestId(/^incident-marker-/)).toHaveLength(2));
+  });
+});
+
+describe("the Activity tab's order (#826)", () => {
+  it("reads like a status page: uptime and incidents first, then the events, then the logs", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=activity`);
+    const history = await screen.findByTestId("history-tab");
+    const events = await screen.findByTestId("events-tab");
+    const logs = await screen.findByTestId("logs-tab");
+    // compareDocumentPosition: FOLLOWING (4) means the argument comes after.
+    expect(history.compareDocumentPosition(events) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(events.compareDocumentPosition(logs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 
@@ -473,20 +506,78 @@ describe("the data tab (#794, stacked per the #795 review)", () => {
     expect(screen.queryByTestId("timeseries-chart")).toBeNull();
   });
 
-  it("hides the tab with nothing declared", () => {
+  it("draws no data section with nothing declared, and no Data tab ever", () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?tab=data`, health, []);
     expect(screen.queryByRole("tab", { name: "Data" })).toBeNull();
+    expect(screen.queryByTestId("data-tab")).toBeNull();
   });
 });
 
-describe("the scoped summary (#795 review)", () => {
-  it("talks about THIS system's components: mix subject, slots, alarms", () => {
+describe("the system card's header says each thing once (#872)", () => {
+  // A counts line above the card repeated what its header said (slots, the
+  // verdict's count); the header alone now carries the system's facts.
+  it("carries the verdict, the standard's label, the component count and the gap, with no counts line", () => {
+    mount(undefined, health, [], [{ id: uuidFor("std"), name: "huddle-room", label: "Huddle Room Standard" }]);
+    const header = screen.getByTestId("system-header");
+    expect(within(header).getByText("Huddle Room Standard")).toBeTruthy();
+    expect(within(header).getByTestId("component-count").textContent).toBe("3 components");
+    expect(within(header).getAllByText(/slots filled/).length).toBe(1);
+    expect(screen.queryByTestId("counts-line")).toBeNull();
+  });
+});
+
+describe("the place is context, the system the subject (#872)", () => {
+  it("titles a sole system's view by its place and ends the path at the place's parent", () => {
     mount();
-    const rail = screen.getByTestId("fleet-summary");
-    expect(within(rail).getByText("components")).toBeTruthy();
-    expect(within(rail).queryByText("roots")).toBeNull();
-    expect(within(rail).getByText("slots filled")).toBeTruthy();
-    expect(within(rail).getByText(/active alarms?/)).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Boardroom A");
+    expect(within(screen.getByTestId("breadcrumb")).queryByText("Boardroom A")).toBeNull();
+  });
+
+  it("shows the place as a card naming its type, without repeating its name", () => {
+    mount();
+    const card = screen.getByTestId("place-card");
+    expect(within(card).getByTestId("place-type").textContent).toBe("Room");
+    expect(within(card).queryByText("Boardroom A")).toBeNull();
+  });
+
+  // A room holding one system IS the system: its own panel would only point
+  // back here, so the card offers none (#872 drawer audit); Configure place
+  // is where its form lives.
+  it("offers no second panel for a sole system's room", () => {
+    mount();
+    expect(within(screen.getByTestId("place-card")).queryByRole("button", { name: "Place details" })).toBeNull();
+  });
+
+  // The place's own configuration (its properties and their cascade) lives on
+  // its Configure tab; a sole system's place lands on the system otherwise,
+  // so the card links straight to it (#872 review).
+  it("links to the place's own Configure from its card", async () => {
+    mount();
+    fireEvent.click(within(screen.getByTestId("place-card")).getByRole("link", { name: "Configure place" }));
+    expect(await screen.findByTestId("location-page")).toBeTruthy();
+    expect(window.location.pathname + window.location.search).toBe(`/web/locations/${uuidFor("szp-room")}?tab=configure`);
+  });
+
+  // Going back up lands where you were (#872): the Explore crumb opens the
+  // outline down to this system's row, not at the top of the fleet.
+  it("links Explore back to this system's row in the outline", async () => {
+    mount();
+    fireEvent.click(within(screen.getByTestId("breadcrumb")).getByRole("button", { name: "Explore" }));
+    expect(await screen.findByTestId("fleet-page")).toBeTruthy();
+    expect(window.location.pathname + window.location.search).toBe(`/web/explore?node=${uuidFor("szp-sys")}`);
+  });
+
+  it("gives an unplaced system its own title and no place card", () => {
+    mount(`/web/systems/${uuidFor("szp-other")}`);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Overflow Room");
+    expect(screen.queryByTestId("place-card")).toBeNull();
+  });
+
+  it("offers Retry when a read fails, instead of a blank", async () => {
+    const r = mount();
+    r.qc.setQueryData([...systemHealthKey(uuidFor("szp-sys"))], undefined);
+    r.qc.getQueryCache().find({ queryKey: [...systemHealthKey(uuidFor("szp-sys"))] })?.setState({ status: "error", error: new Error("boom"), data: undefined });
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy();
   });
 });
 
@@ -548,6 +639,37 @@ describe("the configure tab (#800)", () => {
 
 // Slice 2 of #800: ?edit=1 means the one editor, wherever it is typed. The
 // bare param lands the workspace on Configure, already editing.
+// A sole system's place has no page of its own (#872): it configures on the
+// system's Configure tab, in its own section with its own Edit, so the room
+// is one page even when its place's properties need changing.
+describe("the place configures beside its system (#872)", () => {
+  it("carries a System section and a Place section, each its own form", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure`);
+    expect(await screen.findByTestId("configure-face")).toBeTruthy();
+    const place = await screen.findByTestId("configure-face-place");
+    expect(within(place).getByText("Parent")).toBeTruthy();
+    // Place first, as the page reads: its card sits above the system's.
+    const system = screen.getByTestId("configure-face");
+    expect(place.compareDocumentPosition(system) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("?edit=place begins editing the place's form only", async () => {
+    mount(`/web/systems/${uuidFor("szp-sys")}?tab=configure&edit=place`);
+    const place = await screen.findByTestId("configure-face-place");
+    expect(await within(place).findByRole("button", { name: /save changes/i })).toBeTruthy();
+    expect(within(screen.getByTestId("configure-face")).queryByRole("button", { name: /save changes/i })).toBeNull();
+  });
+
+  it("gives an unplaced system no Place section", async () => {
+    const r = mount(`/web/systems/${uuidFor("szp-other")}?tab=configure`);
+    r.qc.setQueryData([...systemHealthKey(uuidFor("szp-other"))], { ...health, roles: [], transitions: [] });
+    r.qc.setQueryData([...systemRolesKey(uuidFor("szp-other"))], []);
+    r.qc.setQueryData([...systemMetricsKey(uuidFor("szp-other"))], []);
+    expect(await screen.findByTestId("configure-face")).toBeTruthy();
+    expect(screen.queryByTestId("configure-face-place")).toBeNull();
+  });
+});
+
 describe("?edit=1 lands on configure (#800)", () => {
   it("opens the configure tab editing from a bare ?edit=1 address", async () => {
     mount(`/web/systems/${uuidFor("szp-sys")}?edit=1`);
@@ -571,6 +693,29 @@ describe("properties live on configure (#800)", () => {
 });
 
 describe("the miss face (#800)", () => {
+  // The create handoff lands here while the fleet view in the cache predates
+  // the new row. The page refetches it on mount, and until that read lands
+  // it cannot know the address is a miss: saying "may have been deleted"
+  // about the thing the operator created a second ago is the wrong answer.
+  it("does not call a just-created system missing while the fleet view is still being read", async () => {
+    let answer!: (r: Response) => void;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.includes("/views/fleet")) return new Promise<Response>((res) => { answer = res; });
+      return Promise.resolve(new Response("{}", { status: 404, headers: { "content-type": "application/json" } }));
+    }));
+    const r = mount(`/web/systems/${uuidFor("szp-new")}`);
+    // What a create leaves behind: the list refreshed, the view now stale.
+    void r.qc.invalidateQueries({ queryKey: [...FLEET_VIEW_KEY] });
+    await waitFor(() => expect(answer).toBeTypeOf("function"));
+    expect(screen.queryByText(/No system answers this address/)).toBeNull();
+    const fresh = { ...view, systems: [...(view.systems ?? []), { id: uuidFor("szp-new"), name: "fresh", label: "Fresh Room", location: (view.systems ?? [])[0]?.location, verdict: "incomplete", dots: [] }] };
+    answer(new Response(JSON.stringify(fresh), { status: 200, headers: { "content-type": "application/json" } }));
+    expect(await screen.findByRole("heading", { name: "Fresh Room" })).toBeTruthy();
+    expect(screen.queryByText(/No system answers this address/)).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
   it("an address matching no system renders the explicit miss, not a silent fallback", async () => {
     mount("/web/systems/no-such-room");
     expect(await screen.findByText(/No system answers this address/)).toBeTruthy();

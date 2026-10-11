@@ -567,6 +567,15 @@ var systemConfig = scopedConfig[System]{
 		if before.LocationID == nil {
 			return nil // placed nowhere: its removal rolls up to nothing
 		}
+		// The place it left recounts: a system left alone there reads as the
+		// place again (#872).
+		tx, ok := q.(pgx.Tx)
+		if !ok {
+			return fmt.Errorf("storage: system delete cascade needs a transaction")
+		}
+		if err := p.cascadeSiblingSystemLabels(ctx, tx, *before.LocationID); err != nil {
+			return err
+		}
 		// The id is already in hand (before.LocationID); recordHealth binds
 		// it directly (see ownerRef), so no lookup is needed at all, not even
 		// for the name: this used to fetch one solely to populate a field
@@ -719,6 +728,13 @@ func (p *PG) CreateSystem(ctx context.Context, actorID string, spec SystemSpec, 
 	}
 	if s, err = p.stampSystemLabel(ctx, tx, s); err != nil {
 		return nil, err
+	}
+	// Its arrival may make the place shared: the siblings already there name
+	// their kind from now on (#872).
+	if s.LocationID != nil {
+		if err := p.cascadeSiblingSystemLabels(ctx, tx, *s.LocationID); err != nil {
+			return nil, err
+		}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "create", "system", s.ID, nil, s); err != nil {
 		return nil, err
@@ -1198,6 +1214,21 @@ func (p *PG) MoveSystem(ctx context.Context, actorID, name string, move SystemMo
 	// placement key is what made it a write path.
 	if after, err = p.stampSystemLabel(ctx, tx, after); err != nil {
 		return nil, err
+	}
+	// The place it left and the place it joined each recount (#872).
+	if !sameOptional(before.LocationID, after.LocationID) {
+		var places []string
+		for _, l := range []*string{before.LocationID, after.LocationID} {
+			if l != nil {
+				places = append(places, *l)
+			}
+		}
+		if err := p.cascadeSiblingSystemLabels(ctx, tx, places...); err != nil {
+			return nil, err
+		}
+		if after, err = p.stampSystemLabel(ctx, tx, after); err != nil {
+			return nil, err
+		}
 	}
 	if err := writeAuditRes(ctx, tx, actorID, "move", "system", after.ID, before, after); err != nil {
 		return nil, err

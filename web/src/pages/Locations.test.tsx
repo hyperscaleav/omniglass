@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, waitFor, fireEvent, within } from "@solidjs/testing-library";
+import { render, screen, waitFor, fireEvent } from "@solidjs/testing-library";
 import { Router, Route } from "@solidjs/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
 import Locations from "./Locations";
@@ -9,9 +9,8 @@ import { ownerPropertiesKey, type EffectiveProperty } from "../lib/owner_propert
 import { ME_KEY, type Me } from "../lib/auth";
 import { TAGS_KEY, entityTagsKey } from "../lib/tags";
 import { uuidFor } from "../lib/testids";
-import { NAME_MIN_W } from "../components/TreeList";
 
-// The Locations page on the shared TreeList in the create-as-route model: New routes
+// The Locations route in the create-as-route model (the list is Explore's outline, #861): New routes
 // to /locations/create (a draft accordion), Save hands off to /locations/<name> in
 // edit; the detail is read-only in view (no in-body mutation control) and editable
 // via the pencil. The detail also carries the Properties panel, which resolves the
@@ -44,11 +43,11 @@ const hqProperties: EffectiveProperty[] = [
   { property_type_name: "site.note", property_type_id: "site.note-id", label: "Note", data_type: "string", required: false, is_set: true, from_contract: false, set_value: "leased", value: "leased", value_id: "v-note" },
 ];
 
-function mount(path: string, extraLocations: Location[] = [], meOverride: Me = me) {
+function mount(path: string, extraLocations: Location[] = [], meOverride: Me = me, registry: LocationType[] = types, base: Location[] = [hq, lab, hqB1]) {
   const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  const all = [hq, lab, hqB1, ...extraLocations];
+  const all = [...base, ...extraLocations];
   qc.setQueryData([...LOCATIONS_KEY], all);
-  qc.setQueryData([...LOCATION_TYPES_KEY], types);
+  qc.setQueryData([...LOCATION_TYPES_KEY], registry);
   qc.setQueryData([...ME_KEY], meOverride);
   qc.setQueryData([...TAGS_KEY], []);
   // Keyed by uuid (#627 review finding 1): the detail page's panels now
@@ -63,6 +62,7 @@ function mount(path: string, extraLocations: Location[] = [], meOverride: Me = m
       <Router>
         <Route path="/locations" component={Locations} />
         <Route path="/locations/:id" component={Locations} />
+        <Route path="/explore" component={() => <div data-testid="explore-page" />} />
       </Router>
     </QueryClientProvider>
   ));
@@ -125,6 +125,12 @@ describe("Locations create-as-route", () => {
     expect(screen.getByText(/Available once the location is created/)).toBeTruthy();
   });
 
+  it("leads back to Explore, where every place is listed now (#861)", async () => {
+    mount("/locations/create");
+    fireEvent.click(await screen.findByRole("button", { name: /Explore/ }));
+    expect(await screen.findByTestId("explore-page")).toBeTruthy();
+  });
+
   it("posts the location_type handle, never the uuid, on create (#466)", async () => {
     let captured: unknown;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -153,149 +159,6 @@ describe("Locations create-as-route", () => {
     expect((captured as { location_type: string }).location_type).toBe("campus");
   });
 
-  it("a campus row wears its type's landmark glyph, not the unknown-type fallback (#466)", async () => {
-    mount("/locations");
-    await waitFor(() => expect(screen.getByText("HQ")).toBeTruthy());
-    const row = screen.getByText("HQ").closest("tr")!;
-    // The Landmark glyph's pediment path; MapPin (the unknown-type fallback)
-    // draws a teardrop instead. The icon map joins the node's type (a name) to
-    // the registry, so a uuid-keyed map degrades every row to the fallback.
-    expect(row.querySelector('path[d="m12 2 9 5H3z"]')).toBeTruthy();
-    expect(row.querySelector('path[d^="M20 10c0 6-8 12"]')).toBeNull();
-  });
-
-});
-
-// The Properties panel on the location detail is the shared owner panel, pointed at
-// the location arc: the location type's contract resolved against the location's own
-// values, with anything the location sets that no contract declares grouped apart.
-// #627 scopes name uniqueness to placement, not the whole fleet: two
-// locations under different parents may now legally share a name. The tree
-// builder used to key its construction-time map on the bare name
-// (byId.set(l.name, ...)), so the second same-named row silently overwrote
-// the first and its children reparented onto the survivor. Keying that map
-// on uuid instead (node.id itself stays the name; only the construction key
-// moved) is what keeps both rows in the rendered tree.
-describe("Locations list survives duplicate names across placements (#627)", () => {
-  afterEach(() => window.history.pushState({}, "", "/"));
-
-  it("renders both same-named locations when they sit under different parents, each keeping its own child", async () => {
-    // Each "room-1" has its OWN child (desk-a / desk-b): a bare row count
-    // could still look right off a double-push artifact (the surviving node
-    // object gets pushed into both parents' children arrays). The
-    // discriminating symptom the amendment actually describes is the CHILD
-    // reparenting onto whichever same-named node won the map: under the old
-    // bug, both desks end up merged onto one surviving "room-1" object and
-    // so both appear TWICE; under the fix, each desk renders exactly once,
-    // under its own parent.
-    const bldgA: Location = { id: uuidFor("l-bldg-a"), name: "bldg-a", location_type: "building", effective_tags: {} };
-    const bldgB: Location = { id: uuidFor("l-bldg-b"), name: "bldg-b", location_type: "building", effective_tags: {} };
-    const roomInA: Location = { id: uuidFor("l-room-a"), name: "room-1", location_type: "room", parent: "bldg-a", parent_id: bldgA.id, effective_tags: {} };
-    const roomInB: Location = { id: uuidFor("l-room-b"), name: "room-1", location_type: "room", parent: "bldg-b", parent_id: bldgB.id, effective_tags: {} };
-    const deskA: Location = { id: uuidFor("l-desk-a"), name: "desk-a", location_type: "area", parent: "room-1", parent_id: roomInA.id, effective_tags: {} };
-    const deskB: Location = { id: uuidFor("l-desk-b"), name: "desk-b", location_type: "area", parent: "room-1", parent_id: roomInB.id, effective_tags: {} };
-
-    const qc = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-    qc.setQueryData([...LOCATIONS_KEY], [bldgA, bldgB, roomInA, roomInB, deskA, deskB]);
-    qc.setQueryData([...LOCATION_TYPES_KEY], types);
-    qc.setQueryData([...ME_KEY], me);
-    qc.setQueryData([...TAGS_KEY], []);
-    window.history.pushState({}, "", "/locations");
-    render(() => (
-      <QueryClientProvider client={qc}>
-        <Router>
-          <Route path="/locations" component={Locations} />
-        </Router>
-      </QueryClientProvider>
-    ));
-
-    await waitFor(() => expect(screen.getAllByText("bldg-a").length).toBeGreaterThan(0));
-    // Tree mode starts fully collapsed, so expand everything.
-    fireEvent.click(screen.getByTitle("Expand all"));
-    // Rows are matched by their NAME cell specifically (the first <td>), not
-    // by a bare text search: the "Parent" column also prints a row's parent
-    // NAME as plain text, and desk-a/desk-b's parent is "room-1" too, which
-    // would otherwise double-count as a false match.
-    const rows = () => Array.from(document.querySelectorAll("tbody tr"));
-    const nameCell = (row: Element) => row.querySelector("td")?.textContent ?? "";
-    const rowsNamed = (name: string) => rows().filter((r) => nameCell(r).includes(name));
-    await waitFor(() => expect(rowsNamed("room-1")).toHaveLength(2));
-    expect(rowsNamed("desk-a")).toHaveLength(1);
-    expect(rowsNamed("desk-b")).toHaveLength(1);
-    // desk-a sits under the SAME "room-1" row as bldg-a, desk-b under
-    // bldg-b's: the tree renders depth-first, so desk-a's row falls
-    // strictly between bldg-a's and bldg-b's, and desk-b's falls after
-    // bldg-b's.
-    const indexOf = (name: string) => rows().indexOf(rowsNamed(name)[0]);
-    expect(indexOf("desk-a")).toBeGreaterThan(indexOf("bldg-a"));
-    expect(indexOf("desk-a")).toBeLessThan(indexOf("bldg-b"));
-    expect(indexOf("desk-b")).toBeGreaterThan(indexOf("bldg-b"));
-  });
-});
-
-// The list row carries BOTH identities: the label an operator reads, and
-// the key the API and CLI address the row by. The key is what somebody types into
-// `omniglass location get <key>`, so it is on the row rather than behind a hover:
-// hover does not exist on touch, is not discoverable, and cannot be selected to
-// copy.
-//
-// Before this the row showed one or the other and never both, and the rule that
-// picked between them was written out six times across the console.
-describe("Locations list identity", () => {
-  afterEach(() => window.history.pushState({}, "", "/"));
-
-  it("shows the label with the key beneath it", async () => {
-    mount("/locations");
-    await waitFor(() => expect(screen.getByText("HQ")).toBeTruthy());
-    // Both, on the same row, not one standing in for the other.
-    const row = screen.getByText("HQ").closest("tr")!;
-    expect(within(row).getByText("hq")).toBeTruthy();
-  });
-
-  it("shows the key once when the entity has no label", async () => {
-    const bare: Location = { id: uuidFor("l-bare"), name: "hq-boardroom-nvx-tx", location_type: "campus", effective_tags: {} };
-    mount("/locations", [bare]);
-    await waitFor(() => expect(screen.getByText("hq-boardroom-nvx-tx")).toBeTruthy());
-    // Rendered once, not duplicated as label-plus-key: the label IS the key, and
-    // nothing is derived from it (a sentence-cased "Hq boardroom nvx tx" would
-    // read as a typo and mangle every acronym in the domain).
-    expect(screen.getAllByText("hq-boardroom-nvx-tx")).toHaveLength(1);
-  });
-
-  // The pen (#683). TreeList kept its own copy of the identity rule, comparing the
-  // resolved label to the row's address, and that copy cannot see who chose the
-  // label. Left alone it would repeat the name under every platform-labelled row,
-  // which is the regression the flat list's IdentityCell was fixed to avoid, on the
-  // surface that renders most of the fleet.
-  it("does not repeat the key beneath a label the platform rendered", async () => {
-    const generated: Location = {
-      id: uuidFor("l-gen"), name: "level-1", label: "Level 1",
-      label_generated: true, location_type: "campus", effective_tags: {},
-    };
-    mount("/locations", [generated]);
-    await waitFor(() => expect(screen.getByText("Level 1")).toBeTruthy());
-    const row = screen.getByText("Level 1").closest("tr")!;
-    expect(within(row).queryByText("level-1")).toBeNull();
-  });
-
-  // The tree list carried the same chip the flat list did, and it goes for the
-  // same reason (#693): a full-text mark on every platform-labelled row cost the
-  // Name column the width of the word, on the surface that renders most of the
-  // fleet, to state a fact an operator could not act on from a list. It is now
-  // the lock on the label field of the edit blade.
-  it("renders no pen chip in the tree, whoever holds the pen", async () => {
-    const generated: Location = {
-      id: uuidFor("l-gen"), name: "level-1", label: "Level 1",
-      label_generated: true, location_type: "campus", effective_tags: {},
-    };
-    mount("/locations", [generated]);
-    await waitFor(() => expect(screen.getByText("Level 1")).toBeTruthy());
-    const row = screen.getByText("Level 1").closest("tr")!;
-    expect(within(row).queryByTitle(/platform/i)).toBeNull();
-    expect(within(row).queryByText("Generated")).toBeNull();
-    const mine = screen.getByText("HQ").closest("tr")!;
-    expect(within(mine).queryByTitle(/platform/i)).toBeNull();
-  });
 });
 
 // The create form asks WHAT and WHERE first, then shows what the platform will
@@ -484,27 +347,6 @@ describe("Locations create identity", () => {
   });
 });
 
-// The Locations half of #690's uniformity clause, and the page the issue was
-// filed against as the control: it declares 650px of default columns, so at 1280
-// its Name column measured 173px and looked fine while the other two measured 0.
-// It gets the same floor rather than being left alone, because "Locations,
-// Systems and Components behave the same way" is the acceptance, and a page that
-// happens to fit today is a page that stops fitting when a column is added.
-describe("Locations list keeps a floor under the Name column (#690)", () => {
-  it("declares no width on Name and a table floor that leaves it NAME_MIN_W", async () => {
-    localStorage.clear();
-    mount("/locations");
-    await waitFor(() => expect(document.querySelector("table.og-rows")).toBeTruthy());
-
-    const table = document.querySelector("table.og-rows") as HTMLTableElement;
-    const cols = [...table.querySelectorAll("colgroup col")] as HTMLTableColElement[];
-    const declared = cols.slice(1).reduce((sum, c) => sum + parseInt(c.style.width || "0", 10), 0);
-
-    expect(cols[0].style.width).toBe("");
-    expect(parseInt(table.style.minWidth, 10) - declared).toBe(NAME_MIN_W);
-  });
-});
-
 // The label pen on the edit blade (#693). The chip left the list, and the fact
 // landed on the field an operator can act on. This block proves the page is
 // WIRED to the shared field (components/LabelPenField.test.tsx proves the
@@ -557,3 +399,4 @@ describe("the classic face is gone (#800)", () => {
     expect(screen.queryByRole("button", { name: /^cancel$/i })).toBeNull();
   });
 });
+

@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
 import type { PageDescriptor } from "../components/TreeList";
-import { componentsDescriptor } from "./Components";
-import { systemsDescriptor } from "./Systems";
-import { locationsDescriptor } from "./Locations";
 import { filesDescriptor } from "./Files";
 
 // The page-config conformance matrix: the analogue of the backend's
@@ -11,9 +8,6 @@ import { filesDescriptor } from "./Files";
 // per-page test. A new page that, say, defaults a column it never declared, or
 // reuses another page's storageKey, fails here.
 const registry: { name: string; d: PageDescriptor }[] = [
-  { name: "components", d: componentsDescriptor },
-  { name: "systems", d: systemsDescriptor },
-  { name: "locations", d: locationsDescriptor },
   { name: "files", d: filesDescriptor },
 ];
 

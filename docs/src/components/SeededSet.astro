@@ -86,6 +86,34 @@ if (nested && tree.length !== rows.length) {
         ))}
       </tbody>
     </table>
+  ) : kind === 'vendors' ? (
+    <table class="seeded-set">
+      <thead><tr><th>Vendor</th><th>Kind</th><th>Website</th></tr></thead>
+      <tbody>
+        {rows.map((v) => (
+          <tr>
+            <td><code>{v.id}</code> ({v.label})</td>
+            <td>{v.kind}</td>
+            <td>{v.website ? <code>{v.website}</code> : ''}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ) : kind === 'products' ? (
+    <table class="seeded-set">
+      <thead><tr><th>Product</th><th>Vendor</th><th>Driver</th><th>Kind</th><th>Declared properties</th></tr></thead>
+      <tbody>
+        {rows.map((p) => (
+          <tr>
+            <td><code>{p.id}</code> ({p.label})</td>
+            <td>{p.vendor_id ? <code>{p.vendor_id}</code> : ''}</td>
+            <td>{p.driver_id ? <code>{p.driver_id}</code> : ''}</td>
+            <td>{p.kind}</td>
+            <td>{(p.properties ?? []).map((d) => (<span><code>{d.name}</code>{d.default ? ` = ${d.default}` : ''} </span>))}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   ) : kind === 'location_types' ? (
     <table class="seeded-set">
       <thead><tr><th>Type</th><th>Allowed parents</th><th>Names</th></tr></thead>
