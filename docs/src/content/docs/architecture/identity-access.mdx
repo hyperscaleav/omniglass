@@ -246,6 +246,11 @@ canDo(P, action, E)  iff  exists grant g in grants(P) such that
 | `system` | system id | subtree(S): S + its components + descendants |
 | `component` | component id | exactly `{ C }` |
 | `group` | group id | members(G) at resolution time (dynamic groups re-resolve) |
+
+"Their components" means the components whose **effective** place is in the subtree: a component's
+place is inherited from its primary system unless set
+([ADR-0140](/architecture/decisions/#adr-0140-a-system-is-what-the-business-groups-a-location-is-where-things-sit-and-a-room-is-one-thing),
+#878), and a `system` scope reaches its subsystems as well as its members.
 :::
 
 Today each fleet entity is scoped by its own tier (a `location` scope contains locations only, and

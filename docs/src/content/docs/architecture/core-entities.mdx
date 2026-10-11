@@ -81,9 +81,13 @@ each role carrying an **impact**. See [implementation status](/architecture/stat
   **required** (a generic product covers anything not yet modeled more specifically), so a component
   always resolves a contract and, through its product, a **`component_type`** genus.
 - A **system** is a set of components doing one job: a meeting room, a classroom, a video wall. It is
-  located at a location and **conforms to a `standard`**, the blueprint it is built against; the
-  pointer is optional, mirroring `component.product_id`.
-- A **location** ties systems and components to a physical place, classified by `location_type`, its
+  the **logical** grouping the business cares about, the unit Omniglass monitors, and what support
+  troubleshoots through (its health, usually remotely). It is located at a location and **conforms
+  to a `standard`**, the blueprint it is built against; the pointer is optional, mirroring
+  `component.product_id`. Operators add components **to a system**: membership is how a component
+  belongs ([ADR-0140](/architecture/decisions/#adr-0140-a-system-is-what-the-business-groups-a-location-is-where-things-sit-and-a-room-is-one-thing)).
+- A **location** is the **physical** grouping: where things sit, in the customer's own tree, and
+  how support and inventory go and find a box on site. It ties systems and components to a place, classified by `location_type`, its
   only shape-definer (no template). A starter type set ships seeded and platform-owned, an
   operator's change to one held as a fork over it
   ([the seed model](#the-seed-model-forked-templates-versus-canonical-catalogs)), read at
@@ -96,6 +100,34 @@ each role carrying an **impact**. See [implementation status](/architecture/stat
 - A **node** is the edge process (`omniglass node run`) that pulls work, reaches components over
   interfaces, and ships results ([nodes](/architecture/nodes/)). It is structural because it is a
   first-class **owner** of its own self-health telemetry and node-owned alarms.
+
+Where a place holds exactly one system, the two groupings coincide and the console shows them as
+one thing (ADR-0139): Conference Room 123 is its system, and its components are a drill-down inside
+it. A place holding several systems, or none, remains a place of its own.
+
+::::design[Target design: systems and places (ADR-0140), tracked in #876, #877, #878, #879]
+Built today: a system's location is optional, a component's location is only what was explicitly
+set (nothing defaults it, and moving a system leaves its components behind), and system nesting
+exists in storage with no console surface. ADR-0140 settles the model:
+
+- **Every system has a place** ([#876](https://github.com/hyperscaleav/omniglass/issues/876)): the
+  deepest place that spans everything it needs. Existing placeless systems backfill to the deepest
+  place containing their members, else the root.
+- **A system's place bounds its components and subsystems**
+  ([#877](https://github.com/hyperscaleav/omniglass/issues/877)): a component's own place must be at
+  or below its **primary** system's place (a secondary membership, such as a shared head-end serving
+  a subsystem, does not constrain it), and a subsystem's place at or below its parent's. A system
+  move that would strand an explicitly placed primary member is refused, naming it.
+- **A component's place is inherited from its primary system unless set**
+  ([#878](https://github.com/hyperscaleav/omniglass/issues/878)): its effective place is derived at
+  read time, never copied, so moving a system carries its inherited components with it. Every reader
+  that means "where is this component" reads the effective place.
+- **Systems group into systems** ([#879](https://github.com/hyperscaleav/omniglass/issues/879)): a
+  divisible hall is one system holding the shared head-end, with a subsystem per room it splits into.
+
+A location grant reaching the systems and components placed there is the cross-tier scope expansion
+([#10](https://github.com/hyperscaleav/omniglass/issues/10)), decided separately.
+::::
 
 ```d2
 direction: down
@@ -520,10 +552,13 @@ location -> location: parent (tree)
 ### Sub-components and sub-systems
 
 The `parent_id` self-reference is **same-kind nesting**: a chassis with line cards is a parent
-component over children, and likewise a parent system over room subsystems. The nesting feeds the
-[cascade](/architecture/cascade/) (deeper wins) and the **health rollup** (sub-system into parent
-system, sub-component into parent component, [health](/architecture/health/)). The **practical
-starting depth is 3 levels**, **not a hard cap**.
+component over children, and likewise a parent system over room subsystems (the divisible hall:
+the head-end on the parent, a subsystem per room, ADR-0140). The nesting feeds the
+[cascade](/architecture/cascade/) (deeper wins). It does **not** feed the health rollup today: a
+system's verdict rolls up to its location, never through the system tree
+([health](/architecture/health/)); how a parent system's verdict relates to its subsystems' is
+decided with the grouping slice ([#879](https://github.com/hyperscaleav/omniglass/issues/879)). The
+**practical starting depth is 3 levels**, **not a hard cap**.
 
 ## Ownership: the exclusive-arc
 

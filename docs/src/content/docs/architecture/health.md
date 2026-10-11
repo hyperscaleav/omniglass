@@ -391,7 +391,11 @@ component templates that feed the utilization KPIs.
 
 Zabbix bolts services, SLA, and the service tree on as a separate subsystem. Omniglass makes health
 **first-class but not separate**: the **system tree is the service tree**, the verdict a `property`
-sample, the history its transitions, the SLI a calc over them, the SLA an alarm.
+sample, the history its transitions, the SLI a calc over them, the SLA an alarm. Today a system's
+verdict rolls up to its location, not through the system tree; how a parent system (a divisible
+hall's head-end) relates to its subsystems' verdicts is decided with the grouping slice
+([ADR-0140](/architecture/decisions/#adr-0140-a-system-is-what-the-business-groups-a-location-is-where-things-sit-and-a-room-is-one-thing),
+#879).
 
 Related: [core entities](/architecture/core-entities/#system-roles-the-slots-a-system-needs-filled)
 (the role, the typed-slot guard, the quorum), [alarms and actions](/architecture/alarms-actions/) (the
