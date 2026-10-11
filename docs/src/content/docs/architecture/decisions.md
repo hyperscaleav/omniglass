@@ -175,6 +175,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0137](#adr-0137-explore-is-the-fleets-door-and-it-is-an-outline-of-places) | 2026-08-31 | Accepted | Explore (`/explore`) is the fleet's one door, and it draws one thing: an outline of places. A place wears the system that sits there, its components beneath; a chain of single-child places folds into one row; a collapsed row says what it holds in the registry's own labels and counts its systems by verdict, never worst-wins. Depth and what may be added come from `allowed_parent_types`, never a type's name. The filter is a predicate over live state, never a scope. One EntityForm per kind; three tabs and one counts line per workspace; the band canvas, KPI chips, jump anchors, the renderer library and the inventory tables retire (#826, #861, superseding ADR-0132's anchors and ADR-0129's canvas landing) |
 | [ADR-0138](#adr-0138-the-autopilot-ships-a-daily-slice-and-pr-review-is-its-approval-gate) | 2026-09-17 | Accepted | A scheduled daily session (the autopilot) ships one thin slice per day: for slices it scopes itself it files the definition in the `/define-work` shape with the `Mode: autopilot (ADR-0138)` marker and proceeds, the Define gate's approval comment moving to the architect's review of the PR (merge accepts, close vetoes). An in-progress loop, an approved definition, and a priority `Bug` outrank self-scoping; invariant surfaces (the authorization layers, the migration rules, the audit contract), breaking API changes and dependency majors stay behind a human approval comment; at most two autopilot PRs stay open; provenance is a marker line, never a new label class; the autopilot never merges |
 | [ADR-0139](#adr-0139-a-detail-view-is-one-per-system-its-place-a-card-of-context) | 2026-10-05 | Accepted | Systems are the unit Omniglass monitors; places are folders and metadata; components are pieces of systems. A detail view is one per system, its place a card of context above the system card and its tabs; a place holding exactly one system lands on it, and a place holding none or several keeps its own view (a brief card per system, then the outline rooted there). The side panel is the glance (verdict, why, context, identity and tags), configuration staying on Configure, revising #826's one-form panel. The shipped system label rule leads with the place, and healthy is grey on every health pill (#872) |
+| [ADR-0140](#adr-0140-a-system-is-what-the-business-groups-a-location-is-where-things-sit-and-a-room-is-one-thing) | 2026-10-11 | Accepted | A system is the logical grouping the business cares about and support troubleshoots through; a location is the physical grouping that finds the box on site; operators add components to a system. Every system has a place, which bounds its components (checked against the primary system only) and its subsystems; a component's place is inherited from its primary system unless set, derived at read time; systems group into systems (a divisible hall and its rooms); a place holding one system is one thing with it. The cross-tier scope expansion is decided separately (#10) |
 
 ## Entries
 
@@ -6284,4 +6285,41 @@ interface create form, since that name is the platform's to mint.
   should be stored or derived, and the inheritance of a component's place from its system
   (which the UI's old "location follows the primary system" claimed and the schema does not
   carry), stay with #862.
+
+### ADR-0140: A system is what the business groups, a location is where things sit, and a room is one thing
+
+- **Date:** 2026-10-11 | **Status:** Accepted | **Pages:** [core entities](/architecture/core-entities/), [health](/architecture/health/), [identity and access](/architecture/identity-access/)
+- **Decision:** Three entities, two groupings, both in daily use. A **system** is the logical
+  grouping the business cares about: the components that make a thing work, the unit Omniglass
+  monitors, and what support troubleshoots through (its health, usually remotely). A **location** is
+  the physical grouping: where things sit, and how support and inventory go and find a box on site.
+  Operators add components **to a system**; membership is how a component belongs. Then:
+  1. **Every system has a place**, the deepest place that spans everything it needs; existing
+     placeless systems backfill to the deepest place containing their members, else the root (#876).
+  2. **A system's place bounds its components and subsystems**: a component's own place must be at
+     or below its **primary** system's place, secondary memberships not constraining it (a shared
+     head-end sits beside the rooms it serves); a subsystem's place must be at or below its parent's;
+     a system move that would strand an explicitly placed primary member is refused, naming it (#877).
+  3. **A component's place is inherited from its primary system unless set**: its effective place is
+     derived at read time, never copied into the column, and every reader that means "where is this
+     component" reads it (the label, the tag and variable cascade, the fleet view, the console) (#878).
+  4. **Systems group into systems**: a divisible hall is one system holding the shared head-end, with
+     a subsystem per room it splits into (#879).
+  5. **Where a place and its system coincide, they are one thing** (ADR-0139): a place holding exactly
+     one system is shown, addressed and configured as that system, its components a drill-down inside
+     it; for a divisible hall that holds at both levels.
+- **Context:** Operators think in two hierarchies at once, and #872 made the console honour both.
+  The model underneath contradicted it in three places: a component's location was only what was
+  explicitly set (so a component added to a room's system had no place, and moving the system left
+  it behind; the old console copy "location follows the primary system" claimed an inheritance the
+  schema never had), a system's location was optional, and system nesting existed in storage with
+  no seeded data, no console surface and no health rollup, so the divisible hall it is for could not
+  be expressed. Considered and rejected: retiring system nesting (the divisible hall needs it);
+  making a system a facet of its location (a place can hold several systems, and a system's
+  components span places); checking containment against every system a component belongs to (it
+  would forbid the divisible hall's own shared head-end); copying the system's place into the
+  component on join (stale on every system move). The scope consequence (a location grant reaching
+  the systems and components placed there) is the cross-tier expansion, decided separately (#10).
+  The `core-entities` claim that system nesting feeds the health rollup is corrected with this entry;
+  the parent-verdict rule is decided with the grouping slice.
 
