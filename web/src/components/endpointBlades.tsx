@@ -356,9 +356,9 @@ export function CreateEndpointForm(props: { onCreated: (i: Endpoint) => void; co
         <input id="new-iface-label" autocomplete="off" class="input input-bordered w-full" value={label()} placeholder="Control processor" onInput={(e) => setLabel(e.currentTarget.value)} disabled={busy()} />
       </div>
       <div role="tablist" class="tabs tabs-border tabs-sm">
-        {/* Probe first: it is what exists end to end today. Attach derives the
-            endpoint from a driver's spec (#813); its collection engine lands
-            with the following slices. */}
+        {/* Probe first: a bare reachability check needs no driver. Attach
+            derives the endpoint from a driver's spec (#813), whose poll
+            functions the node then collects over the transport (#814). */}
         <button type="button" role="tab" aria-selected={mode() === "probe" ? "true" : "false"} class="tab" classList={{ "tab-active": mode() === "probe" }} onClick={() => setMode("probe")}>Probe</button>
         <button type="button" role="tab" aria-selected={mode() === "attach" ? "true" : "false"} class="tab" classList={{ "tab-active": mode() === "attach" }} onClick={() => setMode("attach")}>Attach a driver</button>
       </div>
