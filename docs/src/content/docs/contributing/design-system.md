@@ -77,7 +77,7 @@ a place holding none or several renders its own subject card,
   (`lib/detail.ts` `isRoomOf`), so its `PlaceCard` names no place and offers no second panel, and a
   component in such a room shows no place card beside the system it serves. A blade has no
   breadcrumb, so its `PlaceCard` takes `path` and says where the place sits. `EntityForm` with `host="blade"` leaves out the
-  kind's configuration panels (roles, properties, reconciliation, interfaces), which the detail
+  kind's configuration panels (roles, properties, reconciliation, endpoints), which the detail
   view's Configure tab carries, and a system's or component's placement, which the panel's
   place card already says.
 - **The Name column has a floor, and the card scrolls before it gives it up.** A list table is
@@ -173,7 +173,7 @@ an unknown verdict) does **not** use `badge-neutral`: against this theme's dark 
 tinted from the text color, so it reads as a visible pill at the same weight as the soft hues. A
 **healthy** verdict wears `badge-healthy`, the same grey with its own name (#872): only trouble
 carries a hue, on every health pill, strip and marker, and a known healthy verdict stays
-distinguishable from an unknown one in markup. The same reason keeps `type` values (interface/task
+distinguishable from an unknown one in markup. The same reason keeps `type` values (endpoint/task
 `type`) as plain `font-data` text, not a `badge-neutral` chip.
 
 ## Primitives (the reuse target)
@@ -232,7 +232,7 @@ through: a heading must resolve its row (it rendered the raw id), must not snaps
 stale after a rename), and must render through `BladeTitle` or be named in the test's exception
 list with a reason (it resolved and tracked correctly and read the wrong field, the name where
 its list showed the label). The exceptions are the entities that carry no label at
-all, where the name is the only operator-facing string: a secret, a variable, a tag, an interface.
+all, where the name is the only operator-facing string: a secret, a variable, a tag, an endpoint.
 
 **Free text declares itself.** `multiline` reads wrapped with its newlines preserved and edits in a
 `textarea`. It is a prop rather than a second component because a component means every new page
@@ -460,7 +460,7 @@ one"; the drafted NAME travels back with the create as `expected_name`, so a nam
 the preview and the submit, because another create took the number or the type's stem was edited, is
 a refusal rather than a silent difference. The three
 signal registries (`property_type`, `event_type`, `command_type`) do not wire it either, because a
-signal name is chosen to match what an interface reports rather than derived from prose somebody
+signal name is chosen to match what an endpoint reports rather than derived from prose somebody
 typed, and that was as true when those names carried dots as it is now they are single tokens. `tag`, `variable`, and `secret`
 invite an exception because their prose calls them keys; they get none, and take the one rule like
 everything else.

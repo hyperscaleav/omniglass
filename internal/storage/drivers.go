@@ -11,17 +11,20 @@ import (
 
 // Driver is a registry row naming the implementation that gets/emits/sets a
 // product's signals (e.g. "Generic SNMP", "Kestrel Device API"): a stable id, the
-// official flag, a label, and a version string. It is a flat registry
-// like vendor: no tree, and no in-use delete guard in this slice (nothing
-// references a driver yet; product will). The registry lists alphabetically by
-// label; there is no ordering field.
+// official flag, a label, a version string, and (since #813) the declarative
+// spec body. It is a flat registry like vendor: no tree. The registry lists
+// alphabetically by label; there is no ordering field.
 type Driver struct {
 	// ID is the uuid primary key, Name the renameable slug handle (ADR-0062).
-	ID        string
-	Name      string
-	Label     string
-	Version   string
-	Official  bool
+	ID       string
+	Name     string
+	Label    string
+	Version  string
+	Official bool
+	// Spec is the declarative body (internal/driver, #813): data, not code,
+	// validated against the catalogs at every write. Nil for a stub that has
+	// not been authored yet; a stub cannot be attached.
+	Spec      []byte
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -31,13 +34,14 @@ type Driver struct {
 type DriverPatch struct {
 	Label   *string
 	Version *string
+	Spec    []byte
 }
 
-const driverCols = `id, name, coalesce(label, ''), version, official, created_at, updated_at`
+const driverCols = `id, name, coalesce(label, ''), version, official, spec, created_at, updated_at`
 
 func scanDriver(row pgx.Row) (*Driver, error) {
 	var d Driver
-	if err := row.Scan(&d.ID, &d.Name, &d.Label, &d.Version, &d.Official, &d.CreatedAt, &d.UpdatedAt); err != nil {
+	if err := row.Scan(&d.ID, &d.Name, &d.Label, &d.Version, &d.Official, &d.Spec, &d.CreatedAt, &d.UpdatedAt); err != nil {
 		return nil, err
 	}
 	return &d, nil
@@ -46,15 +50,19 @@ func scanDriver(row pgx.Row) (*Driver, error) {
 // UpsertDriver installs or updates a driver by id, the boot-seed phase's write.
 // Idempotent: re-seeding the same id updates it in place.
 func (p *PG) UpsertDriver(ctx context.Context, d Driver) error {
+	if err := p.validateDriverSpec(ctx, d.Spec); err != nil {
+		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
+	}
 	_, err := p.pool.Exec(ctx, `
-		insert into driver (name, label, version, official)
-		values ($1, $2, $3, $4)
+		insert into driver (name, label, version, official, spec)
+		values ($1, $2, $3, $4, $5)
 		on conflict (name) do update
 			set label = excluded.label,
 			    version      = excluded.version,
 			    official     = excluded.official,
+			    spec         = excluded.spec,
 			    updated_at   = now()`,
-		d.Name, labelOrNull(d.Label), d.Version, d.Official)
+		d.Name, labelOrNull(d.Label), d.Version, d.Official, specOrNull(d.Spec))
 	if err != nil {
 		return fmt.Errorf("storage: upsert driver %q: %w", d.Name, err)
 	}
@@ -99,6 +107,9 @@ func (p *PG) CreateDriver(ctx context.Context, actorID string, d Driver) (*Drive
 	if err := ValidateName("driver", d.Name); err != nil {
 		return nil, err
 	}
+	if err := p.validateDriverSpec(ctx, d.Spec); err != nil {
+		return nil, err
+	}
 	d.Official = false
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -107,10 +118,10 @@ func (p *PG) CreateDriver(ctx context.Context, actorID string, d Driver) (*Drive
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := tx.QueryRow(ctx, `
-		insert into driver (name, label, version, official)
-		values ($1, $2, $3, false)
+		insert into driver (name, label, version, official, spec)
+		values ($1, $2, $3, false, $4)
 		returning id, created_at, updated_at`,
-		d.Name, labelOrNull(d.Label), d.Version).
+		d.Name, labelOrNull(d.Label), d.Version, specOrNull(d.Spec)).
 		Scan(&d.ID, &d.CreatedAt, &d.UpdatedAt); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrTypeExists
@@ -126,7 +137,7 @@ func (p *PG) CreateDriver(ctx context.Context, actorID string, d Driver) (*Drive
 	return &d, nil
 }
 
-// UpdateDriver patches a custom driver's label or version (nil fields
+// UpdateDriver patches a custom driver's label, version or spec (nil fields
 // unchanged) and audits it. Official rows are read-only (ErrTypeOfficial); an
 // unknown id is ErrTypeNotFound.
 func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverPatch) (*Driver, error) {
@@ -146,15 +157,21 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 		}
 		return nil, fmt.Errorf("storage: audit image driver %q: %w", id, err)
 	}
+	if patch.Spec != nil {
+		if err := p.validateDriverSpec(ctx, patch.Spec); err != nil {
+			return nil, err
+		}
+	}
 	setLabel, labelVal := labelPatch(patch.Label)
 	d, err := scanDriver(tx.QueryRow(ctx, `
 		update driver set
 			label = case when $4::boolean then $2 else label end,
 			version      = coalesce($3, version),
+			spec         = coalesce($5, spec),
 			updated_at   = now()
 		where `+registryRefCol(id)+` = $1
 		returning `+driverCols,
-		id, labelVal, patch.Version, setLabel))
+		id, labelVal, patch.Version, setLabel, specOrNull(patch.Spec)))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrTypeNotFound
@@ -175,8 +192,8 @@ func (p *PG) UpdateDriver(ctx context.Context, actorID, id string, patch DriverP
 }
 
 // DeleteDriver removes a custom driver, refusing an official row
-// (ErrTypeOfficial). Nothing references driver in this slice (a later product
-// slice will), so there is no in-use guard.
+// (ErrTypeOfficial) or one an endpoint is attached through (ErrTypeInUse,
+// backed by the endpoint.driver_id FK).
 func (p *PG) DeleteDriver(ctx context.Context, actorID, id string) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -186,6 +203,15 @@ func (p *PG) DeleteDriver(ctx context.Context, actorID, id string) error {
 
 	if err := guardTypeMutable(ctx, tx, "driver", id); err != nil {
 		return err
+	}
+	var inUse bool
+	if err := tx.QueryRow(ctx, `select exists (
+			select 1 from endpoint e join driver d on d.id = e.driver_id
+			where d.`+registryRefCol(id)+` = $1)`, id).Scan(&inUse); err != nil {
+		return fmt.Errorf("storage: driver in-use check %q: %w", id, err)
+	}
+	if inUse {
+		return ErrTypeInUse
 	}
 	before, err := registryAuditImage(ctx, tx, "driver", id)
 	if err != nil {

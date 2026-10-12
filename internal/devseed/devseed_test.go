@@ -540,11 +540,11 @@ func TestRunIdempotent(t *testing.T) {
 	// Two interfaces on the DSP, each named by its protocol and typed by its transport:
 	// web (http) and qrc (tcp). Interfaces are id-keyed, so resolve the per-component
 	// names through the scoped list and keep their ids for the task check.
-	ifaces, err := gw.ListInterfaces(ctx, all)
+	ifaces, err := gw.ListEndpoints(ctx, all)
 	if err != nil {
 		t.Fatalf("list interfaces: %v", err)
 	}
-	byName := map[string]*storage.Interface{}
+	byName := map[string]*storage.Endpoint{}
 	for i := range ifaces {
 		if ifaces[i].Component != nil && *ifaces[i].Component == "dsp" {
 			byName[ifaces[i].Name] = &ifaces[i]
@@ -556,19 +556,19 @@ func TestRunIdempotent(t *testing.T) {
 	if httpIf == nil || tcpIf == nil {
 		t.Fatalf("seeded http/tcp interfaces not both found on the dsp: %v", byName)
 	}
-	if httpIf.Type != "http" {
-		t.Errorf("http interface type = %q, want http", httpIf.Type)
+	if httpIf.Transport != "http" {
+		t.Errorf("http interface type = %q, want http", httpIf.Transport)
 	}
-	if tcpIf.Type != "tcp" {
-		t.Errorf("tcp interface type = %q, want tcp", tcpIf.Type)
+	if tcpIf.Transport != "tcp" {
+		t.Errorf("tcp interface type = %q, want tcp", tcpIf.Transport)
 	}
-	for _, it := range []*storage.Interface{httpIf, tcpIf} {
+	for _, it := range []*storage.Endpoint{httpIf, tcpIf} {
 		if it.Node == nil || *it.Node != "edge-hq" {
 			t.Errorf("interface %s node = %v, want edge-hq", it.Name, it.Node)
 		}
 	}
 	var ifaceCount int
-	if err := conn.QueryRow(ctx, `select count(*) from interface where component = (select id from component where name = 'dsp')`).Scan(&ifaceCount); err != nil {
+	if err := conn.QueryRow(ctx, `select count(*) from endpoint where component = (select id from component where name = 'dsp')`).Scan(&ifaceCount); err != nil {
 		t.Fatalf("count reachability interfaces: %v", err)
 	}
 	if ifaceCount != 2 {
@@ -582,8 +582,8 @@ func TestRunIdempotent(t *testing.T) {
 	}
 	reachTasks := map[string]int{}
 	for i := range tasks {
-		for _, it := range []*storage.Interface{httpIf, tcpIf} {
-			if tasks[i].InterfaceID == it.ID {
+		for _, it := range []*storage.Endpoint{httpIf, tcpIf} {
+			if tasks[i].EndpointID == it.ID {
 				reachTasks[it.Name]++
 				if tasks[i].Mode != "poll" || !tasks[i].Enabled {
 					t.Errorf("%s task = %+v, want mode poll enabled", it.Name, tasks[i])
@@ -607,14 +607,14 @@ func TestRunIdempotent(t *testing.T) {
 		{iface: "http", transitions: 1},
 		{iface: "tcp", transitions: 3},
 	} {
-		verdict, err := gw.LatestProperty(ctx, "dsp", "interface-reachable", tc.iface)
+		verdict, err := gw.LatestProperty(ctx, "dsp", "endpoint-reachable", tc.iface)
 		if err != nil {
 			t.Fatalf("latest verdict %s: %v", tc.iface, err)
 		}
 		if verdict == nil || verdict.Value != "up" {
 			t.Fatalf("seeded %s verdict = %+v, want value up", tc.iface, verdict)
 		}
-		transitions, err := gw.PropertyTransitions(ctx, "dsp", "interface-reachable", tc.iface, 0)
+		transitions, err := gw.PropertyTransitions(ctx, "dsp", "endpoint-reachable", tc.iface, 0)
 		if err != nil {
 			t.Fatalf("property transitions %s: %v", tc.iface, err)
 		}

@@ -31,6 +31,18 @@ type Config struct {
 	// Pinger is the icmp probe primitive the node runs its icmp tasks with. Nil
 	// defaults to the real collection.NewICMPPinger(); tests inject a fake.
 	Pinger collection.Pinger
+	// HTTP is the layer-7 http probe primitive (#812). Nil defaults to the
+	// real collection.NewHTTPProber(); tests inject a fake.
+	HTTP collection.HTTPProber
+	// SSH is the layer-7 ssh probe primitive (#812). Nil defaults to the
+	// real collection.NewSSHProber(); tests inject a fake.
+	SSH collection.SSHProber
+	// SNMP is the driver-poll v2c GET client (#814). Nil defaults to the
+	// real collection.NewSNMPGetter(); tests inject a fake.
+	SNMP collection.SNMPGetter
+	// Line is the driver-poll stateless line-protocol client (#814). Nil
+	// defaults to the real collection.NewLineExchanger(); tests inject a fake.
+	Line collection.LineExchanger
 }
 
 // Run claims the node's NATS credential, connects outbound-only to the bus,
@@ -78,21 +90,47 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 	if pinger == nil {
 		pinger = collection.NewICMPPinger()
 	}
+	httpProber := cfg.HTTP
+	if httpProber == nil {
+		httpProber = collection.NewHTTPProber()
+	}
+	sshProber := cfg.SSH
+	if sshProber == nil {
+		sshProber = collection.NewSSHProber()
+	}
+	snmpGetter := cfg.SNMP
+	if snmpGetter == nil {
+		snmpGetter = collection.NewSNMPGetter()
+	}
+	lineExchanger := cfg.Line
+	if lineExchanger == nil {
+		lineExchanger = collection.NewLineExchanger()
+	}
+	runner := &collection.Runner{TCP: dialer, Ping: pinger, HTTP: httpProber, SSH: sshProber, SNMP: snmpGetter, Line: lineExchanger}
 
 	// verdicts remembers the last reachability verdict per task (keyed by the
 	// node-unique task id, since interface names collide across components) across
-	// ticks, so the node emits interface-reachable only on a flip or first
+	// ticks, so the node emits endpoint-reachable only on a flip or first
 	// observation (transition-only). It lives for the whole run, not per tick.
 	verdicts := map[string]string{}
+	// faultseen remembers each driver task's last fault set so a static
+	// misconfiguration lands one collection-failed, not one per tick (#814).
+	faultseen := map[string]string{}
 
 	wl, err := pullWorklist(nc, cfg.Name)
 	if err != nil {
 		return collection.WorklistReply{}, err
 	}
 	logger.Info("worklist pulled", "facility", "collection", "tasks", len(wl.Tasks))
-	if err := runTasks(ctx, nc, cfg.Name, wl, dialer, pinger, verdicts); err != nil {
+	// executedCommands remembers each pulled command's outcome across ticks:
+	// at-least-once delivery means redelivery, and idempotence per command id
+	// lives here (the report repeats, the device is not touched twice). It is
+	// pruned past the redelivery window so it does not grow for the life of the run.
+	executedCommands := map[int64]commandOutcome{}
+	if err := runTasks(ctx, nc, cfg.Name, wl, runner, verdicts, faultseen); err != nil {
 		return wl, err
 	}
+	runCommands(ctx, nc, cfg.Name, runner, executedCommands)
 	if err := publishHeartbeat(nc, cfg.Name); err != nil {
 		return wl, err
 	}
@@ -123,7 +161,9 @@ func Run(ctx context.Context, cfg Config) (collection.WorklistReply, error) {
 			}
 			// Run the worklist's tcp tasks and publish their telemetry. A publish
 			// failure is non-fatal (retry next tick).
-			_ = runTasks(ctx, nc, cfg.Name, wl, dialer, pinger, verdicts)
+			_ = runTasks(ctx, nc, cfg.Name, wl, runner, verdicts, faultseen)
+			// Pull and actuate the pending command queue (#815).
+			runCommands(ctx, nc, cfg.Name, runner, executedCommands)
 			// Ship whatever the node logged this tick as self-logs.
 			publishSelfLogs(nc, cfg.Name, sink)
 		}

@@ -66,10 +66,10 @@ func TestNodeRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, node_name, params) values ('disp-1-icmp', (select id from interface_type where name = 'icmp'), (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, node_name, params) values ('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), (select principal_id from node where name = 'node-a'), '{"target":"10.0.0.1"}'::jsonb)`); err != nil {
 		t.Fatalf("insert interface: %v", err)
 	}
-	if _, err := conn.Exec(ctx, `insert into task (id, mode, interface_id, spec, enabled) values ('t-icmp', 'poll', (select id from interface where name = 'disp-1-icmp'), '{"probe":"icmp"}'::jsonb, true)`); err != nil {
+	if _, err := conn.Exec(ctx, `insert into task (id, mode, endpoint_id, spec, enabled) values ('t-icmp', 'poll', (select id from endpoint where name = 'disp-1-icmp'), '{"probe":"icmp"}'::jsonb, true)`); err != nil {
 		t.Fatalf("insert task: %v", err)
 	}
 	conn.Close(ctx)
@@ -103,7 +103,7 @@ func TestNodeRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(msg.Data, &reply); err != nil {
 		t.Fatalf("decode worklist: %v", err)
 	}
-	if len(reply.Tasks) != 1 || reply.Tasks[0].ID != "t-icmp" || reply.Tasks[0].InterfaceType != "icmp" {
+	if len(reply.Tasks) != 1 || reply.Tasks[0].ID != "t-icmp" || reply.Tasks[0].Transport != "icmp" {
 		t.Fatalf("worklist = %+v, want one t-icmp/icmp task", reply.Tasks)
 	}
 	if reply.ConfigGeneration == 0 {

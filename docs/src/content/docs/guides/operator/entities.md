@@ -49,7 +49,7 @@ while editing), a room's only system is the room (its card names no place and of
 blade for it, only **Configure place**), and the standard is in Classification, not repeated
 above it. Configuration (a
 system's roles, the properties and their cascade, a component's reconciliation and
-interfaces) is the detail view's **Configure** tab, one **Expand** away, along with the
+endpoints) is the detail view's **Configure** tab, one **Expand** away, along with the
 components, the history and the vitals. Delete sits on the left of the footer behind a confirm, gated by your
 permissions on that row.
 
@@ -80,7 +80,7 @@ button** and names the permission that would unlock it (`Requires <resource>:upd
 A blade with no actions at all (a role) shows no bar.
 
 The same bar carries **create**. A form that opens in a slide-over (New user, New tag, Upload
-file) or as its own blade (New interface) puts its **Create** button in the bar at the foot of the
+file) or as its own blade (New endpoint) puts its **Create** button in the bar at the foot of the
 panel, never floating after the last field, and greys it out until the form is complete. **Cancel**
 sits beside it on the forms that offer one; where it does not, the header **x** closes the panel.
 

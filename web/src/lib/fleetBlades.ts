@@ -1,7 +1,7 @@
 import { type BladeDef } from "./blades";
 import { systemBlade, componentBlade, locationBlade } from "../components/EntityBlade";
 import { propertyResolutionBlade } from "../components/PropertiesPanel";
-import { interfaceBlade, interfaceCreateBlade } from "../components/interfaceBlades";
+import { endpointBlade, endpointCreateBlade } from "../components/endpointBlades";
 
 // The fleet's cross-entity blade registry (#799): one blade per kind,
 // self-fetching by id, so any page pushes any kind. Since #826 the blade
@@ -13,6 +13,6 @@ export const fleetRegistry: Record<string, BladeDef> = {
   component: componentBlade,
   location: locationBlade,
   "property-resolution": propertyResolutionBlade,
-  interface: interfaceBlade,
-  "interface-create": interfaceCreateBlade,
+  endpoint: endpointBlade,
+  "endpoint-create": endpointCreateBlade,
 };

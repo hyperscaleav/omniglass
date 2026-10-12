@@ -245,19 +245,7 @@ func TestRegistryHandleRenameKeepsReferences(t *testing.T) {
 		t.Errorf("secret type reads %v, want snmp-comm through the rename", snmp)
 	}
 
-	// interface_type: an interface's transport arc follows the rename.
-	iface, err := gw.CreateInterface(ctx, "", storage.InterfaceSpec{Type: "tcp", Component: strptr("bar-1")}, all)
-	if err != nil {
-		t.Fatalf("interface: %v", err)
-	}
-	if _, err := conn.Exec(ctx, `update interface_type set name = 'tcp-connect' where name = 'tcp'`); err != nil {
-		t.Fatalf("rename interface type: %v", err)
-	}
-	gotIf, err := gw.GetInterface(ctx, iface.ID, all)
-	if err != nil {
-		t.Fatalf("get interface after type rename: %v", err)
-	}
-	if gotIf.Type != "tcp-connect" {
-		t.Errorf("interface type reads %q, want tcp-connect through the rename", gotIf.Type)
-	}
+	// The interface_type arm this test carried retired with the table: a
+	// transport is a code-registry fact (ADR-0073, #811), so there is no row
+	// left to rename and no arc to follow it.
 }

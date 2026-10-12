@@ -15,7 +15,7 @@ describe("tasks data layer", () => {
 
   it("lists tasks and unwraps the envelope", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ tasks: [{ id: "t-1", interface_id: "if-tcp", mode: "poll", enabled: true }] }),
+      jsonResponse({ tasks: [{ id: "t-1", endpoint_id: "if-tcp", mode: "poll", enabled: true }] }),
     );
     const tasks = await listTasks();
     expect(tasks).toHaveLength(1);
@@ -30,7 +30,7 @@ describe("tasks data layer", () => {
   });
 
   it("gets a task by id", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "t-1", interface_id: "if-tcp", mode: "poll", enabled: true }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: "t-1", endpoint_id: "if-tcp", mode: "poll", enabled: true }));
     const t = await getTask("t-1");
     expect(t.id).toBe("t-1");
     const req = fetchMock.mock.calls[0][0] as Request;

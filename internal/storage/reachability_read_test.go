@@ -13,9 +13,9 @@ import (
 )
 
 // TestReachabilityReads proves the two read helpers the reachability BFF composes
-// over: ListComponentInterfaces returns a component's interfaces ordered by name,
-// and LatestMetricInstance resolves one interface's latest probe value rather than
-// the newest across every interface (as the instance-blind LatestMetric does).
+// over: ListComponentEndpoints returns a component's endpoints ordered by name,
+// and LatestMetricInstance resolves one endpoint's latest probe value rather than
+// the newest across every endpoint (as the instance-blind LatestMetric does).
 func TestReachabilityReads(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test needs Postgres")
@@ -36,31 +36,31 @@ func TestReachabilityReads(t *testing.T) {
 		t.Fatalf("create component: %v", err)
 	}
 
-	// Two interfaces on the component (icmp and tcp), seeded via raw insert since
-	// there is no interface CRUD gateway method yet.
+	// Two endpoints on the component (icmp and tcp), seeded via raw insert to
+	// pin the read path independent of the create path.
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
 	defer conn.Close(ctx)
-	if _, err := conn.Exec(ctx, `insert into interface (name, type, component, params) values
-		('disp-1-tcp', (select id from interface_type where name = 'tcp'), (select id from component where name = 'disp-1'), '{"target":"10.20.4.11","port":5000}'::jsonb),
-		('disp-1-icmp', (select id from interface_type where name = 'icmp'), (select id from component where name = 'disp-1'), '{"target":"10.20.4.11"}'::jsonb)`); err != nil {
-		t.Fatalf("insert interfaces: %v", err)
+	if _, err := conn.Exec(ctx, `insert into endpoint (name, transport, component, params) values
+		('disp-1-tcp', 'tcp', (select id from component where name = 'disp-1'), '{"target":"10.20.4.11","port":5000}'::jsonb),
+		('disp-1-icmp', 'icmp', (select id from component where name = 'disp-1'), '{"target":"10.20.4.11"}'::jsonb)`); err != nil {
+		t.Fatalf("insert endpoints: %v", err)
 	}
 
-	ifaces, err := gw.ListComponentInterfaces(ctx, "disp-1")
+	ifaces, err := gw.ListComponentEndpoints(ctx, "disp-1")
 	if err != nil {
-		t.Fatalf("list interfaces: %v", err)
+		t.Fatalf("list endpoints: %v", err)
 	}
 	if len(ifaces) != 2 || ifaces[0].Name != "disp-1-icmp" || ifaces[1].Name != "disp-1-tcp" {
-		t.Fatalf("interfaces: want [disp-1-icmp disp-1-tcp] ordered, got %+v", ifaces)
+		t.Fatalf("endpoints: want [disp-1-icmp disp-1-tcp] ordered, got %+v", ifaces)
 	}
-	if ifaces[1].Type != "tcp" || len(ifaces[1].Params) == 0 {
-		t.Fatalf("tcp interface: want type tcp with params, got %+v", ifaces[1])
+	if ifaces[1].Transport != "tcp" || len(ifaces[1].Params) == 0 {
+		t.Fatalf("tcp endpoint: want transport tcp with params, got %+v", ifaces[1])
 	}
 
-	// tcp-open on two different interface instances at different times: the newer
+	// tcp-open on two different endpoint instances at different times: the newer
 	// write is on disp-1-icmp is irrelevant; instance-scoped read must return the
 	// disp-1-tcp value even though it is older.
 	older := time.Now().UTC().Add(-2 * time.Minute)
