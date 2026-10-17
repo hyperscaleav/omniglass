@@ -5648,6 +5648,89 @@ components:
         - sources
         - locks
       type: object
+    SimCapabilities:
+      additionalProperties: false
+      properties:
+        low_ports:
+          type: boolean
+        net_admin:
+          type: boolean
+        port_offset:
+          format: int64
+          type: integer
+      required:
+        - low_ports
+        - net_admin
+        - port_offset
+      type: object
+    SimDeviceBody:
+      additionalProperties: false
+      properties:
+        address:
+          description: The host the component's interfaces target.
+          type: string
+        component_id:
+          type: string
+        hits:
+          description: Requests the simulated device has answered since the server started.
+          format: int64
+          type: integer
+        hits_by_protocol:
+          additionalProperties:
+            format: int64
+            type: integer
+          type: object
+        last_hit_at:
+          format: date-time
+          type: string
+        last_protocol:
+          type: string
+        name:
+          type: string
+        product:
+          description: The component's product; its name selects the simulator profile.
+          type: string
+        serving:
+          description: Whether the simulator reported serving this device in its latest batch.
+          type: boolean
+      required:
+        - component_id
+        - name
+        - product
+        - address
+        - serving
+        - hits
+        - hits_by_protocol
+      type: object
+    SimulationOutputBody:
+      additionalProperties: false
+      properties:
+        $schema:
+          description: A URL to the JSON Schema for this object.
+          examples:
+            - /api/v1/schemas/SimulationOutputBody.json
+          format: uri
+          readOnly: true
+          type: string
+        capabilities:
+          $ref: "#/components/schemas/SimCapabilities"
+        connected:
+          description: A simulator beside this node pulled its device list recently.
+          type: boolean
+        devices:
+          items:
+            $ref: "#/components/schemas/SimDeviceBody"
+          type:
+            - array
+            - "null"
+        last_seen:
+          format: date-time
+          type: string
+      required:
+        - connected
+        - capabilities
+        - devices
+      type: object
     StandardBody:
       additionalProperties: false
       properties:
@@ -10258,6 +10341,33 @@ paths:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
       summary: List a node's recent self-logs
+      x-omniglass-permission: node:read
+  /nodes/{name}/simulation:
+    get:
+      description: The devices a simulator beside the node serves (each component with an interface placed on the node), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope read. Gated by node:read.
+      operationId: get-node-simulation
+      parameters:
+        - description: The node's unique name
+          in: path
+          name: name
+          required: true
+          schema:
+            description: The node's unique name
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimulationOutputBody"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Error
+      summary: Get a node's simulator
       x-omniglass-permission: node:read
   /nodes/{name}:enroll:
     post:

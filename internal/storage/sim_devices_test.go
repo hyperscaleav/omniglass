@@ -1,0 +1,90 @@
+package storage_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/jackc/pgx/v5"
+
+	"github.com/hyperscaleav/omniglass/internal/scope"
+	"github.com/hyperscaleav/omniglass/internal/seed"
+	"github.com/hyperscaleav/omniglass/internal/storage"
+	"github.com/hyperscaleav/omniglass/internal/storage/storagetest"
+)
+
+// TestNodeSimDevices proves the simulator's device list: each component with
+// an interface placed on the node, once, with its product and the host its
+// interfaces target, and nothing placed on another node or on none.
+func TestNodeSimDevices(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs Postgres")
+	}
+	ctx := context.Background()
+	dsn := storagetest.NewDSN(t)
+	gw, err := storage.NewPG(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open gateway: %v", err)
+	}
+	defer gw.Close()
+	if err := seed.Run(ctx, gw); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	all := scope.Set{All: true}
+	for _, n := range []string{"sim-a", "sim-b"} {
+		if _, err := gw.CreateNode(ctx, "", storage.NodeSpec{Name: n}, all, all); err != nil {
+			t.Fatalf("create node %s: %v", n, err)
+		}
+	}
+	for _, c := range []string{"dsp-1", "dsp-2", "loose"} {
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: c}, all, all, all, all); err != nil {
+			t.Fatalf("create component %s: %v", c, err)
+		}
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	exec := func(sql string) {
+		t.Helper()
+		if _, err := conn.Exec(ctx, sql); err != nil {
+			t.Fatalf("%s: %v", sql, err)
+		}
+	}
+	// The product is minted for the test: what the list carries is the
+	// product's name, whichever product that is.
+	prod := storagetest.MintProduct(t, ctx, gw, "")
+	exec(`update component set product_id = (select id from product where name = '` + prod.Name + `') where name = 'dsp-1'`)
+	iface := func(name, typ, comp, node, target string) {
+		t.Helper()
+		nodeExpr := "null"
+		if node != "" {
+			nodeExpr = "(select principal_id from node where name = '" + node + "')"
+		}
+		exec(`insert into interface (name, type, component, node_name, params) values ('` + name + `',
+			(select id from interface_type where name = '` + typ + `'),
+			(select id from component where name = '` + comp + `'), ` + nodeExpr + `,
+			'{"target":"` + target + `"}'::jsonb)`)
+	}
+	iface("dsp-1-http", "tcp", "dsp-1", "sim-a", "127.20.0.5:80")
+	iface("dsp-1-icmp", "icmp", "dsp-1", "sim-a", "127.20.0.5")
+	iface("dsp-2-http", "tcp", "dsp-2", "sim-b", "127.20.0.6:80")
+	iface("loose-http", "tcp", "loose", "", "127.20.0.7:80")
+
+	got, err := gw.NodeSimDevices(ctx, "sim-a")
+	if err != nil {
+		t.Fatalf("sim devices: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("sim-a devices = %+v, want dsp-1 once", got)
+	}
+	d := got[0]
+	if d.Name != "dsp-1" || d.Product != prod.Name || d.Address != "127.20.0.5" || d.ComponentID == "" {
+		t.Fatalf("device = %+v", d)
+	}
+
+	none, err := gw.NodeSimDevices(ctx, "no-such-node")
+	if err != nil || len(none) != 0 {
+		t.Fatalf("unknown node: %v %+v, want empty", err, none)
+	}
+}

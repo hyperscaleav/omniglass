@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
+	"github.com/hyperscaleav/omniglass/internal/simhub"
 	ogv1 "github.com/hyperscaleav/omniglass/proto/og/v1"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
@@ -36,7 +37,8 @@ type Server struct {
 	subs          []*nats.Subscription
 	consumeCtx    jetstream.ConsumeContext // the telemetry durable consumer's pull loop
 	internalToken string
-	ownStoreDir   string // non-empty when the Server created (and must clean) it
+	sims          *simhub.Registry // the simulators beside this server's nodes
+	ownStoreDir   string           // non-empty when the Server created (and must clean) it
 }
 
 // New starts an in-process NATS server (JetStream on) with the per-node auth
@@ -47,7 +49,7 @@ func New(cfg Config, store Store) (*Server, error) {
 	if _, err := rand.Read(tok); err != nil {
 		return nil, fmt.Errorf("bus: internal token: %w", err)
 	}
-	s := &Server{store: store, internalToken: hex.EncodeToString(tok)}
+	s := &Server{store: store, internalToken: hex.EncodeToString(tok), sims: simhub.New()}
 
 	storeDir := cfg.StoreDir
 	if storeDir == "" {
@@ -179,6 +181,10 @@ func (s *Server) subscribe() error {
 	}
 	s.subs = append(s.subs, wl, hb, cq, cs)
 
+	if err := s.subscribeSim(); err != nil {
+		return err
+	}
+
 	// The telemetry ingest path: a JetStream stream + durable consumer over the
 	// same internal client. It carries the node -> server sample flow.
 	if err := s.startTelemetryConsumer(); err != nil {
@@ -266,5 +272,61 @@ func (s *Server) PublishTelemetry(ctx context.Context, b *ogv1.TelemetryBatch) e
 	if err := s.nc.FlushWithContext(ctx); err != nil {
 		return fmt.Errorf("bus: flush telemetry publish: %w", err)
 	}
+	return nil
+}
+
+// SimStatus is the server's view of one node's simulator.
+type SimStatus = simhub.Status
+
+// SimStatus reports the simulator beside a node, or false when none has
+// pulled since this server started.
+func (s *Server) SimStatus(node string) (SimStatus, bool) { return s.sims.Status(node) }
+
+// subscribeSim answers simulators' device-list pulls and records their hits.
+// Both ride the node's subject grant, so the node name taken from the
+// subject is the simulator's own.
+func (s *Server) subscribeSim() error {
+	list, err := s.nc.Subscribe(collection.SimlistWildcard, func(msg *nats.Msg) {
+		node := collection.NodeFromSubject(msg.Subject)
+		// The same confused-deputy guard as the worklist: reply only into
+		// the requesting node's own inbox.
+		if msg.Reply == "" || !strings.HasPrefix(msg.Reply, collection.InboxPrefix(node)+".") {
+			return
+		}
+		var req collection.SimlistRequest
+		_ = json.Unmarshal(msg.Data, &req) // an empty request states no capabilities
+		devices, err := s.store.NodeSimDevices(context.Background(), node)
+		if err != nil {
+			return // read failed; drop, the simulator re-pulls
+		}
+		reply := collection.SimlistReply{Devices: make([]collection.SimDevice, 0, len(devices))}
+		ids := make([]string, 0, len(devices))
+		for _, d := range devices {
+			reply.Devices = append(reply.Devices, collection.SimDevice{
+				ComponentID: d.ComponentID, Name: d.Name, Product: d.Product, Address: d.Address,
+			})
+			ids = append(ids, d.ComponentID)
+		}
+		s.sims.Pulled(node, req.Capabilities, ids)
+		b, err := json.Marshal(reply)
+		if err != nil {
+			return
+		}
+		_ = msg.Respond(b)
+	})
+	if err != nil {
+		return fmt.Errorf("bus: subscribe simlist: %w", err)
+	}
+	hits, err := s.nc.Subscribe(collection.SimHitWildcard, func(msg *nats.Msg) {
+		var b collection.SimHitBatch
+		if err := json.Unmarshal(msg.Data, &b); err != nil {
+			return
+		}
+		s.sims.Report(collection.NodeFromSubject(msg.Subject), b)
+	})
+	if err != nil {
+		return fmt.Errorf("bus: subscribe simhit: %w", err)
+	}
+	s.subs = append(s.subs, list, hits)
 	return nil
 }

@@ -87,7 +87,7 @@ func runServer(ctx context.Context, _ string) error {
 
 	srv := &http.Server{
 		Addr:              c.Addr,
-		Handler:           api.NewHandler(gw, api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(c.NatsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv)),
+		Handler:           api.NewHandler(gw, api.WithSecureCookies(c.SecureCookies), api.WithNatsURL(c.NatsURL), api.WithSettingsService(gw.Settings()), api.WithTelemetryPublisher(busSrv), api.WithSimStatus(busSrv.SimStatus)),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

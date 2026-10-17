@@ -16,6 +16,8 @@ import (
 type Store interface {
 	AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error)
 	NodeWorklist(ctx context.Context, name string) (storage.Worklist, error)
+	// NodeSimDevices lists the components a simulator beside the node serves.
+	NodeSimDevices(ctx context.Context, name string) ([]storage.SimDevice, error)
 	RecordHeartbeat(ctx context.Context, name string) error
 	// The command wire (#815): resolve-and-dispatch a node's pending command
 	// queue, and record its execution reports.
