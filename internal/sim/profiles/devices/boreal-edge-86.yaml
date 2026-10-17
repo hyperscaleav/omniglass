@@ -1,8 +1,8 @@
 # yaml-language-server: $schema=schema.json
-# Boreal Edge 85, 85" Commercial Display
+# Boreal Edge 86, 86" Commercial Display
 #
 # Boreal is the lab's fictional commercial-display manufacturer. The
-# Edge 85 is a 4K commercial panel used as a presentation display in
+# Edge 86 is a 4K commercial panel used as a presentation display in
 # meeting rooms. It exposes an HTTP web admin + JSON API and SNMP. No
 # command-line interface.
 #
@@ -13,16 +13,16 @@
 # the profile so the lab is self-explanatory; a real Boreal device
 # would force a password change on first boot.
 
-name: boreal-edge-85
+name: boreal-edge-86
 manufacturer: Boreal
-model: "Edge 85"
+model: "Edge 86"
 device_type: display
 # Case-study hostname role. Hostnames come from the system-profile
 # suffix ("display"); slug_prefix only seeds the internal HostID slug.
 slug_prefix: display
 
 doc:
-  summary: "Boreal Edge 85-inch 4K commercial display"
+  summary: "Boreal Edge 86-inch 4K commercial display"
   description: |
     Commercial-grade UHD display for meeting rooms. Managed via the
     Boreal web admin interface and monitored via SNMP. Supports HDMI,
@@ -141,7 +141,7 @@ interfaces:
     auth:
       community: "public"
     # MIB that defines the enterprise OID arc below.
-    mib: BOREAL-EDGE-85-MIB.txt
+    mib: BOREAL-EDGE-86-MIB.txt
     # Boreal uses enterprise OID 1.3.6.1.4.1.55520 (fictional arc)
     oid_map:
       status.device.power:              "1.3.6.1.4.1.55520.1.1.1.0"
@@ -208,7 +208,7 @@ defaults:
   configuration:
     device:
       serial: ""
-      model: "Edge 85"
+      model: "Edge 86"
       manufacturer: "Boreal"
     firmware:
       version: "3.4.1"

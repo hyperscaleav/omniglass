@@ -278,7 +278,7 @@ func TestEnrichDefaults(t *testing.T) {
 	mkState := func() map[string]any {
 		return map[string]any{
 			"configuration": map[string]any{
-				"device":  map[string]any{"serial": "", "model": "Edge 85"},
+				"device":  map[string]any{"serial": "", "model": "Edge 86"},
 				"network": map[string]any{"hostname": ""},
 			},
 			"status": map[string]any{
@@ -304,7 +304,7 @@ func TestEnrichDefaults(t *testing.T) {
 	if got := cfg["device"].(map[string]any)["serial"].(string); got == "" {
 		t.Error("serial still blank after enrich")
 	}
-	if got := cfg["device"].(map[string]any)["model"]; got != "Edge 85" {
+	if got := cfg["device"].(map[string]any)["model"]; got != "Edge 86" {
 		t.Errorf("model = %q, enrich must not stomp non-blank fields", got)
 	}
 	ipv4 := d.Defaults["status"].(map[string]any)["network"].(map[string]any)["ipv4"].(map[string]any)

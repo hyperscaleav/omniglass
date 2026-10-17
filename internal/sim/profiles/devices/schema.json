@@ -19,7 +19,7 @@
       "pattern": "^[a-z0-9][a-z0-9-]*$",
       "examples": [
         "kestrel-vroom",
-        "boreal-edge-85",
+        "boreal-edge-86",
         "polaris-dsp-16"
       ]
     },

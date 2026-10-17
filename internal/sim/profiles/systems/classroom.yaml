@@ -21,7 +21,7 @@ devices:
     count: 1
     tags: [video, conferencing, education]
 
-  - profile: boreal-edge-85
+  - profile: boreal-edge-86
     role: display
     suffix: display
     count: 1
