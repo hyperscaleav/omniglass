@@ -28,7 +28,7 @@ func (d *Device) StartTCPSession(port int) error {
 	if err != nil {
 		return fmt.Errorf("listening on %s: %w", addr, err)
 	}
-	tracked := trackConns(lis)
+	tracked := trackConns(lis, d.logConnect)
 	d.tcpSessionListener = tracked
 
 	go func() {

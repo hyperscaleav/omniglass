@@ -32,7 +32,7 @@ func (d *Device) StartTelnet(port int, defaultUser, defaultPassword string, perm
 	if err != nil {
 		return fmt.Errorf("listening on %s: %w", addr, err)
 	}
-	tracked := trackConns(lis)
+	tracked := trackConns(lis, d.logConnect)
 	d.telnetListener = tracked
 
 	effectivePermissive := permissive

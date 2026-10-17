@@ -14,7 +14,7 @@ func TestTrackedListenerCloseEndsLiveConns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lis := trackConns(raw)
+	lis := trackConns(raw, nil)
 	go func() {
 		for {
 			c, err := lis.Accept()

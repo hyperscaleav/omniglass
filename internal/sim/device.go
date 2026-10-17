@@ -1264,7 +1264,11 @@ func (d *Device) StartHTTP(port int, tlsCert *tls.Certificate) error {
 	}
 	d.Port = port
 
-	srv := &http.Server{Handler: d}
+	srv := &http.Server{Handler: d, ConnState: func(c net.Conn, s http.ConnState) {
+		if s == http.StateNew {
+			d.logConnect(c)
+		}
+	}}
 	d.httpMu.Lock()
 	d.httpServers = append(d.httpServers, srv)
 	d.httpAddrs = append(d.httpAddrs, lis.Addr())

@@ -147,6 +147,13 @@ func TestEngineReportsHitsOnOneStream(t *testing.T) {
 		t.Fatal(err)
 	}
 	dspDo(t, http.MethodGet, dspURL(ip, "/api/status"), "")
+	// A reachability probe connects and closes without a request; that is a
+	// hit too.
+	probe, err := net.Dial("tcp", net.JoinHostPort(ip, fmt.Sprint(1710+syncPortShift)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe.Close()
 	g := &gosnmp.GoSNMP{Target: ip, Port: uint16(161 + syncPortShift), Community: "public",
 		Version: gosnmp.Version2c, Timeout: 2 * time.Second, Retries: 1}
 	if err := g.Connect(); err != nil {
@@ -179,6 +186,17 @@ func TestEngineReportsHitsOnOneStream(t *testing.T) {
 	}
 	if h := got["http"]; h.Path != "/api/status" || h.Status != http.StatusOK {
 		t.Errorf("http hit = %+v", h)
+	}
+	connects := map[int]bool{}
+	for _, h := range hits {
+		if h.Protocol == "tcp" && h.Method == "CONNECT" {
+			connects[h.Port] = true
+		}
+	}
+	for _, p := range []int{80, 1710, 22} {
+		if !connects[p+syncPortShift] {
+			t.Errorf("no CONNECT hit on port %d; got %v", p+syncPortShift, connects)
+		}
 	}
 }
 
