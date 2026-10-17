@@ -49,7 +49,7 @@ func TestSetBehaviorOverrides_ValidationRejects(t *testing.T) {
 	}
 }
 
-// TestSetBehaviorOverrides_FullReplace covers the contract from #102:
+// TestSetBehaviorOverrides_FullReplace covers the contract from omniglass-lab#102:
 // an override write is always a full set replacement, so calling
 // SetBehaviorOverrides with [B, C] when [A, B] is currently running
 // must result in exactly [B, C] active.
@@ -159,7 +159,7 @@ func TestOverridePublishesCauseAttribution(t *testing.T) {
 }
 
 // TestProfileBehaviorSkipsOverriddenPath is the path-overlap contract
-// from #102: while a scenario override is active on a path, the
+// from omniglass-lab#102: while a scenario override is active on a path, the
 // profile-declared behavior that would otherwise write the same path
 // skips that write. The rest of the profile behavior continues, only
 // the overlapping mutation is dropped, not the whole behavior.

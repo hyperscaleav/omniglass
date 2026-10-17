@@ -32,7 +32,8 @@ func (d *Device) StartTelnet(port int, defaultUser, defaultPassword string, perm
 	if err != nil {
 		return fmt.Errorf("listening on %s: %w", addr, err)
 	}
-	d.telnetListener = lis
+	tracked := trackConns(lis)
+	d.telnetListener = tracked
 
 	effectivePermissive := permissive
 	if !effectivePermissive && defaultPassword == "" {
@@ -45,7 +46,7 @@ func (d *Device) StartTelnet(port int, defaultUser, defaultPassword string, perm
 	go func() {
 		slog.Info("device telnet started", "device", d.Hostname, "addr", addr)
 		for {
-			conn, err := lis.Accept()
+			conn, err := tracked.Accept()
 			if err != nil {
 				if !strings.Contains(err.Error(), "closed") {
 					slog.Error("device telnet accept error", "device", d.Hostname, "error", err)
@@ -58,7 +59,7 @@ func (d *Device) StartTelnet(port int, defaultUser, defaultPassword string, perm
 	return nil
 }
 
-// StopTelnet closes the telnet listener.
+// StopTelnet closes the telnet listener and every connection it accepted.
 func (d *Device) StopTelnet() {
 	if d.telnetListener != nil {
 		d.telnetListener.Close()

@@ -1,8 +1,8 @@
 # Executive Boardroom
 #
 # Top-tier executive boardroom: codec, dual displays, touch panel, DSP.
-# Mirrors the large-conference-a stack but with executive tagging so the
-# sync service can place it under a distinct system type.
+# Mirrors the large-conference-a stack but with executive tagging so it
+# can be placed under a distinct system type.
 
 name: boardroom
 doc:

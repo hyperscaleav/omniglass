@@ -123,17 +123,20 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 		return nil, fmt.Errorf("invalid IP %q for device %q", snap.LoopbackIP, snap.DeviceID)
 	}
 
+	// The device's defaults carry its per-instance identity (hostname,
+	// serial and MAC from its id, address), so a reset to defaults keeps
+	// the identity the device started with.
 	peers := peersByRoom[roomKey{snap.SiteCode, snap.Building, snap.Room}]
+	defaults := profile.ExpandIdentityTokens(prof.Defaults, snap.SiteCode, snap.Building, snap.Room, peers)
+	if defaults == nil {
+		defaults = map[string]any{}
+	}
+	fleet.Enrich(defaults, snap.Hostname, snap.DeviceID, ip)
 	state := snap.State
 	if state == nil {
 		// A device listed without state (the server assigns devices, not
-		// their state) starts from its profile's defaults with its
-		// per-instance identity filled in.
-		state = deepCopy(profile.ExpandIdentityTokens(prof.Defaults, snap.SiteCode, snap.Building, snap.Room, peers))
-		if state == nil {
-			state = map[string]any{}
-		}
-		fleet.Enrich(state, snap.Hostname, snap.DeviceID, ip)
+		// their state) starts from its defaults.
+		state = deepCopy(defaults)
 	}
 	dev := NewDevice(snap.DeviceID, snap.Hostname, ip, snap.ProfileName, snap.Version, state)
 	// Install the profile's defaults snapshot so templates and
@@ -143,7 +146,7 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 	// expanded per room here too, so a reset restores the same
 	// room-specific account/peer the device was seeded with rather
 	// than the raw profile template.
-	dev.SetDefaults(profile.ExpandIdentityTokens(prof.Defaults, snap.SiteCode, snap.Building, snap.Room, peers))
+	dev.SetDefaults(defaults)
 
 	// Register routes, commands, and OID bindings from every interface
 	// the profile declares. Listeners are started later in StartAll; this
@@ -193,6 +196,9 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 					return nil, fmt.Errorf("compiling session config for %q on %q: %w",
 						iface.Name, snap.Hostname, err)
 				}
+				// Session events report the port the listener binds, like
+				// every other hit, not the profile's declared port.
+				cfg.Port = e.port(iface.Port)
 				if e.sessionConfigs[snap.Hostname] == nil {
 					e.sessionConfigs[snap.Hostname] = make(map[string]*SessionConfig)
 				}
@@ -230,7 +236,7 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 
 	// Behaviors compile last so they can see all interfaces if
 	// a future phase wants to gate one on a declared port. Per
-	// phase 1 of issue #52, behavior compile failures stop the
+	// phase 1 of omniglass-lab#52, behavior compile failures stop the
 	// load: a malformed schedule or template should fail loudly
 	// at startup rather than silently not animating the device.
 	for i := range prof.Behaviors {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
+	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 )
 
 func TestCompileAndApplyMutations(t *testing.T) {
@@ -384,8 +385,7 @@ func TestResolveValue_JSONDecoding(t *testing.T) {
 // the route mutation pipeline end-to-end without booting a live
 // listener.
 func TestKestrelRebootRouteAppliesDefaults(t *testing.T) {
-	root := findLabProfilesRoot(t)
-	store, err := profile.LoadStore(root)
+	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
 		t.Fatalf("LoadStore: %v", err)
 	}

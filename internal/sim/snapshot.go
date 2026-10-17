@@ -26,9 +26,9 @@ type DeviceSnapshot struct {
 // DeviceID is the compiler's stable slug, so a recompile of the same
 // manifest addresses the same devices; each device starts from its own
 // copy of its profile defaults.
-func Snapshots(est *fleet.CompiledFleet) []DeviceSnapshot {
-	out := make([]DeviceSnapshot, 0, len(est.Devices))
-	for _, d := range est.Devices {
+func Snapshots(fl *fleet.CompiledFleet) []DeviceSnapshot {
+	out := make([]DeviceSnapshot, 0, len(fl.Devices))
+	for _, d := range fl.Devices {
 		out = append(out, DeviceSnapshot{
 			DeviceID:    d.HostID,
 			Hostname:    d.Hostname,

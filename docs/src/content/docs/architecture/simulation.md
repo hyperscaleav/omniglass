@@ -9,9 +9,9 @@ sidebar:
 
 Omniglass ships a device simulator in the same binary. It serves a whole fleet of fictional AV
 and IT devices, each on its own loopback address, speaking the protocols real gear speaks (HTTP
-and HTTPS, SNMP v2c, SSH, Telnet, raw TCP line protocols, UDP) from one live state per device. A
-collector pointed at a simulated device cannot tell it from hardware: it polls, the device
-answers, and a write over one protocol shows in every other. That makes the simulator both a
+and HTTPS, SNMP, SSH, Telnet, raw TCP line protocols, UDP) from one live state per device. A
+collector polls a simulated device as it would hardware, and the device answers from that state:
+a write over one protocol shows in every protocol that reads what it wrote. That makes the simulator both a
 test bed (the end-to-end and screenshot harnesses get a real fleet to collect from) and a
 teaching surface ([learning tool](/contributing/learning-tool/)): an operator can watch the
 monitoring loop work against a fleet they can break on purpose.
@@ -21,8 +21,9 @@ Built: the engine in `internal/sim` (ported from the retired omniglass-lab proje
 embedded catalog of device and system profiles, response templates and fleet manifests; the
 fleet compiler, which expands a manifest into devices with stable hostnames, serials and
 addresses; and the engine, which serves every device's declared interfaces with behaviors and
-computed fields over shared state, reporting each hit through a function seam. It runs
-in-process under test today. Still `Design`: the sim run mode and its pod and
+computed fields over shared state, reporting every request it answers on one hit stream. The
+engine follows a changing fleet in place (devices added, removed or moved without disturbing the
+rest), and a stopped device drops its open connections. It runs in-process under test today. Still `Design`: the sim run mode and its pod and
 `make dev` placement (#887), simulating the seeded inventory (#888), impairments (#889), and the
 console surfaces (#890).
 :::
@@ -42,7 +43,7 @@ the binary needs nothing on disk:
 - **templates** render responses from live state, so a device's HTTP status route and its CLI
   `show channels` read the same values.
 
-The catalog names only fictional vendors (Kestrel, Polaris, Newtron, Boreal, Tessellate), the same
+The catalog names only fictional vendors (Kestrel, Polaris, Newtron, Boreal, Tessellate, Shinra Cloud), the same
 rule the boot seed follows, and a test holds it to that.
 
 ## Fleets
@@ -58,11 +59,13 @@ The engine gives each device a listener per declared interface on the device's o
 every listener reads and writes the same state tree. The DSP's HTTP gain route writes
 `status.channels.0.gain`; the SSH `show channels` renders it; a line-protocol session subscribed to
 that path receives a push; SNMP answers its mapped OIDs from the same tree. Routes and commands
-match exactly, and SNMP is v2c GET, GETNEXT and walk.
+match exactly. SNMP is read-only (v1 and v2c GET, GETNEXT, GETBULK and walk; no SET, no traps),
+and UDP is an echo.
 
-Each hit (a request answered, a command run, a session opened or pushed to) is reported through a
-function seam on the engine, with the device, protocol, operation and raw peer address. The
-engine does not know who consumes hits; the run mode will.
+Every request a device answers (an HTTP route, an SNMP GET, a CLI command) arrives on one hit
+stream with the device, protocol, operation, port and status, plus the peer address where the
+protocol exposes it (SNMP does not). Session lifecycle (a line-protocol session opened, closed or
+pushed to) is a separate stream. The engine does not know who consumes either; the run mode will.
 
 ## Addresses and reachability
 

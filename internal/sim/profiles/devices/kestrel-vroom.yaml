@@ -227,17 +227,17 @@ defaults:
       # Recent device log lines, surfaced over the PRIVATE /api/logs
       # route. The web admin "Recent logs" card fetches this from client
       # JS (the network-tab breadcrumb); the student then calls
-      # GET /api/logs directly. Realistic RoomOS-style lines, generic
+      # GET /api/logs directly. Realistic codec-style lines, generic
       # room id (no real hostnames), mix of INFO and WARN.
       recent:
-        - "2026-06-13T08:41:02Z INFO  roomos.app      UCC client signed in (account=room-vc@example.lan, tenant=teams)"
-        - "2026-06-13T08:41:05Z INFO  roomos.pairing  Touch controller paired (model=newtron-panel-7, link=usb-c)"
-        - "2026-06-13T09:02:17Z INFO  roomos.call     Call started (id=c8821, protocol=sip, peers=3)"
-        - "2026-06-13T09:14:53Z WARN  roomos.net      Uplink degraded: packet loss 4.1%, jitter 38ms, enabling rate adaptation"
-        - "2026-06-13T09:15:41Z INFO  roomos.net      Uplink recovered: loss 0.0%, jitter 6ms, resumed 1080p send"
-        - "2026-06-13T09:31:08Z WARN  roomos.audio    Microphone array muted by far-end host during active call"
-        - "2026-06-13T09:58:22Z INFO  roomos.call     Call ended (id=c8821, duration=3365s, reason=local-hangup)"
-        - "2026-06-13T10:03:49Z INFO  roomos.system   Returned to standby after idle timeout (600s)"
+        - "2026-06-13T08:41:02Z INFO  kvroom.app      UCC client signed in (account=room-vc@example.lan, tenant=teams)"
+        - "2026-06-13T08:41:05Z INFO  kvroom.pairing  Touch controller paired (model=newtron-panel-7, link=usb-c)"
+        - "2026-06-13T09:02:17Z INFO  kvroom.call     Call started (id=c8821, protocol=sip, peers=3)"
+        - "2026-06-13T09:14:53Z WARN  kvroom.net      Uplink degraded: packet loss 4.1%, jitter 38ms, enabling rate adaptation"
+        - "2026-06-13T09:15:41Z INFO  kvroom.net      Uplink recovered: loss 0.0%, jitter 6ms, resumed 1080p send"
+        - "2026-06-13T09:31:08Z WARN  kvroom.audio    Microphone array muted by far-end host during active call"
+        - "2026-06-13T09:58:22Z INFO  kvroom.call     Call ended (id=c8821, duration=3365s, reason=local-hangup)"
+        - "2026-06-13T10:03:49Z INFO  kvroom.system   Returned to standby after idle timeout (600s)"
     # ---- Codec device state (HTTP control, not course-monitored) ----
     call:
       active: false

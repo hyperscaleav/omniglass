@@ -61,10 +61,9 @@
   </div>
 </main>
 <script>
-  // Resolve absolute "/api/..." paths against the iframe's own proxy
-  // prefix so they route back through the console's passthrough. A bare
-  // leading slash would otherwise hit the console origin and 404.
-  // See issue #51.
+  // This page is served by the simulated device's own HTTP listener.
+  // apiURL() resolves absolute "/api/..." paths against the page's own
+  // path, so API calls stay relative to wherever the page is served.
   function apiURL(path) {
     if (!path.startsWith('/')) return path;
     const base = location.pathname.replace(/\/$/, '');

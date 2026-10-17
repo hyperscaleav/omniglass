@@ -122,14 +122,11 @@ interfaces:
       default_user: admin
       default_password: newtron
     api_surface: newtron-panel
-    # persistent: true keeps the SSH connection open across commands so
-    # the console renders the web-terminal "open session" xterm launch
-    # link (session_capable = persistent && ssh/telnet/tcp; see
-    # internal/httpapi/server.go and cmd/console/web/app.js), giving
-    # newtron parity with the other session-capable devices instead of
-    # the copy-ssh fallback. The panel has no subscribable telemetry, so
-    # there are no `subjects` / subscribe verbs, this is a plain hot
-    # shell. All existing one-shot commands (`show status`, `show room`,
+    # persistent: true keeps the SSH connection open across commands,
+    # giving newtron parity with the other session-capable devices
+    # (persistent ssh/telnet/tcp listeners). The panel has no
+    # subscribable telemetry, so there are no `subjects` / subscribe
+    # verbs, this is a plain hot shell. All existing one-shot commands (`show status`, `show room`,
     # `reboot`, `factory-reset`) run unchanged inside the session.
     persistent: true
     line_ending: "\r\n"

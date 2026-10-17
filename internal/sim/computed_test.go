@@ -103,7 +103,7 @@ func TestComputedSeedsAnchorOnInstall(t *testing.T) {
 }
 
 // TestComputedSnapshotOverlay confirms the whole-map read surface (the
-// DeviceStream snapshot / drawer UI) sees the computed value at its
+// snapshot a consumer of the diff stream reads) sees the computed value at its
 // natural key, without it ever being written to stored state.
 func TestComputedSnapshotOverlay(t *testing.T) {
 	now := time.Unix(2_000, 0)

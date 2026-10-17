@@ -66,12 +66,13 @@ func (d *Device) StartSSH(port int, defaultUser, defaultPassword string, permiss
 	if err != nil {
 		return fmt.Errorf("listening on %s: %w", addr, err)
 	}
-	d.sshListener = lis
+	tracked := trackConns(lis)
+	d.sshListener = tracked
 
 	go func() {
 		slog.Info("device SSH started", "device", d.Hostname, "addr", addr)
 		for {
-			conn, err := lis.Accept()
+			conn, err := tracked.Accept()
 			if err != nil {
 				if !strings.Contains(err.Error(), "closed") {
 					slog.Error("device SSH accept error", "device", d.Hostname, "error", err)
@@ -84,7 +85,7 @@ func (d *Device) StartSSH(port int, defaultUser, defaultPassword string, permiss
 	return nil
 }
 
-// StopSSH closes the SSH listener.
+// StopSSH closes the SSH listener and every connection it accepted.
 func (d *Device) StopSSH() {
 	if d.sshListener != nil {
 		d.sshListener.Close()

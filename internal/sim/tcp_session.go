@@ -28,12 +28,13 @@ func (d *Device) StartTCPSession(port int) error {
 	if err != nil {
 		return fmt.Errorf("listening on %s: %w", addr, err)
 	}
-	d.tcpSessionListener = lis
+	tracked := trackConns(lis)
+	d.tcpSessionListener = tracked
 
 	go func() {
 		slog.Info("device TCP-session started", "device", d.Hostname, "addr", addr)
 		for {
-			conn, err := lis.Accept()
+			conn, err := tracked.Accept()
 			if err != nil {
 				if !strings.Contains(err.Error(), "closed") {
 					slog.Error("device TCP-session accept error", "device", d.Hostname, "error", err)
@@ -46,7 +47,7 @@ func (d *Device) StartTCPSession(port int) error {
 	return nil
 }
 
-// StopTCPSession closes the raw-TCP listener.
+// StopTCPSession closes the raw-TCP listener and every connection it accepted.
 func (d *Device) StopTCPSession() {
 	if d.tcpSessionListener != nil {
 		d.tcpSessionListener.Close()

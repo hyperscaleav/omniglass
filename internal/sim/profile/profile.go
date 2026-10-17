@@ -63,11 +63,9 @@ type Interface struct {
 	OIDMap        map[string]string `yaml:"oid_map"`
 	ReachableWhen string            `yaml:"reachable_when"`
 
-	// MIB names the SNMP MIB file this device ships, served by the
-	// console under /static/mibs/<MIB>. Set on snmp interfaces whose
-	// enterprise OID arc has a published MIB (e.g. the Boreal Edge);
-	// the console renders a "download MIB" link from it next to the
-	// SNMP op group. Empty for devices with no MIB (MIB-2-only panels).
+	// MIB names the SNMP MIB file this device's enterprise OID arc is
+	// defined in (e.g. the Boreal Edge). Empty for devices with no
+	// enterprise MIB (MIB-2-only panels).
 	MIB string `yaml:"mib"`
 
 	// Persistent enables the hot-socket shell loop on ssh/telnet/tcp
@@ -359,7 +357,7 @@ type Mutation struct {
 // without needing an external trigger. Behaviors reuse the route-mutation
 // pipeline from internal/sim/mutate.go: each tick renders the
 // listed mutations against the device's current state and applies them
-// in place. Issue #52 phase 1.
+// in place. Phase 1 of omniglass-lab#52.
 //
 // Determinism: when a Mutation's value template uses randStep, the
 // per-device pseudo-random source is seeded from the device id so a

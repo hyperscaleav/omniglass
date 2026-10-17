@@ -9,7 +9,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Manifest is the top-level fleet manifest authored by instructors.
+// Manifest is the top-level fleet manifest, authored by whoever defines
+// a simulated fleet.
 //
 // A manifest can declare multiple tenants by setting `tenant` on each site
 // (or a default at the top level). Tenant scopes placement so two tenants
@@ -70,10 +71,10 @@ type Location struct {
 
 // SystemVolume assigns a system profile to one or more rooms.
 //
-// SystemType is the omniglass system_type name the sync service should
-// use when creating the system in omniglass. Label is a human-readable
-// label template (e.g. "Boardroom {room}") used for system display names
-// in the Omniglass UI; if empty, falls back to a generated
+// SystemType is the omniglass system_type name to use when creating
+// the system in omniglass. Label is a human-readable label template
+// (e.g. "Boardroom {room}") used for system display names in the
+// Omniglass UI; if empty, falls back to a generated
 // "Adjective Surname".
 type SystemVolume struct {
 	Profile    string   `yaml:"profile"`

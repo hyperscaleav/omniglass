@@ -3,37 +3,12 @@ package sim
 import (
 	"net"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
+	"github.com/hyperscaleav/omniglass/internal/sim/profiles"
 )
-
-// findLabProfilesRoot walks up the directory tree from cwd looking for
-// the profiles/ directory. Mirrors the helper in profile_test.go so
-// the simulator's integration test can locate the shipped
-// profiles regardless of where `go test` was invoked.
-func findLabProfilesRoot(t *testing.T) string {
-	t.Helper()
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for {
-		candidate := filepath.Join(dir, "profiles")
-		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return candidate
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("could not find profiles/ directory")
-			return ""
-		}
-		dir = parent
-	}
-}
 
 // newAuthDevice builds a minimal device with one route for auth tests.
 // The route renders a fixed body so a successful response is easy to
@@ -361,15 +336,12 @@ func TestHTTPAuthFromProfile_HeaderEnforced(t *testing.T) {
 	}
 }
 
-// TestHTTPAuthFromProfile_LabProfilesIntegration loads every device
-// profile from disk and asserts each HTTP interface produces the auth
-// mode its YAML claims. This is the regression catch for "I changed
-// the YAML and forgot to flip enforce" or "I renamed a field". It
-// runs only when the profiles directory is reachable from the test
-// binary, mirroring TestEngineLoadTemplates.
-func TestHTTPAuthFromProfile_LabProfilesIntegration(t *testing.T) {
-	root := findLabProfilesRoot(t)
-	store, err := profile.LoadStore(root)
+// TestHTTPAuthFromProfile_CatalogProfiles loads the embedded catalog and
+// asserts each HTTP interface produces the auth mode its YAML claims. This
+// is the regression catch for "I changed the YAML and forgot to flip
+// enforce" or "I renamed a field".
+func TestHTTPAuthFromProfile_CatalogProfiles(t *testing.T) {
+	store, err := profile.LoadStoreFS(profiles.FS)
 	if err != nil {
 		t.Fatalf("LoadStore: %v", err)
 	}

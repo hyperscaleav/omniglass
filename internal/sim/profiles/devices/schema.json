@@ -181,7 +181,7 @@
         },
         "mib": {
           "type": "string",
-          "description": "SNMP MIB filename this device ships (served by the console under /static/mibs/). Set on snmp interfaces with a published enterprise MIB; the console drawer renders a download link from it."
+          "description": "SNMP MIB filename that defines this device's enterprise OID arc. Set on snmp interfaces with an enterprise MIB."
         },
         "persistent": {
           "type": "boolean"
