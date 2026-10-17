@@ -1,0 +1,1 @@
+{"ok": true, "webhook_url": "{{ .State | get "configuration" | get "webhook" | get "url" }}", "delivery": "poll-modeled"}

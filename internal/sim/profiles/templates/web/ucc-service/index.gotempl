@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ .Hostname }}, UCC Platform</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #0f1020; color: #dfe2f2; margin: 0; }
+  .bar { background: #07081a; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: baseline; }
+  .bar .brand { font-weight: 700; letter-spacing: 0.06em; color: #8a7bff; }
+  main { max-width: 720px; margin: 24px auto; padding: 0 16px; }
+  .card { background: #181a33; border: 1px solid #272a4d; border-radius: 6px; padding: 18px 22px; margin-bottom: 14px; }
+  .card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #8b8fc0; margin: 0 0 10px; }
+  .row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; border-bottom: 1px solid #23264a; }
+  .row:last-child { border-bottom: none; }
+  .row .k { color: #8b8fc0; }
+  .row .v { font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div><span class="brand">SHINRA UCC</span> &middot; {{ .Hostname }}</div>
+  <div class="model">Cloud Platform</div>
+</div>
+<main>
+  <div class="card">
+    <h2>Meetings</h2>
+    <div class="row"><span class="k">active meetings</span><span class="v">{{ .State | get "status" | get "meeting" | get "active" }}</span></div>
+    <div class="row"><span class="k">recent errors</span><span class="v">{{ .State | get "status" | get "meeting" | get "errors" }}</span></div>
+  </div>
+  <div class="card">
+    <h2>Service</h2>
+    <div class="row"><span class="k">version</span><span class="v">{{ .State | get "configuration" | get "firmware" | get "version" }}</span></div>
+    <div class="row"><span class="k">uptime (s)</span><span class="v">{{ .State | get "status" | get "device" | get "uptime" }}</span></div>
+    <div class="row"><span class="k">ip</span><span class="v">{{ .IP }}</span></div>
+  </div>
+</main>
+<script>
+  // apiURL() resolves absolute "/api/..." paths against the iframe's
+  // own proxy prefix so any future fetch routes back through the
+  // console's /proxy/sites/.../web/<port>/ passthrough instead of the
+  // console origin. See issue #51. (This dashboard is read-only today;
+  // the helper is present for convention + future controls.)
+  function apiURL(path) {
+    if (!path.startsWith('/')) return path;
+    const base = location.pathname.replace(/\/$/, '');
+    return base + path;
+  }
+</script>
+</body>
+</html>

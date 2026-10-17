@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ .Hostname }}, Boreal Edge 85</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #eef2f6; color: #1b2a3a; margin: 0; }
+  .bar { background: #1b2a3a; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: baseline; }
+  .bar .brand { font-weight: 700; letter-spacing: 0.06em; color: #6fd6c9; }
+  .bar .model { opacity: 0.8; font-size: 13px; }
+  main { max-width: 780px; margin: 24px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #d6dde5; border-radius: 6px; padding: 18px 22px; margin-bottom: 14px; }
+  .card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7a8c; margin: 0 0 10px; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 14px; border-bottom: 1px solid #f0f3f6; gap: 16px; }
+  .row:last-child { border-bottom: none; }
+  .row .k { color: #6b7a8c; flex: 0 0 auto; }
+  .row .v { font-weight: 500; flex: 0 0 auto; }
+  .row .ctrl { flex: 1 1 auto; display: flex; justify-content: flex-end; gap: 8px; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 3px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .pill.on { background: #d6f0ea; color: #136e5b; }
+  .pill.off { background: #efe2e2; color: #7a2c2c; }
+  button { font-family: inherit; font-size: 13px; padding: 6px 12px; border: 1px solid #b9c4d2; background: #f4f7fa; color: #1b2a3a; border-radius: 4px; cursor: pointer; }
+  button:hover { background: #e8eef4; }
+  button.primary { background: #6fd6c9; border-color: #4fb5a8; color: #08362f; font-weight: 600; }
+  button.primary:hover { background: #5ec8ba; }
+  button:disabled { opacity: 0.5; cursor: progress; }
+  select, input[type=range] { font-family: inherit; }
+  select { font-size: 13px; padding: 5px 8px; border: 1px solid #b9c4d2; border-radius: 4px; background: #fff; }
+  input[type=range] { width: 220px; vertical-align: middle; }
+  .slider-val { display: inline-block; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; color: #1b2a3a; font-weight: 500; margin-left: 8px; }
+  .toast { position: fixed; bottom: 20px; right: 20px; background: #1b2a3a; color: #fff; padding: 10px 16px; border-radius: 4px; font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .toast.err { background: #7a2c2c; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div><span class="brand">BOREAL</span> &middot; {{ .Hostname }}</div>
+  <div class="model">Edge 85</div>
+</div>
+<main>
+  <div class="card">
+    <h2>Display</h2>
+    <div class="row">
+      <span class="k">power</span>
+      <span class="v" id="power-pill">
+        {{ if eq (.State | get "status" | get "device" | get "power") "on" }}
+        <span class="pill on">on</span>
+        {{ else }}
+        <span class="pill off">off</span>
+        {{ end }}
+      </span>
+      <span class="ctrl">
+        <button id="power-on">Power on</button>
+        <button id="power-off">Power off</button>
+      </span>
+    </div>
+    <div class="row">
+      <span class="k">input</span>
+      <span class="ctrl">
+        <select id="input-select">
+          {{ $cur := .State | get "status" | get "display" | get "input" }}
+          <option value="hdmi1" {{ if eq $cur "hdmi1" }}selected{{ end }}>HDMI 1</option>
+          <option value="hdmi2" {{ if eq $cur "hdmi2" }}selected{{ end }}>HDMI 2</option>
+          <option value="dp1"   {{ if eq $cur "dp1"   }}selected{{ end }}>DisplayPort</option>
+          <option value="usbc"  {{ if eq $cur "usbc"  }}selected{{ end }}>USB-C</option>
+          <option value="none"  {{ if eq $cur "none"  }}selected{{ end }}>No signal</option>
+        </select>
+      </span>
+    </div>
+    <div class="row">
+      <span class="k">brightness</span>
+      <span class="ctrl">
+        <input type="range" id="brightness" min="0" max="100" value="{{ .State | get "status" | get "display" | get "brightness" }}">
+        <span class="slider-val" id="brightness-val">{{ .State | get "status" | get "display" | get "brightness" }}%</span>
+      </span>
+    </div>
+    <div class="row"><span class="k">resolution</span><span class="v">{{ .State | get "status" | get "display" | get "resolution" }}</span></div>
+    <div class="row"><span class="k">panel temperature</span><span class="v">{{ .State | get "status" | get "display" | get "temperature" }} &deg;C</span></div>
+  </div>
+  <div class="card">
+    <h2>Audio</h2>
+    <div class="row">
+      <span class="k">volume</span>
+      <span class="ctrl">
+        <input type="range" id="volume" min="0" max="100" value="{{ .State | get "status" | get "audio" | get "volume" }}">
+        <span class="slider-val" id="volume-val">{{ .State | get "status" | get "audio" | get "volume" }}%</span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="k">mute</span>
+      <span class="ctrl">
+        <button id="mute-toggle" class="{{ if .State | get "status" | get "audio" | get "mute" }}primary{{ end }}">
+          {{ if .State | get "status" | get "audio" | get "mute" }}Muted &mdash; click to unmute{{ else }}Mute audio{{ end }}
+        </button>
+      </span>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Device</h2>
+    <div class="row"><span class="k">model</span><span class="v">{{ .State | get "configuration" | get "device" | get "model" }}</span></div>
+    <div class="row"><span class="k">serial</span><span class="v">{{ .State | get "configuration" | get "device" | get "serial" }}</span></div>
+    <div class="row"><span class="k">firmware</span><span class="v">{{ .State | get "configuration" | get "firmware" | get "version" }}</span></div>
+    <div class="row"><span class="k">uptime (s)</span><span class="v">{{ .State | get "status" | get "device" | get "uptime" }}</span></div>
+    <div class="row"><span class="k">ip</span><span class="v">{{ .IP }}</span></div>
+  </div>
+</main>
+<div id="toast" class="toast"></div>
+<script>
+  // Browser inherits the Basic auth credentials from the page load, so
+  // these fetch calls do not need explicit Authorization headers. The
+  // same-origin same-realm rule covers it.
+  const toast = document.getElementById('toast');
+  function flash(msg, isErr) {
+    toast.textContent = msg;
+    toast.className = 'toast show' + (isErr ? ' err' : '');
+    setTimeout(() => { toast.className = 'toast' + (isErr ? ' err' : ''); }, 1400);
+  }
+  // Resolve absolute "/api/..." paths against the iframe's own
+  // proxy prefix so they route back through the console's
+  // /proxy/sites/.../web/<port>/ passthrough. A bare leading
+  // slash would otherwise hit the console origin and 404.
+  // See issue #51.
+  function apiURL(path) {
+    if (!path.startsWith('/')) return path;
+    const base = location.pathname.replace(/\/$/, '');
+    return base + path;
+  }
+  async function send(path, body) {
+    try {
+      const r = await fetch(apiURL(path), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) { flash('error: ' + r.status, true); return false; }
+      flash('applied');
+      return true;
+    } catch (e) {
+      flash('network error', true);
+      return false;
+    }
+  }
+  function reload() { setTimeout(() => location.reload(), 250); }
+
+  document.getElementById('power-on').onclick = async () => {
+    if (await send('/api/display/power', { power: 'on' })) reload();
+  };
+  document.getElementById('power-off').onclick = async () => {
+    if (await send('/api/display/power', { power: 'off' })) reload();
+  };
+  document.getElementById('input-select').onchange = async (e) => {
+    if (await send('/api/display/input', { input: e.target.value })) reload();
+  };
+  const bSlider = document.getElementById('brightness');
+  const bVal = document.getElementById('brightness-val');
+  bSlider.oninput = () => { bVal.textContent = bSlider.value + '%'; };
+  bSlider.onchange = async () => {
+    await send('/api/display/brightness', { brightness: Number(bSlider.value) });
+  };
+  const vSlider = document.getElementById('volume');
+  const vVal = document.getElementById('volume-val');
+  vSlider.oninput = () => { vVal.textContent = vSlider.value + '%'; };
+  vSlider.onchange = async () => {
+    await send('/api/audio/volume', { volume: Number(vSlider.value) });
+  };
+  const muteBtn = document.getElementById('mute-toggle');
+  muteBtn.onclick = async () => {
+    const muted = muteBtn.classList.contains('primary');
+    if (await send('/api/audio/mute', { mute: !muted })) reload();
+  };
+</script>
+</body>
+</html>

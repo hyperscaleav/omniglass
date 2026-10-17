@@ -1,0 +1,1 @@
+{"ok": true, "scene": "{{ .State | get "status" | get "room" | get "scene" }}"}

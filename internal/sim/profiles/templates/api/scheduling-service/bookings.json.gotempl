@@ -1,0 +1,6 @@
+{
+  {{/* @field status.bookings.today number "Bookings scheduled for today" */}}
+  "today": {{ .State | get "status" | get "bookings" | get "today" }},
+  {{/* @field configuration.sync_ok bool "Whether the last config sync succeeded" */}}
+  "sync_ok": {{ .State | get "configuration" | get "sync_ok" }}
+}

@@ -113,6 +113,7 @@ export default defineConfig({
             { label: 'Messaging', slug: 'architecture/messaging' },
             // the foundations underneath
             { label: 'Nodes', slug: 'architecture/nodes' },
+            { label: 'Simulation', slug: 'architecture/simulation' },
             { label: 'Storage', slug: 'architecture/storage' },
             { label: 'Data model', slug: 'architecture/data-model' },
             { label: 'Workers', slug: 'architecture/workers' },

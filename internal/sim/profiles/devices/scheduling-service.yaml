@@ -1,0 +1,80 @@
+# yaml-language-server: $schema=schema.json
+# Scheduling Service, Cloud Room-Booking Platform
+#
+# A centralized cloud service that owns room bookings and panel config
+# (think a calendaring / room-resource backend). Standalone HTTP
+# service, token auth, no SNMP / CLI / raw-TCP. ICMP kept for the
+# network band.
+#
+# Course datapoints (HTTP, token auth, one way in):
+#   status.bookings.today  , bookings scheduled for today
+#   configuration.sync_ok  , last config sync succeeded
+#
+# Auth: header token. public_paths exempts the dashboard root.
+
+name: scheduling-service
+manufacturer: Shinra Cloud
+model: "Scheduling Platform"
+device_type: cloud-service
+slug_prefix: sched-svc
+
+doc:
+  summary: "Cloud room-booking / scheduling platform (bookings + config)"
+  description: |
+    Centralized scheduling cloud service that owns room bookings and
+    pushes panel config. Exposes an HTTP admin API (token auth)
+    reporting today's bookings and config-sync health. HTTP + ICMP
+    only, no SNMP or CLI.
+  tags: [cloud, scheduling, service]
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 443
+    tls: true
+    doc:
+      summary: "Scheduling admin HTTP API + dashboard"
+      tags: [management, api, cloud]
+    auth:
+      type: header
+      header: "X-Sched-Token"
+      api_key: "sched-lab-token"
+      enforce: true
+      public_paths: ["/"]
+    api_surface: scheduling-service
+    routes:
+      - match: "GET /"
+        template: web/scheduling-service/index.gotempl
+        doc: { summary: "Scheduling service dashboard" }
+
+      - match: "GET /api/status"
+        template: api/scheduling-service/status.json.gotempl
+        doc: { summary: "Service status (today's bookings, sync health)", tags: [api, status] }
+
+      - match: "GET /api/bookings"
+        template: api/scheduling-service/bookings.json.gotempl
+        doc: { summary: "Today's bookings + config sync flag", tags: [api, bookings] }
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+defaults:
+  status:
+    device:
+      boot_epoch: 0
+    bookings:
+      today: 8
+  configuration:
+    sync_ok: true
+    device:
+      serial: ""
+      model: "Scheduling Platform"
+      manufacturer: "Shinra Cloud"
+    firmware:
+      version: "cloud-2026.06"
+    network:
+      hostname: ""

@@ -1,0 +1,1 @@
+{"ok": true, "brightness": {{ .State | get "status" | get "display" | get "brightness" }}}

@@ -1,0 +1,1 @@
+{"ok": true, "power": "{{ .State | get "status" | get "device" | get "power" }}"}

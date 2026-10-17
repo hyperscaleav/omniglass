@@ -1,0 +1,28 @@
+{
+  "device": {
+    "power": "{{ .State | get "status" | get "device" | get "power" }}",
+    "uptime": {{ .State | get "status" | get "device" | get "uptime" }},
+    "model": "{{ .State | get "configuration" | get "device" | get "model" }}",
+    "serial": "{{ .State | get "configuration" | get "device" | get "serial" }}",
+    "firmware": "{{ .State | get "configuration" | get "firmware" | get "version" }}"
+  },
+  "app": {
+    "mode": "{{ .State | get "status" | get "app" | get "mode" }}",
+    "ucc_signin": "{{ .State | get "status" | get "app" | get "ucc_signin" }}",
+    "touch_pair": "{{ .State | get "status" | get "peripherals" | get "touch_pair" }}",
+    "local_presentation": {{ .State | get "status" | get "presentation" | get "local_active" }}
+  },
+  "call": {
+    "active": {{ .State | get "status" | get "call" | get "active" }},
+    "participants": {{ .State | get "status" | get "call" | get "participants" }}
+  },
+  "audio": {
+    "volume": {{ .State | get "status" | get "audio" | get "volume" }},
+    "mic_mute": {{ .State | get "status" | get "audio" | get "mic_mute" }},
+    "speaker_level": {{ .State | get "status" | get "audio" | get "speaker_level" }}
+  },
+  "video": {
+    "camera_on": {{ .State | get "status" | get "video" | get "camera_on" }},
+    "resolution": "{{ .State | get "status" | get "video" | get "resolution" }}"
+  }
+}

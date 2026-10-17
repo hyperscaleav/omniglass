@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ .Hostname }}, Kestrel VRoom</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #0e1727; color: #d6e0ed; margin: 0; }
+  .bar { background: #05090f; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #1a2744; }
+  .bar .brand { font-weight: 700; letter-spacing: 0.06em; color: #ffb54a; }
+  .bar .model { opacity: 0.7; font-size: 13px; color: #a6b5cc; }
+  main { max-width: 820px; margin: 24px auto; padding: 0 16px; }
+  .card { background: #151f36; border: 1px solid #1a2744; border-radius: 6px; padding: 18px 22px; margin-bottom: 14px; }
+  .card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #7c8aa5; margin: 0 0 10px; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 14px; border-bottom: 1px solid rgba(26,39,68,0.6); gap: 16px; }
+  .row:last-child { border-bottom: none; }
+  .row .k { color: #7c8aa5; }
+  .row .v { font-weight: 500; color: #eaf0fa; }
+  .ctrl { display: flex; gap: 8px; align-items: center; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 3px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  .pill.active { background: #1f4837; color: #6fd6c9; }
+  .pill.idle { background: #1a2744; color: #7c8aa5; }
+  .pill.standby { background: #4a3a14; color: #ffb54a; }
+  button { font-family: inherit; font-size: 13px; padding: 6px 12px; border: 1px solid #2c3a5a; background: #1f2a44; color: #d6e0ed; border-radius: 4px; cursor: pointer; }
+  button:hover { background: #28365a; }
+  button.primary { background: #ffb54a; border-color: #cc8d2f; color: #2a1a05; font-weight: 600; }
+  button.primary:hover { background: #f3a936; }
+  button.danger { background: #c83e3e; border-color: #a72f2f; color: #fff; font-weight: 600; }
+  button.danger:hover { background: #b13838; }
+  input[type=range] { width: 220px; vertical-align: middle; }
+  .slider-val { display: inline-block; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; margin-left: 8px; color: #eaf0fa; }
+  .toast { position: fixed; bottom: 20px; right: 20px; background: #ffb54a; color: #2a1a05; padding: 10px 16px; border-radius: 4px; font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none; font-weight: 600; }
+  .toast.show { opacity: 1; }
+  .toast.err { background: #c83e3e; color: #fff; }
+  .logs { margin: 0; padding: 0; list-style: none; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5; }
+  .logs li { padding: 3px 0; border-bottom: 1px solid rgba(26,39,68,0.4); color: #b9c6dc; white-space: pre-wrap; word-break: break-word; }
+  .logs li:last-child { border-bottom: none; }
+  .logs .muted { color: #7c8aa5; font-style: italic; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div><span class="brand">KESTREL</span> &middot; {{ .Hostname }}</div>
+  <div class="model">VRoom</div>
+</div>
+<main>
+  <div class="card">
+    <h2>Call</h2>
+    {{ if .State | get "status" | get "call" | get "active" }}
+    <div class="row">
+      <span class="k">status</span>
+      <span class="v"><span class="pill active">In call</span></span>
+      <span class="ctrl"><button id="hangup" class="danger">End call</button></span>
+    </div>
+    <div class="row"><span class="k">participants</span><span class="v">{{ .State | get "status" | get "call" | get "participants" }}</span></div>
+    {{ else }}
+    <div class="row">
+      <span class="k">status</span>
+      <span class="v"><span class="pill idle">idle</span></span>
+    </div>
+    {{ end }}
+  </div>
+
+  <div class="card">
+    <h2>Audio / Video</h2>
+    <div class="row">
+      <span class="k">microphone</span>
+      <span class="ctrl">
+        <button id="mute-toggle" class="{{ if .State | get "status" | get "audio" | get "mic_mute" }}danger{{ end }}">
+          {{ if .State | get "status" | get "audio" | get "mic_mute" }}Mic muted{{ else }}Mute mic{{ end }}
+        </button>
+      </span>
+    </div>
+    <div class="row">
+      <span class="k">speaker level</span>
+      <span class="ctrl">
+        <input type="range" id="speaker" min="0" max="100" value="{{ .State | get "status" | get "audio" | get "speaker_level" }}">
+        <span class="slider-val" id="speaker-val">{{ .State | get "status" | get "audio" | get "speaker_level" }}</span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="k">camera</span>
+      <span class="ctrl">
+        <button id="cam-toggle" class="{{ if .State | get "status" | get "video" | get "camera_on" }}primary{{ end }}">
+          {{ if .State | get "status" | get "video" | get "camera_on" }}Camera on &mdash; click to hide{{ else }}Camera hidden &mdash; click to show{{ end }}
+        </button>
+      </span>
+    </div>
+    <div class="row"><span class="k">video resolution</span><span class="v">{{ .State | get "status" | get "video" | get "resolution" }}</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Application</h2>
+    <div class="row"><span class="k">mode</span><span class="v">{{ .State | get "status" | get "app" | get "mode" }}</span></div>
+    <div class="row"><span class="k">UCC sign-in</span><span class="v">{{ with .State | get "status" | get "app" | get "ucc_signin" }}{{ . }}{{ else }}signed out{{ end }}</span></div>
+    <div class="row"><span class="k">paired touch panel</span><span class="v">{{ with .State | get "status" | get "peripherals" | get "touch_pair" }}{{ . }}{{ else }}none{{ end }}</span></div>
+    <div class="row">
+      <span class="k">local presentation</span>
+      <span class="v">{{ if .State | get "status" | get "presentation" | get "local_active" }}<span class="pill active">active</span>{{ else }}<span class="pill idle">idle</span>{{ end }}</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>System</h2>
+    <div class="row">
+      <span class="k">power state</span>
+      <span class="v">
+        {{ if eq (.State | get "status" | get "device" | get "power") "standby" }}
+        <span class="pill standby">standby</span>
+        {{ else }}
+        <span class="pill active">active</span>
+        {{ end }}
+      </span>
+      <span class="ctrl">
+        {{ if eq (.State | get "status" | get "device" | get "power") "standby" }}
+        <button id="standby-off" class="primary">Wake</button>
+        {{ else }}
+        <button id="standby-on">Enter standby</button>
+        {{ end }}
+      </span>
+    </div>
+    <div class="row"><span class="k">model</span><span class="v">{{ .State | get "configuration" | get "device" | get "model" }}</span></div>
+    <div class="row"><span class="k">serial</span><span class="v">{{ .State | get "configuration" | get "device" | get "serial" }}</span></div>
+    <div class="row"><span class="k">firmware</span><span class="v">{{ .State | get "configuration" | get "firmware" | get "version" }}</span></div>
+    <div class="row"><span class="k">uptime (s)</span><span class="v">{{ .State | get "status" | get "device" | get "uptime" }}</span></div>
+    <div class="row"><span class="k">ip</span><span class="v">{{ .IP }}</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Recent logs</h2>
+    <ul id="logs" class="logs"><li class="muted">loading…</li></ul>
+  </div>
+</main>
+<div id="toast" class="toast"></div>
+<script>
+  // Browser carries the Basic auth credentials over to fetch() calls
+  // automatically because they are same-origin same-realm with the
+  // page load that just succeeded.
+  const toast = document.getElementById('toast');
+  function flash(msg, isErr) {
+    toast.textContent = msg;
+    toast.className = 'toast show' + (isErr ? ' err' : '');
+    setTimeout(() => { toast.className = 'toast' + (isErr ? ' err' : ''); }, 1400);
+  }
+  // Resolve absolute "/api/..." paths against the iframe's own
+  // proxy prefix so they route back through the console's
+  // /proxy/sites/.../web/<port>/ passthrough. A bare leading
+  // slash would otherwise hit the console origin and 404.
+  // See issue #51.
+  function apiURL(path) {
+    if (!path.startsWith('/')) return path;
+    const base = location.pathname.replace(/\/$/, '');
+    return base + path;
+  }
+  async function send(path, body) {
+    try {
+      const r = await fetch(apiURL(path), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+      });
+      if (!r.ok) { flash('error: ' + r.status, true); return false; }
+      flash('applied');
+      return true;
+    } catch (e) { flash('network error', true); return false; }
+  }
+  function reload() { setTimeout(() => location.reload(), 250); }
+
+  const muteBtn = document.getElementById('mute-toggle');
+  if (muteBtn) muteBtn.onclick = async () => {
+    const muted = muteBtn.classList.contains('danger');
+    if (await send('/api/audio/mute', { mute: !muted })) reload();
+  };
+  const camBtn = document.getElementById('cam-toggle');
+  if (camBtn) camBtn.onclick = async () => {
+    const on = camBtn.classList.contains('primary');
+    if (await send('/api/video/camera', { camera_on: !on })) reload();
+  };
+  const slider = document.getElementById('speaker');
+  const sliderVal = document.getElementById('speaker-val');
+  if (slider) {
+    slider.oninput = () => { sliderVal.textContent = slider.value; };
+    slider.onchange = async () => {
+      await send('/api/audio/volume', { volume: Number(slider.value) });
+    };
+  }
+  const standbyOn = document.getElementById('standby-on');
+  if (standbyOn) standbyOn.onclick = async () => {
+    if (await send('/api/system/standby', { power: 'standby' })) reload();
+  };
+  const standbyOff = document.getElementById('standby-off');
+  if (standbyOff) standbyOff.onclick = async () => {
+    if (await send('/api/system/standby', { power: 'on' })) reload();
+  };
+  const hangup = document.getElementById('hangup');
+  if (hangup) hangup.onclick = async () => {
+    if (await send('/api/call/disconnect', {})) reload();
+  };
+
+  // Recent logs panel. Fetches the PRIVATE GET /api/logs route, the
+  // same undocumented endpoint a student finds in the network tab and
+  // can then call directly (e.g. as a collector's HTTP item). The page's
+  // Basic-auth creds ride along on this same-origin GET automatically.
+  const logsEl = document.getElementById('logs');
+  async function loadLogs() {
+    if (!logsEl) return;
+    try {
+      const r = await fetch(apiURL('/api/logs'));
+      if (!r.ok) { logsEl.innerHTML = '<li class="muted">logs unavailable (' + r.status + ')</li>'; return; }
+      const data = await r.json();
+      const lines = (data && data.recent) || [];
+      if (!lines.length) { logsEl.innerHTML = '<li class="muted">no recent log lines</li>'; return; }
+      logsEl.innerHTML = '';
+      for (const line of lines) {
+        const li = document.createElement('li');
+        li.textContent = line;
+        logsEl.appendChild(li);
+      }
+    } catch (e) {
+      logsEl.innerHTML = '<li class="muted">network error loading logs</li>';
+    }
+  }
+  loadLogs();
+</script>
+</body>
+</html>
