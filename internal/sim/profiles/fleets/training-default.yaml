@@ -1,0 +1,22 @@
+name: "training-default"
+domain: "acme.lab"
+
+display_names:
+  style: "docker"
+
+sites:
+  - code: BOI
+    name: "Boise Campus"
+    cidr: "127.1.0.0/16"
+    locations:
+      - building: "17C"
+        floors:
+          - floor: "4"
+            systems:
+              - profile: large-conference-a
+                rooms: ["415B", "420A"]
+          - floor: "3"
+            systems:
+              - profile: large-conference-a
+                count: 2
+                start_room: 300

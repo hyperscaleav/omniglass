@@ -1,0 +1,127 @@
+# yaml-language-server: $schema=schema.json
+# UCC Service, Cloud Unified-Communications Platform
+#
+# A centralized cloud service (a meeting platform's admin plane) that the
+# room devices sign into. Unlike the room hardware it runs as a
+# standalone HTTP service, not inside a site pod, and carries NO SNMP /
+# CLI / raw-TCP surface, cloud platforms are monitored over their HTTP
+# admin API with a bearer-style token, and nothing else. ICMP is kept
+# so the network band can still reach it.
+#
+# Course datapoints (HTTP, token auth, one way in):
+#   status.meeting.active  , meetings currently in progress
+#   status.meeting.errors  , recent join/media errors
+#
+# Auth: header token (Authorization-style). public_paths exempts the
+# dashboard root so an operator can land and paste a token.
+
+name: ucc-service
+manufacturer: Shinra Cloud
+model: "UCC Platform"
+device_type: cloud-service
+slug_prefix: ucc-svc
+
+doc:
+  summary: "Cloud unified-communications platform (meeting + error telemetry)"
+  description: |
+    Centralized UCC cloud service the room bars sign into. Exposes an
+    HTTP admin API (token auth) reporting active meetings and recent
+    join/media errors. HTTP + ICMP only, no SNMP or CLI.
+  tags: [cloud, ucc, service]
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 443
+    tls: true
+    doc:
+      summary: "UCC admin HTTP API + dashboard"
+      tags: [management, api, cloud]
+    auth:
+      type: header
+      header: "X-UCC-Token"
+      api_key: "ucc-lab-token"
+      enforce: true
+      public_paths: ["/"]
+    api_surface: ucc-service
+    routes:
+      - match: "GET /"
+        template: web/ucc-service/index.gotempl
+        doc: { summary: "UCC service dashboard" }
+
+      - match: "GET /api/status"
+        template: api/ucc-service/status.json.gotempl
+        doc: { summary: "Service status (active meetings, error count)", tags: [api, status] }
+
+      - match: "GET /api/meetings"
+        template: api/ucc-service/meetings.json.gotempl
+        doc: { summary: "Active meetings + recent errors", tags: [api, meeting] }
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# Outbound webhook emitter. On each interval this behavior flips the
+# meeting flag on AND POSTs a "meeting.started" webhook to the configured
+# collector, the device's only egress-HTTP capability (see emit.go).
+#
+# OPERATOR CONFIG: point every room at a webhook receiver by
+# setting configuration.webhook.target_url. It is a single profile-level
+# value, so one edit covers all ucc-service instances across every room
+# (the lab models one ucc-service per room; they share this profile, so
+# the target is service-level by construction). Leave it empty to disable
+# emission, render of an empty URL is the safe configured-off default,
+# so the behavior still ticks (flips the meeting flag) but sends nothing.
+#
+# One event per room: each device instance runs its own copy of this
+# behavior with its own hostname, so the catcher sees one
+# meeting.started per room hostname per interval.
+behaviors:
+  - name: meeting_started
+    schedule:
+      interval: 60s
+    mutations:
+      - path: status.meeting.started
+        value: "true"
+    emit:
+      url: "{{ .Defaults.configuration.webhook.target_url }}"
+      body: >-
+        {"host":"{{ .Defaults.configuration.webhook.target_host }}","event":"meeting.started","room":"{{ .Defaults.configuration.room.name }}","ts":{{ now }}}
+
+defaults:
+  status:
+    device:
+      boot_epoch: 0
+    meeting:
+      active: 3
+      errors: 0
+      # Flipped on by the meeting_started behavior each interval; the
+      # emit body announces the transition to the collector.
+      started: false
+  configuration:
+    device:
+      serial: ""
+      model: "UCC Platform"
+      manufacturer: "Shinra Cloud"
+    firmware:
+      version: "cloud-2026.06"
+    network:
+      hostname: ""
+    # Outbound webhook target for the meeting_started behavior. Set
+    # target_url to a webhook receiver URL to enable emission
+    # for every ucc-service room at once; empty disables it (configured-off).
+    # target_host is the hostname the event maps to in the monitoring
+    # platform: the room's VIDEO BAR (the meeting-room endpoint the UCC data
+    # belongs to), set per room via a fleet override. The cloud fires the
+    # webhook, but it carries the target device's hostname. Empty target_host
+    # drops the event at the catcher (no host = no trapper item).
+    webhook:
+      target_url: ""
+      target_host: ""
+    # Human room label included in the webhook body. Empty by default;
+    # a fleet-level override can set it per room if desired.
+    room:
+      name: ""

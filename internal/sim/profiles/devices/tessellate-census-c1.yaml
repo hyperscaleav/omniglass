@@ -1,0 +1,309 @@
+# yaml-language-server: $schema=schema.json
+# Tessellate Census C1, Ceiling People Counter / Occupancy Sensor
+#
+# Tessellate is the lab's fictional sensor vendor. The Census C1 is a
+# ceiling-mounted stereo-vision people counter for meeting rooms: it
+# reports a live head-count, an occupancy increased/decreased signal,
+# and a derived "vacant" boolean. Unlike the other lab devices its
+# PRIMARY surface is an HTTP REST + event API (the data / push band),
+# NOT SNMP, sensor vendors ship telemetry over REST and webhooks, not
+# enterprise MIBs, so this device intentionally carries no SNMP
+# interface at all.
+#
+# Auth pattern: header-based API key (X-Census-Key). The dashboard HTML
+# is public so an operator can paste a key; every /api/* route is gated.
+#
+# WEBHOOK / PUSH CAVEAT (read before extending): the case study calls
+# for OUTBOUND webhooks, the sensor POSTing to a collector on each
+# occupancy event. The simulator has NO outbound-HTTP mechanism: a
+# device cannot make an egress HTTP POST to an arbitrary URL. Device-
+# initiated push is limited to (a) same-socket persistent-session
+# subscriptions and (b) pollable HTTP GET routes. There is also no
+# streaming/SSE route type, HTTP routes are strict request/response.
+# So the realtime surface here is modeled the closest supported way: a
+# pollable /api/events route backed by a rolling event buffer in state,
+# plus the same events visible over a raw-TCP control band with live
+# push subscriptions. The "webhook" is documented on the dashboard as a
+# configurable target, but the actual delivery is poll/subscribe, not
+# device-originated POST. See REPORT for the flagged gap.
+
+name: tessellate-census-c1
+manufacturer: Tessellate
+model: "Census C1"
+device_type: people-counter
+# Case-study hostname role. Hostnames come from the system-profile
+# suffix ("people-counter"); slug_prefix only seeds the internal
+# HostID slug. Kept aligned with the case-study name.
+slug_prefix: people-counter
+
+doc:
+  summary: "Tessellate Census C1 ceiling people counter"
+  description: |
+    Ceiling-mounted stereo-vision people counter for meeting rooms.
+    Reports a live occupancy head-count, an increased/decreased event
+    signal, and a derived vacant flag. Primary surface is an HTTP REST
+    + event API (data/push band) rather than SNMP. A raw-TCP control
+    band exposes the same live signals with push subscriptions for
+    room-control integrations.
+
+interfaces:
+  - name: http-api
+    protocol: http
+    port: 80
+    doc:
+      summary: "Census REST + event API"
+      tags: [management, api, data]
+    auth:
+      type: header
+      header: "X-Census-Key"
+      api_key: "census-lab-key"
+      enforce: true
+      # Dashboard is public so an operator can paste a key into the
+      # page; every /api/* route stays gated behind the header.
+      public_paths: ["/"]
+    api_surface: tessellate-census
+    routes:
+      - match: "GET /"
+        template: web/tessellate-census/index.gotempl
+        doc: { summary: "Sensor dashboard" }
+
+      - match: "GET /api/status"
+        template: api/tessellate-census/status.json.gotempl
+        doc: { summary: "Sensor status snapshot", tags: [api, status] }
+
+      # Occupancy event signal + vacant flag over HTTP. The live
+      # head-count (people_count) is the course's raw-TCP datapoint and
+      # is DELIBERATELY ABSENT from this route (and from /api/status and
+      # /api/events): the only way in for people_count is the raw-TCP
+      # control band below (COUNT? / SUBSCRIBE COUNT on port 5000). What
+      # stays on HTTP here is the derived last_event / vacant signal.
+      - match: "GET /api/occupancy"
+        template: api/tessellate-census/occupancy.json.gotempl
+        doc: { summary: "Occupancy event signal + vacant flag (no head-count; that is raw-TCP only)", tags: [api, data] }
+
+      # Pollable realtime surface. Because the simulator has no outbound
+      # webhook / SSE transport, the "event stream" is a rolling buffer
+      # in state that consumers poll. Each occupancy tick refreshes
+      # last_event + count; a real Census would ALSO POST this payload
+      # to the configured webhook target, modeled here as poll-only.
+      - match: "GET /api/events"
+        template: api/tessellate-census/events.json.gotempl
+        doc: { summary: "Latest occupancy event (poll this; webhook is poll-modeled)", tags: [api, data, events] }
+
+      # Configure the (modeled) webhook target. Stores the URL in state
+      # so the dashboard can show it, but the simulator does NOT actually
+      # POST to it, see the header caveat. Kept so the case-study API
+      # shape is faithful and operators see where delivery WOULD go.
+      - match: "POST /api/webhook"
+        template: api/tessellate-census/webhook-ack.json.gotempl
+        doc: { summary: "Set webhook target URL (stored only; no outbound POST)", tags: [api, config] }
+        example: |
+          {"url": "https://collector.shinra.lan/occupancy"}
+        mutate:
+          configuration.webhook.url: "{{ .Request.Body.url }}"
+
+      # Reboot re-anchors uptime and resets the volatile occupancy
+      # telemetry to declared defaults.
+      - match: "POST /api/admin/reboot"
+        template: api/tessellate-census/reboot-ack.json.gotempl
+        doc: { summary: "Reboot sensor (clears uptime, resets occupancy state)", tags: [api, admin] }
+        example: "{}"
+        mutations: &census_reboot_mutations
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.occupancy.people_count, value: "{{ .Defaults.status.occupancy.people_count }}" }
+          - { path: status.occupancy.people_count_prev, value: "{{ .Defaults.status.occupancy.people_count_prev }}" }
+          - { path: status.occupancy.last_event, value: "{{ .Defaults.status.occupancy.last_event }}" }
+          - { path: status.occupancy.vacant, value: "{{ .Defaults.status.occupancy.vacant }}" }
+
+      - match: "POST /api/admin/factory-reset"
+        template: api/tessellate-census/factory-reset-ack.json.gotempl
+        doc: { summary: "Factory reset (resets every status path + webhook target)", tags: [api, admin] }
+        example: "{}"
+        mutations: &census_factory_reset_mutations
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.occupancy.people_count, value: "{{ .Defaults.status.occupancy.people_count }}" }
+          - { path: status.occupancy.people_count_prev, value: "{{ .Defaults.status.occupancy.people_count_prev }}" }
+          - { path: status.occupancy.last_event, value: "{{ .Defaults.status.occupancy.last_event }}" }
+          - { path: status.occupancy.vacant, value: "{{ .Defaults.status.occupancy.vacant }}" }
+          - { path: configuration.webhook.url, value: "{{ .Defaults.configuration.webhook.url }}" }
+
+  # Raw-TCP control band, the closest supported "push" transport. A
+  # room-control system dials in and registers feedback subscriptions;
+  # the sensor pushes "#<token>=<value>" lines on the same socket every
+  # time the count or vacant flag changes (driven by the behavior
+  # below). This is push, but socket-scoped, not an outbound webhook.
+  - name: control
+    protocol: tcp
+    port: 5000
+    doc:
+      summary: "Raw-TCP occupancy feed (CR-delimited ASCII, push subscriptions)"
+      tags: [control, persistent-session, raw-tcp, data]
+    api_surface: tessellate-census-control
+    persistent: true
+    line_ending: "\r"
+    welcome: "TESSELLATE CENSUS C1 FEED READY"
+    limits:
+      max_subs_per_session: 64
+      publish_min_interval_ms: 50
+      max_sessions_per_device: 16
+      out_buffer: 256
+    subjects:
+      - match: "status.occupancy.people_count"
+        path: "status.occupancy.people_count"
+        publish_token: "COUNT"
+        push_format: "#{{ .Token }}={{ .Value }}"
+      - match: "status.occupancy.vacant"
+        path: "status.occupancy.vacant"
+        publish_token: "VACANT"
+        push_format: "#{{ .Token }}={{ .Value }}"
+      - match: "status.occupancy.last_event"
+        path: "status.occupancy.last_event"
+        publish_token: "EVENT"
+        push_format: "#{{ .Token }}={{ .Value }}"
+    commands:
+      - match: "COUNT?"
+        template: api/tessellate-census/control-count.txt.gotempl
+        doc: { summary: "Query live people count" }
+      - match: "VACANT?"
+        template: api/tessellate-census/control-vacant.txt.gotempl
+        doc: { summary: "Query vacant flag" }
+      - match: "SUBSCRIBE COUNT"
+        action: subscribe
+        subject: "status.occupancy.people_count"
+        response: "#ACK SUBSCRIBE COUNT"
+      - match: "SUBSCRIBE VACANT"
+        action: subscribe
+        subject: "status.occupancy.vacant"
+        response: "#ACK SUBSCRIBE VACANT"
+      - match: "SUBSCRIBE EVENT"
+        action: subscribe
+        subject: "status.occupancy.last_event"
+        response: "#ACK SUBSCRIBE EVENT"
+      - match: "UNSUBSCRIBE COUNT"
+        action: unsubscribe
+        subject: "status.occupancy.people_count"
+        response: "#ACK UNSUBSCRIBE COUNT"
+      - match: "UNSUBSCRIBE VACANT"
+        action: unsubscribe
+        subject: "status.occupancy.vacant"
+        response: "#ACK UNSUBSCRIBE VACANT"
+
+  # Binary AV-control band, an AUTHENTIC fixed-frame hex poll for the
+  # live head-count, used by the course's AV-control / external-check
+  # demo. Where the ASCII control band above answers "COUNT?" with text,
+  # this band speaks a tiny binary request/response protocol the way real
+  # AV gear does: a HEX request frame in, a HEX
+  # response frame back. Still a poll, no subscriptions here.
+  #
+  # FRAME FORMAT (fixed, deterministic):
+  #
+  #   Envelope (both directions):  STX(0x02) <payload...> ETX(0x03) CR(0x0D)
+  #
+  #   Request  (4 payload-wrapped bytes on the wire): 02 AA 01 03 0D
+  #     payload AA 01  →  0xAA magic, 0x01 = opcode "poll people_count"
+  #
+  #   Response (5 bytes on the wire):                 02 AA 81 CC 03
+  #     payload AA 81 CC  →  0xAA magic, 0x81 = 0x01|0x80 (response bit),
+  #                          CC = people_count as one raw byte (0-255)
+  #
+  # The response is fixed-width, so a client reads exactly 5 bytes rather
+  # than delimiter-scanning (people_count can legitimately be 0x03 or
+  # 0x0D, which would collide with ETX/CR under naive framing). The
+  # cmd/census-hexpoll external-check binary does exactly that. STX/ETX
+  # frame_start/frame_end keep the binary payload from being whitespace-
+  # trimmed the way the ASCII band's frames are.
+  - name: control-hex
+    protocol: tcp
+    port: 5001
+    doc:
+      summary: "Binary AV-control band, fixed hex poll for live head-count"
+      tags: [control, raw-tcp, binary, data]
+    api_surface: tessellate-census-hex
+    persistent: true
+    line_ending: "\r"
+    frame_start: "\x02"
+    frame_end: "\x03"
+    commands:
+      # Poll people_count. Request payload AA 01 → response AA 81 <count>.
+      - match_hex: "AA 01"
+        response: '{{ hex_byte "AA" }}{{ hex_byte "81" }}{{ byte_of .State.status.occupancy.people_count }}'
+        doc: { summary: "Hex poll: people_count (request AA 01 → response AA 81 <count>)" }
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+
+# uptime = now - boot_epoch (seconds), resolved on read. No goroutine,
+# no event. Re-anchored to "{{ now }}" by reboot / factory-reset.
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# Occupancy drift. One behavior owns the whole occupancy tuple so the
+# fields stay internally consistent each tick:
+#   1. snapshot the current count into people_count_prev
+#   2. random-walk people_count within [0, 14] (a room's plausible range)
+#   3. derive last_event from new-vs-prev (increased/decreased/steady)
+#   4. derive vacant = (count == 0)
+# Order matters: mutations run in list order against the same state
+# map, so step 3 sees both the pre-step prev (step 1) and the post-step
+# count (step 2). This is what surfaces the "occupancy increased/
+# decreased" signal and the vacant boolean the case study calls for.
+behaviors:
+  - name: occupancy_drift
+    schedule:
+      interval: 20s
+    mutations:
+      # 1. Snapshot the prior count so step 3 can compare against it.
+      - path: status.occupancy.people_count_prev
+        value: "{{ .State.status.occupancy.people_count }}"
+      # 2. Random-walk the count within [0, 14], snapped to a whole
+      #    number. `round 0` keeps it integer-valued (5, not 5.0) while
+      #    staying float64 so the comparison helpers below work without
+      #    an int() cast (the simulator registers no `int` template func).
+      - path: status.occupancy.people_count
+        value: "{{ round 0 (clamp 0.0 14.0 (randStep 2.0 .State.status.occupancy.people_count)) }}"
+      # 3. Derive the occupancy change signal from new-vs-prev. `round 0`
+      #    stores a whole-numbered value that the mutation pipeline
+      #    coerces back to int64, so `sub` here returns int64 and the
+      #    comparisons use INTEGER literals (0, not 0.0), text/template's
+      #    gt/lt bucket all signed-int kinds together but treat a float
+      #    literal as a different kind, which would error.
+      - path: status.occupancy.last_event
+        value: >-
+          {{ $delta := sub .State.status.occupancy.people_count .State.status.occupancy.people_count_prev }}{{ if gt $delta 0 }}increased{{ else if lt $delta 0 }}decreased{{ else }}steady{{ end }}
+      # 4. vacant = count is zero. Both operands are int64, so compare
+      #    against the integer literal 0.
+      - path: status.occupancy.vacant
+        value: "{{ if eq .State.status.occupancy.people_count 0 }}true{{ else }}false{{ end }}"
+
+defaults:
+  status:
+    device:
+      # Anchor for the computed uptime field. 0 means "unset", the
+      # simulator seeds it to the device's start time on load.
+      boot_epoch: 0
+    occupancy:
+      people_count: 0
+      # Snapshot of the prior tick's count, used by the drift behavior
+      # to derive the increased/decreased event signal.
+      people_count_prev: 0
+      # increased | decreased | steady, the occupancy change signal.
+      last_event: "steady"
+      vacant: true
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "Census C1"
+      manufacturer: "Tessellate"
+    firmware:
+      version: "1.2.0"
+    # Modeled webhook target. Stored for display; the simulator does not
+    # actually POST to it (no outbound-HTTP transport exists).
+    webhook:
+      url: ""
+    network:
+      hostname: ""

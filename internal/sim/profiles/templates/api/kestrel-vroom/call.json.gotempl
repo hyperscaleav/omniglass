@@ -1,0 +1,4 @@
+{
+  "active": {{ .State | get "status" | get "call" | get "active" }},
+  "participants": {{ .State | get "status" | get "call" | get "participants" }}
+}

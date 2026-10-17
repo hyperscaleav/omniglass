@@ -1,0 +1,6 @@
+{
+  {{/* @field status.meeting.active number "Meetings currently in progress" */}}
+  "active": {{ .State | get "status" | get "meeting" | get "active" }},
+  {{/* @field status.meeting.errors number "Recent join/media errors" */}}
+  "errors": {{ .State | get "status" | get "meeting" | get "errors" }}
+}

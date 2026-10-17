@@ -1,0 +1,16 @@
+# Lobby Digital Signage
+#
+# Wall-mounted display pair for lobby/reception. Just two displays
+# pulling content from a CMS, no codec, no controls. Common in
+# small sales offices.
+
+name: lobby-signage
+doc:
+  summary: "Lobby digital signage: two displays only"
+
+devices:
+  - profile: boreal-edge-85
+    role: display
+    suffix: DS
+    count: 2
+    tags: [display, signage, public]

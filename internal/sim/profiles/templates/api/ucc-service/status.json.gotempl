@@ -1,0 +1,11 @@
+{
+  "service": {
+    "model": "{{ .State | get "configuration" | get "device" | get "model" }}",
+    "firmware": "{{ .State | get "configuration" | get "firmware" | get "version" }}",
+    "uptime": {{ .State | get "status" | get "device" | get "uptime" }}
+  },
+  "meeting": {
+    "active": {{ .State | get "status" | get "meeting" | get "active" }},
+    "errors": {{ .State | get "status" | get "meeting" | get "errors" }}
+  }
+}

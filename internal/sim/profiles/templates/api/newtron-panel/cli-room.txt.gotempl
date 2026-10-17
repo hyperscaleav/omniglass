@@ -1,0 +1,3 @@
+scene     : {{ .State | get "status" | get "room" | get "scene" }}
+source    : {{ .State | get "status" | get "room" | get "source" }}
+occupancy : {{ .State | get "status" | get "panel" | get "occupancy" }}

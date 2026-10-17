@@ -1,0 +1,5 @@
+idx  name             gain    mute   peak
+---  ---------------  ------  -----  ------
+{{- range .State.status.channels }}
+{{ printf "%3v" (index . "index") }}  {{ printf "%-15s" (index . "name") }}  {{ printf "%3v" (index . "gain") }} dB  {{ printf "%-5t" (index . "mute") }}  {{ printf "%3v" (index . "peak_db") }} dB
+{{- end }}

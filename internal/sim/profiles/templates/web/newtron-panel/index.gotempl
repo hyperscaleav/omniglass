@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ .Hostname }}, Newtron Panel 7</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #faf9f6; color: #2a2a30; margin: 0; }
+  .bar { background: #2a2a30; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: baseline; }
+  .bar .brand { font-weight: 700; letter-spacing: 0.06em; color: #e85d24; }
+  .bar .model { opacity: 0.7; font-size: 13px; }
+  main { max-width: 760px; margin: 24px auto; padding: 0 16px; }
+  .card { background: #fff; border: 1px solid #e2dfd6; border-radius: 6px; padding: 18px 22px; margin-bottom: 14px; }
+  .card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #8a7a66; margin: 0 0 10px; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 14px; border-bottom: 1px solid #f3efe6; gap: 16px; }
+  .row:last-child { border-bottom: none; }
+  .row .k { color: #8a7a66; }
+  .row .v { font-weight: 500; }
+  .scene-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 4px; }
+  .scene-grid button { padding: 14px 10px; border: 2px solid #e2dfd6; background: #fbf9f1; color: #2a2a30; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; }
+  .scene-grid button:hover { border-color: #e85d24; }
+  .scene-grid button.active { background: #e85d24; border-color: #c44a18; color: #fff; }
+  .source-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
+  .source-grid button { padding: 10px; border: 1px solid #d5cfbe; background: #fff; color: #2a2a30; border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 13px; }
+  .source-grid button:hover { background: #f3efe6; }
+  .source-grid button.active { background: #2a2a30; border-color: #2a2a30; color: #fff; }
+  input[type=range] { width: 240px; vertical-align: middle; }
+  .slider-val { display: inline-block; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; margin-left: 8px; }
+  .toast { position: fixed; bottom: 20px; right: 20px; background: #e85d24; color: #fff; padding: 10px 16px; border-radius: 4px; font-size: 13px; opacity: 0; transition: opacity 0.2s; pointer-events: none; font-weight: 600; }
+  .toast.show { opacity: 1; }
+  .toast.err { background: #7a2c2c; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div><span class="brand">NEWTRON</span> &middot; {{ .Hostname }}</div>
+  <div class="model">Panel 7</div>
+</div>
+<main>
+  <div class="card">
+    <h2>Scene</h2>
+    {{ $scene := .State | get "status" | get "room" | get "scene" }}
+    <div class="scene-grid">
+      <button class="scene-btn {{ if eq $scene "idle"          }}active{{ end }}" data-scene="idle">Idle</button>
+      <button class="scene-btn {{ if eq $scene "presentation"  }}active{{ end }}" data-scene="presentation">Presentation</button>
+      <button class="scene-btn {{ if eq $scene "vc"            }}active{{ end }}" data-scene="vc">Video call</button>
+      <button class="scene-btn {{ if eq $scene "cleanup"       }}active{{ end }}" data-scene="cleanup">Cleanup</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Source</h2>
+    {{ $src := .State | get "status" | get "room" | get "source" }}
+    <div class="source-grid">
+      <button class="source-btn {{ if eq $src "none"   }}active{{ end }}" data-source="none">None</button>
+      <button class="source-btn {{ if eq $src "laptop" }}active{{ end }}" data-source="laptop">Laptop (HDMI)</button>
+      <button class="source-btn {{ if eq $src "wireless" }}active{{ end }}" data-source="wireless">Wireless cast</button>
+      <button class="source-btn {{ if eq $src "room-pc"  }}active{{ end }}" data-source="room-pc">Room PC</button>
+      <button class="source-btn {{ if eq $src "vc"       }}active{{ end }}" data-source="vc">VC codec</button>
+      <button class="source-btn {{ if eq $src "doc-cam"  }}active{{ end }}" data-source="doc-cam">Doc camera</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Panel</h2>
+    <div class="row">
+      <span class="k">backlight</span>
+      <span class="ctrl">
+        <input type="range" id="brightness" min="0" max="100" value="{{ .State | get "status" | get "panel" | get "brightness" }}">
+        <span class="slider-val" id="brightness-val">{{ .State | get "status" | get "panel" | get "brightness" }}%</span>
+      </span>
+    </div>
+    <div class="row"><span class="k">occupancy</span><span class="v">{{ .State | get "status" | get "panel" | get "occupancy" }}</span></div>
+    <div class="row"><span class="k">firmware</span><span class="v">{{ .State | get "configuration" | get "firmware" | get "version" }}</span></div>
+    <div class="row"><span class="k">serial</span><span class="v">{{ .State | get "configuration" | get "device" | get "serial" }}</span></div>
+    <div class="row"><span class="k">uptime (s)</span><span class="v">{{ .State | get "status" | get "device" | get "uptime" }}</span></div>
+    <div class="row"><span class="k">ip</span><span class="v">{{ .IP }}</span></div>
+    <!-- WEB-DRIVER-ONLY teaching surface: room config version. The value
+         is NOT in any API route, SNMP OID, or SSH `show` command, it
+         ships ONLY as the base64 blob in data-cfgblob below. A plaintext
+         `curl GET /` sees the encoded blob and the "loading…"
+         placeholder, never the value; client JS atob()-decodes it into
+         the DOM, so only a real (or headless-JS) browser renders it. -->
+    <div class="row"><span class="k">room config version</span><span class="v" id="config-version" data-cfgblob="{{ b64enc (.State | get "configuration" | get "room" | get "config_version") }}">loading…</span></div>
+  </div>
+</main>
+<div id="toast" class="toast"></div>
+<script>
+  const toast = document.getElementById('toast');
+  function flash(msg, isErr) {
+    toast.textContent = msg;
+    toast.className = 'toast show' + (isErr ? ' err' : '');
+    setTimeout(() => { toast.className = 'toast' + (isErr ? ' err' : ''); }, 1400);
+  }
+  // Resolve absolute "/api/..." paths against the iframe's own
+  // proxy prefix so they route back through the console's
+  // /proxy/sites/.../web/<port>/ passthrough. A bare leading
+  // slash would otherwise hit the console origin and 404.
+  // See issue #51.
+  function apiURL(path) {
+    if (!path.startsWith('/')) return path;
+    const base = location.pathname.replace(/\/$/, '');
+    return base + path;
+  }
+  async function send(path, body) {
+    try {
+      const r = await fetch(apiURL(path), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) { flash('error: ' + r.status, true); return false; }
+      flash('applied');
+      return true;
+    } catch (e) { flash('network error', true); return false; }
+  }
+  function reload() { setTimeout(() => location.reload(), 250); }
+
+  document.querySelectorAll('.scene-btn').forEach(btn => {
+    btn.onclick = async () => {
+      if (await send('/api/room/scene', { scene: btn.dataset.scene })) reload();
+    };
+  });
+  document.querySelectorAll('.source-btn').forEach(btn => {
+    btn.onclick = async () => {
+      if (await send('/api/room/source', { source: btn.dataset.source })) reload();
+    };
+  });
+  const slider = document.getElementById('brightness');
+  const sliderVal = document.getElementById('brightness-val');
+  slider.oninput = () => { sliderVal.textContent = slider.value + '%'; };
+  slider.onchange = async () => {
+    await send('/api/panel/brightness', { brightness: Number(slider.value) });
+  };
+
+  // WEB-DRIVER-ONLY datapoint: decode the room config version. The
+  // server embeds it as a base64 blob in data-cfgblob; nothing in the
+  // served HTML carries it in plaintext, so a curl scrape never sees
+  // the value. atob() runs only in a real browser (or a headless
+  // JS-executing driver), which renders it into the DOM here.
+  (() => {
+    const el = document.getElementById('config-version');
+    if (!el) return;
+    const blob = el.dataset.cfgblob || '';
+    try {
+      el.textContent = blob ? atob(blob) : '(unset)';
+    } catch (e) {
+      el.textContent = '(decode error)';
+    }
+  })();
+</script>
+</body>
+</html>

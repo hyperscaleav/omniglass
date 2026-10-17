@@ -1,0 +1,40 @@
+# University Classroom
+#
+# Standard university teaching classroom (30-40 students). The four
+# Applied Monitoring case-study devices: a video bar for remote/
+# recording, one large display at the front, a touch panel for
+# instructor control, and a ceiling people counter for occupancy.
+#
+# Device `suffix` values are the clean case-study role names, the
+# fleet compiler builds hostnames as
+# "<site>-[<building>-]<room>-<suffix><N>", so e.g. a Boise classroom
+# 120 video bar resolves to BOI-Hall-A-120-video-bar1.acme.lab.
+
+name: classroom
+doc:
+  summary: "University classroom: video bar, front display, touch panel, people counter"
+
+devices:
+  - profile: kestrel-vroom
+    role: video-bar
+    suffix: video-bar
+    count: 1
+    tags: [video, conferencing, education]
+
+  - profile: boreal-edge-85
+    role: display
+    suffix: display
+    count: 1
+    tags: [display, education]
+
+  - profile: newtron-panel-7
+    role: touch-panel
+    suffix: touch-panel
+    count: 1
+    tags: [control, education]
+
+  - profile: tessellate-census-c1
+    role: people-counter
+    suffix: people-counter
+    count: 1
+    tags: [sensors, occupancy, education]

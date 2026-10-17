@@ -1,0 +1,219 @@
+# yaml-language-server: $schema=schema.json
+# Boreal Edge 85, 85" Commercial Display
+#
+# Boreal is the lab's fictional commercial-display manufacturer. The
+# Edge 85 is a 4K commercial panel used as a presentation display in
+# meeting rooms. It exposes an HTTP web admin + JSON API and SNMP. No
+# command-line interface.
+#
+# Auth pattern: HTTP Basic. The web admin gates every request behind
+# the configured user/password and returns 401 + WWW-Authenticate when
+# the credentials are missing or wrong, so a browser shows the native
+# credential dialog. Default credentials are admin / boreal, baked into
+# the profile so the lab is self-explanatory; a real Boreal device
+# would force a password change on first boot.
+
+name: boreal-edge-85
+manufacturer: Boreal
+model: "Edge 85"
+device_type: display
+# Case-study hostname role. Hostnames come from the system-profile
+# suffix ("display"); slug_prefix only seeds the internal HostID slug.
+slug_prefix: display
+
+doc:
+  summary: "Boreal Edge 85-inch 4K commercial display"
+  description: |
+    Commercial-grade UHD display for meeting rooms. Managed via the
+    Boreal web admin interface and monitored via SNMP. Supports HDMI,
+    DisplayPort, and USB-C inputs.
+
+interfaces:
+  - name: web-admin
+    protocol: http
+    port: 80
+    doc:
+      summary: "Web-based management interface"
+      tags: [management, configuration]
+    auth:
+      type: basic
+      default_user: admin
+      default_password: boreal
+      realm: "Boreal Edge Admin"
+      enforce: true
+    api_surface: boreal-edge
+    routes:
+      - match: "GET /"
+        template: web/boreal-edge/index.gotempl
+        doc: { summary: "Display dashboard" }
+
+      # Course teaching path for display telemetry (power, input,
+      # volume, brightness, temperature) is SNMP, see oid_map below.
+      # This JSON status route is DELIBERATELY identity-only: it carries
+      # model / serial / uptime / network, NOT the telemetry, so SNMP is
+      # the single way in for the five course datapoints. Firmware is
+      # absent here too (web-admin HTML is its only surface). The former
+      # GET /api/display read route (input + brightness duplication) was
+      # removed for the same reason.
+      - match: "GET /api/status"
+        template: api/boreal-edge/status.json.gotempl
+        doc: { summary: "Device identity (model, serial, uptime, network)", tags: [api, status] }
+
+      - match: "POST /api/display/power"
+        template: api/boreal-edge/power-ack.json.gotempl
+        doc: { summary: "Set display power state", tags: [api, control] }
+        example: |
+          {"power": "on"}
+        mutations:
+          - path: status.device.power
+            value: "{{ .Request.Body.power }}"
+            enum: ["on", "off", "standby"]
+
+      - match: "POST /api/display/input"
+        template: api/boreal-edge/input-ack.json.gotempl
+        doc: { summary: "Switch display input source", tags: [api, control] }
+        example: |
+          {"input": "hdmi1"}
+        mutate:
+          status.display.input: "{{ .Request.Body.input }}"
+
+      - match: "POST /api/display/brightness"
+        template: api/boreal-edge/brightness-ack.json.gotempl
+        doc: { summary: "Set display brightness (0-100)", tags: [api, control] }
+        example: |
+          {"brightness": 80}
+        mutate:
+          status.display.brightness: "{{ .Request.Body.brightness }}"
+
+      - match: "POST /api/audio/volume"
+        template: api/boreal-edge/volume-ack.json.gotempl
+        doc: { summary: "Set audio volume (0-100)", tags: [api, control] }
+        example: |
+          {"volume": 30}
+        mutate:
+          status.audio.volume: "{{ .Request.Body.volume }}"
+
+      - match: "POST /api/audio/mute"
+        template: api/boreal-edge/mute-ack.json.gotempl
+        doc: { summary: "Toggle audio mute", tags: [api, control] }
+        example: |
+          {"mute": true}
+        mutate:
+          status.audio.mute: "{{ .Request.Body.mute }}"
+
+      # Reboot resets uptime and a small set of volatile display state
+      # back to declared defaults. Boreal has no CLI surface, so the
+      # anchor is HTTP-only, kept for parity with the other profiles.
+      - match: "POST /api/admin/reboot"
+        template: api/boreal-edge/reboot-ack.json.gotempl
+        doc: { summary: "Reboot display (clears uptime, resets display state)", tags: [api, admin] }
+        example: "{}"
+        mutations: &boreal_reboot_mutations
+          # Re-anchor uptime to "now" so the computed elapsed value drops to ~0.
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.display.input, value: "{{ .Defaults.status.display.input }}" }
+          - { path: status.display.brightness, value: "{{ .Defaults.status.display.brightness }}" }
+
+      # Factory reset expands to every volatile status path with a
+      # declared default in the profile.
+      - match: "POST /api/admin/factory-reset"
+        template: api/boreal-edge/factory-reset-ack.json.gotempl
+        doc: { summary: "Factory reset (resets every status path to defaults)", tags: [api, admin] }
+        example: "{}"
+        mutations: &boreal_factory_reset_mutations
+          - { path: status.device.power, value: "{{ .Defaults.status.device.power }}" }
+          - { path: status.device.boot_epoch, value: "{{ now }}" }
+          - { path: status.display.input, value: "{{ .Defaults.status.display.input }}" }
+          - { path: status.display.brightness, value: "{{ .Defaults.status.display.brightness }}" }
+          - { path: status.display.contrast, value: "{{ .Defaults.status.display.contrast }}" }
+          - { path: status.display.temperature, value: "{{ .Defaults.status.display.temperature }}" }
+          - { path: status.display.resolution, value: "{{ .Defaults.status.display.resolution }}" }
+          - { path: status.audio.volume, value: "{{ .Defaults.status.audio.volume }}" }
+          - { path: status.audio.mute, value: "{{ .Defaults.status.audio.mute }}" }
+
+  - name: snmp
+    protocol: snmp
+    port: 161
+    doc:
+      summary: "SNMP monitoring interface"
+      tags: [monitoring]
+    api_surface: boreal-edge
+    auth:
+      community: "public"
+    # MIB the console serves for this device (under /static/mibs/). The
+    # drawer renders a "download MIB" link next to the SNMP op group so
+    # trainees can grab the OID definitions for the enterprise arc below.
+    mib: BOREAL-EDGE-85-MIB.txt
+    # Boreal uses enterprise OID 1.3.6.1.4.1.55520 (fictional arc)
+    oid_map:
+      status.device.power:              "1.3.6.1.4.1.55520.1.1.1.0"
+      status.device.uptime:             "1.3.6.1.2.1.1.3.0"
+      status.display.input:             "1.3.6.1.4.1.55520.2.2.0"
+      status.display.brightness:        "1.3.6.1.4.1.55520.2.3.0"
+      status.display.temperature:       "1.3.6.1.4.1.55520.2.4.0"
+      status.audio.volume:              "1.3.6.1.4.1.55520.3.1.0"
+      status.audio.mute:                "1.3.6.1.4.1.55520.3.2.0"
+      status.network.ipv4.address:      "1.3.6.1.4.1.55520.4.1.0"
+      status.network.ipv4.mac:          "1.3.6.1.4.1.55520.4.2.0"
+      # Firmware is DELIBERATELY ABSENT from SNMP (and from the JSON
+      # status route below). It is rendered ONLY in the web admin HTML
+      # page (GET /), so the course's "scrape the firmware string off
+      # the rendered admin page" hacking datapoint has exactly one way
+      # in. The .55520.5.1.0 OID that used to carry it is gone.
+      configuration.device.serial:      "1.3.6.1.4.1.55520.5.2.0"
+
+  - name: icmp
+    protocol: icmp
+    doc: { summary: "ICMP ping reachability", tags: [monitoring] }
+    reachable_when: "status.device.power != 'off'"
+
+# Read-derived fields, computed on every read rather than written by a
+# timer. uptime = now - boot_epoch (seconds). No goroutine, no event:
+# reading uptime never floods the event stream the way a per-tick
+# behavior did. The boot_epoch anchor is seeded at device start and
+# re-set to "{{ now }}" by the reboot / factory-reset routes above.
+computed:
+  - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
+
+# Autonomous, scheduled mutations. The simulator spawns one goroutine
+# per behavior and applies the listed mutations on each tick. See
+# .claude/skills/write-profile/SKILL.md for the full schema.
+# Phase 1 supports schedule.interval only; preconditions, probabilistic
+# triggers, and recovery actions land in later phases (issue #52).
+behaviors:
+  - name: temperature_drift
+    schedule:
+      interval: 60s
+    mutations:
+      - path: status.display.temperature
+        value: "{{ sigfig 3 (clamp 34.0 54.0 (randStep 1.0 .State.status.display.temperature)) }}"
+
+defaults:
+  status:
+    device:
+      power: "on"
+      # Anchor for the computed uptime field. 0 means "unset", the
+      # simulator seeds it to the device's start time on load.
+      boot_epoch: 0
+    display:
+      input: "hdmi1"
+      brightness: 80
+      contrast: 70
+      temperature: 38
+      resolution: "3840x2160"
+    audio:
+      volume: 20
+      mute: false
+    network:
+      ipv4:
+        address: ""
+        mac: ""
+  configuration:
+    device:
+      serial: ""
+      model: "Edge 85"
+      manufacturer: "Boreal"
+    firmware:
+      version: "3.4.1"
+    network:
+      hostname: ""

@@ -1,0 +1,10 @@
+{
+  "device": {
+    "model": "{{ .State | get "configuration" | get "device" | get "model" }}",
+    "serial": "{{ .State | get "configuration" | get "device" | get "serial" }}",
+    "uptime": {{ .State | get "status" | get "device" | get "uptime" }}
+  },
+  "network": {
+    "address": "{{ .State | get "status" | get "network" | get "ipv4" | get "address" }}"
+  }
+}

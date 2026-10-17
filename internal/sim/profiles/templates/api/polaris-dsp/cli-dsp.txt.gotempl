@@ -1,0 +1,7 @@
+model            : {{ .State | get "configuration" | get "device" | get "model" }}
+firmware         : {{ .State | get "configuration" | get "firmware" | get "version" }}
+uptime (s)       : {{ .State | get "status" | get "device" | get "uptime" }}
+cpu load (%)     : {{ .State | get "status" | get "dsp" | get "cpu_load" }}
+active channels  : {{ .State | get "status" | get "dsp" | get "active_channels" }} / 16
+temperature (C)  : {{ .State | get "status" | get "dsp" | get "temperature" }}
+fan (rpm)        : {{ .State | get "status" | get "dsp" | get "fan_rpm" }}

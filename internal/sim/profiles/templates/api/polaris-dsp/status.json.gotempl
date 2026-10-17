@@ -1,0 +1,14 @@
+{
+  "device": {
+    "uptime": {{ .State | get "status" | get "device" | get "uptime" }},
+    "model": "{{ .State | get "configuration" | get "device" | get "model" }}",
+    "serial": "{{ .State | get "configuration" | get "device" | get "serial" }}",
+    "firmware": "{{ .State | get "configuration" | get "firmware" | get "version" }}"
+  },
+  "dsp": {
+    "cpu_load": {{ .State | get "status" | get "dsp" | get "cpu_load" }},
+    "active_channels": {{ .State | get "status" | get "dsp" | get "active_channels" }},
+    "temperature": {{ .State | get "status" | get "dsp" | get "temperature" }},
+    "fan_rpm": {{ .State | get "status" | get "dsp" | get "fan_rpm" }}
+  }
+}

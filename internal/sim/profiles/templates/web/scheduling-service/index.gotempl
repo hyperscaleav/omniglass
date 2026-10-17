@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ .Hostname }}, Scheduling Platform</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #0c1512; color: #d9efe6; margin: 0; }
+  .bar { background: #061009; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: baseline; }
+  .bar .brand { font-weight: 700; letter-spacing: 0.06em; color: #4fd6a0; }
+  main { max-width: 720px; margin: 24px auto; padding: 0 16px; }
+  .card { background: #112620; border: 1px solid #1d4030; border-radius: 6px; padding: 18px 22px; margin-bottom: 14px; }
+  .card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #79a892; margin: 0 0 10px; }
+  .row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; border-bottom: 1px solid #1a3a2c; }
+  .row:last-child { border-bottom: none; }
+  .row .k { color: #79a892; }
+  .row .v { font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div><span class="brand">SHINRA SCHED</span> &middot; {{ .Hostname }}</div>
+  <div class="model">Cloud Platform</div>
+</div>
+<main>
+  <div class="card">
+    <h2>Bookings</h2>
+    <div class="row"><span class="k">today</span><span class="v">{{ .State | get "status" | get "bookings" | get "today" }}</span></div>
+    <div class="row"><span class="k">config sync</span><span class="v">{{ if .State | get "configuration" | get "sync_ok" }}ok{{ else }}failed{{ end }}</span></div>
+  </div>
+  <div class="card">
+    <h2>Service</h2>
+    <div class="row"><span class="k">version</span><span class="v">{{ .State | get "configuration" | get "firmware" | get "version" }}</span></div>
+    <div class="row"><span class="k">uptime (s)</span><span class="v">{{ .State | get "status" | get "device" | get "uptime" }}</span></div>
+    <div class="row"><span class="k">ip</span><span class="v">{{ .IP }}</span></div>
+  </div>
+</main>
+<script>
+  // apiURL() resolves absolute "/api/..." paths against the iframe's
+  // own proxy prefix so any future fetch routes back through the
+  // console's /proxy/sites/.../web/<port>/ passthrough instead of the
+  // console origin. See issue #51. (This dashboard is read-only today;
+  // the helper is present for convention + future controls.)
+  function apiURL(path) {
+    if (!path.startsWith('/')) return path;
+    const base = location.pathname.replace(/\/$/, '');
+    return base + path;
+  }
+</script>
+</body>
+</html>

@@ -82,6 +82,12 @@ func TestTestsDoNotBorrowTheSeedCatalog(t *testing.T) {
 		if pinFiles[rel] {
 			return nil
 		}
+		// The simulator's tests name its own profiles (internal/sim/profiles),
+		// which share the seed's fictional model names but live in a separate
+		// embedded catalog: a seed rename cannot break them.
+		if strings.HasPrefix(rel, "internal/sim/") {
+			return nil
+		}
 		src, err := os.ReadFile(path)
 		if err != nil {
 			return err
