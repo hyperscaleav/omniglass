@@ -175,12 +175,13 @@ The [simulator](/architecture/simulation/) runs beside a node with that node's i
 devices placed on it, and the node's simulation view shows what it serves and what reached it:
 
 ```sh
-omniglass sim run --name edge-hq --token ogp_... --port-offset 10000   # serve edge-hq's simulated devices
+omniglass sim run --server https://omniglass.example --name edge-hq --token ogp_... --port-offset 10000   # serve edge-hq's simulated devices
 omniglass node simulation edge-hq   # connected?, capabilities, and hits per simulated device
 ```
 
-Locally, `make dev-sim` (beside `make dev`) enrolls the dev fleet's node and runs the simulator; set
-`SIM_PORT_OFFSET` on a host that cannot bind ports below 1024.
+Locally, `make dev-sim` (beside `make dev`) enrolls the dev fleet's node once, keeps its token in
+`bin/edge-hq.token` for a `node run` to share, and runs the simulator; set `SIM_PORT_OFFSET` on a host
+that cannot bind ports below 1024.
 
 The node-facing `claim` exchange is public (the enrollment token is the authentication), so
 a node presents its name and token to receive its NATS credential:

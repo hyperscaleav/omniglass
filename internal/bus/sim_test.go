@@ -73,8 +73,10 @@ func TestSimRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer srv.Shutdown()
+	permErrs := make(chan error, 16)
 	nc, err := nats.Connect(srv.ClientURL(), nats.UserInfo("node-a", "secret-a"),
-		nats.CustomInboxPrefix(collection.InboxPrefix("node-a")))
+		nats.CustomInboxPrefix(collection.InboxPrefix("node-a")),
+		nats.ErrorHandler(func(_ *nats.Conn, _ *nats.Subscription, e error) { permErrs <- e }))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,8 +127,15 @@ func TestSimRoundTrip(t *testing.T) {
 		t.Fatalf("status = %+v, want the stated capabilities and dsp-1 serving", st)
 	}
 
-	// Isolation: node-a's credential cannot pull node-b's list.
-	if _, err := nc.Request(collection.SimlistSubject("node-b"), req, time.Second); err == nil {
-		t.Fatal("node-a pulled node-b's simlist")
+	// Isolation: node-a's credential is refused node-b's subjects by the
+	// grant itself (a permissions violation), not merely left unanswered.
+	for _, subj := range []string{collection.SimlistSubject("node-b"), collection.SimHitSubject("node-b")} {
+		if err := nc.Publish(subj, req); err != nil {
+			t.Fatal(err)
+		}
+		_ = nc.Flush()
+		if !awaitPermissionViolation(permErrs, 3*time.Second) {
+			t.Fatalf("no permissions violation publishing on %s", subj)
+		}
 	}
 }

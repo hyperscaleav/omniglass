@@ -32,7 +32,7 @@ type simDeviceBody struct {
 	Product        string         `json:"product" doc:"The component's product; its name selects the simulator profile."`
 	Address        string         `json:"address" doc:"The host the component's interfaces target."`
 	Serving        bool           `json:"serving" doc:"Whether the simulator reported serving this device in its latest batch."`
-	Hits           int            `json:"hits" doc:"Requests the simulated device has answered since the server started."`
+	Hits           int            `json:"hits" doc:"Connections and requests the simulated device has answered since the server started."`
 	HitsByProtocol map[string]int `json:"hits_by_protocol"`
 	LastHitAt      *time.Time     `json:"last_hit_at,omitempty"`
 	LastProtocol   string         `json:"last_protocol,omitempty"`
@@ -53,12 +53,12 @@ func registerSimulationRoutes(api huma.API, a *authenticator, gw storage.Gateway
 		Method:      http.MethodGet,
 		Path:        "/nodes/{name}/simulation",
 		Summary:     "Get a node's simulator",
-		Description: "The devices a simulator beside the node serves (each component with an interface placed on the node), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope read. Gated by node:read.",
+		Description: "The devices a simulator beside the node serves (each component with an interface placed on the node, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope node read. Gated by node:read.",
 	}, "node", "read"), func(ctx context.Context, in *nodePathInput) (*simulationOutput, error) {
 		if _, err := gw.GetNode(ctx, in.Name, a.scopeFor(ctx, "node", "read")); err != nil {
 			return nil, mapNodeErr(err)
 		}
-		devices, err := gw.NodeSimDevices(ctx, in.Name)
+		devices, err := gw.NodeSimDevices(ctx, in.Name, a.scopeFor(ctx, "component", "read"))
 		if err != nil {
 			return nil, huma.Error500InternalServerError("get node simulation")
 		}

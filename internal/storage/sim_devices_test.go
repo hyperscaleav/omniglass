@@ -71,7 +71,7 @@ func TestNodeSimDevices(t *testing.T) {
 	iface("dsp-2-http", "tcp", "dsp-2", "sim-b", "127.20.0.6:80")
 	iface("loose-http", "tcp", "loose", "", "127.20.0.7:80")
 
-	got, err := gw.NodeSimDevices(ctx, "sim-a")
+	got, err := gw.NodeSimDevices(ctx, "sim-a", all)
 	if err != nil {
 		t.Fatalf("sim devices: %v", err)
 	}
@@ -83,7 +83,23 @@ func TestNodeSimDevices(t *testing.T) {
 		t.Fatalf("device = %+v", d)
 	}
 
-	none, err := gw.NodeSimDevices(ctx, "no-such-node")
+	// The list honors the caller's component scope (resolved component
+	// roots): a reader whose scope covers dsp-1 sees it, one whose scope
+	// covers only another component, or nothing, does not.
+	var dsp2ID string
+	if err := conn.QueryRow(ctx, `select id from component where name = 'dsp-2'`).Scan(&dsp2ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := gw.NodeSimDevices(ctx, "sim-a", scope.Set{IDs: []string{d.ComponentID}}); err != nil || len(got) != 1 {
+		t.Fatalf("scoped to dsp-1: %v %+v", err, got)
+	}
+	for _, read := range []scope.Set{{IDs: []string{dsp2ID}}, {}} {
+		if got, err := gw.NodeSimDevices(ctx, "sim-a", read); err != nil || len(got) != 0 {
+			t.Fatalf("scope %+v sees %+v (%v), want nothing", read, got, err)
+		}
+	}
+
+	none, err := gw.NodeSimDevices(ctx, "no-such-node", all)
 	if err != nil || len(none) != 0 {
 		t.Fatalf("unknown node: %v %+v, want empty", err, none)
 	}

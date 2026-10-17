@@ -37,8 +37,8 @@ func TestRegistryCountsHitsOnListedDevices(t *testing.T) {
 	if c1.Count != 3 || c1.ByProtocol["http"] != 2 || c1.ByProtocol["snmp"] != 1 {
 		t.Fatalf("c1 = %+v", c1)
 	}
-	if !c1.LastAt.Equal(at(3)) || c1.LastProtocol != "snmp" {
-		t.Fatalf("c1 last = %v %s, want the latest hit", c1.LastAt, c1.LastProtocol)
+	if !c1.LastAt.Equal(at(0)) || c1.LastProtocol != "http" {
+		t.Fatalf("c1 last = %v %s, want the batch's last hit at the server's time", c1.LastAt, c1.LastProtocol)
 	}
 	if _, ok := st.Devices["c9"]; ok {
 		t.Fatal("a hit on an unlisted component was recorded")
@@ -82,5 +82,39 @@ func TestRegistryStatusIsACopy(t *testing.T) {
 	again, _ := r.Status("edge-a")
 	if again.Devices["c1"].ByProtocol["http"] != 1 {
 		t.Fatal("mutating a status reached the registry")
+	}
+}
+
+// A simulator's report cannot grow the registry without bound or pin its
+// view: only known protocols count, a batch is capped, and the server
+// stamps when it heard a hit.
+func TestRegistryBoundsWhatAReportCanDo(t *testing.T) {
+	r := New()
+	r.now = func() time.Time { return at(100) }
+	r.Pulled("edge-a", collection.SimCapabilities{}, []string{"c1"})
+
+	acc, rej := r.Report("edge-a", collection.SimHitBatch{Hits: []collection.SimHit{
+		{ComponentID: "c1", Protocol: "http", At: at(100_000_000)}, // a client clock far ahead
+		{ComponentID: "c1", Protocol: "made-up-protocol-1"},
+		{ComponentID: "c1", Protocol: "made-up-protocol-2"},
+	}})
+	if acc != 1 || rej != 2 {
+		t.Fatalf("accepted %d rejected %d, want only the http hit", acc, rej)
+	}
+	st, _ := r.Status("edge-a")
+	if len(st.Devices["c1"].ByProtocol) != 1 {
+		t.Fatalf("by protocol = %v, want http alone", st.Devices["c1"].ByProtocol)
+	}
+	if !st.Devices["c1"].LastAt.Equal(at(100)) {
+		t.Fatalf("last hit at %v, want the server's time", st.Devices["c1"].LastAt)
+	}
+
+	big := collection.SimHitBatch{}
+	for i := 0; i < MaxHitsPerBatch+10; i++ {
+		big.Hits = append(big.Hits, collection.SimHit{ComponentID: "c1", Protocol: "tcp"})
+	}
+	acc, rej = r.Report("edge-a", big)
+	if acc != MaxHitsPerBatch || rej != 10 {
+		t.Fatalf("oversized batch: accepted %d rejected %d, want the cap", acc, rej)
 	}
 }

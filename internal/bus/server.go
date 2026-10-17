@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"os"
 	"strings"
 	"time"
@@ -245,7 +246,8 @@ func (s *Server) subscribeSim() error {
 		}
 		var req collection.SimlistRequest
 		_ = json.Unmarshal(msg.Data, &req) // an empty request states no capabilities
-		devices, err := s.store.NodeSimDevices(context.Background(), node)
+		// The node's own simulator sees everything placed on its node.
+		devices, err := s.store.NodeSimDevices(context.Background(), node, scope.Set{All: true})
 		if err != nil {
 			return // read failed; drop, the simulator re-pulls
 		}

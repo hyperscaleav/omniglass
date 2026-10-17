@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"net"
 	"testing"
 
@@ -22,7 +23,7 @@ type fakeStore struct {
 func (f fakeStore) AuthenticateNode(_ context.Context, name, hashHex string) (bool, error) {
 	return name == f.validName && hashHex == f.validHashHex, nil
 }
-func (f fakeStore) NodeSimDevices(context.Context, string) ([]storage.SimDevice, error) {
+func (f fakeStore) NodeSimDevices(context.Context, string, scope.Set) ([]storage.SimDevice, error) {
 	return nil, nil
 }
 func (f fakeStore) NodeWorklist(context.Context, string) (storage.Worklist, error) {

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 
 	"github.com/hyperscaleav/omniglass/internal/storage"
 	"github.com/nats-io/nats-server/v2/server"
@@ -17,7 +18,7 @@ type Store interface {
 	AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error)
 	NodeWorklist(ctx context.Context, name string) (storage.Worklist, error)
 	// NodeSimDevices lists the components a simulator beside the node serves.
-	NodeSimDevices(ctx context.Context, name string) ([]storage.SimDevice, error)
+	NodeSimDevices(ctx context.Context, name string, read scope.Set) ([]storage.SimDevice, error)
 	RecordHeartbeat(ctx context.Context, name string) error
 	// The telemetry ingest consumer surface: resolve+confine a task's owner,
 	// snapshot the sample registry (reject-not-project), and write the typed
