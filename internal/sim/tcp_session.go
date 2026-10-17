@@ -9,30 +9,27 @@ import (
 )
 
 // StartTCPSession binds a raw-TCP persistent shell on the device's
-// loopback IP:port. Unlike the SSH and Telnet listeners, raw TCP has
-// no auth ceremony, no IAC negotiation, and no shell channel
-// handshake, every accept hands directly off to runShellSession,
-// which honors the interface's configured wire-format quirks
-// (LineEnding, FrameStart/End, StripChecksumBytes) the same way it
-// does for SSH and Telnet.
-//
-// Mirrors the SSH and Telnet listener Start* shape so the engine's
-// dispatch table needs only one extra case. The session registry must
-// be attached via AttachTCPSession before calling StartTCPSession,
-// otherwise the listener accepts connections and immediately closes
-// them with a slog.Warn, refusing connections without a registry
-// is friendlier than serving them in a degraded "no sessions" mode.
+// loopback IP for its first attached registry. The engine starts each
+// persistent tcp interface with its own registry (startTCPSession).
 func (d *Device) StartTCPSession(port int) error {
+	return d.startTCPSession(port, d.TCPSession())
+}
+
+// startTCPSession binds one raw-TCP listener serving one registry's
+// sessions. A nil registry is a misconfiguration: every connect is closed.
+func (d *Device) startTCPSession(port int, reg *SessionRegistry) error {
 	addr := fmt.Sprintf("%s:%d", d.LoopbackIP.String(), port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listening on %s: %w", addr, err)
 	}
 	tracked := trackConns(lis, d.logConnect)
-	d.tcpSessionListener = tracked
+	d.tcpMu.Lock()
+	d.tcpListeners = append(d.tcpListeners, tracked)
+	d.tcpMu.Unlock()
 
 	go func() {
-		slog.Info("device TCP-session started", "device", d.Hostname, "addr", addr)
+		slog.Debug("device TCP-session started", "device", d.Hostname, "addr", addr)
 		for {
 			conn, err := tracked.Accept()
 			if err != nil {
@@ -41,27 +38,43 @@ func (d *Device) StartTCPSession(port int) error {
 				}
 				return
 			}
-			go d.serveTCPSession(conn, port)
+			go d.serveTCPSession(conn, port, reg)
 		}
 	}()
 	return nil
 }
 
-// StopTCPSession closes the raw-TCP listener and every connection it accepted.
+// StopTCPSession closes every raw-TCP listener and every connection they
+// accepted.
 func (d *Device) StopTCPSession() {
-	if d.tcpSessionListener != nil {
-		d.tcpSessionListener.Close()
+	d.tcpMu.Lock()
+	ls := d.tcpListeners
+	d.tcpListeners = nil
+	d.tcpMu.Unlock()
+	for _, l := range ls {
+		_ = l.Close()
 	}
+}
+
+// TCPSessionAddrs returns the bound address of each raw-TCP listener, in
+// start order.
+func (d *Device) TCPSessionAddrs() []net.Addr {
+	d.tcpMu.Lock()
+	defer d.tcpMu.Unlock()
+	out := make([]net.Addr, 0, len(d.tcpListeners))
+	for _, l := range d.tcpListeners {
+		out = append(out, l.Addr())
+	}
+	return out
 }
 
 // serveTCPSession is the per-connection handler. Opens a session
 // against the device's TCP SessionRegistry and runs the shared shell
 // loop. No deadline is set on the conn, persistent sessions hold
 // open across many commands and welcome banners arrive immediately.
-func (d *Device) serveTCPSession(conn net.Conn, port int) {
+func (d *Device) serveTCPSession(conn net.Conn, port int, reg *SessionRegistry) {
 	defer conn.Close()
 
-	reg := d.tcpSession
 	if reg == nil {
 		// Listener bound without a registry, operator misconfig.
 		// Log loudly and close; profiles that declare persistent: true
@@ -84,17 +97,4 @@ func (d *Device) serveTCPSession(conn net.Conn, port int) {
 
 	rd := bufio.NewReader(conn)
 	runShellSession(d, sess, rd, conn, port, "tcp")
-}
-
-// tcpPort derives the port the TCP-session listener bound to. Matches
-// the sshPort / telnet port pattern used elsewhere for consistent
-// event-log Port fields. Best-effort read off the listener's address.
-func (d *Device) tcpPort() int {
-	if d.tcpSessionListener == nil {
-		return 0
-	}
-	if tcp, ok := d.tcpSessionListener.Addr().(*net.TCPAddr); ok {
-		return tcp.Port
-	}
-	return 0
 }

@@ -527,10 +527,30 @@ func (s *Store) loadDevices(fsys fs.FS, dir string) error {
 		if _, exists := s.Devices[p.Name]; exists {
 			return fmt.Errorf("duplicate device profile name: %s", p.Name)
 		}
+		if err := validateInterfaces(&p); err != nil {
+			return fmt.Errorf("%s: %w", full, err)
+		}
 		if err := validateComputed(&p); err != nil {
 			return fmt.Errorf("%s: %w", full, err)
 		}
 		s.Devices[p.Name] = &p
+	}
+	return nil
+}
+
+// validateInterfaces rejects what the simulator cannot serve faithfully: a
+// device has one SSH and one Telnet listener, so a second interface of
+// either would silently go unserved.
+func validateInterfaces(p *DeviceProfile) error {
+	seen := map[string]string{}
+	for _, iface := range p.Interfaces {
+		if iface.Protocol != "ssh" && iface.Protocol != "telnet" {
+			continue
+		}
+		if prev, dup := seen[iface.Protocol]; dup {
+			return fmt.Errorf("interfaces %q and %q are both %s; a device serves one %s interface", prev, iface.Name, iface.Protocol, iface.Protocol)
+		}
+		seen[iface.Protocol] = iface.Name
 	}
 	return nil
 }

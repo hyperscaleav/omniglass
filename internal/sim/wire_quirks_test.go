@@ -208,7 +208,7 @@ func TestRawTCPSession(t *testing.T) {
 	}
 	t.Cleanup(dev.StopTCPSession)
 
-	addr := dev.tcpSessionListener.Addr().String()
+	addr := dev.TCPSessionAddrs()[0].String()
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		t.Fatalf("dial %s: %v", addr, err)

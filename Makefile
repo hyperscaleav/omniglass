@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify dev-sim
+.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify dev-sim bench-sim
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -124,6 +124,11 @@ test-short:
 # another worktree moves these numbers more than most regressions would.
 bench:
 	go test -run '^$$' -bench . -benchmem -count=5 ./internal/storage/...
+
+# One simulator process serving a 1,000-device fleet: startup time, goroutines
+# and heap while serving, and goroutines left behind after it stops.
+bench-sim:
+	go test -run '^$$' -bench BenchmarkServeThousandDevices -benchtime 3x ./internal/sim/
 
 # Browser-driven e2e of the console against the built binary: brings up the dev
 # Postgres, embeds + serves the console, mints a token, and drives it with

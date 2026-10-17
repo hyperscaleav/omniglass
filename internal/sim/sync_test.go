@@ -223,3 +223,34 @@ func TestEngineSyncDerivesStateForAListedDevice(t *testing.T) {
 		t.Fatalf("serials %q and %q, want one non-empty serial derived from the id", first, second)
 	}
 }
+
+// A device with two line-protocol interfaces serves each with its own
+// session config, and a stop closes both listeners.
+func TestEngineServesEachTCPInterfaceSeparately(t *testing.T) {
+	e := newCatalogEngine(t)
+	ip := "127.88.5.1"
+	if err := e.Sync([]DeviceSnapshot{{DeviceID: "census", Hostname: "census", LoopbackIP: ip,
+		ProfileName: "tessellate-census-c1", Version: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	ascii := net.JoinHostPort(ip, fmt.Sprint(5000+syncPortShift))
+	c, err := net.DialTimeout("tcp", ascii, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	buf := make([]byte, 256)
+	n, _ := c.Read(buf)
+	c.Close()
+	if !strings.Contains(string(buf[:n]), "FEED READY") {
+		t.Fatalf("port 5000 greeted %q, want the ASCII band's welcome", buf[:n])
+	}
+
+	e.StopAll()
+	for _, p := range []int{5000, 5001} {
+		if c, err := net.DialTimeout("tcp", net.JoinHostPort(ip, fmt.Sprint(p+syncPortShift)), 300*time.Millisecond); err == nil {
+			c.Close()
+			t.Errorf("port %d still accepts after StopAll", p)
+		}
+	}
+}

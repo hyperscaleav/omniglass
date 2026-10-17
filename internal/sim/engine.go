@@ -58,7 +58,7 @@ func (e *Engine) SetSessionPublisher(pub SessionEventPublisher) {
 		if reg := d.TelnetSession(); reg != nil {
 			reg.SetBus(pub)
 		}
-		if reg := d.TCPSession(); reg != nil {
+		for _, reg := range d.TCPSessions() {
 			reg.SetBus(pub)
 		}
 	}
@@ -384,10 +384,13 @@ func (e *Engine) startInterface(dev *Device, iface profile.Interface) error {
 		// listener; the LoadDevices path warned and skipped the
 		// non-persistent case, so the absence of a registry here
 		// is the same condition.
-		if dev.TCPSession() == nil {
-			return nil
+		port := e.port(iface.Port)
+		for _, reg := range dev.TCPSessions() {
+			if reg.cfg.Port == port {
+				return dev.startTCPSession(port, reg)
+			}
 		}
-		return dev.StartTCPSession(e.port(iface.Port))
+		return nil
 	case "udp":
 		return dev.StartUDP(e.port(iface.Port))
 	case "icmp":
