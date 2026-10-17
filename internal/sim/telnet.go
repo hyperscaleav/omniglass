@@ -44,7 +44,7 @@ func (d *Device) StartTelnet(port int, defaultUser, defaultPassword string, perm
 	}
 
 	go func() {
-		slog.Info("device telnet started", "device", d.Hostname, "addr", addr)
+		slog.Debug("device telnet started", "device", d.Hostname, "addr", addr)
 		for {
 			conn, err := tracked.Accept()
 			if err != nil {

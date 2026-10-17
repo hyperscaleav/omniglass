@@ -70,7 +70,7 @@ func (d *Device) StartSSH(port int, defaultUser, defaultPassword string, permiss
 	d.sshListener = tracked
 
 	go func() {
-		slog.Info("device SSH started", "device", d.Hostname, "addr", addr)
+		slog.Debug("device SSH started", "device", d.Hostname, "addr", addr)
 		for {
 			conn, err := tracked.Accept()
 			if err != nil {

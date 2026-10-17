@@ -42,7 +42,7 @@ func (d *Device) StartSNMP(port int, community string) error {
 	}
 
 	go func() {
-		slog.Info("device SNMP started", "device", d.Hostname, "addr", addr)
+		slog.Debug("device SNMP started", "device", d.Hostname, "addr", addr)
 		if err := srv.ServeForever(); err != nil && !strings.Contains(err.Error(), "closed") {
 			slog.Error("device SNMP error", "device", d.Hostname, "error", err)
 		}

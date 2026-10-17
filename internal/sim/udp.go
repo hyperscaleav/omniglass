@@ -20,7 +20,7 @@ func (d *Device) StartUDP(port int) error {
 	d.udpConn = conn
 
 	go func() {
-		slog.Info("device UDP started", "device", d.Hostname, "addr", addr)
+		slog.Debug("device UDP started", "device", d.Hostname, "addr", addr)
 		buf := make([]byte, 4096)
 		for {
 			n, from, err := conn.ReadFrom(buf)

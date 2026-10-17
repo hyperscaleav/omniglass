@@ -273,14 +273,15 @@ type Device struct {
 	rand *deviceRand
 
 	// One listener per protocol. Future stages populate snmp/ssh/telnet/udp.
-	httpMu             sync.Mutex
-	httpServers        []*http.Server // one per declared http interface
-	httpAddrs          []net.Addr
-	snmpServer         snmpShutdowner // *GoSNMPServer.SNMPServer, kept as interface so device.go doesn't import the server package
-	sshListener        net.Listener
-	telnetListener     net.Listener
-	tcpSessionListener net.Listener // raw TCP, persistent-session-only (no one-shot equivalent)
-	udpConn            net.PacketConn
+	httpMu         sync.Mutex
+	httpServers    []*http.Server // one per declared http interface
+	httpAddrs      []net.Addr
+	snmpServer     snmpShutdowner // *GoSNMPServer.SNMPServer, kept as interface so device.go doesn't import the server package
+	sshListener    net.Listener
+	telnetListener net.Listener
+	tcpMu          sync.Mutex
+	tcpListeners   []net.Listener // raw TCP, persistent-session-only (no one-shot equivalent), one per interface
+	udpConn        net.PacketConn
 
 	// Persistent-session machinery. Populated by the engine when an
 	// interface is declared with persistent: true. The SSH registry
@@ -292,7 +293,7 @@ type Device struct {
 	// raw TCP, declines to serve).
 	sshSession    *SessionRegistry
 	telnetSession *SessionRegistry
-	tcpSession    *SessionRegistry
+	tcpSessions   []*SessionRegistry // one per persistent tcp interface
 }
 
 // applyExternalDiffs writes an externally applied diff batch into the
@@ -345,8 +346,8 @@ func (d *Device) fanoutToSessions(diffs map[string]any) {
 	if d.telnetSession != nil {
 		d.telnetSession.Fanout(diffs)
 	}
-	if d.tcpSession != nil {
-		d.tcpSession.Fanout(diffs)
+	for _, r := range d.TCPSessions() {
+		r.Fanout(diffs)
 	}
 }
 
@@ -361,12 +362,20 @@ func (d *Device) AttachSSHSession(r *SessionRegistry) { d.sshSession = r }
 // rules as AttachSSHSession.
 func (d *Device) AttachTelnetSession(r *SessionRegistry) { d.telnetSession = r }
 
-// AttachTCPSession installs a SessionRegistry on the raw-TCP
-// session listener. Required before StartTCPSession, raw TCP has
-// no fallback "one-shot" mode, the listener exists solely to serve
-// persistent sessions. Idempotent; passing nil unbinds the registry
-// and causes subsequent accepts to close immediately.
-func (d *Device) AttachTCPSession(r *SessionRegistry) { d.tcpSession = r }
+// AttachTCPSession adds a raw-TCP session registry, one per persistent
+// tcp interface (a device may declare several, each on its own port with
+// its own framing and commands). Raw TCP has no fallback "one-shot" mode:
+// a listener exists solely to serve its registry's sessions. Passing nil
+// unbinds them all.
+func (d *Device) AttachTCPSession(r *SessionRegistry) {
+	d.tcpMu.Lock()
+	defer d.tcpMu.Unlock()
+	if r == nil {
+		d.tcpSessions = nil
+		return
+	}
+	d.tcpSessions = append(d.tcpSessions, r)
+}
 
 // SSHSession returns the SSH session registry (may be nil).
 func (d *Device) SSHSession() *SessionRegistry { return d.sshSession }
@@ -374,8 +383,20 @@ func (d *Device) SSHSession() *SessionRegistry { return d.sshSession }
 // TelnetSession returns the Telnet session registry (may be nil).
 func (d *Device) TelnetSession() *SessionRegistry { return d.telnetSession }
 
-// TCPSession returns the raw-TCP session registry (may be nil).
-func (d *Device) TCPSession() *SessionRegistry { return d.tcpSession }
+// TCPSession returns the first raw-TCP session registry (may be nil).
+func (d *Device) TCPSession() *SessionRegistry {
+	if rs := d.TCPSessions(); len(rs) > 0 {
+		return rs[0]
+	}
+	return nil
+}
+
+// TCPSessions returns every raw-TCP session registry, in attach order.
+func (d *Device) TCPSessions() []*SessionRegistry {
+	d.tcpMu.Lock()
+	defer d.tcpMu.Unlock()
+	return append([]*SessionRegistry(nil), d.tcpSessions...)
+}
 
 // snmpShutdowner is satisfied by GoSNMPServer.SNMPServer. Interface kept
 // here so device.go's core types don't drag in the SNMP server package.
@@ -1280,7 +1301,7 @@ func (d *Device) StartHTTP(port int, tlsCert *tls.Certificate) error {
 	}
 
 	go func() {
-		slog.Info("device HTTP started", "device", d.Hostname, "scheme", scheme, "addr", addr)
+		slog.Debug("device HTTP started", "device", d.Hostname, "scheme", scheme, "addr", addr)
 		var err error
 		if tlsCert != nil {
 			err = srv.ServeTLS(lis, "", "")
