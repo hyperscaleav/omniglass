@@ -13,8 +13,8 @@ type trackedListener struct {
 	net.Listener
 	onAccept func(net.Conn) // nil: accept silently
 	mu       sync.Mutex
-	conns  map[net.Conn]struct{}
-	closed bool
+	conns    map[net.Conn]struct{}
+	closed   bool
 }
 
 func trackConns(l net.Listener, onAccept func(net.Conn)) *trackedListener {
