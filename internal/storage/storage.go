@@ -540,6 +540,8 @@ type Gateway interface {
 	AuthenticateNode(ctx context.Context, name, tokenHashHex string) (bool, error)
 	RecordHeartbeat(ctx context.Context, name string) error
 	NodeWorklist(ctx context.Context, name string) (Worklist, error)
+	// NodeSimDevices lists the components a simulator beside the node serves.
+	NodeSimDevices(ctx context.Context, name string) ([]SimDevice, error)
 	// ResolveTaskOwner binds a task's owner component and confines the node to its
 	// own tasks, for the telemetry ingest consumer.
 	ResolveTaskOwner(ctx context.Context, taskID, nodeName string) (TaskOwner, bool, error)

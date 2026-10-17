@@ -454,6 +454,9 @@ func (UnimplementedGateway) RecordHeartbeat(context.Context, string) error { ret
 func (UnimplementedGateway) NodeWorklist(context.Context, string) (Worklist, error) {
 	return Worklist{}, nil
 }
+func (UnimplementedGateway) NodeSimDevices(context.Context, string) ([]SimDevice, error) {
+	return nil, nil
+}
 func (UnimplementedGateway) ResolveTaskOwner(context.Context, string, string) (TaskOwner, bool, error) {
 	return TaskOwner{}, false, nil
 }

@@ -266,8 +266,10 @@ var nameOverride = map[string]([]string){
 	"list-auth-me-sessions":       {"session", "list"},
 	"revoke-auth-me-session":      {"session", "revoke"},
 	"revoke-all-auth-me-sessions": {"session", "revoke-all"},
-	"login":                       {"auth", "login"},
-	"logout":                      {"auth", "logout"},
+	// A node has one simulator: a singular read, not a list.
+	"get-node-simulation": {"node", "simulation"},
+	"login":               {"auth", "login"},
+	"logout":              {"auth", "logout"},
 }
 
 func buildCommands(doc spec, base string) []command {

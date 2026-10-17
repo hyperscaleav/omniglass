@@ -16,6 +16,8 @@ func TestNodePermissionsScoped(t *testing.T) {
 		collection.WorklistSubject("node-a"),
 		collection.HeartbeatSubject("node-a"),
 		collection.TelemetrySubject("node-a"),
+		collection.SimlistSubject("node-a"),
+		collection.SimHitSubject("node-a"),
 	}
 	if got := perms.Publish.Allow; !equal(got, wantPub) {
 		t.Errorf("publish allow = %v, want %v", got, wantPub)

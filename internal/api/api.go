@@ -42,6 +42,9 @@ type options struct {
 	// the handler runs without a bus, and the push route then answers 503 rather
 	// than pretending to accept telemetry nothing will ever consume.
 	telemetryPub TelemetryPublisher
+	// simStatus reports the simulators beside the server's nodes. Nil reads
+	// as no simulator anywhere.
+	simStatus SimStatusFunc
 }
 
 // Option configures NewHandler.
@@ -277,6 +280,7 @@ func registerRoutes(api huma.API, gw storage.Gateway, svc *settings.Service, o o
 	registerSystemLogRoutes(api, a, gw)
 	registerSeriesRoutes(api, a, gw)
 	registerTelemetryRoutes(api, a, gw, o.telemetryPub)
+	registerSimulationRoutes(api, a, gw, o.simStatus)
 	registerEventTypeRoutes(api, a, gw)
 	registerCommandTypeRoutes(api, a, gw)
 	registerCommandRoutes(api, a, gw)
