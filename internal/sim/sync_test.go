@@ -129,6 +129,11 @@ func TestEngineSyncServesPastAFailedListener(t *testing.T) {
 	if code, _ := dspDo(t, http.MethodGet, dspURL(b, "/api/status"), ""); code != http.StatusOK {
 		t.Fatalf("b dark because a failed: %d", code)
 	}
+	for _, d := range e.Devices() {
+		if d.DeviceID == "dsp-a" {
+			t.Fatal("dsp-a held as served after it failed to start")
+		}
+	}
 }
 
 // Every protocol's hits arrive on one stream, for devices added before or
@@ -252,5 +257,58 @@ func TestEngineServesEachTCPInterfaceSeparately(t *testing.T) {
 			c.Close()
 			t.Errorf("port %d still accepts after StopAll", p)
 		}
+	}
+}
+
+// A device that takes over an address another device just left serves on
+// it: removals stop before additions start.
+func TestEngineSyncHandsAnAddressToANewDevice(t *testing.T) {
+	e := newCatalogEngine(t)
+	ip := "127.88.6.1"
+	if err := e.Sync([]DeviceSnapshot{dspSnapshot("old", ip)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Sync([]DeviceSnapshot{dspSnapshot("new", ip)}); err != nil {
+		t.Fatalf("handover: %v", err)
+	}
+	if code, _ := dspDo(t, http.MethodGet, dspURL(ip, "/api/status"), ""); code != http.StatusOK {
+		t.Fatalf("new device on a freed address: %d", code)
+	}
+	// Two devices swapping addresses in one sync both serve.
+	a, b := "127.88.6.2", "127.88.6.3"
+	if err := e.Sync([]DeviceSnapshot{dspSnapshot("x", a), dspSnapshot("y", b)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Sync([]DeviceSnapshot{dspSnapshot("x", b), dspSnapshot("y", a)}); err != nil {
+		t.Fatalf("swap: %v", err)
+	}
+	for _, ip := range []string{a, b} {
+		if code, _ := dspDo(t, http.MethodGet, dspURL(ip, "/api/status"), ""); code != http.StatusOK {
+			t.Fatalf("after the swap %s answers %d", ip, code)
+		}
+	}
+}
+
+// A device that failed to start is not counted as served, and the next
+// sync tries it again.
+func TestEngineSyncRetriesADeviceThatFailedToStart(t *testing.T) {
+	e := newCatalogEngine(t)
+	ip := "127.88.7.1"
+	squat, err := net.Listen("tcp", net.JoinHostPort(ip, fmt.Sprint(80+syncPortShift)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp", ip)}); err == nil {
+		t.Fatal("sync with a squatted port reported no error")
+	}
+	if n := len(e.Devices()); n != 0 {
+		t.Fatalf("a device that failed to start is held as served (%d devices)", n)
+	}
+	squat.Close()
+	if err := e.Sync([]DeviceSnapshot{dspSnapshot("dsp", ip)}); err != nil {
+		t.Fatalf("retry: %v", err)
+	}
+	if code, _ := dspDo(t, http.MethodGet, dspURL(ip, "/api/status"), ""); code != http.StatusOK {
+		t.Fatalf("retried device: %d", code)
 	}
 }

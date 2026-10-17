@@ -1877,7 +1877,7 @@ export interface paths {
         };
         /**
          * Get a node's simulator
-         * @description The devices a simulator beside the node serves (each component with an interface placed on the node), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope read. Gated by node:read.
+         * @description The devices a simulator beside the node serves (each component with an interface placed on the node, within the caller's component read scope), joined to the hits the server has seen and the simulator's capabilities. Hits are live and per server process, not stored. Requires an all-scope node read. Gated by node:read.
          */
         get: operations["get-node-simulation"];
         put?: never;
@@ -7160,7 +7160,7 @@ export interface components {
             component_id: string;
             /**
              * Format: int64
-             * @description Requests the simulated device has answered since the server started.
+             * @description Connections and requests the simulated device has answered since the server started.
              */
             hits: number;
             hits_by_protocol: {

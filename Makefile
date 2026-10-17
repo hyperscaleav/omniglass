@@ -236,13 +236,19 @@ dev: up build-web
 	./bin/omniglass server
 
 # The simulator beside the dev fleet's node: run it in a second terminal while
-# `make dev` serves. It enrolls edge-hq afresh with the dev owner's token (the
-# dev seed keeps no node secret) and serves the devices placed on edge-hq.
-# Ports below 1024 need a privilege an unprivileged host lacks: grant the binary
-# cap_net_bind_service, or shift every port with SIM_PORT_OFFSET.
+# `make dev` serves. The first run enrolls edge-hq with the dev owner's token
+# (the dev seed keeps no node secret) and keeps the node token in
+# bin/edge-hq.token; later runs reuse it, so a `node run` sharing that token is
+# not cut off. Empty the file to enroll afresh. Ports below 1024 need a
+# privilege an unprivileged host lacks: grant the binary cap_net_bind_service,
+# or shift every port with SIM_PORT_OFFSET.
 SIM_PORT_OFFSET ?= 0
 dev-sim: build
-	@owner=$$(./bin/omniglass token dev --description "dev sim enroll" | sed -n 's/^  \([^ ][^ ]*\)$$/\1/p'); \
-	node=$$(./bin/omniglass node enroll edge-hq --server http://localhost:8080 --token "$$owner" | sed -n 's/.*"token": *"\([^"]*\)".*/\1/p'); \
-	test -n "$$node" || { echo "dev-sim: could not enroll edge-hq; is make dev serving?"; exit 1; }; \
-	exec ./bin/omniglass sim run --server http://localhost:8080 --name edge-hq --token "$$node" --port-offset $(SIM_PORT_OFFSET)
+	@if [ ! -s bin/edge-hq.token ]; then \
+		owner=$$(./bin/omniglass token dev --description "dev sim enroll" | sed -n 's/^  \([^ ][^ ]*\)$$/\1/p'); \
+		./bin/omniglass node enroll edge-hq --server http://localhost:8080 --token "$$owner" \
+			| sed -n 's/.*"token": *"\([^"]*\)".*/\1/p' > bin/edge-hq.token; \
+	fi; \
+	test -s bin/edge-hq.token || { echo "dev-sim: could not enroll edge-hq; is make dev serving?"; exit 1; }; \
+	echo "edge-hq's node token is in bin/edge-hq.token (node run --name edge-hq --token \$$(cat bin/edge-hq.token))"; \
+	exec ./bin/omniglass sim run --server http://localhost:8080 --name edge-hq --token "$$(cat bin/edge-hq.token)" --port-offset $(SIM_PORT_OFFSET)

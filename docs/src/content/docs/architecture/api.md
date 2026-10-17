@@ -290,7 +290,8 @@ is fleet-wide, so `node:read` and `node:create` require an **all-scope** grant.
 
 **A node's simulator is a read beside it.** `GET /nodes/{name}/simulation` (gated `node:read`, all-scope)
 lists the components a [simulator](/architecture/simulation/) beside the node serves (each component with an
-endpoint placed on the node, its product and target host), joined to the simulator's stated capabilities
+endpoint placed on the node and inside the caller's component read scope, its product and target host),
+joined to the simulator's stated capabilities
 and the hits the server has seen per device. Hits are a live signal kept in the server's memory, not
 stored, so they start from zero when the server restarts; a node with no simulator reads `connected: false`.
 

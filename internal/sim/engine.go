@@ -16,19 +16,19 @@ import (
 
 // Engine manages all simulated devices for a site.
 type Engine struct {
-	store          *profile.Store
-	templates      fs.FS
-	portMap        func(int) int // nil serves each profile port as declared
-	mu             sync.Mutex    // guards devices
-	devices        []*Device
-	seamMu         sync.RWMutex // guards the observer seams below
-	logger         RequestLogger
-	reqPub         RequestPublisher
-	diffPub        DiffPublisher
-	hit            func(Hit)
-	certs          certCache // lazy self-signed cert shared by TLS interfaces
-	sessionPub     SessionEventPublisher
-	sessionConfigs map[string]map[string]*SessionConfig // device hostname → interface name → cfg
+	store      *profile.Store
+	templates  fs.FS
+	portMap    func(int) int // nil serves each profile port as declared
+	syncMu     sync.Mutex    // serializes Sync
+	mu         sync.Mutex    // guards devices
+	devices    []*Device
+	seamMu     sync.RWMutex // guards the observer seams below
+	logger     RequestLogger
+	reqPub     RequestPublisher
+	diffPub    DiffPublisher
+	hit        func(Hit)
+	certs      certCache // lazy self-signed cert shared by TLS interfaces
+	sessionPub SessionEventPublisher
 }
 
 // NewEngine creates a simulator engine over a profile store and a templates
@@ -36,9 +36,8 @@ type Engine struct {
 // is valid for profiles that render no templates.
 func NewEngine(store *profile.Store, templates fs.FS) *Engine {
 	return &Engine{
-		store:          store,
-		templates:      templates,
-		sessionConfigs: make(map[string]map[string]*SessionConfig),
+		store:     store,
+		templates: templates,
 	}
 }
 
@@ -199,10 +198,6 @@ func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[st
 				// Session events report the port the listener binds, like
 				// every other hit, not the profile's declared port.
 				cfg.Port = e.port(iface.Port)
-				if e.sessionConfigs[snap.Hostname] == nil {
-					e.sessionConfigs[snap.Hostname] = make(map[string]*SessionConfig)
-				}
-				e.sessionConfigs[snap.Hostname][iface.Name] = cfg
 				reg := NewSessionRegistry(dev, cfg, e.sessionPub)
 				switch iface.Protocol {
 				case "ssh":
@@ -304,8 +299,16 @@ func (e *Engine) startDevice(dev *Device) error {
 // follows the server: a new device is built and started, a device no longer
 // listed is stopped, and a device whose address or profile changed is
 // restarted. A device unchanged on both sides keeps serving with its live
-// state. Failures are joined, each naming its device; the rest still serve.
+// state. Every departing device stops before any arriving one starts, so an
+// address handed from one device to another (or swapped between two) is
+// free when it is bound. A device that fails to start is stopped and left
+// out, so it is not reported as served and the next Sync tries it again.
+// Failures are joined, each naming its device; the rest still serve. Calls
+// are serialized.
 func (e *Engine) Sync(snapshots []DeviceSnapshot) error {
+	e.syncMu.Lock()
+	defer e.syncMu.Unlock()
+
 	e.mu.Lock()
 	current := make(map[string]*Device, len(e.devices))
 	for _, d := range e.devices {
@@ -313,19 +316,28 @@ func (e *Engine) Sync(snapshots []DeviceSnapshot) error {
 	}
 	e.mu.Unlock()
 
-	peersByRoom := roomPeers(snapshots)
-	var next []*Device
-	var errs []error
-	wanted := make(map[string]bool, len(snapshots))
+	// Phase one: keep the unchanged, stop everything else that is leaving
+	// or changing.
+	kept := make(map[string]*Device, len(snapshots))
+	var arriving []DeviceSnapshot
 	for _, snap := range snapshots {
-		wanted[snap.DeviceID] = true
-		if d, ok := current[snap.DeviceID]; ok {
-			if d.LoopbackIP.String() == snap.LoopbackIP && d.ProfileName == snap.ProfileName {
-				next = append(next, d)
-				continue
-			}
+		if d, ok := current[snap.DeviceID]; ok && d.LoopbackIP.String() == snap.LoopbackIP && d.ProfileName == snap.ProfileName {
+			kept[snap.DeviceID] = d
+			continue
+		}
+		arriving = append(arriving, snap)
+	}
+	for id, d := range current {
+		if kept[id] == nil {
 			e.stopDevice(d)
 		}
+	}
+
+	// Phase two: build and start the arrivals.
+	peersByRoom := roomPeers(snapshots)
+	started := make(map[string]*Device, len(arriving))
+	var errs []error
+	for _, snap := range arriving {
 		dev, err := e.buildDevice(snap, peersByRoom)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("device %s: %w", snap.DeviceID, err))
@@ -334,12 +346,20 @@ func (e *Engine) Sync(snapshots []DeviceSnapshot) error {
 		if dev == nil {
 			continue
 		}
-		errs = append(errs, e.startDevice(dev))
-		next = append(next, dev)
+		if err := e.startDevice(dev); err != nil {
+			e.stopDevice(dev)
+			errs = append(errs, err)
+			continue
+		}
+		started[snap.DeviceID] = dev
 	}
-	for id, d := range current {
-		if !wanted[id] {
-			e.stopDevice(d)
+
+	next := make([]*Device, 0, len(snapshots))
+	for _, snap := range snapshots {
+		if d := kept[snap.DeviceID]; d != nil {
+			next = append(next, d)
+		} else if d := started[snap.DeviceID]; d != nil {
+			next = append(next, d)
 		}
 	}
 	e.mu.Lock()
@@ -423,9 +443,6 @@ func (e *Engine) stopDevice(dev *Device) {
 	dev.StopTelnet()
 	dev.StopTCPSession()
 	dev.StopUDP()
-	e.mu.Lock()
-	delete(e.sessionConfigs, dev.Hostname)
-	e.mu.Unlock()
 }
 
 // Devices returns the devices currently loaded.

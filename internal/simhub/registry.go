@@ -11,6 +11,15 @@ import (
 	"github.com/hyperscaleav/omniglass/internal/collection"
 )
 
+// MaxHitsPerBatch caps the hits one report may add; the rest are rejected.
+// A simulator flushes about once a second, so this is far above a real
+// fleet's rate and only stops a misbehaving credential.
+const MaxHitsPerBatch = 10_000
+
+// knownProtocols are the protocols a simulated device answers. A hit naming
+// anything else is rejected rather than becoming a new map key.
+var knownProtocols = map[string]bool{"http": true, "snmp": true, "ssh": true, "telnet": true, "tcp": true, "udp": true}
+
 // DeviceHits is the hit tally for one simulated device.
 type DeviceHits struct {
 	Count        int
@@ -78,8 +87,10 @@ func (r *Registry) Pulled(node string, caps collection.SimCapabilities, componen
 
 // Report records a hit batch from a node's simulator, keeping only devices
 // the node was handed (a simulator cannot report on another node's
-// components, or on components it invented). It returns how many hits were
-// accepted and rejected.
+// components, or on components it invented), known protocols, and at most
+// MaxHitsPerBatch hits. A hit is stamped with the time the server heard it,
+// not the simulator's clock. It returns how many hits were accepted and
+// rejected.
 func (r *Registry) Report(node string, b collection.SimHitBatch) (accepted, rejected int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -93,8 +104,9 @@ func (r *Registry) Report(node string, b collection.SimHitBatch) (accepted, reje
 			st.serving[id] = true
 		}
 	}
+	now := r.now()
 	for _, h := range b.Hits {
-		if !st.listed[h.ComponentID] {
+		if !st.listed[h.ComponentID] || !knownProtocols[h.Protocol] || accepted == MaxHitsPerBatch {
 			rejected++
 			continue
 		}
@@ -106,9 +118,7 @@ func (r *Registry) Report(node string, b collection.SimHitBatch) (accepted, reje
 		}
 		d.Count++
 		d.ByProtocol[h.Protocol]++
-		if !h.At.Before(d.LastAt) {
-			d.LastAt, d.LastProtocol = h.At, h.Protocol
-		}
+		d.LastAt, d.LastProtocol = now, h.Protocol
 	}
 	return accepted, rejected
 }

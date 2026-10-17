@@ -143,8 +143,8 @@ func TestSimulatorEndToEnd(t *testing.T) {
 		v, ok := read()
 		return ok && v.Connected && len(v.Devices) == 1 && v.Devices[0].Serving
 	})
-	if v, _ := read(); v.Devices[0].HitsByProtocol["tcp"] != 0 {
-		t.Fatalf("hits before any collection: %v", v.Devices[0].HitsByProtocol)
+	if v, ok := read(); !ok || len(v.Devices) != 1 || v.Devices[0].HitsByProtocol["tcp"] != 0 {
+		t.Fatalf("before any collection: %+v (read ok %v), want one device and no tcp hits", v, ok)
 	}
 
 	// The node collects from the simulated device once, and its probe is
@@ -154,7 +154,7 @@ func TestSimulatorEndToEnd(t *testing.T) {
 	}
 	waitFor(t, "the probe's hit to show in `node simulation`", func() bool {
 		v, ok := read()
-		return ok && v.Devices[0].HitsByProtocol["tcp"] > 0
+		return ok && len(v.Devices) == 1 && v.Devices[0].HitsByProtocol["tcp"] > 0
 	})
 }
 

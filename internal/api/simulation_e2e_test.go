@@ -65,8 +65,10 @@ func TestNodeSimulationAPI(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: "dsp-1"}, all, all, all, all); err != nil {
-		t.Fatal(err)
+	for _, c := range []string{"dsp-1", "elsewhere"} {
+		if _, err := gw.CreateComponent(ctx, "", storage.ComponentSpec{Name: c}, all, all, all, all); err != nil {
+			t.Fatal(err)
+		}
 	}
 	conn, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -79,6 +81,36 @@ func TestNodeSimulationAPI(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select id from component where name = 'dsp-1'`).Scan(&dsp1); err != nil {
 		t.Fatal(err)
 	}
+	// A reader of every node whose component scope is one component: the
+	// view lists only components that scope covers.
+	scopedTo := func(component string) string {
+		tok, hash, prefix, err := auth.NewBearerToken()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var pid string
+		if err := conn.QueryRow(ctx, `insert into principal (kind) values ('service') returning id`).Scan(&pid); err != nil {
+			t.Fatal(err)
+		}
+		for _, q := range []struct {
+			sql  string
+			args []any
+		}{
+			{`insert into service (principal_id, name) values ($1, $2)`, []any{pid, "sim-scoped-" + component}},
+			{`insert into credential (principal_id, kind, secret_hash, prefix) values ($1, 'bearer', $2, $3)`, []any{pid, hash, prefix}},
+			{`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-node-reader'), 'all', null)`, []any{pid}},
+			{`insert into principal_grant (principal_id, role_id, scope_kind, scope_id) values ($1, (select id from role where name = 'sim-component-reader'), 'component', (select id::text from component where name = $2))`, []any{pid, component}},
+		} {
+			if _, err := conn.Exec(ctx, q.sql, q.args...); err != nil {
+				t.Fatalf("%s: %v", q.sql, err)
+			}
+		}
+		return tok
+	}
+	if _, err := conn.Exec(ctx, `insert into role (name, permissions) values ('sim-node-reader', '{"node:read"}'), ('sim-component-reader', '{"component:read"}')`); err != nil {
+		t.Fatal(err)
+	}
+	seesDsp1, seesElsewhere := scopedTo("dsp-1"), scopedTo("elsewhere")
 	conn.Close(ctx)
 
 	reg := simhub.New()
@@ -122,5 +154,14 @@ func TestNodeSimulationAPI(t *testing.T) {
 	viewer := setupAllViewer(t, ctx, dsn, "sim-viewer")
 	c.do(viewer, http.MethodGet, "/nodes/site-a/simulation", nil, http.StatusOK)
 	c.do("", http.MethodGet, "/nodes/site-a/simulation", nil, http.StatusUnauthorized)
+	for tok, want := range map[string]int{seesDsp1: 1, seesElsewhere: 0} {
+		var v simulationBody
+		if err := json.Unmarshal(c.do(tok, http.MethodGet, "/nodes/site-a/simulation", nil, http.StatusOK), &v); err != nil {
+			t.Fatal(err)
+		}
+		if len(v.Devices) != want {
+			t.Errorf("a component-scoped reader sees %d devices, want %d", len(v.Devices), want)
+		}
+	}
 	c.do(ownerTok, http.MethodGet, "/nodes/ghost/simulation", nil, http.StatusNotFound)
 }

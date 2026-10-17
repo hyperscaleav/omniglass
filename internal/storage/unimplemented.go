@@ -454,7 +454,7 @@ func (UnimplementedGateway) PendingNodeCommands(context.Context, string) ([]Comm
 func (UnimplementedGateway) RecordCommandExecution(context.Context, string, int64, string) error {
 	return nil
 }
-func (UnimplementedGateway) NodeSimDevices(context.Context, string) ([]SimDevice, error) {
+func (UnimplementedGateway) NodeSimDevices(context.Context, string, scope.Set) ([]SimDevice, error) {
 	return nil, nil
 }
 func (UnimplementedGateway) ResolveTaskOwner(context.Context, string, string) (TaskOwner, bool, error) {

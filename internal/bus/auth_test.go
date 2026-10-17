@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
+	"github.com/hyperscaleav/omniglass/internal/scope"
 	"net"
 	"testing"
 
@@ -26,7 +27,7 @@ func (f fakeStore) PendingNodeCommands(context.Context, string) ([]storage.Comma
 	return nil, nil
 }
 func (f fakeStore) RecordCommandExecution(context.Context, string, int64, string) error { return nil }
-func (f fakeStore) NodeSimDevices(context.Context, string) ([]storage.SimDevice, error) {
+func (f fakeStore) NodeSimDevices(context.Context, string, scope.Set) ([]storage.SimDevice, error) {
 	return nil, nil
 }
 func (f fakeStore) NodeWorklist(context.Context, string) (storage.Worklist, error) {
