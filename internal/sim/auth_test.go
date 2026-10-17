@@ -347,7 +347,7 @@ func TestHTTPAuthFromProfile_CatalogProfiles(t *testing.T) {
 	}
 
 	expected := map[string]HTTPAuthMode{
-		"boreal-edge-85":  HTTPAuthBasic,
+		"boreal-edge-86":  HTTPAuthBasic,
 		"kestrel-vroom":   HTTPAuthBasic,
 		"polaris-dsp-16":  HTTPAuthHeader,
 		"newtron-panel-7": HTTPAuthNone, // declared basic, enforce=false → open

@@ -195,7 +195,7 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 
 	// SNMP reads live state too: a display powered off over HTTP reads off
 	// over SNMP.
-	display := deviceByProfile(t, e, "boreal-edge-85")
+	display := deviceByProfile(t, e, "boreal-edge-86")
 	dip := display.LoopbackIP.String()
 	preq, _ := http.NewRequest(http.MethodPost,
 		"http://"+net.JoinHostPort(dip, fmt.Sprint(80+acceptancePortShift))+"/api/display/power",

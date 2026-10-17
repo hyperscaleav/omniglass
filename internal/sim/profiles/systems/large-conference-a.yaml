@@ -2,7 +2,7 @@
 #
 # Standard mixed-vendor large conference room for 12-20 people. One
 # Kestrel VRoom as the VC endpoint, a Newtron Panel 7 for room control,
-# two Boreal Edge 85 displays for dual-screen presentation, and a
+# two Boreal Edge 86 displays for dual-screen presentation, and a
 # Polaris DSP 16 for audio processing. Represents a realistic deployment
 # where no single vendor owns the whole room.
 
@@ -30,7 +30,7 @@ devices:
     count: 1
     tags: [control, sensors]
 
-  - profile: boreal-edge-85
+  - profile: boreal-edge-86
     role: display
     suffix: DS
     count: 2

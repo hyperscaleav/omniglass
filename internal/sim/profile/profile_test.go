@@ -16,7 +16,7 @@ func TestLoadStore(t *testing.T) {
 
 	// Lab's current generic-vendor catalog. Cross-check the names so any
 	// rename is caught at unit-test time rather than at fleet compile.
-	expectedDevices := []string{"kestrel-vroom", "newtron-panel-7", "boreal-edge-85", "polaris-dsp-16"}
+	expectedDevices := []string{"kestrel-vroom", "newtron-panel-7", "boreal-edge-86", "polaris-dsp-16"}
 	for _, name := range expectedDevices {
 		if _, ok := store.Devices[name]; !ok {
 			t.Errorf("expected device profile %q to be loaded", name)
@@ -89,7 +89,7 @@ func TestSystemProfileFields(t *testing.T) {
 	}{
 		"kestrel-vroom":   {"COD", 1},
 		"newtron-panel-7": {"TP", 1},
-		"boreal-edge-85":  {"DS", 2},
+		"boreal-edge-86":  {"DS", 2},
 		"polaris-dsp-16":  {"DSP", 1},
 	}
 	for _, d := range sys.Devices {
@@ -124,7 +124,7 @@ func TestValidateMissingProfile(t *testing.T) {
 	}
 }
 
-// TestPowerRoutesDeclareEnum locks the boreal-edge-85 and kestrel-vroom
+// TestPowerRoutesDeclareEnum locks the boreal-edge-86 and kestrel-vroom
 // power routes to the enum-validated shape. If a future change replaces
 // the list mutations with the legacy map without re-adding the enum,
 // this test fails, which is the point: silent regressions to the
@@ -140,7 +140,7 @@ func TestPowerRoutesDeclareEnum(t *testing.T) {
 		device string
 		match  string
 	}{
-		{"boreal-edge-85", "POST /api/display/power"},
+		{"boreal-edge-86", "POST /api/display/power"},
 		{"kestrel-vroom", "POST /api/system/standby"},
 	}
 	for _, c := range cases {
@@ -220,7 +220,7 @@ func TestRebootMutationsAnchoredAcrossSurfaces(t *testing.T) {
 		{"kestrel-vroom", "POST /api/admin/reboot", ""},
 		{"polaris-dsp-16", "POST /api/admin/reboot", "system reboot"},
 		{"newtron-panel-7", "POST /api/admin/reboot", "reboot"},
-		{"boreal-edge-85", "POST /api/admin/reboot", ""},
+		{"boreal-edge-86", "POST /api/admin/reboot", ""},
 	}
 
 	for _, c := range cases {
@@ -288,7 +288,7 @@ func TestFactoryResetMutationsAnchoredAcrossSurfaces(t *testing.T) {
 		{"kestrel-vroom", "POST /api/admin/factory-reset", ""},
 		{"polaris-dsp-16", "POST /api/admin/factory-reset", "system factory-reset"},
 		{"newtron-panel-7", "POST /api/admin/factory-reset", "factory-reset"},
-		{"boreal-edge-85", "POST /api/admin/factory-reset", ""},
+		{"boreal-edge-86", "POST /api/admin/factory-reset", ""},
 	}
 
 	for _, c := range cases {

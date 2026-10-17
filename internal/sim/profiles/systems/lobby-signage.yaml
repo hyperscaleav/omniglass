@@ -9,7 +9,7 @@ doc:
   summary: "Lobby digital signage: two displays only"
 
 devices:
-  - profile: boreal-edge-85
+  - profile: boreal-edge-86
     role: display
     suffix: DS
     count: 2

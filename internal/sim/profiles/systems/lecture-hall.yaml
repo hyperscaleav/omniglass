@@ -15,7 +15,7 @@ devices:
     count: 1
     tags: [video, conferencing, education, large-room]
 
-  - profile: boreal-edge-85
+  - profile: boreal-edge-86
     role: display
     suffix: DS
     count: 4
