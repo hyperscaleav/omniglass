@@ -176,9 +176,10 @@ func flush(nc *nats.Conn, name string, engine *sim.Engine, hits *hitBuffer) {
 	_ = nc.Publish(collection.SimHitSubject(name), b)
 }
 
-// maxBufferedHits bounds the hits held between flushes, below the server's
-// per-batch cap and within one NATS message.
-const maxBufferedHits = 5_000
+// maxBufferedHits bounds the hits held between flushes: below the server's
+// per-batch cap, and at roughly 200 bytes a hit, well inside NATS's default
+// 1 MB message limit (a batch over it would be dropped whole).
+const maxBufferedHits = 2_000
 
 // hitBuffer collects engine hits between flushes, mapped to the wire shape
 // (a device's id is its component id). Beyond maxBufferedHits it counts
