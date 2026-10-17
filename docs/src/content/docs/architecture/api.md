@@ -288,6 +288,12 @@ password). It is the surface's **one public route**, unauthenticated because the
 authentication, and an invalid token is a **401** (a claim must not disclose which nodes exist). A node
 is fleet-wide, so `node:read` and `node:create` require an **all-scope** grant.
 
+**A node's simulator is a read beside it.** `GET /nodes/{name}/simulation` (gated `node:read`, all-scope)
+lists the components a [simulator](/architecture/simulation/) beside the node serves (each component with an
+endpoint placed on the node, its product and target host), joined to the simulator's stated capabilities
+and the hits the server has seen per device. Hits are a live signal kept in the server's memory, not
+stored, so they start from zero when the server restarts; a node with no simulator reads `connected: false`.
+
 **The endpoint is authored; the task is derived.** An endpoint is addressed by a surrogate `id` and
 **named by its protocol**: `name` derives from `transport`, unique **within its component**
 (create takes a type, not a name; a duplicate protocol on one component is a **409**). Creating an

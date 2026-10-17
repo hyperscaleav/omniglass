@@ -128,7 +128,7 @@ func TestSimulatorEndToEnd(t *testing.T) {
 	type simView struct {
 		Connected bool `json:"connected"`
 		Devices   []struct {
-			Name           string         `json:"name"`
+			Component      string         `json:"component"`
 			Serving        bool           `json:"serving"`
 			HitsByProtocol map[string]int `json:"hits_by_protocol"`
 		} `json:"devices"`

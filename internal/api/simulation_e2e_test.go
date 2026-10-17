@@ -26,7 +26,7 @@ type simulationBody struct {
 	Capabilities collection.SimCapabilities `json:"capabilities"`
 	Devices      []struct {
 		ComponentID    string         `json:"component_id"`
-		Name           string         `json:"name"`
+		Component      string         `json:"component"`
 		Product        string         `json:"product"`
 		Address        string         `json:"address"`
 		Serving        bool           `json:"serving"`
@@ -103,7 +103,7 @@ func TestNodeSimulationAPI(t *testing.T) {
 		t.Fatalf("devices = %+v, want dsp-1", got.Devices)
 	}
 	d := got.Devices[0]
-	if d.Name != "dsp-1" || d.Address != "127.22.0.5" || !d.Serving || d.Hits != 2 ||
+	if d.Component != "dsp-1" || d.Address != "127.22.0.5" || !d.Serving || d.Hits != 2 ||
 		d.HitsByProtocol["snmp"] != 1 || d.LastHitAt == nil || d.LastProtocol == "" {
 		t.Fatalf("dsp-1 = %+v", d)
 	}

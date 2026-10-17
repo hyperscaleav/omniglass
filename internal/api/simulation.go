@@ -28,7 +28,7 @@ const simConnectedWindow = 90 * time.Second
 
 type simDeviceBody struct {
 	ComponentID    string         `json:"component_id"`
-	Name           string         `json:"name"`
+	Component      string         `json:"component" doc:"The component's name."`
 	Product        string         `json:"product" doc:"The component's product; its name selects the simulator profile."`
 	Address        string         `json:"address" doc:"The host the component's interfaces target."`
 	Serving        bool           `json:"serving" doc:"Whether the simulator reported serving this device in its latest batch."`
@@ -83,7 +83,7 @@ func simulationBody(devices []storage.SimDevice, st simhub.Status, seen bool, no
 	}
 	out.Body.Devices = make([]simDeviceBody, 0, len(devices))
 	for _, d := range devices {
-		b := simDeviceBody{ComponentID: d.ComponentID, Name: d.Name, Product: d.Product, Address: d.Address,
+		b := simDeviceBody{ComponentID: d.ComponentID, Component: d.Name, Product: d.Product, Address: d.Address,
 			Serving: st.Serving[d.ComponentID], HitsByProtocol: map[string]int{}}
 		if h, ok := st.Devices[d.ComponentID]; ok {
 			b.Hits = h.Count
@@ -95,6 +95,6 @@ func simulationBody(devices []storage.SimDevice, st simhub.Status, seen bool, no
 		}
 		out.Body.Devices = append(out.Body.Devices, b)
 	}
-	sort.SliceStable(out.Body.Devices, func(i, j int) bool { return out.Body.Devices[i].Name < out.Body.Devices[j].Name })
+	sort.SliceStable(out.Body.Devices, func(i, j int) bool { return out.Body.Devices[i].Component < out.Body.Devices[j].Component })
 	return out
 }

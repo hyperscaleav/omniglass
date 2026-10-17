@@ -1,7 +1,7 @@
 # Local dev loop + the build/run flow for the single binary. Production deploy
 # is BYO Postgres; tests use ephemeral testcontainer Postgres.
 
-.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify
+.PHONY: build build-web web image gen gen-proto gen-web test test-web test-short test-e2e bench clean-testcontainers tidy up down dev release-plan release-apply release-snapshot docs-shots docs-shots-check docs-shots-verify dev-sim
 
 # Build the single binary (no console embedded; serves the build-the-console
 # placeholder under /web).
@@ -229,3 +229,15 @@ dev: up build-web
 	@echo "  sign in with username 'dev' and password 'dev', or paste a bearer token:"
 	@./bin/omniglass token dev --description "dev login token"
 	./bin/omniglass server
+
+# The simulator beside the dev fleet's node: run it in a second terminal while
+# `make dev` serves. It enrolls edge-hq afresh with the dev owner's token (the
+# dev seed keeps no node secret) and serves the devices placed on edge-hq.
+# Ports below 1024 need a privilege an unprivileged host lacks: grant the binary
+# cap_net_bind_service, or shift every port with SIM_PORT_OFFSET.
+SIM_PORT_OFFSET ?= 0
+dev-sim: build
+	@owner=$$(./bin/omniglass token dev --description "dev sim enroll" | sed -n 's/^  \([^ ][^ ]*\)$$/\1/p'); \
+	node=$$(./bin/omniglass node enroll edge-hq --server http://localhost:8080 --token "$$owner" | sed -n 's/.*"token": *"\([^"]*\)".*/\1/p'); \
+	test -n "$$node" || { echo "dev-sim: could not enroll edge-hq; is make dev serving?"; exit 1; }; \
+	exec ./bin/omniglass sim run --server http://localhost:8080 --name edge-hq --token "$$node" --port-offset $(SIM_PORT_OFFSET)

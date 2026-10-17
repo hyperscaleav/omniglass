@@ -5669,6 +5669,9 @@ components:
         address:
           description: The host the component's interfaces target.
           type: string
+        component:
+          description: The component's name.
+          type: string
         component_id:
           type: string
         hits:
@@ -5685,8 +5688,6 @@ components:
           type: string
         last_protocol:
           type: string
-        name:
-          type: string
         product:
           description: The component's product; its name selects the simulator profile.
           type: string
@@ -5695,7 +5696,7 @@ components:
           type: boolean
       required:
         - component_id
-        - name
+        - component
         - product
         - address
         - serving
