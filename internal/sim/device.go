@@ -201,7 +201,7 @@ type Device struct {
 	DeviceID    string
 	Hostname    string
 	LoopbackIP  net.IP
-	Port        int // primary HTTP port, populated by StartHTTP for the drawer UI
+	Port        int // primary HTTP port, populated by StartHTTP
 	ProfileName string
 	Version     int64
 
@@ -902,8 +902,8 @@ func (d *Device) addRoute(match, tmplPath, tmplContent string, mutate map[string
 }
 
 // State returns a snapshot of the device's current state, with any
-// computed fields resolved into the copy so observers (DeviceStream
-// snapshot, drawer UI) see derived values like uptime.
+// computed fields resolved into the copy so observers (a consumer of
+// the diff stream's snapshot, for one) see derived values like uptime.
 func (d *Device) State() map[string]any {
 	d.mu.RLock()
 	defer d.mu.RUnlock()

@@ -378,10 +378,9 @@ computed:
   - { path: status.device.uptime, kind: elapsed, since: status.device.boot_epoch }
 
 # Autonomous, scheduled mutations. The simulator spawns one goroutine
-# per behavior and applies the listed mutations on each tick. See
-# .claude/skills/write-profile/SKILL.md for the full schema.
+# per behavior and applies the listed mutations on each tick.
 # Phase 1 supports schedule.interval only; preconditions, probabilistic
-# triggers, and recovery actions land in later phases (issue #52).
+# triggers, and recovery actions land in later phases (omniglass-lab#52).
 behaviors:
   - name: cpu_drift
     schedule:

@@ -8,11 +8,12 @@ import (
 	"testing"
 )
 
-// realBrand matches real AV and UC companies. The catalog renders into the
-// console (device docs, the API surface drawer), so like the boot seed it
-// names only the fictional catalog; internal/seed/brands_test.go is the
+// realBrand matches real AV and UC companies and their best-known product
+// names. The catalog's docs and responses are what an operator sees of a
+// simulated device, so like the boot seed it names only the fictional
+// catalog; internal/seed/brands_test.go is the
 // seed's sibling guard.
-var realBrand = regexp.MustCompile(`(?i)\b(crestron|biamp|qsc|q-sys|shure|cisco|extron|sony|samsung|zoom|polycom)\b`)
+var realBrand = regexp.MustCompile(`(?i)\b(crestron|biamp|qsc|q-sys|shure|cisco|extron|sony|samsung|zoom|polycom|roomos|webex|tesira)\b`)
 
 func TestCatalogNamesNoRealCompany(t *testing.T) {
 	files := 0
@@ -43,7 +44,7 @@ func TestCatalogNamesNoRealCompany(t *testing.T) {
 }
 
 func TestRealBrandMatcher(t *testing.T) {
-	for _, s := range []string{"Crestron TSS-1070", "Q-SYS QRC", "a Zoom Room"} {
+	for _, s := range []string{"Crestron TSS-1070", "Q-SYS QRC", "a Zoom Room", "roomos.app"} {
 		if !realBrand.MatchString(s) {
 			t.Errorf("realBrand missed %q", s)
 		}

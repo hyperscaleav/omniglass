@@ -6057,3 +6057,22 @@ The label rule's first cut read the place alone, so two systems of different kin
 each system's kind ("Media Lab Meeting Room", "Media Lab Signage"). That is a fact the rule could
 not see, so the system's data map gained `SharesLocation`, and a create, a move or a delete restamps
 the systems at the places whose count it changed, in the same transaction.
+
+### The simulator joins the binary (#885, slices #886 to #888)
+
+The device simulator that lived in the separate omniglass-lab project now ships in the omniglass
+binary (`internal/sim`), so a fleet of fictional devices can be collected from without real gear
+or a second stack. The first slice ports the engine: the embedded catalog of device and system
+profiles, templates and fleet manifests; the fleet compiler; and per-device listeners for HTTP(S),
+SNMP, SSH, Telnet, TCP line sessions and UDP over one live state per device. The lab's director,
+gRPC stream, packet tagger and Zabbix trigger definitions stay behind, and the lab's word
+"estate" follows the glossary to fleet.
+
+Porting found what the lab's own tests had stopped seeing. They located the catalog by probing
+the filesystem and skipped when the probe failed, so a template reference left behind by the move
+to fictional vendors had gone unnoticed; they now load the embedded catalog and fail loudly, and a
+test walks every template the catalog references. A stopped device kept answering clients that
+were already connected, because each listener stopped accepting without closing what it had
+accepted; the acceptance test failed every second run in the same process until stops closed
+their connections. And with state no longer round-tripping through a database, integers stayed
+integers, which a DSP template formatted as floats.

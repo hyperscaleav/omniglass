@@ -15,7 +15,7 @@ import (
 // profile-declared behavior, but with one extra rule: any profile
 // behavior whose mutation targets the same path skips that path while
 // the override is active. The skip prevents value-flapping between two
-// writers on the same key (#102).
+// writers on the same key (omniglass-lab#102).
 type BehaviorOverrideSpec struct {
 	OverrideID string
 	Path       string
@@ -68,7 +68,7 @@ func (d *Device) SetBehaviorOverrides(specs []BehaviorOverrideSpec) error {
 		// simulator's perspective. A stanza targets a heterogeneous
 		// fleet and not every device profile declares every key;
 		// profile.Mutation.Optional=true makes a missing path log a
-		// warning rather than fail (#102 silent-skip semantics).
+		// warning rather than fail (omniglass-lab#102 silent-skip semantics).
 		m, err := compileBehaviorMutationList([]profile.Mutation{{
 			Path:     spec.Path,
 			Value:    spec.Expression,

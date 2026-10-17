@@ -360,22 +360,14 @@ func toString(v any) string {
 	return fmt.Sprint(v)
 }
 
-// findProfilesRoot walks up to find the profiles/ directory.
+// findProfilesRoot is the catalog directory beside this package. Tests here
+// read it from disk (the loader's directory path); a missing catalog is a
+// broken checkout, so it fails rather than skips.
 func findProfilesRoot(t *testing.T) string {
 	t.Helper()
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
+	root := filepath.Join("..", "profiles")
+	if info, err := os.Stat(filepath.Join(root, "devices")); err != nil || !info.IsDir() {
+		t.Fatalf("catalog not found at %s: %v", root, err)
 	}
-	for {
-		candidate := filepath.Join(dir, "profiles")
-		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return candidate
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("could not find profiles/ directory")
-		}
-		dir = parent
-	}
+	return root
 }

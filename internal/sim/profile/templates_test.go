@@ -8,18 +8,15 @@ import (
 	"testing"
 )
 
-// TestDeviceWebTemplates_NoBareAbsoluteAPICalls is a regression
-// test for issue #51: device admin pages served inside the
-// console iframe must not call fetch() with a bare leading-slash
-// path. The iframe loads under /proxy/sites/<site>/devices/<id>/
-// web/<port>/ on the console origin, so a bare "/api/foo" resolves
-// against the console (which 404s) instead of routing back through
-// the proxy passthrough to the device.
+// TestDeviceWebTemplates_NoBareAbsoluteAPICalls guards the device
+// admin pages' apiURL() convention (originally omniglass-lab#51). Each
+// page is served by the simulated device's own HTTP listener, and its
+// apiURL() helper prepends location.pathname so absolute "/api/..."
+// paths stay relative to wherever the page is served instead of
+// resolving against the bare origin.
 //
-// The fix: each template has an apiURL() helper that prepends
-// location.pathname, and send() / fetch() call sites pass paths
-// through it. This test enforces the convention so a future edit
-// can't quietly reintroduce the bug.
+// send() / fetch() call sites pass paths through apiURL(). This test
+// enforces the convention so a future edit can't quietly bypass it.
 //
 // Two assertions per template:
 //
@@ -36,8 +33,8 @@ func TestDeviceWebTemplates_NoBareAbsoluteAPICalls(t *testing.T) {
 		t.Fatalf("read web templates dir: %v", err)
 	}
 
-	// Match fetch('/api/... and fetch("/api/..., leading slash is
-	// the bug signature. Wrapping helpers like apiURL('/api/...')
+	// Match fetch('/api/... and fetch("/api/..., a leading slash
+	// means the call skipped apiURL(). Wrapping helpers like apiURL('/api/...')
 	// are fine because their first character is "(", not the quote.
 	bareAbsolute := regexp.MustCompile(`fetch\(\s*['"]/api/`)
 
@@ -63,14 +60,14 @@ func TestDeviceWebTemplates_NoBareAbsoluteAPICalls(t *testing.T) {
 		if !strings.Contains(text, "apiURL(") {
 			t.Errorf("%s: missing apiURL(...) helper. Every device-page template "+
 				"must wrap fetch paths with apiURL so absolute /api/... paths "+
-				"route back through the iframe's proxy prefix. See issue #51.",
+				"stay relative to wherever the page is served.",
 				path)
 		}
 
 		if loc := bareAbsolute.FindStringIndex(text); loc != nil {
 			line := strings.Count(text[:loc[0]], "\n") + 1
-			t.Errorf("%s:%d: bare fetch('/api/...') call would 404 in the "+
-				"console iframe, wrap with apiURL(). See issue #51.",
+			t.Errorf("%s:%d: bare fetch('/api/...') call bypasses the page's "+
+				"served path, wrap with apiURL().",
 				path, line)
 		}
 	}

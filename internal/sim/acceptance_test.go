@@ -1,3 +1,8 @@
+//go:build linux
+
+// The fleet serves on 127.x addresses beyond 127.0.0.1, which Linux treats
+// as local without configuration.
+
 package sim
 
 import (
@@ -36,13 +41,13 @@ func startFleet(t *testing.T, name string) (*Engine, *profile.Store) {
 	if err != nil {
 		t.Fatalf("parsing fleet: %v", err)
 	}
-	est, err := fleet.Compile(m, store)
+	fl, err := fleet.Compile(m, store)
 	if err != nil {
 		t.Fatalf("compiling fleet: %v", err)
 	}
 	e := NewEngine(store, profiles.Templates())
 	e.SetPortMap(func(p int) int { return p + acceptancePortShift })
-	if err := e.LoadDevices(Snapshots(est)); err != nil {
+	if err := e.LoadDevices(Snapshots(fl)); err != nil {
 		t.Fatalf("loading devices: %v", err)
 	}
 	if err := e.StartAll(); err != nil {
@@ -77,23 +82,25 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 	ip := dsp.LoopbackIP.String()
 	at := func(port int) string { return net.JoinHostPort(ip, fmt.Sprint(port+acceptancePortShift)) }
 
-	// Hits arrive on two seams today (TODO(#887): one hit stream):
-	// RequestLogger for the stream listeners, RequestPublisher for SNMP.
 	var hitsMu sync.Mutex
 	hits := map[string]bool{}
-	hit := func(deviceID, protocol string) {
-		if deviceID != dsp.DeviceID {
+	var sessionPorts []int
+	e.SetHitReporter(func(h Hit) {
+		if h.DeviceID != dsp.DeviceID {
 			return
 		}
-		if protocol == "" {
-			protocol = "http"
+		hitsMu.Lock()
+		hits[h.Protocol] = true
+		hitsMu.Unlock()
+	})
+	e.SetSessionPublisher(func(ev SessionEvent) {
+		if ev.DeviceID != dsp.DeviceID {
+			return
 		}
 		hitsMu.Lock()
-		hits[protocol] = true
+		sessionPorts = append(sessionPorts, ev.Port)
 		hitsMu.Unlock()
-	}
-	e.SetLogger(func(l RequestLog) { hit(l.DeviceID, l.Protocol) })
-	e.SetRequestPublisher(func(ev RequestEvent) { hit(ev.DeviceID, ev.Protocol) })
+	})
 
 	// Line protocol: subscribe to channel 0 gain before the write.
 	conn, err := net.DialTimeout("tcp", at(1710), 2*time.Second)
@@ -186,9 +193,51 @@ func TestFleetServesSharedStateAcrossProtocols(t *testing.T) {
 		t.Errorf("SNMP serial = %v, HTTP serial = %q", pkt.Variables[0].Value, status.Device.Serial)
 	}
 
-	// Every request-response hit was reported for the device.
+	// SNMP reads live state too: a display powered off over HTTP reads off
+	// over SNMP.
+	display := deviceByProfile(t, e, "boreal-edge-85")
+	dip := display.LoopbackIP.String()
+	preq, _ := http.NewRequest(http.MethodPost,
+		"http://"+net.JoinHostPort(dip, fmt.Sprint(80+acceptancePortShift))+"/api/display/power",
+		bytes.NewBufferString(`{"power": "off"}`))
+	preq.Header.Set("Content-Type", "application/json")
+	preq.SetBasicAuth("admin", "boreal")
+	presp, err := http.DefaultClient.Do(preq)
+	if err != nil {
+		t.Fatalf("display power write: %v", err)
+	}
+	presp.Body.Close()
+	if presp.StatusCode != http.StatusOK {
+		t.Fatalf("display power write status = %d", presp.StatusCode)
+	}
+	dg := &gosnmp.GoSNMP{
+		Target: dip, Port: uint16(161 + acceptancePortShift), Community: "public",
+		Version: gosnmp.Version2c, Timeout: 2 * time.Second, Retries: 1,
+	}
+	if err := dg.Connect(); err != nil {
+		t.Fatalf("display SNMP connect: %v", err)
+	}
+	defer dg.Conn.Close()
+	ppkt, err := dg.Get([]string{"1.3.6.1.4.1.55520.1.1.1.0"})
+	if err != nil {
+		t.Fatalf("display SNMP GET: %v", err)
+	}
+	if got := string(asBytes(ppkt.Variables[0].Value)); got != "off" {
+		t.Errorf("SNMP power = %v after an HTTP power-off, want off", ppkt.Variables[0].Value)
+	}
+
+	// Every request-response hit was reported for the device, and session
+	// events carry the bound port, as the hits do.
 	hitsMu.Lock()
 	defer hitsMu.Unlock()
+	if len(sessionPorts) == 0 {
+		t.Error("no session event for the line-protocol session")
+	}
+	for _, p := range sessionPorts {
+		if p != 1710+acceptancePortShift {
+			t.Errorf("session event port = %d, want the bound %d", p, 1710+acceptancePortShift)
+		}
+	}
 	for _, p := range []string{"http", "ssh", "snmp"} {
 		if !hits[p] {
 			t.Errorf("no %s hit reported for %s; saw %v", p, dsp.Hostname, hits)

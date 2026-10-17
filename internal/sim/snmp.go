@@ -24,7 +24,7 @@ func (d *Device) StartSNMP(port int, community string) error {
 	oids := d.sortedOIDs()
 
 	handler := GoSNMPServer.MasterAgent{
-		Logger: GoSNMPServer.NewDiscardLogger(), // per-request debug noise; hits report through RequestPublisher
+		Logger: snmpLogger{GoSNMPServer.NewDiscardLogger()},
 		SecurityConfig: GoSNMPServer.SecurityConfig{
 			NoSecurity: true,
 		},
@@ -273,3 +273,19 @@ func toInt64(v any) int64 {
 		return 0
 	}
 }
+
+// snmpLogger drops the SNMP library's per-request debug and info output
+// (hits report through RequestPublisher) but keeps its warnings and errors,
+// such as a value it cannot encode for the requested OID.
+type snmpLogger struct{ GoSNMPServer.ILogger }
+
+func (snmpLogger) Warn(args ...interface{}) { slog.Warn("snmp: " + fmt.Sprint(args...)) }
+func (snmpLogger) Warnf(format string, args ...interface{}) {
+	slog.Warn("snmp: " + fmt.Sprintf(format, args...))
+}
+func (snmpLogger) Warning(args ...interface{}) { slog.Warn("snmp: " + fmt.Sprint(args...)) }
+func (snmpLogger) Error(args ...interface{})   { slog.Error("snmp: " + fmt.Sprint(args...)) }
+func (snmpLogger) Errorf(format string, args ...interface{}) {
+	slog.Error("snmp: " + fmt.Sprintf(format, args...))
+}
+func (snmpLogger) Errorln(args ...interface{}) { slog.Error("snmp: " + fmt.Sprint(args...)) }

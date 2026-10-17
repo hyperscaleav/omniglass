@@ -175,7 +175,7 @@ func (d *Device) runBehavior(b *behaviorEntry, offset time.Duration) {
 //
 // Path-overlap skip: any mutation whose static path text matches an
 // active behavior override on the device is dropped from this tick
-// (#102). The skip applies at the per-mutation level so a multi-path
+// (omniglass-lab#102). The skip applies at the per-mutation level so a multi-path
 // behavior keeps writing the paths the override does not cover. Only
 // literal paths participate in the skip, templated paths fall through
 // to applyMutations as before, which is the conservative default until
@@ -270,8 +270,8 @@ func compileBehaviorMutationList(items []profile.Mutation, funcs template.FuncMa
 }
 
 // Behaviors returns the names of all registered behaviors on the
-// device, in declaration order. Used by tests and drawer surfaces that
-// need to enumerate what's running.
+// device, in declaration order. Used by tests and any consumer that needs
+// to enumerate what's running.
 func (d *Device) Behaviors() []string {
 	d.behaviorMu.Lock()
 	defer d.behaviorMu.Unlock()
