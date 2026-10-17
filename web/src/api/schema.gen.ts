@@ -7108,6 +7108,8 @@ export interface components {
         SimDeviceBody: {
             /** @description The host the component's interfaces target. */
             address: string;
+            /** @description The component's name. */
+            component: string;
             component_id: string;
             /**
              * Format: int64
@@ -7120,7 +7122,6 @@ export interface components {
             /** Format: date-time */
             last_hit_at?: string;
             last_protocol?: string;
-            name: string;
             /** @description The component's product; its name selects the simulator profile. */
             product: string;
             /** @description Whether the simulator reported serving this device in its latest batch. */

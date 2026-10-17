@@ -23,7 +23,7 @@ const (
 	// APITelemetrySubject is the trusted push lane: the API publishes a batch here
 	// after it has authorized the caller against the declared owner, so the consumer
 	// believes that owner. Only the server's own credential can publish here (a node
-	// grant is an explicit allow-list of its three own subjects).
+	// grant is an explicit allow-list of its own subjects).
 	//
 	// It is deliberately NOT a token under TelemetryWildcard. That wildcard is
 	// single-token and a node's grant covers og.v1.telemetry.<its-own-name>, so a

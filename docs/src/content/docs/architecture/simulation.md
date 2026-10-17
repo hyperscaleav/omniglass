@@ -17,15 +17,15 @@ teaching surface ([learning tool](/contributing/learning-tool/)): an operator ca
 monitoring loop work against a fleet they can break on purpose.
 
 :::note[Partial]
-Built: the engine in `internal/sim` (ported from the retired omniglass-lab project, #886). The
+Built: the engine in `internal/sim` (ported from the retired omniglass-lab project, #886): the
 embedded catalog of device and system profiles, response templates and fleet manifests; the
 fleet compiler, which expands a manifest into devices with stable hostnames, serials and
 addresses; and the engine, which serves every device's declared interfaces with behaviors and
-computed fields over shared state, reporting every request it answers on one hit stream. The
-engine follows a changing fleet in place (devices added, removed or moved without disturbing the
-rest), and a stopped device drops its open connections. It runs in-process under test today. Still `Design`: the sim run mode and its pod and
-`make dev` placement (#887), simulating the seeded inventory (#888), impairments (#889), and the
-console surfaces (#890).
+computed fields over shared state, follows a changing fleet in place, and reports every
+connection and request it answers on one hit stream. Also built: the `sim run` mode beside a node
+(#887), which pulls the devices placed on the node, serves them, and reports hits the server shows
+at `GET /nodes/{name}/simulation`, locally as `make dev-sim`. Still `Design`: the Helm sidecar
+(#892), simulating the seeded inventory (#888), impairments (#889), and the console surfaces (#890).
 :::
 
 ## The catalog
@@ -83,12 +83,33 @@ Two facts shape where the simulator runs:
 - **Ports below 1024 need a privilege** (SNMP 161, SSH 22, HTTP 80 and 443). The engine can remap
   every profile port at listen time, which is how the tests serve a fleet unprivileged.
 
-:::design[Target design: the sim run mode, tracked in #887]
-The simulator is its own run mode that runs beside a node and shares its
-loopback: as a sidecar container in the node's pod (granted `NET_ADMIN` and the unprivileged-port
-sysctl), or locally as one more host process next to `server` and `node`. It pulls its device list
-from the server as a node-like principal, so the seeded inventory is the simulated fleet, and
-reports hits back so the console can show the collector reaching each device.
+## Beside a node
+
+The simulator is its own run mode, `omniglass sim run`, that runs beside a node and shares its
+loopback, holding that node's credential: it reads the same `OMNIGLASS_SERVER`,
+`OMNIGLASS_NODE_NAME` and `OMNIGLASS_NODE_TOKEN` as `node run`, so the node's subject grant is its
+grant too. It can pull the devices behind its own node and report hits on them, never another
+node's.
+
+On every pull (every ten seconds by default) it asks the server for each component with an
+interface placed on the node, with the component's product and the host its interfaces target, and
+serves the ones it can: a product whose name the catalog has a profile for, at a loopback address.
+The rest it logs and leaves alone. A device added on the server starts serving on the next pull
+and a device removed goes dark, with no restart and no disturbance to the others. Each pull states
+what the simulator can do where it runs (bind ports below 1024, hold `NET_ADMIN`, the shift it
+applies to every port with `--port-offset` when it can do neither), and about once a second it
+publishes the hits it saw and the devices it is serving.
+
+The server accepts hits only for components it handed that node, keeps them in memory (a live
+signal, not stored history), and joins them to the node's devices at
+`GET /nodes/{name}/simulation`, which the CLI reads as `omniglass node simulation <node>`. A
+connection a device accepts counts as a hit, so a collector's bare reachability probe shows there
+as `tcp`, beside the requests it answers. Locally, `make dev-sim` runs the simulator beside
+`make dev`'s fleet.
+
+:::design[Target design: the simulator as a sidecar, tracked in #892]
+In a deployment the simulator is a sidecar container in the node's pod, granted `NET_ADMIN` and the
+unprivileged-port sysctl, so it binds the profiles' real ports and can make ping tell the truth.
 :::
 
 :::design[Target design: impairments, tracked in #889]

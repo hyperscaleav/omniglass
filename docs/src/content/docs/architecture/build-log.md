@@ -6076,3 +6076,14 @@ were already connected, because each listener stopped accepting without closing 
 accepted; the acceptance test failed every second run in the same process until stops closed
 their connections. And with state no longer round-tripping through a database, integers stayed
 integers, which a DSP template formatted as floats.
+
+The second slice puts the simulator beside a node. `omniglass sim run` holds the node's own
+credential, so the node's subject grant is the whole of its authority: two new subjects in that
+grant carry its device-list pull (`og.v1.simlist.<node>`) and its hit batches
+(`og.v1.simhit.<node>`). It serves each component placed on the node whose product names a profile
+and whose interfaces target a loopback address, and follows the list without a restart. The server
+keeps hits in memory, accepting them only for components it handed that node, and shows them at
+`GET /nodes/{name}/simulation` (`omniglass node simulation`). Writing the end-to-end test showed a
+collector's reachability probe never registered, since it connects and closes without a request;
+an accepted connection now counts as a hit. The Helm chart has no node to put a sidecar beside
+yet (#892).

@@ -19,7 +19,7 @@ func TestSimulationBodyConnectedWindow(t *testing.T) {
 	if stale.Body.Connected || stale.Body.LastSeen == nil {
 		t.Error("a pull 5m ago reads connected, or lost its last-seen time")
 	}
-	if got := fresh.Body.Devices; got[0].Name != "alpha" || got[0].Hits != 0 || got[0].LastHitAt != nil {
+	if got := fresh.Body.Devices; got[0].Component != "alpha" || got[0].Hits != 0 || got[0].LastHitAt != nil {
 		t.Errorf("devices = %+v, want sorted by name with no hits", got)
 	}
 }

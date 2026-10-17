@@ -176,7 +176,7 @@ Subjects are hierarchical and **scope is expressed in them**, not bolted on:
   ([identity and access](/architecture/identity-access/)).
 :::
 
-- **The API telemetry lane (`og.v1.api.telemetry`) is trusted by subject.** A first-party push (`POST /telemetry:push`) is authorized at the route, so the API publishes as a **trusted server producer** with no admission pass, and the ingest consumer believes the owner the batch carries **because of the subject it arrived on**, never because the field is populated. A batch on `og.v1.telemetry.*` that asserts an owner is dropped. Only the server's own credential can reach this subject: a node's grant is an explicit allow-list of its own three subjects, and the lane sits **outside** the single-token `og.v1.telemetry.*` wildcard.
+- **The API telemetry lane (`og.v1.api.telemetry`) is trusted by subject.** A first-party push (`POST /telemetry:push`) is authorized at the route, so the API publishes as a **trusted server producer** with no admission pass, and the ingest consumer believes the owner the batch carries **because of the subject it arrived on**, never because the field is populated. A batch on `og.v1.telemetry.*` that asserts an owner is dropped. Only the server's own credential can reach this subject: a node's grant is an explicit allow-list of its own subjects, and the lane sits **outside** the single-token `og.v1.telemetry.*` wildcard.
 - **Subject permissions gate the subject string.** A node may publish and subscribe only the subjects for its placement; the grant is **mechanically derived from placement**, a coarse transport gate, not a second copy of the ABAC model. **Operators never connect to the bus** (see the live UI relay below).
 
 :::design[Target design, tracked in #430]
@@ -192,7 +192,9 @@ Every control-plane subject is `og.v1.<verb>.<node>`
 the node name is the **last token, exactly one token**, which is what lets the server subscribe
 per-verb single-token wildcards (`og.v1.worklist.*`) and lets a node's credential be an explicit
 allow-list of its own subjects plus its private reply namespace (`_INBOX.<node>`). The verb family
-today is `worklist` (request-reply), `heartbeat`, and `telemetry` (the JetStream firehose);
+today is `worklist` (request-reply), `heartbeat`, and `telemetry` (the JetStream firehose), plus
+`simlist` (request-reply) and `simhit` for the [simulator](/architecture/simulation/) beside a node,
+which holds that node's credential;
 `worklist-changed` is reserved for the server's re-pull nudge, and `og.v1.command.<node>` is the
 committed future per-node command queue. The trusted push lane `og.v1.api.telemetry` deliberately
 sits in its **own segment** rather than as a reserved node name under `og.v1.telemetry.*` (above):
