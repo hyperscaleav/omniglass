@@ -2,12 +2,15 @@ package sim
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"net"
 	"strings"
+	"sync"
 
+	"github.com/hyperscaleav/omniglass/internal/sim/fleet"
 	"github.com/hyperscaleav/omniglass/internal/sim/profile"
 )
 
@@ -16,7 +19,13 @@ type Engine struct {
 	store          *profile.Store
 	templates      fs.FS
 	portMap        func(int) int // nil serves each profile port as declared
+	mu             sync.Mutex    // guards devices
 	devices        []*Device
+	seamMu         sync.RWMutex // guards the observer seams below
+	logger         RequestLogger
+	reqPub         RequestPublisher
+	diffPub        DiffPublisher
+	hit            func(Hit)
 	certs          certCache // lazy self-signed cert shared by TLS interfaces
 	sessionPub     SessionEventPublisher
 	sessionConfigs map[string]map[string]*SessionConfig // device hostname → interface name → cfg
@@ -55,13 +64,13 @@ func (e *Engine) SetSessionPublisher(pub SessionEventPublisher) {
 	}
 }
 
-// LoadDevices creates simulated devices from a site snapshot.
-func (e *Engine) LoadDevices(snapshots []DeviceSnapshot) error {
-	// Index hostnames by room + profile so a device's defaults can name a
-	// sibling in the same room via {room-device:<profile>} (e.g. a video
-	// bar's paired touch panel). Mirrors the fleet compiler's seed-time
-	// expansion so reset-to-defaults yields the same per-room identity.
-	type roomKey struct{ site, building, room string }
+// roomKey groups devices that share a room, so a device's defaults can
+// name a sibling in the same room via {room-device:<profile>} (e.g. a video
+// bar's paired touch panel). Mirrors the fleet compiler's seed-time
+// expansion so reset-to-defaults yields the same per-room identity.
+type roomKey struct{ site, building, room string }
+
+func roomPeers(snapshots []DeviceSnapshot) map[roomKey]map[string]string {
 	peersByRoom := make(map[roomKey]map[string]string)
 	for _, snap := range snapshots {
 		k := roomKey{snap.SiteCode, snap.Building, snap.Room}
@@ -72,142 +81,176 @@ func (e *Engine) LoadDevices(snapshots []DeviceSnapshot) error {
 		}
 		peers[snap.ProfileName] = snap.Hostname
 	}
+	return peersByRoom
+}
 
+// LoadDevices creates simulated devices from a fleet snapshot. Listeners
+// start later, in StartAll.
+func (e *Engine) LoadDevices(snapshots []DeviceSnapshot) error {
+	peersByRoom := roomPeers(snapshots)
 	for _, snap := range snapshots {
-		prof, ok := e.store.Devices[snap.ProfileName]
-		if !ok {
-			slog.Warn("unknown profile, skipping device",
-				"device", snap.DeviceID,
-				"profile", snap.ProfileName,
-			)
+		dev, err := e.buildDevice(snap, peersByRoom)
+		if err != nil {
+			return err
+		}
+		if dev == nil {
 			continue
 		}
+		e.mu.Lock()
+		e.devices = append(e.devices, dev)
+		e.mu.Unlock()
+	}
+	slog.Info("loaded devices", "count", len(e.Devices()))
+	return nil
+}
 
-		ip := net.ParseIP(snap.LoopbackIP)
-		if ip == nil {
-			return fmt.Errorf("invalid IP %q for device %q", snap.LoopbackIP, snap.DeviceID)
+// buildDevice turns one snapshot into a device with its routes, commands,
+// OIDs, sessions, behaviors and computed fields registered, and the engine's
+// observer seams installed. It starts nothing. A snapshot naming a profile
+// the catalog lacks yields (nil, nil).
+func (e *Engine) buildDevice(snap DeviceSnapshot, peersByRoom map[roomKey]map[string]string) (*Device, error) {
+	prof, ok := e.store.Devices[snap.ProfileName]
+	if !ok {
+		slog.Warn("unknown profile, skipping device",
+			"device", snap.DeviceID,
+			"profile", snap.ProfileName,
+		)
+		return nil, nil
+	}
+
+	ip := net.ParseIP(snap.LoopbackIP)
+	if ip == nil {
+		return nil, fmt.Errorf("invalid IP %q for device %q", snap.LoopbackIP, snap.DeviceID)
+	}
+
+	peers := peersByRoom[roomKey{snap.SiteCode, snap.Building, snap.Room}]
+	state := snap.State
+	if state == nil {
+		// A device listed without state (the server assigns devices, not
+		// their state) starts from its profile's defaults with its
+		// per-instance identity filled in.
+		state = deepCopy(profile.ExpandIdentityTokens(prof.Defaults, snap.SiteCode, snap.Building, snap.Room, peers))
+		if state == nil {
+			state = map[string]any{}
 		}
+		fleet.Enrich(state, snap.Hostname, snap.DeviceID, ip)
+	}
+	dev := NewDevice(snap.DeviceID, snap.Hostname, ip, snap.ProfileName, snap.Version, state)
+	// Install the profile's defaults snapshot so templates and
+	// mutations on this device can read `{{ .Defaults.<path> }}` to
+	// reset state paths to their declared defaults (used by reboot
+	// and factory-reset routes / CLI verbs). Identity tokens are
+	// expanded per room here too, so a reset restores the same
+	// room-specific account/peer the device was seeded with rather
+	// than the raw profile template.
+	dev.SetDefaults(profile.ExpandIdentityTokens(prof.Defaults, snap.SiteCode, snap.Building, snap.Room, peers))
 
-		dev := NewDevice(snap.DeviceID, snap.Hostname, ip, snap.ProfileName, snap.Version, snap.State)
-		// Install the profile's defaults snapshot so templates and
-		// mutations on this device can read `{{ .Defaults.<path> }}` to
-		// reset state paths to their declared defaults (used by reboot
-		// and factory-reset routes / CLI verbs). Identity tokens are
-		// expanded per room here too, so a reset restores the same
-		// room-specific account/peer the device was seeded with rather
-		// than the raw profile template.
-		peers := peersByRoom[roomKey{snap.SiteCode, snap.Building, snap.Room}]
-		dev.SetDefaults(profile.ExpandIdentityTokens(prof.Defaults, snap.SiteCode, snap.Building, snap.Room, peers))
-
-		// Register routes, commands, and OID bindings from every interface
-		// the profile declares. Listeners are started later in StartAll; this
-		// step is pure state population.
-		for _, iface := range prof.Interfaces {
-			switch iface.Protocol {
-			case "http":
-				for i := range iface.Routes {
-					route := &iface.Routes[i]
-					tmplContent, err := e.loadTemplate(route.Template)
+	// Register routes, commands, and OID bindings from every interface
+	// the profile declares. Listeners are started later in StartAll; this
+	// step is pure state population.
+	for _, iface := range prof.Interfaces {
+		switch iface.Protocol {
+		case "http":
+			for i := range iface.Routes {
+				route := &iface.Routes[i]
+				tmplContent, err := e.loadTemplate(route.Template)
+				if err != nil {
+					slog.Warn("skipping route, template not found",
+						"device", snap.Hostname, "route", route.Match,
+						"template", route.Template, "error", err,
+					)
+					continue
+				}
+				if err := dev.AddRouteFromProfile(route, tmplContent); err != nil {
+					return nil, fmt.Errorf("adding route %q to %q: %w", route.Match, snap.Hostname, err)
+				}
+			}
+		case "ssh", "telnet", "tcp":
+			for i := range iface.Commands {
+				cmd := &iface.Commands[i]
+				var tmplContent string
+				switch {
+				case cmd.Response != "":
+					tmplContent = cmd.Response
+				case cmd.Template != "":
+					content, err := e.loadTemplate(cmd.Template)
 					if err != nil {
-						slog.Warn("skipping route, template not found",
-							"device", snap.Hostname, "route", route.Match,
-							"template", route.Template, "error", err,
+						slog.Warn("skipping command, template not found",
+							"device", snap.Hostname, "command", cmd.Match,
+							"template", cmd.Template, "error", err,
 						)
 						continue
 					}
-					if err := dev.AddRouteFromProfile(route, tmplContent); err != nil {
-						return fmt.Errorf("adding route %q to %q: %w", route.Match, snap.Hostname, err)
-					}
+					tmplContent = content
 				}
-			case "ssh", "telnet", "tcp":
-				for i := range iface.Commands {
-					cmd := &iface.Commands[i]
-					var tmplContent string
-					switch {
-					case cmd.Response != "":
-						tmplContent = cmd.Response
-					case cmd.Template != "":
-						content, err := e.loadTemplate(cmd.Template)
-						if err != nil {
-							slog.Warn("skipping command, template not found",
-								"device", snap.Hostname, "command", cmd.Match,
-								"template", cmd.Template, "error", err,
-							)
-							continue
-						}
-						tmplContent = content
-					}
-					if err := dev.AddCommandFromProfile(cmd, tmplContent); err != nil {
-						return fmt.Errorf("adding command %q to %q: %w", cmd.Match, snap.Hostname, err)
-					}
-				}
-				if iface.Persistent {
-					cfg, err := CompileSessionConfig(&iface)
-					if err != nil {
-						return fmt.Errorf("compiling session config for %q on %q: %w",
-							iface.Name, snap.Hostname, err)
-					}
-					if e.sessionConfigs[snap.Hostname] == nil {
-						e.sessionConfigs[snap.Hostname] = make(map[string]*SessionConfig)
-					}
-					e.sessionConfigs[snap.Hostname][iface.Name] = cfg
-					reg := NewSessionRegistry(dev, cfg, e.sessionPub)
-					switch iface.Protocol {
-					case "ssh":
-						dev.AttachSSHSession(reg)
-					case "telnet":
-						dev.AttachTelnetSession(reg)
-					case "tcp":
-						dev.AttachTCPSession(reg)
-					}
-				} else if iface.Protocol == "tcp" {
-					// Raw-TCP listeners exist solely to host
-					// persistent sessions, there is no one-shot
-					// TCP listener mode in the simulator (TCP probes
-					// are agent-driven connect tests, not server-
-					// side dispatch). A non-persistent tcp interface
-					// is almost certainly a profile mistake.
-					slog.Warn("tcp interface declared without persistent: true; listener will not start",
-						"device", snap.Hostname, "name", iface.Name, "port", iface.Port)
-				}
-			case "snmp":
-				// OID map is shared across all SNMP interfaces on a device;
-				// in practice profiles declare only one.
-				if dev.OIDMap == nil {
-					dev.OIDMap = make(map[string]string, len(iface.OIDMap))
-				}
-				for statePath, oid := range iface.OIDMap {
-					dev.OIDMap[oid] = statePath
+				if err := dev.AddCommandFromProfile(cmd, tmplContent); err != nil {
+					return nil, fmt.Errorf("adding command %q to %q: %w", cmd.Match, snap.Hostname, err)
 				}
 			}
-		}
-
-		// Behaviors compile last so they can see all interfaces if
-		// a future phase wants to gate one on a declared port. Per
-		// phase 1 of issue #52, behavior compile failures stop the
-		// load: a malformed schedule or template should fail loudly
-		// at startup rather than silently not animating the device.
-		for i := range prof.Behaviors {
-			if err := dev.AddBehaviorFromProfile(&prof.Behaviors[i]); err != nil {
-				return fmt.Errorf("registering behavior on %q: %w", snap.Hostname, err)
+			if iface.Persistent {
+				cfg, err := CompileSessionConfig(&iface)
+				if err != nil {
+					return nil, fmt.Errorf("compiling session config for %q on %q: %w",
+						iface.Name, snap.Hostname, err)
+				}
+				if e.sessionConfigs[snap.Hostname] == nil {
+					e.sessionConfigs[snap.Hostname] = make(map[string]*SessionConfig)
+				}
+				e.sessionConfigs[snap.Hostname][iface.Name] = cfg
+				reg := NewSessionRegistry(dev, cfg, e.sessionPub)
+				switch iface.Protocol {
+				case "ssh":
+					dev.AttachSSHSession(reg)
+				case "telnet":
+					dev.AttachTelnetSession(reg)
+				case "tcp":
+					dev.AttachTCPSession(reg)
+				}
+			} else if iface.Protocol == "tcp" {
+				// Raw-TCP listeners exist solely to host
+				// persistent sessions, there is no one-shot
+				// TCP listener mode in the simulator (TCP probes
+				// are agent-driven connect tests, not server-
+				// side dispatch). A non-persistent tcp interface
+				// is almost certainly a profile mistake.
+				slog.Warn("tcp interface declared without persistent: true; listener will not start",
+					"device", snap.Hostname, "name", iface.Name, "port", iface.Port)
+			}
+		case "snmp":
+			// OID map is shared across all SNMP interfaces on a device;
+			// in practice profiles declare only one.
+			if dev.OIDMap == nil {
+				dev.OIDMap = make(map[string]string, len(iface.OIDMap))
+			}
+			for statePath, oid := range iface.OIDMap {
+				dev.OIDMap[oid] = statePath
 			}
 		}
-
-		// Computed fields are read-derived (no goroutine, no event).
-		// Installing seeds each elapsed anchor to "now" so uptime starts
-		// at ~0 and counts up on read. No StartBehaviors equivalent,
-		// there is nothing to run.
-		for i := range prof.Computed {
-			if err := dev.AddComputedFromProfile(&prof.Computed[i]); err != nil {
-				return fmt.Errorf("registering computed field on %q: %w", snap.Hostname, err)
-			}
-		}
-
-		e.devices = append(e.devices, dev)
 	}
 
-	slog.Info("loaded devices", "count", len(e.devices))
-	return nil
+	// Behaviors compile last so they can see all interfaces if
+	// a future phase wants to gate one on a declared port. Per
+	// phase 1 of issue #52, behavior compile failures stop the
+	// load: a malformed schedule or template should fail loudly
+	// at startup rather than silently not animating the device.
+	for i := range prof.Behaviors {
+		if err := dev.AddBehaviorFromProfile(&prof.Behaviors[i]); err != nil {
+			return nil, fmt.Errorf("registering behavior on %q: %w", snap.Hostname, err)
+		}
+	}
+
+	// Computed fields are read-derived (no goroutine, no event).
+	// Installing seeds each elapsed anchor to "now" so uptime starts
+	// at ~0 and counts up on read. No StartBehaviors equivalent,
+	// there is nothing to run.
+	for i := range prof.Computed {
+		if err := dev.AddComputedFromProfile(&prof.Computed[i]); err != nil {
+			return nil, fmt.Errorf("registering computed field on %q: %w", snap.Hostname, err)
+		}
+	}
+
+	e.installSeams(dev)
+	return dev, nil
 }
 
 // SetPortMap remaps every profile port at listen time, so a fleet can
@@ -225,21 +268,78 @@ func (e *Engine) port(declared int) int {
 // StartAll starts listeners for every interface each device declares.
 // Dispatches to per-protocol Start<Proto> methods so new protocols can be
 // added in one place without touching the outer loop. Unknown protocols
-// (including icmp, which is answered by the kernel) are skipped.
+// (including icmp, which is answered by the kernel) are skipped. A listener
+// that fails to bind does not stop the rest: every device is started and the
+// failures come back joined, each naming its device.
 func (e *Engine) StartAll() error {
-	for _, dev := range e.devices {
-		prof, ok := e.store.Devices[dev.ProfileName]
-		if !ok {
+	var errs []error
+	for _, dev := range e.Devices() {
+		errs = append(errs, e.startDevice(dev))
+	}
+	return errors.Join(errs...)
+}
+
+func (e *Engine) startDevice(dev *Device) error {
+	prof, ok := e.store.Devices[dev.ProfileName]
+	if !ok {
+		return nil
+	}
+	var errs []error
+	for _, iface := range prof.Interfaces {
+		if err := e.startInterface(dev, iface); err != nil {
+			errs = append(errs, fmt.Errorf("device %s: starting %s: %w", dev.DeviceID, iface.Protocol, err))
+		}
+	}
+	dev.StartBehaviors()
+	return errors.Join(errs...)
+}
+
+// Sync makes the served fleet match snapshots, the way a running simulator
+// follows the server: a new device is built and started, a device no longer
+// listed is stopped, and a device whose address or profile changed is
+// restarted. A device unchanged on both sides keeps serving with its live
+// state. Failures are joined, each naming its device; the rest still serve.
+func (e *Engine) Sync(snapshots []DeviceSnapshot) error {
+	e.mu.Lock()
+	current := make(map[string]*Device, len(e.devices))
+	for _, d := range e.devices {
+		current[d.DeviceID] = d
+	}
+	e.mu.Unlock()
+
+	peersByRoom := roomPeers(snapshots)
+	var next []*Device
+	var errs []error
+	wanted := make(map[string]bool, len(snapshots))
+	for _, snap := range snapshots {
+		wanted[snap.DeviceID] = true
+		if d, ok := current[snap.DeviceID]; ok {
+			if d.LoopbackIP.String() == snap.LoopbackIP && d.ProfileName == snap.ProfileName {
+				next = append(next, d)
+				continue
+			}
+			e.stopDevice(d)
+		}
+		dev, err := e.buildDevice(snap, peersByRoom)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("device %s: %w", snap.DeviceID, err))
 			continue
 		}
-		for _, iface := range prof.Interfaces {
-			if err := e.startInterface(dev, iface); err != nil {
-				return fmt.Errorf("starting %s on %q: %w", iface.Protocol, dev.Hostname, err)
-			}
+		if dev == nil {
+			continue
 		}
-		dev.StartBehaviors()
+		errs = append(errs, e.startDevice(dev))
+		next = append(next, dev)
 	}
-	return nil
+	for id, d := range current {
+		if !wanted[id] {
+			e.stopDevice(d)
+		}
+	}
+	e.mu.Lock()
+	e.devices = next
+	e.mu.Unlock()
+	return errors.Join(errs...)
 }
 
 // startInterface dispatches one profile interface to the matching
@@ -300,50 +400,99 @@ func (e *Engine) startInterface(dev *Device, iface profile.Interface) error {
 // in-flight tick is given a chance to finish under d.mu before the
 // listeners that share that lock teardown.
 func (e *Engine) StopAll() {
-	for _, dev := range e.devices {
-		dev.StopBehaviors()
-		dev.StopBehaviorOverrides()
-		dev.StopHTTP()
-		dev.StopSNMP()
-		dev.StopSSH()
-		dev.StopTelnet()
-		dev.StopTCPSession()
-		dev.StopUDP()
+	for _, dev := range e.Devices() {
+		e.stopDevice(dev)
 	}
 }
 
-// Devices returns all loaded devices.
+func (e *Engine) stopDevice(dev *Device) {
+	dev.StopBehaviors()
+	dev.StopBehaviorOverrides()
+	dev.StopHTTP()
+	dev.StopSNMP()
+	dev.StopSSH()
+	dev.StopTelnet()
+	dev.StopTCPSession()
+	dev.StopUDP()
+	e.mu.Lock()
+	delete(e.sessionConfigs, dev.Hostname)
+	e.mu.Unlock()
+}
+
+// Devices returns the devices currently loaded.
 func (e *Engine) Devices() []*Device {
-	return e.devices
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]*Device(nil), e.devices...)
 }
 
-// SetLogger attaches a RequestLogger to every loaded device. Call this after
-// LoadDevices and before StartAll so the first request on any listener is
-// observed.
+// SetLogger sets the RequestLogger every device reports through, including
+// devices added later by Sync.
 func (e *Engine) SetLogger(logger RequestLogger) {
-	for _, d := range e.devices {
-		d.Logger = logger
-	}
+	e.seamMu.Lock()
+	e.logger = logger
+	e.seamMu.Unlock()
 }
 
-// SetDiffPublisher attaches a DiffPublisher to every loaded device.
-// Call this after LoadDevices and before StartAll so the first mutate
-// batch on any device is shipped upstream.
+// SetDiffPublisher sets the DiffPublisher every device ships its local mutate
+// batches through, including devices added later by Sync.
 func (e *Engine) SetDiffPublisher(p DiffPublisher) {
-	for _, d := range e.devices {
-		d.DiffPublisher = p
-	}
+	e.seamMu.Lock()
+	e.diffPub = p
+	e.seamMu.Unlock()
 }
 
-// SetRequestPublisher attaches a RequestPublisher to every loaded
-// device. Call this after LoadDevices and before StartAll so the
-// first inbound request on any listener is observed. Used by
-// listener paths that don't go through RequestLogger, currently
-// SNMP, expected to grow to cover any future protocol whose
-// observability is richer than the per-request-row Logger shape.
+// SetRequestPublisher sets the RequestPublisher every device reports through
+// (today SNMP, whose request detail does not fit RequestLog), including
+// devices added later by Sync.
 func (e *Engine) SetRequestPublisher(p RequestPublisher) {
-	for _, d := range e.devices {
-		d.RequestPublisher = p
+	e.seamMu.Lock()
+	e.reqPub = p
+	e.seamMu.Unlock()
+}
+
+// SetHitReporter sets the one stream every protocol's hits arrive on, the
+// seam a consumer that only needs "this device was reached" uses instead of
+// the per-shape logger and publisher.
+func (e *Engine) SetHitReporter(f func(Hit)) {
+	e.seamMu.Lock()
+	e.hit = f
+	e.seamMu.Unlock()
+}
+
+// installSeams points a device's observer fields at adapters that read the
+// engine's current seams, so a seam set after a device starts serving reaches
+// it without writing fields its listeners are reading.
+func (e *Engine) installSeams(dev *Device) {
+	dev.Logger = func(l RequestLog) {
+		e.seamMu.RLock()
+		logger, hit := e.logger, e.hit
+		e.seamMu.RUnlock()
+		if logger != nil {
+			logger(l)
+		}
+		if hit != nil {
+			hit(hitFromLog(l))
+		}
+	}
+	dev.RequestPublisher = func(ev RequestEvent) {
+		e.seamMu.RLock()
+		pub, hit := e.reqPub, e.hit
+		e.seamMu.RUnlock()
+		if pub != nil {
+			pub(ev)
+		}
+		if hit != nil {
+			hit(hitFromEvent(ev))
+		}
+	}
+	dev.DiffPublisher = func(c StateChange) {
+		e.seamMu.RLock()
+		pub := e.diffPub
+		e.seamMu.RUnlock()
+		if pub != nil {
+			pub(c)
+		}
 	}
 }
 

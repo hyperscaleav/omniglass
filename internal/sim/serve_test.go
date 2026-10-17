@@ -198,7 +198,7 @@ func TestStartHTTP_TLS(t *testing.T) {
 	}
 	defer dev.StopHTTP()
 
-	port := dev.httpListener.Addr().(*net.TCPAddr).Port
+	port := dev.HTTPAddrs()[0].(*net.TCPAddr).Port
 
 	// Wait briefly for the goroutine to begin Serve; sub-second is
 	// generous for an in-process listener.

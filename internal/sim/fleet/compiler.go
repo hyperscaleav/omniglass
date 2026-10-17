@@ -341,12 +341,21 @@ func (c *compiler) expandRooms(sv SystemVolume) []string {
 // keeps it. Serial/MAC are derived from HostID so they stay identical
 // across reruns and across a fresh reseed.
 func enrichDefaults(d *CompiledDevice) {
-	setBlankLeaf(d.Defaults, "configuration.network.hostname", d.Hostname)
-	setBlankLeaf(d.Defaults, "configuration.device.serial", generateSerial(d.HostID))
-	if d.LoopbackIP != nil {
-		setBlankLeaf(d.Defaults, "status.network.ipv4.address", d.LoopbackIP.String())
+	Enrich(d.Defaults, d.Hostname, d.HostID, d.LoopbackIP)
+}
+
+// Enrich writes a device's per-instance identity into its state in place,
+// under the same blank-leaf rule as the compiler: the hostname, a serial and
+// MAC derived from hostID, and the address. The simulator calls it for a
+// device the server assigns, so a device's serial is the same function of
+// its id however it was listed.
+func Enrich(state map[string]any, hostname, hostID string, ip net.IP) {
+	setBlankLeaf(state, "configuration.network.hostname", hostname)
+	setBlankLeaf(state, "configuration.device.serial", generateSerial(hostID))
+	if ip != nil {
+		setBlankLeaf(state, "status.network.ipv4.address", ip.String())
 	}
-	setBlankLeaf(d.Defaults, "status.network.ipv4.mac", generateMAC(d.HostID))
+	setBlankLeaf(state, "status.network.ipv4.mac", generateMAC(hostID))
 }
 
 // setBlankLeaf walks the dotted path through nested map[string]any and

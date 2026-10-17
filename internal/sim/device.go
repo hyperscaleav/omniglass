@@ -273,7 +273,9 @@ type Device struct {
 	rand *deviceRand
 
 	// One listener per protocol. Future stages populate snmp/ssh/telnet/udp.
-	httpListener       net.Listener
+	httpMu             sync.Mutex
+	httpServers        []*http.Server // one per declared http interface
+	httpAddrs          []net.Addr
 	snmpServer         snmpShutdowner // *GoSNMPServer.SNMPServer, kept as interface so device.go doesn't import the server package
 	sshListener        net.Listener
 	telnetListener     net.Listener
@@ -1260,10 +1262,13 @@ func (d *Device) StartHTTP(port int, tlsCert *tls.Certificate) error {
 	if err != nil {
 		return fmt.Errorf("listening on %s: %w", addr, err)
 	}
-	d.httpListener = lis
 	d.Port = port
 
 	srv := &http.Server{Handler: d}
+	d.httpMu.Lock()
+	d.httpServers = append(d.httpServers, srv)
+	d.httpAddrs = append(d.httpAddrs, lis.Addr())
+	d.httpMu.Unlock()
 	scheme := "http"
 	if tlsCert != nil {
 		srv.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*tlsCert}}
@@ -1285,10 +1290,24 @@ func (d *Device) StartHTTP(port int, tlsCert *tls.Certificate) error {
 	return nil
 }
 
-// StopHTTP closes the device's HTTP listener.
+// HTTPAddrs returns the bound address of each HTTP listener the device is
+// serving, in start order.
+func (d *Device) HTTPAddrs() []net.Addr {
+	d.httpMu.Lock()
+	defer d.httpMu.Unlock()
+	return append([]net.Addr(nil), d.httpAddrs...)
+}
+
+// StopHTTP closes every HTTP listener the device started and the
+// connections they hold, so a stopped device stops answering clients that
+// kept a connection alive.
 func (d *Device) StopHTTP() {
-	if d.httpListener != nil {
-		d.httpListener.Close()
+	d.httpMu.Lock()
+	servers := d.httpServers
+	d.httpServers, d.httpAddrs = nil, nil
+	d.httpMu.Unlock()
+	for _, srv := range servers {
+		_ = srv.Close()
 	}
 }
 
