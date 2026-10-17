@@ -3750,6 +3750,28 @@ Example:
 omniglass setting update <namespace>
 ```
 
+## `omniglass sim`
+
+Simulate the devices placed on a node
+
+### `omniglass sim run`
+
+Serve the node's simulated devices and follow changes until interrupted
+
+```
+omniglass sim run [flags]
+```
+
+Serves each component placed on the node whose product has a simulator profile and whose interfaces target a loopback address, on that address, and reports every request it answers to the server. Re-pulls the device list on an interval, so devices added or removed on the server start or stop without a restart.
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--name` | string | (none) | the node this simulator runs beside (env OMNIGLASS_NODE_NAME) |
+| `--poll` | duration | `10s` | how often to re-pull the device list |
+| `--port-offset` | int | `0` | shift every simulated port, to serve without the privilege to bind ports below 1024 |
+| `--server` | string | (none) | Omniglass server base URL (env OMNIGLASS_SERVER) |
+| `--token` | string | (none) | that node's enrollment token (env OMNIGLASS_NODE_TOKEN) |
+
 ## `omniglass standard`
 
 Commands for the standard resource

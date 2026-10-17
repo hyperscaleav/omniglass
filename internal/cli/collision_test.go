@@ -109,6 +109,8 @@ func TestNodeRunIsReachable(t *testing.T) {
 		{[]string{"node", "run"}, "run"},
 		{[]string{"node", "list"}, "list"},
 		{[]string{"node", "enroll"}, "enroll"},
+		{[]string{"node", "simulation"}, "simulation"},
+		{[]string{"sim", "run"}, "run"},
 	} {
 		cmd, _, err := root.Find(tc.args)
 		if err != nil {
@@ -118,5 +120,19 @@ func TestNodeRunIsReachable(t *testing.T) {
 		if cmd.Name() != tc.want {
 			t.Errorf("%v resolved to %q, want %q", tc.args, cmd.Name(), tc.want)
 		}
+	}
+}
+
+// The simulator needs its node's identity; without it, it says what to set
+// rather than failing somewhere downstream.
+func TestSimRunRequiresTheNodeIdentity(t *testing.T) {
+	t.Setenv("OMNIGLASS_SERVER", "")
+	t.Setenv("OMNIGLASS_NODE_NAME", "")
+	t.Setenv("OMNIGLASS_NODE_TOKEN", "")
+	root := Root("test")
+	root.SetArgs([]string{"sim", "run"})
+	err := root.Execute()
+	if err == nil || !strings.Contains(err.Error(), "OMNIGLASS_NODE_TOKEN") {
+		t.Fatalf("sim run without identity: %v", err)
 	}
 }

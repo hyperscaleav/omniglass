@@ -11,13 +11,14 @@ import (
 // answering clients that were already connected.
 type trackedListener struct {
 	net.Listener
-	mu     sync.Mutex
+	onAccept func(net.Conn) // nil: accept silently
+	mu       sync.Mutex
 	conns  map[net.Conn]struct{}
 	closed bool
 }
 
-func trackConns(l net.Listener) *trackedListener {
-	return &trackedListener{Listener: l, conns: map[net.Conn]struct{}{}}
+func trackConns(l net.Listener, onAccept func(net.Conn)) *trackedListener {
+	return &trackedListener{Listener: l, onAccept: onAccept, conns: map[net.Conn]struct{}{}}
 }
 
 func (l *trackedListener) Accept() (net.Conn, error) {
@@ -33,6 +34,9 @@ func (l *trackedListener) Accept() (net.Conn, error) {
 	}
 	tc := &trackedConn{Conn: c, owner: l}
 	l.conns[tc] = struct{}{}
+	if l.onAccept != nil {
+		l.onAccept(c)
+	}
 	return tc, nil
 }
 
@@ -63,4 +67,21 @@ func (c *trackedConn) Close() error {
 		c.owner.mu.Unlock()
 	})
 	return c.Conn.Close()
+}
+
+// logConnect reports an accepted connection as a hit: a reachability probe
+// connects and closes without a request, and it reached the device as much
+// as any request did.
+func (d *Device) logConnect(c net.Conn) {
+	if d.Logger == nil {
+		return
+	}
+	port := 0
+	if a, ok := c.LocalAddr().(*net.TCPAddr); ok {
+		port = a.Port
+	}
+	d.Logger(RequestLog{
+		DeviceID: d.DeviceID, Hostname: d.Hostname, Protocol: "tcp", Method: "CONNECT",
+		Port: port, Remote: c.RemoteAddr().String(), LocalAddr: c.LocalAddr().String(),
+	})
 }
