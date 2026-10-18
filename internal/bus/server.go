@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hyperscaleav/omniglass/internal/collection"
@@ -40,7 +41,9 @@ type Server struct {
 	internalToken string
 	sims          *simhub.Registry // the simulators beside this server's nodes
 	stopSweep     chan struct{}    // ends the settlement sweep
-	ownStoreDir   string           // non-empty when the Server created (and must clean) it
+	sweepStop     sync.Once
+	sweepDone     sync.WaitGroup
+	ownStoreDir   string // non-empty when the Server created (and must clean) it
 }
 
 // New starts an in-process NATS server (JetStream on) with the per-node auth
@@ -223,9 +226,11 @@ func (s *Server) ClientURL() string { return s.ns.ClientURL() }
 // Shutdown drains the internal client and stops the server, then removes an
 // owned JetStream store dir. Idempotent enough to defer.
 func (s *Server) Shutdown() {
+	// Stop the sweep once, and wait for a sweep in flight, before closing
+	// what it reads through.
 	if s.stopSweep != nil {
-		close(s.stopSweep)
-		s.stopSweep = nil
+		s.sweepStop.Do(func() { close(s.stopSweep) })
+		s.sweepDone.Wait()
 	}
 	for _, sub := range s.subs {
 		_ = sub.Unsubscribe()
@@ -350,7 +355,9 @@ const settlementSweepEvery = 5 * time.Second
 func (s *Server) startSettlementSweep() {
 	s.stopSweep = make(chan struct{})
 	stop := s.stopSweep
+	s.sweepDone.Add(1)
 	go func() {
+		defer s.sweepDone.Done()
 		t := time.NewTicker(settlementSweepEvery)
 		defer t.Stop()
 		for {

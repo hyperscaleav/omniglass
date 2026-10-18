@@ -97,7 +97,7 @@ below from the project's history. From here it grows one slice at a time.
 | [ADR-0060](#adr-0060-a-resource-is-one-kebab-case-noun-nesting-means-ownership) | 2026-07-22 | Accepted | A resource is one kebab-case noun; nesting means ownership |
 | [ADR-0061](#adr-0061-a-calculated-series-is-current-at-its-highest-id-not-its-newest-timestamp) | 2026-07-22 | Accepted | A calculated series is current at its highest id, not its newest timestamp |
 | [ADR-0062](#adr-0062-a-registry-takes-a-uuid-primary-key-and-a-renameable-handle) | 2026-07-22 | Accepted | A registry takes a uuid primary key and a renameable handle |
-| [ADR-0063](#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) | 2026-07-23 | Accepted; superseded in part by [ADR-0079](#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus) | The telemetry model is typed registries over bare-noun data tables |
+| [ADR-0063](#adr-0063-the-telemetry-model-is-typed-registries-over-bare-noun-data-tables) | 2026-07-23 | Accepted; superseded in part by [ADR-0079](#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus); revised in part by [ADR-0141](#adr-0141-a-command-settles-when-its-evidence-arrives-from-its-reply-first-and-observation-second) | The telemetry model is typed registries over bare-noun data tables |
 | [ADR-0064](#adr-0064-placement-and-classification-are-mutable-after-create) | 2026-07-23 | Accepted | Placement and classification are mutable after create |
 | [ADR-0065](#adr-0065-property-sample-and-current-value-replace-the-datapoint) | 2026-07-28 | Accepted; superseded in part by [ADR-0079](#adr-0079-five-telemetry-lanes-and-property-stops-being-the-genus) | Property, sample, and current value replace the datapoint |
 | [ADR-0066](#adr-0066-logs-are-a-raw-ingest-lane-not-events) | 2026-07-28 | Accepted | Logs are a raw ingest lane, not events |
@@ -6418,12 +6418,15 @@ interface create form, since that name is the platform's to mint.
   closes: a matching observation of its target taken at or after the intent settles it inside the
   window. Where the evidence comes from is declared on the driver's command binding:
   `settle: { from: response }` reads the device's reply to the command, with `extract` (the reply
-  carries the new value, recorded as an observation and compared to the intent) or `success` (the
-  reply only confirms); `from: observe`, the default, waits for the next observation. A reply that
+  carries the new value, compared to the intent and, for a property target, recorded as a
+  validated observation) or `success` (the reply only confirms); `from: observe`, the default, waits for the next observation. A reply that
   fails the binding's reading, or an execution error, fails a response-settled command at once.
   The settle check runs at issue, on the execution report, when an observation of the target lands,
   and on a server sweep that times out commands past their window. A command issued with no
-  instance is judged on the series of the endpoint it was dispatched over.
+  instance is judged on the series of the endpoint it was dispatched over. The early settle compares an
+  observation's `ts` to the intent's: a polled observation carries the node's sample time, so a
+  node clock behind the database's can push genuine evidence to the past-window judgment (late,
+  never wrong); every other comparison keeps ADR-0108's one clock.
 - **Context:** ADR-0063 held a command pending for its whole window and judged it only after,
   and the check ran only at issue and on reads. Run against the simulator (#888, #900), `set-input`
   to a panel actuated, the device switched, and the next poll saw it, yet the command stayed

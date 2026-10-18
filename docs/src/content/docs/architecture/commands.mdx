@@ -106,9 +106,11 @@ The window bounds how long a command waits for its evidence, not when it may set
 spec says how its commands settle:
 
 - `settle: { from: response, extract: { regex: ... } }`: the device's reply carries the new value
-  (`SET INPUT hdmi3` answers `INPUT hdmi3`). The server reads it when the execution report lands,
-  records it as an observation of the target on the dispatched endpoint, and settles the command
-  if it matches the intent or fails it if not.
+  (`SET INPUT hdmi3` answers `INPUT hdmi3`). The server reads it when the execution report lands
+  and settles the command if it matches the intent or fails it if not. For a property target the
+  value is also recorded as an observation on the dispatched endpoint, held to the property's
+  validation like any telemetry (a value outside it fails the command and records nothing) and
+  written only when it changes; a metric target is judged without a recorded sample.
 - `settle: { from: response, success: { regex: ... } }`: the reply only confirms (`OK`). A
   matching reply settles the command; any other fails it.
 - `settle: { from: observe }`, the default: the reply decides nothing, and the next observation of

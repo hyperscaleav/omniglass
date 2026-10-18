@@ -206,3 +206,86 @@ func TestSweepTimesOutAnUnsettledCommand(t *testing.T) {
 		t.Fatalf("status past the window = %q, want timed-out", got)
 	}
 }
+
+func (r *settleRig) observedRows(t *testing.T) int {
+	t.Helper()
+	var n int
+	if err := r.conn.QueryRow(r.ctx, `select count(*) from property p join property_type pt on pt.id = p.property_type_id
+		where pt.name = 'video-input' and p.provenance = 'observed'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// A reply's value is held to the target property's validation like any
+// telemetry: a value outside it fails the command and records nothing.
+func TestAReplyOutsideThePropertysValuesRecordsNothing(t *testing.T) {
+	r := newSettleRig(t, valueReply)
+	id := r.issueAndDispatch(t, "hdmi3")
+	if err := r.gw.RecordCommandExecution(r.ctx, "edge", id, "", "INPUT <img/src=x>"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.status(t, id); got != "failed" {
+		t.Fatalf("status = %q, want failed", got)
+	}
+	if n := r.observedRows(t); n != 0 {
+		t.Fatalf("%d observed rows written from an invalid reply, want none", n)
+	}
+}
+
+// A reply repeating the current value settles its command without adding a
+// row: the observed series records transitions.
+func TestARepeatedReplyValueIsOneTransition(t *testing.T) {
+	r := newSettleRig(t, valueReply)
+	for i := 0; i < 2; i++ {
+		id := r.issueAndDispatch(t, "hdmi3")
+		if err := r.gw.RecordCommandExecution(r.ctx, "edge", id, "", "INPUT hdmi3"); err != nil {
+			t.Fatal(err)
+		}
+		if got := r.status(t, id); got != "settled" {
+			t.Fatalf("command %d status = %q", i, got)
+		}
+	}
+	if n := r.observedRows(t); n != 1 {
+		t.Fatalf("%d observed rows for one value, want 1", n)
+	}
+}
+
+// A reply that cannot be stored (a NUL byte) fails the command, and the
+// execution is still recorded, so the command is not redelivered.
+func TestAnUnstorableReplyStillRecordsTheExecution(t *testing.T) {
+	r := newSettleRig(t, valueReply)
+	id := r.issueAndDispatch(t, "hdmi3")
+	if err := r.gw.RecordCommandExecution(r.ctx, "edge", id, "", "INPUT hd\x00mi3"); err != nil {
+		t.Fatal(err)
+	}
+	var executed bool
+	if err := r.conn.QueryRow(r.ctx, `select executed_at is not null from command where id = $1`, id).Scan(&executed); err != nil {
+		t.Fatal(err)
+	}
+	if !executed || r.status(t, id) != "failed" {
+		t.Fatalf("executed %v status %q, want the execution recorded and the command failed", executed, r.status(t, id))
+	}
+}
+
+// Inside the window, an observation that does not match, or one taken
+// before the intent, leaves the command pending.
+func TestNonEvidenceLeavesACommandPending(t *testing.T) {
+	r := newSettleRig(t, "")
+	id := r.issueAndDispatch(t, "hdmi3")
+	var issuedAt time.Time
+	if err := r.conn.QueryRow(r.ctx, `select ts from command where id = $1`, id).Scan(&issuedAt); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []storage.PropertySampleWrite{
+		{OwnerKind: "component", OwnerID: "switcher", Key: "video-input", Instance: "tcp", Value: "hdmi1", Source: "tcp"},
+		{OwnerKind: "component", OwnerID: "switcher", Key: "video-input", Instance: "tcp", Value: "hdmi3", Source: "tcp", TS: issuedAt.Add(-time.Minute)},
+	} {
+		if err := r.gw.InsertPropertySamples(r.ctx, []storage.PropertySampleWrite{s}); err != nil {
+			t.Fatal(err)
+		}
+		if got := r.status(t, id); got != "issued" {
+			t.Fatalf("after %s at %v: status = %q, want still issued", s.Value, s.TS, got)
+		}
+	}
+}

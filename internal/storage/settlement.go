@@ -256,10 +256,11 @@ func (p *PG) settleOnObservation(ctx context.Context, q txQuerier, ownerKind, ar
 		if err != nil {
 			return fmt.Errorf("storage: command type %s: %w", name, err)
 		}
+		// The same series settleCheck judges a command on: its own instance,
+		// or the endpoint it was dispatched over when it has none.
 		sql := fmt.Sprintf(`select c.id, $4::text from command c
 			where c.status = 'issued' and c.owner_kind = $1 and c.%s = $2 and c.command_type_id = $3
-			  and (c.instance = $4 or (c.instance = '' and exists (
-				select 1 from endpoint e where e.id = c.dispatched_endpoint_id and e.name = $4)))
+			  and coalesce(nullif(c.instance, ''), (select e.name from endpoint e where e.id = c.dispatched_endpoint_id), '') = $4
 			order by c.id`, col)
 		pending, err := p.pendingCommands(ctx, q, sql, ownerKind, arc, ct.ID, instance)
 		if err != nil {
@@ -298,28 +299,54 @@ func (p *PG) SweepCommandSettlements(ctx context.Context) error {
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("storage: sweep settlements: %w", err)
 	}
+	// One series failing does not starve the rest: each is its own
+	// transaction, and the failures come back together.
+	var errs []error
 	for _, s := range due {
-		ct, err := p.GetCommandType(ctx, s.commandType)
-		if err != nil {
-			return err
-		}
-		tx, err := p.pool.Begin(ctx)
-		if err != nil {
-			return fmt.Errorf("storage: begin sweep: %w", err)
-		}
-		now, err := dbNow(ctx, tx)
-		if err == nil {
-			err = p.settleCheck(ctx, tx, ct, s.ownerKind, s.arc, s.instance, now)
-		}
-		if err == nil {
-			err = tx.Commit(ctx)
-		}
-		_ = tx.Rollback(ctx)
-		if err != nil {
-			return fmt.Errorf("storage: sweep %s %s: %w", s.commandType, s.arc, err)
+		if err := p.sweepSeries(ctx, s.ownerKind, s.arc, s.commandType, s.instance); err != nil {
+			errs = append(errs, fmt.Errorf("storage: sweep %s %s: %w", s.commandType, s.arc, err))
 		}
 	}
-	return nil
+	return errors.Join(errs...)
+}
+
+func (p *PG) sweepSeries(ctx context.Context, ownerKind, arc, commandType, instance string) error {
+	ct, err := p.GetCommandType(ctx, commandType)
+	if err != nil {
+		return err
+	}
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	now, err := dbNow(ctx, tx)
+	if err != nil {
+		return err
+	}
+	if err := p.settleCheck(ctx, tx, ct, ownerKind, arc, instance, now); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// commandTargetedProperties is the set of property types some command type
+// targets: the observations settlement has to look at.
+func commandTargetedProperties(ctx context.Context, q querier) (map[string]bool, error) {
+	rows, err := q.Query(ctx, `select distinct pt.name from command_type ct join property_type pt on pt.id = ct.target_property_type_id`)
+	if err != nil {
+		return nil, fmt.Errorf("storage: command-targeted properties: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		out[n] = true
+	}
+	return out, rows.Err()
 }
 
 // commandIntendedValue reads the intended row one command opened, by its

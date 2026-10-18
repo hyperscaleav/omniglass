@@ -6,7 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hyperscaleav/omniglass/internal/key"
+	"log/slog"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/hyperscaleav/omniglass/internal/driver"
 	"github.com/jackc/pgx/v5"
@@ -197,8 +201,25 @@ func (p *PG) RecordCommandExecution(ctx context.Context, node string, commandID 
 	if err != nil {
 		return fmt.Errorf("storage: record execution of command %d: %w", commandID, err)
 	}
-	if err := p.settleFromResponse(ctx, tx, commandID, ownerKind, arc, instance, commandType, endpointID, execErr, reply); err != nil {
-		return err
+	// Settling is judged under a savepoint: whatever goes wrong reading the
+	// reply fails the command, never the execution stamp, so an actuated
+	// command is not redelivered.
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: savepoint for command %d settlement: %w", commandID, err)
+	}
+	if serr := p.settleFromResponse(ctx, sp, commandID, ownerKind, arc, instance, commandType, endpointID, execErr, reply); serr != nil {
+		_ = sp.Rollback(ctx)
+		slog.Warn("command reply could not settle it", "facility", "command", "command", commandID, "error", serr.Error())
+		now, err := dbNow(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if err := markSettlement(ctx, tx, commandID, "failed", now); err != nil {
+			return err
+		}
+	} else if err := sp.Commit(ctx); err != nil {
+		return fmt.Errorf("storage: release savepoint for command %d: %w", commandID, err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("storage: commit record execution: %w", err)
@@ -240,6 +261,10 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 	if execErr != "" {
 		return markSettlement(ctx, tx, commandID, "failed", now)
 	}
+	// A reply that is not readable text says nothing a binding can read.
+	if !utf8.ValidString(reply) || strings.ContainsRune(reply, 0) {
+		return markSettlement(ctx, tx, commandID, "failed", now)
+	}
 	verdict := binding.JudgeReply(reply)
 	if !verdict.Succeeded {
 		return markSettlement(ctx, tx, commandID, "failed", now)
@@ -255,17 +280,33 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 	if series == "" {
 		series = epName
 	}
-	// The reply is an observation of the target, recorded where the
-	// driver's polls of it land.
+	// The reply is an observation of a property target, recorded where the
+	// driver's polls of it land: held to the property's validation like any
+	// telemetry (a value outside it fails the command and records nothing),
+	// and written only as a transition.
 	if ct.TargetPropertyType != "" {
-		col, err := ownerColumn(ownerKind)
+		var dataType string
+		var validation []byte
+		if err := tx.QueryRow(ctx, `select data_type, validation from property_type where name = $1`, ct.TargetPropertyType).Scan(&dataType, &validation); err != nil {
+			return fmt.Errorf("storage: property type %s: %w", ct.TargetPropertyType, err)
+		}
+		if err := key.ValidateValue(dataType, replyJSON(dataType, verdict.Value), validation); err != nil {
+			return markSettlement(ctx, tx, commandID, "failed", now)
+		}
+		latest, err := p.latestTargetValue(ctx, tx, ct, ownerKind, arc, series, "observed")
 		if err != nil {
 			return err
 		}
-		sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source)
-			values ($1, $2, $3, (select id from property_type where name = $4), $5, to_jsonb($6::text), 'observed', $7)`, col)
-		if _, err := tx.Exec(ctx, sql, now, ownerKind, arc, ct.TargetPropertyType, series, verdict.Value, transport); err != nil {
-			return fmt.Errorf("storage: record command %d reply as an observation: %w", commandID, err)
+		if latest == nil || !replyMatchesIntent(latest.Value, verdict.Value) {
+			col, err := ownerColumn(ownerKind)
+			if err != nil {
+				return err
+			}
+			sql := fmt.Sprintf(`insert into property (ts, owner_kind, %s, property_type_id, instance, value, provenance, source)
+				values ($1, $2, $3, (select id from property_type where name = $4), $5, to_jsonb($6::text), 'observed', $7)`, col)
+			if _, err := tx.Exec(ctx, sql, now, ownerKind, arc, ct.TargetPropertyType, series, verdict.Value, transport); err != nil {
+				return fmt.Errorf("storage: record command %d reply as an observation: %w", commandID, err)
+			}
 		}
 	}
 	intended, err := p.commandIntendedValue(ctx, tx, ct, commandID)
@@ -277,6 +318,23 @@ func (p *PG) settleFromResponse(ctx context.Context, tx pgx.Tx, commandID int64,
 		status = "failed"
 	}
 	return markSettlement(ctx, tx, commandID, status, now)
+}
+
+// replyJSON renders an extracted reply value as the JSON its property's data
+// type expects, for validation.
+func replyJSON(dataType, value string) json.RawMessage {
+	switch dataType {
+	case "int", "float":
+		if _, err := strconv.ParseFloat(value, 64); err == nil {
+			return json.RawMessage(value)
+		}
+	case "bool":
+		if value == "true" || value == "false" {
+			return json.RawMessage(value)
+		}
+	}
+	b, _ := json.Marshal(value)
+	return b
 }
 
 // replyMatchesIntent compares a reply's extracted text to an intended value:

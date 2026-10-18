@@ -235,7 +235,7 @@ func validateSettle(c CommandBinding) error {
 		}
 		return nil
 	}
-	return validateMatch("settle of "+c.CommandType, *st.Success)
+	return validateMatch(fmt.Sprintf("command binding %q settle", c.CommandType), *st.Success)
 }
 
 // Parse decodes a spec, refusing unknown fields: a typo authors nothing
@@ -331,7 +331,7 @@ func (s *Spec) Validate(cat Catalog) error {
 			return fmt.Errorf("driver: duplicate function name %q", l.Name)
 		}
 		functions[l.Name] = true
-		if err := validateMatch(l.Name, l.Match); err != nil {
+		if err := validateMatch(fmt.Sprintf("listener %q", l.Name), l.Match); err != nil {
 			return err
 		}
 		if err := validateEmits("listener", l.Name, l.Emits, cat); err != nil {
@@ -471,7 +471,7 @@ func checkPollShape(tr string, p Poll) error {
 	return nil
 }
 
-func validateMatch(fn string, m Match) error {
+func validateMatch(what string, m Match) error {
 	set := 0
 	if m.Prefix != "" {
 		set++
@@ -479,11 +479,11 @@ func validateMatch(fn string, m Match) error {
 	if m.Regex != "" {
 		set++
 		if _, err := regexp.Compile(m.Regex); err != nil {
-			return fmt.Errorf("driver: listener %q has an uncompilable match regex: %v", fn, err)
+			return fmt.Errorf("driver: %s has an uncompilable match regex: %v", what, err)
 		}
 	}
 	if set != 1 {
-		return fmt.Errorf("driver: listener %q needs exactly one match rule, has %d", fn, set)
+		return fmt.Errorf("driver: %s needs exactly one match rule, has %d", what, set)
 	}
 	return nil
 }

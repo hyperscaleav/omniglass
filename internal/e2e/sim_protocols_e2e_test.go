@@ -213,4 +213,13 @@ func TestOperatorMonitorsAndConfiguresSimulatedDevices(t *testing.T) {
 		err := conn.QueryRow(ctx, `select status from command order by id desc limit 1`).Scan(&status)
 		return err == nil && status == "settled"
 	})
+	// From the reply, not a later poll: the driver polls every 30 seconds, so
+	// a settlement this soon after the issue is the reply's.
+	var took float64
+	if err := conn.QueryRow(ctx, `select extract(epoch from settled_at - ts) from command order by id desc limit 1`).Scan(&took); err != nil {
+		t.Fatal(err)
+	}
+	if took >= 10 {
+		t.Fatalf("settled %.1fs after the issue; the reply should settle it within the node's tick, not the next poll", took)
+	}
 }
